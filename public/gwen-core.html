@@ -246,6 +246,24 @@
     </div>
   </div>
 
+  <!-- ============================================================ -->
+  <!-- CHAT INTERFACE                                                -->
+  <!-- ============================================================ -->
+  <section class="gwen-chat-bar" id="gwenChatBar">
+    <div class="gwen-chat-toggle" id="gwenChatToggle" onclick="toggleChat()">
+      <span class="gwen-chat-toggle-icon">&#9650;</span>
+      <span class="gwen-chat-toggle-label">Chat with G.W.E.N.</span>
+    </div>
+  </section>
+
+  <section class="gwen-chat-panel" id="gwenChatPanel">
+    <div class="gwen-chat-messages" id="gwenChatMessages">
+      <div class="gwen-chat-msg gwen-chat-msg-agent">
+        <div class="gwen-chat-msg-avatar">G</div>
+        <div class="gwen-chat-msg-body">
+          <p>Welcome to G.W.E.N. I am your research intelligence agent, specialized in grant writing, study design, data management, and compliance. How can I help with your research today?</p>
+        </div>
+      </div>
     </div>
     <div class="gwen-chat-input-row">
       <textarea class="gwen-chat-input" id="gwenChatInput" rows="2" placeholder="Ask about grants, study design, compliance, data management..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendGwenMessage();}"></textarea>

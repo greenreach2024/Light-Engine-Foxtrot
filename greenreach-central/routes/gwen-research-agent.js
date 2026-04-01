@@ -19,6 +19,8 @@ import { Router } from 'express';
 import crypto from 'crypto';
 import { query, isDatabaseAvailable } from '../config/database.js';
 import { trackAiUsage, estimateChatCost } from '../lib/ai-usage-tracker.js';
+import { executeTool } from './farm-ops-agent.js';
+import leamBridge from '../lib/leam-bridge.js';
 
 const router = Router();
 
@@ -3504,6 +3506,141 @@ const GWEN_TOOL_CATALOG = {
         const result = await query(sql, p);
         return { ok: true, entries: result.rows, count: result.rows.length };
       } catch (err) { return { ok: false, error: err.message }; }
+    },
+  },
+
+  // -- Device Scanning & Discovery Tools (shared with E.V.I.E.) --------
+
+  scan_devices: {
+    description: 'Unified device discovery scan. Scans wireless (SwitchBot, Light Engine), wired (bus channels), or all. Returns normalized assets with asset_kind, source, registration_state, and a discovery_session_id for follow-up register_device or save_bus_mapping calls. Use mode "all" for comprehensive onboarding.',
+    parameters: {
+      protocol: { type: 'string', description: 'Wireless protocol filter: "all", "switchbot", "light-engine". Default: all.' },
+      mode: { type: 'string', description: 'Scan scope: "wireless" (default), "wired" (bus channels only), or "all" (both wireless and wired).' },
+      bus_type: { type: 'string', description: 'For wired scans: bus type filter ("i2c", "spi", "1wire", "uart", "all"). Default: all.' },
+    },
+    required: [],
+    execute: async (params, ctx) => {
+      return await executeTool('scan_devices', { ...params, farm_id: ctx.farmId });
+    },
+  },
+
+  register_device: {
+    description: 'Register a new IoT device into the farm inventory. WRITE operation -- describe the device and ask the researcher to confirm before executing. Valid types: sensor, light_controller, fan_controller, dehumidifier, hvac, humidifier, irrigation, camera, hub, relay, meter, other.',
+    parameters: {
+      name: { type: 'string', description: 'Device name (e.g. "Zone 1 Dehumidifier", "Main Room Temp Sensor")' },
+      type: { type: 'string', description: 'Device type: sensor, light_controller, fan_controller, dehumidifier, hvac, humidifier, irrigation, camera, hub, relay, meter, other' },
+      room_id: { type: 'string', description: 'Room to assign to (optional)' },
+      zone: { type: 'string', description: 'Zone within the room (e.g. "zone-1", "zone-2"). Optional.' },
+      protocol: { type: 'string', description: 'Connection protocol: switchbot, wifi, wired, zigbee, bluetooth, manual. Default: manual' },
+      brand: { type: 'string', description: 'Manufacturer/brand (optional)' },
+      model: { type: 'string', description: 'Model number (optional)' },
+      device_id: { type: 'string', description: 'Specific device ID (auto-generated if omitted)' },
+    },
+    required: ['name', 'type'],
+    execute: async (params, ctx) => {
+      return await executeTool('register_device', { ...params, farm_id: ctx.farmId });
+    },
+  },
+
+  scan_bus_channels: {
+    description: 'Scan wired bus channels (I2C, SPI, 1-Wire, UART) for connected devices. Returns discovered channels with addresses and suggested types. Use this for targeted wired-only scanning.',
+    parameters: {
+      bus_type: { type: 'string', description: 'Bus type to scan: "i2c", "spi", "1wire", "uart", or "all" (default).' },
+      timeout_ms: { type: 'number', description: 'Scan timeout in milliseconds (default 5000).' },
+    },
+    required: [],
+    execute: async (params, ctx) => {
+      return await executeTool('scan_bus_channels', { ...params, farm_id: ctx.farmId });
+    },
+  },
+
+  save_bus_mapping: {
+    description: 'Map a discovered wired bus channel to a device. WRITE operation -- describe the mapping and ask the researcher to confirm before executing.',
+    parameters: {
+      bus_address: { type: 'string', description: 'Physical bus address (e.g. "0x48", "28-00000abcdef").' },
+      device_id: { type: 'string', description: 'Device identifier to map to (auto-generated if omitted).' },
+      bus_type: { type: 'string', description: 'Bus type: "i2c", "spi", "1wire", "uart".' },
+      device_name: { type: 'string', description: 'Human-readable device name.' },
+      device_type: { type: 'string', description: 'Device type: sensor, light_controller, fan_controller, etc.' },
+      group_name: { type: 'string', description: 'Optional group/zone to assign the mapping to.' },
+    },
+    required: ['bus_address', 'bus_type'],
+    execute: async (params, ctx) => {
+      return await executeTool('save_bus_mapping', { ...params, farm_id: ctx.farmId });
+    },
+  },
+
+  leam_scan_all: {
+    description: 'Full device scan using the operator\'s local machine: BLE + ARP + mDNS + SSDP/UPnP. Discovers nearby devices the cloud server cannot see: BLE sensors, speakers, smart plugs, TVs, printers, etc. LEAM companion agent is auto-managed.',
+    parameters: {
+      duration: { type: 'number', description: 'Scan duration in milliseconds (default 12000, max 30000)' },
+    },
+    required: [],
+    execute: async (params, ctx) => {
+      const result = await leamBridge.sendCommand(ctx.farmId, 'scan_all', {
+        duration: params.duration || 12000
+      });
+      if (result.leam_required) {
+        return { ok: false, error: result.error, hint: 'LEAM is initializing automatically. If this persists, check that the LEAM service is installed on the operator machine.' };
+      }
+      return result.ok ? { ok: true, ...result.data } : result;
+    },
+  },
+
+  leam_ble_scan: {
+    description: 'Scan for Bluetooth Low Energy devices near the operator\'s machine. Discovers BLE sensors, speakers, smart plugs, wearables. Returns device name, MAC, signal strength (RSSI), device type classification, and advertised services.',
+    parameters: {
+      duration: { type: 'number', description: 'BLE scan duration in milliseconds (default 10000, max 30000)' },
+    },
+    required: [],
+    execute: async (params, ctx) => {
+      const result = await leamBridge.sendCommand(ctx.farmId, 'ble_scan', {
+        duration: params.duration || 10000
+      });
+      if (result.leam_required) {
+        return { ok: false, error: result.error, hint: 'LEAM is initializing automatically for BLE scanning.' };
+      }
+      return result.ok ? { ok: true, ...result.data } : result;
+    },
+  },
+
+  leam_network_scan: {
+    description: 'Scan the local network for all connected devices using ARP + mDNS/Bonjour + UPnP/SSDP. Finds smart TVs, AirPlay speakers, printers, file servers, IoT hubs, routers, and any IP-connected device.',
+    parameters: {
+      arp: { type: 'boolean', description: 'Enable ARP table scan (default true)' },
+      mdns: { type: 'boolean', description: 'Enable mDNS/Bonjour scan (default true)' },
+      ssdp: { type: 'boolean', description: 'Enable UPnP/SSDP scan (default true)' },
+      duration: { type: 'number', description: 'Active scan duration in ms (default 8000)' },
+    },
+    required: [],
+    execute: async (params, ctx) => {
+      const result = await leamBridge.sendCommand(ctx.farmId, 'network_scan', {
+        arp: params.arp !== false,
+        mdns: params.mdns !== false,
+        ssdp: params.ssdp !== false,
+        duration: params.duration || 8000
+      });
+      if (result.leam_required) {
+        return { ok: false, error: result.error, hint: 'LEAM is initializing automatically for network scanning.' };
+      }
+      return result.ok ? { ok: true, ...result.data } : result;
+    },
+  },
+
+  leam_status: {
+    description: 'Check if the LEAM companion agent is connected and get its status: version, uptime, available modules (BLE, network, system), connected host info. Use this before attempting scans to verify LEAM availability.',
+    parameters: {},
+    required: [],
+    execute: async (params, ctx) => {
+      const status = leamBridge.getClientStatus(ctx.farmId);
+      if (!status.connected) {
+        return {
+          ok: true,
+          connected: false,
+          message: 'LEAM companion is not currently connected. It will be initialized automatically when a scan is requested. If LEAM is not installed, it can be set up as a background service on the operator machine.'
+        };
+      }
+      return { ok: true, ...status };
     },
   },
 

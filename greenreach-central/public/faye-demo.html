@@ -1,0 +1,2205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>F.A.Y.E. -- Capability Demo</title>
+  <style>
+/* ================================================================
+   F.A.Y.E. DEMO -- Cinematic Capability Showcase
+   ================================================================ */
+:root {
+  --faye-amber:        #f59e0b;
+  --faye-amber-bright: #fbbf24;
+  --faye-amber-dim:    #d97706;
+  --faye-amber-glow:   rgba(245, 158, 11, 0.25);
+  --faye-rose:         #f43f5e;
+  --faye-violet:       #8b5cf6;
+  --faye-cyan:         #06b6d4;
+  --faye-green:        #10b981;
+  --bg-deep:    #080f1a;
+  --bg-surface: #0c1422;
+  --bg-card:    #101e30;
+  --bg-elevated:#1a2d42;
+  --border:     #1a2d42;
+  --text-primary:   #e5e7eb;
+  --text-secondary: #94a3b8;
+  --text-muted:     #64748b;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg-deep);
+  color: var(--text-primary);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* -- Starfield ---------------------------------------------------- */
+.starfield {
+  position: fixed;
+  top: 0; left: 0; width: 100vw; height: 100vh;
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* -- Audio Control ----------------------------------------------- */
+.audio-control {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(12, 20, 34, 0.85);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 14px;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+}
+.audio-control:hover { border-color: var(--faye-amber); }
+.audio-icon { font-size: 18px; color: var(--faye-amber); }
+.audio-label { font-size: 12px; color: var(--text-secondary); letter-spacing: 0.5px; }
+
+/* -- Content Wrapper --------------------------------------------- */
+.demo-content {
+  position: relative;
+  z-index: 1;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 24px 24px 40px;
+}
+
+/* -- Fade-in system ---------------------------------------------- */
+.scene { opacity: 0; transform: translateY(30px); transition: opacity 0.8s, transform 0.8s; }
+.scene.visible { opacity: 1; transform: translateY(0); }
+
+/* -- Title Scene ------------------------------------------------- */
+.title-scene {
+  text-align: center;
+  padding: 32px 0 32px;
+}
+.title-faye {
+  font-size: 72px;
+  font-weight: 800;
+  letter-spacing: 12px;
+  color: var(--faye-amber);
+  text-shadow: 0 0 60px rgba(245, 158, 11, 0.3), 0 0 120px rgba(245, 158, 11, 0.1);
+  margin-bottom: 12px;
+}
+.title-sub {
+  font-size: 16px;
+  letter-spacing: 6px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+.title-full {
+  font-size: 13px;
+  letter-spacing: 4px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+.title-stats {
+  display: flex;
+  justify-content: center;
+  gap: 36px;
+  margin-top: 48px;
+  flex-wrap: wrap;
+}
+.title-stat-item { text-align: center; }
+.title-stat-value {
+  display: block;
+  font-size: 36px;
+  font-weight: 700;
+  color: var(--faye-amber);
+  font-variant-numeric: tabular-nums;
+}
+.title-stat-label {
+  display: block;
+  font-size: 11px;
+  color: var(--text-muted);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin-top: 4px;
+}
+.title-stat-desc {
+  display: block;
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+/* -- Orb Animation ----------------------------------------------- */
+.demo-orb-container {
+  display: flex;
+  justify-content: center;
+  margin: 40px 0 20px;
+}
+.demo-orb {
+  position: relative;
+  width: 160px;
+  height: 160px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.demo-orb-core {
+  width: 32px;
+  height: 32px;
+  background: radial-gradient(circle, var(--faye-amber-bright), var(--faye-amber-dim));
+  border-radius: 50%;
+  box-shadow: 0 0 30px var(--faye-amber-glow), 0 0 60px rgba(245, 158, 11, 0.12);
+}
+.demo-orb-ring {
+  position: absolute;
+  border-radius: 50%;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  animation: demoOrbPulse 4s ease-in-out infinite;
+}
+.demo-orb-ring-1 { width: 72px;  height: 72px;  border: 1px solid rgba(245, 158, 11, 0.3); animation-delay: 0s; }
+.demo-orb-ring-2 { width: 110px; height: 110px; border: 1px solid rgba(244, 63, 94, 0.2);  animation-delay: 0.7s; }
+.demo-orb-ring-3 { width: 150px; height: 150px; border: 1px solid rgba(139, 92, 246, 0.15); animation-delay: 1.4s; }
+@keyframes demoOrbPulse {
+  0%, 100% { opacity: 0.3; transform: translate(-50%, -50%) scale(1); }
+  50%       { opacity: 0.9; transform: translate(-50%, -50%) scale(1.08); }
+}
+
+/* -- Section Headers --------------------------------------------- */
+.section-header {
+  text-align: center;
+  padding: 28px 0 24px;
+}
+.section-tag {
+  display: inline-block;
+  font-size: 10px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--faye-amber);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  padding: 4px 16px;
+  border-radius: 20px;
+  margin-bottom: 16px;
+}
+.section-title {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+.section-desc {
+  font-size: 14px;
+  color: var(--text-secondary);
+  max-width: 640px;
+  margin: 0 auto;
+  line-height: 1.7;
+}
+
+/* -- Demo Panels ------------------------------------------------- */
+.demo-panel {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  margin-bottom: 24px;
+  overflow: hidden;
+}
+.demo-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+.demo-panel-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.demo-panel-tag {
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  letter-spacing: 0.5px;
+}
+.tag-amber  { background: rgba(245, 158, 11, 0.12); color: var(--faye-amber); }
+.tag-rose   { background: rgba(244, 63, 94, 0.12);  color: var(--faye-rose); }
+.tag-violet { background: rgba(139, 92, 246, 0.12); color: var(--faye-violet); }
+.tag-cyan   { background: rgba(6, 182, 212, 0.12);  color: var(--faye-cyan); }
+.tag-green  { background: rgba(16, 185, 129, 0.12); color: var(--faye-green); }
+
+.demo-panel-body {
+  padding: 20px;
+  position: relative;
+  min-height: 120px;
+}
+.demo-canvas {
+  width: 100%;
+  height: 300px;
+  display: block;
+  border-radius: 8px;
+}
+
+/* -- Capability Grid --------------------------------------------- */
+.cap-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+  padding: 0 0 20px;
+}
+.cap-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+  transition: all 0.4s;
+}
+.cap-card:hover {
+  border-color: var(--faye-amber);
+  box-shadow: 0 0 24px rgba(245, 158, 11, 0.08);
+  transform: translateY(-2px);
+}
+.cap-card-icon  { font-size: 24px; margin-bottom: 12px; display: block; }
+.cap-card-title { font-size: 15px; font-weight: 600; color: var(--text-primary); margin-bottom: 6px; }
+.cap-card-desc  { font-size: 12px; color: var(--text-secondary); line-height: 1.6; }
+.cap-card-tools { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 12px; }
+.cap-tool-tag {
+  font-size: 10px;
+  color: var(--faye-amber);
+  background: rgba(245, 158, 11, 0.06);
+  border: 1px solid rgba(245, 158, 11, 0.15);
+  padding: 2px 8px;
+  border-radius: 4px;
+  letter-spacing: 0.3px;
+}
+.cap-tool-tag.tier-auto         { color: var(--faye-green); border-color: rgba(16,185,129,0.2); background: rgba(16,185,129,0.06); }
+.cap-tool-tag.tier-quick        { color: var(--faye-cyan);  border-color: rgba(6,182,212,0.2);  background: rgba(6,182,212,0.06); }
+.cap-tool-tag.tier-confirm      { color: var(--faye-amber); border-color: rgba(245,158,11,0.2); background: rgba(245,158,11,0.06); }
+.cap-tool-tag.tier-admin        { color: var(--faye-rose);  border-color: rgba(244,63,94,0.2);  background: rgba(244,63,94,0.06); }
+
+/* -- Sensor / Data Cards ----------------------------------------- */
+.data-cards-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px;
+}
+.data-card-mini {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+}
+.data-card-mini-value {
+  font-size: 26px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  display: block;
+  margin-bottom: 4px;
+}
+.data-card-mini-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  letter-spacing: 0.5px;
+}
+
+/* -- Tool Execution Bars ----------------------------------------- */
+.tool-exec-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 8px;
+  opacity: 0;
+  transform: translateX(-20px);
+  transition: opacity 0.4s, transform 0.4s;
+}
+.tool-exec-bar.visible  { opacity: 1; transform: translateX(0); }
+.tool-exec-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--faye-amber);
+  animation: toolPulse 1.5s ease-in-out infinite;
+}
+.tool-exec-bar.completed .tool-exec-dot { background: var(--faye-amber-bright); animation: none; }
+.tool-exec-name  { font-size: 12px; color: var(--text-primary); font-weight: 500; flex: 1; }
+.tool-exec-time  { font-size: 10px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+@keyframes toolPulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
+
+/* -- Collaboration Flow ------------------------------------------ */
+.collab-flow {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.collab-msg {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  opacity: 0;
+  transform: translateY(12px);
+  transition: opacity 0.5s, transform 0.5s;
+}
+.collab-msg.visible { opacity: 1; transform: translateY(0); }
+.collab-avatar {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.avatar-evie { background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.3); color: var(--faye-green); }
+.avatar-gwen { background: rgba(139, 92, 246, 0.15);  border: 1px solid rgba(139, 92, 246, 0.3);  color: var(--faye-violet); }
+.avatar-faye { background: rgba(245, 158, 11, 0.15);  border: 1px solid rgba(245, 158, 11, 0.3);  color: var(--faye-amber); }
+.collab-bubble {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 16px;
+  font-size: 12px;
+  line-height: 1.6;
+  flex: 1;
+  max-width: 580px;
+}
+.collab-bubble-name { font-size: 10px; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 4px; }
+.name-evie { color: var(--faye-green); }
+.name-gwen { color: var(--faye-violet); }
+.name-faye { color: var(--faye-amber); }
+.collab-bubble p  { color: var(--text-secondary); margin-bottom: 0; }
+.collab-highlight { color: var(--text-primary); font-weight: 600; }
+.collab-tool-call {
+  display: inline-block;
+  font-size: 10px;
+  color: var(--faye-amber);
+  background: rgba(245,158,11,0.08);
+  border: 1px solid rgba(245,158,11,0.2);
+  padding: 1px 6px;
+  border-radius: 3px;
+  margin: 2px 0;
+  font-family: monospace;
+}
+
+/* -- Bar gauge for environment ----------------------------------- */
+.gauge-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+  font-size: 12px;
+}
+.gauge-label  { width: 140px; color: var(--text-secondary); flex-shrink: 0; }
+.gauge-bar    { flex: 1; height: 6px; background: var(--bg-elevated); border-radius: 3px; overflow: hidden; position: relative; }
+.gauge-fill   { height: 100%; border-radius: 3px; transition: width 1.2s ease; }
+.gauge-value  { width: 60px; text-align: right; font-variant-numeric: tabular-nums; color: var(--text-primary); font-weight: 500; }
+
+/* -- Status badge ------------------------------------------------- */
+.status-badge {
+  font-size: 10px; padding: 2px 8px;
+  border-radius: 4px; font-weight: 600;
+}
+.status-optimal { background: rgba(16, 185, 129, 0.15); color: var(--faye-green); }
+.status-warn    { background: rgba(245, 158, 11, 0.15);  color: var(--faye-amber); }
+.status-alert   { background: rgba(244, 63, 94, 0.15);   color: var(--faye-rose); }
+
+/* -- Autonomy Ladder --------------------------------------------- */
+.autonomy-ladder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  padding: 20px 0;
+  overflow-x: auto;
+}
+.autonomy-level {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px 18px;
+  border-radius: 10px;
+  min-width: 120px;
+  position: relative;
+}
+.autonomy-level.active {
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  box-shadow: 0 0 20px rgba(245, 158, 11, 0.1);
+}
+.autonomy-level.inactive {
+  opacity: 0.4;
+}
+.autonomy-level-code {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--faye-amber);
+  margin-bottom: 4px;
+}
+.autonomy-level.inactive .autonomy-level-code { color: var(--text-muted); }
+.autonomy-level-name {
+  font-size: 11px;
+  color: var(--text-secondary);
+  letter-spacing: 0.5px;
+}
+.autonomy-arrow {
+  font-size: 16px;
+  color: var(--text-muted);
+  padding: 0 2px;
+}
+
+/* -- Trust Tier Table -------------------------------------------- */
+.trust-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.trust-table th {
+  text-align: left;
+  padding: 10px 12px;
+  color: var(--faye-amber);
+  font-weight: 600;
+  font-size: 10px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--border);
+}
+.trust-table td {
+  padding: 10px 12px;
+  color: var(--text-secondary);
+  border-bottom: 1px solid rgba(26, 45, 66, 0.5);
+}
+.trust-table tr:hover td { color: var(--text-primary); background: rgba(245, 158, 11, 0.03); }
+
+/* -- Shadow Log -------------------------------------------------- */
+.shadow-log {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.shadow-entry {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 16px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  opacity: 0;
+  transform: translateX(-12px);
+  transition: opacity 0.5s, transform 0.5s;
+}
+.shadow-entry.visible { opacity: 1; transform: translateX(0); }
+.shadow-match  { color: var(--faye-green); font-weight: 600; }
+.shadow-metric { color: var(--faye-amber); font-weight: 600; }
+
+/* -- Security Stack ---------------------------------------------- */
+.security-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.security-layer {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 18px;
+  position: relative;
+  overflow: hidden;
+}
+.security-layer::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+}
+.security-layer:nth-child(1)::before { background: var(--faye-amber); }
+.security-layer:nth-child(2)::before { background: var(--faye-cyan); }
+.security-layer:nth-child(3)::before { background: var(--faye-rose); }
+.security-layer:nth-child(4)::before { background: var(--faye-violet); }
+.security-layer:nth-child(5)::before { background: var(--faye-green); }
+.security-layer:nth-child(6)::before { background: var(--faye-amber); }
+.security-layer-num {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--faye-amber);
+  min-width: 28px;
+}
+.security-layer-info { flex: 1; }
+.security-layer-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+}
+.security-layer-cite {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+.security-layer-desc {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+/* -- Order Pipeline ---------------------------------------------- */
+.pipeline-row {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+}
+.pipeline-col {
+  min-width: 160px;
+  flex: 1;
+}
+.pipeline-col-header {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 8px 12px;
+  border-radius: 6px 6px 0 0;
+  text-align: center;
+  margin-bottom: 6px;
+}
+.pipeline-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin-bottom: 6px;
+  font-size: 11px;
+}
+.pipeline-card-id { color: var(--text-muted); font-variant-numeric: tabular-nums; margin-bottom: 2px; }
+.pipeline-card-items { color: var(--text-primary); font-weight: 500; }
+.pipeline-card-total { color: var(--faye-amber); font-weight: 600; margin-top: 2px; }
+
+/* -- Agent cards -------------------------------------------------- */
+.agent-cards-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 14px;
+  margin-bottom: 20px;
+}
+.agent-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 20px;
+  position: relative;
+  overflow: hidden;
+}
+.agent-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+}
+.agent-card.agent-evie::before { background: var(--faye-green); }
+.agent-card.agent-gwen::before { background: var(--faye-violet); }
+.agent-card.agent-faye::before { background: var(--faye-amber); }
+.agent-card-name {
+  font-size: 14px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+.agent-card.agent-evie .agent-card-name { color: var(--faye-green); }
+.agent-card.agent-gwen .agent-card-name { color: var(--faye-violet); }
+.agent-card.agent-faye .agent-card-name { color: var(--faye-amber); }
+.agent-card-full {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+.agent-card-meta {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+
+/* -- Insight Cards ----------------------------------------------- */
+.insight-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 18px;
+  margin-bottom: 10px;
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity 0.5s, transform 0.5s;
+}
+.insight-card.visible { opacity: 1; transform: translateY(0); }
+.insight-domain {
+  font-size: 10px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--faye-amber);
+  margin-bottom: 4px;
+}
+.insight-topic {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+.insight-body {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+.insight-confidence {
+  font-size: 10px;
+  color: var(--faye-amber);
+  margin-top: 6px;
+}
+
+/* -- Accuracy Grid ----------------------------------------------- */
+.accuracy-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+}
+.accuracy-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px;
+}
+.accuracy-tool {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+.accuracy-bar-bg {
+  height: 6px;
+  background: var(--bg-elevated);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+.accuracy-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 1.2s ease;
+}
+.accuracy-label {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+.accuracy-pct {
+  font-size: 14px;
+  font-weight: 700;
+  float: right;
+}
+
+/* -- Pattern Timeline -------------------------------------------- */
+.pattern-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pattern-item {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 10px 14px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.pattern-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--faye-amber);
+  margin-top: 4px;
+  flex-shrink: 0;
+}
+.pattern-body {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+.pattern-freq {
+  font-size: 10px;
+  color: var(--faye-amber);
+  margin-top: 2px;
+}
+
+/* -- Threat Assessment -------------------------------------------- */
+.threat-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--faye-rose);
+  border-radius: 8px;
+  padding: 16px 18px;
+}
+.threat-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: 12px;
+}
+.threat-label {
+  color: var(--text-muted);
+  min-width: 120px;
+  flex-shrink: 0;
+}
+.threat-value {
+  color: var(--text-primary);
+}
+
+/* -- Responsive -------------------------------------------------- */
+@media (max-width: 768px) {
+  .title-faye { font-size: 48px; letter-spacing: 6px; }
+  .title-stats { gap: 16px; }
+  .cap-grid { grid-template-columns: 1fr; }
+  .autonomy-ladder { flex-wrap: wrap; justify-content: center; }
+  .pipeline-row { flex-wrap: wrap; }
+  .agent-cards-row { grid-template-columns: 1fr; }
+}
+
+/* -- Scrollbar --------------------------------------------------- */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--bg-deep); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+  </style>
+</head>
+<body>
+
+<canvas class="starfield" id="starfield"></canvas>
+
+<!-- Audio Control -->
+<div class="audio-control" id="audioControl" onclick="toggleAudio()">
+  <span class="audio-icon" id="audioIcon">&#9835;</span>
+  <span class="audio-label" id="audioLabel">Play Soundtrack</span>
+</div>
+
+<div class="demo-content">
+
+  <!-- ============================================================ -->
+  <!-- SCENE 1: TITLE                                                -->
+  <!-- ============================================================ -->
+  <div class="scene" id="scene-title" data-scene="title">
+    <div class="title-scene">
+      <div class="demo-orb-container">
+        <div class="demo-orb">
+          <div class="demo-orb-ring demo-orb-ring-1"></div>
+          <div class="demo-orb-ring demo-orb-ring-2"></div>
+          <div class="demo-orb-ring demo-orb-ring-3"></div>
+          <div class="demo-orb-core"></div>
+        </div>
+      </div>
+      <div class="title-faye">F.A.Y.E.</div>
+      <div class="title-sub">Governed Operations Intelligence</div>
+      <div class="title-full">Farm Autonomy &amp; Yield Engine</div>
+      <div class="title-stats">
+        <div class="title-stat-item">
+          <span class="title-stat-value" id="statToolCount">0</span>
+          <span class="title-stat-label">Tools</span>
+          <span class="title-stat-desc">Operational Catalog</span>
+        </div>
+        <div class="title-stat-item">
+          <span class="title-stat-value" id="statDomainCount">0</span>
+          <span class="title-stat-label">Domains</span>
+          <span class="title-stat-desc">Operational Scope</span>
+        </div>
+        <div class="title-stat-item">
+          <span class="title-stat-value" id="statSecurityCount">0</span>
+          <span class="title-stat-label">Security Layers</span>
+          <span class="title-stat-desc">Zero Trust</span>
+        </div>
+        <div class="title-stat-item">
+          <span class="title-stat-value" style="font-size: 28px;">L2</span>
+          <span class="title-stat-label">Autonomy</span>
+          <span class="title-stat-desc">Earned, Not Given</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- SCENE 2: COMMAND CENTER                                       -->
+  <!-- ============================================================ -->
+  <div class="scene" id="scene-command" data-scene="command">
+    <div class="section-header">
+      <span class="section-tag">Operational Awareness</span>
+      <h2 class="section-title">Every Number. Every Signal. One Operator.</h2>
+      <p class="section-desc">
+        F.A.Y.E. runs a continuous intelligence loop every 15 minutes -- scanning payment failures,
+        farm heartbeats, order volume anomalies, and accounting balances.
+        Daily briefings at 7:00 AM ET. Weekly digests every Monday.
+      </p>
+    </div>
+
+    <!-- Network Health Chart -->
+    <div class="demo-panel">
+      <div class="demo-panel-header">
+        <div class="demo-panel-title">
+          <span>&#9679;</span> Network Health -- 24 Hour Window
+        </div>
+        <span class="demo-panel-tag tag-amber">LIVE</span>
+      </div>
+      <div class="demo-panel-body">
+        <div id="toolExecCommand" style="margin-bottom: 14px;"></div>
+        <canvas class="demo-canvas" id="networkHealthCanvas"></canvas>
+      </div>
+    </div>
+
+    <!-- Alert Triage -->
+    <div class="demo-panel">
+      <div class="demo-panel-header">
+        <div class="demo-panel-title">
+          <span>&#9679;</span> Intelligent Alert Triage
+        </div>
+        <span class="demo-panel-tag tag-rose">ALERTS</span>
+      </div>
+      <div class="demo-panel-body" id="alertTriageContainer"></div>
+    </div>
+
+    <!-- Daily Briefing -->
+    <div class="demo-panel">
+      <div class="demo-panel-header">
+        <div class="demo-panel-title">
+          <span>&#9679;</span> Daily Briefing -- Automated
+        </div>
+        <span class="demo-panel-tag tag-cyan">07:00 AM ET</span>
+      </div>
+      <div class="demo-panel-body">
+        <div style="background:var(--bg-surface);border:1px solid var(--border);border-radius:8px;padding:16px 18px;">
+          <div style="font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:8px;">Morning Operations Summary</div>
+          <div style="font-size:12px;color:var(--text-secondary);line-height:1.8;">
+            12 orders yesterday | $847.20 CAD revenue | 1 farm online | 2 alerts open (0 critical).<br>
+            Payment success rate: 100%. Unclassified transactions: 3.<br>
+            E.V.I.E. sessions (24h): 6 | Escalations: 1 | Top ask: "inventory status"<br>
+            <span style="color:var(--text-muted);font-size:11px;">Sent automatically at 7:00 AM ET to admin.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- SCENE 3: EARNED AUTONOMY                                      -->
+  <!-- ============================================================ -->
+  <div class="scene" id="scene-autonomy" data-scene="autonomy">
+    <div class="section-header">
+      <span class="section-tag">Progressive Autonomy</span>
+      <h2 class="section-title">Trust Is Not Given. It Is Earned.</h2>
+      <p class="section-desc">
+        F.A.Y.E. operates on a five-level autonomy ladder. Promotion requires 95% success rate,
+        50+ uses, and 90%+ shadow accuracy over 14 days. Three consecutive failures trigger
+        immediate demotion with 30-day probation.
+      </p>
+    </div>
+
+    <!-- Autonomy Ladder -->
+    <div class="demo-panel">
+      <div class="demo-panel-header">
+        <div class="demo-panel-title">
+          <span>&#9679;</span> Autonomy Progression Ladder
+        </div>
+        <span class="demo-panel-tag tag-amber">GOVERNANCE</span>
+      </div>
+      <div class="demo-panel-body">
+        <div class="autonomy-ladder" id="autonomyLadder"></div>
+      </div>
+    </div>
+
+    <!-- Trust Tier Matrix -->
+    <div class="demo-panel">
+      <div class="demo-panel-header">
+        <div class="demo-panel-title">
+          <span>&#9679;</span> Action Class Trust Matrix
+        </div>
+        <span class="demo-panel-tag tag-cyan">TRUST TIERS</span>
+      </div>
+      <div class="demo-panel-body">
+        <table class="trust-table" id="trustTable"></table>
+      </div>
+    </div>
+
+    <!-- Shadow Decision Log -->
+    <div class="demo-panel">
+      <div class="demo-panel-header">
+        <div class="demo-panel-title">
+          <span>&#9679;</span> Shadow Decision Log -- Live Feed
+        </div>
+        <span class="demo-panel-tag tag-violet">SHADOW MODE</span>
+      </div>
+      <div class="demo-panel-body">
+        <div class="shadow-log" id="shadowLogContainer"></div>
+        <div id="shadowAccuracy" style="text-align:center;margin-top:14px;font-size:14px;font-weight:700;color:var(--faye-amber);"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- SCENE 4: SECURITY OPERATIONS                                  -->
+  <!-- ============================================================ -->
+  <div class="scene" id="scene-security" data-scene="security">
+    <div class="section-header">
+      <span class="section-tag">Security Intelligence</span>
+      <h2 class="section-title">Six Layers Deep. Zero Trust Assumed.</h2>
+      <p class="section-desc">
+        F.A.Y.E. runs continuous security analysis using peer-reviewed methodologies.
+        Behavioral anomalies, statistical z-scores, multi-source threat correlation,
+        and transparent explainability -- all surfaced with confidence levels and false-positive risk.
+      </p>
+    </div>
+
+    <!-- Six-Layer Stack -->
+    <div class="demo-panel">
+      <div class="demo-panel-header">
+        <div class="demo-panel-title">
+          <span>&#9679;</span> Six-Layer Security Stack
+        </div>
+        <span class="demo-panel-tag tag-rose">SECURITY</span>
+      </div>
+      <div class="demo-panel-body">
+        <div class="security-stack" id="securityStackContainer"></div>
+      </div>
+    </div>
+
+    <!-- Live Threat Assessment -->
+    <div class="demo-panel">
+      <div class="demo-panel-header">
+        <div class="demo-panel-title">
+          <span>&#9679;</span> Live Threat Assessment -- Explainability Chain
+        </div>
+        <span class="demo-panel-tag tag-amber">ANALYSIS</span>
+      </div>
+      <div class="demo-panel-body" id="threatAssessmentContainer"></div>
+    </div>
+
+    <!-- Security Workbook -->
+    <div class="demo-panel">
+      <div class="demo-panel-header">
+        <div class="demo-panel-title">
+          <span>&#9679;</span> Security Workbook -- Persistent Journal
+        </div>
+        <span class="demo-panel-tag tag-violet">WORKBOOK</span>
+      </div>
+      <div class="demo-panel-body">
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;" id="workbookSections"></div>
+        <div style="font-size:12px;color:var(--text-secondary);line-height:1.6;">
+          F.A.Y.E. maintains a living security workbook -- documenting findings, methodology, and evolving detection strategies across sessions.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- SCENE 5: BUSINESS ENGINE                                      -->
+  <!-- ============================================================ -->
+  <div class="scene" id="scene-business" data-scene="business">
+    <div class="section-header">
+      <span class="section-tag">Commerce Intelligence</span>
+      <h2 class="section-title">Revenue. Orders. Growers. Grocers.</h2>
+      <p class="section-desc">
+        F.A.Y.E. manages the full commerce lifecycle -- from producer applications to wholesale
+        orders to payment reconciliation. Revenue trends, buyer analytics, fulfillment pipelines,
+        and accounting -- all in one intelligence layer.
+      </p>
+    </div>
+
+    <!-- Revenue Trend -->
+    <div class="demo-panel">
+      <div class="demo-panel-header">
+        <div class="demo-panel-title">
+          <span>&#9679;</span> Revenue Trend -- 30 Day Window (CAD)
+        </div>
+        <span class="demo-panel-tag tag-amber">REVENUE</span>
+      </div>
+      <div class="demo-panel-body">
+        <canvas class="demo-canvas" id="revenueCanvas"></canvas>
+      </div>
+    </div>
+
+    <!-- Order Pipeline -->
+    <div class="demo-panel">
+      <div class="demo-panel-header">
+        <div class="demo-panel-title">
+          <span>&#9679;</span> Order Pipeline -- Status Board
+        </div>
+        <span class="demo-panel-tag tag-cyan">ORDERS</span>
+      </div>
+      <div class="demo-panel-body">
+        <div class="pipeline-row" id="orderPipelineContainer"></div>
+      </div>
+    </div>
+
+    <!-- Buyer Analytics -->
+    <div class="demo-panel">
+      <div class="demo-panel-header">
+        <div class="demo-panel-title">
+          <span>&#9679;</span> Buyer Analytics
+        </div>
+        <span class="demo-panel-tag tag-violet">BUYERS</span>
+      </div>
+      <div class="demo-panel-body">
+        <div class="data-cards-row" id="buyerAnalyticsContainer"></div>
+      </div>
+    </div>
+
+    <!-- Accounting Snapshot -->
+    <div class="demo-panel">
+      <div class="demo-panel-header">
+        <div class="demo-panel-title">
+          <span>&#9679;</span> Accounting Snapshot
+        </div>
+        <span class="demo-panel-tag tag-amber">ACCOUNTING</span>
+      </div>
+      <div class="demo-panel-body" id="accountingContainer"></div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- SCENE 6: AGENT SISTERHOOD                                     -->
+  <!-- ============================================================ -->
+  <div class="scene" id="scene-collab" data-scene="collab">
+    <div class="section-header">
+      <span class="section-tag">Agent Collaboration</span>
+      <h2 class="section-title">E.V.I.E. Reports. G.W.E.N. Researches. F.A.Y.E. Governs.</h2>
+      <p class="section-desc">
+        Three AI agents, each with distinct expertise, communicating through structured
+        message channels. F.A.Y.E. oversees E.V.I.E.'s grower interactions, reviews
+        G.W.E.N.'s research metrics, and coordinates cross-agent responses to complex situations.
+      </p>
+    </div>
+
+    <!-- Agent Overview Cards -->
+    <div class="agent-cards-row" id="agentCardsContainer"></div>
+
+    <!-- Live Conversation -->
+    <div class="demo-panel">
+      <div class="demo-panel-header">
+        <div class="demo-panel-title">
+          <span>&#9679;</span> Live Agent Exchange -- Wholesale Order Spike Response
+        </div>
+        <span class="demo-panel-tag tag-violet">MULTI-AGENT</span>
+      </div>
+      <div class="demo-panel-body">
+        <div class="collab-flow" id="collabFlowContainer"></div>
+      </div>
+    </div>
+
+    <!-- E.V.I.E. Oversight -->
+    <div class="demo-panel">
+      <div class="demo-panel-header">
+        <div class="demo-panel-title">
+          <span>&#9679;</span> E.V.I.E. Oversight Dashboard
+        </div>
+        <span class="demo-panel-tag tag-green">OVERSIGHT</span>
+      </div>
+      <div class="demo-panel-body">
+        <div class="data-cards-row" id="evieOversightContainer"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- SCENE 7: LEARNING ENGINE                                      -->
+  <!-- ============================================================ -->
+  <div class="scene" id="scene-learning" data-scene="learning">
+    <div class="section-header">
+      <span class="section-tag">Adaptive Intelligence</span>
+      <h2 class="section-title">Every Outcome Teaches. Every Pattern Compounds.</h2>
+      <p class="section-desc">
+        F.A.Y.E. stores insights, tracks outcomes, recognizes patterns, and evaluates
+        her own accuracy. Knowledge persists across sessions. Patterns detected once
+        inform decisions forever.
+      </p>
+    </div>
+
+    <!-- Knowledge Base -->
+    <div class="demo-panel">
+      <div class="demo-panel-header">
+        <div class="demo-panel-title">
+          <span>&#9679;</span> Knowledge Base -- Live Insight Feed
+        </div>
+        <span class="demo-panel-tag tag-amber">KNOWLEDGE</span>
+      </div>
+      <div class="demo-panel-body" id="knowledgeBaseContainer"></div>
+    </div>
+
+    <!-- Outcome Tracking -->
+    <div class="demo-panel">
+      <div class="demo-panel-header">
+        <div class="demo-panel-title">
+          <span>&#9679;</span> Outcome Tracking -- Tool Accuracy
+        </div>
+        <span class="demo-panel-tag tag-cyan">ACCURACY</span>
+      </div>
+      <div class="demo-panel-body">
+        <div class="accuracy-grid" id="accuracyGridContainer"></div>
+      </div>
+    </div>
+
+    <!-- Pattern Recognition -->
+    <div class="demo-panel">
+      <div class="demo-panel-header">
+        <div class="demo-panel-title">
+          <span>&#9679;</span> Pattern Recognition Timeline
+        </div>
+        <span class="demo-panel-tag tag-violet">PATTERNS</span>
+      </div>
+      <div class="demo-panel-body">
+        <div class="pattern-timeline" id="patternTimelineContainer"></div>
+      </div>
+    </div>
+
+    <!-- Domain Ownership -->
+    <div class="demo-panel">
+      <div class="demo-panel-header">
+        <div class="demo-panel-title">
+          <span>&#9679;</span> Domain Ownership Map
+        </div>
+        <span class="demo-panel-tag tag-amber">MASTERY</span>
+      </div>
+      <div class="demo-panel-body">
+        <canvas class="demo-canvas" id="domainOwnershipCanvas" style="height:260px;"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- SCENE 8: FULL TOOL INVENTORY                                  -->
+  <!-- ============================================================ -->
+  <div class="scene" id="scene-tools" data-scene="tools">
+    <div class="section-header">
+      <span class="section-tag">Full Tool Inventory</span>
+      <h2 class="section-title">99 Tools. 8 Domains. One Governed Intelligence.</h2>
+      <p class="section-desc">
+        Every tool in F.A.Y.E.'s operational catalog -- from security audits to revenue analysis
+        to E.V.I.E. oversight. Each tool has an action class, a trust tier, and an accuracy record.
+      </p>
+    </div>
+    <div class="cap-grid" id="allToolsGrid"></div>
+  </div>
+
+</div>
+
+<!-- ============================================================ -->
+<!-- JAVASCRIPT                                                     -->
+<!-- ============================================================ -->
+<script>
+(function () {
+  'use strict';
+
+  // ================================================================
+  // AUDIO -- Warm amber-toned ambient soundtrack (Web Audio API)
+  // ================================================================
+  var audioCtx = null;
+  var audioPlaying = false;
+  var audioNodes = [];
+
+  function createAudioContext() {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+
+  function playAmberAmbient() {
+    if (!audioCtx) createAudioContext();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+
+    var master = audioCtx.createGain();
+    master.gain.value = 0;
+    master.gain.linearRampToValueAtTime(0.15, audioCtx.currentTime + 3);
+    master.connect(audioCtx.destination);
+
+    var delay = audioCtx.createDelay(2.0);
+    delay.delayTime.value = 0.42;
+    var delayFeedback = audioCtx.createGain();
+    delayFeedback.gain.value = 0.32;
+    var delayGain = audioCtx.createGain();
+    delayGain.gain.value = 0.16;
+    delay.connect(delayFeedback);
+    delayFeedback.connect(delay);
+    delay.connect(delayGain);
+    delayGain.connect(master);
+    audioNodes.push(delay, delayFeedback, delayGain);
+
+    function createDrone(freq, vol) {
+      var osc = audioCtx.createOscillator();
+      var gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      gain.gain.value = vol;
+      var lfo = audioCtx.createOscillator();
+      var lfoGain = audioCtx.createGain();
+      lfo.type = 'sine';
+      lfo.frequency.value = 0.05 + Math.random() * 0.04;
+      lfoGain.gain.value = vol * 0.22;
+      lfo.connect(lfoGain);
+      lfoGain.connect(gain.gain);
+      lfo.start();
+      osc.connect(gain);
+      gain.connect(master);
+      osc.start();
+      audioNodes.push(osc, lfo, gain, lfoGain);
+    }
+
+    // D major warmth -- D / A / F#
+    createDrone(73.42,  0.28);  // D2
+    createDrone(110,    0.18);  // A2
+    createDrone(146.83, 0.12);  // D3
+    createDrone(185,    0.07);  // F#3
+
+    function createPad(freq, vol) {
+      var osc1 = audioCtx.createOscillator();
+      var osc2 = audioCtx.createOscillator();
+      var gain = audioCtx.createGain();
+      osc1.type = 'triangle';
+      osc2.type = 'sine';
+      osc1.frequency.value = freq;
+      osc2.frequency.value = freq * 1.003;
+      gain.gain.value = vol;
+      var filter = audioCtx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.value = 800;
+      filter.Q.value = 0.4;
+      var fLfo = audioCtx.createOscillator();
+      var fLfoGain = audioCtx.createGain();
+      fLfo.type = 'sine';
+      fLfo.frequency.value = 0.035;
+      fLfoGain.gain.value = 160;
+      fLfo.connect(fLfoGain);
+      fLfoGain.connect(filter.frequency);
+      fLfo.start();
+      osc1.connect(filter);
+      osc2.connect(filter);
+      filter.connect(gain);
+      gain.connect(master);
+      osc1.start();
+      osc2.start();
+      audioNodes.push(osc1, osc2, fLfo, gain, fLfoGain, filter);
+    }
+
+    createPad(220, 0.03);    // A3
+    createPad(293.66, 0.025); // D4
+    createPad(369.99, 0.015); // F#4
+
+    var chimeNotes = [293.66, 369.99, 440, 554.37, 587.33, 739.99, 880];
+    function scheduleChime() {
+      if (!audioPlaying) return;
+      var freq = chimeNotes[Math.floor(Math.random() * chimeNotes.length)];
+      var osc = audioCtx.createOscillator();
+      var gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.04, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 4.5);
+      osc.connect(gain);
+      gain.connect(delay);
+      gain.connect(master);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 4.5);
+      setTimeout(scheduleChime, 2000 + Math.random() * 3800);
+    }
+    setTimeout(scheduleChime, 1400);
+
+    audioNodes.push(master);
+  }
+
+  function stopAudio() {
+    audioNodes.forEach(function (node) {
+      try { if (node.stop) node.stop(); } catch (e) {}
+      try { if (node.disconnect) node.disconnect(); } catch (e) {}
+    });
+    audioNodes = [];
+  }
+
+  window.toggleAudio = function () {
+    if (audioPlaying) {
+      stopAudio();
+      audioPlaying = false;
+      document.getElementById('audioIcon').innerHTML = '&#9835;';
+      document.getElementById('audioLabel').textContent = 'Play Soundtrack';
+    } else {
+      playAmberAmbient();
+      audioPlaying = true;
+      document.getElementById('audioIcon').innerHTML = '&#9724;';
+      document.getElementById('audioLabel').textContent = 'Stop Soundtrack';
+    }
+  };
+
+  // ================================================================
+  // STARFIELD -- amber-tinted
+  // ================================================================
+  function initStarfield() {
+    var canvas = document.getElementById('starfield');
+    var ctx = canvas.getContext('2d');
+    var w, h, stars = [];
+
+    function resize() { w = canvas.width = window.innerWidth; h = canvas.height = window.innerHeight; }
+
+    function createStars(count) {
+      stars = [];
+      for (var i = 0; i < count; i++) {
+        stars.push({
+          x: Math.random() * w,
+          y: Math.random() * h,
+          r: Math.random() * 1.2 + 0.2,
+          a: Math.random() * 0.4 + 0.05,
+          speed: Math.random() * 0.018 + 0.004,
+          phase: Math.random() * Math.PI * 2,
+          hue: Math.random() < 0.55 ? 'amber' : Math.random() < 0.5 ? 'rose' : 'white'
+        });
+      }
+    }
+
+    function draw(t) {
+      ctx.clearRect(0, 0, w, h);
+      stars.forEach(function (s) {
+        var flicker = Math.sin(t * s.speed + s.phase) * 0.3 + 0.7;
+        var color;
+        if      (s.hue === 'amber') color = 'rgba(245, 158, 11, ';
+        else if (s.hue === 'rose')  color = 'rgba(244, 63, 94, ';
+        else                         color = 'rgba(180, 200, 220, ';
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+        ctx.fillStyle = color + (s.a * flicker) + ')';
+        ctx.fill();
+      });
+      requestAnimationFrame(draw);
+    }
+
+    resize();
+    createStars(220);
+    window.addEventListener('resize', function () { resize(); createStars(220); });
+    requestAnimationFrame(draw);
+  }
+
+  // ================================================================
+  // SCROLL OBSERVER
+  // ================================================================
+  function initScrollObserver() {
+    var observer = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('visible');
+        }
+      });
+    }, { threshold: 0.12 });
+    document.querySelectorAll('.scene').forEach(function (el) { observer.observe(el); });
+  }
+
+  // ================================================================
+  // COUNTER ANIMATION
+  // ================================================================
+  function animateCounter(el, target, duration) {
+    var start = performance.now();
+    function update(now) {
+      var progress = Math.min((now - start) / duration, 1);
+      var eased = 1 - Math.pow(1 - progress, 3);
+      el.textContent = Math.round(target * eased);
+      if (progress < 1) requestAnimationFrame(update);
+    }
+    requestAnimationFrame(update);
+  }
+
+  // ================================================================
+  // TOOL EXECUTION ANIMATION
+  // ================================================================
+  function showToolExec(containerId, tools, baseDelay) {
+    baseDelay = baseDelay || 0;
+    var parent = document.getElementById(containerId);
+    if (!parent) return;
+    parent.innerHTML = '';
+    tools.forEach(function (tool, i) {
+      var bar = document.createElement('div');
+      bar.className = 'tool-exec-bar';
+      bar.innerHTML =
+        '<div class="tool-exec-dot"></div>' +
+        '<span class="tool-exec-name">' + tool.name + '</span>' +
+        '<span class="tool-exec-time">' + tool.time + '</span>';
+      parent.appendChild(bar);
+      setTimeout(function () { bar.classList.add('visible'); }, baseDelay + i * 500);
+      setTimeout(function () { bar.classList.add('completed'); }, baseDelay + i * 500 + 900);
+    });
+  }
+
+  // ================================================================
+  // SCENE 2: COMMAND CENTER
+  // ================================================================
+  function renderNetworkHealth() {
+    var canvas = document.getElementById('networkHealthCanvas');
+    if (!canvas) return;
+    var ctx = canvas.getContext('2d');
+    var dpr = window.devicePixelRatio || 1;
+    canvas.width = canvas.offsetWidth * dpr;
+    canvas.height = canvas.offsetHeight * dpr;
+    ctx.scale(dpr, dpr);
+    var w = canvas.offsetWidth;
+    var h = canvas.offsetHeight;
+    var pad = { top: 36, right: 24, bottom: 44, left: 56 };
+
+    var pts = 48;
+    var metrics = [
+      { label: 'Orders',     color: '#f59e0b', base: 8,   amp: 4,   phase: 0 },
+      { label: 'Revenue ($)', color: '#06b6d4', base: 420, amp: 180, phase: 0.8 },
+      { label: 'Alerts',     color: '#f43f5e', base: 2,   amp: 3,   phase: 1.5 },
+      { label: 'Uptime (%)', color: '#10b981', base: 99,  amp: 1,   phase: 2.2 }
+    ];
+
+    metrics.forEach(function (m) {
+      m.data = [];
+      for (var i = 0; i < pts; i++) {
+        var t = i / pts;
+        var v = m.base + m.amp * Math.sin(t * Math.PI * 3 + m.phase) + (Math.random() - 0.5) * m.amp * 0.3;
+        m.data.push(Math.max(0, v));
+      }
+    });
+
+    var chartW = w - pad.left - pad.right;
+    var chartH = h - pad.top - pad.bottom;
+
+    ctx.fillStyle = '#060c16';
+    ctx.fillRect(0, 0, w, h);
+
+    ctx.strokeStyle = '#0f1e2f';
+    ctx.lineWidth = 0.5;
+    for (var yi = 0; yi <= 6; yi++) {
+      var gy = pad.top + chartH * yi / 6;
+      ctx.beginPath(); ctx.moveTo(pad.left, gy); ctx.lineTo(w - pad.right, gy); ctx.stroke();
+    }
+    for (var xi = 0; xi <= 6; xi++) {
+      var gx = pad.left + chartW * xi / 6;
+      ctx.beginPath(); ctx.moveTo(gx, pad.top); ctx.lineTo(gx, pad.top + chartH); ctx.stroke();
+    }
+
+    // Normalize and draw each metric as 0-100%
+    metrics.forEach(function (m) {
+      var minV = Math.min.apply(null, m.data);
+      var maxV = Math.max.apply(null, m.data);
+      var range = maxV - minV || 1;
+      ctx.strokeStyle = m.color;
+      ctx.lineWidth = 1.8;
+      ctx.shadowColor = m.color;
+      ctx.shadowBlur = 4;
+      ctx.beginPath();
+      m.data.forEach(function (v, i) {
+        var x = pad.left + (i / (pts - 1)) * chartW;
+        var y = pad.top + chartH - ((v - minV) / range) * chartH;
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+    });
+
+    ctx.fillStyle = '#64748b';
+    ctx.font = '9px monospace';
+    ctx.textAlign = 'center';
+    for (var xi2 = 0; xi2 <= 6; xi2++) {
+      var x2 = pad.left + chartW * xi2 / 6;
+      var hr = Math.round(24 * xi2 / 6);
+      ctx.fillText(String(hr).padStart(2, '0') + ':00', x2, h - pad.bottom + 16);
+    }
+
+    var lx = pad.left + 6;
+    metrics.forEach(function (m, i) {
+      ctx.fillStyle = m.color;
+      ctx.font = '10px -apple-system, sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillRect(lx + i * 130, pad.top - 22, 12, 3);
+      ctx.fillText(m.label, lx + i * 130 + 16, pad.top - 18);
+    });
+  }
+
+  function renderAlertTriage() {
+    var items = [
+      { title: 'Payment Failure Spike', detail: '3 failed payments in 15 minutes on /api/wholesale/checkout/execute. Pattern-matched to known gateway timeout. Auto-retry scheduled.', severity: 'alert', domain: 'Payments', ago: '2m ago' },
+      { title: 'Farm Heartbeat Gap', detail: 'The Notable Sprout (FARM-MLTP9LVH-B0B85039) -- no heartbeat for 18 minutes. Threshold: 15 minutes. LE instance health check pending.', severity: 'warn', domain: 'Farm Health', ago: '6m ago' },
+      { title: 'Unclassified Transactions', detail: '3 Square webhook transactions pending classification. Sunday batch pattern detected -- likely wholesale revenue.', severity: 'optimal', domain: 'Accounting', ago: '14m ago' },
+      { title: 'Order Volume Drop', detail: 'Order volume 40% below 7-day average for this time slot. Pattern matches Canadian statutory holiday -- suppressing anomaly alert.', severity: 'optimal', domain: 'Orders', ago: '22m ago' }
+    ];
+    var html = items.map(function (a) {
+      var borderColor = a.severity === 'alert' ? '#f43f5e' : a.severity === 'warn' ? '#f59e0b' : '#10b981';
+      return '<div style="background:var(--bg-surface);border:1px solid var(--border);border-left:3px solid ' + borderColor + ';border-radius:8px;padding:14px 16px;margin-bottom:10px;">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">' +
+        '<span style="font-size:13px;font-weight:600;color:var(--text-primary);">' + a.title + '</span>' +
+        '<span class="status-badge status-' + a.severity + '">' + a.severity.toUpperCase() + '</span>' +
+        '</div>' +
+        '<div style="font-size:12px;color:var(--text-secondary);line-height:1.5;margin-bottom:8px;">' + a.detail + '</div>' +
+        '<div style="display:flex;gap:12px;font-size:10px;color:var(--text-muted);">' +
+        '<span>' + a.domain + '</span><span>' + a.ago + '</span>' +
+        '</div></div>';
+    }).join('');
+    document.getElementById('alertTriageContainer').innerHTML = html;
+  }
+
+  // ================================================================
+  // SCENE 3: EARNED AUTONOMY
+  // ================================================================
+  function renderAutonomyLadder() {
+    var levels = [
+      { code: 'L0', name: 'Reactive', active: false },
+      { code: 'L1', name: 'Observant', active: false },
+      { code: 'L2', name: 'Advisory', active: true },
+      { code: 'L3', name: 'Proactive', active: false },
+      { code: 'L4', name: 'Autonomous', active: false }
+    ];
+    var html = '';
+    levels.forEach(function (l, i) {
+      html += '<div class="autonomy-level ' + (l.active ? 'active' : 'inactive') + '">' +
+        '<span class="autonomy-level-code">' + l.code + '</span>' +
+        '<span class="autonomy-level-name">' + l.name + '</span>' +
+        (l.active ? '<span style="font-size:9px;color:var(--faye-amber);margin-top:4px;">CURRENT</span>' : '') +
+        '</div>';
+      if (i < levels.length - 1) html += '<span class="autonomy-arrow">&#9654;</span>';
+    });
+    document.getElementById('autonomyLadder').innerHTML = html;
+  }
+
+  function renderTrustTable() {
+    var rows = [
+      { action: 'recommend', cls: 'AUTO', tier: 'AUTO', threshold: '--', cap: '' },
+      { action: 'notify', cls: 'AUTO', tier: 'AUTO', threshold: '--', cap: '' },
+      { action: 'classify', cls: 'QUICK_CONFIRM', tier: 'QUICK_CONFIRM', threshold: '50 uses / 95% / 14d', cap: '' },
+      { action: 'modify', cls: 'CONFIRM', tier: 'CONFIRM', threshold: '50 uses / 95% / 14d', cap: '' },
+      { action: 'send_admin_email', cls: 'CONFIRM', tier: 'CONFIRM', threshold: '50 uses / 95% / 14d', cap: '' },
+      { action: 'transact (process_refund)', cls: 'ADMIN', tier: 'ADMIN', threshold: 'Admin approval always', cap: 'HARD CAP: Never AUTO' },
+      { action: 'override', cls: 'ADMIN', tier: 'ADMIN', threshold: 'Admin approval always', cap: 'HARD CAP: Never AUTO' }
+    ];
+    var colorMap = { AUTO: '#10b981', QUICK_CONFIRM: '#06b6d4', CONFIRM: '#f59e0b', ADMIN: '#f43f5e' };
+    var html = '<thead><tr><th>Action</th><th>Class</th><th>Current Tier</th><th>Promotion Threshold</th><th>Hard Cap</th></tr></thead><tbody>';
+    html += rows.map(function (r) {
+      var c = colorMap[r.cls] || '#94a3b8';
+      return '<tr>' +
+        '<td style="color:var(--text-primary);font-weight:500;">' + r.action + '</td>' +
+        '<td><span style="color:' + c + ';font-weight:600;">' + r.cls + '</span></td>' +
+        '<td>' + r.tier + '</td>' +
+        '<td>' + r.threshold + '</td>' +
+        '<td style="color:var(--faye-rose);font-weight:600;">' + r.cap + '</td>' +
+        '</tr>';
+    }).join('');
+    html += '</tbody>';
+    document.getElementById('trustTable').innerHTML = html;
+  }
+
+  function renderShadowLog() {
+    var entries = [
+      { text: 'Shadow: Would classify TXN-4422 as <span class="shadow-metric">Wholesale Revenue</span> (confidence: 0.92). Actual: Admin classified as Wholesale Revenue. <span class="shadow-match">MATCH</span>' },
+      { text: 'Shadow: Would resolve Alert #118 (recurring heartbeat gap, resolved 4x prior). Actual: Admin resolved manually after 2 hours. <span class="shadow-match">MATCH</span>' },
+      { text: 'Shadow: Would send low-inventory notice to admin. Actual: Admin sent identical notice. <span class="shadow-match">MATCH</span>' }
+    ];
+    var container = document.getElementById('shadowLogContainer');
+    container.innerHTML = '';
+    entries.forEach(function (e, i) {
+      var div = document.createElement('div');
+      div.className = 'shadow-entry';
+      div.innerHTML = e.text;
+      container.appendChild(div);
+      setTimeout(function () { div.classList.add('visible'); }, i * 1200);
+    });
+    setTimeout(function () {
+      document.getElementById('shadowAccuracy').textContent = 'Shadow Accuracy: 94.2% (47/50 matches over 14 days)';
+    }, entries.length * 1200 + 600);
+  }
+
+  // ================================================================
+  // SCENE 4: SECURITY OPERATIONS
+  // ================================================================
+  function renderSecurityStack() {
+    var layers = [
+      { num: '1', name: 'Behavioral Analysis', cite: 'Kamatchi et al. (2025)', desc: 'Off-hours activity, new action types, auth surges' },
+      { num: '2', name: 'Statistical Anomaly Detection', cite: 'Yang et al. (2022)', desc: 'z-score analysis on error rates, alert volumes' },
+      { num: '3', name: 'Threat Correlation', cite: 'Prasad et al. (2025)', desc: 'Multi-source pattern matching, attack vector ID' },
+      { num: '4', name: 'Explainable AI', cite: 'Sharma et al. (2025)', desc: 'Transparent rationale, confidence, false-positive risk' },
+      { num: '5', name: 'IoT/Sensor Security', cite: 'Hernandez-Ramos et al. (2025)', desc: 'Heartbeat gaps, telemetry freshness' },
+      { num: '6', name: 'Comprehensive Audit', cite: 'Internal standard', desc: 'Auth patterns, stale connections, hard boundary verification' }
+    ];
+    document.getElementById('securityStackContainer').innerHTML = layers.map(function (l) {
+      return '<div class="security-layer">' +
+        '<span class="security-layer-num">' + l.num + '</span>' +
+        '<div class="security-layer-info">' +
+        '<div class="security-layer-name">' + l.name + '</div>' +
+        '<div class="security-layer-cite">' + l.cite + '</div>' +
+        '<div class="security-layer-desc">' + l.desc + '</div>' +
+        '</div></div>';
+    }).join('');
+  }
+
+  function renderThreatAssessment() {
+    var html = '<div class="threat-card">' +
+      '<div style="font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:10px;">Active Threat Assessment</div>' +
+      '<div class="threat-row"><span class="threat-label">Finding:</span><span class="threat-value">Concentrated error spike on /api/wholesale/checkout/execute</span></div>' +
+      '<div class="threat-row"><span class="threat-label">Methodology:</span><span class="threat-value">Yang et al. z-score (2.4 sigma deviation)</span></div>' +
+      '<div class="threat-row"><span class="threat-label">Data Sources:</span><span class="threat-value">Error telemetry (last 4 hours), payment webhook logs</span></div>' +
+      '<div class="threat-row"><span class="threat-label">Confidence:</span><span class="threat-value" style="color:var(--faye-amber);">Medium (72%)</span></div>' +
+      '<div class="threat-row"><span class="threat-label">False-Positive Risk:</span><span class="threat-value">Moderate -- could be legitimate high-volume buyer</span></div>' +
+      '<div class="threat-row"><span class="threat-label">Recommendation:</span><span class="threat-value">Monitor next 2 hours. Escalate if z-score exceeds 3.0</span></div>' +
+      '</div>';
+    document.getElementById('threatAssessmentContainer').innerHTML = html;
+  }
+
+  function renderWorkbookSections() {
+    var sections = ['Threat Landscape', 'Research Synthesis', 'Detection Models', 'Incident Log', 'Implementation Ideas'];
+    document.getElementById('workbookSections').innerHTML = sections.map(function (s) {
+      return '<span style="font-size:11px;color:var(--faye-amber);background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);padding:4px 12px;border-radius:6px;">' + s + '</span>';
+    }).join('');
+  }
+
+  // ================================================================
+  // SCENE 5: BUSINESS ENGINE
+  // ================================================================
+  function renderRevenueChart() {
+    var canvas = document.getElementById('revenueCanvas');
+    if (!canvas) return;
+    var ctx = canvas.getContext('2d');
+    var dpr = window.devicePixelRatio || 1;
+    canvas.width = canvas.offsetWidth * dpr;
+    canvas.height = canvas.offsetHeight * dpr;
+    ctx.scale(dpr, dpr);
+    var w = canvas.offsetWidth;
+    var h = canvas.offsetHeight;
+    var pad = { top: 30, right: 24, bottom: 50, left: 60 };
+
+    var days = 30;
+    var data = [];
+    for (var i = 0; i < days; i++) {
+      data.push(280 + Math.sin(i * 0.3) * 180 + Math.random() * 120 + i * 8);
+    }
+
+    var chartW = w - pad.left - pad.right;
+    var chartH = h - pad.top - pad.bottom;
+    var maxVal = Math.max.apply(null, data) * 1.1;
+
+    ctx.fillStyle = '#060c16';
+    ctx.fillRect(0, 0, w, h);
+
+    ctx.strokeStyle = '#0f1e2f';
+    ctx.lineWidth = 0.5;
+    for (var yi = 0; yi <= 5; yi++) {
+      var gy = pad.top + chartH * yi / 5;
+      ctx.beginPath(); ctx.moveTo(pad.left, gy); ctx.lineTo(w - pad.right, gy); ctx.stroke();
+    }
+
+    // Fill gradient
+    ctx.beginPath();
+    data.forEach(function (v, i) {
+      var x = pad.left + (i / (days - 1)) * chartW;
+      var y = pad.top + chartH - (v / maxVal) * chartH;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    });
+    ctx.lineTo(pad.left + chartW, pad.top + chartH);
+    ctx.lineTo(pad.left, pad.top + chartH);
+    ctx.closePath();
+    var grad = ctx.createLinearGradient(0, pad.top, 0, pad.top + chartH);
+    grad.addColorStop(0, 'rgba(245, 158, 11, 0.2)');
+    grad.addColorStop(1, 'rgba(245, 158, 11, 0.01)');
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    // Line
+    ctx.strokeStyle = '#f59e0b';
+    ctx.lineWidth = 2;
+    ctx.shadowColor = '#f59e0b';
+    ctx.shadowBlur = 4;
+    ctx.beginPath();
+    data.forEach(function (v, i) {
+      var x = pad.left + (i / (days - 1)) * chartW;
+      var y = pad.top + chartH - (v / maxVal) * chartH;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // X labels
+    ctx.fillStyle = '#64748b';
+    ctx.font = '9px monospace';
+    ctx.textAlign = 'center';
+    for (var d = 0; d < days; d += 5) {
+      var x3 = pad.left + (d / (days - 1)) * chartW;
+      ctx.fillText('Mar ' + (d + 1), x3, h - pad.bottom + 16);
+    }
+    // Y labels
+    ctx.textAlign = 'right';
+    for (var yi2 = 0; yi2 <= 5; yi2++) {
+      var val = Math.round(maxVal - maxVal * yi2 / 5);
+      ctx.fillText('$' + val, pad.left - 6, pad.top + chartH * yi2 / 5 + 3);
+    }
+  }
+
+  function renderOrderPipeline() {
+    var cols = [
+      { name: 'Pending', count: 3, color: 'var(--faye-amber)', orders: [
+        { id: 'WO-2026-0401', items: 'Baby Arugula 8oz', total: '$14.20' },
+        { id: 'WO-2026-0402', items: 'Bibb Butterhead 16oz', total: '$18.00' },
+        { id: 'WO-2026-0403', items: 'Baby Arugula 4oz', total: '$8.40' }
+      ]},
+      { name: 'Confirmed', count: 5, color: 'var(--faye-cyan)', orders: [
+        { id: 'WO-2026-0398', items: 'Bibb Butterhead 8oz', total: '$12.00' },
+        { id: 'WO-2026-0399', items: 'Baby Arugula 8oz, Bibb 16oz', total: '$31.20' }
+      ]},
+      { name: 'Fulfilling', count: 2, color: 'var(--faye-violet)', orders: [
+        { id: 'WO-2026-0395', items: 'Baby Arugula 4oz x2', total: '$16.80' }
+      ]},
+      { name: 'Delivered', count: 18, color: 'var(--faye-green)', orders: [
+        { id: 'WO-2026-0388', items: 'Bibb Butterhead 16oz', total: '$18.00' }
+      ]},
+      { name: 'Cancelled', count: 1, color: 'var(--faye-rose)', orders: [
+        { id: 'WO-2026-0391', items: 'Baby Arugula 8oz', total: '$14.20' }
+      ]}
+    ];
+    document.getElementById('orderPipelineContainer').innerHTML = cols.map(function (col) {
+      return '<div class="pipeline-col">' +
+        '<div class="pipeline-col-header" style="background:rgba(255,255,255,0.04);color:' + col.color + ';">' +
+        col.name + ' (' + col.count + ')' +
+        '</div>' +
+        col.orders.map(function (o) {
+          return '<div class="pipeline-card">' +
+            '<div class="pipeline-card-id">' + o.id + '</div>' +
+            '<div class="pipeline-card-items">' + o.items + '</div>' +
+            '<div class="pipeline-card-total">' + o.total + ' CAD</div>' +
+            '</div>';
+        }).join('') +
+        '</div>';
+    }).join('');
+  }
+
+  function renderBuyerAnalytics() {
+    var stats = [
+      { value: '4', label: 'Active Buyers', color: 'var(--faye-amber)' },
+      { value: '62%', label: 'Repeat Rate', color: 'var(--faye-green)' },
+      { value: '$28.40', label: 'Avg Order (CAD)', color: 'var(--faye-cyan)' },
+      { value: '+2', label: 'New This Week', color: 'var(--faye-violet)' },
+      { value: '2', label: 'Buyer Types', color: 'var(--faye-amber)' }
+    ];
+    document.getElementById('buyerAnalyticsContainer').innerHTML = stats.map(function (s) {
+      return '<div class="data-card-mini">' +
+        '<span class="data-card-mini-value" style="color:' + s.color + ';">' + s.value + '</span>' +
+        '<span class="data-card-mini-label">' + s.label + '</span>' +
+        '</div>';
+    }).join('');
+  }
+
+  function renderAccounting() {
+    var html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;">' +
+      '<div style="background:var(--bg-surface);border:1px solid var(--border);border-radius:8px;padding:16px;text-align:center;">' +
+      '<div style="font-size:20px;font-weight:700;color:var(--faye-green);">$4,220.00</div>' +
+      '<div style="font-size:11px;color:var(--text-muted);margin-top:4px;">Total Debits</div></div>' +
+      '<div style="background:var(--bg-surface);border:1px solid var(--border);border-radius:8px;padding:16px;text-align:center;">' +
+      '<div style="font-size:20px;font-weight:700;color:var(--faye-green);">$4,220.00</div>' +
+      '<div style="font-size:11px;color:var(--text-muted);margin-top:4px;">Total Credits</div></div>' +
+      '<div style="background:var(--bg-surface);border:1px solid var(--border);border-radius:8px;padding:16px;text-align:center;">' +
+      '<div style="font-size:20px;font-weight:700;color:var(--faye-green);">BALANCED</div>' +
+      '<div style="font-size:11px;color:var(--text-muted);margin-top:4px;">Status</div></div>' +
+      '</div>' +
+      '<div style="margin-top:12px;font-size:12px;color:var(--text-secondary);line-height:1.6;">' +
+      '3 transactions pending classification. Accounts Payable to farms: $1,840.00 across 1 farm.' +
+      '</div>';
+    document.getElementById('accountingContainer').innerHTML = html;
+  }
+
+  // ================================================================
+  // SCENE 6: AGENT SISTERHOOD
+  // ================================================================
+  function renderAgentCards() {
+    var agents = [
+      { cls: 'agent-evie', name: 'E.V.I.E.', full: 'Environmental Vision & Intelligence Engine', meta: '59 tools | Grower-facing | Farm operations<br>Reports to F.A.Y.E. via escalations' },
+      { cls: 'agent-gwen', name: 'G.W.E.N.', full: 'Grants, Workplans, Evidence & Navigation', meta: '103 tools | Research platform | Grant lifecycle<br>Shares engagement metrics with F.A.Y.E.' },
+      { cls: 'agent-faye', name: 'F.A.Y.E.', full: 'Farm Autonomy & Yield Engine', meta: '99 tools | Operations governance | Business intelligence<br>Senior agent -- oversees both' }
+    ];
+    document.getElementById('agentCardsContainer').innerHTML = agents.map(function (a) {
+      return '<div class="agent-card ' + a.cls + '">' +
+        '<div class="agent-card-name">' + a.name + '</div>' +
+        '<div class="agent-card-full">' + a.full + '</div>' +
+        '<div class="agent-card-meta">' + a.meta + '</div>' +
+        '</div>';
+    }).join('');
+  }
+
+  function renderCollabFlow() {
+    var messages = [
+      {
+        avatar: 'EVIE', cls: 'avatar-evie', name: 'E.V.I.E.', nameCls: 'name-evie',
+        body: '<em style="color:var(--text-muted);font-size:10px;">Escalation to F.A.Y.E.</em><br>Three wholesale orders received in 20 minutes. Current inventory: Baby Arugula 8oz x 12 available, Bibb Butterhead 16oz x 8 available. Combined order demand exceeds <span class="collab-highlight">arugula stock by 4 units</span>. Requesting fulfillment guidance.'
+      },
+      {
+        avatar: 'FAYE', cls: 'avatar-faye', name: 'F.A.Y.E.', nameCls: 'name-faye',
+        body: 'Received. Checking order pipeline and buyer history.<br><span class="collab-tool-call">get_order_dashboard</span> -- "3 pending, 2 confirmed today"<br><span class="collab-tool-call">get_buyer_analytics</span> -- "Buyer WB-1044 is repeat (6 orders). WB-1051 is new."<br>Directive to E.V.I.E.: <span class="collab-highlight">Prioritize repeat buyer WB-1044 for full fulfillment.</span> Offer WB-1051 partial fill with next-available delivery date. Log as demand signal for harvest planning.'
+      },
+      {
+        avatar: 'EVIE', cls: 'avatar-evie', name: 'E.V.I.E.', nameCls: 'name-evie',
+        body: 'Acknowledged. WB-1044 order confirmed and reserved. WB-1051 notified of partial availability. Flagging demand pattern -- <span class="collab-highlight">arugula short 3 of last 5 order cycles</span>.'
+      },
+      {
+        avatar: 'FAYE', cls: 'avatar-faye', name: 'F.A.Y.E.', nameCls: 'name-faye',
+        body: '<em style="color:var(--text-muted);font-size:10px;">Observation to G.W.E.N.</em><br>Recurring arugula shortfall pattern. 3 of last 5 wholesale cycles show demand exceeding supply. Current tower allocation: 30 towers arugula, 48 towers butterhead. <span class="collab-highlight">Requesting yield optimization analysis.</span>'
+      },
+      {
+        avatar: 'GWEN', cls: 'avatar-gwen', name: 'G.W.E.N.', nameCls: 'name-gwen',
+        body: 'Reviewing tower allocation against 60-day demand data. Preliminary: <span class="collab-highlight">reallocating 6 towers from butterhead to arugula</span> would close the gap without impacting butterhead fulfillment (current surplus: 4 units avg). Publishing analysis to ELN with confidence interval.'
+      },
+      {
+        avatar: 'FAYE', cls: 'avatar-faye', name: 'F.A.Y.E.', nameCls: 'name-faye',
+        body: 'Recommendation logged. Scheduling tower reallocation review for admin approval. Storing insight: <span class="collab-highlight">"Arugula demand exceeds allocation -- consider 36/42 split."</span> Shadow-logging this decision for trust evaluation.'
+      }
+    ];
+
+    var container = document.getElementById('collabFlowContainer');
+    container.innerHTML = '';
+
+    messages.forEach(function (m, i) {
+      var div = document.createElement('div');
+      div.className = 'collab-msg';
+      div.innerHTML =
+        '<div class="collab-avatar ' + m.cls + '">' + m.avatar.slice(0, 2) + '</div>' +
+        '<div class="collab-bubble">' +
+        '<div class="collab-bubble-name ' + m.nameCls + '">' + m.name + '</div>' +
+        '<p>' + m.body + '</p>' +
+        '</div>';
+      container.appendChild(div);
+
+      setTimeout(function () { div.classList.add('visible'); }, i * 1100);
+    });
+  }
+
+  function renderEvieOversight() {
+    var stats = [
+      { value: '23', label: 'E.V.I.E. Sessions (7d)', color: 'var(--faye-green)' },
+      { value: '147', label: 'Messages', color: 'var(--faye-cyan)' },
+      { value: '4', label: 'Escalations to F.A.Y.E.', color: 'var(--faye-amber)' },
+      { value: '2', label: 'Feature Requests', color: 'var(--faye-violet)' },
+      { value: '$2.84', label: 'Cost (7d) CAD', color: 'var(--faye-green)' },
+      { value: 'inventory', label: 'Top Ask', color: 'var(--text-secondary)' }
+    ];
+    document.getElementById('evieOversightContainer').innerHTML = stats.map(function (s) {
+      return '<div class="data-card-mini">' +
+        '<span class="data-card-mini-value" style="color:' + s.color + ';font-size:' + (s.label === 'Top Ask' ? '16px' : '26px') + ';">' + s.value + '</span>' +
+        '<span class="data-card-mini-label">' + s.label + '</span>' +
+        '</div>';
+    }).join('');
+  }
+
+  // ================================================================
+  // SCENE 7: LEARNING ENGINE
+  // ================================================================
+  function renderKnowledgeBase() {
+    var insights = [
+      { domain: 'accounting', topic: 'Sunday batch classification', body: 'Recurring Sunday evening transactions from Square webhook are wholesale revenue. 12 consecutive correct classifications.', confidence: '0.96' },
+      { domain: 'orders', topic: 'Holiday volume dip', body: 'Order volume drops 35-45% on Canadian statutory holidays. Not anomalous -- suppress alert.', confidence: '0.88' },
+      { domain: 'farm_health', topic: 'Heartbeat recovery', body: 'Farm heartbeat gaps under 15 minutes self-resolve 94% of the time. Escalate only after 30 minutes.', confidence: '0.91' }
+    ];
+    var container = document.getElementById('knowledgeBaseContainer');
+    container.innerHTML = '';
+    insights.forEach(function (ins, i) {
+      var div = document.createElement('div');
+      div.className = 'insight-card';
+      div.innerHTML =
+        '<div class="insight-domain">' + ins.domain + '</div>' +
+        '<div class="insight-topic">' + ins.topic + '</div>' +
+        '<div class="insight-body">' + ins.body + '</div>' +
+        '<div class="insight-confidence">Confidence: ' + ins.confidence + '</div>';
+      container.appendChild(div);
+      setTimeout(function () { div.classList.add('visible'); }, i * 900);
+    });
+  }
+
+  function renderAccuracyGrid() {
+    var tools = [
+      { name: 'classify_transaction', success: 47, total: 50, pct: 94, eligible: true },
+      { name: 'resolve_alert', success: 38, total: 42, pct: 90.5, eligible: false },
+      { name: 'get_market_overview', success: 12, total: 12, pct: 100, eligible: true }
+    ];
+    document.getElementById('accuracyGridContainer').innerHTML = tools.map(function (t) {
+      var c = t.pct >= 95 ? 'var(--faye-green)' : t.pct >= 90 ? 'var(--faye-amber)' : 'var(--faye-rose)';
+      return '<div class="accuracy-card">' +
+        '<div class="accuracy-tool">' + t.name + '</div>' +
+        '<div class="accuracy-bar-bg"><div class="accuracy-bar-fill" style="width:' + t.pct + '%;background:' + c + ';"></div></div>' +
+        '<span class="accuracy-label">' + t.success + '/' + t.total + ' positive' +
+        (t.eligible ? ' -- <span style="color:var(--faye-green);">eligible for promotion</span>' : ' -- monitoring') +
+        '</span>' +
+        '<span class="accuracy-pct" style="color:' + c + ';">' + t.pct + '%</span>' +
+        '</div>';
+    }).join('');
+  }
+
+  function renderPatternTimeline() {
+    var patterns = [
+      { text: 'Sunday batch cycle detected', freq: 'Weekly | 52 occurrences | First seen: Apr 2025' },
+      { text: 'Arugula demand spike Thursdays', freq: 'Weekly | 8 occurrences | First seen: Jan 2026' },
+      { text: 'Farm heartbeat gap at 03:00 UTC', freq: 'Daily | Maintenance window | Auto-suppressed' }
+    ];
+    document.getElementById('patternTimelineContainer').innerHTML = patterns.map(function (p) {
+      return '<div class="pattern-item">' +
+        '<div class="pattern-dot"></div>' +
+        '<div><div class="pattern-body">' + p.text + '</div>' +
+        '<div class="pattern-freq">' + p.freq + '</div></div>' +
+        '</div>';
+    }).join('');
+  }
+
+  function renderDomainOwnership() {
+    var canvas = document.getElementById('domainOwnershipCanvas');
+    if (!canvas) return;
+    var ctx = canvas.getContext('2d');
+    var dpr = window.devicePixelRatio || 1;
+    canvas.width = canvas.offsetWidth * dpr;
+    canvas.height = canvas.offsetHeight * dpr;
+    ctx.scale(dpr, dpr);
+    var w = canvas.offsetWidth;
+    var h = canvas.offsetHeight;
+    var pad = { top: 20, right: 24, bottom: 40, left: 140 };
+
+    var domains = [
+      { name: 'alert_triage',   level: 2 },
+      { name: 'accounting',     level: 2 },
+      { name: 'farm_health',    level: 2 },
+      { name: 'orders',         level: 1 },
+      { name: 'payments',       level: 1 },
+      { name: 'network',        level: 2 },
+      { name: 'evie_oversight', level: 2 },
+      { name: 'market_intel',   level: 1 }
+    ];
+
+    var chartW = w - pad.left - pad.right;
+    var chartH = h - pad.top - pad.bottom;
+    var barH = Math.min(24, chartH / domains.length - 6);
+    var maxLevel = 4;
+
+    ctx.fillStyle = '#060c16';
+    ctx.fillRect(0, 0, w, h);
+
+    // Grid lines for L0..L4
+    ctx.strokeStyle = '#0f1e2f';
+    ctx.lineWidth = 0.5;
+    for (var li = 0; li <= maxLevel; li++) {
+      var gx = pad.left + (li / maxLevel) * chartW;
+      ctx.beginPath(); ctx.moveTo(gx, pad.top); ctx.lineTo(gx, pad.top + chartH); ctx.stroke();
+      ctx.fillStyle = '#64748b';
+      ctx.font = '9px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('L' + li, gx, h - pad.bottom + 14);
+    }
+
+    domains.forEach(function (d, i) {
+      var y = pad.top + i * (chartH / domains.length) + (chartH / domains.length - barH) / 2;
+      var bw = (d.level / maxLevel) * chartW;
+
+      // Bar
+      var grad = ctx.createLinearGradient(pad.left, 0, pad.left + bw, 0);
+      grad.addColorStop(0, 'rgba(245, 158, 11, 0.6)');
+      grad.addColorStop(1, 'rgba(245, 158, 11, 0.25)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.roundRect(pad.left, y, bw, barH, 4);
+      ctx.fill();
+
+      // Glow on L2 domains (near promotion)
+      if (d.level === 2) {
+        ctx.shadowColor = '#f59e0b';
+        ctx.shadowBlur = 6;
+        ctx.strokeStyle = 'rgba(245, 158, 11, 0.4)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.roundRect(pad.left, y, bw, barH, 4);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+      }
+
+      // Level label inside bar
+      ctx.fillStyle = '#fff';
+      ctx.font = '600 10px -apple-system, sans-serif';
+      ctx.textAlign = 'left';
+      if (bw > 30) ctx.fillText('L' + d.level, pad.left + bw - 22, y + barH / 2 + 3);
+
+      // Domain label
+      ctx.fillStyle = '#94a3b8';
+      ctx.font = '11px -apple-system, sans-serif';
+      ctx.textAlign = 'right';
+      ctx.fillText(d.name, pad.left - 10, y + barH / 2 + 4);
+    });
+  }
+
+  // ================================================================
+  // SCENE 8: ALL TOOLS
+  // ================================================================
+  function renderAllTools() {
+    var categories = [
+      { title: 'System Health & Monitoring', color: 'var(--faye-green)', tools: ['get_system_health', 'get_farm_heartbeats', 'get_sync_status'] },
+      { title: 'Alerts Management', color: 'var(--faye-rose)', tools: ['get_admin_alerts', 'create_alert', 'acknowledge_alert', 'resolve_alert', 'acknowledge_farm_alert', 'resolve_farm_alert', 'resolve_all_alerts', 'acknowledge_all_alerts'] },
+      { title: 'Accounting & Finance', color: 'var(--faye-amber)', tools: ['get_trial_balance', 'get_unclassified_transactions', 'get_revenue_summary', 'get_accounts_payable', 'get_recent_transactions', 'classify_transaction', 'process_refund'] },
+      { title: 'Orders & Commerce', color: 'var(--faye-cyan)', tools: ['get_order_dashboard', 'get_order_detail', 'get_payment_status', 'get_refund_history', 'get_buyer_analytics', 'process_refund'] },
+      { title: 'Farm Network', color: 'var(--faye-green)', tools: ['get_network_overview', 'get_farm_detail'] },
+      { title: 'Market Intelligence', color: 'var(--faye-violet)', tools: ['get_market_overview', 'fetch_market_trends', 'get_approved_market_sources'] },
+      { title: 'AI Costs', color: 'var(--faye-cyan)', tools: ['get_ai_usage_costs', 'get_aws_costs'] },
+      { title: 'E.V.I.E. & Agent Oversight', color: 'var(--faye-green)', tools: ['get_evie_engagement', 'get_agent_engagement_report', 'get_farm_alerts', 'get_evie_conversations', 'get_evie_conversation_summaries'] },
+      { title: 'Inter-Agent Communication', color: 'var(--faye-amber)', tools: ['send_message_to_evie', 'get_evie_messages', 'get_agent_conversation', 'get_evie_conversations', 'get_evie_conversation_summaries'] },
+      { title: 'Security & Threat Detection', color: 'var(--faye-rose)', tools: ['run_security_audit', 'analyze_security_behavior', 'detect_security_anomalies', 'correlate_threat_indicators', 'explain_security_finding', 'analyze_sensor_security', 'write_security_workbook'] },
+      { title: 'LE Diagnostics', color: 'var(--faye-cyan)', tools: ['diagnose_le_health', 'check_service_connectivity', 'get_le_inventory_status', 'read_le_source_file', 'get_le_config_and_permissions', 'get_recent_changes_and_deploys', 'check_dependencies'] },
+      { title: 'Learning & Knowledge', color: 'var(--faye-violet)', tools: ['store_insight', 'get_knowledge', 'search_knowledge', 'archive_insight', 'record_outcome', 'get_patterns'] },
+      { title: 'Autonomy & Trust', color: 'var(--faye-amber)', tools: ['evaluate_trust_promotion', 'get_domain_ownership', 'set_domain_ownership', 'log_shadow_decision', 'get_shadow_accuracy', 'get_action_class'] },
+      { title: 'Data Infrastructure', color: 'var(--faye-green)', tools: ['get_data_freshness', 'get_db_pool_status', 'check_certificate_expiry', 'get_setup_checklist'] },
+      { title: 'Analytics & Trends', color: 'var(--faye-amber)', tools: ['analyze_revenue_trend', 'analyze_order_patterns', 'analyze_farm_performance', 'get_anomaly_report', 'get_decision_log'] },
+      { title: 'Producer Portal', color: 'var(--faye-cyan)', tools: ['review_producer_applications', 'approve_producer_application', 'reject_producer_application'] },
+      { title: 'Research Platform', color: 'var(--faye-violet)', tools: ['get_research_dashboard', 'get_study_compliance_status', 'get_research_audit_log', 'manage_study_collaborators'] },
+      { title: 'Communications', color: 'var(--faye-rose)', tools: ['send_admin_email', 'send_sms', 'get_email_status', 'get_webhook_config'] },
+      { title: 'Memory & Recall', color: 'var(--faye-cyan)', tools: ['save_admin_memory', 'recall_conversations', 'search_past_conversations', 'get_weekly_feature_request_todo'] },
+      { title: 'Feedback', color: 'var(--faye-green)', tools: ['record_recommendation_feedback', 'rate_alert', 'get_esg_summary'] }
+    ];
+
+    var totalTools = categories.reduce(function (sum, c) { return sum + c.tools.length; }, 0);
+    animateCounter(document.getElementById('statToolCount'), 99, 2000);
+    animateCounter(document.getElementById('statDomainCount'), 8, 1500);
+    animateCounter(document.getElementById('statSecurityCount'), 6, 1500);
+
+    document.getElementById('allToolsGrid').innerHTML = categories.map(function (cat) {
+      return '<div class="cap-card">' +
+        '<span class="cap-card-icon" style="color:' + cat.color + ';">&#9679;</span>' +
+        '<div class="cap-card-title">' + cat.title +
+        ' <span style="color:var(--text-muted);font-size:11px;font-weight:400;">(' + cat.tools.length + ')</span></div>' +
+        '<div class="cap-card-tools">' +
+        cat.tools.map(function (t) { return '<span class="cap-tool-tag">' + t + '</span>'; }).join('') +
+        '</div></div>';
+    }).join('');
+  }
+
+  // ================================================================
+  // INIT
+  // ================================================================
+  window.addEventListener('DOMContentLoaded', function () {
+    initStarfield();
+    initScrollObserver();
+    renderAllTools();
+
+    // Auto-start audio on first interaction
+    var audioStarted = false;
+    function tryStartAudio() {
+      if (audioStarted) return;
+      audioStarted = true;
+      playAmberAmbient();
+      audioPlaying = true;
+      document.getElementById('audioIcon').innerHTML = '&#9724;';
+      document.getElementById('audioLabel').textContent = 'Stop Soundtrack';
+    }
+    ['click', 'scroll', 'touchstart', 'keydown'].forEach(function (ev) {
+      window.addEventListener(ev, tryStartAudio, { once: false, passive: true });
+    });
+
+    // Continuous slow auto-scroll
+    var autoScrollActive = false;
+    var autoScrollRafId = null;
+    var autoScrollSpeed = 0.6;
+    var autoScrollStartDelay = 4000;
+
+    function autoScrollTick() {
+      if (!autoScrollActive) return;
+      var maxScroll = document.documentElement.scrollHeight - window.innerHeight;
+      if (window.scrollY >= maxScroll - 2) {
+        autoScrollActive = false;
+        return;
+      }
+      window.scrollBy(0, autoScrollSpeed);
+      autoScrollRafId = requestAnimationFrame(autoScrollTick);
+    }
+
+    function startAutoScroll() {
+      if (autoScrollActive) return;
+      autoScrollActive = true;
+      autoScrollRafId = requestAnimationFrame(autoScrollTick);
+    }
+
+    function stopAutoScroll() {
+      autoScrollActive = false;
+      if (autoScrollRafId) { cancelAnimationFrame(autoScrollRafId); autoScrollRafId = null; }
+    }
+
+    var autoScrollInitTimer = setTimeout(startAutoScroll, autoScrollStartDelay);
+
+    var resumeTimer = null;
+    function onUserScroll() {
+      stopAutoScroll();
+      clearTimeout(resumeTimer);
+      resumeTimer = setTimeout(startAutoScroll, 4000);
+    }
+    window.addEventListener('wheel', onUserScroll, { passive: true });
+    window.addEventListener('touchmove', onUserScroll, { passive: true });
+    window.addEventListener('keydown', function (e) {
+      if (e.key === 'ArrowDown' || e.key === 'PageDown' || e.key === ' ') onUserScroll();
+    });
+
+    // Render visualizations when sections come into view
+    var rendered = {};
+    var observer2 = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (!entry.isIntersecting) return;
+        var scene = entry.target.dataset.scene;
+        if (rendered[scene]) return;
+        rendered[scene] = true;
+        if (scene === 'command') {
+          showToolExec('toolExecCommand', [
+            { name: 'get_admin_alerts', time: '82ms' },
+            { name: 'get_system_health', time: '44ms' },
+            { name: 'get_farm_heartbeats', time: '61ms' },
+            { name: 'get_order_dashboard', time: '95ms' }
+          ]);
+          setTimeout(renderNetworkHealth, 200);
+          setTimeout(renderAlertTriage, 400);
+        }
+        if (scene === 'autonomy') {
+          renderAutonomyLadder();
+          renderTrustTable();
+          setTimeout(renderShadowLog, 600);
+        }
+        if (scene === 'security') {
+          renderSecurityStack();
+          setTimeout(renderThreatAssessment, 400);
+          renderWorkbookSections();
+        }
+        if (scene === 'business') {
+          setTimeout(renderRevenueChart, 200);
+          renderOrderPipeline();
+          renderBuyerAnalytics();
+          renderAccounting();
+        }
+        if (scene === 'collab') {
+          renderAgentCards();
+          renderCollabFlow();
+          renderEvieOversight();
+        }
+        if (scene === 'learning') {
+          renderKnowledgeBase();
+          renderAccuracyGrid();
+          renderPatternTimeline();
+          setTimeout(renderDomainOwnership, 200);
+        }
+      });
+    }, { threshold: 0.1 });
+
+    document.querySelectorAll('.scene[data-scene]').forEach(function (el) { observer2.observe(el); });
+
+    // Handle resize
+    var resizeTimer;
+    window.addEventListener('resize', function () {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(function () {
+        if (rendered['command'])  renderNetworkHealth();
+        if (rendered['business']) renderRevenueChart();
+        if (rendered['learning']) renderDomainOwnership();
+      }, 250);
+    });
+  });
+
+})();
+</script>
+</body>
+</html>
