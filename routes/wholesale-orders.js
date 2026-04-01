@@ -17,6 +17,45 @@ import { query } from '../lib/database.js';
 
 const router = express.Router();
 
+function getCentralUrl() {
+  return process.env.GREENREACH_CENTRAL_URL || process.env.CENTRAL_URL || 'https://greenreachgreens.com';
+}
+
+async function deductInventoryAtCentral(farmId, items, orderId) {
+  const centralUrl = getCentralUrl();
+  const deductionItems = items.map(item => ({
+    product_id: item.sku_id || item.product_id || item.product_name,
+    quantity_lbs: Number(item.quantity) || 0,
+    reason: 'wholesale_order_accepted',
+    order_id: orderId
+  })).filter(it => it.quantity_lbs > 0);
+
+  if (deductionItems.length === 0) return { success: true, deductions: [] };
+
+  try {
+    const resp = await fetch(`${centralUrl}/api/inventory/deduct`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Farm-ID': farmId,
+        'X-API-Key': process.env.GREENREACH_API_KEY || process.env.WHOLESALE_FARM_API_KEY || ''
+      },
+      body: JSON.stringify({ farmId, items: deductionItems }),
+      signal: AbortSignal.timeout(8000)
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (resp.ok && data.success !== false) {
+      console.log(`[Wholesale Orders] Inventory deducted at Central for ${deductionItems.length} items, order ${orderId}`);
+      return data;
+    }
+    console.warn(`[Wholesale Orders] Inventory deduction response: ${resp.status}`, data.error || '');
+    return { success: false, error: data.error || `HTTP ${resp.status}` };
+  } catch (err) {
+    console.error(`[Wholesale Orders] Inventory deduction failed (non-fatal):`, err.message);
+    return { success: false, error: err.message };
+  }
+}
+
 function shouldReadFromDb() {
   const raw = String(process.env.WHOLESALE_READ_FROM_DB || '').trim().toLowerCase();
   if (!raw) return true;
@@ -632,6 +671,10 @@ router.post('/farm-verify', async (req, res) => {
             console.log(`[Wholesale Orders] All sub-orders verified for ${subOrder.master_order_id}`);
           }
         }
+        // Deduct inventory at Central (non-blocking)
+        deductInventoryAtCentral(farm_id, subOrder.items || [], sub_order_id).catch(err =>
+          console.warn('[Wholesale Orders] Non-fatal deduction error:', err.message)
+        );
         break;
         
       case 'decline':

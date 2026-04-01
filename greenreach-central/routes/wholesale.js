@@ -2378,11 +2378,18 @@ router.post('/checkout/execute', checkoutLimiter, requireWholesaleDbForCriticalP
                 type: 'wholesale_order_created',
                 order_id: order.master_order_id,
                 farm_id: sub.farm_id,
+                farm_name: sub.farm_name || sub.farm_id,
                 delivery_date: order.delivery_date,
                 created_at: order.created_at,
                 payment_status: payment.status,
+                buyer_name: buyer_account?.name || buyer_account?.email || 'Wholesale Buyer',
+                buyer_email: buyer_account?.email || '',
+                delivery_address: normalizedDeliveryAddress?.street || '',
+                subtotal: sub.subtotal || sub.total || 0,
+                verification_deadline: new Date(Date.now() + 24 * 3600000).toISOString(),
                 items: (sub.items || []).map((it) => ({
-                  sku_id: it.sku_id, product_name: it.product_name, quantity: it.quantity, unit: it.unit
+                  sku_id: it.sku_id, product_name: it.product_name, quantity: it.quantity, unit: it.unit,
+                  price_per_unit: it.price_per_unit || it.unit_price || 0
                 }))
               }, sub.farm_id, farm, 3000);
             } catch { /* notification is best-effort */ }

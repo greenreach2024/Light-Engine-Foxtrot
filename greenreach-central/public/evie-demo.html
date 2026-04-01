@@ -1942,6 +1942,7 @@ body {
       cursor.className = 'narration-cursor';
       var charIdx = 0;
       var speed = 22; // ms per character
+      narrationText.appendChild(cursor);
 
       typeTimer = setInterval(function() {
         if (charIdx < text.length) {

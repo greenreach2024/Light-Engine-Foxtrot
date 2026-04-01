@@ -19,6 +19,7 @@ import {
 } from '../lib/input-validation.js';
 import * as reservationStore from '../lib/wholesale/reservation-store.js';
 import { query as dbQuery } from '../lib/database.js';
+import orderStore from '../lib/wholesale/order-store.js';
 
 let reservationCleanupStarted = false;
 if (!reservationCleanupStarted) {
@@ -439,6 +440,57 @@ router.post('/order-events', wholesaleAuthMiddleware, express.json({ limit: '256
     while (events.length > 200) events.pop();
 
     fs.writeFileSync(eventsFile, JSON.stringify({ events, updated_at: new Date().toISOString() }, null, 2), 'utf8');
+
+    // Bridge: create NeDB sub-orders so Activity Hub and LE-wholesale-orders can display them
+    if (payload.type === 'wholesale_order_created' && payload.order_id && payload.farm_id) {
+      try {
+        // Save master order if not already in NeDB
+        const existingOrder = await orderStore.getOrder(String(payload.order_id));
+        if (!existingOrder) {
+          await orderStore.saveOrder({
+            master_order_id: String(payload.order_id),
+            buyer_name: payload.buyer_name || 'Wholesale Buyer',
+            buyer_email: payload.buyer_email || '',
+            delivery_date: payload.delivery_date || null,
+            delivery_address: payload.delivery_address || '',
+            status: payload.payment_status === 'completed' ? 'confirmed' : 'pending_payment',
+            created_at: payload.created_at || new Date().toISOString()
+          });
+        }
+
+        // Create sub-order for this farm
+        const subOrderId = `SO-${payload.order_id}-${payload.farm_id}`;
+        const existingSub = await orderStore.getSubOrder(subOrderId);
+        if (!existingSub) {
+          const items = (payload.items || []).map(it => ({
+            sku_id: it.sku_id || '',
+            product_name: it.product_name || it.sku_id || 'Unknown',
+            quantity: Number(it.quantity) || 0,
+            unit: it.unit || 'lb',
+            price_per_unit: Number(it.price_per_unit) || 0,
+            line_total: (Number(it.price_per_unit) || 0) * (Number(it.quantity) || 0)
+          }));
+          const subtotal = items.reduce((sum, it) => sum + it.line_total, 0);
+
+          await orderStore.saveSubOrder({
+            sub_order_id: subOrderId,
+            master_order_id: String(payload.order_id),
+            farm_id: payload.farm_id,
+            farm_name: payload.farm_name || payload.farm_id,
+            status: 'pending_verification',
+            items,
+            sub_total: payload.subtotal || subtotal,
+            verification_deadline: payload.verification_deadline || new Date(Date.now() + 24 * 3600000).toISOString(),
+            payment_status: payload.payment_status || 'pending',
+            buyer_name: payload.buyer_name || 'Wholesale Buyer',
+            delivery_date: payload.delivery_date || null
+          });
+          console.log(`[Wholesale Sync] Created NeDB sub-order ${subOrderId} for Activity Hub`);
+        }
+      } catch (bridgeErr) {
+        console.error('[Wholesale Sync] NeDB bridge error (non-fatal):', bridgeErr.message);
+      }
+    }
 
     console.log('[Wholesale Sync] Received order event:', event.type, event.order_id);
     return res.json({ ok: true, stored: true });
