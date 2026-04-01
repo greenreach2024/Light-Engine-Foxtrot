@@ -22,6 +22,31 @@ class WholesaleNotificationService {
     
     this.fromEmail = process.env.NOTIFICATIONS_FROM_EMAIL || 'orders@greenreach.ca';
     this.appUrl = process.env.APP_URL || 'http://localhost:8091';
+    this._centralUrl = process.env.GREENREACH_CENTRAL_URL || process.env.CENTRAL_URL || 'https://greenreachgreens.com';
+  }
+
+  /**
+   * Push an in-app notification to EVIE via Central API.
+   * Fire-and-forget so it never blocks order flow.
+   */
+  async _pushEvieNotification(farmId, title, body, category) {
+    if (!farmId) return;
+    try {
+      await fetch(`${this._centralUrl}/api/assistant/notifications/push`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          farm_id: farmId,
+          category: category || 'order',
+          title,
+          body: body || null,
+          severity: 'info',
+          source: 'wholesale'
+        })
+      });
+    } catch (err) {
+      console.warn('[Notifications] EVIE push failed (non-fatal):', err.message);
+    }
   }
 
   /**
@@ -180,6 +205,14 @@ support@greenreach.ca
       console.error(`[Notifications] Email failed for ${farm_name}:`, error.message);
     }
     
+    // Push in-app notification to EVIE (redundant channel)
+    await this._pushEvieNotification(
+      subOrder.farm_id || farmContact.farm_id,
+      `New Wholesale Order #${order.id}`,
+      `Order from ${order.buyer_name || 'buyer'} - $${Number(subOrder.sub_total || 0).toFixed(2)} - respond within ${hoursLeft}h`,
+      'order'
+    );
+
     // Send SMS if phone provided
     if (phone) {
       await smsService.notifyFarmNewOrder(phone, order.id, subOrder.sub_total, hoursLeft);

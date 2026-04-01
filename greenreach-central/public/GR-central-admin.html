@@ -1089,7 +1089,103 @@
             gap: 12px;
             justify-content: flex-end;
         }
-    </style>
+
+        /* ── Alert Farm Group Accordion ─────────────────────── */
+        .alert-farm-group {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            margin-bottom: 8px;
+            overflow: hidden;
+            background: var(--bg-card);
+        }
+        .alert-farm-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 16px;
+            cursor: pointer;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border);
+            transition: background 0.2s;
+            user-select: none;
+        }
+        .alert-farm-header:hover {
+            background: rgba(59, 130, 246, 0.08);
+        }
+        .alert-farm-header-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .alert-farm-chevron {
+            font-size: 11px;
+            color: var(--text-muted);
+            display: inline-block;
+            width: 14px;
+            transition: transform 0.2s;
+        }
+        .alert-farm-count {
+            font-size: 12px;
+            color: var(--text-secondary);
+            background: rgba(255,255,255,0.06);
+            padding: 2px 8px;
+            border-radius: 10px;
+        }
+        .alert-farm-active {
+            font-size: 11px;
+            color: var(--accent-yellow);
+            background: rgba(245, 158, 11, 0.12);
+            padding: 2px 8px;
+            border-radius: 10px;
+        }
+        .alert-farm-critical {
+            font-size: 11px;
+            color: var(--accent-red);
+            background: rgba(239, 68, 68, 0.12);
+            padding: 2px 8px;
+            border-radius: 10px;
+        }
+        .alert-farm-header-actions {
+            flex-shrink: 0;
+        }
+        .alert-farm-body {
+            padding: 0;
+        }
+        .alert-farm-body .alert-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        .alert-farm-body .alert-table th {
+            background: var(--bg-secondary);
+            padding: 8px 12px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
+            border-bottom: 1px solid var(--border);
+        }
+        .alert-farm-body .alert-table td {
+            padding: 8px 12px;
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+            color: var(--text-primary);
+        }
+        .alert-farm-body .alert-row:hover td {
+            background: rgba(59, 130, 246, 0.04);
+        }
+        .btn-warning {
+            background: rgba(245, 158, 11, 0.15);
+            color: var(--accent-yellow);
+            border-color: rgba(245, 158, 11, 0.3);
+        }
+        .btn-warning:hover {
+            background: rgba(245, 158, 11, 0.25);
+        }
+
+        </style>
 </head>
 <body>
     <!-- Delivery Service Banner -->
@@ -2886,6 +2982,7 @@
                     <div class="header-actions">
                         <button class="btn" onclick="acknowledgeAllAlerts()">Acknowledge All</button>
                         <button class="btn" onclick="resolveAllAlerts()">Resolve All</button>
+                        <button class="btn btn-warning" onclick="bulkResolveOlder()">Clear Older Alerts</button>
                     </div>
                 </div>
 
@@ -2912,6 +3009,9 @@
                     <div class="card-header">
                         <div class="card-title">Alert Feed</div>
                         <div class="filter-bar">
+                            <select id="filter-alert-farm" onchange="filterAlerts()">
+                                <option value="">All Farms</option>
+                            </select>
                             <select id="filter-alert-severity" onchange="filterAlerts()">
                                 <option value="">All Severities</option>
                                 <option value="critical">Critical</option>
@@ -2924,29 +3024,16 @@
                                 <option value="acknowledged">Acknowledged</option>
                                 <option value="resolved">Resolved</option>
                             </select>
+                            <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-muted);cursor:pointer;">
+                                <input type="checkbox" id="alerts-group-by-farm" checked onchange="filterAlerts()">
+                                Group by farm
+                            </label>
                         </div>
                     </div>
                     <div class="card-body">
-                        <div class="table-container">
-                            <table id="alerts-table">
-                                <thead>
-                                    <tr>
-                                        <th>Time</th>
-                                        <th>Farm</th>
-                                        <th>Severity</th>
-                                        <th>Alert Type</th>
-                                        <th>Message</th>
-                                        <th>Status</th>
-                                        <th>Acknowledged By</th>
-                                        <th>Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="alerts-tbody">
-                                    <tr>
-                                        <td colspan="8" class="loading">Loading alerts...</td>
-                                    </tr>
-                                </tbody>
-                            </table>
+                        <div id="alerts-grouped-container">
+                            <!-- JS renders farm-grouped accordion sections here -->
+                            <p style="padding:24px;text-align:center;color:var(--text-muted);">Loading alerts...</p>
                         </div>
                     </div>
                 </div>

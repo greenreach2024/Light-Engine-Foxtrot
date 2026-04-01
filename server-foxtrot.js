@@ -2246,6 +2246,7 @@ const VIEWER_ALLOWED_PATHS = [
   '/api/assistant/chat',
   '/api/assistant/chat/stream',
   '/api/assistant/upload-image',
+  '/api/assistant/notifications',
   '/api/admin/assistant/chat',
   '/api/admin/assistant/chat/stream',
   '/api/admin/assistant/memory',

@@ -28,6 +28,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createRequire } from 'module';
+import notificationStore from '../services/notification-store.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -4732,6 +4733,12 @@ router.get('/state', async (req, res) => {
       } catch (e) { /* non-fatal */ }
     }
 
+    // Unread notification count (lightweight)
+    var unreadNotifications = 0;
+    try {
+      unreadNotifications = await notificationStore.getUnreadCount(farmId);
+    } catch (e) { /* non-fatal */ }
+
     // Proactive message
     var proactiveMessage = null;
     if (risks.length > 0) {
@@ -4752,7 +4759,8 @@ router.get('/state', async (req, res) => {
       insights: insights,
       farm_name: farmName,
       farm_location: farmLocation,
-      proactive_message: proactiveMessage
+      proactive_message: proactiveMessage,
+      unread_notifications: unreadNotifications
     });
   } catch (err) {
     logger.error('[E.V.I.E. State] Error:', err.message);
@@ -4760,7 +4768,8 @@ router.get('/state', async (req, res) => {
       ok: true,
       alerts: 0, alert_items: [], rooms: [], crops: [], tasks: [],
       risks: [], recommendations: [], insights: [],
-      farm_name: '', farm_location: '', proactive_message: null
+      farm_name: '', farm_location: '', proactive_message: null,
+      unread_notifications: 0
     });
   }
 });
@@ -5464,6 +5473,72 @@ router.get('/engagement-report', async (req, res) => {
   } catch (err) {
     logger.error('[EngagementReport] Error:', err.message);
     return res.status(500).json({ ok: false, error: 'Failed to generate report' });
+  }
+});
+
+// ── Notification Endpoints — In-app notification feed for E.V.I.E. ──────────
+
+/**
+ * GET /api/assistant/notifications
+ * Fetch notifications for the current farm. Newest first.
+ * Query: ?unread_only=true&limit=30&offset=0
+ */
+router.get('/notifications', async (req, res) => {
+  try {
+    const farmId = req.farmId || req.query.farm_id || 'demo-farm';
+    const unreadOnly = req.query.unread_only === 'true';
+    const limit = Math.min(parseInt(req.query.limit) || 30, 100);
+    const offset = parseInt(req.query.offset) || 0;
+
+    const result = await notificationStore.getNotifications(farmId, { unreadOnly, limit, offset });
+    return res.json({ ok: true, ...result });
+  } catch (err) {
+    logger.error('[Notifications] Fetch error:', err.message);
+    return res.status(500).json({ ok: false, error: 'Failed to fetch notifications' });
+  }
+});
+
+/**
+ * POST /api/assistant/notifications/read
+ * Mark notification(s) as read.
+ * Body: { id: number } for single, or { all: true } for all.
+ */
+router.post('/notifications/read', async (req, res) => {
+  try {
+    const farmId = req.farmId || req.body?.farm_id || 'demo-farm';
+    const { id, all } = req.body || {};
+
+    if (all) {
+      const count = await notificationStore.markAllRead(farmId);
+      return res.json({ ok: true, marked: count });
+    }
+    if (id) {
+      const ok = await notificationStore.markRead(parseInt(id), farmId);
+      return res.json({ ok });
+    }
+    return res.status(400).json({ ok: false, error: 'Provide id or all:true' });
+  } catch (err) {
+    logger.error('[Notifications] Read error:', err.message);
+    return res.status(500).json({ ok: false, error: 'Failed to mark notifications read' });
+  }
+});
+
+/**
+ * POST /api/assistant/notifications/push
+ * Push a notification (internal use by LE wholesale, email hooks, etc.).
+ * Body: { farm_id, category, title, body, severity, source }
+ */
+router.post('/notifications/push', async (req, res) => {
+  try {
+    const { farm_id, category, title, body, severity, source } = req.body || {};
+    if (!farm_id || !title) {
+      return res.status(400).json({ ok: false, error: 'farm_id and title are required' });
+    }
+    const result = await notificationStore.pushNotification(farm_id, { category, title, body, severity, source });
+    return res.json({ ok: true, notification: result });
+  } catch (err) {
+    logger.error('[Notifications] Push error:', err.message);
+    return res.status(500).json({ ok: false, error: 'Failed to push notification' });
   }
 });
 

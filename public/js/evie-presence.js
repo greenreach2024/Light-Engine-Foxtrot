@@ -121,7 +121,19 @@
   statusEl.id = 'evie-ambient-status';
   statusEl.textContent = 'Monitoring your farm';
 
+  // Notification bell (highly visible when unread)
+  var notifBell = document.createElement('div');
+  notifBell.className = 'evie-notif-bell';
+  notifBell.id = 'evie-notif-bell';
+  notifBell.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg><span class="evie-notif-count" id="evie-notif-count"></span>';
+  notifBell.addEventListener('click', function (e) {
+    e.stopPropagation();
+    togglePanel(true);
+    switchMode('inbox');
+  });
+
   ambientRow.appendChild(ambientOrbWrap);
+  ambientRow.appendChild(notifBell);
   ambientRow.appendChild(statusEl);
   ambient.appendChild(ambientRow);
 
@@ -160,12 +172,14 @@
     { key: 'observe', label: 'Observe' },
     { key: 'advise',  label: 'Advise' },
     { key: 'converse', label: 'Chat' },
+    { key: 'inbox',   label: 'Inbox' },
     { key: 'learn',   label: 'Farm' }
   ];
   var modeIcons = {
     observe: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>',
     advise: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 1 1 7.072 0l-.548.547A3.374 3.374 0 0 0 14 18.469V19a2 2 0 1 1-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>',
     converse: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
+    inbox: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>',
     learn: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>'
   };
   modes.forEach(function (m) {
@@ -247,9 +261,21 @@
     '  <div id="evie-insight-list"></div>' +
     '</div>';
 
+  // --- Inbox Mode (Notifications) ---
+  var inboxEl = document.createElement('div');
+  inboxEl.id = 'evie-mode-inbox';
+  inboxEl.style.display = 'none';
+  inboxEl.innerHTML =
+    '<div class="evie-inbox-header">' +
+    '  <div class="evie-intel-section-title">Notifications <span class="count" id="evie-notif-inbox-count">0</span></div>' +
+    '  <button class="evie-notif-mark-all" id="evie-notif-mark-all">Mark all read</button>' +
+    '</div>' +
+    '<div id="evie-notif-list" class="evie-notif-list"></div>';
+
   panelBody.appendChild(observeEl);
   panelBody.appendChild(adviseEl);
   panelBody.appendChild(converseEl);
+  panelBody.appendChild(inboxEl);
   panelBody.appendChild(learnEl);
 
   // ── Inject into DOM ──────────────────────────────────────────
@@ -259,6 +285,21 @@
     startPolling();
     attachChatEvents();
     refreshState();
+
+    // Wire up mark-all-read button
+    var markAllBtn = document.getElementById('evie-notif-mark-all');
+    if (markAllBtn) {
+      markAllBtn.addEventListener('click', async function () {
+        try {
+          await fetch(API_BASE + '/notifications/read', {
+            method: 'POST',
+            headers: Object.assign({ 'Content-Type': 'application/json' }, getAuthHeaders()),
+            body: JSON.stringify({ all: true })
+          });
+          loadNotifications();
+        } catch (e) { /* silent */ }
+      });
+    }
   }
 
   if (document.readyState === 'loading') {
@@ -288,7 +329,12 @@
     observeEl.style.display = mode === 'observe' ? '' : 'none';
     adviseEl.style.display  = mode === 'advise'  ? '' : 'none';
     converseEl.style.display = mode === 'converse' ? '' : 'none';
+    inboxEl.style.display   = mode === 'inbox'   ? '' : 'none';
     learnEl.style.display   = mode === 'learn'   ? '' : 'none';
+
+    if (mode === 'inbox') {
+      loadNotifications();
+    }
 
     if (mode === 'converse') {
       setTimeout(function () {
@@ -411,10 +457,96 @@
       renderAdviseMode(data);
       renderLearnMode(data);
       updateAmbient(data);
+      updateNotifBadge(data.unread_notifications || 0);
     } catch (e) {
       // Best-effort polling -- silent fail
     }
   }
+
+  // ── Notification Badge + Loading ─────────────────────────────
+
+  function updateNotifBadge(count) {
+    notifUnread = count;
+    var badge = document.getElementById('evie-notif-count');
+    var bell = document.getElementById('evie-notif-bell');
+    var inboxCount = document.getElementById('evie-notif-inbox-count');
+    if (badge) badge.textContent = count > 0 ? String(count) : '';
+    if (bell) bell.classList.toggle('has-unread', count > 0);
+    if (inboxCount) inboxCount.textContent = String(count);
+
+    // Also update the inbox tab itself
+    var inboxTab = tabBar.querySelector('[data-mode="inbox"]');
+    if (inboxTab) {
+      var existing = inboxTab.querySelector('.evie-tab-badge');
+      if (count > 0) {
+        if (!existing) {
+          var dot = document.createElement('span');
+          dot.className = 'evie-tab-badge';
+          inboxTab.appendChild(dot);
+        }
+      } else if (existing) {
+        existing.remove();
+      }
+    }
+  }
+
+  async function loadNotifications() {
+    var list = document.getElementById('evie-notif-list');
+    if (!list) return;
+    try {
+      var resp = await fetch(API_BASE + '/notifications?limit=30', { headers: getAuthHeaders() });
+      if (!resp.ok) return;
+      var data = await resp.json();
+      if (!data.ok) return;
+      notifData = data.notifications || [];
+      updateNotifBadge(data.unread_count || 0);
+      renderNotifications();
+    } catch (e) {
+      console.warn('[E.V.I.E.] Notification fetch failed');
+    }
+  }
+
+  function renderNotifications() {
+    var list = document.getElementById('evie-notif-list');
+    if (!list) return;
+    if (notifData.length === 0) {
+      list.innerHTML = '<div class="evie-notice">No notifications yet.</div>';
+      return;
+    }
+    var html = '';
+    notifData.forEach(function (n) {
+      var catIcon = {
+        order: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>',
+        alert: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
+        general: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>'
+      };
+      var icon = catIcon[n.category] || catIcon.general;
+      var readClass = n.read ? 'read' : 'unread';
+      html += '<div class="evie-notif-item ' + readClass + '" data-id="' + n.id + '">' +
+        '<div class="evie-notif-icon">' + icon + '</div>' +
+        '<div class="evie-notif-content">' +
+        '  <div class="evie-notif-title">' + esc(n.title) + '</div>' +
+        (n.body ? '  <div class="evie-notif-body">' + esc(n.body) + '</div>' : '') +
+        '  <div class="evie-notif-meta">' + timeAgo(new Date(n.created_at).getTime()) +
+        (n.source ? ' | ' + esc(n.source) : '') + '</div>' +
+        '</div>' +
+        (!n.read ? '<button class="evie-notif-read-btn" onclick="window._evieMarkRead(' + n.id + ')">Mark read</button>' : '') +
+        '</div>';
+    });
+    list.innerHTML = html;
+  }
+
+  // Global handlers for notification actions
+  window._evieMarkRead = async function (id) {
+    try {
+      await fetch(API_BASE + '/notifications/read', {
+        method: 'POST',
+        headers: Object.assign({ 'Content-Type': 'application/json' }, getAuthHeaders()),
+        body: JSON.stringify({ id: id })
+      });
+      loadNotifications();
+    } catch (e) { /* silent */ }
+  };
 
   function updateAmbient(data) {
     var badge = document.getElementById('evie-ambient-badge');

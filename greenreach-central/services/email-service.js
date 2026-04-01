@@ -5,6 +5,7 @@
  */
 
 import nodemailer from 'nodemailer';
+import notificationStore from './notification-store.js';
 
 const FROM_EMAIL = process.env.FROM_EMAIL || process.env.EMAIL_FROM || 'noreply@greenreachgreens.com';
 const FROM_NAME = process.env.FROM_NAME || 'GreenReach Farms';
@@ -68,7 +69,7 @@ class EmailService {
    * Send an email. Returns { success, messageId }.
    * Tries SES first, falls back to SMTP (WorkMail), then stub in dev.
    */
-  async sendEmail({ to, subject, text, html, from, cc, bcc }) {
+  async sendEmail({ to, subject, text, html, from, cc, bcc, farmId, notifCategory }) {
     const fromAddress = from || `${FROM_NAME} <${FROM_EMAIL}>`;
     console.log(`[email] -> ${to} | ${subject}`);
 
@@ -134,16 +135,39 @@ class EmailService {
     console.warn(`[EMAIL WARNING] Configure SES credentials or set SMTP_HOST/SMTP_USER/SMTP_PASS env vars`);
     if (text) console.warn(`[email] Body preview: ${text.substring(0, 200)}`);
     return { success: false, messageId: `stub-${Date.now()}`, stub: true, error: "No email transport configured" };
+  }
 
-
-
-
+  /**
+   * Push an in-app notification to EVIE after any sendEmail call.
+   * Called automatically by sendOrderConfirmation and can be called manually.
+   */
+  async _pushNotification(farmId, subject, body, category) {
+    if (!farmId) return;
+    try {
+      await notificationStore.pushNotification(farmId, {
+        category: category || 'general',
+        title: subject,
+        body: body || null,
+        severity: 'info',
+        source: 'email'
+      });
+    } catch (err) {
+      console.warn('[email] Notification push failed (non-fatal):', err.message);
+    }
   }
 
   async sendOrderConfirmation(order, buyer) {
     const items = (order.farm_sub_orders || [])
       .flatMap(sub => (sub.items || []).map(it => `  • ${it.product_name || it.sku_id} × ${it.quantity}`))
       .join('\n');
+
+    // Push in-app notification to all farms in the order
+    const farmIds = (order.farm_sub_orders || []).map(sub => sub.farm_id).filter(Boolean);
+    for (const fid of [...new Set(farmIds)]) {
+      await this._pushNotification(fid, `New Order #${order.master_order_id}`,
+        `Order from ${buyer.contactName || buyer.businessName || buyer.email} - $${Number(order.grand_total || 0).toFixed(2)}`,
+        'order');
+    }
 
     return this.sendEmail({
       to: buyer.email,

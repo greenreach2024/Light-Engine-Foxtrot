@@ -7501,120 +7501,250 @@ async function loadAnomaliesView() {
 async function loadAlertsView(options = {}) {
     const { farmId = null, severity = null, status = null } = options;
     console.log('[Alerts] Loading alerts...', { farmId, severity, status });
-    const tbody = document.getElementById('alerts-tbody');
-    if (!tbody) {
-        console.warn('[Alerts] Table body not found');
+    const container = document.getElementById('alerts-grouped-container');
+    if (!container) {
+        console.warn('[Alerts] Grouped container not found');
         return;
     }
-    
+
     try {
+        // Populate farm filter dropdown (once)
+        populateAlertFarmFilter();
+
         // Fetch live alert data from API
         const params = new URLSearchParams();
         if (farmId) params.append('farm_id', farmId);
         if (severity) params.append('severity', severity);
         if (status) params.append('status', status);
+        params.append('limit', '200');
         const query = params.toString();
         const response = await authenticatedFetch(`${API_BASE}/api/admin/alerts${query ? `?${query}` : ''}`);
-        
+
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
-        
+
         const data = await response.json();
         console.log('[Alerts] Received data:', data);
-        
+
         if (!data.success) {
             throw new Error(data.error || 'Failed to load alerts');
         }
-        
+
         const alerts = data.alerts || [];
         const summary = data.summary || {};
-        
-        // Update KPIs based on actual data
+
+        // Update KPIs
         document.getElementById('alerts-active').textContent = summary.active || 0;
         document.getElementById('alerts-critical').textContent = summary.critical || 0;
         document.getElementById('alerts-warnings').textContent = summary.warning || 0;
         document.getElementById('alerts-resolved').textContent = summary.resolved || 0;
-        
+
         if (alerts.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 24px; color: var(--text-muted);">No active alerts</td></tr>';
+            container.innerHTML = '<p style="padding:24px;text-align:center;color:var(--text-muted);">No alerts match your filters.</p>';
             return;
         }
-        
-        // Render alerts table with expandable detail rows
-        const html = alerts.map((alert, idx) => {
-            const sourceLabel = alert.source_table === 'admin' ? 'F.A.Y.E.' : 'E.V.I.E.';
-            const sourceColor = alert.source_table === 'admin' ? 'var(--accent-blue)' : 'var(--accent-green, #22c55e)';
-            const hasDetail = alert.detail || alert.tool || alert.recovery_strategy;
-            const detailId = `alert-detail-${alert.source_table}-${alert.id}`;
 
-            // Build detail content
-            let detailParts = [];
-            if (alert.detail) detailParts.push(`<strong>Detail:</strong> ${alert.detail}`);
-            if (alert.tool) detailParts.push(`<strong>Source/Tool:</strong> ${alert.tool}`);
-            if (alert.recovery_attempted) {
-                detailParts.push(`<strong>Recovery attempted:</strong> ${alert.recovery_strategy || 'yes'}`);
-            }
-            if (alert.acknowledged_at) {
-                detailParts.push(`<strong>Acknowledged at:</strong> ${new Date(alert.acknowledged_at).toLocaleString()} by ${alert.acknowledged_by || 'system'}`);
-            }
-            if (alert.resolved_at) {
-                detailParts.push(`<strong>Resolved at:</strong> ${new Date(alert.resolved_at).toLocaleString()}`);
-            }
+        const groupByFarm = document.getElementById('alerts-group-by-farm')?.checked;
 
-            const mainRow = `<tr class="alert-row" style="cursor: ${hasDetail ? 'pointer' : 'default'};" onclick="${hasDetail ? `toggleAlertDetail('${detailId}')` : ''}">
-                <td>${new Date(alert.timestamp).toLocaleString()}</td>
-                <td>
-                    ${alert.farm_id || alert.category || '--'}
-                    <div style="margin-top: 2px;"><small style="color: ${sourceColor};">${sourceLabel}</small></div>
-                </td>
-                <td><span class="status-badge status-${alert.severity === 'high' ? 'critical' : alert.severity}">${alert.severity}</span></td>
-                <td>${alert.category || alert.type || '--'}</td>
-                <td>
-                    <div style="margin-bottom: 2px;">${alert.message || '--'}</div>
-                    ${hasDetail ? '<small style="color: var(--text-muted); text-decoration: underline;">Click to expand</small>' : ''}
-                </td>
-                <td><span class="status-badge status-${alert.status === 'active' ? 'warning' : (alert.status === 'resolved' ? 'success' : 'info')}">${alert.status}</span></td>
-                <td>${alert.acknowledged_by || '--'}</td>
-                <td>
-                    ${alert.status === 'active' ?
-                        `<button class="btn-small" onclick="event.stopPropagation(); acknowledgeAlert('${alert.id}', '${alert.source_table}')">Acknowledge</button>` :
-                        alert.status === 'acknowledged' ?
-                        `<button class="btn-small" onclick="event.stopPropagation(); resolveAlert('${alert.id}', '${alert.source_table}')">Resolve</button>` :
-                        '--'
-                    }
-                </td>
-            </tr>`;
+        if (groupByFarm) {
+            renderAlertsGrouped(container, alerts);
+        } else {
+            renderAlertsFlat(container, alerts);
+        }
 
-            const detailRow = hasDetail ? `<tr id="${detailId}" class="alert-detail-row" style="display: none;">
-                <td colspan="8" style="padding: 12px 20px; background: var(--bg-secondary, rgba(0,0,0,0.15)); border-left: 3px solid ${sourceColor};">
-                    ${detailParts.join('<br style="margin-bottom: 6px;">')}
-                </td>
-            </tr>` : '';
-
-            return mainRow + detailRow;
-        }).join('');
-
-        tbody.innerHTML = html;
-        
     } catch (error) {
         console.error('[Alerts] Error loading data:', error);
-        tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 24px; color: var(--accent-red);">Error loading alerts: ' + error.message + '</td></tr>';
-        
-        // Set error state for KPIs
+        container.innerHTML = '<p style="padding:24px;text-align:center;color:var(--accent-red);">Error loading alerts: ' + error.message + '</p>';
         document.getElementById('alerts-active').textContent = '--';
         document.getElementById('alerts-critical').textContent = '--';
         document.getElementById('alerts-warnings').textContent = '--';
         document.getElementById('alerts-resolved').textContent = '--';
-        
         showToast('Failed to load alert data', 'error');
+    }
+}
+
+/**
+ * Populate the farm filter dropdown from the alerts/farms endpoint
+ */
+let _alertFarmsLoaded = false;
+async function populateAlertFarmFilter() {
+    if (_alertFarmsLoaded) return;
+    const select = document.getElementById('filter-alert-farm');
+    if (!select) return;
+    try {
+        const resp = await authenticatedFetch(`${API_BASE}/api/admin/alerts/farms`);
+        const data = await resp.json();
+        if (data.success && data.farms) {
+            data.farms.forEach(f => {
+                const opt = document.createElement('option');
+                opt.value = f.farm_id;
+                opt.textContent = f.farm_name || f.farm_id;
+                select.appendChild(opt);
+            });
+            _alertFarmsLoaded = true;
+        }
+    } catch (e) {
+        console.warn('[Alerts] Could not load farm list for filter');
+    }
+}
+
+/**
+ * Render alerts grouped by farm in collapsible accordion sections
+ */
+function renderAlertsGrouped(container, alerts) {
+    // Group by farm
+    const groups = {};
+    const platformAlerts = [];
+    alerts.forEach(a => {
+        const key = a.farm_id || null;
+        if (key) {
+            if (!groups[key]) groups[key] = { name: a.farm_name || a.farm_id || key, alerts: [] };
+            groups[key].alerts.push(a);
+        } else {
+            platformAlerts.push(a);
+        }
+    });
+
+    let html = '';
+
+    // Farm groups
+    Object.keys(groups).sort().forEach(farmId => {
+        const group = groups[farmId];
+        const activeCount = group.alerts.filter(a => a.status === 'active').length;
+        const critCount = group.alerts.filter(a => a.severity === 'critical' || a.severity === 'high').length;
+        const sectionId = 'alert-farm-' + farmId.replace(/[^a-zA-Z0-9]/g, '_');
+
+        html += '<div class="alert-farm-group" data-farm-id="' + farmId + '">';
+        html += '<div class="alert-farm-header" onclick="toggleAlertFarmGroup(\'' + sectionId + '\')">';
+        html += '  <div class="alert-farm-header-left">';
+        html += '    <span class="alert-farm-chevron" id="chevron-' + sectionId + '">&#9654;</span>';
+        html += '    <strong>' + (group.name) + '</strong>';
+        html += '    <span class="alert-farm-count">' + group.alerts.length + ' alert' + (group.alerts.length !== 1 ? 's' : '') + '</span>';
+        if (activeCount > 0) html += '    <span class="alert-farm-active">' + activeCount + ' active</span>';
+        if (critCount > 0) html += '    <span class="alert-farm-critical">' + critCount + ' critical</span>';
+        html += '  </div>';
+        html += '  <div class="alert-farm-header-actions">';
+        html += '    <button class="btn-small" onclick="event.stopPropagation(); bulkResolveFarm(\'' + farmId + '\')">Resolve All</button>';
+        html += '  </div>';
+        html += '</div>';
+        html += '<div class="alert-farm-body" id="' + sectionId + '" style="display:none;">';
+        html += buildAlertTable(group.alerts);
+        html += '</div>';
+        html += '</div>';
+    });
+
+    // Platform/admin alerts (no farm_id)
+    if (platformAlerts.length > 0) {
+        const sectionId = 'alert-farm-platform';
+        html += '<div class="alert-farm-group">';
+        html += '<div class="alert-farm-header" onclick="toggleAlertFarmGroup(\'' + sectionId + '\')">';
+        html += '  <div class="alert-farm-header-left">';
+        html += '    <span class="alert-farm-chevron" id="chevron-' + sectionId + '">&#9654;</span>';
+        html += '    <strong>Platform / F.A.Y.E.</strong>';
+        html += '    <span class="alert-farm-count">' + platformAlerts.length + ' alert' + (platformAlerts.length !== 1 ? 's' : '') + '</span>';
+        html += '  </div>';
+        html += '</div>';
+        html += '<div class="alert-farm-body" id="' + sectionId + '" style="display:none;">';
+        html += buildAlertTable(platformAlerts);
+        html += '</div>';
+        html += '</div>';
+    }
+
+    container.innerHTML = html;
+}
+
+/**
+ * Render flat (non-grouped) alert table
+ */
+function renderAlertsFlat(container, alerts) {
+    container.innerHTML = '<div class="table-container">' + buildAlertTable(alerts) + '</div>';
+}
+
+/**
+ * Build an alert table from an array of alerts
+ */
+function buildAlertTable(alerts) {
+    let html = '<table class="alert-table"><thead><tr>';
+    html += '<th>Time</th><th>Source</th><th>Severity</th><th>Type</th><th>Message</th><th>Status</th><th>Actions</th>';
+    html += '</tr></thead><tbody>';
+
+    alerts.forEach(function (alert) {
+        const sourceLabel = alert.source_table === 'admin' ? 'F.A.Y.E.' : 'E.V.I.E.';
+        const sourceColor = alert.source_table === 'admin' ? 'var(--accent-blue)' : 'var(--accent-green, #22c55e)';
+        const hasDetail = alert.detail || alert.tool || alert.recovery_strategy;
+        const detailId = 'alert-detail-' + alert.source_table + '-' + alert.id;
+
+        let detailParts = [];
+        if (alert.detail) detailParts.push('<strong>Detail:</strong> ' + alert.detail);
+        if (alert.tool) detailParts.push('<strong>Source/Tool:</strong> ' + alert.tool);
+        if (alert.recovery_attempted) {
+            detailParts.push('<strong>Recovery attempted:</strong> ' + (alert.recovery_strategy || 'yes'));
+        }
+        if (alert.acknowledged_at) {
+            detailParts.push('<strong>Acknowledged:</strong> ' + new Date(alert.acknowledged_at).toLocaleString() + ' by ' + (alert.acknowledged_by || 'system'));
+        }
+        if (alert.resolved_at) {
+            detailParts.push('<strong>Resolved:</strong> ' + new Date(alert.resolved_at).toLocaleString());
+        }
+
+        html += '<tr class="alert-row" style="cursor:' + (hasDetail ? 'pointer' : 'default') + ';" onclick="' + (hasDetail ? "toggleAlertDetail('" + detailId + "')" : '') + '">';
+        html += '<td>' + new Date(alert.timestamp).toLocaleString() + '</td>';
+        html += '<td><small style="color:' + sourceColor + ';">' + sourceLabel + '</small></td>';
+        html += '<td><span class="status-badge status-' + (alert.severity === 'high' ? 'critical' : alert.severity) + '">' + alert.severity + '</span></td>';
+        html += '<td>' + (alert.category || alert.type || '--') + '</td>';
+        html += '<td><div style="margin-bottom:2px;">' + (alert.message || '--') + '</div>';
+        if (hasDetail) html += '<small style="color:var(--text-muted);text-decoration:underline;">Click to expand</small>';
+        html += '</td>';
+        html += '<td><span class="status-badge status-' + (alert.status === 'active' ? 'warning' : alert.status === 'resolved' ? 'success' : 'info') + '">' + alert.status + '</span></td>';
+        html += '<td>';
+        if (alert.status === 'active') {
+            html += '<button class="btn-small" onclick="event.stopPropagation(); acknowledgeAlert(\'' + alert.id + '\', \'' + alert.source_table + '\')">Ack</button>';
+        } else if (alert.status === 'acknowledged') {
+            html += '<button class="btn-small" onclick="event.stopPropagation(); resolveAlert(\'' + alert.id + '\', \'' + alert.source_table + '\')">Resolve</button>';
+        } else {
+            html += '--';
+        }
+        html += '</td></tr>';
+
+        if (hasDetail) {
+            html += '<tr id="' + detailId + '" class="alert-detail-row" style="display:none;">';
+            html += '<td colspan="7" style="padding:12px 20px;background:var(--bg-secondary, rgba(0,0,0,0.15));border-left:3px solid ' + sourceColor + ';">';
+            html += detailParts.join('<br style="margin-bottom:6px;">');
+            html += '</td></tr>';
+        }
+    });
+
+    html += '</tbody></table>';
+    return html;
+}
+
+/**
+ * Toggle a farm group accordion
+ */
+function toggleAlertFarmGroup(sectionId) {
+    const body = document.getElementById(sectionId);
+    const chevron = document.getElementById('chevron-' + sectionId);
+    if (!body) return;
+    const isOpen = body.style.display !== 'none';
+    body.style.display = isOpen ? 'none' : '';
+    if (chevron) chevron.innerHTML = isOpen ? '&#9654;' : '&#9660;';
+}
+
+/**
+ * Toggle expandable detail row for an alert
+ */
+function toggleAlertDetail(detailId) {
+    const row = document.getElementById(detailId);
+    if (row) {
+        row.style.display = row.style.display === 'none' ? 'table-row' : 'none';
     }
 }
 
 function filterAlerts() {
     const severity = document.getElementById('filter-alert-severity')?.value || null;
     const status = document.getElementById('filter-alert-status')?.value || null;
-    const farmId = currentFarmId || null;
+    const farmId = document.getElementById('filter-alert-farm')?.value || null;
     loadAlertsView({ farmId, severity, status });
 }
 
@@ -7659,32 +7789,6 @@ async function resolveAlert(alertId, sourceTable) {
 }
 
 /**
- * Trace alert to source
- */
-async function traceAlert(alertId, context) {
-    console.log('[Alerts] Tracing alert to source:', alertId, context);
-    // Reuse the existing trace logic from anomalies
-    if (context.zone_id) {
-        // Navigate to the zone view if available
-        showToast(`Tracing to ${context.farm_id} / ${context.zone_id}`, 'info');
-    } else if (context.room_id) {
-        showToast(`Tracing to ${context.farm_id} / ${context.room_id}`, 'info');
-    } else {
-        showToast(`Alert source: ${context.farm_id}`, 'info');
-    }
-}
-
-/**
- * Toggle expandable detail row for an alert
- */
-function toggleAlertDetail(detailId) {
-    const row = document.getElementById(detailId);
-    if (row) {
-        row.style.display = row.style.display === 'none' ? 'table-row' : 'none';
-    }
-}
-
-/**
  * Acknowledge all active alerts (batch operation)
  */
 async function acknowledgeAllAlerts() {
@@ -7719,6 +7823,49 @@ async function resolveAllAlerts() {
     } catch (error) {
         console.error('[Alerts] Error resolving all alerts:', error);
         showToast('Failed to resolve alerts', 'error');
+    }
+}
+
+/**
+ * Resolve all alerts for a specific farm
+ */
+async function bulkResolveFarm(farmId) {
+    if (!confirm('Resolve all alerts for this farm?')) return;
+    try {
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/alerts/bulk-resolve`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ farm_id: farmId })
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error);
+        showToast(`${data.count} alert(s) resolved for farm`, 'success');
+        await loadAlertsView();
+    } catch (error) {
+        console.error('[Alerts] Bulk resolve farm error:', error);
+        showToast('Failed to resolve farm alerts', 'error');
+    }
+}
+
+/**
+ * Resolve alerts older than N hours (prompted)
+ */
+async function bulkResolveOlder() {
+    const hours = prompt('Resolve alerts older than how many hours?\n(e.g. 24 for 1 day, 168 for 1 week)', '24');
+    if (!hours || isNaN(hours)) return;
+    try {
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/alerts/bulk-resolve`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ older_than_hours: parseInt(hours) })
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error);
+        showToast(`${data.count} older alert(s) resolved`, 'success');
+        await loadAlertsView();
+    } catch (error) {
+        console.error('[Alerts] Bulk resolve older error:', error);
+        showToast('Failed to resolve older alerts', 'error');
     }
 }
 

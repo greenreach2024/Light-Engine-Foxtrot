@@ -2804,6 +2804,92 @@ router.post('/alerts/resolve-all', async (req, res) => {
 });
 
 /**
+ * POST /api/admin/alerts/bulk-resolve
+ * Resolve alerts with optional farm_id and age filters.
+ * Body: { farm_id?: string, older_than_hours?: number }
+ */
+router.post('/alerts/bulk-resolve', async (req, res) => {
+    try {
+        if (!(await isDatabaseAvailable())) {
+            return res.status(503).json({ success: false, error: 'Database not available' });
+        }
+
+        const { farm_id, older_than_hours } = req.body || {};
+        let totalResolved = 0;
+
+        // Farm alerts (filtered by farm_id if provided)
+        const farmConds = ['resolved = false'];
+        const farmParams = [];
+        let fi = 1;
+        if (farm_id) {
+            farmConds.push(`farm_id = $${fi++}`);
+            farmParams.push(farm_id);
+        }
+        if (older_than_hours && Number.isFinite(Number(older_than_hours))) {
+            farmConds.push(`created_at < NOW() - INTERVAL '${parseInt(older_than_hours)} hours'`);
+        }
+        try {
+            const r = await query(
+                `UPDATE farm_alerts SET resolved = true, resolved_at = NOW()
+                 WHERE ${farmConds.join(' AND ')} RETURNING id`,
+                farmParams
+            );
+            totalResolved += r.rows.length;
+        } catch (e) {
+            if (!e.message?.includes('relation')) throw e;
+        }
+
+        // Admin alerts (no farm_id column — only apply age filter)
+        if (!farm_id) {
+            const adminConds = ['resolved = FALSE'];
+            if (older_than_hours && Number.isFinite(Number(older_than_hours))) {
+                adminConds.push(`created_at < NOW() - INTERVAL '${parseInt(older_than_hours)} hours'`);
+            }
+            try {
+                const r = await query(
+                    `UPDATE admin_alerts SET resolved = TRUE, resolved_at = NOW()
+                     WHERE ${adminConds.join(' AND ')} RETURNING id`
+                );
+                totalResolved += r.rows.length;
+            } catch (e) {
+                if (!e.message?.includes('relation')) throw e;
+            }
+        }
+
+        res.json({ success: true, count: totalResolved, message: `${totalResolved} alert(s) resolved` });
+    } catch (error) {
+        console.error('[Admin API] Error in bulk-resolve:', error);
+        res.status(500).json({ success: false, error: 'Failed to bulk-resolve alerts' });
+    }
+});
+
+/**
+ * GET /api/admin/alerts/farms
+ * Get distinct farm_ids from farm_alerts for the farm filter dropdown.
+ */
+router.get('/alerts/farms', async (req, res) => {
+    try {
+        if (!(await isDatabaseAvailable())) {
+            return res.json({ success: true, farms: [] });
+        }
+        const result = await query(
+            `SELECT DISTINCT fa.farm_id, f.name AS farm_name
+             FROM farm_alerts fa
+             LEFT JOIN farms f ON f.farm_id = fa.farm_id
+             WHERE fa.farm_id IS NOT NULL
+             ORDER BY fa.farm_id`
+        );
+        res.json({
+            success: true,
+            farms: result.rows.map(r => ({ farm_id: r.farm_id, farm_name: r.farm_name || r.farm_id }))
+        });
+    } catch (error) {
+        console.error('[Admin API] Error fetching alert farms:', error);
+        res.json({ success: true, farms: [] });
+    }
+});
+
+/**
  * GET /api/admin/farms/:farmId/config
  * Get farm configuration settings
  */
