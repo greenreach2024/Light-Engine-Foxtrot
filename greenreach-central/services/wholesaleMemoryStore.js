@@ -132,7 +132,12 @@ export function sanitizeBuyer(buyer) {
     location: buyer.location || null,
     createdAt: buyer.createdAt,
     status: buyer.status || 'active',
-    phone: buyer.phone || null
+    phone: buyer.phone || null,
+    keyContact: buyer.keyContact || null,
+    backupContact: buyer.backupContact || null,
+    backupPhone: buyer.backupPhone || null,
+    squareCustomerId: buyer.squareCustomerId || null,
+    squareCardId: buyer.squareCardId || null
   };
 }
 
@@ -146,11 +151,14 @@ async function persistBuyer(buyer) {
   const now = new Date().toISOString();
   const params = [buyer.id, buyer.businessName, buyer.contactName, buyer.email,
        buyer.buyerType, JSON.stringify(buyer.location || null), buyer.passwordHash,
-       buyer.status || 'active', buyer.phone || null, buyer.createdAt || now, now];
+       buyer.status || 'active', buyer.phone || null, buyer.createdAt || now, now,
+       buyer.keyContact || null, buyer.backupContact || null, buyer.backupPhone || null,
+       buyer.squareCustomerId || null, buyer.squareCardId || null];
 
   const upsertSql = `INSERT INTO wholesale_buyers
-        (id, business_name, contact_name, email, buyer_type, location, password_hash, status, phone, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10, $11)
+        (id, business_name, contact_name, email, buyer_type, location, password_hash, status, phone, created_at, updated_at,
+         key_contact, backup_contact, backup_phone, square_customer_id, square_card_id)
+       VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
        ON CONFLICT (id) DO UPDATE
        SET business_name = EXCLUDED.business_name,
            contact_name = EXCLUDED.contact_name,
@@ -160,6 +168,11 @@ async function persistBuyer(buyer) {
            password_hash = EXCLUDED.password_hash,
            status = EXCLUDED.status,
            phone = EXCLUDED.phone,
+           key_contact = EXCLUDED.key_contact,
+           backup_contact = EXCLUDED.backup_contact,
+           backup_phone = EXCLUDED.backup_phone,
+           square_customer_id = EXCLUDED.square_customer_id,
+           square_card_id = EXCLUDED.square_card_id,
            updated_at = EXCLUDED.updated_at`;
 
   try {
@@ -183,6 +196,11 @@ async function persistBuyer(buyer) {
         }
         await query(`ALTER TABLE wholesale_buyers ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'active'`);
         await query(`ALTER TABLE wholesale_buyers ADD COLUMN IF NOT EXISTS phone VARCHAR(50)`);
+        await query(`ALTER TABLE wholesale_buyers ADD COLUMN IF NOT EXISTS key_contact VARCHAR(255)`);
+        await query(`ALTER TABLE wholesale_buyers ADD COLUMN IF NOT EXISTS backup_contact VARCHAR(255)`);
+        await query(`ALTER TABLE wholesale_buyers ADD COLUMN IF NOT EXISTS backup_phone VARCHAR(50)`);
+        await query(`ALTER TABLE wholesale_buyers ADD COLUMN IF NOT EXISTS square_customer_id VARCHAR(255)`);
+        await query(`ALTER TABLE wholesale_buyers ADD COLUMN IF NOT EXISTS square_card_id VARCHAR(255)`);
         await query(upsertSql, params);
         console.log('[BuyerPersist] Schema repair succeeded, buyer persisted:', buyer.email);
         return;
@@ -254,6 +272,11 @@ function hydrateRowIntoMaps(row) {
     passwordHash: row.password_hash,
     status: row.status || 'active',
     phone: row.phone || null,
+    keyContact: row.key_contact || null,
+    backupContact: row.backup_contact || null,
+    backupPhone: row.backup_phone || null,
+    squareCustomerId: row.square_customer_id || null,
+    squareCardId: row.square_card_id || null,
     createdAt: row.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString()
   };
   const key = buyer.email.trim().toLowerCase();
@@ -269,7 +292,7 @@ export async function updateBuyer(buyerId, updates) {
   if (!buyer) return null;
 
   // Only allow updating safe fields
-  const allowedFields = ['businessName', 'contactName', 'phone', 'buyerType', 'location'];
+  const allowedFields = ['businessName', 'contactName', 'phone', 'buyerType', 'location', 'keyContact', 'backupContact', 'backupPhone', 'squareCustomerId', 'squareCardId'];
   for (const field of allowedFields) {
     if (updates[field] !== undefined) {
       buyer[field] = updates[field];

@@ -2267,6 +2267,25 @@
               </div>
             </div>
 
+            <div class="form-row">
+              <div class="form-group">
+                <label for="account-key-contact">Key Contact</label>
+                <input type="text" id="account-key-contact" placeholder="Primary contact person" />
+              </div>
+              <div class="form-group">
+                <label for="account-backup-contact">Backup Contact</label>
+                <input type="text" id="account-backup-contact" placeholder="Secondary contact person" />
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="account-backup-phone">Backup Phone</label>
+                <input type="tel" id="account-backup-phone" placeholder="(555) 987-6543" />
+              </div>
+              <div class="form-group"></div>
+            </div>
+
             <div class="form-group">
               <label for="account-address">Street Address</label>
               <input type="text" id="account-address" placeholder="123 Main St" />
@@ -2324,6 +2343,37 @@
               <button type="submit" class="btn btn-primary">Update Password</button>
             </div>
           </form>
+        </div>
+
+        <div class="checkout-section">
+          <h2>Saved Payment Method</h2>
+          <div id="card-on-file-display">
+            <p id="card-on-file-none" style="color: var(--warm-text-muted, #888);">No card on file. Add one to enable recurring orders.</p>
+            <div id="card-on-file-info" style="display:none;">
+              <p><strong>Card:</strong> <span id="card-brand"></span> ending in <span id="card-last4"></span></p>
+              <p><strong>Expires:</strong> <span id="card-exp"></span></p>
+              <div class="checkout-actions" style="margin-top:0.75rem;">
+                <button type="button" class="btn btn-secondary" onclick="app.removeCardOnFile()">Remove Card</button>
+              </div>
+            </div>
+          </div>
+          <div id="card-on-file-add" style="margin-top:1rem;">
+            <div id="sq-card-container" style="min-height:90px;"></div>
+            <div class="checkout-actions" style="margin-top:0.75rem;">
+              <button type="button" class="btn btn-primary" id="save-card-btn" onclick="app.saveCardOnFile()">Save Card to File</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="checkout-section">
+          <h2>Standing Orders (Subscriptions)</h2>
+          <div id="subscriptions-list">
+            <p id="subscriptions-none" style="color: var(--warm-text-muted, #888);">No standing orders configured.</p>
+            <div id="subscriptions-items"></div>
+          </div>
+          <div class="checkout-actions" style="margin-top:0.75rem;">
+            <button type="button" class="btn btn-secondary" onclick="app.navigateTo('catalog')" id="create-subscription-btn" style="display:none;">Create Standing Order from Current Cart</button>
+          </div>
         </div>
       </div>
     </div>

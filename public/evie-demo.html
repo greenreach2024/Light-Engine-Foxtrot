@@ -714,6 +714,33 @@ body {
   100% { transform: translate(-50%, -50%) scale(3); opacity: 0; }
 }
 
+
+/* -- Voice Narration Control ------------------------------------- */
+.voice-control {
+  position: fixed;
+  top: 16px;
+  right: 180px;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(12, 20, 34, 0.85);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 14px;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  transition: border-color 0.3s, box-shadow 0.3s;
+}
+.voice-control:hover { border-color: #10b981; box-shadow: 0 0 12px rgba(16, 185, 129, 0.3); }
+.voice-control.speaking { border-color: #10b981; box-shadow: 0 0 16px rgba(16, 185, 129, 0.3); }
+.voice-icon { font-size: 16px; color: #10b981; transition: transform 0.3s; }
+.voice-control.speaking .voice-icon { animation: voicePulse 1s ease-in-out infinite; }
+@keyframes voicePulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.15); opacity: 0.7; }
+}
+.voice-label { font-size: 12px; color: var(--text-secondary); letter-spacing: 0.5px; }
   </style>
 </head>
 <body>
@@ -726,6 +753,11 @@ body {
   <span class="audio-label" id="audioLabel">Play Soundtrack</span>
 </div>
 
+<!-- Voice Narration Control -->
+<div class="voice-control" id="voiceControl" onclick="toggleVoice()">
+  <span class="voice-icon" id="voiceIcon">&#9835;</span>
+  <span class="voice-label" id="voiceLabel">Voice Narration</span>
+</div>
 
 <div class="demo-content">
 
@@ -1935,6 +1967,114 @@ body {
     var currentNarrationIdx = -1;
     var typeTimer = null;
 
+    // ================================================================
+    // VOICE NARRATION -- Web Speech API
+    // ================================================================
+    var voiceEnabled = false;
+    var voiceSynth = window.speechSynthesis || null;
+    var preferredVoice = null;
+    var currentUtterance = null;
+
+    function pickVoice() {
+      if (!voiceSynth) return;
+      var voices = voiceSynth.getVoices();
+      if (!voices.length) return;
+
+      // Tier 1: Enhanced / Premium voices (macOS high-quality downloads)
+      var enhanced = ['enhanced', 'premium'];
+      for (var e = 0; e < enhanced.length; e++) {
+        for (var v = 0; v < voices.length; v++) {
+          var nm = voices[v].name.toLowerCase();
+          if (nm.indexOf(enhanced[e]) !== -1 && voices[v].lang && voices[v].lang.indexOf('en') === 0) {
+            preferredVoice = voices[v];
+            return;
+          }
+        }
+      }
+
+      // Tier 2: Google high-quality voices (Chrome)
+      for (var v = 0; v < voices.length; v++) {
+        var nm = voices[v].name.toLowerCase();
+        if (nm.indexOf('google') !== -1 && nm.indexOf('english') !== -1) {
+          preferredVoice = voices[v];
+          return;
+        }
+      }
+
+      // Tier 3: Known decent system voices
+      var priorities = ['samantha', 'karen', 'moira', 'tessa', 'fiona', 'victoria', 'zira', 'hazel'];
+      for (var p = 0; p < priorities.length; p++) {
+        for (var v = 0; v < voices.length; v++) {
+          if (voices[v].name.toLowerCase().indexOf(priorities[p]) !== -1) {
+            preferredVoice = voices[v];
+            return;
+          }
+        }
+      }
+
+      // Tier 4: Any English voice
+      for (var v = 0; v < voices.length; v++) {
+        if (voices[v].lang && voices[v].lang.indexOf('en') === 0) {
+          preferredVoice = voices[v];
+          return;
+        }
+      }
+      preferredVoice = voices[0];
+    }
+
+    if (voiceSynth) {
+      pickVoice();
+      if (voiceSynth.onvoiceschanged !== undefined) {
+        voiceSynth.onvoiceschanged = pickVoice;
+      }
+    }
+
+    function speakNarration(text) {
+      if (!voiceEnabled || !voiceSynth) return;
+      voiceSynth.cancel();
+      var cleanText = text.replace(/ -- /g, ', ').replace(/--/g, ', ');
+      var utt = new SpeechSynthesisUtterance(cleanText);
+      if (preferredVoice) utt.voice = preferredVoice;
+      utt.rate = 0.92;
+      utt.pitch = 1.0;
+      utt.volume = 0.85;
+      utt.onstart = function() {
+        var ctrl = document.getElementById('voiceControl');
+        if (ctrl) ctrl.classList.add('speaking');
+      };
+      utt.onend = function() {
+        var ctrl = document.getElementById('voiceControl');
+        if (ctrl) ctrl.classList.remove('speaking');
+        currentUtterance = null;
+      };
+      utt.onerror = function() {
+        var ctrl = document.getElementById('voiceControl');
+        if (ctrl) ctrl.classList.remove('speaking');
+        currentUtterance = null;
+      };
+      currentUtterance = utt;
+      voiceSynth.speak(utt);
+    }
+
+    window.toggleVoice = function() {
+      voiceEnabled = !voiceEnabled;
+      var ctrl = document.getElementById('voiceControl');
+      var label = document.getElementById('voiceLabel');
+      if (voiceEnabled) {
+        if (label) label.textContent = 'Voice On';
+        if (ctrl) ctrl.style.borderColor = '#10b981';
+        if (currentNarrationIdx >= 0 && currentNarrationIdx < narrationData.length) {
+          speakNarration(narrationData[currentNarrationIdx].text);
+        }
+      } else {
+        if (label) label.textContent = 'Voice Narration';
+        if (ctrl) ctrl.style.borderColor = '';
+        if (voiceSynth) voiceSynth.cancel();
+        if (ctrl) ctrl.classList.remove('speaking');
+      }
+    };
+
+
     function typeNarration(text, callback) {
       if (typeTimer) clearInterval(typeTimer);
       narrationText.innerHTML = '';
@@ -1977,8 +2117,9 @@ body {
         if (i === idx) { dot.classList.add('active'); dot.classList.add('visited'); }
       });
 
-      // Type the narration
+      // Type the narration + speak it
       typeNarration(narrationData[idx].text);
+      speakNarration(narrationData[idx].text);
 
       // Fire pulse rings on title stats if title scene
       if (sceneKey === 'title') {
@@ -2071,10 +2212,20 @@ body {
     function tryStartAudio() {
       if (audioStarted) return;
       audioStarted = true;
+      // Auto-start soundtrack
       playOrganicAmbient();
       audioPlaying = true;
       document.getElementById('audioIcon').innerHTML = '&#9724;';
       document.getElementById('audioLabel').textContent = 'Stop Soundtrack';
+      // Auto-start voice narration
+      voiceEnabled = true;
+      var vCtrl = document.getElementById('voiceControl');
+      var vLabel = document.getElementById('voiceLabel');
+      if (vLabel) vLabel.textContent = 'Voice On';
+      if (vCtrl) vCtrl.style.borderColor = '';
+      if (currentNarrationIdx >= 0 && narrationData && currentNarrationIdx < narrationData.length) {
+        speakNarration(narrationData[currentNarrationIdx].text);
+      }
     }
     ['click', 'scroll', 'touchstart', 'keydown'].forEach(function (ev) {
       window.addEventListener(ev, tryStartAudio, { once: false, passive: true });

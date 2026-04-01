@@ -532,11 +532,17 @@
       document.getElementById('account-contact-name').value = b?.contactName || '';
       document.getElementById('account-email').value = b?.email || '';
       document.getElementById('account-phone').value = b?.phone || '';
+      document.getElementById('account-key-contact').value = b?.keyContact || '';
+      document.getElementById('account-backup-contact').value = b?.backupContact || '';
+      document.getElementById('account-backup-phone').value = b?.backupPhone || '';
       document.getElementById('account-address').value = b?.location?.address1 || b?.location?.street || '';
       document.getElementById('account-city').value = b?.location?.city || '';
       document.getElementById('account-province').value = b?.location?.state || b?.location?.province || '';
       document.getElementById('account-postal').value = b?.location?.postalCode || '';
       document.getElementById('account-buyer-type').value = b?.buyerType || 'restaurant';
+
+      this.loadCardOnFile();
+      this.loadSubscriptions();
     },
 
     async saveAccountSettings() {
@@ -547,6 +553,9 @@
         contactName: document.getElementById('account-contact-name').value,
         email: document.getElementById('account-email').value,
         phone: document.getElementById('account-phone').value,
+        keyContact: document.getElementById('account-key-contact').value,
+        backupContact: document.getElementById('account-backup-contact').value,
+        backupPhone: document.getElementById('account-backup-phone').value,
         address: document.getElementById('account-address').value,
         city: document.getElementById('account-city').value,
         province: document.getElementById('account-province').value,
@@ -606,6 +615,189 @@
       } catch (error) {
         console.error('Update password error:', error);
         this.showToast('Network error updating password', 'error');
+      }
+    },
+
+    // ── Card on file ───────────────────────────────────────────────────
+
+    async loadCardOnFile() {
+      try {
+        const { response, json } = await this.apiFetch('/api/wholesale/buyers/me/card');
+        if (response.ok && json?.status === 'ok') {
+          const cards = json.data.cards || [];
+          const noneEl = document.getElementById('card-on-file-none');
+          const infoEl = document.getElementById('card-on-file-info');
+          const addEl = document.getElementById('card-on-file-add');
+          if (cards.length > 0) {
+            const c = cards[0];
+            document.getElementById('card-brand').textContent = c.brand || 'Card';
+            document.getElementById('card-last4').textContent = c.last4 || '****';
+            document.getElementById('card-exp').textContent = (c.expMonth || '??') + '/' + (c.expYear || '????');
+            if (noneEl) noneEl.style.display = 'none';
+            if (infoEl) infoEl.style.display = '';
+            if (addEl) addEl.style.display = 'none';
+            // Enable subscription button since card exists
+            const subBtn = document.getElementById('create-subscription-btn');
+            if (subBtn) subBtn.style.display = '';
+          } else {
+            if (noneEl) noneEl.style.display = '';
+            if (infoEl) infoEl.style.display = 'none';
+            if (addEl) addEl.style.display = '';
+          }
+        }
+      } catch (error) {
+        console.error('Load card on file error:', error);
+      }
+    },
+
+    async saveCardOnFile() {
+      if (!this.currentBuyer) return this.showAuthModal('sign-in');
+      const btn = document.getElementById('save-card-btn');
+      if (btn) btn.disabled = true;
+
+      try {
+        if (!window.Square) {
+          this.showToast('Square payments not loaded', 'error');
+          return;
+        }
+        const payments = window.Square.payments(window.SQUARE_APP_ID, window.SQUARE_LOCATION_ID);
+        const card = await payments.card();
+        await card.attach('#sq-card-container');
+        const tokenResult = await card.tokenize();
+        if (tokenResult.status !== 'OK') {
+          this.showToast('Card verification failed', 'error');
+          return;
+        }
+
+        const { response, json } = await this.apiFetch('/api/wholesale/buyers/me/card', {
+          method: 'POST',
+          body: JSON.stringify({ cardNonce: tokenResult.token })
+        });
+
+        if (response.ok && json?.status === 'ok') {
+          this.showToast('Card saved on file', 'success');
+          this.loadCardOnFile();
+        } else {
+          this.showToast(json?.message || 'Failed to save card', 'error');
+        }
+      } catch (error) {
+        console.error('Save card on file error:', error);
+        this.showToast('Error saving card', 'error');
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    },
+
+    async removeCardOnFile() {
+      if (!this.currentBuyer) return;
+      if (!confirm('Remove your saved card?')) return;
+
+      try {
+        const { response, json } = await this.apiFetch('/api/wholesale/buyers/me/card', {
+          method: 'DELETE'
+        });
+
+        if (response.ok && json?.status === 'ok') {
+          this.showToast('Card removed', 'success');
+          this.loadCardOnFile();
+        } else {
+          this.showToast(json?.message || 'Failed to remove card', 'error');
+        }
+      } catch (error) {
+        console.error('Remove card error:', error);
+        this.showToast('Error removing card', 'error');
+      }
+    },
+
+    // ── Subscriptions / standing orders ────────────────────────────────
+
+    async loadSubscriptions() {
+      try {
+        const { response, json } = await this.apiFetch('/api/wholesale/buyers/me/subscriptions');
+        if (response.ok && json?.status === 'ok') {
+          const subs = json.data.subscriptions || [];
+          const noneEl = document.getElementById('subscriptions-none');
+          const listEl = document.getElementById('subscriptions-items');
+          if (subs.length > 0) {
+            if (noneEl) noneEl.style.display = 'none';
+            if (listEl) {
+              listEl.innerHTML = subs.map(s => {
+                const statusBadge = s.status === 'active'
+                  ? '<span style="color:var(--warm-success,green);">Active</span>'
+                  : '<span style="color:var(--warm-text-muted,#888);">' + (s.status || 'Unknown') + '</span>';
+                const itemCount = (s.cart || []).length;
+                return '<div style="border:1px solid var(--warm-border,#ddd);border-radius:8px;padding:1rem;margin-bottom:0.75rem;">'
+                  + '<div style="display:flex;justify-content:space-between;align-items:center;">'
+                  + '<div><strong>' + (s.cadence || 'Weekly') + ' order</strong> - ' + itemCount + ' items - ' + statusBadge + '</div>'
+                  + '<div>'
+                  + (s.status === 'active'
+                    ? '<button class="btn btn-secondary" style="font-size:0.85rem;padding:0.25rem 0.75rem;" onclick="app.pauseSubscription(\'' + s.id + '\')">Pause</button>'
+                    : '<button class="btn btn-primary" style="font-size:0.85rem;padding:0.25rem 0.75rem;" onclick="app.resumeSubscription(\'' + s.id + '\')">Resume</button>')
+                  + ' <button class="btn btn-secondary" style="font-size:0.85rem;padding:0.25rem 0.75rem;color:#c44;" onclick="app.cancelSubscription(\'' + s.id + '\')">Cancel</button>'
+                  + '</div></div>'
+                  + '<div style="font-size:0.85rem;color:var(--warm-text-muted,#888);margin-top:0.5rem;">Next order: ' + (s.next_order_date || 'N/A') + '</div>'
+                  + '</div>';
+              }).join('');
+            }
+          } else {
+            if (noneEl) noneEl.style.display = '';
+            if (listEl) listEl.innerHTML = '';
+          }
+        }
+      } catch (error) {
+        console.error('Load subscriptions error:', error);
+      }
+    },
+
+    async pauseSubscription(subId) {
+      try {
+        const { response, json } = await this.apiFetch('/api/wholesale/buyers/me/subscriptions/' + subId, {
+          method: 'PUT',
+          body: JSON.stringify({ status: 'paused' })
+        });
+        if (response.ok) {
+          this.showToast('Standing order paused', 'success');
+          this.loadSubscriptions();
+        } else {
+          this.showToast(json?.message || 'Failed to pause', 'error');
+        }
+      } catch (error) {
+        this.showToast('Error pausing subscription', 'error');
+      }
+    },
+
+    async resumeSubscription(subId) {
+      try {
+        const { response, json } = await this.apiFetch('/api/wholesale/buyers/me/subscriptions/' + subId, {
+          method: 'PUT',
+          body: JSON.stringify({ status: 'active' })
+        });
+        if (response.ok) {
+          this.showToast('Standing order resumed', 'success');
+          this.loadSubscriptions();
+        } else {
+          this.showToast(json?.message || 'Failed to resume', 'error');
+        }
+      } catch (error) {
+        this.showToast('Error resuming subscription', 'error');
+      }
+    },
+
+    async cancelSubscription(subId) {
+      if (!confirm('Cancel this standing order? This cannot be undone.')) return;
+      try {
+        const { response, json } = await this.apiFetch('/api/wholesale/buyers/me/subscriptions/' + subId, {
+          method: 'PUT',
+          body: JSON.stringify({ status: 'cancelled' })
+        });
+        if (response.ok) {
+          this.showToast('Standing order cancelled', 'success');
+          this.loadSubscriptions();
+        } else {
+          this.showToast(json?.message || 'Failed to cancel', 'error');
+        }
+      } catch (error) {
+        this.showToast('Error cancelling subscription', 'error');
       }
     },
 

@@ -31,6 +31,8 @@ export class SquarePaymentProvider extends PaymentProvider {
     
     this.paymentsApi = this.client.paymentsApi;
     this.refundsApi = this.client.refundsApi;
+    this.customersApi = this.client.customersApi;
+    this.cardsApi = this.client.cardsApi;
     this.webhookSecret = config.webhookSecret;
     this.brokerMerchantId = config.brokerMerchantId; // GreenReach's Square merchant ID for fee collection
   }
@@ -382,6 +384,87 @@ export class SquarePaymentProvider extends PaymentProvider {
       'IDEMPOTENCY_KEY_REUSED': PaymentErrorCodes.IDEMPOTENCY_CONFLICT
     };
     return errorMap[squareErrorCode] || PaymentErrorCodes.PROVIDER_ERROR;
+  }
+
+  /**
+   * Create or retrieve a Square customer for a wholesale buyer
+   */
+  async createCustomer({ email, displayName, phone, referenceId }) {
+    try {
+      const response = await this.customersApi.createCustomer({
+        idempotencyKey: crypto.randomUUID(),
+        emailAddress: email,
+        givenName: displayName,
+        phoneNumber: phone || undefined,
+        referenceId: referenceId || undefined
+      });
+      const customer = response.result.customer;
+      return { success: true, customerId: customer.id };
+    } catch (error) {
+      console.error('[Square] Create customer failed:', error.message);
+      throw new PaymentError(error.message || 'Failed to create Square customer', PaymentErrorCodes.PROVIDER_ERROR, error);
+    }
+  }
+
+  /**
+   * Save a card on file for a Square customer
+   * @param {string} customerId - Square customer ID
+   * @param {string} sourceId - Card nonce from Square Web Payments SDK
+   */
+  async createCardOnFile({ customerId, sourceId }) {
+    try {
+      const response = await this.cardsApi.createCard({
+        idempotencyKey: crypto.randomUUID(),
+        sourceId,
+        card: { customerId }
+      });
+      const card = response.result.card;
+      return {
+        success: true,
+        cardId: card.id,
+        brand: card.cardBrand,
+        last4: card.last4,
+        expMonth: card.expMonth,
+        expYear: card.expYear
+      };
+    } catch (error) {
+      console.error('[Square] Create card on file failed:', error.message);
+      throw new PaymentError(error.message || 'Failed to save card on file', PaymentErrorCodes.PROVIDER_ERROR, error);
+    }
+  }
+
+  /**
+   * List cards on file for a Square customer
+   */
+  async listCards(customerId) {
+    try {
+      const response = await this.cardsApi.listCards(undefined, customerId);
+      const cards = (response.result.cards || []).map(c => ({
+        cardId: c.id,
+        brand: c.cardBrand,
+        last4: c.last4,
+        expMonth: c.expMonth,
+        expYear: c.expYear,
+        enabled: c.enabled
+      }));
+      return { success: true, cards };
+    } catch (error) {
+      console.error('[Square] List cards failed:', error.message);
+      return { success: false, cards: [], error: error.message };
+    }
+  }
+
+  /**
+   * Disable (remove) a card on file
+   */
+  async disableCard(cardId) {
+    try {
+      await this.cardsApi.disableCard(cardId);
+      return { success: true };
+    } catch (error) {
+      console.error('[Square] Disable card failed:', error.message);
+      throw new PaymentError(error.message || 'Failed to remove card', PaymentErrorCodes.PROVIDER_ERROR, error);
+    }
   }
 }
 

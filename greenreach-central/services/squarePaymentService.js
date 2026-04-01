@@ -52,7 +52,7 @@ export async function processSquarePayments(params) {
   }
 
   const sourceId = paymentSource?.source_id || paymentSource?.sourceId || null;
-  if (!sourceId || sourceId === 'CARD_ON_FILE') {
+  if (!sourceId) {
     const failedResults = farmSubOrders.map((subOrder) => ({
       farmId: subOrder.farm_id,
       success: false,
@@ -215,8 +215,92 @@ export async function createDemoPaymentRecord(orderId, amount) {
   };
 }
 
+/**
+ * Create a Square customer and save a card on file for a wholesale buyer.
+ * Uses GreenReach's own Square credentials (not the farm's).
+ */
+export async function saveCardOnFile({ buyerId, email, displayName, phone, cardNonce }) {
+  const squareEnvironment = process.env.SQUARE_ENVIRONMENT;
+  const accessToken = process.env.SQUARE_ACCESS_TOKEN;
+  if (!squareEnvironment || !accessToken) {
+    return { success: false, error: 'Square credentials not configured for card storage' };
+  }
+
+  const provider = PaymentProviderFactory.create('square', {
+    squareAccessToken: accessToken,
+    environment: squareEnvironment,
+  });
+
+  // Create customer if needed
+  const custResult = await provider.createCustomer({
+    email,
+    displayName,
+    phone,
+    referenceId: buyerId
+  });
+
+  // Save card on file
+  const cardResult = await provider.createCardOnFile({
+    customerId: custResult.customerId,
+    sourceId: cardNonce
+  });
+
+  return {
+    success: true,
+    squareCustomerId: custResult.customerId,
+    squareCardId: cardResult.cardId,
+    brand: cardResult.brand,
+    last4: cardResult.last4,
+    expMonth: cardResult.expMonth,
+    expYear: cardResult.expYear
+  };
+}
+
+/**
+ * Get the saved card details for a buyer
+ */
+export async function getCardOnFile(squareCustomerId) {
+  if (!squareCustomerId) return { success: false, cards: [] };
+
+  const squareEnvironment = process.env.SQUARE_ENVIRONMENT;
+  const accessToken = process.env.SQUARE_ACCESS_TOKEN;
+  if (!squareEnvironment || !accessToken) {
+    return { success: false, cards: [], error: 'Square credentials not configured' };
+  }
+
+  const provider = PaymentProviderFactory.create('square', {
+    squareAccessToken: accessToken,
+    environment: squareEnvironment,
+  });
+
+  return provider.listCards(squareCustomerId);
+}
+
+/**
+ * Remove a card on file
+ */
+export async function removeCardOnFile(squareCardId) {
+  if (!squareCardId) return { success: false, error: 'No card ID provided' };
+
+  const squareEnvironment = process.env.SQUARE_ENVIRONMENT;
+  const accessToken = process.env.SQUARE_ACCESS_TOKEN;
+  if (!squareEnvironment || !accessToken) {
+    return { success: false, error: 'Square credentials not configured' };
+  }
+
+  const provider = PaymentProviderFactory.create('square', {
+    squareAccessToken: accessToken,
+    environment: squareEnvironment,
+  });
+
+  return provider.disableCard(squareCardId);
+}
+
 export default {
   processSquarePayments,
   refundPayment,
-  createDemoPaymentRecord
+  createDemoPaymentRecord,
+  saveCardOnFile,
+  getCardOnFile,
+  removeCardOnFile
 };

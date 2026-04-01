@@ -53,7 +53,7 @@ import {
 } from '../services/wholesaleNetworkAggregator.js';
 import { listNetworkFarms, removeNetworkFarm, upsertNetworkFarm } from '../services/networkFarmsStore.js';
 import { getBatchFarmSquareCredentials } from '../services/squareCredentials.js';
-import { processSquarePayments, refundPayment } from '../services/squarePaymentService.js';
+import { processSquarePayments, refundPayment, saveCardOnFile, getCardOnFile, removeCardOnFile } from '../services/squarePaymentService.js';
 import { ingestPaymentRevenue, ingestFarmPayables, ingestFarmPayout } from '../services/revenue-accounting-connector.js';
 import emailService from '../services/email-service.js';
 import { farmStore } from '../lib/farm-data-store.js';
@@ -1698,7 +1698,7 @@ router.get('/buyers/me', requireBuyerPortalAuth, (req, res) => {
 
 router.put('/buyers/me', requireBuyerPortalAuth, async (req, res, next) => {
   try {
-    const { businessName, contactName, email, phone, buyerType, address, city, province, postalCode, country } = req.body || {};
+    const { businessName, contactName, email, phone, buyerType, address, city, province, postalCode, country, keyContact, backupContact, backupPhone } = req.body || {};
 
     const location = {
       address1: sanitizeText(address) || req.wholesaleBuyer.location?.address1 || null,
@@ -1715,6 +1715,9 @@ router.put('/buyers/me', requireBuyerPortalAuth, async (req, res, next) => {
       contactName: sanitizeText(contactName),
       email: email ? String(email).trim().toLowerCase() : undefined,
       phone: sanitizeText(phone),
+      keyContact: sanitizeText(keyContact),
+      backupContact: sanitizeText(backupContact),
+      backupPhone: sanitizeText(backupPhone),
       buyerType: sanitizeText(buyerType),
       location
     });
@@ -1735,6 +1738,156 @@ router.put('/buyers/me', requireBuyerPortalAuth, async (req, res, next) => {
 router.post('/auth/logout', requireBuyerPortalAuth, (req, res) => {
   blacklistToken(req.wholesaleToken);
   return res.json({ status: 'ok', message: 'Logged out' });
+});
+
+// ── Card on file ─────────────────────────────────────────────────────
+
+router.get('/buyers/me/card', requireBuyerPortalAuth, async (req, res, next) => {
+  try {
+    const buyer = req.wholesaleBuyer;
+    if (!buyer.squareCustomerId) {
+      return res.json({ status: 'ok', data: { cards: [] } });
+    }
+    const result = await getCardOnFile(buyer.squareCustomerId);
+    return res.json({ status: 'ok', data: { cards: result.cards || [] } });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/buyers/me/card', requireBuyerPortalAuth, async (req, res, next) => {
+  try {
+    const buyer = req.wholesaleBuyer;
+    const { cardNonce } = req.body || {};
+    if (!cardNonce || typeof cardNonce !== 'string') {
+      return res.status(400).json({ status: 'error', message: 'cardNonce is required' });
+    }
+
+    const result = await saveCardOnFile({
+      buyerId: buyer.id,
+      email: buyer.email,
+      displayName: buyer.businessName || buyer.contactName,
+      phone: buyer.phone,
+      cardNonce
+    });
+
+    // Persist the Square IDs on the buyer record
+    await updateBuyer(buyer.id, {
+      squareCustomerId: result.squareCustomerId,
+      squareCardId: result.squareCardId
+    });
+
+    return res.json({
+      status: 'ok',
+      data: {
+        brand: result.brand,
+        last4: result.last4,
+        expMonth: result.expMonth,
+        expYear: result.expYear
+      }
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.delete('/buyers/me/card', requireBuyerPortalAuth, async (req, res, next) => {
+  try {
+    const buyer = req.wholesaleBuyer;
+    if (!buyer.squareCardId) {
+      return res.status(404).json({ status: 'error', message: 'No card on file' });
+    }
+
+    await removeCardOnFile(buyer.squareCardId);
+
+    await updateBuyer(buyer.id, {
+      squareCardId: null,
+      squareCustomerId: buyer.squareCustomerId // keep the customer, just remove card
+    });
+
+    return res.json({ status: 'ok', message: 'Card removed' });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+// ── Subscriptions / standing orders ──────────────────────────────────
+
+router.get('/buyers/me/subscriptions', requireBuyerPortalAuth, async (req, res, next) => {
+  try {
+    if (!isDatabaseAvailable()) {
+      return res.json({ status: 'ok', data: { subscriptions: [] } });
+    }
+    const result = await query(
+      `SELECT * FROM wholesale_subscriptions WHERE buyer_id = $1 AND status != 'cancelled' ORDER BY created_at DESC`,
+      [req.wholesaleBuyer.id]
+    );
+    return res.json({ status: 'ok', data: { subscriptions: result.rows } });
+  } catch (error) {
+    if (error.message && error.message.includes('does not exist')) {
+      return res.json({ status: 'ok', data: { subscriptions: [] } });
+    }
+    return next(error);
+  }
+});
+
+router.post('/buyers/me/subscriptions', requireBuyerPortalAuth, async (req, res, next) => {
+  try {
+    const buyer = req.wholesaleBuyer;
+    if (!buyer.squareCardId) {
+      return res.status(400).json({ status: 'error', message: 'A saved card is required for standing orders' });
+    }
+
+    const { cadence, cart, deliveryAddress, fulfillmentMethod } = req.body || {};
+    if (!cadence || !['weekly', 'biweekly', 'monthly'].includes(cadence)) {
+      return res.status(400).json({ status: 'error', message: 'cadence must be weekly, biweekly, or monthly' });
+    }
+    if (!Array.isArray(cart) || cart.length === 0) {
+      return res.status(400).json({ status: 'error', message: 'cart must be a non-empty array' });
+    }
+
+    const now = new Date();
+    const nextDate = new Date(now);
+    if (cadence === 'weekly') nextDate.setDate(nextDate.getDate() + 7);
+    else if (cadence === 'biweekly') nextDate.setDate(nextDate.getDate() + 14);
+    else nextDate.setMonth(nextDate.getMonth() + 1);
+
+    const id = 'SUB-' + crypto.randomUUID().slice(0, 8).toUpperCase();
+    await query(
+      `INSERT INTO wholesale_subscriptions (id, buyer_id, farm_id, status, cadence, next_order_date, cart, delivery_address, fulfillment_method, payment_method)
+       VALUES ($1, $2, $3, 'active', $4, $5, $6::jsonb, $7, $8, 'card_on_file')`,
+      [id, buyer.id, cart[0]?.farm_id || null, cadence, nextDate.toISOString().slice(0, 10),
+       JSON.stringify(cart), sanitizeText(deliveryAddress) || null, sanitizeText(fulfillmentMethod) || 'delivery']
+    );
+
+    return res.json({ status: 'ok', data: { subscriptionId: id, nextOrderDate: nextDate.toISOString().slice(0, 10) } });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.put('/buyers/me/subscriptions/:subId', requireBuyerPortalAuth, async (req, res, next) => {
+  try {
+    const { status } = req.body || {};
+    if (!['active', 'paused', 'cancelled'].includes(status)) {
+      return res.status(400).json({ status: 'error', message: 'status must be active, paused, or cancelled' });
+    }
+
+    const result = await query(
+      `UPDATE wholesale_subscriptions SET status = $1, updated_at = NOW()
+       WHERE id = $2 AND buyer_id = $3
+       RETURNING *`,
+      [status, req.params.subId, req.wholesaleBuyer.id]
+    );
+
+    if (!result.rows.length) {
+      return res.status(404).json({ status: 'error', message: 'Subscription not found' });
+    }
+
+    return res.json({ status: 'ok', data: { subscription: result.rows[0] } });
+  } catch (error) {
+    return next(error);
+  }
 });
 
 // ── Buyer order detail ───────────────────────────────────────────────

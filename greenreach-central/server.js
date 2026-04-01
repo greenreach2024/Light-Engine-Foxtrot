@@ -141,6 +141,7 @@ import { initDatabase, getDatabase, query, isDatabaseAvailable } from './config/
 import { startHealthCheckService, stopHealthCheckService } from './services/healthCheck.js';
 import { startNightlyAuditService } from './services/nightly-audit.js';
 import { startNightlyChecklist } from './services/nightly-checklist.js';
+import { startSubscriptionScheduler } from './services/subscriptionScheduler.js';
 import { startFayeIntelligence } from './services/faye-intelligence.js';
 import { startSyncMonitor } from './services/syncMonitor.js';
 import { startWholesaleNetworkSync } from './services/wholesaleNetworkSync.js';
@@ -5072,6 +5073,7 @@ async function startServer() {
       startMarketAnalysisAgent(); // Phase 2A: daily GPT market analysis
       startFayeIntelligence(); // F.A.Y.E. Phase 3: anomaly detection + daily briefing
       startNightlyChecklist(); // Nightly AI Checklist: learning notes exchange + self-eval questions
+      startSubscriptionScheduler(); // Wholesale subscription recurring orders
 
       // AI Vision Phase 3: weekly cross-farm yield regression (T31/T32)
       // Run once after 5 min, then weekly
