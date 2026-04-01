@@ -654,10 +654,10 @@
                 .map(
                   (order) => `
                 <tr>
-                  <td>${order.order_id}</td>
-                  <td>${order.buyer_name || order.buyer_id}</td>
-                  <td>${order.farm_id || (order.farms ? order.farms.length + ' farms' : 'N/A')}</td>
-                  <td>$${(order.total_price || 0).toFixed(2)}</td>
+                  <td>${order.master_order_id ? order.master_order_id.substring(0, 12) + '...' : 'N/A'}</td>
+                  <td>${order.buyer_account?.businessName || order.buyer_id}</td>
+                  <td>${order.farm_sub_orders ? order.farm_sub_orders.map(s => s.farm_id).join(', ') : 'N/A'}</td>
+                  <td>$${(order.grand_total || 0).toFixed(2)}</td>
                   <td><span class="badge ${order.order_status || 'pending'}">${order.order_status || 'pending'}</span></td>
                   <td><span class="badge ${order.verification_status || 'pending'}">${order.verification_status || 'pending_farm_verification'}</span></td>
                   <td>${new Date(order.created_at).toLocaleString()}</td>
@@ -746,8 +746,9 @@
     },
 
     async loadPayments() {
+      const headers = this.getAuthHeaders();
       try {
-        const response = await fetch('/api/wholesale/webhooks/payments');
+        const response = await fetch('/api/wholesale/webhooks/payments', { headers });
         const data = await response.json();
 
         if (data.status === 'ok') {
@@ -885,8 +886,9 @@
     },
 
     async loadRefunds() {
+      const headers = this.getAuthHeaders();
       try {
-        const response = await fetch('/api/wholesale/refunds');
+        const response = await fetch('/api/wholesale/refunds', { headers });
         const data = await response.json();
 
         if (data.status === 'ok') {
@@ -932,7 +934,7 @@
 
         const response = await fetch('/api/wholesale/webhooks/reconcile', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' }
+          headers: this.getAuthHeaders()
         });
 
         const data = await response.json();
@@ -956,7 +958,7 @@
       try {
         const response = await fetch('/api/wholesale/webhooks/reconcile', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' }
+          headers: this.getAuthHeaders()
         });
 
         const data = await response.json();
@@ -1764,6 +1766,12 @@
           ? `/api/admin/wholesale/buyers?search=${encodeURIComponent(search)}`
           : '/api/admin/wholesale/buyers';
         const res = await fetch(url, { headers });
+        if (!res.ok) {
+          console.error('[Buyers] Server returned', res.status);
+          const tbody = document.getElementById('buyers-table');
+          if (tbody) tbody.innerHTML = '<tr><td colspan="8" style="color: var(--error);">Server error (' + res.status + '). Retry in a moment.</td></tr>';
+          return;
+        }
         const json = await res.json();
         const buyers = (json.data?.buyers || []).map((buyer) => this.normalizeBuyer(buyer));
         this.buyers = buyers;
