@@ -780,6 +780,186 @@ body {
 ::-webkit-scrollbar-track { background: var(--bg-deep); }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+/* ================================================================
+   NARRATION ENGINE -- Cinematic typewriter narration system
+   ================================================================ */
+.narration-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  z-index: 300;
+  background: linear-gradient(180deg, rgba(8,15,26,0) 0%, rgba(8,15,26,0.97) 30%);
+  padding: 40px 24px 28px;
+  pointer-events: none;
+  transform: translateY(100%);
+  opacity: 0;
+  transition: transform 0.8s cubic-bezier(0.16,1,0.3,1), opacity 0.8s;
+}
+.narration-bar.active {
+  transform: translateY(0);
+  opacity: 1;
+}
+.narration-inner {
+  max-width: 800px;
+  margin: 0 auto;
+  position: relative;
+}
+.narration-accent {
+  position: absolute;
+  top: -8px;
+  left: 0;
+  width: 60px;
+  height: 2px;
+  background: #f59e0b;
+  box-shadow: 0 0 12px rgba(245, 158, 11, 0.4);
+  border-radius: 2px;
+  transition: width 0.6s ease;
+}
+.narration-bar.active .narration-accent {
+  width: 120px;
+}
+.narration-label {
+  font-size: 9px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: #f59e0b;
+  margin-bottom: 8px;
+  opacity: 0.8;
+}
+.narration-text {
+  font-size: 17px;
+  line-height: 1.8;
+  color: #d1d5db;
+  font-weight: 400;
+  letter-spacing: 0.2px;
+  min-height: 60px;
+}
+.narration-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 20px;
+  background: #f59e0b;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  animation: narratCursorBlink 0.8s step-end infinite;
+}
+@keyframes narratCursorBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+.narration-progress {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+  align-items: center;
+}
+.narration-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(100, 116, 139, 0.4);
+  transition: all 0.4s;
+}
+.narration-dot.active {
+  background: #f59e0b;
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.4);
+  transform: scale(1.4);
+}
+.narration-dot.visited {
+  background: rgba(245, 158, 11, 0.5);
+}
+
+/* -- Scene entrance upgrades ------------------------------------- */
+.scene {
+  opacity: 0;
+  transform: translateY(50px);
+  transition: opacity 1.0s cubic-bezier(0.16,1,0.3,1), transform 1.0s cubic-bezier(0.16,1,0.3,1);
+}
+.scene.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+.scene.visible .section-header {
+  animation: narratHeaderReveal 1.2s cubic-bezier(0.16,1,0.3,1) forwards;
+}
+@keyframes narratHeaderReveal {
+  0% { opacity: 0; transform: translateY(20px) scale(0.97); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+.scene.visible .demo-panel {
+  animation: narratPanelSlide 0.9s cubic-bezier(0.16,1,0.3,1) both;
+}
+.scene.visible .demo-panel:nth-child(2) { animation-delay: 0.15s; }
+.scene.visible .demo-panel:nth-child(3) { animation-delay: 0.30s; }
+.scene.visible .demo-panel:nth-child(4) { animation-delay: 0.45s; }
+@keyframes narratPanelSlide {
+  0% { opacity: 0; transform: translateX(-30px); }
+  100% { opacity: 1; transform: translateX(0); }
+}
+.scene.visible .cap-card {
+  animation: narratCardPop 0.7s cubic-bezier(0.34,1.56,0.64,1) both;
+}
+.scene.visible .cap-card:nth-child(1) { animation-delay: 0.1s; }
+.scene.visible .cap-card:nth-child(2) { animation-delay: 0.25s; }
+.scene.visible .cap-card:nth-child(3) { animation-delay: 0.4s; }
+@keyframes narratCardPop {
+  0% { opacity: 0; transform: scale(0.85) translateY(20px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+/* -- Scanning line effect on panels ------------------------------ */
+.scene.visible .demo-panel::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(245, 158, 11, 0.4), transparent);
+  animation: narratScanLine 2s ease forwards;
+  pointer-events: none;
+  z-index: 5;
+}
+.demo-panel { position: relative; overflow: hidden; }
+@keyframes narratScanLine {
+  0% { transform: translateX(-100%); opacity: 1; }
+  100% { transform: translateX(100%); opacity: 0; }
+}
+
+/* -- Floating data particles ------------------------------------- */
+.data-particles {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* -- Stat pulse ring --------------------------------------------- */
+.title-stat-value {
+  position: relative;
+}
+.pulse-ring {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 60px;
+  height: 60px;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  border-radius: 50%;
+  transform: translate(-50%, -50%) scale(0);
+  animation: narratPulseRing 2s ease-out forwards;
+  pointer-events: none;
+}
+@keyframes narratPulseRing {
+  0% { transform: translate(-50%, -50%) scale(0); opacity: 0.8; }
+  100% { transform: translate(-50%, -50%) scale(3); opacity: 0; }
+}
+
   </style>
 </head>
 <body>
@@ -1198,6 +1378,18 @@ body {
 </div>
 
 <!-- ============================================================ -->
+  <canvas class="data-particles" id="dataParticles"></canvas>
+
+  <!-- Narration Bar -->
+  <div class="narration-bar" id="narrationBar">
+    <div class="narration-inner">
+      <div class="narration-accent"></div>
+      <div class="narration-label" id="narrationLabel">F.A.Y.E.</div>
+      <div class="narration-text" id="narrationText"><span class="narration-cursor"></span></div>
+      <div class="narration-progress"><div class="narration-dot" data-idx="0"></div><div class="narration-dot" data-idx="1"></div><div class="narration-dot" data-idx="2"></div><div class="narration-dot" data-idx="3"></div><div class="narration-dot" data-idx="4"></div><div class="narration-dot" data-idx="5"></div><div class="narration-dot" data-idx="6"></div><div class="narration-dot" data-idx="7"></div></div>
+    </div>
+  </div>
+
 <!-- JAVASCRIPT                                                     -->
 <!-- ============================================================ -->
 <script>
@@ -2076,10 +2268,161 @@ body {
   // ================================================================
   // INIT
   // ================================================================
+
+  // ================================================================
+  // NARRATION ENGINE -- Cinematic typewriter narration + particles
+  // ================================================================
+  function initNarration() {
+    
+    // ================================================================
+    // NARRATION ENGINE
+    // ================================================================
+    var narrationData = [
+      { scene: 'title', text: 'F.A.Y.E. -- the Farm Autonomy and Yield Engine. She runs the business side of a cloud farm with 99 tools and a trust model that demands proof before granting power. Every transaction, every security check, every order -- governed with precision.' },
+      { scene: 'command', text: 'Every morning, F.A.Y.E. assembles a daily briefing. Order counts, revenue totals, open alerts, system health -- the full operational picture, delivered before the first cup of coffee. She does not wait to be asked. She anticipates.' },
+      { scene: 'autonomy', text: 'Autonomy is earned, not assumed. F.A.Y.E. starts at Level 0 -- recommend only. She watches, she shadows, she proves accuracy. Only after sustained precision across hundreds of decisions does she advance. Trust is built one correct call at a time.' },
+      { scene: 'security', text: 'Six layers of defense. Peer-reviewed methodology from behavioral baselines to statistical anomaly detection to explainable AI reasoning. F.A.Y.E. protects the farm from threats the admin may never see -- and she shows her work every time.' },
+      { scene: 'business', text: 'Revenue trends, order pipelines, buyer analytics, balanced books. F.A.Y.E. manages the entire commercial engine of a controlled environment farm -- from the first wholesale inquiry through fulfillment to the final accounting entry.' },
+      { scene: 'collab', text: 'E.V.I.E. keeps the crop alive. G.W.E.N. advances the research. F.A.Y.E. orchestrates it all. When orders spike, all three coordinate -- adjusting climate for increased demand, checking harvest capacity, and confirming fulfillment timelines.' },
+      { scene: 'learning', text: "Every decision F.A.Y.E. makes is logged, analyzed, and learned from. Knowledge persists across sessions. Pattern recognition improves daily. Accuracy tracking ensures she never drifts from the grower's intent. She does not forget." },
+      { scene: 'tools', text: '99 tools across 21 categories. Security audits, revenue analysis, order management, farm diagnostics, anomaly detection, progressive automation. The most comprehensive governed operations toolkit ever built for controlled environment agriculture.' }
+    ];
+    var narrationBar = document.getElementById('narrationBar');
+    var narrationText = document.getElementById('narrationText');
+    var narrationLabel = document.getElementById('narrationLabel');
+    var narrationDots = document.querySelectorAll('.narration-dot');
+    var currentNarrationIdx = -1;
+    var typeTimer = null;
+
+    function typeNarration(text, callback) {
+      if (typeTimer) clearInterval(typeTimer);
+      narrationText.innerHTML = '';
+      var cursor = document.createElement('span');
+      cursor.className = 'narration-cursor';
+      var charIdx = 0;
+      var speed = 22; // ms per character
+
+      typeTimer = setInterval(function() {
+        if (charIdx < text.length) {
+          // Insert text before cursor
+          narrationText.insertBefore(document.createTextNode(text[charIdx]), cursor);
+          charIdx++;
+          // Append cursor after text
+          narrationText.appendChild(cursor);
+        } else {
+          clearInterval(typeTimer);
+          typeTimer = null;
+          if (callback) setTimeout(callback, 400);
+        }
+      }, speed);
+    }
+
+    function triggerNarration(sceneKey) {
+      var idx = -1;
+      for (var i = 0; i < narrationData.length; i++) {
+        if (narrationData[i].scene === sceneKey) { idx = i; break; }
+      }
+      if (idx === -1 || idx === currentNarrationIdx) return;
+      currentNarrationIdx = idx;
+
+      // Activate bar
+      narrationBar.classList.add('active');
+
+      // Update dots
+      narrationDots.forEach(function(dot, i) {
+        dot.classList.remove('active');
+        if (i < idx) dot.classList.add('visited');
+        if (i === idx) { dot.classList.add('active'); dot.classList.add('visited'); }
+      });
+
+      // Type the narration
+      typeNarration(narrationData[idx].text);
+
+      // Fire pulse rings on title stats if title scene
+      if (sceneKey === 'title') {
+        setTimeout(function() {
+          document.querySelectorAll('.title-stat-value').forEach(function(el) {
+            var ring = document.createElement('div');
+            ring.className = 'pulse-ring';
+            el.style.position = 'relative';
+            el.appendChild(ring);
+            setTimeout(function() { ring.remove(); }, 2200);
+          });
+        }, 800);
+      }
+    }
+
+    // Data particle system
+    var particleCanvas = document.getElementById('dataParticles');
+    var dataParticles = [];
+    if (particleCanvas) {
+      var pCtx = particleCanvas.getContext('2d');
+      function resizeParticleCanvas() {
+        particleCanvas.width = window.innerWidth;
+        particleCanvas.height = window.innerHeight;
+      }
+      resizeParticleCanvas();
+      window.addEventListener('resize', resizeParticleCanvas);
+
+      for (var pi = 0; pi < 40; pi++) {
+        dataParticles.push({
+          x: Math.random() * window.innerWidth,
+          y: Math.random() * window.innerHeight,
+          vy: -(0.15 + Math.random() * 0.4),
+          vx: (Math.random() - 0.5) * 0.3,
+          size: 1 + Math.random() * 2,
+          opacity: 0.1 + Math.random() * 0.3,
+          phase: Math.random() * Math.PI * 2
+        });
+      }
+
+      function drawDataParticles(t) {
+        pCtx.clearRect(0, 0, particleCanvas.width, particleCanvas.height);
+        dataParticles.forEach(function(p) {
+          p.x += p.vx + Math.sin(t * 0.001 + p.phase) * 0.15;
+          p.y += p.vy;
+          if (p.y < -10) {
+            p.y = particleCanvas.height + 10;
+            p.x = Math.random() * particleCanvas.width;
+          }
+          if (p.x < -10) p.x = particleCanvas.width + 10;
+          if (p.x > particleCanvas.width + 10) p.x = -10;
+
+          var flicker = Math.sin(t * 0.003 + p.phase) * 0.15 + 0.85;
+          pCtx.beginPath();
+          pCtx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+          pCtx.fillStyle = 'rgba(245, 158, 11, ' + (p.opacity * flicker).toFixed(3) + ')';
+          pCtx.fill();
+        });
+        requestAnimationFrame(drawDataParticles);
+      }
+      requestAnimationFrame(drawDataParticles);
+    }
+
+
+    // Hook into IntersectionObserver for narration triggers
+    var narratObserver = new IntersectionObserver(function(entries) {
+      entries.forEach(function(entry) {
+        if (entry.isIntersecting) {
+          var scene = entry.target.dataset.scene;
+          if (scene) triggerNarration(scene);
+        }
+      });
+    }, { threshold: 0.25 });
+
+    document.querySelectorAll('.scene[data-scene]').forEach(function(el) {
+      narratObserver.observe(el);
+    });
+  }
+
   window.addEventListener('DOMContentLoaded', function () {
     initStarfield();
     initScrollObserver();
     renderAllTools();
+
+    // Init narration engine
+    initNarration();
+
 
     // Auto-start audio on first interaction
     var audioStarted = false;

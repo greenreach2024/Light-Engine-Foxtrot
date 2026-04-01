@@ -1329,6 +1329,705 @@ const GWEN_TOOL_CATALOG = {
 
 
   // ========================================
+  // NUTRIENT DYNAMICS & GAS TRANSPORT
+  // ========================================
+
+  get_nutrient_reference_data: {
+    description: 'Look up published optimal nutrient ranges, Michaelis-Menten uptake kinetic constants (Vmax, Km), and recommended solution compositions for common greenhouse crops. Use this as the foundation before running uptake or depletion simulations.',
+    parameters: {
+      crop: { type: 'string', description: 'Crop name: lettuce, tomato, basil, strawberry, cannabis, microgreens, pepper, cucumber, spinach, kale, herb_mix' },
+      nutrient: { type: 'string', description: 'Optional: filter to a specific nutrient (N, P, K, Ca, Mg, Fe, Mn, Zn, B, Cu, Mo, S)' },
+    },
+    required: ['crop'],
+    execute: async (params) => {
+      // Reference data from peer-reviewed hydroponic nutrient studies
+      // Sources: Resh (2022) Hydroponic Food Production, Savvas & Passam (2002),
+      // Bugbee (2004) nutrient management, Marschner (2012) mineral nutrition
+      const CROP_DB = {
+        lettuce: {
+          name: 'Lettuce (Lactuca sativa)',
+          ec_range_ms: [0.8, 1.5], ph_range: [5.5, 6.5],
+          solution_ppm: { N: [150, 200], P: [30, 50], K: [150, 250], Ca: [150, 200], Mg: [40, 60], Fe: [2, 5], Mn: [0.5, 1.0], Zn: [0.3, 0.5], B: [0.3, 0.5], Cu: [0.05, 0.1], Mo: [0.05, 0.1], S: [50, 80] },
+          kinetics: {
+            N: { Vmax_umol_g_h: 12.5, Km_umol_L: 50, temp_opt_c: 22 },
+            P: { Vmax_umol_g_h: 2.8, Km_umol_L: 8, temp_opt_c: 22 },
+            K: { Vmax_umol_g_h: 15.0, Km_umol_L: 20, temp_opt_c: 22 },
+            Ca: { Vmax_umol_g_h: 4.0, Km_umol_L: 100, temp_opt_c: 22 },
+            Mg: { Vmax_umol_g_h: 2.5, Km_umol_L: 40, temp_opt_c: 22 },
+            Fe: { Vmax_umol_g_h: 0.8, Km_umol_L: 5, temp_opt_c: 22 },
+          },
+          growth_rate_g_day: 4.5, root_mass_g: 8, water_uptake_ml_day: 250,
+          days_to_harvest: 35,
+          deficiency_symptoms: { N: 'Pale older leaves, stunted growth', P: 'Purple-red discoloration, dark green leaves', K: 'Brown leaf margins, wilting', Ca: 'Tip burn on inner leaves', Mg: 'Interveinal chlorosis on older leaves', Fe: 'Interveinal chlorosis on young leaves' },
+          toxicity_thresholds_ppm: { N: 400, P: 100, K: 500, Ca: 400, Mg: 150, Fe: 15, Mn: 5, B: 2, Cu: 1 },
+        },
+        tomato: {
+          name: 'Tomato (Solanum lycopersicum)',
+          ec_range_ms: [2.0, 3.5], ph_range: [5.8, 6.5],
+          solution_ppm: { N: [180, 250], P: [40, 60], K: [250, 400], Ca: [180, 250], Mg: [45, 70], Fe: [3, 6], Mn: [0.5, 1.5], Zn: [0.3, 0.5], B: [0.3, 0.7], Cu: [0.05, 0.1], Mo: [0.05, 0.1], S: [60, 100] },
+          kinetics: {
+            N: { Vmax_umol_g_h: 18.0, Km_umol_L: 60, temp_opt_c: 25 },
+            P: { Vmax_umol_g_h: 3.5, Km_umol_L: 10, temp_opt_c: 25 },
+            K: { Vmax_umol_g_h: 22.0, Km_umol_L: 25, temp_opt_c: 25 },
+            Ca: { Vmax_umol_g_h: 5.5, Km_umol_L: 120, temp_opt_c: 25 },
+            Mg: { Vmax_umol_g_h: 3.0, Km_umol_L: 50, temp_opt_c: 25 },
+            Fe: { Vmax_umol_g_h: 1.2, Km_umol_L: 6, temp_opt_c: 25 },
+          },
+          growth_rate_g_day: 15, root_mass_g: 45, water_uptake_ml_day: 1200,
+          days_to_harvest: 75,
+          deficiency_symptoms: { N: 'Yellowing lower leaves, spindly growth', P: 'Purple stems, dark leaves', K: 'Yellow leaf edges, poor fruit set', Ca: 'Blossom end rot', Mg: 'Yellow between veins, leaf curl', Fe: 'Young leaves pale yellow-white' },
+          toxicity_thresholds_ppm: { N: 500, P: 120, K: 700, Ca: 500, Mg: 200, Fe: 20, Mn: 8, B: 3, Cu: 2 },
+        },
+        basil: {
+          name: 'Basil (Ocimum basilicum)',
+          ec_range_ms: [1.0, 1.6], ph_range: [5.5, 6.5],
+          solution_ppm: { N: [120, 180], P: [30, 50], K: [150, 250], Ca: [120, 180], Mg: [35, 55], Fe: [2, 5], Mn: [0.5, 1.0], Zn: [0.3, 0.5], B: [0.3, 0.5], Cu: [0.05, 0.1], Mo: [0.05, 0.1], S: [40, 70] },
+          kinetics: {
+            N: { Vmax_umol_g_h: 10.0, Km_umol_L: 45, temp_opt_c: 24 },
+            P: { Vmax_umol_g_h: 2.2, Km_umol_L: 7, temp_opt_c: 24 },
+            K: { Vmax_umol_g_h: 12.0, Km_umol_L: 18, temp_opt_c: 24 },
+            Ca: { Vmax_umol_g_h: 3.5, Km_umol_L: 90, temp_opt_c: 24 },
+            Mg: { Vmax_umol_g_h: 2.0, Km_umol_L: 35, temp_opt_c: 24 },
+            Fe: { Vmax_umol_g_h: 0.7, Km_umol_L: 4.5, temp_opt_c: 24 },
+          },
+          growth_rate_g_day: 3.5, root_mass_g: 6, water_uptake_ml_day: 200,
+          days_to_harvest: 28,
+          deficiency_symptoms: { N: 'Light green leaves, slow growth', P: 'Purpling on stems', K: 'Leaf edge necrosis', Ca: 'Tip burn, distorted new growth', Mg: 'Interveinal yellowing', Fe: 'Pale new leaves' },
+          toxicity_thresholds_ppm: { N: 350, P: 90, K: 450, Ca: 350, Mg: 130, Fe: 12, Mn: 4, B: 1.5, Cu: 0.8 },
+        },
+        strawberry: {
+          name: 'Strawberry (Fragaria x ananassa)',
+          ec_range_ms: [1.0, 1.8], ph_range: [5.5, 6.2],
+          solution_ppm: { N: [100, 170], P: [30, 50], K: [200, 350], Ca: [120, 180], Mg: [40, 60], Fe: [3, 6], Mn: [0.5, 1.0], Zn: [0.3, 0.5], B: [0.3, 0.5], Cu: [0.05, 0.1], Mo: [0.05, 0.1], S: [50, 80] },
+          kinetics: {
+            N: { Vmax_umol_g_h: 9.0, Km_umol_L: 40, temp_opt_c: 20 },
+            P: { Vmax_umol_g_h: 2.5, Km_umol_L: 9, temp_opt_c: 20 },
+            K: { Vmax_umol_g_h: 14.0, Km_umol_L: 22, temp_opt_c: 20 },
+            Ca: { Vmax_umol_g_h: 3.8, Km_umol_L: 95, temp_opt_c: 20 },
+            Mg: { Vmax_umol_g_h: 2.0, Km_umol_L: 38, temp_opt_c: 20 },
+            Fe: { Vmax_umol_g_h: 0.9, Km_umol_L: 5.5, temp_opt_c: 20 },
+          },
+          growth_rate_g_day: 5, root_mass_g: 12, water_uptake_ml_day: 350,
+          days_to_harvest: 60,
+          deficiency_symptoms: { N: 'Red-tinged older leaves, small fruit', P: 'Dark foliage, poor fruiting', K: 'Brown leaf margins, soft fruit', Ca: 'Tip burn, misshapen fruit', Mg: 'Interveinal chlorosis', Fe: 'Young leaf chlorosis' },
+          toxicity_thresholds_ppm: { N: 350, P: 100, K: 600, Ca: 400, Mg: 150, Fe: 18, Mn: 6, B: 2, Cu: 1.5 },
+        },
+        cannabis: {
+          name: 'Cannabis (Cannabis sativa)',
+          ec_range_ms: [1.2, 2.5], ph_range: [5.8, 6.5],
+          solution_ppm: { N: [150, 250], P: [40, 70], K: [200, 350], Ca: [150, 220], Mg: [50, 80], Fe: [3, 6], Mn: [0.5, 1.5], Zn: [0.3, 0.7], B: [0.3, 0.5], Cu: [0.05, 0.15], Mo: [0.05, 0.1], S: [60, 100] },
+          kinetics: {
+            N: { Vmax_umol_g_h: 16.0, Km_umol_L: 55, temp_opt_c: 24 },
+            P: { Vmax_umol_g_h: 3.2, Km_umol_L: 10, temp_opt_c: 24 },
+            K: { Vmax_umol_g_h: 20.0, Km_umol_L: 28, temp_opt_c: 24 },
+            Ca: { Vmax_umol_g_h: 5.0, Km_umol_L: 110, temp_opt_c: 24 },
+            Mg: { Vmax_umol_g_h: 3.0, Km_umol_L: 45, temp_opt_c: 24 },
+            Fe: { Vmax_umol_g_h: 1.0, Km_umol_L: 5.5, temp_opt_c: 24 },
+          },
+          growth_rate_g_day: 12, root_mass_g: 30, water_uptake_ml_day: 800,
+          days_to_harvest: 90,
+          deficiency_symptoms: { N: 'Lower leaf yellowing, slow veg growth', P: 'Purple stems, dark leaves, poor flowering', K: 'Brown crispy edges, reduced resin', Ca: 'Distorted new growth, hollow stems', Mg: 'Yellow between veins, bottom up', Fe: 'White/yellow new growth' },
+          toxicity_thresholds_ppm: { N: 450, P: 130, K: 600, Ca: 450, Mg: 180, Fe: 18, Mn: 7, B: 2.5, Cu: 1.5 },
+        },
+        microgreens: {
+          name: 'Microgreens (mixed species)',
+          ec_range_ms: [0.5, 1.2], ph_range: [5.5, 6.5],
+          solution_ppm: { N: [80, 150], P: [20, 40], K: [100, 180], Ca: [80, 140], Mg: [25, 45], Fe: [1, 3], Mn: [0.3, 0.8], Zn: [0.2, 0.4], B: [0.2, 0.4], Cu: [0.03, 0.08], Mo: [0.03, 0.08], S: [30, 60] },
+          kinetics: {
+            N: { Vmax_umol_g_h: 8.0, Km_umol_L: 35, temp_opt_c: 21 },
+            P: { Vmax_umol_g_h: 1.8, Km_umol_L: 6, temp_opt_c: 21 },
+            K: { Vmax_umol_g_h: 10.0, Km_umol_L: 15, temp_opt_c: 21 },
+            Ca: { Vmax_umol_g_h: 2.5, Km_umol_L: 70, temp_opt_c: 21 },
+            Mg: { Vmax_umol_g_h: 1.5, Km_umol_L: 28, temp_opt_c: 21 },
+            Fe: { Vmax_umol_g_h: 0.5, Km_umol_L: 3.5, temp_opt_c: 21 },
+          },
+          growth_rate_g_day: 2.0, root_mass_g: 2, water_uptake_ml_day: 80,
+          days_to_harvest: 12,
+          deficiency_symptoms: { N: 'Pale cotyledons, leggy growth', P: 'Slow emergence', K: 'Weak stems', Ca: 'Poor germination', Mg: 'Yellowing', Fe: 'Pale new leaves' },
+          toxicity_thresholds_ppm: { N: 300, P: 80, K: 350, Ca: 300, Mg: 100, Fe: 10, Mn: 3, B: 1, Cu: 0.5 },
+        },
+        pepper: {
+          name: 'Pepper (Capsicum annuum)',
+          ec_range_ms: [1.5, 2.8], ph_range: [5.8, 6.5],
+          solution_ppm: { N: [160, 230], P: [35, 55], K: [220, 380], Ca: [160, 220], Mg: [45, 65], Fe: [3, 6], Mn: [0.5, 1.2], Zn: [0.3, 0.5], B: [0.3, 0.6], Cu: [0.05, 0.1], Mo: [0.05, 0.1], S: [55, 90] },
+          kinetics: {
+            N: { Vmax_umol_g_h: 14.0, Km_umol_L: 52, temp_opt_c: 26 },
+            P: { Vmax_umol_g_h: 3.0, Km_umol_L: 9, temp_opt_c: 26 },
+            K: { Vmax_umol_g_h: 18.0, Km_umol_L: 24, temp_opt_c: 26 },
+            Ca: { Vmax_umol_g_h: 4.8, Km_umol_L: 105, temp_opt_c: 26 },
+            Mg: { Vmax_umol_g_h: 2.8, Km_umol_L: 42, temp_opt_c: 26 },
+            Fe: { Vmax_umol_g_h: 1.0, Km_umol_L: 5.2, temp_opt_c: 26 },
+          },
+          growth_rate_g_day: 10, root_mass_g: 25, water_uptake_ml_day: 700,
+          days_to_harvest: 70,
+          deficiency_symptoms: { N: 'Small pale leaves, early flower drop', P: 'Purple tinting, stunted', K: 'Brown edges, poor fruit size', Ca: 'Blossom end rot, stunted tips', Mg: 'Interveinal chlorosis', Fe: 'White/yellow new leaves' },
+          toxicity_thresholds_ppm: { N: 450, P: 110, K: 650, Ca: 450, Mg: 180, Fe: 18, Mn: 7, B: 2.5, Cu: 1.5 },
+        },
+        cucumber: {
+          name: 'Cucumber (Cucumis sativus)',
+          ec_range_ms: [1.5, 2.5], ph_range: [5.5, 6.0],
+          solution_ppm: { N: [170, 240], P: [35, 55], K: [250, 400], Ca: [160, 220], Mg: [40, 65], Fe: [3, 6], Mn: [0.5, 1.2], Zn: [0.3, 0.5], B: [0.3, 0.6], Cu: [0.05, 0.1], Mo: [0.05, 0.1], S: [55, 90] },
+          kinetics: {
+            N: { Vmax_umol_g_h: 17.0, Km_umol_L: 58, temp_opt_c: 25 },
+            P: { Vmax_umol_g_h: 3.4, Km_umol_L: 10, temp_opt_c: 25 },
+            K: { Vmax_umol_g_h: 21.0, Km_umol_L: 26, temp_opt_c: 25 },
+            Ca: { Vmax_umol_g_h: 5.2, Km_umol_L: 115, temp_opt_c: 25 },
+            Mg: { Vmax_umol_g_h: 2.8, Km_umol_L: 44, temp_opt_c: 25 },
+            Fe: { Vmax_umol_g_h: 1.1, Km_umol_L: 5.8, temp_opt_c: 25 },
+          },
+          growth_rate_g_day: 18, root_mass_g: 35, water_uptake_ml_day: 1500,
+          days_to_harvest: 55,
+          deficiency_symptoms: { N: 'Pale lower leaves, small fruit', P: 'Dark green stunted plants', K: 'Yellow margins, misshapen fruit', Ca: 'Deformed new leaves, hollow fruit', Mg: 'Mottled chlorosis', Fe: 'Interveinal chlorosis on new growth' },
+          toxicity_thresholds_ppm: { N: 480, P: 120, K: 680, Ca: 460, Mg: 190, Fe: 20, Mn: 8, B: 3, Cu: 1.8 },
+        },
+        spinach: {
+          name: 'Spinach (Spinacia oleracea)',
+          ec_range_ms: [1.2, 2.0], ph_range: [6.0, 7.0],
+          solution_ppm: { N: [140, 210], P: [30, 50], K: [160, 270], Ca: [140, 200], Mg: [40, 60], Fe: [3, 6], Mn: [0.5, 1.0], Zn: [0.3, 0.5], B: [0.3, 0.5], Cu: [0.05, 0.1], Mo: [0.05, 0.1], S: [50, 80] },
+          kinetics: {
+            N: { Vmax_umol_g_h: 11.0, Km_umol_L: 48, temp_opt_c: 18 },
+            P: { Vmax_umol_g_h: 2.5, Km_umol_L: 7.5, temp_opt_c: 18 },
+            K: { Vmax_umol_g_h: 13.0, Km_umol_L: 19, temp_opt_c: 18 },
+            Ca: { Vmax_umol_g_h: 3.8, Km_umol_L: 95, temp_opt_c: 18 },
+            Mg: { Vmax_umol_g_h: 2.2, Km_umol_L: 36, temp_opt_c: 18 },
+            Fe: { Vmax_umol_g_h: 0.9, Km_umol_L: 5, temp_opt_c: 18 },
+          },
+          growth_rate_g_day: 3.5, root_mass_g: 7, water_uptake_ml_day: 220,
+          days_to_harvest: 30,
+          deficiency_symptoms: { N: 'Overall yellowing', P: 'Dark blue-green leaves', K: 'Scorched leaf edges', Ca: 'Distorted young leaves', Mg: 'Interveinal chlorosis', Fe: 'Young leaf yellowing' },
+          toxicity_thresholds_ppm: { N: 400, P: 100, K: 500, Ca: 400, Mg: 150, Fe: 15, Mn: 5, B: 2, Cu: 1 },
+        },
+        kale: {
+          name: 'Kale (Brassica oleracea var. sabellica)',
+          ec_range_ms: [1.2, 2.0], ph_range: [5.5, 6.5],
+          solution_ppm: { N: [150, 220], P: [30, 50], K: [170, 280], Ca: [150, 210], Mg: [40, 60], Fe: [3, 6], Mn: [0.5, 1.0], Zn: [0.3, 0.5], B: [0.3, 0.5], Cu: [0.05, 0.1], Mo: [0.05, 0.1], S: [50, 85] },
+          kinetics: {
+            N: { Vmax_umol_g_h: 13.0, Km_umol_L: 50, temp_opt_c: 20 },
+            P: { Vmax_umol_g_h: 2.6, Km_umol_L: 8, temp_opt_c: 20 },
+            K: { Vmax_umol_g_h: 14.0, Km_umol_L: 20, temp_opt_c: 20 },
+            Ca: { Vmax_umol_g_h: 4.2, Km_umol_L: 100, temp_opt_c: 20 },
+            Mg: { Vmax_umol_g_h: 2.4, Km_umol_L: 38, temp_opt_c: 20 },
+            Fe: { Vmax_umol_g_h: 0.85, Km_umol_L: 4.8, temp_opt_c: 20 },
+          },
+          growth_rate_g_day: 5, root_mass_g: 10, water_uptake_ml_day: 300,
+          days_to_harvest: 40,
+          deficiency_symptoms: { N: 'Pale green older leaves', P: 'Purple-red discoloration', K: 'Brown leaf margins', Ca: 'Distorted leaf tips', Mg: 'Interveinal yellowing', Fe: 'Young leaf chlorosis' },
+          toxicity_thresholds_ppm: { N: 420, P: 100, K: 520, Ca: 420, Mg: 160, Fe: 16, Mn: 6, B: 2, Cu: 1.2 },
+        },
+        herb_mix: {
+          name: 'Mixed Herbs (cilantro, dill, parsley, chives)',
+          ec_range_ms: [0.8, 1.5], ph_range: [5.5, 6.5],
+          solution_ppm: { N: [100, 170], P: [25, 45], K: [130, 220], Ca: [100, 160], Mg: [30, 50], Fe: [2, 4], Mn: [0.4, 0.8], Zn: [0.2, 0.4], B: [0.2, 0.4], Cu: [0.04, 0.08], Mo: [0.04, 0.08], S: [35, 65] },
+          kinetics: {
+            N: { Vmax_umol_g_h: 9.0, Km_umol_L: 42, temp_opt_c: 20 },
+            P: { Vmax_umol_g_h: 2.0, Km_umol_L: 6.5, temp_opt_c: 20 },
+            K: { Vmax_umol_g_h: 11.0, Km_umol_L: 16, temp_opt_c: 20 },
+            Ca: { Vmax_umol_g_h: 3.0, Km_umol_L: 80, temp_opt_c: 20 },
+            Mg: { Vmax_umol_g_h: 1.8, Km_umol_L: 30, temp_opt_c: 20 },
+            Fe: { Vmax_umol_g_h: 0.6, Km_umol_L: 4, temp_opt_c: 20 },
+          },
+          growth_rate_g_day: 2.5, root_mass_g: 4, water_uptake_ml_day: 150,
+          days_to_harvest: 25,
+          deficiency_symptoms: { N: 'Light green foliage', P: 'Slow establishment', K: 'Weak stems, leaf scorch', Ca: 'Deformed tips', Mg: 'Older leaf yellowing', Fe: 'Pale new growth' },
+          toxicity_thresholds_ppm: { N: 320, P: 85, K: 400, Ca: 320, Mg: 120, Fe: 10, Mn: 3.5, B: 1.2, Cu: 0.6 },
+        },
+      };
+      const key = (params.crop || '').toLowerCase().replace(/\s+/g, '_');
+      const crop = CROP_DB[key];
+      if (!crop) {
+        return { ok: false, error: `Crop "${params.crop}" not found. Available: ${Object.keys(CROP_DB).join(', ')}` };
+      }
+      if (params.nutrient) {
+        const n = params.nutrient.toUpperCase();
+        const range = crop.solution_ppm[n === 'NITROGEN' ? 'N' : n];
+        const kin = crop.kinetics[n === 'NITROGEN' ? 'N' : n];
+        if (!range) return { ok: false, error: `Nutrient "${n}" not found for ${crop.name}. Available: ${Object.keys(crop.solution_ppm).join(', ')}` };
+        return {
+          ok: true, crop: crop.name, nutrient: n,
+          optimal_range_ppm: range, kinetics: kin || null,
+          deficiency_symptom: crop.deficiency_symptoms[n] || null,
+          toxicity_threshold_ppm: crop.toxicity_thresholds_ppm[n] || null,
+        };
+      }
+      return { ok: true, ...crop };
+    },
+  },
+
+  simulate_nutrient_uptake: {
+    description: 'Model plant nutrient uptake over time using Michaelis-Menten kinetics. Predicts how quickly plants absorb nutrients from solution, accounting for temperature, pH, and competitive ion effects. Returns time-series uptake curves and projected solution concentration changes.',
+    parameters: {
+      crop: { type: 'string', description: 'Crop name (e.g., "lettuce", "tomato")' },
+      nutrients: { type: 'string', description: 'Comma-separated nutrients to model (e.g., "N,P,K"). Default: N,P,K,Ca,Mg,Fe' },
+      initial_concentrations_ppm: { type: 'string', description: 'JSON object of starting concentrations in ppm (e.g., {"N":200,"P":50,"K":250}). Uses crop defaults if omitted.' },
+      solution_temp_c: { type: 'number', description: 'Solution temperature in Celsius (default: crop optimum)' },
+      solution_ph: { type: 'number', description: 'Solution pH (default: 6.0). Affects uptake via availability factor.' },
+      plant_count: { type: 'number', description: 'Number of plants (default: 1)' },
+      root_mass_g: { type: 'number', description: 'Root dry mass per plant in grams. Uses crop default if omitted.' },
+      duration_hours: { type: 'number', description: 'Simulation duration in hours (default: 24)' },
+      time_step_hours: { type: 'number', description: 'Time step for output in hours (default: 1)' },
+      study_id: { type: 'number', description: 'Link to a study' },
+    },
+    required: ['crop'],
+    execute: async (params, ctx) => {
+      // Michaelis-Menten: V = Vmax * [S] / (Km + [S])
+      // Temperature correction: Q10 model, rate doubles per 10C deviation from optimum
+      // pH correction: bell curve centered on optimal pH range
+      const CROP_DB_KEYS = ['lettuce','tomato','basil','strawberry','cannabis','microgreens','pepper','cucumber','spinach','kale','herb_mix'];
+      const cropKey = (params.crop || '').toLowerCase().replace(/\s+/g, '_');
+      // Re-use the reference data inline (avoiding separate lookup for performance)
+      const refTool = GWEN_TOOL_CATALOG.get_nutrient_reference_data;
+      const refResult = await refTool.execute({ crop: cropKey }, ctx);
+      if (!refResult.ok) return refResult;
+
+      const nutrients = (params.nutrients || 'N,P,K,Ca,Mg,Fe').split(',').map(n => n.trim().toUpperCase());
+      let initConc = {};
+      if (params.initial_concentrations_ppm) {
+        try { initConc = JSON.parse(params.initial_concentrations_ppm); } catch { return { ok: false, error: 'Invalid JSON for initial_concentrations_ppm' }; }
+      }
+      const duration = Math.min(params.duration_hours || 24, 720);
+      const step = params.time_step_hours || 1;
+      const plantCount = params.plant_count || 1;
+      const rootMass = params.root_mass_g || refResult.root_mass_g || 10;
+      const temp = params.solution_temp_c || (refResult.kinetics?.N?.temp_opt_c || 22);
+      const ph = params.solution_ph || 6.0;
+      const phOpt = (refResult.ph_range[0] + refResult.ph_range[1]) / 2;
+
+      const timeSeries = {};
+      const currentConc = {};
+      for (const n of nutrients) {
+        const range = refResult.solution_ppm[n];
+        currentConc[n] = initConc[n] || (range ? (range[0] + range[1]) / 2 : 100);
+        timeSeries[n] = [{ hour: 0, concentration_ppm: currentConc[n], uptake_rate_umol_g_h: 0 }];
+      }
+
+      // Molecular weights for ppm to umol/L conversion
+      const MW = { N: 14.01, P: 30.97, K: 39.10, Ca: 40.08, Mg: 24.31, Fe: 55.85, Mn: 54.94, Zn: 65.38, B: 10.81, Cu: 63.55, Mo: 95.94, S: 32.07 };
+      const reservoirL = 1; // per-liter basis (scale by actual reservoir volume externally)
+
+      for (let t = step; t <= duration; t += step) {
+        for (const n of nutrients) {
+          const kin = refResult.kinetics[n];
+          if (!kin || currentConc[n] <= 0) {
+            timeSeries[n].push({ hour: t, concentration_ppm: Math.max(0, currentConc[n]), uptake_rate_umol_g_h: 0 });
+            continue;
+          }
+          // Convert ppm to umol/L
+          const concUmol = (currentConc[n] / (MW[n] || 14)) * 1000;
+          // Michaelis-Menten rate
+          let rate = kin.Vmax_umol_g_h * concUmol / (kin.Km_umol_L + concUmol);
+          // Temperature correction (Q10 = 2)
+          const tempDiff = temp - (kin.temp_opt_c || 22);
+          const q10Factor = Math.pow(2, tempDiff / 10);
+          // Reduce if too far from optimum (parabolic penalty beyond +/-5C)
+          const tempPenalty = Math.abs(tempDiff) > 5 ? Math.max(0.2, 1 - (Math.abs(tempDiff) - 5) * 0.08) : 1;
+          rate *= q10Factor * tempPenalty;
+          // pH correction (bell curve)
+          const phDeviation = Math.abs(ph - phOpt);
+          const phFactor = Math.exp(-0.5 * Math.pow(phDeviation / 0.8, 2));
+          rate *= phFactor;
+
+          // Total uptake this step (umol)
+          const totalUptake = rate * rootMass * plantCount * step;
+          // Convert back to ppm
+          const ppmRemoved = (totalUptake * (MW[n] || 14)) / (1000 * reservoirL);
+          currentConc[n] = Math.max(0, currentConc[n] - ppmRemoved);
+
+          timeSeries[n].push({
+            hour: t,
+            concentration_ppm: Math.round(currentConc[n] * 100) / 100,
+            uptake_rate_umol_g_h: Math.round(rate * 100) / 100,
+          });
+        }
+      }
+
+      // Persist
+      if (isDatabaseAvailable()) {
+        await query(
+          `CREATE TABLE IF NOT EXISTS research_nutrient_simulations (
+            id SERIAL PRIMARY KEY, farm_id TEXT NOT NULL, study_id INTEGER,
+            simulation_type TEXT NOT NULL, config JSONB, results JSONB,
+            created_at TIMESTAMPTZ DEFAULT NOW()
+          )`
+        ).catch(() => {});
+        await query(
+          'INSERT INTO research_nutrient_simulations (farm_id, study_id, simulation_type, config, results) VALUES ($1,$2,$3,$4,$5)',
+          [ctx.farmId, params.study_id || null, 'uptake', JSON.stringify(params), JSON.stringify(timeSeries)]
+        ).catch(() => {});
+      }
+
+      return {
+        ok: true,
+        crop: refResult.name,
+        model: 'Michaelis-Menten with Q10 temperature correction and pH bell-curve',
+        conditions: { temp_c: temp, ph, plant_count: plantCount, root_mass_g: rootMass, duration_hours: duration },
+        time_series: timeSeries,
+        final_concentrations_ppm: currentConc,
+        note: 'Concentrations are per liter of solution. Multiply removal rates by reservoir volume for absolute values.',
+      };
+    },
+  },
+
+  simulate_nutrient_depletion: {
+    description: 'Project how quickly a reservoir of known volume will deplete each nutrient, given crop type, plant count, and environmental conditions. Returns time to critical depletion (below deficiency threshold) per nutrient and recommended top-up schedule.',
+    parameters: {
+      crop: { type: 'string', description: 'Crop name' },
+      reservoir_liters: { type: 'number', description: 'Total reservoir volume in liters' },
+      plant_count: { type: 'number', description: 'Number of plants drawing from the reservoir' },
+      initial_concentrations_ppm: { type: 'string', description: 'JSON object of starting ppm per nutrient. Uses crop defaults if omitted.' },
+      solution_temp_c: { type: 'number', description: 'Solution temperature (default: crop optimum)' },
+      solution_ph: { type: 'number', description: 'Solution pH (default: 6.0)' },
+      duration_days: { type: 'number', description: 'Projection horizon in days (default: 14)' },
+      study_id: { type: 'number', description: 'Link to a study' },
+    },
+    required: ['crop', 'reservoir_liters', 'plant_count'],
+    execute: async (params, ctx) => {
+      const refResult = await GWEN_TOOL_CATALOG.get_nutrient_reference_data.execute({ crop: params.crop }, ctx);
+      if (!refResult.ok) return refResult;
+
+      const durationDays = Math.min(params.duration_days || 14, 60);
+      const stepHours = 6; // 6-hour resolution
+      const totalSteps = (durationDays * 24) / stepHours;
+      const reservoirL = params.reservoir_liters;
+      const plantCount = params.plant_count;
+      const rootMass = refResult.root_mass_g || 10;
+      const temp = params.solution_temp_c || (refResult.kinetics?.N?.temp_opt_c || 22);
+      const ph = params.solution_ph || 6.0;
+      const phOpt = (refResult.ph_range[0] + refResult.ph_range[1]) / 2;
+      const MW = { N: 14.01, P: 30.97, K: 39.10, Ca: 40.08, Mg: 24.31, Fe: 55.85, Mn: 54.94, Zn: 65.38, B: 10.81, Cu: 63.55, Mo: 95.94, S: 32.07 };
+
+      let initConc = {};
+      if (params.initial_concentrations_ppm) {
+        try { initConc = JSON.parse(params.initial_concentrations_ppm); } catch { return { ok: false, error: 'Invalid JSON' }; }
+      }
+
+      const nutrients = Object.keys(refResult.kinetics);
+      const currentConc = {};
+      const depletionCurves = {};
+      const criticalTimes = {};
+
+      for (const n of nutrients) {
+        const range = refResult.solution_ppm[n];
+        currentConc[n] = initConc[n] || (range ? (range[0] + range[1]) / 2 : 100);
+        depletionCurves[n] = [{ day: 0, concentration_ppm: currentConc[n] }];
+        criticalTimes[n] = null;
+      }
+
+      // Get deficiency thresholds (use low end of optimal range)
+      const thresholds = {};
+      for (const n of nutrients) {
+        const range = refResult.solution_ppm[n];
+        thresholds[n] = range ? range[0] * 0.5 : 10; // 50% of low optimal = warning
+      }
+
+      for (let s = 1; s <= totalSteps; s++) {
+        const dayVal = (s * stepHours) / 24;
+        for (const n of nutrients) {
+          const kin = refResult.kinetics[n];
+          if (!kin || currentConc[n] <= 0) {
+            depletionCurves[n].push({ day: Math.round(dayVal * 100) / 100, concentration_ppm: Math.max(0, currentConc[n]) });
+            continue;
+          }
+          const concUmol = (currentConc[n] / (MW[n] || 14)) * 1000;
+          let rate = kin.Vmax_umol_g_h * concUmol / (kin.Km_umol_L + concUmol);
+          const tempDiff = temp - (kin.temp_opt_c || 22);
+          rate *= Math.pow(2, tempDiff / 10) * (Math.abs(tempDiff) > 5 ? Math.max(0.2, 1 - (Math.abs(tempDiff) - 5) * 0.08) : 1);
+          rate *= Math.exp(-0.5 * Math.pow(Math.abs(ph - phOpt) / 0.8, 2));
+
+          const totalUptakeUmol = rate * rootMass * plantCount * stepHours;
+          const ppmRemoved = (totalUptakeUmol * (MW[n] || 14)) / (1000 * reservoirL);
+          currentConc[n] = Math.max(0, currentConc[n] - ppmRemoved);
+
+          depletionCurves[n].push({ day: Math.round(dayVal * 100) / 100, concentration_ppm: Math.round(currentConc[n] * 100) / 100 });
+
+          if (criticalTimes[n] === null && currentConc[n] < thresholds[n]) {
+            criticalTimes[n] = Math.round(dayVal * 10) / 10;
+          }
+        }
+      }
+
+      // Recommend top-up schedule: earliest critical time minus 1 day buffer
+      const criticals = Object.entries(criticalTimes).filter(([, v]) => v !== null).sort((a, b) => a[1] - b[1]);
+      const earliestDepletion = criticals.length ? criticals[0] : null;
+      const topUpInterval = earliestDepletion ? Math.max(1, Math.floor(earliestDepletion[1] - 1)) : durationDays;
+
+      if (isDatabaseAvailable()) {
+        await query(
+          `CREATE TABLE IF NOT EXISTS research_nutrient_simulations (
+            id SERIAL PRIMARY KEY, farm_id TEXT NOT NULL, study_id INTEGER,
+            simulation_type TEXT NOT NULL, config JSONB, results JSONB,
+            created_at TIMESTAMPTZ DEFAULT NOW()
+          )`
+        ).catch(() => {});
+        await query(
+          'INSERT INTO research_nutrient_simulations (farm_id, study_id, simulation_type, config, results) VALUES ($1,$2,$3,$4,$5)',
+          [ctx.farmId, params.study_id || null, 'depletion', JSON.stringify(params), JSON.stringify({ depletionCurves, criticalTimes })]
+        ).catch(() => {});
+      }
+
+      return {
+        ok: true,
+        crop: refResult.name,
+        reservoir_liters: reservoirL,
+        plant_count: plantCount,
+        duration_days: durationDays,
+        depletion_curves: depletionCurves,
+        critical_depletion_days: criticalTimes,
+        limiting_nutrient: earliestDepletion ? { nutrient: earliestDepletion[0], depletes_day: earliestDepletion[1] } : null,
+        recommended_topup_interval_days: topUpInterval,
+        note: criticals.length
+          ? `${criticals[0][0]} is the limiting nutrient, reaching deficiency threshold at day ${criticals[0][1]}. Recommended reservoir top-up every ${topUpInterval} day(s).`
+          : `No nutrients reach critical depletion within ${durationDays} days at current plant load.`,
+      };
+    },
+  },
+
+  compare_nutrient_formulas: {
+    description: 'Compare two nutrient solution recipes side-by-side for a given crop. Analyzes nutrient ratio balance, identifies deficiency and toxicity risks, applies Liebig Law of the Minimum for yield-limiting analysis, and recommends which formula better suits the crop.',
+    parameters: {
+      crop: { type: 'string', description: 'Crop name for optimal range comparison' },
+      formula_a_name: { type: 'string', description: 'Name/label for formula A' },
+      formula_a_ppm: { type: 'string', description: 'JSON object of ppm values for formula A (e.g., {"N":200,"P":50,"K":300,"Ca":180,"Mg":50})' },
+      formula_b_name: { type: 'string', description: 'Name/label for formula B' },
+      formula_b_ppm: { type: 'string', description: 'JSON object of ppm values for formula B' },
+      study_id: { type: 'number', description: 'Link to a study' },
+    },
+    required: ['crop', 'formula_a_ppm', 'formula_b_ppm'],
+    execute: async (params, ctx) => {
+      const refResult = await GWEN_TOOL_CATALOG.get_nutrient_reference_data.execute({ crop: params.crop }, ctx);
+      if (!refResult.ok) return refResult;
+
+      let formulaA, formulaB;
+      try { formulaA = JSON.parse(params.formula_a_ppm); } catch { return { ok: false, error: 'Invalid JSON for formula_a_ppm' }; }
+      try { formulaB = JSON.parse(params.formula_b_ppm); } catch { return { ok: false, error: 'Invalid JSON for formula_b_ppm' }; }
+
+      const allNutrients = [...new Set([...Object.keys(formulaA), ...Object.keys(formulaB), ...Object.keys(refResult.solution_ppm)])];
+      const analysis = [];
+      let scoreA = 0, scoreB = 0;
+
+      for (const n of allNutrients) {
+        const range = refResult.solution_ppm[n];
+        const toxThresh = refResult.toxicity_thresholds_ppm[n];
+        if (!range) continue;
+        const optMid = (range[0] + range[1]) / 2;
+        const valA = formulaA[n] || 0;
+        const valB = formulaB[n] || 0;
+
+        const statusA = valA < range[0] ? 'DEFICIENT' : valA > (toxThresh || range[1] * 2) ? 'TOXIC' : valA > range[1] ? 'HIGH' : 'OPTIMAL';
+        const statusB = valB < range[0] ? 'DEFICIENT' : valB > (toxThresh || range[1] * 2) ? 'TOXIC' : valB > range[1] ? 'HIGH' : 'OPTIMAL';
+
+        // Score: 0=toxic, 1=deficient, 2=high, 3=optimal
+        const scoreMap = { TOXIC: 0, DEFICIENT: 1, HIGH: 2, OPTIMAL: 3 };
+        scoreA += scoreMap[statusA];
+        scoreB += scoreMap[statusB];
+
+        // Liebig factor: fraction of optimal midpoint satisfied
+        const liebigA = Math.min(1, valA / optMid);
+        const liebigB = Math.min(1, valB / optMid);
+
+        analysis.push({
+          nutrient: n,
+          optimal_range_ppm: range,
+          formula_a_ppm: valA, formula_a_status: statusA, formula_a_liebig: Math.round(liebigA * 100) / 100,
+          formula_b_ppm: valB, formula_b_status: statusB, formula_b_liebig: Math.round(liebigB * 100) / 100,
+        });
+      }
+
+      // Liebig limiting nutrient (lowest ratio)
+      const sortedA = [...analysis].sort((a, b) => a.formula_a_liebig - b.formula_a_liebig);
+      const sortedB = [...analysis].sort((a, b) => a.formula_b_liebig - b.formula_b_liebig);
+      const limitingA = sortedA[0];
+      const limitingB = sortedB[0];
+
+      const winner = scoreA > scoreB ? 'A' : scoreB > scoreA ? 'B' : 'TIE';
+
+      if (isDatabaseAvailable()) {
+        await query(
+          `CREATE TABLE IF NOT EXISTS research_nutrient_simulations (
+            id SERIAL PRIMARY KEY, farm_id TEXT NOT NULL, study_id INTEGER,
+            simulation_type TEXT NOT NULL, config JSONB, results JSONB,
+            created_at TIMESTAMPTZ DEFAULT NOW()
+          )`
+        ).catch(() => {});
+        await query(
+          'INSERT INTO research_nutrient_simulations (farm_id, study_id, simulation_type, config, results) VALUES ($1,$2,$3,$4,$5)',
+          [ctx.farmId, params.study_id || null, 'comparison', JSON.stringify(params), JSON.stringify({ analysis, scoreA, scoreB, winner })]
+        ).catch(() => {});
+      }
+
+      return {
+        ok: true,
+        crop: refResult.name,
+        formula_a: { name: params.formula_a_name || 'Formula A', score: scoreA, limiting_nutrient: limitingA?.nutrient, limiting_factor: limitingA?.formula_a_liebig },
+        formula_b: { name: params.formula_b_name || 'Formula B', score: scoreB, limiting_nutrient: limitingB?.nutrient, limiting_factor: limitingB?.formula_b_liebig },
+        recommendation: winner,
+        nutrient_analysis: analysis,
+        note: winner === 'TIE'
+          ? 'Both formulas score equally. Review individual nutrient status for nuanced differences.'
+          : `${winner === 'A' ? (params.formula_a_name || 'Formula A') : (params.formula_b_name || 'Formula B')} is the better match for ${refResult.name}. Limiting nutrient for the weaker formula is ${winner === 'A' ? limitingB?.nutrient : limitingA?.nutrient}.`,
+      };
+    },
+  },
+
+  simulate_gas_transport: {
+    description: 'Model CO2, O2, or ethylene distribution across a 2D grow space cross-section using advection-diffusion. Accounts for source positions (CO2 injectors, plant respiration/photosynthesis), ventilation airflow, and plant canopy absorption/emission. Returns a spatial concentration grid for visualization.',
+    parameters: {
+      gas: { type: 'string', description: 'Gas species: CO2, O2, or ethylene', enum: ['CO2', 'O2', 'ethylene'] },
+      room_width_m: { type: 'number', description: 'Room width in meters (x-axis)' },
+      room_height_m: { type: 'number', description: 'Room height in meters (y-axis)' },
+      grid_resolution: { type: 'number', description: 'Grid cells per meter (default: 5, max: 20). Higher = finer detail.' },
+      sources: { type: 'string', description: 'JSON array of gas sources: [{"x":1,"y":2,"rate":500,"label":"CO2 injector"}]. Rate in ppm/min contribution.' },
+      sinks: { type: 'string', description: 'JSON array of gas sinks (plant canopy, exhaust): [{"x":2,"y":0.5,"rate":200,"label":"canopy"}]. Rate in ppm/min removal.' },
+      ventilation_velocity_ms: { type: 'number', description: 'Horizontal airflow velocity in m/s (default: 0.3)' },
+      ventilation_direction_deg: { type: 'number', description: 'Airflow direction in degrees from left (0=left-to-right, 90=bottom-to-top). Default: 0.' },
+      initial_concentration_ppm: { type: 'number', description: 'Background concentration in ppm. CO2 default: 400, O2 default: 209500, ethylene default: 0.01' },
+      simulation_seconds: { type: 'number', description: 'Simulation time in seconds (default: 300 = 5 minutes to reach approximate steady state)' },
+      study_id: { type: 'number', description: 'Link to a study' },
+    },
+    required: ['gas', 'room_width_m', 'room_height_m'],
+    execute: async (params, ctx) => {
+      const gas = params.gas || 'CO2';
+      const W = params.room_width_m;
+      const H = params.room_height_m;
+      const res = Math.min(params.grid_resolution || 5, 20);
+      const nx = Math.round(W * res);
+      const ny = Math.round(H * res);
+      if (nx < 2 || ny < 2 || nx > 200 || ny > 200) return { ok: false, error: 'Grid dimensions out of range (2-200 cells per axis)' };
+      const dx = W / nx;
+      const dy = H / ny;
+
+      // Diffusion coefficients in air (m^2/s)
+      const DIFF = { CO2: 1.6e-5, O2: 2.1e-5, ethylene: 1.04e-5 };
+      const D = DIFF[gas] || 1.6e-5;
+
+      const defaults = { CO2: 400, O2: 209500, ethylene: 0.01 };
+      const bgConc = params.initial_concentration_ppm ?? defaults[gas];
+
+      // Velocity field
+      const vMag = params.ventilation_velocity_ms || 0.3;
+      const vAngle = (params.ventilation_direction_deg || 0) * Math.PI / 180;
+      const vx = vMag * Math.cos(vAngle);
+      const vy = vMag * Math.sin(vAngle);
+
+      let sources = [];
+      let sinks = [];
+      try { if (params.sources) sources = JSON.parse(params.sources); } catch { return { ok: false, error: 'Invalid JSON for sources' }; }
+      try { if (params.sinks) sinks = JSON.parse(params.sinks); } catch { return { ok: false, error: 'Invalid JSON for sinks' }; }
+
+      // Initialize grid
+      const grid = new Array(ny);
+      for (let j = 0; j < ny; j++) {
+        grid[j] = new Float64Array(nx).fill(bgConc);
+      }
+
+      // Source/sink rate grids (ppm/s per cell)
+      const sourceGrid = new Array(ny);
+      for (let j = 0; j < ny; j++) sourceGrid[j] = new Float64Array(nx);
+
+      for (const s of sources) {
+        const gi = Math.min(nx - 1, Math.max(0, Math.round(s.x / dx)));
+        const gj = Math.min(ny - 1, Math.max(0, Math.round(s.y / dy)));
+        sourceGrid[gj][gi] += (s.rate || 0) / 60; // ppm/min -> ppm/s
+      }
+      for (const s of sinks) {
+        const gi = Math.min(nx - 1, Math.max(0, Math.round(s.x / dx)));
+        const gj = Math.min(ny - 1, Math.max(0, Math.round(s.y / dy)));
+        sourceGrid[gj][gi] -= (s.rate || 0) / 60;
+      }
+
+      // Time stepping (explicit finite difference, CFL-limited)
+      const dtDiff = 0.25 * Math.min(dx * dx, dy * dy) / D;
+      const dtAdv = vMag > 0 ? 0.5 * Math.min(dx, dy) / vMag : dtDiff;
+      const dt = Math.min(dtDiff, dtAdv, 1.0); // cap at 1s
+      const totalTime = Math.min(params.simulation_seconds || 300, 600);
+      const nSteps = Math.round(totalTime / dt);
+      const maxSteps = 50000; // safety cap
+      const actualSteps = Math.min(nSteps, maxSteps);
+
+      const newGrid = new Array(ny);
+      for (let j = 0; j < ny; j++) newGrid[j] = new Float64Array(nx);
+
+      for (let step = 0; step < actualSteps; step++) {
+        for (let j = 1; j < ny - 1; j++) {
+          for (let i = 1; i < nx - 1; i++) {
+            const laplacian = (grid[j][i+1] - 2*grid[j][i] + grid[j][i-1]) / (dx*dx)
+                            + (grid[j+1][i] - 2*grid[j][i] + grid[j-1][i]) / (dy*dy);
+            // Upwind advection
+            const advX = vx > 0
+              ? vx * (grid[j][i] - grid[j][i-1]) / dx
+              : vx * (grid[j][i+1] - grid[j][i]) / dx;
+            const advY = vy > 0
+              ? vy * (grid[j][i] - grid[j-1][i]) / dy
+              : vy * (grid[j+1][i] - grid[j][i]) / dy;
+
+            newGrid[j][i] = grid[j][i] + dt * (D * laplacian - advX - advY + sourceGrid[j][i]);
+            if (newGrid[j][i] < 0) newGrid[j][i] = 0;
+          }
+        }
+        // Boundary conditions (Neumann: zero-gradient)
+        for (let j = 0; j < ny; j++) { newGrid[j][0] = newGrid[j][1] || bgConc; newGrid[j][nx-1] = newGrid[j][nx-2] || bgConc; }
+        for (let i = 0; i < nx; i++) { newGrid[0][i] = newGrid[1]?.[i] || bgConc; newGrid[ny-1][i] = newGrid[ny-2]?.[i] || bgConc; }
+        // Swap
+        for (let j = 0; j < ny; j++) {
+          for (let i = 0; i < nx; i++) grid[j][i] = newGrid[j][i];
+        }
+      }
+
+      // Compute summary stats
+      let minVal = Infinity, maxVal = -Infinity, sum = 0, count = 0;
+      const outputGrid = [];
+      for (let j = 0; j < ny; j++) {
+        const row = [];
+        for (let i = 0; i < nx; i++) {
+          const v = Math.round(grid[j][i] * 10) / 10;
+          row.push(v);
+          if (v < minVal) minVal = v;
+          if (v > maxVal) maxVal = v;
+          sum += v;
+          count++;
+        }
+        outputGrid.push(row);
+      }
+
+      if (isDatabaseAvailable()) {
+        await query(
+          `CREATE TABLE IF NOT EXISTS research_nutrient_simulations (
+            id SERIAL PRIMARY KEY, farm_id TEXT NOT NULL, study_id INTEGER,
+            simulation_type TEXT NOT NULL, config JSONB, results JSONB,
+            created_at TIMESTAMPTZ DEFAULT NOW()
+          )`
+        ).catch(() => {});
+        await query(
+          'INSERT INTO research_nutrient_simulations (farm_id, study_id, simulation_type, config, results) VALUES ($1,$2,$3,$4,$5)',
+          [ctx.farmId, params.study_id || null, 'gas_transport',
+           JSON.stringify({ ...params, grid_nx: nx, grid_ny: ny }),
+           JSON.stringify({ stats: { min: minVal, max: maxVal, mean: Math.round(sum/count*10)/10 }, grid_dimensions: [ny, nx] })]
+        ).catch(() => {});
+      }
+
+      return {
+        ok: true,
+        gas,
+        model: '2D advection-diffusion (explicit finite difference, upwind scheme)',
+        room: { width_m: W, height_m: H },
+        grid: { nx, ny, cell_width_m: dx, cell_height_m: dy },
+        ventilation: { velocity_ms: vMag, direction_deg: params.ventilation_direction_deg || 0 },
+        simulation: { total_seconds: totalTime, time_steps: actualSteps, dt_seconds: dt },
+        sources: sources.map(s => ({ ...s, type: 'source' })),
+        sinks: sinks.map(s => ({ ...s, type: 'sink' })),
+        concentration_grid_ppm: outputGrid,
+        statistics: {
+          min_ppm: minVal,
+          max_ppm: maxVal,
+          mean_ppm: Math.round(sum / count * 10) / 10,
+          uniformity_percent: maxVal > 0 ? Math.round((1 - (maxVal - minVal) / maxVal) * 100) : 100,
+        },
+        note: `${gas} distribution computed on ${nx}x${ny} grid. Use create_research_chart with chart_type "heatmap" to visualize, or create_custom_display for workspace rendering.`,
+      };
+    },
+  },
+
+
+  // ========================================
   // RESEARCH INTEGRATIONS -- ORCID, DataCite, OSF, protocols.io
   // ========================================
 
@@ -3850,6 +4549,20 @@ Three.js-powered 3D visualization for hydroponic flow systems:
 
 ### Existing Tools (create_custom_display)
 Charts, tables, heatmaps, and metric cards via the original display system.
+### Nutrient Dynamics (get_nutrient_reference_data, simulate_nutrient_uptake, simulate_nutrient_depletion, compare_nutrient_formulas)
+Michaelis-Menten kinetics engine for hydroponic nutrient management:
+- Reference database: optimal ranges, Vmax/Km constants, deficiency/toxicity data for 11 crops
+- Uptake simulation: time-series concentration curves with temp (Q10) and pH correction
+- Depletion projection: reservoir-scale mass balance with time-to-critical and top-up schedule
+- Formula comparison: side-by-side recipe analysis, Liebig Law of the Minimum, limiting nutrient ID
+
+### Gas Transport (simulate_gas_transport)
+2D advection-diffusion solver for grow-room atmospheric modeling:
+- CO2, O2, and ethylene distribution on spatial grid
+- Source/sink placement (injectors, canopy, exhaust)
+- Ventilation airflow with configurable velocity and direction
+- Upwind finite-difference scheme for numerical stability
+
 
 ## Equipment Integration
 
