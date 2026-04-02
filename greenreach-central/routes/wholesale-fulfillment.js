@@ -91,6 +91,48 @@ function normalizeTrackingUpdates(body = {}) {
   return [];
 }
 
+function normalizeQueueStatus(rawStatus) {
+  const status = String(rawStatus || '').trim().toLowerCase();
+  if (!status) return 'pending_verification';
+
+  if ([
+    'pending',
+    'pending_verification',
+    'pending_farm_verification',
+    'pending_payment',
+    'payment_authorized',
+    'created',
+    'new',
+    'awaiting_farm_verification',
+    'awaiting_acceptance',
+    'awaiting_verification'
+  ].includes(status)) {
+    return 'pending_verification';
+  }
+
+  if (['confirmed', 'processing', 'farm_accepted', 'accepted', 'farms_verified'].includes(status)) {
+    return 'confirmed';
+  }
+
+  if (['packed', 'ready_for_pickup'].includes(status)) {
+    return 'packed';
+  }
+
+  if (['shipped', 'fulfilled'].includes(status)) {
+    return 'shipped';
+  }
+
+  if (['delivered', 'completed', 'picked_up'].includes(status)) {
+    return 'delivered';
+  }
+
+  if (['cancelled', 'canceled', 'rejected', 'declined', 'farm_declined', 'payment_failed', 'expired'].includes(status)) {
+    return 'expired';
+  }
+
+  return status;
+}
+
 // POST /order-statuses — Bulk status update
 router.post('/order-statuses', async (req, res) => {
   try {
@@ -150,7 +192,9 @@ router.post('/order-statuses', async (req, res) => {
 router.get('/order-statuses', async (req, res) => {
   try {
     const farmId = req.farmId || req.query.farm_id;
-    const statuses = Object.fromEntries(uiOrderStatuses.entries());
+    const statuses = Object.fromEntries(
+      Array.from(uiOrderStatuses.entries()).map(([orderId, status]) => [orderId, normalizeQueueStatus(status)])
+    );
 
     if (await isDatabaseAvailable()) {
       try {
@@ -168,16 +212,18 @@ router.get('/order-statuses', async (req, res) => {
           subOrders.forEach(sub => {
             if (!sub) return;
             if (farmId && sub.farm_id && String(sub.farm_id) !== String(farmId)) return;
-            const key = sub.sub_order_id || sub.id;
+            const key = sub.sub_order_id || sub.id || row.master_order_id || String(row.id);
             if (!key) return;
-            statuses[String(key)] = sub.status || row.status || statuses[String(key)] || 'pending_verification';
+            statuses[String(key)] = normalizeQueueStatus(
+              sub.status || row.status || statuses[String(key)] || 'pending_verification'
+            );
             matchedSubOrder = true;
           });
 
           if (!matchedSubOrder && (!farmId || String(row.farm_id) === String(farmId))) {
             const key = row.master_order_id || String(row.id);
             if (key && !statuses[String(key)]) {
-              statuses[String(key)] = row.status || 'pending';
+              statuses[String(key)] = normalizeQueueStatus(row.status || 'pending_verification');
             }
           }
         });
@@ -264,7 +310,7 @@ router.get('/tracking-numbers', async (req, res) => {
           subOrders.forEach(sub => {
             if (!sub) return;
             if (farmId && sub.farm_id && String(sub.farm_id) !== String(farmId)) return;
-            const key = sub.sub_order_id || sub.id;
+            const key = sub.sub_order_id || sub.id || row.master_order_id || String(row.id);
             if (!key) return;
             if (sub.tracking_number) {
               tracking[String(key)] = String(sub.tracking_number);
@@ -334,13 +380,16 @@ router.get('/order-events', async (req, res) => {
         events = result.rows.map(o => {
           const data = o.order_data || {};
           const subOrders = Array.isArray(data.farm_sub_orders) ? data.farm_sub_orders : [];
-          const subOrder = subOrders.find(s => farmId ? String(s?.farm_id) === String(farmId) : true) || subOrders[0] || {};
-          if (farmId && !subOrder?.farm_id && String(o.farm_id || '') !== String(farmId)) {
+          const subOrder = farmId
+            ? (subOrders.find(s => String(s?.farm_id) === String(farmId)) || null)
+            : (subOrders[0] || null);
+
+          if (farmId && !subOrder && String(o.farm_id || '') !== String(farmId)) {
             return null;
           }
 
-          const effectiveStatus = subOrder.status || o.status || 'pending_verification';
-          const subOrderId = subOrder.sub_order_id || subOrder.id || o.master_order_id || String(o.id);
+          const effectiveStatus = normalizeQueueStatus(subOrder?.status || o.status || 'pending_verification');
+          const subOrderId = subOrder?.sub_order_id || subOrder?.id || o.master_order_id || String(o.id);
           const buyer = data.buyer_account || {};
           const addr = data.delivery_address || {};
           const fm = String(data.fulfillment_method || 'delivery').toLowerCase();
@@ -348,8 +397,8 @@ router.get('/order-events', async (req, res) => {
           return {
             order_id: subOrderId,
             master_order_id: o.master_order_id || String(o.id),
-            farm_id: subOrder.farm_id || o.farm_id,
-            farm_name: subOrder.farm_name || '',
+            farm_id: subOrder?.farm_id || o.farm_id,
+            farm_name: subOrder?.farm_name || '',
             event: effectiveStatus,
             status: effectiveStatus,
             buyer_name: buyer.businessName || buyer.business_name || buyer.contactName || buyer.contact_name || '',
@@ -363,17 +412,17 @@ router.get('/order-events', async (req, res) => {
               : '',
             fulfillment_method: fm,
             po_number: data.po_number || '',
-            amount: subOrder.sub_total || subOrder.total_amount || o.total_amount,
-            total_amount: subOrder.sub_total || subOrder.total_amount || o.total_amount,
-            items: subOrder.items || data.farm_sub_orders?.[0]?.items || [],
+            amount: subOrder?.sub_total || subOrder?.total_amount || o.total_amount,
+            total_amount: subOrder?.sub_total || subOrder?.total_amount || o.total_amount,
+            items: subOrder?.items || data.farm_sub_orders?.[0]?.items || [],
             timestamp: o.updated_at || o.created_at,
             created_at: o.created_at,
             certifications_required: buyer.certifications_required || data.certifications_required || [],
             gap_certified: buyer.gap_certified || data.gap_certified || false,
             notes: data.notes || buyer.notes || '',
             notifications: data.notifications || [],
-            tracking_number: subOrder.tracking_number || null,
-            verification_deadline: subOrder.verification_deadline || data.verification_deadline || null
+            tracking_number: subOrder?.tracking_number || null,
+            verification_deadline: subOrder?.verification_deadline || data.verification_deadline || null
           };
         }).filter(Boolean);
       } catch {

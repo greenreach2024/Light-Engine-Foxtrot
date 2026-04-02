@@ -3675,6 +3675,32 @@ function initializeAdminTooltipTracking() {
 // WHOLESALE ORDERS MANAGEMENT
 // ============================================================================
 
+function normalizeWholesaleQueueStatus(rawStatus) {
+    const status = String(rawStatus || '').trim().toLowerCase();
+    if (!status) return 'pending_verification';
+
+    if ([
+        'pending',
+        'pending_verification',
+        'pending_farm_verification',
+        'pending_payment',
+        'payment_authorized',
+        'created',
+        'new',
+        'awaiting_farm_verification',
+        'awaiting_acceptance',
+        'awaiting_verification'
+    ].includes(status)) return 'pending_verification';
+
+    if (['confirmed', 'processing', 'farm_accepted', 'accepted', 'farms_verified'].includes(status)) return 'confirmed';
+    if (['packed', 'ready_for_pickup'].includes(status)) return 'packed';
+    if (['shipped', 'fulfilled'].includes(status)) return 'shipped';
+    if (['delivered', 'completed', 'picked_up'].includes(status)) return 'delivered';
+    if (['cancelled', 'canceled', 'rejected', 'declined', 'farm_declined', 'payment_failed', 'expired'].includes(status)) return 'expired';
+
+    return status;
+}
+
 /**
  * Refresh wholesale orders from the API
  */
@@ -3722,7 +3748,9 @@ async function refreshWholesaleOrders() {
             if (!orderMap.has(orderId)) {
                 orderMap.set(orderId, {
                     ...event,
-                    status: statusData[orderId] || event.status || event.event || 'pending',
+                    status: normalizeWholesaleQueueStatus(
+                        statusData[orderId] || event.status || event.event || 'pending_verification'
+                    ),
                     tracking_number: trackingData[orderId] || null
                 });
             }
@@ -3750,7 +3778,7 @@ async function refreshWholesaleOrders() {
  */
 function renderOrderCard(order) {
     const oid = String(order.order_id || '');
-    const status = String(order.status || order.event || '').trim().toLowerCase() || 'pending';
+    const status = normalizeWholesaleQueueStatus(order.status || order.event);
     const statusConfig = {
         'pending':   { label: 'Pending',   color: '#f59e0b' },
         'confirmed': { label: 'Confirmed', color: '#06b6d4' },
