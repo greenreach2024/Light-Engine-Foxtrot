@@ -1061,6 +1061,250 @@
       from { opacity: 0; transform: translateY(10px); }
       to { opacity: 1; transform: translateY(0); }
     }
+
+    /* ── EVIE Chat Panel ── */
+    .evie-orb {
+      position: fixed;
+      bottom: 100px;
+      right: 24px;
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      border: 2px solid rgba(139, 92, 246, 0.5);
+      cursor: pointer;
+      z-index: 1100;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 20px rgba(99, 102, 241, 0.4);
+      transition: all 0.3s ease;
+    }
+    .evie-orb:hover {
+      transform: scale(1.1);
+      box-shadow: 0 6px 30px rgba(99, 102, 241, 0.6);
+    }
+    .evie-orb.has-notification {
+      animation: eviePulse 2s infinite;
+    }
+    .evie-orb-icon {
+      font-size: 1.4rem;
+      color: #fff;
+      font-weight: 700;
+      font-family: -apple-system, system-ui, sans-serif;
+    }
+    @keyframes eviePulse {
+      0%, 100% { box-shadow: 0 4px 20px rgba(99, 102, 241, 0.4); }
+      50% { box-shadow: 0 4px 30px rgba(139, 92, 246, 0.7); }
+    }
+    .evie-panel {
+      position: fixed;
+      bottom: 170px;
+      right: 24px;
+      width: 380px;
+      max-height: 520px;
+      background: rgba(17, 24, 39, 0.97);
+      border: 1px solid rgba(139, 92, 246, 0.3);
+      border-radius: 16px;
+      z-index: 1100;
+      display: none;
+      flex-direction: column;
+      box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
+      backdrop-filter: blur(16px);
+      overflow: hidden;
+    }
+    .evie-panel.active {
+      display: flex;
+    }
+    .evie-panel-header {
+      padding: 1rem 1.25rem;
+      background: linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(139, 92, 246, 0.15));
+      border-bottom: 1px solid rgba(139, 92, 246, 0.2);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .evie-panel-title {
+      font-size: 1rem;
+      font-weight: 600;
+      color: #c4b5fd;
+    }
+    .evie-panel-close {
+      background: none;
+      border: none;
+      color: #9ca3af;
+      font-size: 1.2rem;
+      cursor: pointer;
+      padding: 4px 8px;
+      border-radius: 6px;
+    }
+    .evie-panel-close:hover {
+      background: rgba(255,255,255,0.1);
+      color: #fff;
+    }
+    .evie-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1rem;
+      min-height: 200px;
+      max-height: 340px;
+    }
+    .evie-msg {
+      margin-bottom: 0.75rem;
+      padding: 0.6rem 0.85rem;
+      border-radius: 12px;
+      font-size: 0.88rem;
+      line-height: 1.5;
+      max-width: 92%;
+      word-wrap: break-word;
+    }
+    .evie-msg.user {
+      background: rgba(59, 130, 246, 0.2);
+      border: 1px solid rgba(59, 130, 246, 0.25);
+      margin-left: auto;
+      text-align: right;
+      color: #bfdbfe;
+    }
+    .evie-msg.assistant {
+      background: rgba(139, 92, 246, 0.15);
+      border: 1px solid rgba(139, 92, 246, 0.2);
+      color: #e2e8f0;
+    }
+    .evie-msg.system {
+      background: rgba(75, 85, 99, 0.2);
+      border: 1px solid rgba(75, 85, 99, 0.3);
+      color: #9ca3af;
+      font-size: 0.82rem;
+      text-align: center;
+      max-width: 100%;
+    }
+    .evie-input-row {
+      padding: 0.75rem 1rem;
+      border-top: 1px solid rgba(139, 92, 246, 0.2);
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+    }
+    .evie-input {
+      flex: 1;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(139, 92, 246, 0.25);
+      border-radius: 10px;
+      padding: 0.6rem 0.85rem;
+      color: #f1f5f9;
+      font-size: 0.88rem;
+      font-family: inherit;
+      outline: none;
+    }
+    .evie-input:focus {
+      border-color: rgba(139, 92, 246, 0.5);
+      box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.15);
+    }
+    .evie-input::placeholder { color: #6b7280; }
+    .evie-send-btn {
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      border: none;
+      color: white;
+      width: 38px;
+      height: 38px;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+    }
+    .evie-send-btn:hover { transform: scale(1.05); }
+    .evie-send-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+    .evie-voice-btn {
+      background: rgba(139, 92, 246, 0.2);
+      border: 1px solid rgba(139, 92, 246, 0.3);
+      color: #c4b5fd;
+      width: 38px;
+      height: 38px;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 0.95rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+    }
+    .evie-voice-btn:hover { background: rgba(139, 92, 246, 0.35); }
+    .evie-voice-btn.active {
+      background: rgba(239, 68, 68, 0.3);
+      border-color: rgba(239, 68, 68, 0.5);
+      color: #fca5a5;
+      animation: eviePulse 1.5s infinite;
+    }
+    .evie-typing {
+      display: none;
+      padding: 0.6rem 0.85rem;
+      color: #9ca3af;
+      font-size: 0.82rem;
+    }
+    .evie-typing.active { display: block; }
+    .evie-tasks-section {
+      padding: 0.5rem 1rem 0.75rem;
+      border-top: 1px solid rgba(139, 92, 246, 0.15);
+      background: rgba(139, 92, 246, 0.05);
+      max-height: 120px;
+      overflow-y: auto;
+    }
+    .evie-tasks-header {
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: #a78bfa;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin-bottom: 0.35rem;
+    }
+    .evie-task-item {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.3rem 0;
+      font-size: 0.82rem;
+      color: #d1d5db;
+    }
+    .evie-task-check {
+      width: 16px;
+      height: 16px;
+      border: 1.5px solid rgba(139, 92, 246, 0.4);
+      border-radius: 4px;
+      cursor: pointer;
+      background: transparent;
+      transition: all 0.2s;
+      flex-shrink: 0;
+    }
+    .evie-task-check:hover {
+      border-color: #8b5cf6;
+      background: rgba(139, 92, 246, 0.15);
+    }
+    .evie-task-check.done {
+      background: #8b5cf6;
+      border-color: #8b5cf6;
+    }
+    .evie-task-text.done {
+      text-decoration: line-through;
+      opacity: 0.5;
+    }
+    @media (max-width: 480px) {
+      .evie-panel {
+        right: 8px;
+        left: 8px;
+        width: auto;
+        bottom: 140px;
+        max-height: 65vh;
+      }
+      .evie-orb {
+        right: 16px;
+        bottom: 80px;
+        width: 48px;
+        height: 48px;
+      }
+    }
   </style>
 </head>
 <body>
@@ -1382,11 +1626,38 @@
           <li>"Today's tasks"</li>
           <li>"How many trays active?"</li>
           <li>"Seedling status"</li>
+          <li>"Ask EVIE &lt;anything&gt;"</li>
           <li>"Close assistant"</li>
         </ul>
       </div>
       
       <button class="button button-secondary" onclick="closeVoiceAssistant()" style="margin-top: 2rem;">Close</button>
+    </div>
+  </div>
+
+  <!-- EVIE Assistant Orb -->
+  <div class="evie-orb" id="evieOrb" onclick="toggleEviePanel()" title="EVIE Assistant">
+    <span class="evie-orb-icon">E</span>
+  </div>
+
+  <!-- EVIE Chat Panel -->
+  <div class="evie-panel" id="eviePanel">
+    <div class="evie-panel-header">
+      <span class="evie-panel-title">E.V.I.E. -- Farm Assistant</span>
+      <button class="evie-panel-close" onclick="toggleEviePanel()" title="Close">&times;</button>
+    </div>
+    <div class="evie-messages" id="evieMessages">
+      <div class="evie-msg system">EVIE is ready. Ask about tasks, orders, environment, or anything farm-related.</div>
+    </div>
+    <div class="evie-typing" id="evieTyping">EVIE is thinking...</div>
+    <div class="evie-tasks-section" id="evieTasksSection" style="display:none;">
+      <div class="evie-tasks-header">Today's Tasks</div>
+      <div id="evieTasksList"></div>
+    </div>
+    <div class="evie-input-row">
+      <button class="evie-voice-btn" id="evieVoiceBtn" onclick="toggleEvieVoice()" title="Voice input">Mic</button>
+      <input type="text" class="evie-input" id="evieInput" placeholder="Ask EVIE..." autocomplete="off" />
+      <button class="evie-send-btn" id="evieSendBtn" onclick="sendEvieMessage()" title="Send">&#8594;</button>
     </div>
   </div>
 
@@ -2722,25 +2993,9 @@
         
         speakMessage('Order accepted successfully');
         
-        // Show success and option to start picking
-        const content = document.getElementById('orderVerifyContent');
-        content.innerHTML = `
-          <div style="text-align: center; padding: 2rem;">
-            <div style="font-size: 4rem; color: #10b981; margin-bottom: 1rem;">✓</div>
-            <h3 style="color: #10b981; margin-bottom: 1rem;">Order Accepted!</h3>
-            <p style="color: #cbd5e1; margin-bottom: 2rem;">The buyer has been notified.</p>
-            
-            <button onclick="startPicking('${orderId}')" class="button button-primary" style="width: 100%; margin-bottom: 1rem;">
-              🌱 Start Picking
-            </button>
-            <button onclick="loadPendingOrdersInModal()" class="button button-secondary" style="width: 100%;">
-              ← Back to Orders
-            </button>
-          </div>
-        `;
-        
-        // Refresh order count
+        // Refresh the order list to show updated status badge
         loadOrderPickList();
+        loadPendingOrdersInModal();
         
       } catch (error) {
         console.error('Error accepting order:', error);
@@ -2865,20 +3120,9 @@
         
         speakMessage('Order declined');
         
-        const content = document.getElementById('orderVerifyContent');
-        content.innerHTML = `
-          <div style="text-align: center; padding: 2rem;">
-            <div style="font-size: 4rem; color: #94a3b8; margin-bottom: 1rem;">✗</div>
-            <h3 style="color: #cbd5e1; margin-bottom: 1rem;">Order Declined</h3>
-            <p style="color: #94a3b8; margin-bottom: 2rem;">Searching for alternative farms...</p>
-            
-            <button onclick="loadPendingOrdersInModal()" class="button button-secondary" style="width: 100%;">
-              ← Back to Orders
-            </button>
-          </div>
-        `;
-        
+        // Refresh the order list to show updated status badge
         loadOrderPickList();
+        loadPendingOrdersInModal();
         
       } catch (error) {
         console.error('Error declining order:', error);
@@ -3237,17 +3481,29 @@
       loadPendingOrdersInModal();
     }
 
+    function getOrderStatusBadge(status) {
+      const s = (status || '').toLowerCase();
+      if (s === 'pending_verification' || s === 'pending') return { label: 'Awaiting Acceptance', color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.15)' };
+      if (s === 'farm_accepted' || s === 'accepted') return { label: 'Accepted', color: '#10b981', bg: 'rgba(16, 185, 129, 0.15)' };
+      if (s === 'farm_declined' || s === 'declined') return { label: 'Declined', color: '#6b7280', bg: 'rgba(107, 114, 128, 0.15)' };
+      if (s === 'farm_modified' || s === 'modified') return { label: 'Modified', color: '#3b82f6', bg: 'rgba(59, 130, 246, 0.15)' };
+      if (s === 'picking') return { label: 'Picking', color: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.15)' };
+      if (s === 'packed') return { label: 'Packed', color: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.15)' };
+      if (s === 'shipped') return { label: 'Shipped', color: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.15)' };
+      return { label: 'Pending', color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.15)' };
+    }
+
     async function loadPendingOrdersInModal() {
       try {
         const modal = document.getElementById('orderVerifyModal');
         const content = document.getElementById('orderVerifyContent');
         
-        modal.querySelector('.modal-header h2').textContent = 'Pending Orders';
+        modal.querySelector('.modal-header h2').textContent = 'Wholesale Orders';
         modal.classList.add('active');
         
         content.innerHTML = '<div class="spinner"></div>';
         
-        const response = await fetch(`${currentAPI}/api/activity-hub/orders/pending`, {
+        const response = await fetch(`${currentAPI}/api/activity-hub/orders/all?farm_id=${encodeURIComponent(farmId)}`, {
           headers: {
             'X-Farm-ID': farmId,
             ...getAuthHeaders()
@@ -3256,37 +3512,44 @@
         
         const data = await response.json();
         
-        if (!data.ok || data.orders.length === 0) {
-          content.innerHTML = '<div class="empty-state">No pending orders</div>';
+        if (!data.ok || !data.orders || data.orders.length === 0) {
+          content.innerHTML = '<div class="empty-state">No orders found</div>';
           return;
         }
         
         content.innerHTML = data.orders.map(order => {
-          const deadline = new Date(order.verification_deadline);
-          const hoursRemaining = Math.max(0, (deadline - new Date()) / (1000 * 60 * 60));
-          const isUrgent = hoursRemaining < 6;
-          const deadlineStr = deadline.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-          const borderColor = isUrgent ? '#ef4444' : 'rgba(59, 130, 246, 0.3)';
-          const textColor = isUrgent ? '#ef4444' : '#f59e0b';
-          const itemsHtml = order.items.map(item => 
+          const oid = order.sub_order_id || order.id || order._id;
+          const badge = getOrderStatusBadge(order.status);
+          const isPending = badge.label === 'Awaiting Acceptance' || badge.label === 'Pending';
+          const deadline = order.verification_deadline ? new Date(order.verification_deadline) : null;
+          const hoursRemaining = deadline ? Math.max(0, (deadline - new Date()) / (1000 * 60 * 60)) : 999;
+          const isUrgent = isPending && hoursRemaining < 6;
+          const deadlineStr = deadline ? deadline.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+          const borderColor = isUrgent ? '#ef4444' : (badge.label === 'Accepted' ? '#10b981' : badge.label === 'Declined' ? '#6b7280' : 'rgba(59, 130, 246, 0.3)');
+          const itemsHtml = (order.items || []).map(item => 
             '<div style="display: flex; justify-content: space-between; color: #f8fafc; padding: 0.25rem 0;">' +
               '<span>' + item.product_name + '</span>' +
-              '<span style="color: #60a5fa; font-weight: 600;">' + item.quantity + ' ' + item.unit + '</span>' +
+              '<span style="color: #60a5fa; font-weight: 600;">' + item.quantity + ' ' + (item.unit || '') + '</span>' +
             '</div>'
           ).join('');
+          const total = order.sub_total || (order.items || []).reduce((s, i) => s + (i.price_per_unit * i.quantity), 0);
           
+          const deadlineHtml = isPending && deadline ? `
+                  <div style="color: ${isUrgent ? '#ef4444' : '#f59e0b'}; font-weight: 600;">
+                    ${isUrgent ? 'URGENT: ' : ''}${Math.floor(hoursRemaining)}h remaining
+                  </div>
+                  <div style="color: #94a3b8; font-size: 0.9rem;">${deadlineStr}</div>` : '';
+
           return `
             <div class="order-card ${isUrgent ? 'urgent' : ''}" style="background: rgba(30, 41, 59, 0.8); padding: 1.5rem; border-radius: 12px; margin-bottom: 1rem; border: 2px solid ${borderColor};">
               <div style="display: flex; justify-content: space-between; margin-bottom: 1rem;">
                 <div>
-                  <div style="color: #60a5fa; font-weight: 700; font-size: 1.2rem; margin-bottom: 0.25rem;">Order #${order.id.slice(-8)}</div>
+                  <div style="color: #60a5fa; font-weight: 700; font-size: 1.2rem; margin-bottom: 0.25rem;">Order #${String(oid).slice(-8)}</div>
                   <div style="color: #cbd5e1;">${order.buyer_name || 'Wholesale Buyer'}</div>
                 </div>
                 <div style="text-align: right;">
-                  <div style="color: ${textColor}; font-weight: 600;">
-                    ${isUrgent ? '⚠️ ' : ''}${Math.floor(hoursRemaining)}h remaining
-                  </div>
-                  <div style="color: #94a3b8; font-size: 0.9rem;">${deadlineStr}</div>
+                  <span style="display: inline-block; padding: 0.3rem 0.75rem; border-radius: 6px; font-weight: 600; font-size: 0.85rem; color: ${badge.color}; background: ${badge.bg}; border: 1px solid ${badge.color};">${badge.label}</span>
+                  ${deadlineHtml}
                 </div>
               </div>
               
@@ -3295,11 +3558,11 @@
                 ${itemsHtml}
                 <div style="border-top: 1px solid rgba(148, 163, 184, 0.2); margin-top: 0.75rem; padding-top: 0.75rem; display: flex; justify-content: space-between; font-weight: 600; color: #34d399;">
                   <span>Total:</span>
-                  <span>$${order.sub_total.toFixed(2)}</span>
+                  <span>$${total.toFixed(2)}</span>
                 </div>
               </div>
               
-              <button onclick="openOrderDetail('${order.id}')" class="button button-primary" style="width: 100%;">View & Respond</button>
+              ${isPending ? `<button onclick="openOrderDetail('${oid}')" class="button button-primary" style="width: 100%;">View & Respond</button>` : ''}
             </div>
           `;
         }).join('');
@@ -3911,11 +4174,69 @@
       }
       // Help
       else if (command.includes('help') || command.includes('what can')) {
-        response = 'I can help with: harvest readiness, harvest predictions, record harvest, seed a crop, quality checks, zone status, recipe status, inventory, temperature, humidity, tasks, and seedlings. Just ask!';
+        response = 'I can help with: harvest readiness, harvest predictions, record harvest, seed a crop, quality checks, zone status, recipe status, inventory, temperature, humidity, tasks, and seedlings. Say "ask EVIE" followed by any question for AI-powered help. Or say "add task", "list tasks", "show orders", or just ask naturally.';
       }
-      // Default
+      // ASK EVIE: "ask evie..." / "evie..." / "hey evie..."
+      else if (command.startsWith('ask evie') || command.startsWith('evie') || command.startsWith('hey evie')) {
+        const evieQuery = command.replace(/^(?:ask evie|hey evie|evie)[,:]?\s*/i, '');
+        response = 'Asking EVIE...';
+        showResponse(response);
+        speakResponse(response);
+        closeVoiceAssistant();
+        setTimeout(() => routeToEvie(evieQuery || command), 300);
+        return;
+      }
+      // TASK COMMANDS: "add task..." / "new task..." / "create task..."
+      else if (command.match(/^(?:add|new|create)\s+task/i)) {
+        const taskDesc = command.replace(/^(?:add|new|create)\s+task[:\s]*/i, '').trim();
+        response = taskDesc ? 'Creating task: ' + taskDesc : 'What task should I add?';
+        showResponse(response);
+        speakResponse(response);
+        if (taskDesc) {
+          closeVoiceAssistant();
+          setTimeout(() => routeToEvie('create a task: ' + taskDesc), 300);
+        }
+        return;
+      }
+      // LIST TASKS: "list tasks" / "show tasks" / "my tasks" / "today's tasks"
+      else if (command.match(/(?:list|show|my|today).*task/i)) {
+        response = 'Loading your tasks...';
+        showResponse(response);
+        speakResponse(response);
+        closeVoiceAssistant();
+        setTimeout(() => {
+          if (!eviePanelOpen) toggleEviePanel();
+          loadEvieTasks();
+          routeToEvie('show my tasks for today');
+        }, 300);
+        return;
+      }
+      // COMPLETE TASK: "complete task..." / "finish task..." / "done with task..."
+      else if (command.match(/(?:complete|finish|done).*task/i)) {
+        response = 'Checking tasks...';
+        showResponse(response);
+        speakResponse(response);
+        closeVoiceAssistant();
+        setTimeout(() => routeToEvie(command), 300);
+        return;
+      }
+      // ORDER COMMANDS: "show orders" / "pending orders" / "order status"
+      else if (command.match(/(?:show|check|list|pending).*order/i) || command.includes('order status')) {
+        response = 'Checking orders...';
+        showResponse(response);
+        speakResponse(response);
+        closeVoiceAssistant();
+        setTimeout(() => routeToEvie(command), 300);
+        return;
+      }
+      // Default: route everything else to EVIE for natural language handling
       else {
-        response = 'I didn\'t understand that. Try: "what\'s ready to harvest", "seed basil", "quality check", "zone status", or say "help" for all commands.';
+        response = 'Routing to EVIE...';
+        showResponse(response);
+        speakResponse(response);
+        closeVoiceAssistant();
+        setTimeout(() => routeToEvie(command), 300);
+        return;
       }
 
       showResponse(response);
@@ -3936,6 +4257,249 @@
         const el = document.getElementById('voiceStatus');
         if (el) el.textContent = 'Tap microphone to speak';
       }, 1000);
+    }
+
+    // ====================================================================
+    // EVIE Chat Integration
+    // ====================================================================
+    const EVIE_API = '/api/assistant';
+    let eviePanelOpen = false;
+    let evieConversationId = null;
+    let evieVoiceActive = false;
+    let evieRecognition = null;
+
+    function getEvieAuthHeaders() {
+      const headers = { 'Content-Type': 'application/json' };
+      const token = localStorage.getItem('authToken') || localStorage.getItem('deviceToken');
+      if (token) headers['Authorization'] = 'Bearer ' + token;
+      if (farmId) headers['X-Farm-ID'] = farmId;
+      return headers;
+    }
+
+    function toggleEviePanel() {
+      eviePanelOpen = !eviePanelOpen;
+      const panel = document.getElementById('eviePanel');
+      const orb = document.getElementById('evieOrb');
+      if (eviePanelOpen) {
+        panel.classList.add('active');
+        orb.classList.remove('has-notification');
+        document.getElementById('evieInput').focus();
+        loadEvieTasks();
+      } else {
+        panel.classList.remove('active');
+        stopEvieVoice();
+      }
+    }
+
+    function appendEvieMessage(role, text) {
+      const container = document.getElementById('evieMessages');
+      const div = document.createElement('div');
+      div.className = 'evie-msg ' + role;
+      div.textContent = text;
+      container.appendChild(div);
+      container.scrollTop = container.scrollHeight;
+    }
+
+    async function sendEvieMessage(text) {
+      const input = document.getElementById('evieInput');
+      const message = text || input.value.trim();
+      if (!message) return;
+      if (!text) input.value = '';
+
+      appendEvieMessage('user', message);
+      document.getElementById('evieTyping').classList.add('active');
+      document.getElementById('evieSendBtn').disabled = true;
+
+      try {
+        const resp = await fetch(EVIE_API + '/chat', {
+          method: 'POST',
+          headers: getEvieAuthHeaders(),
+          body: JSON.stringify({
+            message,
+            conversationId: evieConversationId,
+            context: {
+              source: 'activity-hub',
+              farmId: farmId || localStorage.getItem('farmId'),
+              farmName: farmName || 'Farm'
+            }
+          }),
+          signal: AbortSignal.timeout(30000)
+        });
+
+        const data = await resp.json();
+        document.getElementById('evieTyping').classList.remove('active');
+        document.getElementById('evieSendBtn').disabled = false;
+
+        if (data.conversationId) evieConversationId = data.conversationId;
+
+        const reply = data.response || data.message || data.reply || 'No response received.';
+        appendEvieMessage('assistant', reply);
+
+        // Speak the response if voice mode is active
+        if (evieVoiceActive) {
+          speakEvieResponse(reply);
+        }
+
+        // Check if EVIE created/updated tasks
+        if (data.actions && data.actions.some(a => a.type === 'task_created' || a.type === 'task_updated')) {
+          loadEvieTasks();
+        }
+
+      } catch (error) {
+        document.getElementById('evieTyping').classList.remove('active');
+        document.getElementById('evieSendBtn').disabled = false;
+        console.error('[EVIE] Chat error:', error);
+        appendEvieMessage('system', 'Connection error. Check your network and try again.');
+      }
+    }
+
+    // Handle Enter key in EVIE input
+    document.addEventListener('keydown', (e) => {
+      if (e.target && e.target.id === 'evieInput' && e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendEvieMessage();
+      }
+    });
+
+    // ── EVIE Voice Input ──
+    function toggleEvieVoice() {
+      if (evieVoiceActive) {
+        stopEvieVoice();
+      } else {
+        startEvieVoice();
+      }
+    }
+
+    function startEvieVoice() {
+      if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
+        appendEvieMessage('system', 'Voice input not supported in this browser.');
+        return;
+      }
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      evieRecognition = new SR();
+      evieRecognition.continuous = false;
+      evieRecognition.interimResults = false;
+      evieRecognition.lang = 'en-US';
+
+      evieRecognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        document.getElementById('evieInput').value = transcript;
+        sendEvieMessage(transcript);
+      };
+      evieRecognition.onerror = (event) => {
+        console.error('[EVIE Voice]', event.error);
+        stopEvieVoice();
+      };
+      evieRecognition.onend = () => {
+        // Keep voice active for continuous conversation
+        if (evieVoiceActive) {
+          setTimeout(() => {
+            if (evieVoiceActive && evieRecognition) {
+              try { evieRecognition.start(); } catch(e) {}
+            }
+          }, 1000);
+        }
+      };
+
+      evieVoiceActive = true;
+      document.getElementById('evieVoiceBtn').classList.add('active');
+      document.getElementById('evieVoiceBtn').textContent = 'Stop';
+      try { evieRecognition.start(); } catch(e) {}
+      appendEvieMessage('system', 'Voice mode active. Speak your instructions.');
+    }
+
+    function stopEvieVoice() {
+      evieVoiceActive = false;
+      if (evieRecognition) {
+        try { evieRecognition.stop(); } catch(e) {}
+        evieRecognition = null;
+      }
+      const btn = document.getElementById('evieVoiceBtn');
+      if (btn) {
+        btn.classList.remove('active');
+        btn.textContent = 'Mic';
+      }
+    }
+
+    function speakEvieResponse(text) {
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.rate = 1.0;
+        utterance.pitch = 1.0;
+        utterance.volume = 0.8;
+        window.speechSynthesis.speak(utterance);
+      }
+    }
+
+    // ── EVIE Task Management ──
+    let evieTaskCache = [];
+
+    async function loadEvieTasks() {
+      try {
+        const resp = await fetch('/api/admin/calendar/tasks?status=pending&status=in_progress', {
+          headers: getEvieAuthHeaders(),
+          signal: AbortSignal.timeout(8000)
+        });
+        if (!resp.ok) {
+          document.getElementById('evieTasksSection').style.display = 'none';
+          return;
+        }
+        const data = await resp.json();
+        const tasks = data.tasks || data.data || [];
+        evieTaskCache = tasks;
+
+        const section = document.getElementById('evieTasksSection');
+        const list = document.getElementById('evieTasksList');
+
+        if (tasks.length === 0) {
+          section.style.display = 'none';
+          return;
+        }
+
+        section.style.display = 'block';
+        list.innerHTML = tasks.slice(0, 5).map(t => `
+          <div class="evie-task-item">
+            <div class="evie-task-check ${t.status === 'completed' ? 'done' : ''}"
+                 onclick="completeEvieTask('${t.id}')" title="Mark complete"></div>
+            <span class="evie-task-text ${t.status === 'completed' ? 'done' : ''}">${escapeHtml(t.title || t.description || 'Untitled task')}</span>
+          </div>
+        `).join('');
+      } catch (err) {
+        console.warn('[EVIE Tasks]', err.message);
+        document.getElementById('evieTasksSection').style.display = 'none';
+      }
+    }
+
+    async function completeEvieTask(taskId) {
+      try {
+        const resp = await fetch('/api/admin/calendar/tasks/' + encodeURIComponent(taskId) + '/complete', {
+          method: 'PATCH',
+          headers: getEvieAuthHeaders()
+        });
+        if (resp.ok) {
+          loadEvieTasks();
+          appendEvieMessage('system', 'Task marked complete.');
+        }
+      } catch (err) {
+        console.warn('[EVIE Tasks] Complete failed:', err.message);
+      }
+    }
+
+    function escapeHtml(str) {
+      const div = document.createElement('div');
+      div.appendChild(document.createTextNode(str));
+      return div.innerHTML;
+    }
+
+    // ── Route voice commands to EVIE when unrecognized ──
+    async function routeToEvie(command) {
+      // Open EVIE panel if not already open
+      if (!eviePanelOpen) {
+        toggleEviePanel();
+      }
+      sendEvieMessage(command);
+      speakEvieResponse('Let me look into that for you.');
     }
 
     // Initialize

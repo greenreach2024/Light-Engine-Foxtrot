@@ -8166,6 +8166,73 @@ function normalizeWholesaleTrackingUpdates(body = {}) {
 }
 
 /**
+ * POST /api/wholesale/order-events
+ * Receives order notifications from Central when a wholesale order is placed.
+ * Central calls this endpoint via farmCallWithTimeout() during checkout.
+ * Saves the sub-order to NeDB so Activity Hub can display it.
+ */
+app.post('/api/wholesale/order-events', express.json(), async (req, res) => {
+  try {
+    const data = req.body || {};
+    console.log('[Activity Hub] Received order event:', data.type, 'order:', data.order_id, 'farm:', data.farm_id);
+
+    if (data.type === 'wholesale_order_created') {
+      const farmId = data.farm_id || req.headers['x-farm-id'] || 'LOCAL-FARM';
+      const subOrderId = 'SO-' + (data.order_id || 'UNKNOWN') + '-' + farmId;
+      const items = (data.items || []).map(it => ({
+        sku_id: it.sku_id || '',
+        product_name: it.product_name || it.sku_id || 'Unknown',
+        quantity: Number(it.quantity) || 0,
+        unit: it.unit || 'lb',
+        price_per_unit: Number(it.price_per_unit || it.unit_price) || 0,
+        line_total: (Number(it.price_per_unit || it.unit_price) || 0) * (Number(it.quantity) || 0)
+      }));
+
+      const subOrder = {
+        sub_order_id: subOrderId,
+        wholesale_order_id: data.order_id,
+        master_order_id: data.order_id,
+        farm_id: farmId,
+        farm_name: data.farm_name || farmId,
+        status: 'pending_verification',
+        items,
+        sub_total: Number(data.subtotal) || items.reduce((s, i) => s + (i.line_total || 0), 0),
+        buyer_name: data.buyer_name || '',
+        buyer_contact_name: data.buyer_contact_name || '',
+        buyer_email: data.buyer_email || '',
+        buyer_phone: data.buyer_phone || '',
+        delivery_address: data.delivery_address || '',
+        delivery_date: data.delivery_date || null,
+        preferred_delivery_window: data.preferred_delivery_window || data.time_slot || '',
+        time_slot: data.time_slot || data.preferred_delivery_window || '',
+        delivery_schedule: data.delivery_schedule || '',
+        pickup_schedule: data.pickup_schedule || '',
+        delivery_requirements: data.delivery_requirements || [],
+        pickup_requirements: data.pickup_requirements || [],
+        fulfillment_method: data.fulfillment_method || 'delivery',
+        certifications_required: data.certifications_required || [],
+        practices: data.practices || [],
+        verification_deadline: data.verification_deadline || new Date(Date.now() + 24 * 3600000).toISOString(),
+        created_at: data.created_at || new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        order_data: data
+      };
+
+      await orderStore.saveSubOrder(subOrder);
+      console.log('[Activity Hub] Saved sub-order to NeDB:', subOrderId);
+
+      res.json({ ok: true, sub_order_id: subOrderId });
+    } else {
+      console.log('[Activity Hub] Unrecognized event type:', data.type);
+      res.json({ ok: true, message: 'Event acknowledged' });
+    }
+  } catch (error) {
+    console.error('[Activity Hub] POST order-events error:', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+/**
  * GET /api/wholesale/order-events
  * Returns wholesale orders for the farm admin dashboard.
  * Queries NeDB order store for sub-orders assigned to this farm.
@@ -23586,6 +23653,144 @@ app.use('/api/research', proxyCorsMiddleware, createProxyMiddleware({
   }
 }));
 
+
+// EVIE assistant API proxy -- forwards /api/assistant/* to Central
+app.use('/api/assistant', proxyCorsMiddleware, createProxyMiddleware({
+  target: getCentralApiTarget(),
+  router: () => getCentralApiTarget(),
+  changeOrigin: true,
+  xfwd: true,
+  logLevel: 'warn',
+  timeout: 30000,
+  proxyTimeout: 30000,
+  agent: keepAliveHttpsAgent,
+  pathRewrite: (path) => (path.startsWith('/api/assistant') ? path : `/api/assistant${path}`),
+  onProxyReq(proxyReq, req) {
+    const outgoingPath = req.url.startsWith('/api/assistant') ? req.url : `/api/assistant${req.url}`;
+    console.log(`[-> evie] ${req.method} ${req.originalUrl} -> central${outgoingPath}`);
+    if (req.headers['authorization']) {
+      proxyReq.setHeader('Authorization', req.headers['authorization']);
+    }
+    if (req.headers['x-farm-id']) {
+      proxyReq.setHeader('X-Farm-ID', req.headers['x-farm-id']);
+    }
+    const apiKey = process.env.GREENREACH_API_KEY || process.env.WHOLESALE_FARM_API_KEY;
+    if (apiKey && !req.headers['authorization']) {
+      proxyReq.setHeader('Authorization', `Bearer ${apiKey}`);
+    }
+  },
+  onProxyRes(proxyRes, req) {
+    const origin = req.headers?.origin;
+    if (origin) {
+      proxyRes.headers['access-control-allow-origin'] = origin;
+      const existingVary = proxyRes.headers['vary'];
+      if (existingVary) {
+        const varyParts = String(existingVary).split(/,\s*/);
+        if (!varyParts.includes('Origin')) {
+          proxyRes.headers['vary'] = `${existingVary}, Origin`;
+        }
+      } else {
+        proxyRes.headers['vary'] = 'Origin';
+      }
+    } else {
+      proxyRes.headers['access-control-allow-origin'] = '*';
+    }
+    const requestedHeaders = req.headers?.['access-control-request-headers'];
+    if (requestedHeaders && typeof requestedHeaders === 'string') {
+      proxyRes.headers['access-control-allow-headers'] = requestedHeaders;
+    } else if (!proxyRes.headers['access-control-allow-headers']) {
+      proxyRes.headers['access-control-allow-headers'] = 'Content-Type, Authorization, X-Requested-With, X-Farm-ID';
+    }
+    proxyRes.headers['access-control-allow-methods'] = 'GET,POST,PATCH,DELETE,OPTIONS';
+  },
+  onError(err, req, res) {
+    console.warn('[proxy:/api/assistant] error:', err?.message || err);
+    res.statusCode = 502;
+    res.end(JSON.stringify({ error: 'proxy_error', target: 'central-evie', detail: String(err) }));
+  }
+}));
+
+// EVIE admin assistant API proxy -- forwards /api/admin/assistant/* to Central
+app.use('/api/admin/assistant', proxyCorsMiddleware, createProxyMiddleware({
+  target: getCentralApiTarget(),
+  router: () => getCentralApiTarget(),
+  changeOrigin: true,
+  xfwd: true,
+  logLevel: 'warn',
+  timeout: 30000,
+  proxyTimeout: 30000,
+  agent: keepAliveHttpsAgent,
+  pathRewrite: (path) => (path.startsWith('/api/admin/assistant') ? path : `/api/admin/assistant${path}`),
+  onProxyReq(proxyReq, req) {
+    console.log(`[-> evie-admin] ${req.method} ${req.originalUrl} -> central`);
+    if (req.headers['authorization']) {
+      proxyReq.setHeader('Authorization', req.headers['authorization']);
+    }
+    if (req.headers['x-farm-id']) {
+      proxyReq.setHeader('X-Farm-ID', req.headers['x-farm-id']);
+    }
+    const apiKey = process.env.GREENREACH_API_KEY || process.env.WHOLESALE_FARM_API_KEY;
+    if (apiKey && !req.headers['authorization']) {
+      proxyReq.setHeader('Authorization', `Bearer ${apiKey}`);
+    }
+  },
+  onProxyRes(proxyRes, req) {
+    const origin = req.headers?.origin;
+    if (origin) {
+      proxyRes.headers['access-control-allow-origin'] = origin;
+    } else {
+      proxyRes.headers['access-control-allow-origin'] = '*';
+    }
+    proxyRes.headers['access-control-allow-headers'] = 'Content-Type, Authorization, X-Requested-With, X-Farm-ID';
+    proxyRes.headers['access-control-allow-methods'] = 'GET,POST,PATCH,DELETE,OPTIONS';
+  },
+  onError(err, req, res) {
+    console.warn('[proxy:/api/admin/assistant] error:', err?.message || err);
+    res.statusCode = 502;
+    res.end(JSON.stringify({ error: 'proxy_error', target: 'central-evie-admin', detail: String(err) }));
+  }
+}));
+
+// Calendar/Tasks API proxy -- forwards /api/admin/calendar/* to Central for task management
+app.use('/api/admin/calendar', proxyCorsMiddleware, createProxyMiddleware({
+  target: getCentralApiTarget(),
+  router: () => getCentralApiTarget(),
+  changeOrigin: true,
+  xfwd: true,
+  logLevel: 'warn',
+  timeout: 10000,
+  proxyTimeout: 10000,
+  agent: keepAliveHttpsAgent,
+  pathRewrite: (path) => (path.startsWith('/api/admin/calendar') ? path : `/api/admin/calendar${path}`),
+  onProxyReq(proxyReq, req) {
+    console.log(`[-> calendar] ${req.method} ${req.originalUrl} -> central`);
+    if (req.headers['authorization']) {
+      proxyReq.setHeader('Authorization', req.headers['authorization']);
+    }
+    if (req.headers['x-farm-id']) {
+      proxyReq.setHeader('X-Farm-ID', req.headers['x-farm-id']);
+    }
+    const apiKey = process.env.GREENREACH_API_KEY || process.env.WHOLESALE_FARM_API_KEY;
+    if (apiKey && !req.headers['authorization']) {
+      proxyReq.setHeader('Authorization', `Bearer ${apiKey}`);
+    }
+  },
+  onProxyRes(proxyRes, req) {
+    const origin = req.headers?.origin;
+    if (origin) {
+      proxyRes.headers['access-control-allow-origin'] = origin;
+    } else {
+      proxyRes.headers['access-control-allow-origin'] = '*';
+    }
+    proxyRes.headers['access-control-allow-headers'] = 'Content-Type, Authorization, X-Requested-With, X-Farm-ID';
+    proxyRes.headers['access-control-allow-methods'] = 'GET,POST,PUT,PATCH,DELETE,OPTIONS';
+  },
+  onError(err, req, res) {
+    console.warn('[proxy:/api/admin/calendar] error:', err?.message || err);
+    res.statusCode = 502;
+    res.end(JSON.stringify({ error: 'proxy_error', target: 'central-calendar', detail: String(err) }));
+  }
+}));
 
 // Circuit-breaker short-circuit when controller is unhealthy  
 app.use('/api', (req, res, next) => {
