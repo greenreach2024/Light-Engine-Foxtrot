@@ -1,8 +1,8 @@
 # GreenReach Platform -- Complete System Map
 
-**Version**: 1.8.0
-**Date**: March 30, 2026
-**Last Updated**: March 30, 2026 -- v1.8.0: Research Integration Layer (17 tables, research-integrations.js, GWEN 19 new tools), GWEN Core sidebar/auth/DB fixes, agent-caused Central outage recovered (config-only restart broke npm install), CLOUD_ARCHITECTURE.md updated with env var safety rules. Previous: v1.7.0: E.V.I.E. LLM fallback (Anthropic), F.A.Y.E. auto-recovery, heartbeat false-alert fix, farm settings DB persistence, custom product image upload bugfix (field name mismatch), LE pinned to 1 instance. v1.6.0: Security hardening (9 patches, C2-C5 remediated), custom product CRUD, auth fallback, UI fixes (POS, inventory edit/delete, EVIE overlap). v1.4.0: Wholesale remediation, Square connection cleanup, POS auto-login fix, FAYE/EVIE document access
+**Version**: 1.9.0
+**Date**: April 2, 2026
+**Last Updated**: April 2, 2026 -- v1.9.0: Activity Hub order sync fix (POST/GET /api/wholesale/order-events on LE, Central API fetch replacing broken PG fallback in activity-hub-orders.js), EVIE chat integration in Activity Hub (floating orb, chat panel, voice, tasks), calendar/tasks system (admin-calendar.js on Central), readiness report generated. KNOWN GAP: admin-calendar not mounted on LE. Previous: v1.8.0: Research Integration Layer (17 tables, research-integrations.js, GWEN 19 new tools), GWEN Core sidebar/auth/DB fixes, agent-caused Central outage recovered (config-only restart broke npm install), CLOUD_ARCHITECTURE.md updated with env var safety rules. Previous: v1.7.0: E.V.I.E. LLM fallback (Anthropic), F.A.Y.E. auto-recovery, heartbeat false-alert fix, farm settings DB persistence, custom product image upload bugfix (field name mismatch), LE pinned to 1 instance. v1.6.0: Security hardening (9 patches, C2-C5 remediated), custom product CRUD, auth fallback, UI fixes (POS, inventory edit/delete, EVIE overlap). v1.4.0: Wholesale remediation, Square connection cleanup, POS auto-login fix, FAYE/EVIE document access
 **Authority**: This document is the canonical system map for the entire GreenReach platform. All agents MUST consult this before making changes to ensure full awareness of cross-system impacts.
 **Purpose**: Prevent agent-caused regressions by providing complete visibility into every page, route, data field, button, data flow, and dependency across the platform.
 
@@ -485,6 +485,13 @@ Central excludes: .git, .github, .vscode, node_modules, logs, *.md, public/video
 | /api/farm-sales/donations | donationsRouter | Donations |
 | /api/farm-sales/ai-agent | aiAgentRouter | AI sales agent |
 
+
+#### Wholesale Order Events (Inline Handlers)
+| HTTP | Path | Description |
+|------|------|-------------|
+| POST | /api/wholesale/order-events | Receive order notifications from Central (saves sub-orders to NeDB) |
+| GET | /api/wholesale/order-events | List farm sub-orders from NeDB orderStore |
+
 #### Farm and Setup Routes
 | Prefix | Router | Description |
 |--------|--------|-------------|
@@ -647,6 +654,7 @@ Central excludes: .git, .github, .vscode, node_modules, logs, *.md, public/video
 | /api/assistant-chat | routes/assistant-chat.js | E.V.I.E. chat |
 | /api/admin/assistant | routes/admin-assistant.js | F.A.Y.E. admin AI |
 | /api/admin/ops-agent | routes/admin-ops-agent.js | Operations agent |
+| /api/admin/calendar | routes/admin-calendar.js | Calendar events, tasks, reminders (CRUD) |
 
 #### Inline Compatibility Routes (server.js)
 | HTTP | Path | Description |
@@ -797,7 +805,7 @@ Central excludes: .git, .github, .vscode, node_modules, logs, *.md, public/video
 |------|---------|-------------------|-------------------|
 | farm-summary.html | Farm overview, environment | Temp, humidity per zone, alerts, health score | Refresh, auto-refresh 60s, tab resume |
 | farm-inventory.html | Tray inventory with AI insights | Tray counts, growth stage, harvest dates | Search, filter, AI insights popup |
-| tray-inventory.html | Detailed tray tracking | Tray IDs, locations, dates | Search, filter, bulk actions |
+| tray-inventory.html | Activity Hub with EVIE chat | Tray tracking, order management, EVIE assistant (floating orb, chat panel, voice input, task display) | Search, filter, bulk actions, EVIE chat, voice commands |
 | tray-setup.html | Tray configuration | Format templates, dimensions | Create format, save |
 | room-mapper.html | Room/zone configuration | Room layout, device assignments | Drag-drop zones, save config |
 | room-heatmap.html | Environmental heatmap | Temperature/humidity color grid | Zone selection, time range |

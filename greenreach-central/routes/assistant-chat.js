@@ -3873,7 +3873,8 @@ async function executeExtendedTool(toolName, params, farmId) {
              FROM lot_records l
              LEFT JOIN harvest_events h ON l.harvest_event_id = h.id
             WHERE l.farm_id = $1 ${dateSql}
-            ORDER BY l.harvest_date DESC`,
+            ORDER BY l.harvest_date DESC
+            LIMIT 1000`,
           sqlParams
         );
 

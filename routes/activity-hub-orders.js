@@ -7,7 +7,6 @@
  */
 
 import express from 'express';
-import pool from '../config/database.js';
 import orderStore from '../lib/wholesale/order-store.js';
 import notificationService from '../services/wholesale-notification-service.js';
 import alternativeFarmService from '../services/alternative-farm-service.js';
@@ -62,17 +61,11 @@ async function deductInventoryAtCentral(farmId, items, orderId) {
 }
 
 /**
- * Log order action to audit trail
+ * Log order action to persistent NeDB audit trail
  */
 async function logOrderAction(orderId, farmId, action, details = {}, performedBy = null) {
   try {
-    await pool.query(
-      `INSERT INTO wholesale_order_logs
-        (sub_order_id, farm_id, action, details, performed_by, created_at)
-       VALUES ($1, $2, $3, $4, $5, NOW())
-       RETURNING id`,
-      [orderId, farmId, action, JSON.stringify(details), performedBy]
-    );
+    await orderStore.logOrderAction(orderId, farmId, action, details, performedBy);
     console.log(`[OrderLog] ${action.toUpperCase()} - Order ${orderId} by Farm ${farmId} (${performedBy || 'Unknown'})`);
   } catch (error) {
     console.error('[OrderLog] Failed to log action:', error.message);

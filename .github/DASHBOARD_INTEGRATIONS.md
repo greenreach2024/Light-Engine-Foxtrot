@@ -1,7 +1,7 @@
 # Dashboard Integration Registry
 
-**Version**: 1.1.0  
-**Date**: March 28, 2026  
+**Version**: 1.2.0  
+**Date**: April 2, 2026  
 **Purpose**: Track which AI/ML components are integrated into which dashboards to prevent duplicate work
 
 ---
@@ -196,6 +196,22 @@
 **Notes**:
 - Browser-native speech stack is in use (no dedicated backend speech service required)
 - Additional dashboard-level voice controls can still be layered on top of the current implementation
+
+---
+
+### EVIE Activity Hub Integration (Apr 2, 2026)
+
+**Status**: Deployed
+
+**Dashboard**:
+- **Activity Hub** (`greenreach-central/public/views/tray-inventory.html`, synced to root `public/views/`)
+  - **EVIE Orb**: Floating green circle at bottom-right (line 1639), toggles chat panel
+  - **Chat Panel**: Slide-in panel with message history, typing indicator, input field (lines 1644-1662)
+  - **Voice Input**: WebkitSpeechRecognition with continuous listen, TTS for responses (lines 4365-4418)
+  - **Task Display**: Embedded task list within EVIE panel, loads from `/api/admin/calendar/tasks` (lines 4436-4486)
+  - **Voice Routing**: Legacy `processVoiceCommand()` falls through to EVIE for unrecognized commands. "ask evie"/"hey evie" prefix, task commands, order commands all route to EVIE (lines 4183-4237)
+  - **API Endpoints Used**: `/api/assistant/chat` (POST), `/api/admin/calendar/tasks` (GET), `/api/admin/calendar/tasks/:id/complete` (PATCH)
+  - **KNOWN GAP**: `/api/admin/calendar` is not mounted on LE. Task loading will 404. Needs adminCalendarRouter import or proxy on LE.
 
 ---
 

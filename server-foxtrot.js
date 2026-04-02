@@ -31418,6 +31418,115 @@ async function startServer() {
     process.exit(1);
   }
 
+
+// ── Order Sync Polling ──────────────────────────────────────────────
+// Periodically polls Central for orders assigned to this farm.
+// Catches missed notifications when LE was down during order creation.
+const ORDER_SYNC_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+let orderSyncTimer = null;
+
+async function syncOrdersFromCentral() {
+  try {
+    const farmId = process.env.FARM_ID || 'LOCAL-FARM';
+    const centralUrl = process.env.GREENREACH_CENTRAL_URL || process.env.CENTRAL_URL || 'https://greenreachgreens.com';
+    const apiKey = process.env.GREENREACH_API_KEY || process.env.WHOLESALE_FARM_API_KEY || '';
+    if (!apiKey) return; // No API key = can't auth with Central
+
+    const resp = await fetch(`${centralUrl}/api/wholesale/orders/pending-verification/${encodeURIComponent(farmId)}`, {
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'X-Farm-ID': farmId,
+        'Content-Type': 'application/json'
+      },
+      signal: AbortSignal.timeout(10000)
+    });
+
+    if (!resp.ok) {
+      if (resp.status !== 404) console.warn(`[order-sync] Central responded ${resp.status}`);
+      return;
+    }
+
+    const data = await resp.json();
+    const centralOrders = data.orders || [];
+    if (centralOrders.length === 0) return;
+
+    // Check each Central order against local NeDB store
+    let synced = 0;
+    for (const order of centralOrders) {
+      const orderId = order.master_order_id || order.id;
+      if (!orderId) continue;
+
+      // Check if we already have this order locally
+      const existing = await orderStore.listFarmSubOrders(farmId);
+      const alreadyHave = existing.some(s =>
+        s.master_order_id === orderId ||
+        s.wholesale_order_id === orderId ||
+        String(s.master_order_id) === String(orderId)
+      );
+
+      if (!alreadyHave) {
+        // Reconstruct sub-order from Central data and save locally
+        const subOrderId = 'SO-' + orderId + '-' + farmId;
+        const orderData = order.order_data || {};
+        const subOrders = Array.isArray(orderData.farm_sub_orders) ? orderData.farm_sub_orders : [];
+        const farmSub = subOrders.find(s => s.farm_id === farmId) || subOrders[0] || {};
+        const items = (farmSub.items || []).map(it => ({
+          sku_id: it.sku_id || '',
+          product_name: it.product_name || it.sku_id || 'Unknown',
+          quantity: Number(it.quantity) || 0,
+          unit: it.unit || 'lb',
+          price_per_unit: Number(it.price_per_unit || it.unit_price) || 0,
+          line_total: (Number(it.price_per_unit || it.unit_price) || 0) * (Number(it.quantity) || 0)
+        }));
+
+        const subOrder = {
+          sub_order_id: subOrderId,
+          wholesale_order_id: orderId,
+          master_order_id: orderId,
+          farm_id: farmId,
+          farm_name: farmSub.farm_name || farmId,
+          status: 'pending_verification',
+          items,
+          sub_total: farmSub.sub_total || items.reduce((s, i) => s + (i.line_total || 0), 0),
+          buyer_name: orderData.buyer_name || order.buyer_email || '',
+          buyer_email: order.buyer_email || '',
+          delivery_date: order.delivery_date || null,
+          verification_deadline: new Date(Date.now() + 24 * 3600000).toISOString(),
+          created_at: order.created_at || new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          synced_from_central: true,
+          order_data: orderData
+        };
+
+        await orderStore.saveSubOrder(subOrder);
+        synced++;
+        console.log(`[order-sync] Recovered missed order from Central: ${subOrderId}`);
+      }
+    }
+
+    if (synced > 0) {
+      console.log(`[order-sync] Synced ${synced} missed order(s) from Central`);
+    }
+  } catch (error) {
+    // Non-fatal: log and continue
+    if (error.name !== 'TimeoutError') {
+      console.warn('[order-sync] Poll failed:', error.message);
+    }
+  }
+}
+
+function startOrderSyncPolling() {
+  if (orderSyncTimer) clearInterval(orderSyncTimer);
+  // Initial sync after 30s delay (let server finish startup)
+  setTimeout(() => {
+    syncOrdersFromCentral().catch(() => {});
+    orderSyncTimer = setInterval(() => {
+      syncOrdersFromCentral().catch(() => {});
+    }, ORDER_SYNC_INTERVAL_MS);
+  }, 30000);
+  console.log('[order-sync] Polling enabled (every 5 min)');
+}
+
   SERVER = app.listen(PORT, '0.0.0.0', async () => {
     const address = SERVER.address();
     console.log(`[charlie]  Server successfully started on ${address.address}:${address.port}`);
@@ -31492,6 +31601,11 @@ async function startServer() {
     try { setupLiveSensorSync(); } catch (error) {
       console.warn('[sensor-sync] Failed to start:', error?.message || error);
     }
+    // Start periodic order sync with Central (catches missed notifications)
+    try { startOrderSyncPolling(); } catch (error) {
+      console.warn('[order-sync] Failed to start:', error?.message || error);
+    }
+
     
   // Initialize Schedule Executor for automated plan/schedule application
     if (SCHEDULE_EXECUTOR_ENABLED) {

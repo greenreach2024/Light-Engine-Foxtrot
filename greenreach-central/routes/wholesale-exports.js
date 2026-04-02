@@ -47,7 +47,7 @@ router.get('/orders', async (req, res) => {
       conditions.push(`created_at <= $${params.length}::timestamp`);
     }
     if (conditions.length) sql += ' WHERE ' + conditions.join(' AND ');
-    sql += ' ORDER BY created_at DESC';
+    sql += ' ORDER BY created_at DESC LIMIT 5000';
 
     const result = await query(sql, params);
 

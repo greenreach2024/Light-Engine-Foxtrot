@@ -23,6 +23,32 @@ The farm runs entirely on AWS Elastic Beanstalk. The Light Engine EB instance IS
 7. **NO cross-origin redirects between LE and Central.** LE has no custom domain (only the raw EB CNAME). Never redirect UI page requests from one server to the other -- it breaks iframes, CSP, and HTTPS. Both servers serve the same static UI files directly.
 8. **NEVER use the raw EB URL in code.** The `light-engine-foxtrot-prod-v2.eba-ukiyyqf9.us-east-1.elasticbeanstalk.com` hostname is for deployment only. Do not hardcode it in redirects, links, fetch calls, or any runtime code.
 
+### Recent Fixes (Apr 2, 2026)
+
+21. **Activity Hub order sync fix**
+    - File: `server-foxtrot.js` (lines ~8168-8300)
+    - Added POST `/api/wholesale/order-events` handler on LE. Central was sending order notifications via `farmCallWithTimeout()` but LE had no POST handler, only GET. Orders were invisible to farms.
+    - Added GET `/api/wholesale/order-events` handler to return sub-orders from NeDB orderStore.
+    - File: `routes/activity-hub-orders.js`
+    - Replaced 3 broken PostgreSQL fallback queries (`pool.query` to `wholesale_orders`) with Central API fetch calls (`getCentralUrl() + '/api/wholesale/admin/orders'`). LE uses SQLite, not PostgreSQL -- the PG queries failed silently.
+    - Known remaining issue: `logOrderAction()` (line ~69) still uses `pool.query` with PG-syntax SQL against SQLite. Non-fatal (try/catch) but audit log is dead code on LE.
+
+22. **EVIE chat integration in Activity Hub**
+    - File: `greenreach-central/public/views/tray-inventory.html` (synced to root `public/views/`)
+    - Added floating EVIE orb (green circle with "E" icon, bottom-right)
+    - Added slide-in chat panel with message history, typing indicator, input field
+    - Added EVIE voice input (WebkitSpeechRecognition, continuous listen, TTS responses)
+    - Added task display panel within EVIE panel (loads from `/api/admin/calendar/tasks`)
+    - Added `routeToEvie()` function -- voice commands fall through to EVIE when unrecognized
+    - Voice routing: "ask evie" / "hey evie" prefix, task commands, order commands, and default fallback all route to EVIE
+    - KNOWN GAP: `/api/admin/calendar` is not mounted or proxied on LE. Task loading will 404 on LE. Needs adminCalendarRouter import or proxy.
+
+23. **Calendar and tasks system**
+    - File: `greenreach-central/routes/admin-calendar.js`
+    - Full CRUD for calendar events, tasks, and reminders (Central only)
+    - Three PostgreSQL tables auto-created: `admin_calendar_events`, `admin_tasks`, `admin_task_reminders`
+    - Mounted at `/api/admin/calendar` in Central server.js
+
 ### Recent Fixes (Mar 30, 2026)
 
 20. **GWEN tool schema fix**

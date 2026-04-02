@@ -172,6 +172,15 @@ The monorepo contains two independently deployed applications:
 - `greenreach-central/server.js` must only import files inside `greenreach-central/`.
 - Attempting to import LE middleware (for example `../server/middleware/feature-flags`) will crash Central at runtime.
 
+**AI Route Import Exception (LE imports from Central)**:
+- server-foxtrot.js imports 3 route files from `greenreach-central/routes/`:
+  1. `assistant-chat.js` (E.V.I.E.) -- mounted at `/api/assistant` with `farmAuthMiddleware`
+  2. `admin-assistant.js` (F.A.Y.E.) -- mounted at `/api/admin/assistant` with `adminAuthMiddleware + role guard`
+  3. `admin-ops-agent.js` -- mounted at `/api/admin/ops` with `adminAuthMiddleware + role guard`
+- These are the ONLY cross-boundary imports. They work because Central route files' dependencies (pg, OpenAI, Anthropic) are installed on LE via the shared repo root `node_modules/`.
+- **KNOWN GAP (Apr 2, 2026)**: `admin-calendar.js` is NOT imported or proxied on LE. The Activity Hub's EVIE task panel calls `/api/admin/calendar/tasks` which will 404 on LE. Fix: import adminCalendarRouter following the same pattern as the 3 AI routes.
+- DO NOT add more cross-boundary imports without verifying all transitive dependencies exist in the LE `node_modules/`.
+
 ### Central Devices Status Contract
 
 `GET /api/sync/:farmId/devices` can return devices without a top-level `status`.
