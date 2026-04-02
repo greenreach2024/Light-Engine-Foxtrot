@@ -115,8 +115,28 @@ async function resolveCropPricing(farmId, productName) {
   try {
     const pricingData = await farmStore.get(farmId, 'crop_pricing');
     if (!pricingData?.crops?.length) return { retailPrice: 0, wholesalePrice: 0 };
-    const nameLC = (productName || '').toLowerCase();
-    const match = pricingData.crops.find(c => (c.crop || '').toLowerCase() === nameLC);
+    const normalizeCropKey = (value) => String(value || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, ' ')
+      .trim();
+
+    const inputKey = normalizeCropKey(productName);
+    if (!inputKey) return { retailPrice: 0, wholesalePrice: 0 };
+
+    const entries = pricingData.crops.map((crop) => ({
+      ...crop,
+      _key: normalizeCropKey(crop.crop || crop.name || crop.cropName || crop.label || crop.id)
+    }));
+
+    let match = entries.find((entry) => entry._key === inputKey);
+
+    if (!match) {
+      // Fallback to tolerant matching for variants like "Genovese Basil" vs "Basil".
+      match = entries.find((entry) => entry._key && (
+        entry._key.includes(inputKey) || inputKey.includes(entry._key)
+      ));
+    }
+
     if (!match) return { retailPrice: 0, wholesalePrice: 0 };
     return {
       retailPrice: Number(match.retailPrice) || 0,
@@ -234,14 +254,29 @@ async function loadManualInventoryItems(farmId) {
          sku,
          sku_name,
          product_name,
+         auto_quantity_lbs,
          quantity_available,
          manual_quantity_lbs,
+         GREATEST(
+           0,
+           LEAST(
+             COALESCE(manual_quantity_lbs, 0),
+             COALESCE(quantity_available, 0)
+           )
+         ) AS manual_available_lbs,
          last_updated,
          updated_at,
          created_at
        FROM farm_inventory
        WHERE farm_id = $1
-         AND COALESCE(quantity_available, manual_quantity_lbs, 0) > 0
+         AND COALESCE(status, 'active') != 'inactive'
+         AND GREATEST(
+           0,
+           LEAST(
+             COALESCE(manual_quantity_lbs, 0),
+             COALESCE(quantity_available, 0)
+           )
+         ) > 0
        ORDER BY updated_at DESC NULLS LAST, last_updated DESC NULLS LAST, created_at DESC NULLS LAST`,
       [farmId]
     );
@@ -287,25 +322,27 @@ router.get('/current', async (req, res) => {
     });
 
     const manualTrays = manualItems.map((item, index) => {
-      const qty = coerceNumber(Number(item.quantity_available ?? item.manual_quantity_lbs ?? 0));
+      const qty = coerceNumber(Number(item.manual_available_lbs ?? item.manual_quantity_lbs ?? 0));
       const updated = item.last_updated || item.updated_at || item.created_at || null;
       const ts = updated ? new Date(updated) : null;
 
       return {
         trayId: item.product_id || item.sku || `manual-${index + 1}`,
         crop: item.product_name || item.sku_name || item.sku || 'Manual Inventory',
-        trayCount: 1,
+        trayCount: 0,
         plantCount: qty,
         seedingDate: ts && !Number.isNaN(ts.getTime()) ? ts.toISOString() : null,
-        source: 'manual-inventory'
+        location: 'General Inventory',
+        source: 'general-inventory-manual'
       };
     });
 
-    const trays = [...groupTrays, ...manualTrays].filter((tray) => coerceNumber(tray.plantCount) > 0);
-    const dataAvailable = trays.length > 0;
+    const trays = groupTrays.filter((tray) => coerceNumber(tray.plantCount) > 0);
+    const generalInventory = manualTrays.filter((tray) => coerceNumber(tray.plantCount) > 0);
+    const dataAvailable = trays.length > 0 || generalInventory.length > 0;
 
-    const totals = trays.reduce((acc, tray) => {
-      const trayCount = coerceNumber(tray.trayCount) || 1;
+    const groupTotals = trays.reduce((acc, tray) => {
+      const trayCount = Math.max(0, coerceNumber(tray.trayCount));
       const plantCount = coerceNumber(tray.plantCount) || 0;
 
       acc.trays += trayCount;
@@ -313,17 +350,27 @@ router.get('/current', async (req, res) => {
       return acc;
     }, { trays: 0, plants: 0 });
 
+    const generalInventoryPlants = generalInventory.reduce(
+      (sum, item) => sum + (coerceNumber(item.plantCount) || 0),
+      0
+    );
+
+    const totalPlants = groupTotals.plants + generalInventoryPlants;
+
     const payload = {
-      activeTrays: totals.trays,
-      totalPlants: totals.plants,
+      activeTrays: groupTotals.trays,
+      totalPlants,
+      generalInventoryPlants,
+      generalInventoryCount: generalInventory.length,
       farmCount: dataAvailable ? 1 : 0,
       byFarm: dataAvailable ? [
         {
           farmId,
           name: pickFarmName(farmId),
-          activeTrays: totals.trays,
-          totalPlants: totals.plants,
-          trays
+          activeTrays: groupTotals.trays,
+          totalPlants,
+          trays,
+          generalInventory
         }
       ] : []
     };
@@ -559,8 +606,28 @@ router.get('/:farmId', async (req, res) => {
 
     const result = await query(
       `SELECT *,
-        COALESCE(auto_quantity_lbs, 0) + COALESCE(manual_quantity_lbs, 0) - COALESCE(sold_quantity_lbs, 0) AS available_lbs
-       FROM farm_inventory WHERE farm_id = $1 ORDER BY product_name`,
+        COALESCE(auto_quantity_lbs, 0) + COALESCE(manual_quantity_lbs, 0) - COALESCE(sold_quantity_lbs, 0) AS available_lbs,
+        GREATEST(
+          0,
+          LEAST(
+            COALESCE(manual_quantity_lbs, 0),
+            COALESCE(quantity_available, 0)
+          )
+        ) AS manual_available_lbs,
+        GREATEST(
+          0,
+          COALESCE(quantity_available, 0) - GREATEST(
+            0,
+            LEAST(
+              COALESCE(manual_quantity_lbs, 0),
+              COALESCE(quantity_available, 0)
+            )
+          )
+        ) AS auto_available_lbs
+       FROM farm_inventory
+       WHERE farm_id = $1
+         AND COALESCE(status, 'active') != 'inactive'
+       ORDER BY product_name`,
       [farmId]
     );
 
@@ -590,8 +657,8 @@ router.post('/manual', async (req, res) => {
     const farmId = await resolveFarmId(req);
     if (!farmId) return res.status(401).json({ error: 'Farm ID required' });
 
-    const { product_name, sku, quantity_lbs, unit, price, wholesale_price,
-            retail_price, category, variety, available_for_wholesale } = req.body;
+    const { product_name, sku, quantity_lbs, unit,
+            category, variety, available_for_wholesale } = req.body;
 
     if (!product_name || quantity_lbs === undefined) {
       return res.status(400).json({ error: 'product_name and quantity_lbs are required' });
@@ -603,9 +670,9 @@ router.post('/manual', async (req, res) => {
 
     // Resolve pricing from the Crop Pricing page when not explicitly provided
     const cropPrices = await resolveCropPricing(farmId, product_name);
-    const unitPrice = Number(price) || cropPrices.retailPrice || 0;
-    const resolvedRetail = Number(retail_price) || cropPrices.retailPrice || unitPrice;
-    const resolvedWholesale = Number(wholesale_price) || cropPrices.wholesalePrice || unitPrice;
+    const resolvedRetail = cropPrices.retailPrice || 0;
+    const resolvedWholesale = cropPrices.wholesalePrice || 0;
+    const unitPrice = resolvedRetail;
 
     console.log(`[Manual Inventory] Attempting: farm=${farmId} product=${product_name} qty=${manualQty} id=${productId}`);
 
@@ -626,9 +693,18 @@ router.post('/manual', async (req, res) => {
           manual_quantity_lbs = EXCLUDED.manual_quantity_lbs,
           quantity_available = COALESCE(farm_inventory.auto_quantity_lbs, 0) + EXCLUDED.manual_quantity_lbs - COALESCE(farm_inventory.sold_quantity_lbs, 0),
           quantity_unit = EXCLUDED.quantity_unit,
-          wholesale_price = EXCLUDED.wholesale_price,
-          retail_price = EXCLUDED.retail_price,
-          price = EXCLUDED.price,
+          wholesale_price = CASE
+            WHEN EXCLUDED.wholesale_price > 0 THEN EXCLUDED.wholesale_price
+            ELSE COALESCE(farm_inventory.wholesale_price, 0)
+          END,
+          retail_price = CASE
+            WHEN EXCLUDED.retail_price > 0 THEN EXCLUDED.retail_price
+            ELSE COALESCE(farm_inventory.retail_price, 0)
+          END,
+          price = CASE
+            WHEN EXCLUDED.price > 0 THEN EXCLUDED.price
+            ELSE COALESCE(farm_inventory.price, 0)
+          END,
           available_for_wholesale = EXCLUDED.available_for_wholesale,
           inventory_source = CASE
             WHEN COALESCE(farm_inventory.auto_quantity_lbs, 0) > 0 THEN 'hybrid'
@@ -733,7 +809,7 @@ router.post('/manual', async (req, res) => {
 /**
  * PUT /api/inventory/manual/:productId
  * Update manual quantity for an existing product.
- * Body: { quantity_lbs, price?, wholesale_price?, retail_price?, available_for_wholesale? }
+ * Body: { quantity_lbs, available_for_wholesale? }
  */
 router.put('/manual/:productId', async (req, res) => {
   try {
@@ -741,7 +817,7 @@ router.put('/manual/:productId', async (req, res) => {
     if (!farmId) return res.status(401).json({ error: 'Farm ID required' });
 
     const { productId } = req.params;
-    const { quantity_lbs, price, wholesale_price, retail_price, available_for_wholesale } = req.body;
+    const { quantity_lbs, available_for_wholesale } = req.body;
 
     if (quantity_lbs === undefined) {
       return res.status(400).json({ error: 'quantity_lbs is required' });
@@ -749,30 +825,41 @@ router.put('/manual/:productId', async (req, res) => {
 
     const manualQty = Math.max(0, Number(quantity_lbs) || 0);
 
+    const currentResult = await query(
+      `SELECT product_name, price, retail_price, wholesale_price
+       FROM farm_inventory
+       WHERE farm_id = $1 AND product_id = $2`,
+      [farmId, productId]
+    );
+
+    if (!currentResult.rows.length) {
+      return res.status(404).json({ error: 'Product not found' });
+    }
+
+    const current = currentResult.rows[0];
+    const cropPrices = await resolveCropPricing(farmId, current.product_name || productId);
+    const resolvedRetail = Number(cropPrices.retailPrice) > 0
+      ? Number(cropPrices.retailPrice)
+      : Number(current.retail_price || current.price || 0);
+    const resolvedWholesale = Number(cropPrices.wholesalePrice) > 0
+      ? Number(cropPrices.wholesalePrice)
+      : Number(current.wholesale_price || current.price || 0);
+    const resolvedPrice = Number(resolvedRetail) > 0
+      ? Number(resolvedRetail)
+      : Number(current.price || 0);
+
     const setClauses = [
       'manual_quantity_lbs = $2',
       'quantity_available = COALESCE(auto_quantity_lbs, 0) + $2 - COALESCE(sold_quantity_lbs, 0)',
       `inventory_source = CASE WHEN COALESCE(auto_quantity_lbs, 0) > 0 THEN 'hybrid' ELSE 'manual' END`,
+      'price = $3',
+      'retail_price = $4',
+      'wholesale_price = $5',
       'last_updated = NOW()'
     ];
-    const params = [farmId, manualQty];
-    let idx = 3;
+    const params = [farmId, manualQty, resolvedPrice, resolvedRetail, resolvedWholesale];
+    let idx = 6;
 
-    if (price !== undefined) {
-      setClauses.push(`price = $${idx}`);
-      params.push(Number(price));
-      idx++;
-    }
-    if (wholesale_price !== undefined) {
-      setClauses.push(`wholesale_price = $${idx}`);
-      params.push(Number(wholesale_price));
-      idx++;
-    }
-    if (retail_price !== undefined) {
-      setClauses.push(`retail_price = $${idx}`);
-      params.push(Number(retail_price));
-      idx++;
-    }
     if (available_for_wholesale !== undefined) {
       setClauses.push(`available_for_wholesale = $${idx}`);
       params.push(Boolean(available_for_wholesale));

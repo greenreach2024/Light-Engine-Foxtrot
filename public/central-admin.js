@@ -11015,7 +11015,7 @@ async function saveCustomProduct(productId) {
         // Upload thumbnail if selected
         if (thumbnailFile && savedId) {
             const formData = new FormData();
-            formData.append('thumbnail', thumbnailFile);
+            formData.append('image', thumbnailFile);
             try {
                 await authenticatedFetch(`${API_BASE}/api/farm/products/${savedId}/image`, {
                     method: 'POST',

@@ -15,6 +15,73 @@ let inventoryCache = {
   errors: []
 };
 
+function toFiniteNumber(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function extractCoordinates(rawLocation) {
+  if (!rawLocation || typeof rawLocation !== 'object') return null;
+
+  const latitude = toFiniteNumber(
+    rawLocation.latitude
+      ?? rawLocation.lat
+      ?? rawLocation.location?.latitude
+      ?? rawLocation.location?.lat
+  );
+  const longitude = toFiniteNumber(
+    rawLocation.longitude
+      ?? rawLocation.lng
+      ?? rawLocation.lon
+      ?? rawLocation.location?.longitude
+      ?? rawLocation.location?.lng
+      ?? rawLocation.location?.lon
+  );
+
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+  return { latitude, longitude };
+}
+
+function haversineDistanceKm(aLat, aLng, bLat, bLng) {
+  const toRad = (deg) => (Number(deg) * Math.PI) / 180;
+  const dLat = toRad(bLat - aLat);
+  const dLng = toRad(bLng - aLng);
+  const lat1 = toRad(aLat);
+  const lat2 = toRad(bLat);
+  const sinLat = Math.sin(dLat / 2);
+  const sinLng = Math.sin(dLng / 2);
+  const h = (sinLat * sinLat) + (Math.cos(lat1) * Math.cos(lat2) * sinLng * sinLng);
+  return 6371 * (2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h)));
+}
+
+function resolveCustomSearchRadiusKm(value) {
+  const direct = Number(value);
+  if (Number.isFinite(direct) && direct > 0) return direct;
+
+  const envCustom = Number(process.env.WHOLESALE_CUSTOM_PRODUCT_RADIUS_KM);
+  if (Number.isFinite(envCustom) && envCustom > 0) return envCustom;
+
+  const envDefault = Number(process.env.WHOLESALE_SEARCH_RADIUS_KM);
+  if (Number.isFinite(envDefault) && envDefault > 0) return envDefault;
+
+  return 120;
+}
+
+function isCustomCatalogSku(sku) {
+  if (!sku || typeof sku !== 'object') return false;
+
+  if (sku.is_custom === true) return true;
+  if (String(sku.inventory_source || '').toLowerCase() === 'custom') return true;
+  if (Array.isArray(sku.quality_flags) && sku.quality_flags.includes('custom_product')) return true;
+
+  return Array.isArray(sku.farms) && sku.farms.some((farm) => {
+    if (!farm || typeof farm !== 'object') return false;
+    if (farm.is_custom === true) return true;
+    if (String(farm.inventory_source || '').toLowerCase() === 'custom') return true;
+    return Array.isArray(farm.quality_flags) && farm.quality_flags.includes('custom_product');
+  });
+}
+
 /**
  * Fetch inventory from a single farm
  */
@@ -128,7 +195,18 @@ export async function refreshNetworkInventory() {
   const skuMap = new Map();
   for (const farmInv of farmInventories) {
     for (const lot of farmInv.lots) {
-      const sku = lot.sku_id;
+      const sku = lot.sku_id || lot.product_id || lot.crop_type;
+      if (!sku) continue;
+
+      const rawQualityFlags = Array.isArray(lot.quality_flags) ? lot.quality_flags : [];
+      const inventorySource = String(lot.inventory_source || '').toLowerCase();
+      const isCustomLot = Boolean(lot.is_custom)
+        || inventorySource === 'custom'
+        || rawQualityFlags.includes('custom_product');
+      const qualityFlags = isCustomLot
+        ? Array.from(new Set([...rawQualityFlags, 'custom_product']))
+        : rawQualityFlags;
+
       if (!skuMap.has(sku)) {
         skuMap.set(sku, {
           sku_id: sku,
@@ -138,21 +216,35 @@ export async function refreshNetworkInventory() {
           price_per_unit: lot.price_per_unit || 12.50,
           total_qty_available: 0,
           organic: lot.quality_flags?.includes('organic') || false,
+          description: lot.description || null,
+          thumbnail_url: lot.thumbnail_url || null,
+          inventory_source: lot.inventory_source || null,
+          is_custom: isCustomLot,
           farms: []
         });
       }
       const entry = skuMap.get(sku);
-      entry.total_qty_available += lot.qty_available || 0;
+      const qtyAvailable = Number(lot.qty_available || 0);
+      entry.total_qty_available += qtyAvailable;
+      entry.is_custom = entry.is_custom || isCustomLot;
+      if (!entry.description && lot.description) entry.description = lot.description;
+      if (!entry.thumbnail_url && lot.thumbnail_url) entry.thumbnail_url = lot.thumbnail_url;
+      if (!entry.inventory_source && lot.inventory_source) entry.inventory_source = lot.inventory_source;
       entry.farms.push({
         farm_id: farmInv.farm_id,
         farm_name: farmInv.farm_name,
         lot_id: lot.lot_id,
-        qty_available: lot.qty_available || 0,
+        qty_available: qtyAvailable,
         harvest_date_start: lot.harvest_date_start,
         harvest_date_end: lot.harvest_date_end,
         price_per_unit: lot.price_per_unit || 12.50,
-        quality_flags: lot.quality_flags || [],
-        location: lot.location
+        quality_flags: qualityFlags,
+        location: lot.location,
+        farm_location: farmInv.location || {},
+        is_custom: isCustomLot,
+        inventory_source: lot.inventory_source || null,
+        description: lot.description || null,
+        thumbnail_url: lot.thumbnail_url || null
       });
     }
   }
@@ -348,7 +440,7 @@ export async function allocateCartFromNetwork(cartOrInput, sourcing, buyerLocati
   return normalizeAllocationResult({ allocations, unavailable, commissionRate });
 }
 
-export async function buildAggregateCatalog() {
+export async function buildAggregateCatalog(options = {}) {
   // Refresh if stale (> 5 min old) or empty
   const fiveMinAgo = Date.now() - 5 * 60 * 1000;
   if (!inventoryCache.lastRefresh || new Date(inventoryCache.lastRefresh).getTime() < fiveMinAgo) {
@@ -419,8 +511,74 @@ export async function buildAggregateCatalog() {
     }
   })();
 
+  const buyerCoords = extractCoordinates(options?.buyerLocation || null);
+  const customSearchRadiusKm = resolveCustomSearchRadiusKm(options?.customProductRadiusKm ?? options?.searchRadiusKm);
+  const enforceCustomSearchArea = options?.enforceCustomSearchArea === true;
+  const farmLocationById = new Map((inventoryCache.farms || []).map((farm) => [String(farm.farm_id || ''), farm.location || {}]));
+
+  const skus = (skusWithPendingHolds || [])
+    .map((sku) => {
+      const farms = Array.isArray(sku?.farms) ? sku.farms : [];
+      const skuIsCustom = isCustomCatalogSku(sku);
+
+      const scopedFarms = farms
+        .map((farm) => {
+          const fallbackFarmLocation = farmLocationById.get(String(farm?.farm_id || '')) || {};
+          const farmLocation = farm?.farm_location || farm?.location || fallbackFarmLocation;
+          const farmCoords = extractCoordinates(farmLocation);
+
+          if (skuIsCustom && enforceCustomSearchArea) {
+            if (!buyerCoords || !farmCoords) return null;
+            const distanceKm = haversineDistanceKm(
+              buyerCoords.latitude,
+              buyerCoords.longitude,
+              farmCoords.latitude,
+              farmCoords.longitude
+            );
+            if (!(distanceKm <= customSearchRadiusKm)) return null;
+
+            return {
+              ...farm,
+              distance_km: Number(distanceKm.toFixed(2))
+            };
+          }
+
+          if (!farmCoords) return farm;
+          return {
+            ...farm,
+            distance_km: buyerCoords
+              ? Number(haversineDistanceKm(
+                buyerCoords.latitude,
+                buyerCoords.longitude,
+                farmCoords.latitude,
+                farmCoords.longitude
+              ).toFixed(2))
+              : farm.distance_km
+          };
+        })
+        .filter(Boolean);
+
+      if (scopedFarms.length === 0) return null;
+
+      const totalQty = scopedFarms.reduce((sum, farm) => {
+        const qty = Number(farm.qty_available ?? farm.quantity_available ?? 0);
+        return sum + (Number.isFinite(qty) ? qty : 0);
+      }, 0);
+
+      if (!(totalQty > 0)) return null;
+
+      return {
+        ...sku,
+        farms: scopedFarms,
+        total_qty_available: totalQty,
+        qty_available: totalQty,
+        is_custom: skuIsCustom
+      };
+    })
+    .filter(Boolean);
+
   return {
-    skus: skusWithPendingHolds,
+    skus,
     predicted: predictedInventory,
     farms: inventoryCache.farms.map(f => ({
       farm_id: f.farm_id,

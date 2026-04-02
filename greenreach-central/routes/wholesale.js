@@ -493,6 +493,47 @@ function applyFormulaPricingToCatalogSkus(skus, pricingContext, discountProfile)
   const discountRate = Number(discountProfile?.rate || 0);
 
   for (const sku of list) {
+    const isCustomSku = Boolean(sku?.is_custom)
+      || String(sku?.inventory_source || '').toLowerCase() === 'custom'
+      || (Array.isArray(sku?.quality_flags) && sku.quality_flags.includes('custom_product'))
+      || (Array.isArray(sku?.farms) && sku.farms.some((farm) => {
+        if (!farm || typeof farm !== 'object') return false;
+        if (farm.is_custom === true) return true;
+        if (String(farm.inventory_source || '').toLowerCase() === 'custom') return true;
+        return Array.isArray(farm.quality_flags) && farm.quality_flags.includes('custom_product');
+      }));
+
+    if (isCustomSku) {
+      const explicitPrice = Number(
+        sku?.price_per_unit
+          ?? sku?.wholesale_price
+          ?? sku?.wholesalePrice
+          ?? sku?.final_wholesale_price
+          ?? 0
+      );
+      const normalizedPrice = Number.isFinite(explicitPrice) && explicitPrice > 0
+        ? roundMoney(explicitPrice)
+        : 0;
+
+      sku.base_wholesale_price = normalizedPrice;
+      sku.final_wholesale_price = normalizedPrice;
+      sku.floor_price = normalizedPrice;
+      sku.retail_aggregate_price = roundMoney(Number(sku?.retail_price ?? sku?.retailPrice ?? 0));
+      sku.sku_factor = null;
+      sku.buyer_discount_rate = 0;
+      sku.retail_sample_size = 0;
+      sku.retail_outliers_removed = 0;
+      sku.price_per_unit = normalizedPrice;
+      sku.qty_unit = sku.qty_unit || sku.unit;
+
+      for (const farm of (sku.farms || [])) {
+        if (!Number.isFinite(Number(farm.price_per_unit)) || Number(farm.price_per_unit) <= 0) {
+          farm.price_per_unit = normalizedPrice;
+        }
+      }
+      continue;
+    }
+
     const name = sku?.product_name || sku?.name || '';
     const category = sku?.category || '';
     const cropKey = normalizeCropKey(name);
@@ -537,6 +578,143 @@ function applyFormulaPricingToCatalogSkus(skus, pricingContext, discountProfile)
   }
 
   return list;
+}
+
+function toFiniteNumber(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function extractCoordinates(rawLocation) {
+  if (!rawLocation) return null;
+  const location = (typeof rawLocation === 'string')
+    ? (() => {
+      try { return JSON.parse(rawLocation); } catch { return null; }
+    })()
+    : rawLocation;
+
+  if (!location || typeof location !== 'object') return null;
+
+  const latitude = toFiniteNumber(
+    location.latitude
+      ?? location.lat
+      ?? location.location?.latitude
+      ?? location.location?.lat
+  );
+  const longitude = toFiniteNumber(
+    location.longitude
+      ?? location.lng
+      ?? location.lon
+      ?? location.location?.longitude
+      ?? location.location?.lng
+      ?? location.location?.lon
+  );
+
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+  return { latitude, longitude };
+}
+
+function haversineDistanceKm(aLat, aLng, bLat, bLng) {
+  const toRad = (deg) => (Number(deg) * Math.PI) / 180;
+  const dLat = toRad(bLat - aLat);
+  const dLng = toRad(bLng - aLng);
+  const lat1 = toRad(aLat);
+  const lat2 = toRad(bLat);
+  const sinLat = Math.sin(dLat / 2);
+  const sinLng = Math.sin(dLng / 2);
+  const h = (sinLat * sinLat) + (Math.cos(lat1) * Math.cos(lat2) * sinLng * sinLng);
+  return 6371 * (2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h)));
+}
+
+function resolveCustomProductSearchRadiusKm(rawRadius) {
+  const direct = Number(rawRadius);
+  if (Number.isFinite(direct) && direct > 0) return direct;
+
+  const envCustom = Number(process.env.WHOLESALE_CUSTOM_PRODUCT_RADIUS_KM);
+  if (Number.isFinite(envCustom) && envCustom > 0) return envCustom;
+
+  const envDefault = Number(process.env.WHOLESALE_SEARCH_RADIUS_KM);
+  if (Number.isFinite(envDefault) && envDefault > 0) return envDefault;
+
+  return 120;
+}
+
+function isCustomCatalogItem(item) {
+  if (!item || typeof item !== 'object') return false;
+  if (item.is_custom === true || item.isCustom === true) return true;
+  if (String(item.inventory_source || '').toLowerCase() === 'custom') return true;
+  if (Array.isArray(item.quality_flags) && item.quality_flags.includes('custom_product')) return true;
+
+  return Array.isArray(item.farms) && item.farms.some((farm) => {
+    if (!farm || typeof farm !== 'object') return false;
+    if (farm.is_custom === true || farm.isCustom === true) return true;
+    if (String(farm.inventory_source || '').toLowerCase() === 'custom') return true;
+    return Array.isArray(farm.quality_flags) && farm.quality_flags.includes('custom_product');
+  });
+}
+
+function filterCustomCatalogItemsBySearchArea(items, options = {}) {
+  const list = Array.isArray(items) ? items : [];
+  const farmLocationById = options.farmLocationById instanceof Map ? options.farmLocationById : new Map();
+  const buyerCoords = extractCoordinates(options.buyerLocation || null);
+  const radiusKm = resolveCustomProductSearchRadiusKm(options.radiusKm);
+
+  return list
+    .map((item) => {
+      const farms = Array.isArray(item?.farms) ? item.farms : [];
+      const customItem = isCustomCatalogItem(item);
+
+      const scopedFarms = farms
+        .map((farm) => {
+          const fallbackFarmLocation = farmLocationById.get(String(farm?.farm_id || farm?.id || '')) || {};
+          const farmLocation = farm?.farm_location || farm?.location || fallbackFarmLocation;
+          const farmCoords = extractCoordinates(farmLocation);
+
+          if (customItem) {
+            if (!buyerCoords || !farmCoords) return null;
+            const distanceKm = haversineDistanceKm(
+              buyerCoords.latitude,
+              buyerCoords.longitude,
+              farmCoords.latitude,
+              farmCoords.longitude
+            );
+            if (!(distanceKm <= radiusKm)) return null;
+            return { ...farm, distance_km: Number(distanceKm.toFixed(2)) };
+          }
+
+          if (!buyerCoords || !farmCoords) return farm;
+          return {
+            ...farm,
+            distance_km: Number(haversineDistanceKm(
+              buyerCoords.latitude,
+              buyerCoords.longitude,
+              farmCoords.latitude,
+              farmCoords.longitude
+            ).toFixed(2))
+          };
+        })
+        .filter(Boolean);
+
+      if (scopedFarms.length === 0) return null;
+
+      const totalAvailable = scopedFarms.reduce((sum, farm) => {
+        const qty = Number(farm.quantity_available ?? farm.qty_available ?? 0);
+        return sum + (Number.isFinite(qty) ? qty : 0);
+      }, 0);
+
+      const nextItem = {
+        ...item,
+        farms: scopedFarms,
+        is_custom: customItem
+      };
+
+      if ('total_qty_available' in nextItem) nextItem.total_qty_available = totalAvailable;
+      if ('qty_available' in nextItem) nextItem.qty_available = totalAvailable;
+      if ('total_available' in nextItem) nextItem.total_available = totalAvailable;
+
+      return nextItem;
+    })
+    .filter(Boolean);
 }
 
 const DELIVERY_WINDOWS = ['morning', 'afternoon', 'evening'];
@@ -1002,7 +1180,8 @@ router.get('/inventory', async (req, res) => {
     const result = await query(
       `SELECT product_id, product_name, sku, sku_name, quantity_available,
               manual_quantity_lbs, wholesale_price, retail_price, unit,
-              quantity_unit, category, variety, inventory_source, last_updated
+              quantity_unit, category, variety, inventory_source, is_custom,
+              description, thumbnail_url, last_updated
        FROM farm_inventory
        WHERE farm_id = $1
          AND COALESCE(quantity_available, manual_quantity_lbs, 0) > 0
@@ -1012,6 +1191,12 @@ router.get('/inventory', async (req, res) => {
 
     const lots = result.rows.map(row => {
       const qty = Number(row.quantity_available ?? row.manual_quantity_lbs ?? 0);
+      const inventorySource = String(row.inventory_source || '').toLowerCase();
+      const isCustom = row.is_custom === true || inventorySource === 'custom';
+      const qualityFlags = [];
+      if (inventorySource === 'manual') qualityFlags.push('manual_entry');
+      if (isCustom) qualityFlags.push('custom_product');
+
       return {
         lot_id: row.product_id,
         sku_id: row.sku || row.product_id,
@@ -1021,10 +1206,14 @@ router.get('/inventory', async (req, res) => {
         pack_size: 1,
         unit: row.quantity_unit || row.unit || 'lb',
         price_per_unit: Number(row.wholesale_price ?? row.retail_price ?? 0),
-        quality_flags: row.inventory_source === 'manual' ? ['manual_entry'] : [],
+        quality_flags: qualityFlags,
         harvest_date_start: row.last_updated || null,
         harvest_date_end: null,
-        location: null
+        location: null,
+        inventory_source: row.inventory_source || null,
+        is_custom: isCustom,
+        description: row.description || null,
+        thumbnail_url: row.thumbnail_url || null
       };
     });
 
@@ -1074,12 +1263,20 @@ router.get('/catalog', async (req, res, next) => {
     if (catalogMode === 'network' || req.app?.locals?.databaseReady === false) {
       const nearLat = req.query.nearLat ?? req.query.lat;
       const nearLng = req.query.nearLng ?? req.query.lng;
-      const buyerLocation = (nearLat && nearLng)
-        ? { latitude: Number(nearLat), longitude: Number(nearLng) }
+      const nearLatNum = Number(nearLat);
+      const nearLngNum = Number(nearLng);
+      const buyerLocation = (Number.isFinite(nearLatNum) && Number.isFinite(nearLngNum))
+        ? { latitude: nearLatNum, longitude: nearLngNum }
         : null;
+      const customSearchRadiusKm = resolveCustomProductSearchRadiusKm(req.query.searchRadiusKm ?? req.query.radiusKm);
 
-      const catalog = await buildAggregateCatalog({ buyerLocation });
+      const catalog = await buildAggregateCatalog({
+        buyerLocation,
+        customProductRadiusKm: customSearchRadiusKm,
+        enforceCustomSearchArea: true
+      });
       const farmId = req.query.farmId ? String(req.query.farmId) : null;
+      const networkFarmLocationById = new Map((catalog.farms || []).map((farm) => [String(farm.farm_id || ''), farm.location || farm]));
 
       let items = catalog.items || catalog.skus || [];
 
@@ -1096,7 +1293,9 @@ router.get('/catalog', async (req, res, next) => {
             `SELECT i.product_id, i.product_name, i.sku, i.sku_name,
                     i.quantity_available, i.manual_quantity_lbs,
                     i.wholesale_price, i.retail_price, i.unit, i.quantity_unit,
-                    i.category, i.farm_id, f.name AS farm_name
+                    i.category, i.farm_id, i.inventory_source, i.is_custom,
+                    i.description, i.thumbnail_url,
+                    f.name AS farm_name, f.metadata AS farm_metadata
              FROM farm_inventory i
              JOIN farms f ON f.farm_id = i.farm_id
              WHERE f.status IN ('active','online')
@@ -1116,6 +1315,10 @@ router.get('/catalog', async (req, res, next) => {
                 price_per_unit: Number(row.wholesale_price ?? row.retail_price ?? 0),
                 wholesale_price: Number(row.wholesale_price ?? 0),
                 retail_price: Number(row.retail_price ?? 0),
+                inventory_source: row.inventory_source || null,
+                is_custom: row.is_custom === true || String(row.inventory_source || '').toLowerCase() === 'custom',
+                description: row.description || null,
+                thumbnail_url: row.thumbnail_url || null,
                 total_qty_available: 0,
                 qty_available: 0,
                 farms: []
@@ -1124,13 +1327,24 @@ router.get('/catalog', async (req, res, next) => {
             const entry = skuMap.get(skuId);
             entry.total_qty_available += qty;
             entry.qty_available += qty;
+            entry.is_custom = entry.is_custom || row.is_custom === true || String(row.inventory_source || '').toLowerCase() === 'custom';
+            if (!entry.description && row.description) entry.description = row.description;
+            if (!entry.thumbnail_url && row.thumbnail_url) entry.thumbnail_url = row.thumbnail_url;
             entry.farms.push({
               farm_id: row.farm_id,
               farm_name: row.farm_name,
               quantity_available: qty,
               qty_available: qty,
-              price_per_unit: Number(row.wholesale_price ?? row.retail_price ?? 0)
+              price_per_unit: Number(row.wholesale_price ?? row.retail_price ?? 0),
+              inventory_source: row.inventory_source || null,
+              is_custom: row.is_custom === true || String(row.inventory_source || '').toLowerCase() === 'custom',
+              quality_flags: (row.is_custom === true || String(row.inventory_source || '').toLowerCase() === 'custom') ? ['custom_product'] : [],
+              location: row.farm_metadata?.location || row.farm_metadata || null
             });
+
+            if (!networkFarmLocationById.has(String(row.farm_id || '')) && row.farm_metadata) {
+              networkFarmLocationById.set(String(row.farm_id || ''), row.farm_metadata?.location || row.farm_metadata);
+            }
           }
           items = Array.from(skuMap.values());
         } catch (dbErr) {
@@ -1153,6 +1367,12 @@ router.get('/catalog', async (req, res, next) => {
           return tb - ta;
         });
       }
+
+      items = filterCustomCatalogItemsBySearchArea(items, {
+        buyerLocation,
+        radiusKm: customSearchRadiusKm,
+        farmLocationById: networkFarmLocationById
+      });
 
       items = applyFormulaPricingToCatalogSkus(items, pricingContext, discountProfile);
 
@@ -1191,6 +1411,14 @@ router.get('/catalog', async (req, res, next) => {
     } = req.query;
 
     const farmId = req.query.farmId ? String(req.query.farmId) : null;
+    const nearLat = req.query.nearLat ?? req.query.lat;
+    const nearLng = req.query.nearLng ?? req.query.lng;
+    const nearLatNum = Number(nearLat);
+    const nearLngNum = Number(nearLng);
+    const buyerLocation = (Number.isFinite(nearLatNum) && Number.isFinite(nearLngNum))
+      ? { latitude: nearLatNum, longitude: nearLngNum }
+      : null;
+    const customSearchRadiusKm = resolveCustomProductSearchRadiusKm(req.query.searchRadiusKm ?? req.query.radiusKm);
 
     // Parse array parameters
     const certFilter = certifications ? (Array.isArray(certifications) ? certifications : [certifications]) : [];
@@ -1275,6 +1503,10 @@ router.get('/catalog', async (req, res, next) => {
         i.product_name,
         i.category,
         i.variety,
+        i.description,
+        i.thumbnail_url,
+        i.inventory_source,
+        COALESCE(i.is_custom, FALSE) AS is_custom,
         i.quantity_available,
         i.quantity_unit,
         i.wholesale_price,
@@ -1286,6 +1518,7 @@ router.get('/catalog', async (req, res, next) => {
         f.name as farm_name,
         f.city,
         f.state,
+        f.metadata AS farm_metadata,
         f.certifications as farm_certifications,
         f.practices as farm_practices,
         f.attributes as farm_attributes
@@ -1296,9 +1529,34 @@ router.get('/catalog', async (req, res, next) => {
       LIMIT $${paramIndex++} OFFSET $${paramIndex++}
     `, params);
 
+    const dbFarmLocationById = new Map();
+    const catalogRows = (catalogResult.rows || []).filter((row) => {
+      const farmKey = String(row.farm_id || '');
+      const farmLocation = row.farm_metadata?.location || row.farm_metadata || null;
+      if (farmKey && farmLocation && !dbFarmLocationById.has(farmKey)) {
+        dbFarmLocationById.set(farmKey, farmLocation);
+      }
+
+      const isCustomRow = row.is_custom === true || String(row.inventory_source || '').toLowerCase() === 'custom';
+      if (!isCustomRow) return true;
+
+      const buyerCoords = extractCoordinates(buyerLocation);
+      if (!buyerCoords) return false;
+
+      const farmCoords = extractCoordinates(farmLocation);
+      if (!farmCoords) return false;
+
+      return haversineDistanceKm(
+        buyerCoords.latitude,
+        buyerCoords.longitude,
+        farmCoords.latitude,
+        farmCoords.longitude
+      ) <= customSearchRadiusKm;
+    });
+
     // Fill missing wholesale prices from Crop Pricing page
     const blankPriceFarmIds = [...new Set(
-      catalogResult.rows
+      catalogRows
         .filter(r => !r.wholesale_price || Number(r.wholesale_price) <= 0)
         .map(r => r.farm_id)
     )];
@@ -1315,7 +1573,7 @@ router.get('/catalog', async (req, res, next) => {
         }
       } catch (_) { /* non-fatal */ }
     }
-    for (const row of catalogResult.rows) {
+    for (const row of catalogRows) {
       if (Number(row.wholesale_price || 0) <= 0 || Number(row.retail_price || 0) <= 0) {
         const pm = farmPriceMaps[row.farm_id];
         if (pm) {
@@ -1329,12 +1587,16 @@ router.get('/catalog', async (req, res, next) => {
     }
 
     // Format response
-    const items = catalogResult.rows.map(row => ({
+    const items = catalogRows.map(row => ({
       id: row.id,
       productId: row.product_id,
       name: row.product_name,
       category: row.category,
       variety: row.variety,
+      description: row.description || null,
+      thumbnailUrl: row.thumbnail_url || null,
+      isCustom: row.is_custom === true || String(row.inventory_source || '').toLowerCase() === 'custom',
+      inventorySource: row.inventory_source || null,
       quantity: row.quantity_available,
       unit: row.quantity_unit,
       wholesalePrice: parseFloat(row.wholesale_price),
@@ -1350,6 +1612,7 @@ router.get('/catalog', async (req, res, next) => {
         name: row.farm_name,
         city: row.city,
         state: row.state,
+        location: row.farm_metadata?.location || row.farm_metadata || null,
         certifications: row.farm_certifications || [],
         practices: row.farm_practices || [],
         attributes: row.farm_attributes || []
@@ -1359,9 +1622,11 @@ router.get('/catalog', async (req, res, next) => {
 
     // Buyer-portal SKU shape (aggregate by product_id)
     const skusById = new Map();
-    for (const row of catalogResult.rows) {
+    for (const row of catalogRows) {
       const skuId = String(row.product_id || row.product_name || row.id);
       const existing = skusById.get(skuId);
+      const isCustomRow = row.is_custom === true || String(row.inventory_source || '').toLowerCase() === 'custom';
+      const farmLocation = row.farm_metadata?.location || row.farm_metadata || [row.city, row.state].filter(Boolean).join(', ');
 
       const farmEntry = {
         farm_id: row.farm_id,
@@ -1370,11 +1635,14 @@ router.get('/catalog', async (req, res, next) => {
         quantity_available: Number(row.quantity_available || 0),
         unit: row.quantity_unit,
         price_per_unit: Number(row.wholesale_price || 0),
+        inventory_source: row.inventory_source || null,
+        is_custom: isCustomRow,
+        quality_flags: isCustomRow ? ['custom_product'] : [],
         organic: Boolean(row.source_data?.organic),
         certifications: row.farm_certifications || [],
         practices: row.farm_practices || [],
         attributes: row.farm_attributes || [],
-        location: [row.city, row.state].filter(Boolean).join(', ')
+        location: farmLocation
       };
 
       if (!existing) {
@@ -1384,6 +1652,10 @@ router.get('/catalog', async (req, res, next) => {
           size: row.variety || 'Bulk',
           unit: row.quantity_unit,
           price_per_unit: Number(row.wholesale_price || 0),
+          inventory_source: row.inventory_source || null,
+          is_custom: isCustomRow,
+          description: row.description || null,
+          thumbnail_url: row.thumbnail_url || null,
           total_qty_available: Number(row.quantity_available || 0),
           farms: [farmEntry],
           organic: Boolean(row.source_data?.organic)
@@ -1394,10 +1666,18 @@ router.get('/catalog', async (req, res, next) => {
       existing.farms.push(farmEntry);
       existing.total_qty_available += Number(row.quantity_available || 0);
       existing.price_per_unit = Math.min(Number(existing.price_per_unit || 0), Number(row.wholesale_price || 0));
+      existing.is_custom = existing.is_custom || isCustomRow;
       existing.organic = existing.organic || Boolean(row.source_data?.organic);
+      if (!existing.description && row.description) existing.description = row.description;
+      if (!existing.thumbnail_url && row.thumbnail_url) existing.thumbnail_url = row.thumbnail_url;
     }
 
-    const skus = applyFormulaPricingToCatalogSkus(Array.from(skusById.values()), pricingContext, discountProfile);
+    let skus = applyFormulaPricingToCatalogSkus(Array.from(skusById.values()), pricingContext, discountProfile);
+    skus = filterCustomCatalogItemsBySearchArea(skus, {
+      buyerLocation,
+      radiusKm: customSearchRadiusKm,
+      farmLocationById: dbFarmLocationById
+    });
 
     const skuById = new Map(skus.map((sku) => [String(sku.sku_id), sku]));
     const pricedItems = items.map((item) => {
@@ -2251,7 +2531,7 @@ router.post('/checkout/preview', checkoutLimiter, requireWholesaleDbForCriticalP
 
     // Limited mode: allocate from network snapshots (proximity-aware)
     if (shouldUseNetworkAllocation(req)) {
-      const catalog = await buildAggregateCatalog({ buyerLocation });
+      const catalog = await buildAggregateCatalog({ buyerLocation, enforceCustomSearchArea: true });
       const result = await allocateCartFromNetwork({ cart, catalog, commissionRate, sourcing, buyerLocation });
       if (!result.allocation.farm_sub_orders?.length) {
         return res.status(400).json({ status: 'error', message: 'Unable to allocate items with current inventory' });
@@ -2363,7 +2643,7 @@ router.post('/checkout/execute', checkoutLimiter, requireWholesaleDbForCriticalP
 
     // Limited mode: allocate from network snapshots (proximity-aware)
     if (shouldUseNetworkAllocation(req)) {
-      const catalog = await buildAggregateCatalog({ buyerLocation });
+      const catalog = await buildAggregateCatalog({ buyerLocation, enforceCustomSearchArea: true });
       const result = await allocateCartFromNetwork({ cart, catalog, commissionRate, sourcing, buyerLocation });
       if (!result.allocation.farm_sub_orders?.length) {
         return res.status(400).json({ status: 'error', message: 'Unable to allocate items with current inventory' });

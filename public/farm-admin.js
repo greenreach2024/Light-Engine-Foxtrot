@@ -508,13 +508,18 @@ async function loadDashboardData() {
         }
         
         // Update KPI cards with inventory data
-        const hasGrowData = inventoryData && inventoryData.activeTrays > 0;
+        const hasGrowData = Boolean(
+            inventoryData && (
+                Number(inventoryData.activeTrays || 0) > 0
+                || Number(inventoryData.totalPlants || 0) > 0
+            )
+        );
 
         if (hasGrowData) {
             document.getElementById('kpi-trays').textContent = inventoryData.activeTrays.toLocaleString();
             document.getElementById('kpi-plants').textContent = inventoryData.totalPlants.toLocaleString();
-            document.getElementById('kpi-trays-change').textContent = 'Live grow data';
-            document.getElementById('kpi-plants-change').textContent = 'Live grow data';
+            document.getElementById('kpi-trays-change').textContent = 'Live inventory data';
+            document.getElementById('kpi-plants-change').textContent = 'Live inventory data';
         } else {
             document.getElementById('kpi-trays').textContent = '--';
             document.getElementById('kpi-plants').textContent = '--';
@@ -532,6 +537,17 @@ async function loadDashboardData() {
                 nextHarvest = {
                     daysUntil: nextTray.harvestIn,
                     cropName: nextTray.crop || 'Unknown'
+                };
+            }
+        }
+
+        if (!nextHarvest) {
+            const generalInventory = inventoryData?.byFarm?.[0]?.generalInventory;
+            if (Array.isArray(generalInventory) && generalInventory.length > 0) {
+                const leadItem = generalInventory[0];
+                nextHarvest = {
+                    daysUntil: 0,
+                    cropName: `${leadItem.productName || leadItem.crop || 'General inventory'} ready now`
                 };
             }
         }

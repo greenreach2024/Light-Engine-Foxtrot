@@ -1749,16 +1749,21 @@
         return;
       }
       tbody.innerHTML = products.map(p => {
-        const autoLbs = Number(p.auto_quantity_lbs || 0).toFixed(2);
-        const manualLbs = Number(p.manual_quantity_lbs || 0).toFixed(2);
-        const totalLbs = Number(p.available_lbs || p.quantity_available || (Number(autoLbs) + Number(manualLbs))).toFixed(2);
+        const totalLbsValue = Number(p.available_lbs ?? p.quantity_available ?? 0);
+        const manualRaw = Number(p.manual_available_lbs ?? p.manual_quantity_lbs ?? 0);
+        const manualLbsValue = Math.max(0, Math.min(manualRaw, totalLbsValue));
+        const autoRaw = Number(p.auto_available_lbs ?? (totalLbsValue - manualLbsValue));
+        const autoLbsValue = Math.max(0, autoRaw);
+        const autoLbs = autoLbsValue.toFixed(2);
+        const manualLbs = manualLbsValue.toFixed(2);
+        const totalLbs = totalLbsValue.toFixed(2);
         const retail = Number(p.retail_price || p.price || 0).toFixed(2);
         const wholesale = Number(p.wholesale_price || p.price || 0).toFixed(2);
         const src = p.is_custom ? 'custom' : (p.inventory_source || 'auto');
         const pid = escAttr(p.product_id);
         const actions = [];
         // Edit button for all items
-        actions.push(`<button class="btn-sm" onclick="openEditModal('${pid}', ${manualLbs}, ${retail}, ${wholesale})" style="background:#3b82f6;color:#fff;margin-right:4px;">Edit</button>`);
+        actions.push(`<button class="btn-sm" onclick="openEditModal('${pid}', ${manualLbsValue}, '${escAttr(p.product_name)}', ${retail}, ${wholesale})" style="background:#3b82f6;color:#fff;margin-right:4px;">Edit</button>`);
         // Remove: soft-remove for hybrid/auto, or force-remove option
         if (src === 'manual' || src === 'hybrid') {
           actions.push(`<button class="btn-sm danger" onclick="deleteManualItem('${pid}')">Remove</button>`);
@@ -1839,7 +1844,7 @@
       }
     }
 
-    function openEditModal(productId, currentManualLbs, currentRetail, currentWholesale) {
+    function openEditModal(productId, currentManualLbs, productName, currentRetail, currentWholesale) {
       // Remove existing modal if any
       const existing = document.getElementById('inv-edit-modal');
       if (existing) existing.remove();
@@ -1850,17 +1855,14 @@
       modal.innerHTML = `
         <div style="background:#1e293b;border:1px solid rgba(96,165,250,0.3);border-radius:12px;padding:24px;width:340px;max-width:90vw;box-shadow:0 20px 40px rgba(0,0,0,0.5);">
           <h3 style="margin:0 0 16px;color:#e2e8f0;font-size:1.1rem;">Edit Inventory</h3>
+          <div style="margin-bottom:10px;color:#cbd5e1;font-size:0.9rem;">${escHtml(productName || productId)}</div>
           <div style="margin-bottom:12px;">
-            <label style="display:block;color:#94a3b8;font-size:0.85rem;margin-bottom:4px;">Manual Quantity (lbs)</label>
+            <label style="display:block;color:#94a3b8;font-size:0.85rem;margin-bottom:4px;">Manual Inventory Contribution (lbs)</label>
             <input id="edit-manual-lbs" type="number" step="0.01" min="0" value="${currentManualLbs}" style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid #334155;background:#0f172a;color:#e2e8f0;font-size:0.95rem;" />
           </div>
-          <div style="margin-bottom:12px;">
-            <label style="display:block;color:#94a3b8;font-size:0.85rem;margin-bottom:4px;">Retail Price ($/lb)</label>
-            <input id="edit-retail" type="number" step="0.01" min="0" value="${currentRetail}" style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid #334155;background:#0f172a;color:#e2e8f0;font-size:0.95rem;" />
-          </div>
-          <div style="margin-bottom:16px;">
-            <label style="display:block;color:#94a3b8;font-size:0.85rem;margin-bottom:4px;">Wholesale Price ($/lb)</label>
-            <input id="edit-wholesale" type="number" step="0.01" min="0" value="${currentWholesale}" style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid #334155;background:#0f172a;color:#e2e8f0;font-size:0.95rem;" />
+          <div style="margin-bottom:16px;padding:10px 12px;border-radius:8px;border:1px solid rgba(96,165,250,0.3);background:rgba(30,41,59,0.65);color:#94a3b8;font-size:0.85rem;line-height:1.4;">
+            Pricing is managed on Crop Pricing.<br>
+            Current retail: <span style="color:#e2e8f0;">$${currentRetail}</span> | wholesale: <span style="color:#e2e8f0;">$${currentWholesale}</span>
           </div>
           <div style="display:flex;gap:8px;justify-content:flex-end;">
             <button onclick="closeEditModal()" style="padding:8px 16px;border-radius:6px;border:1px solid #334155;background:transparent;color:#94a3b8;cursor:pointer;">Cancel</button>
@@ -1879,8 +1881,6 @@
 
     async function saveEdit(productId) {
       const manualLbs = parseFloat(document.getElementById('edit-manual-lbs').value);
-      const retail = parseFloat(document.getElementById('edit-retail').value);
-      const wholesale = parseFloat(document.getElementById('edit-wholesale').value);
 
       if (isNaN(manualLbs) || manualLbs < 0) { alert('Valid manual quantity is required.'); return; }
 
@@ -1889,9 +1889,7 @@
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            quantity_lbs: manualLbs,
-            retail_price: isNaN(retail) ? undefined : retail,
-            wholesale_price: isNaN(wholesale) ? undefined : wholesale
+            quantity_lbs: manualLbs
           })
         });
         if (!resp.ok) { const e = await resp.json().catch(() => ({})); throw new Error(e.error || 'Update failed'); }

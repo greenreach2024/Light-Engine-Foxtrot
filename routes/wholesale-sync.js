@@ -345,7 +345,7 @@ router.get('/inventory', async (req, res) => {
         const dbResult = await db.query(
           `SELECT product_id, product_name, quantity_available, manual_quantity_lbs,
                   quantity_unit, wholesale_price, retail_price, category,
-                  inventory_source
+                  inventory_source, is_custom, description, thumbnail_url
            FROM farm_inventory
            WHERE farm_id = $1
              AND COALESCE(quantity_available, manual_quantity_lbs, 0) > 0
@@ -360,10 +360,20 @@ router.get('/inventory', async (req, res) => {
           const deductedQty = Number(deductedBySku.get(skuId) || 0);
           const actualAvailable = Math.max(0, qtyLbs - reservedQty - deductedQty);
           const pricePerUnit = Number(row.wholesale_price || row.retail_price || 0);
+          const inventorySource = String(row.inventory_source || '').toLowerCase();
+          const isCustom = inventorySource === 'custom' || row.is_custom === true;
+          const qualityFlags = ['local', 'vertical_farm'];
+          if (inventorySource === 'manual') {
+            qualityFlags.push('manual_entry');
+          }
+          if (isCustom) {
+            qualityFlags.push('custom_product');
+          }
+
           lots.push({
             lot_id: `LOT-MANUAL-${row.product_id}`,
             qr_payload: `GRTRACE|${farmInfo.farmId}|LOT-MANUAL-${row.product_id}|${skuId}|${today.toISOString()}`,
-            label_text: `${cropName} (manual entry)`,
+            label_text: isCustom ? `${cropName} (custom product)` : `${cropName} (manual entry)`,
             sku_id: skuId,
             sku_name: `${cropName}, ${qtyLbs} lb`,
             qty_available: actualAvailable,
@@ -374,10 +384,14 @@ router.get('/inventory', async (req, res) => {
             price_per_unit: pricePerUnit,
             harvest_date_start: today.toISOString(),
             harvest_date_end: today.toISOString(),
-            quality_flags: ['local', 'vertical_farm', 'manual_entry'],
+            quality_flags: qualityFlags,
             location: row.category || 'Manual',
             crop_type: cropName,
-            days_to_harvest: 0
+            days_to_harvest: 0,
+            inventory_source: row.inventory_source || null,
+            is_custom: isCustom,
+            description: row.description || null,
+            thumbnail_url: row.thumbnail_url || null
           });
         }
         if (dbResult.rows.length > 0) {

@@ -34,35 +34,45 @@ router.get('/', async (req, res) => {
     if (db) {
       try {
         const pgResult = await db.query(
-          'SELECT * FROM farm_inventory WHERE farm_id = $1 ORDER BY product_name',
+          "SELECT * FROM farm_inventory WHERE farm_id = $1 AND COALESCE(status, 'active') != 'inactive' ORDER BY product_name",
           [farmId]
         );
-        const existingSkus = new Set(products.map(p => p.sku_id));
+
+        const toDbProduct = (row, existing = {}) => {
+          const skuKey = row.sku_id || row.product_id;
+          const availableQty = Number(row.quantity_available || row.quantity || 0);
+          const reservedQty = Number(existing.reserved || 0);
+          return {
+            ...existing,
+            sku_id: skuKey,
+            product_id: row.product_id,
+            name: row.product_name,
+            product_name: row.product_name,
+            sku_name: row.sku_name || row.product_name,
+            sku: row.sku || skuKey,
+            category: row.category || existing.category || 'produce',
+            unit: row.unit || existing.unit || 'lb',
+            quantity: availableQty,
+            available: availableQty,
+            quantity_available: availableQty,
+            reserved: reservedQty,
+            unit_price: Number(row.retail_price || row.price || 0),
+            retail_price: Number(row.retail_price || row.price || 0),
+            wholesale_price: Number(row.wholesale_price || row.price || 0),
+            price: Number(row.retail_price || row.price || 0),
+            inventory_source: row.inventory_source || existing.inventory_source || 'manual',
+            last_updated: row.last_updated,
+            updated_at: row.last_updated
+          };
+        };
+
         for (const row of pgResult.rows) {
           const skuKey = row.sku_id || row.product_id;
-          if (!existingSkus.has(skuKey)) {
-            products.push({
-              sku_id: skuKey,
-              product_id: row.product_id,
-              name: row.product_name,
-              product_name: row.product_name,
-              sku_name: row.sku_name || row.product_name,
-              sku: row.sku || skuKey,
-              category: row.category || 'produce',
-              unit: row.unit || 'lb',
-              quantity: Number(row.quantity_available || row.quantity || 0),
-              available: Number(row.quantity_available || row.quantity || 0),
-              quantity_available: Number(row.quantity_available || row.quantity || 0),
-              reserved: 0,
-              unit_price: Number(row.retail_price || row.price || 0),
-              retail_price: Number(row.retail_price || row.price || 0),
-              wholesale_price: Number(row.wholesale_price || row.price || 0),
-              price: Number(row.retail_price || row.price || 0),
-              inventory_source: row.inventory_source || 'manual',
-              last_updated: row.last_updated,
-              updated_at: row.last_updated
-            });
-            existingSkus.add(skuKey);
+          const existingIndex = products.findIndex(p => (p.sku_id || p.product_id) === skuKey);
+          if (existingIndex >= 0) {
+            products[existingIndex] = toDbProduct(row, products[existingIndex]);
+          } else {
+            products.push(toDbProduct(row));
           }
         }
         if (pgResult.rows.length > 0) {
@@ -141,32 +151,41 @@ router.get('/wholesale', async (req, res) => {
     if (db) {
       try {
         const pgResult = await db.query(
-          "SELECT * FROM farm_inventory WHERE farm_id = $1 AND available_for_wholesale = true ORDER BY product_name",
+          "SELECT * FROM farm_inventory WHERE farm_id = $1 AND available_for_wholesale = true AND COALESCE(status, 'active') != 'inactive' ORDER BY product_name",
           [farmId]
         );
-        const existingSkus = new Set(products.map(p => p.sku_id));
+
+        const toDbWholesaleProduct = (row, existing = {}) => {
+          const skuKey = row.sku_id || row.product_id;
+          const availableQty = Number(row.quantity_available || row.quantity || 0);
+          return {
+            ...existing,
+            sku_id: skuKey,
+            product_id: row.product_id,
+            name: row.product_name,
+            product_name: row.product_name,
+            sku_name: row.sku_name || row.product_name,
+            sku: row.sku || skuKey,
+            category: row.category || existing.category || 'produce',
+            unit: row.unit || existing.unit || 'lb',
+            quantity: availableQty,
+            available: availableQty,
+            reserved: Number(existing.reserved || 0),
+            unit_price: Number(row.wholesale_price || row.retail_price || row.price || 0),
+            retail_price: Number(row.retail_price || row.price || 0),
+            wholesale_price: Number(row.wholesale_price || row.price || 0),
+            inventory_source: row.inventory_source || existing.inventory_source || 'manual',
+            last_updated: row.last_updated
+          };
+        };
+
         for (const row of pgResult.rows) {
           const skuKey = row.sku_id || row.product_id;
-          if (!existingSkus.has(skuKey)) {
-            products.push({
-              sku_id: skuKey,
-              product_id: row.product_id,
-              name: row.product_name,
-              product_name: row.product_name,
-              sku_name: row.sku_name || row.product_name,
-              sku: row.sku || skuKey,
-              category: row.category || 'produce',
-              unit: row.unit || 'lb',
-              quantity: Number(row.quantity_available || row.quantity || 0),
-              available: Number(row.quantity_available || row.quantity || 0),
-              reserved: 0,
-              unit_price: Number(row.wholesale_price || row.retail_price || row.price || 0),
-              retail_price: Number(row.retail_price || row.price || 0),
-              wholesale_price: Number(row.wholesale_price || row.price || 0),
-              inventory_source: row.inventory_source || 'manual',
-              last_updated: row.last_updated
-            });
-            existingSkus.add(skuKey);
+          const existingIndex = products.findIndex(p => (p.sku_id || p.product_id) === skuKey);
+          if (existingIndex >= 0) {
+            products[existingIndex] = toDbWholesaleProduct(row, products[existingIndex]);
+          } else {
+            products.push(toDbWholesaleProduct(row));
           }
         }
       } catch (pgErr) {

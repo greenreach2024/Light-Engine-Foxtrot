@@ -1042,12 +1042,17 @@
         .map(
           (sku) => `
           <div class="sku-card">
-            ${sku.thumbnail_url ? `<div class="sku-thumbnail"><img src="${escapeAttr(sku.thumbnail_url)}" alt="${escapeAttr(sku.product_name)}" loading="lazy" /></div>` : ''}
+            ${sku.thumbnail_url
+              ? `<div class="sku-thumbnail"><img src="${escapeAttr(sku.thumbnail_url)}" alt="${escapeAttr(sku.product_name)}" loading="lazy" onerror="this.parentElement.outerHTML='<div class=\'sku-thumbnail-placeholder\'>&#9751;</div>'" /></div>`
+              : '<div class="sku-thumbnail-placeholder">&#9751;</div>'}
             <div class="sku-header">
               <div class="sku-name">${escapeHtml(sku.product_name)}</div>
-              ${sku.organic ? '<span class="sku-badge">Organic</span>' : ''}
+              <div class="sku-badges">
+                ${sku.is_custom ? '<span class="sku-badge sku-badge-custom">Custom</span>' : ''}
+                ${sku.organic ? '<span class="sku-badge">Organic</span>' : ''}
+              </div>
             </div>
-            ${sku.description ? `<div class="sku-description">${escapeHtml(sku.description)}</div>` : ''}
+            <div class="sku-description">${sku.description ? escapeHtml(sku.description) : '<span style="font-style:italic;opacity:0.6;">No description available</span>'}</div>
             <div class="sku-meta">
               <div class="sku-meta-row">
                 <span class="sku-meta-label">Size:</span>
@@ -1081,6 +1086,7 @@
                 <div class="farm-tag-container">
                   <span class="farm-tag">${escapeHtml(f.farm_name)}</span>
                   <span class="farm-qty">${f.qty_available} ${escapeHtml(sku.qty_unit || sku.unit)}</span>
+                  ${Number(f.distance_km) > 0 ? `<span class="sku-distance">${Number(f.distance_km).toFixed(1)} km</span>` : ''}
                   <div class="farm-badges">
                     ${this.getFarmCertificationBadges(f.farm_id)}
                     ${this.getFarmQualityBadge(f.farm_id)}
