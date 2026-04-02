@@ -3750,6 +3750,7 @@ async function refreshWholesaleOrders() {
  */
 function renderOrderCard(order) {
     const oid = String(order.order_id || '');
+    const status = String(order.status || order.event || '').trim().toLowerCase() || 'pending';
     const statusConfig = {
         'pending':   { label: 'Pending',   color: '#f59e0b' },
         'confirmed': { label: 'Confirmed', color: '#06b6d4' },
@@ -3761,15 +3762,18 @@ function renderOrderCard(order) {
         'delivered': { label: 'Delivered', color: '#10b981' }
     };
 
-    const config = statusConfig[order.status] || statusConfig['pending'];
+    const config = statusConfig[status] || statusConfig['pending'];
     const orderDate = new Date(order.timestamp).toLocaleString();
     const createdDate = order.created_at ? new Date(order.created_at).toLocaleString() : orderDate;
     const items = order.items || [];
     const total = parseFloat(order.total_amount) || 0;
 
     // 24-hour acceptance deadline
-    const isPending = order.status === 'pending' || order.status === 'pending_verification';
-    const deadline = order.verification_deadline ? new Date(order.verification_deadline) : null;
+    const isPending = status === 'pending' || status === 'pending_verification';
+    const parsedDeadline = order.verification_deadline ? new Date(order.verification_deadline) : null;
+    const createdAtMs = new Date(order.created_at || order.timestamp || Date.now()).getTime();
+    const fallbackDeadline = Number.isFinite(createdAtMs) ? new Date(createdAtMs + 24 * 3600000) : null;
+    const deadline = parsedDeadline && !Number.isNaN(parsedDeadline.getTime()) ? parsedDeadline : fallbackDeadline;
     const now = new Date();
     const deadlineExpired = deadline ? now > deadline : false;
     let deadlineDisplay = '';
@@ -3785,8 +3789,13 @@ function renderOrderCard(order) {
     }
 
     // Buyer info
-    const buyerName = order.buyer_name || '';
     const buyerEmail = order.buyer_email || '';
+    const buyerName = order.buyer_name
+        || order.buyer_business_name
+        || order.business_name
+        || order.customer_name
+        || (buyerEmail ? buyerEmail.split('@')[0] : '')
+        || 'Buyer';
     const buyerPhone = order.buyer_phone || '';
     const buyerLocation = [order.buyer_city, order.buyer_state].filter(Boolean).join(', ');
 
@@ -3956,7 +3965,7 @@ function renderOrderCard(order) {
                         Acceptance window expired -- funds released to buyer
                     </div>
                 ` : ''}
-                ${(order.status === 'confirmed' || order.status === 'processing') ? `
+                ${(status === 'confirmed' || status === 'processing') ? `
                     <button class="btn-primary" onclick="updateOrderStatus('${oid}', 'packed')" style="
                         background: rgba(139, 92, 246, 0.2);
                         border: 1px solid #8b5cf6;
@@ -3969,7 +3978,7 @@ function renderOrderCard(order) {
                         Mark as Packed
                     </button>
                 ` : ''}
-                ${order.status === 'packed' ? `
+                ${status === 'packed' ? `
                     <button class="btn-primary" onclick="updateOrderStatus('${oid}', 'shipped')" style="
                         background: rgba(59, 130, 246, 0.2);
                         border: 1px solid #3b82f6;
