@@ -5293,6 +5293,22 @@ async function syncQuickBooksCustomers() {
 // PAYMENT METHODS FUNCTIONS
 // ============================================================================
 
+function getPaymentAuthHeaders(farmId, extraHeaders = {}) {
+    const headers = {
+        ...extraHeaders,
+        ...(farmId ? { 'X-Farm-ID': farmId } : {})
+    };
+    const token = currentSession?.token
+        || sessionStorage.getItem('token')
+        || localStorage.getItem('token')
+        || localStorage.getItem('auth_token')
+        || '';
+    if (token) {
+        headers.Authorization = `Bearer ${token}`;
+    }
+    return headers;
+}
+
 /**
  * Load payment methods and Square status
  */
@@ -5300,7 +5316,7 @@ async function loadPaymentMethods() {
     try {
         const farmId = currentSession?.farmId || localStorage.getItem('farm_id') || 'LOCAL-FARM';
         const statusResponse = await fetch('/api/farm/square/status', {
-            headers: { 'X-Farm-ID': farmId }
+            headers: getPaymentAuthHeaders(farmId)
         });
         const statusData = await statusResponse.json();
 
@@ -5398,7 +5414,7 @@ async function connectSquare() {
 
         const response = await fetch('/api/farm/square/authorize', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getPaymentAuthHeaders(farmId, { 'Content-Type': 'application/json' }),
             body: JSON.stringify({ farmId: farmId, farmName: farmName })
         });
         const data = await response.json();
@@ -5453,10 +5469,7 @@ async function disconnectSquare() {
         const farmId = currentSession?.farmId || localStorage.getItem('farm_id') || 'LOCAL-FARM';
         const response = await fetch('/api/farm/square/disconnect', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Farm-ID': farmId
-            },
+            headers: getPaymentAuthHeaders(farmId, { 'Content-Type': 'application/json' }),
             body: JSON.stringify({ farmId: farmId })
         });
         const data = await response.json();
@@ -5482,10 +5495,7 @@ async function testSquareConnection() {
         const farmId = currentSession?.farmId || localStorage.getItem('farm_id') || 'LOCAL-FARM';
         const response = await fetch('/api/farm/square/test-payment', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Farm-ID': farmId
-            },
+            headers: getPaymentAuthHeaders(farmId, { 'Content-Type': 'application/json' }),
             body: JSON.stringify({ farmId: farmId })
         });
         const data = await response.json();
@@ -5975,10 +5985,9 @@ async function loadSettings() {
  */
 async function checkSquareStatus() {
     try {
+        const farmId = localStorage.getItem('farmId') || 'demo-farm';
         const response = await fetch('/api/farm/square/status', {
-            headers: {
-                'X-Farm-ID': localStorage.getItem('farmId') || 'demo-farm'
-            }
+            headers: getPaymentAuthHeaders(farmId)
         });
         
         const data = await response.json();

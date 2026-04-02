@@ -40,8 +40,7 @@ import syncRoutes from './routes/sync.js';
 import { hydrateFromDatabase, migrateDefaultFarmData, getInMemoryStore } from './routes/sync.js';
 import wholesaleRoutes from './routes/wholesale.js';
 import squareOAuthProxyRoutes from './routes/square-oauth-proxy.js';
-// NOTE: farm-stripe-setup.js lives at root level and can't resolve express
-// from greenreach-central/node_modules. Stripe setup should proxy to farm server.
+import stripeConnectControlRouter from './routes/stripe-connect-control.js';
 import adminRoutes from './routes/admin.js';
 import adminAuthRoutes from './routes/admin-auth.js';
 import driverApplicationsRoutes from './routes/driver-applications.js';
@@ -3276,35 +3275,8 @@ app.post('/api/farm/auth/login', (req, res, next) => {
 // API routes
 app.use('/api/auth', authRoutes); // Farm authentication
 app.use('/api/admin/auth', adminAuthRoutes); // Central admin authentication
-// Farm Square payment setup routes (proxied to LE)
-app.get('/api/farm/square/status', (req, res) => edgeProxy(req, res, '/api/farm/square/status'));
-app.post('/api/farm/square/authorize', express.json(), (req, res) => edgeProxy(req, res, '/api/farm/square/authorize', 'POST', req.body));
-app.get('/api/farm/square/callback', async (req, res) => {
-  // Custom proxy for callback -- returns HTML, not JSON
-  const edgeUrl = resolveEdgeUrlForProxy();
-  if (!edgeUrl) return res.status(503).send('Light Engine not available');
-  const qs = new URLSearchParams(req.query).toString();
-  try {
-    const cbHeaders = leProxyHeaders();
-    if (req.headers['x-farm-id']) cbHeaders['X-Farm-ID'] = req.headers['x-farm-id'];
-    logger.info('[SquareCallbackProxy] Proxying to LE: ' + edgeUrl + '/api/farm/square/callback');
-    const response = await fetch(edgeUrl + '/api/farm/square/callback?' + qs, {
-      headers: cbHeaders,
-      signal: AbortSignal.timeout(15000)
-    });
-    const text = await response.text();
-    const ct = response.headers.get('content-type') || 'text/html';
-    logger.info('[SquareCallbackProxy] LE responded: ' + response.status + ' (' + ct + ')');
-    res.status(response.status).type(ct).send(text);
-  } catch (err) {
-    logger.error('[SquareCallbackProxy] error:', err.message);
-    res.status(502).send('Square callback proxy failed');
-  }
-});
-app.post('/api/farm/square/refresh', express.json(), (req, res) => edgeProxy(req, res, '/api/farm/square/refresh', 'POST', req.body));
-app.post('/api/farm/square/settings', express.json(), (req, res) => edgeProxy(req, res, '/api/farm/square/settings', 'POST', req.body));
-app.post('/api/farm/square/disconnect', express.json(), (req, res) => edgeProxy(req, res, '/api/farm/square/disconnect', 'POST', req.body));
-app.post('/api/farm/square/test-payment', express.json(), (req, res) => edgeProxy(req, res, '/api/farm/square/test-payment', 'POST', req.body));
+app.use('/api/farm/square', squareOAuthProxyRoutes); // Central-owned Square control plane
+app.use('/api/farm/stripe', stripeConnectControlRouter); // Central-owned Stripe control plane
 
 app.use('/api', customProductsRouter);                       // /api/farm/products/* -- Custom product CRUD (MUST precede /api/farm auth)
 app.use('/api/farms', authOrAdminMiddleware, farmRoutes);
@@ -3372,8 +3344,7 @@ app.use('/api/sync', syncRoutes); // Farms authenticate via API key
 app.use('/api/farm-settings', farmSettingsRoutes); // Settings sync between Central and Light Engine (API key auth)
 app.use('/api/recipes', recipesRoutes); // Read-only public recipes API
 app.use('/api/wholesale', wholesaleRoutes); // Core wholesale: catalog, orders, payments, network farms
-app.use('/api/square-proxy', squareOAuthProxyRoutes); // Square OAuth proxy to farms
-// Stripe setup proxied to farm server (root-level routes can't resolve express from central node_modules)
+app.use('/api/square-proxy', squareOAuthProxyRoutes); // Compatibility alias for legacy admin UI callers
 app.use('/api/admin', adminRoutes); // Admin dashboard API (sub-mounts /wholesale, /recipes, /pricing, /delivery, /ai)
 app.use('/api/delivery/driver-applications', driverApplicationsRoutes); // Public driver enrollment
 app.use('/api/campaign', campaignRoutes); // Field of Dreams campaign (public)
@@ -3385,7 +3356,7 @@ app.use('/api/admin/marketing', adminAuthMiddleware, requireAdminRole('admin', '
 app.use('/api/reports', authOrAdminMiddleware, reportsRoutes); // Financial exports and reports
 app.use('/api/ai-insights', authOrAdminMiddleware, aiInsightsRoutes); // GPT-4 powered AI insights
 app.use('/api/tts', ttsRoutes); // OpenAI TTS voice synthesis (rate-limited per IP, no auth needed)
-app.use('/api/env', authMiddleware, envProxyRoutes); // Environmental data proxy to farm devices
+app.use('/api/env', authOrAdminMiddleware, envProxyRoutes); // Environmental data proxy (own-farm default, admin cross-farm via /network)
 app.use('/discovery/devices', authMiddleware, discoveryProxyRoutes); // Device discovery proxy to farm devices
 app.use('/api/discovery/devices', authMiddleware, discoveryProxyRoutes); // API alias for discovery proxy
 

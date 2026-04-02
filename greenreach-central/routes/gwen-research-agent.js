@@ -34,6 +34,88 @@ const MAX_TOOL_LOOPS = 12;
 const MAX_TOKENS = 4096;
 const MAX_LLM_MESSAGES = 30;
 
+const IS_PRODUCTION_CLOUD =
+  process.env.NODE_ENV === 'production'
+  || process.env.DEPLOYMENT_MODE === 'cloud';
+
+function evaluateExecuteCodePolicy(ctx) {
+  if (!IS_PRODUCTION_CLOUD) {
+    return { allowed: true, mode: 'non-production' };
+  }
+
+  const enabled = String(process.env.GWEN_EXECUTE_CODE_ENABLED || 'false').toLowerCase() === 'true';
+  if (!enabled) {
+    return {
+      allowed: false,
+      reason: 'execute_code is disabled by default in production. Set GWEN_EXECUTE_CODE_ENABLED=true and configure a controlled window.',
+    };
+  }
+
+  const startRaw = String(process.env.GWEN_EXECUTE_CODE_WINDOW_START || '').trim();
+  const endRaw = String(process.env.GWEN_EXECUTE_CODE_WINDOW_END || '').trim();
+  const windowStart = Date.parse(startRaw);
+  const windowEnd = Date.parse(endRaw);
+
+  if (!Number.isFinite(windowStart) || !Number.isFinite(windowEnd) || windowEnd <= windowStart) {
+    return {
+      allowed: false,
+      reason: 'Controlled execution window is not configured. Set GWEN_EXECUTE_CODE_WINDOW_START and GWEN_EXECUTE_CODE_WINDOW_END as ISO timestamps.',
+    };
+  }
+
+  const now = Date.now();
+  if (now < windowStart || now > windowEnd) {
+    return {
+      allowed: false,
+      reason: `Controlled execution window is closed. Allowed window: ${new Date(windowStart).toISOString()} to ${new Date(windowEnd).toISOString()}`,
+    };
+  }
+
+  const allowedFarmsRaw = String(process.env.GWEN_EXECUTE_CODE_ALLOWED_FARMS || '').trim();
+  if (allowedFarmsRaw) {
+    const allowedFarms = new Set(
+      allowedFarmsRaw
+        .split(',')
+        .map((value) => value.trim())
+        .filter(Boolean)
+    );
+
+    if (ctx?.farmId && !allowedFarms.has(ctx.farmId)) {
+      return {
+        allowed: false,
+        reason: `Farm ${ctx.farmId} is not in GWEN_EXECUTE_CODE_ALLOWED_FARMS for the active execution window.`,
+      };
+    }
+  }
+
+  return {
+    allowed: true,
+    mode: 'controlled-window',
+    window_start: new Date(windowStart).toISOString(),
+    window_end: new Date(windowEnd).toISOString(),
+  };
+}
+
+async function recordBlockedExecutionAttempt(params, ctx, reason) {
+  if (!isDatabaseAvailable() || !ctx?.farmId) return;
+  try {
+    await query(
+      'INSERT INTO code_execution_logs (farm_id, study_id, language, code, purpose, status, error, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,NOW())',
+      [
+        ctx.farmId,
+        params.study_id || null,
+        (params.language || 'unknown').toLowerCase(),
+        params.code || '',
+        params.purpose || 'unspecified',
+        'blocked',
+        reason,
+      ]
+    );
+  } catch {
+    // Best-effort audit logging only.
+  }
+}
+
 async function getAnthropicClient() {
   if (anthropicClient) return anthropicClient;
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -4236,9 +4318,21 @@ const GWEN_TOOL_CATALOG = {
     },
     required: ['language', 'code', 'purpose'],
     execute: async (params, ctx) => {
-      if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
       const lang = (params.language || 'python').toLowerCase();
       if (!['python', 'r'].includes(lang)) return { ok: false, error: 'Unsupported language. Use python or r.' };
+
+      const policy = evaluateExecuteCodePolicy(ctx);
+      if (!policy.allowed) {
+        await recordBlockedExecutionAttempt(params, ctx, policy.reason);
+        return {
+          ok: false,
+          status: 'blocked',
+          controlled_window_required: true,
+          error: policy.reason,
+        };
+      }
+
+      if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
 
       // Log the execution request
       try {
@@ -5643,8 +5737,11 @@ async function chatWithOpenAI(client, messages, ctx) {
 
 // POST /chat -- Main conversational endpoint
 router.post('/chat', async (req, res) => {
-  const userId = req.adminId || req.userId || 'anon';
-  const farmId = req.farmId || req.body.farm_id;
+  const userId = req.user?.userId || req.userId || req.adminId || req.user?.email || 'anon';
+  const farmId = req.user?.farmId || req.farmId || req.body.farm_id;
+  if (!farmId) {
+    return res.status(400).json({ ok: false, error: 'farm_id required' });
+  }
 
   if (!checkRateLimit(userId)) {
     return res.status(429).json({ ok: false, error: 'Rate limit exceeded. Please wait a moment.' });
@@ -5656,7 +5753,14 @@ router.post('/chat', async (req, res) => {
   }
 
   const convId = conversation_id || crypto.randomUUID();
-  const ctx = { farmId, userId, conversationId: convId };
+  const ctx = {
+    farmId,
+    userId,
+    conversationId: convId,
+    userRole: req.user?.role || null,
+    authMethod: req.user?.authMethod || null,
+    actorEmail: req.user?.email || null,
+  };
 
   try {
     // Load persistent memories for this farm (injected into system prompt)

@@ -235,8 +235,6 @@ import wholesaleOrdersRouter from './routes/wholesale-orders.js';
 import wholesaleFarmPerformanceRouter from './routes/wholesale/farm-performance.js';
 import networkRouter from './routes/network.js';
 import activityHubOrdersRouter from './routes/activity-hub-orders.js';
-import farmSquareSetupRouter from './routes/farm-square-setup.js';
-import farmStripeSetupRouter from './routes/farm-stripe-setup.js';
 import mdnsDiscoveryRouter from './routes/mdns-discovery.js';
 import emailRouter from './server/routes/email-routes.js';
 import { sendEmail as sendEmailViaSES } from './lib/email-service.js';
@@ -13713,27 +13711,74 @@ app.use('/api/wholesale/refunds', wholesaleRefundsRouter);
 app.use('/api/wholesale/oauth/square', wholesaleSquareOAuthRouter);
 
 /**
- * Farm: Square Payment Processing Setup
- * - GET /api/farm/square/status: Check if farm has Square connected
- * - POST /api/farm/square/authorize: Generate OAuth URL for farm's Square account
- * - GET /api/farm/square/callback: Handle OAuth callback from Square
- * - POST /api/farm/square/settings: Save payment processing settings
- * - POST /api/farm/square/disconnect: Disconnect farm's Square account
- * - POST /api/farm/square/test-payment: Test payment in sandbox mode
+ * Farm payment control routes are centralized in GreenReach Central.
+ * LE serves as a thin proxy and does not hold payment control authority.
  */
-app.use('/api/farm/square', farmSquareSetupRouter);
+const getCentralPaymentControlTarget = () =>
+  process.env.GREENREACH_CENTRAL_URL
+  || process.env.CENTRAL_URL
+  || 'https://greenreachgreens.com';
 
-/**
- * Farm: Stripe Payment Processing Setup
- * - GET /api/farm/stripe/status: Check if farm has Stripe connected
- * - POST /api/farm/stripe/authorize: Generate OAuth URL for farm's Stripe Connect account
- * - GET /api/farm/stripe/callback: Handle OAuth callback from Stripe
- * - POST /api/farm/stripe/settings: Save Stripe payment processing settings
- * - POST /api/farm/stripe/disconnect: Disconnect farm's Stripe account
- * - POST /api/farm/stripe/test-payment: Test payment processing
- * - POST /api/farm/stripe/webhook: Handle Stripe webhook events
- */
-app.use('/api/farm/stripe', farmStripeSetupRouter);
+function attachPaymentProxyHeaders(proxyReq, req) {
+  if (req.headers['authorization']) {
+    proxyReq.setHeader('Authorization', req.headers['authorization']);
+  }
+  if (req.headers['x-farm-id']) {
+    proxyReq.setHeader('X-Farm-ID', req.headers['x-farm-id']);
+  }
+  // Allow LE-origin callers without JWT to authenticate through farm API key.
+  const apiKey = process.env.GREENREACH_API_KEY;
+  if (apiKey && !req.headers['authorization']) {
+    proxyReq.setHeader('X-API-Key', apiKey);
+    if (!req.headers['x-farm-id'] && process.env.FARM_ID) {
+      proxyReq.setHeader('X-Farm-ID', process.env.FARM_ID);
+    }
+  }
+}
+
+app.use('/api/farm/square', proxyCorsMiddleware, createProxyMiddleware({
+  target: getCentralPaymentControlTarget(),
+  router: () => getCentralPaymentControlTarget(),
+  changeOrigin: true,
+  xfwd: true,
+  logLevel: 'debug',
+  timeout: 15000,
+  proxyTimeout: 15000,
+  agent: keepAliveHttpsAgent,
+  pathRewrite: (proxyPath) => (proxyPath.startsWith('/api/farm/square') ? proxyPath : '/api/farm/square' + proxyPath),
+  onProxyReq(proxyReq, req) {
+    attachPaymentProxyHeaders(proxyReq, req);
+    const outgoingPath = req.url.startsWith('/api/farm/square') ? req.url : '/api/farm/square' + req.url;
+    console.log('[-> payment/square] ' + req.method + ' ' + req.originalUrl + ' -> ' + getCentralPaymentControlTarget() + outgoingPath);
+  },
+  onError(err, req, res) {
+    console.warn('[proxy:/api/farm/square] error:', err?.message || err);
+    res.statusCode = 502;
+    res.end(JSON.stringify({ error: 'proxy_error', target: 'central-payment-square', detail: String(err) }));
+  }
+}));
+
+app.use('/api/farm/stripe', proxyCorsMiddleware, createProxyMiddleware({
+  target: getCentralPaymentControlTarget(),
+  router: () => getCentralPaymentControlTarget(),
+  changeOrigin: true,
+  xfwd: true,
+  logLevel: 'debug',
+  timeout: 15000,
+  proxyTimeout: 15000,
+  agent: keepAliveHttpsAgent,
+  pathRewrite: (proxyPath) => (proxyPath.startsWith('/api/farm/stripe') ? proxyPath : '/api/farm/stripe' + proxyPath),
+  onProxyReq(proxyReq, req) {
+    attachPaymentProxyHeaders(proxyReq, req);
+    const outgoingPath = req.url.startsWith('/api/farm/stripe') ? req.url : '/api/farm/stripe' + req.url;
+    console.log('[-> payment/stripe] ' + req.method + ' ' + req.originalUrl + ' -> ' + getCentralPaymentControlTarget() + outgoingPath);
+  },
+  onError(err, req, res) {
+    console.warn('[proxy:/api/farm/stripe] error:', err?.message || err);
+    res.statusCode = 502;
+    res.end(JSON.stringify({ error: 'proxy_error', target: 'central-payment-stripe', detail: String(err) }));
+  }
+}));
 
 /**
  * Farm: Online Store Setup and Deployment

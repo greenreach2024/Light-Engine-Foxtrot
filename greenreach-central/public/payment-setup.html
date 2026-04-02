@@ -380,19 +380,32 @@
         log('Connection confirmed. Merchant=' + merchant + ', location=' + location);
       }
 
+      function getAuthToken() {
+        return sessionStorage.getItem('token')
+          || localStorage.getItem('token')
+          || localStorage.getItem('auth_token')
+          || '';
+      }
+
+      function buildAuthHeaders(farmId, extra) {
+        var headers = Object.assign({}, extra || {});
+        if (farmId) {
+          headers['X-Farm-ID'] = farmId;
+        }
+        var token = getAuthToken();
+        if (token) {
+          headers.Authorization = 'Bearer ' + token;
+        }
+        return headers;
+      }
+
       async function checkStatus(silent) {
         var farmId = getFarmId();
         var statusUrl = '/api/farm/square/status?farmId=' + encodeURIComponent(farmId);
         try {
-          var res;
-          try {
-            res = await fetch(statusUrl, {
-              headers: { 'X-Farm-ID': farmId }
-            });
-          } catch (headerErr) {
-            log('Status fetch with header failed, retrying without header: ' + headerErr.message);
-            res = await fetch(statusUrl);
-          }
+          var res = await fetch(statusUrl, {
+            headers: buildAuthHeaders(farmId)
+          });
 
           var payload;
           try {
@@ -476,7 +489,7 @@
 
           var res = await fetch('/api/farm/square/authorize', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-Farm-ID': farmId },
+            headers: buildAuthHeaders(farmId, { 'Content-Type': 'application/json' }),
             body: JSON.stringify({ farmId: farmId, farmName: farmName })
           });
           var payload = await res.json();

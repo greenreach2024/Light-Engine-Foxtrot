@@ -2348,7 +2348,10 @@
     async function isSquareConnected() {
       try {
         var fid = sessionStorage.getItem('farm_id') || sessionStorage.getItem('farmId') || localStorage.getItem('farm_id') || 'LOCAL-FARM';
-        var res = await fetch('/api/farm/square/status', { headers: { 'X-Farm-ID': fid } });
+        var token = sessionStorage.getItem('token') || localStorage.getItem('token') || localStorage.getItem('auth_token') || '';
+        var headers = { 'X-Farm-ID': fid };
+        if (token) headers.Authorization = 'Bearer ' + token;
+        var res = await fetch('/api/farm/square/status', { headers: headers });
         var data = await res.json();
         return !!(data.ok && data.connected);
       } catch(e) { return false; }
