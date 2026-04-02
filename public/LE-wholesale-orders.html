@@ -8,442 +8,148 @@
   <link rel="stylesheet" href="/styles/light-engine.css">
   <style>
     :root {
-      /* Dark Theme Shim (Mapped to Light Engine Standard) */
-      --primary: var(--accent-green);      /* #10b981 */
+      --primary: var(--accent-green);
       --primary-light: #34d399;
-      --accent: var(--accent-blue);        /* #3b82f6 */
-      --bg: var(--bg-primary);             /* #0a0f1e */
-      --surface: var(--bg-card);           /* #1a2332 */
-      --border: var(--border);             /* #2d3748 */
-      --text: var(--text-primary);         /* #e5e7eb */
-      --text-secondary: var(--text-secondary); /* #9ca3af */
-      --error: var(--accent-red);          /* #ef4444 */
-      --success: var(--accent-green);      /* #10b981 */
-      --warning: var(--accent-yellow);     /* #f59e0b */
-      --info: var(--accent-blue);          /* #3b82f6 */
+      --accent: var(--accent-blue);
+      --bg: var(--bg-primary);
+      --surface: var(--bg-card);
+      --border-c: var(--border);
+      --text-c: var(--text-primary);
+      --text-sec: var(--text-secondary);
+      --err: var(--accent-red);
+      --ok: var(--accent-green);
+      --warn: var(--accent-yellow);
+      --info-c: var(--accent-blue);
     }
-
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
-
+    * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      line-height: 1.6;
+      background: var(--bg); color: var(--text-c); line-height: 1.6;
     }
-
-    header {
-      background: var(--primary);
-      color: white;
-      padding: 1.5rem 2rem;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    }
-
-    header h1 {
-      font-size: 1.75rem;
-      margin-bottom: 0.25rem;
-    }
-
-    header p {
-      color: var(--text-secondary);
-      font-size: 0.95rem;
-    }
-
-    .container {
-      max-width: 1400px;
-      margin: 2rem auto;
-      padding: 0 2rem;
-    }
-
-    .stats-bar {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 1rem;
-      margin-bottom: 2rem;
-    }
-
-    .stat-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 1.5rem;
-      text-align: center;
-    }
-
-    .stat-value {
-      font-size: 2rem;
-      font-weight: 700;
-      color: var(--primary);
-      display: block;
-    }
-
-    .stat-label {
-      font-size: 0.9rem;
-      color: var(--text-secondary);
-      margin-top: 0.5rem;
-    }
-
-    .stat-card.urgent .stat-value {
-      color: var(--error);
-    }
-
-    .orders-section {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 2rem;
-    }
-
-    .orders-section h2 {
-      font-size: 1.5rem;
-      color: var(--primary);
-      margin-bottom: 1.5rem;
-      padding-bottom: 0.75rem;
-      border-bottom: 2px solid var(--border);
-    }
-
-    .order-card {
-      background: white;
-      border: 2px solid var(--border);
-      border-radius: 8px;
-      padding: 1.5rem;
-      margin-bottom: 1.5rem;
-      transition: box-shadow 0.2s;
-    }
-
-    .order-card:hover {
-      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-    }
-
-    .order-card.urgent {
-      border-color: var(--error);
-      background: #fff5f5;
-    }
-
-    .order-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      margin-bottom: 1rem;
-      padding-bottom: 1rem;
-      border-bottom: 1px solid var(--border);
-    }
-
-    .order-id {
-      font-size: 1.25rem;
-      font-weight: 600;
-      color: var(--primary);
-    }
-
-    .deadline-badge {
-      background: var(--warning);
-      color: white;
-      padding: 0.5rem 1rem;
-      border-radius: 6px;
-      font-weight: 600;
-      font-size: 0.9rem;
-    }
-
-    .deadline-badge.urgent {
-      background: var(--error);
-      animation: pulse 2s infinite;
-    }
-
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.7; }
-    }
-
-    .buyer-info {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-      gap: 1rem;
-      margin-bottom: 1.5rem;
-    }
-
-    .info-group {
-      display: flex;
-      flex-direction: column;
-    }
-
-    .info-label {
-      font-size: 0.85rem;
-      color: var(--text-secondary);
-      margin-bottom: 0.25rem;
-    }
-
-    .info-value {
-      font-weight: 500;
-      color: var(--text);
-    }
-
-    .items-table {
-      width: 100%;
-      border-collapse: collapse;
-      margin: 1.5rem 0;
-    }
-
-    .items-table th {
-      background: var(--bg);
-      padding: 0.75rem;
-      text-align: left;
-      font-weight: 600;
-      font-size: 0.9rem;
-      color: var(--text-secondary);
-      border-bottom: 2px solid var(--border);
-    }
-
-    .items-table td {
-      padding: 0.75rem;
-      border-bottom: 1px solid var(--border);
-    }
-
-    .items-table tr:last-child td {
-      border-bottom: none;
-    }
-
-    .total-row {
-      background: var(--bg);
-      font-weight: 600;
-      font-size: 1.1rem;
-    }
-
-    .action-buttons {
-      display: flex;
-      gap: 1rem;
-      margin-top: 1.5rem;
-      flex-wrap: wrap;
-    }
-
-    .btn {
-      padding: 0.75rem 1.5rem;
-      border: none;
-      border-radius: 6px;
-      font-size: 1rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.2s;
-      display: inline-flex;
-      align-items: center;
-      gap: 0.5rem;
-    }
-
-    .btn-success {
-      background: var(--success);
-      color: white;
-    }
-
-    .btn-success:hover {
-      background: #2f855a;
-      transform: translateY(-1px);
-    }
-
-    .btn-danger {
-      background: var(--error);
-      color: white;
-    }
-
-    .btn-danger:hover {
-      background: #9b2c2c;
-      transform: translateY(-1px);
-    }
-
-    .btn-warning {
-      background: var(--warning);
-      color: white;
-    }
-
-    .btn-warning:hover {
-      background: #b7791f;
-      transform: translateY(-1px);
-    }
-
-    .btn-secondary {
-      background: var(--border);
-      color: var(--text);
-    }
-
-    .btn-secondary:hover {
-      background: #c5d4bb;
-    }
-
-    .modal {
-      display: none;
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0,0,0,0.5);
-      z-index: 1000;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .modal.active {
-      display: flex;
-    }
-
-    .modal-content {
-      background: white;
-      border-radius: 8px;
-      padding: 2rem;
-      max-width: 600px;
-      width: 90%;
-      max-height: 80vh;
-      overflow-y: auto;
-    }
-
-    .modal-header {
-      font-size: 1.5rem;
-      font-weight: 600;
-      margin-bottom: 1.5rem;
-      padding-bottom: 1rem;
-      border-bottom: 2px solid var(--border);
-    }
-
-    .form-group {
-      margin-bottom: 1.5rem;
-    }
-
-    .form-group label {
-      display: block;
-      font-weight: 600;
-      margin-bottom: 0.5rem;
-      color: var(--text);
-    }
-
-    .form-group textarea {
-      width: 100%;
-      padding: 0.75rem;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      font-family: inherit;
-      font-size: 1rem;
-      resize: vertical;
-      min-height: 100px;
-    }
-
-    .form-group input[type="number"] {
-      width: 100px;
-      padding: 0.5rem;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      font-size: 1rem;
-    }
-
-    .modify-items {
-      margin-top: 1rem;
-    }
-
-    .modify-item {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 0.75rem;
-      background: var(--bg);
-      border-radius: 6px;
-      margin-bottom: 0.5rem;
-    }
-
-    .item-name {
-      font-weight: 500;
-      flex: 1;
-    }
-
-    .item-original {
-      color: var(--text-secondary);
-      margin-right: 1rem;
-    }
-
-    .toast {
-      position: fixed;
-      bottom: 2rem;
-      right: 2rem;
-      background: white;
-      border-radius: 8px;
-      padding: 1rem 1.5rem;
-      box-shadow: 0 4px 16px rgba(0,0,0,0.2);
-      z-index: 2000;
-      display: none;
-      animation: slideIn 0.3s;
-    }
-
-    .toast.active {
-      display: block;
-    }
-
-    .toast.success {
-      border-left: 4px solid var(--success);
-    }
-
-    .toast.error {
-      border-left: 4px solid var(--error);
-    }
-
-    @keyframes slideIn {
-      from {
-        transform: translateX(400px);
-        opacity: 0;
-      }
-      to {
-        transform: translateX(0);
-        opacity: 1;
-      }
-    }
-
-    .empty-state {
-      text-align: center;
-      padding: 3rem 2rem;
-      color: var(--text-secondary);
-    }
-
-    .empty-state h3 {
-      font-size: 1.5rem;
-      margin-bottom: 1rem;
-      color: var(--text);
-    }
+    header { background: var(--primary); color: white; padding: 1.5rem 2rem; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    header h1 { font-size: 1.75rem; margin-bottom: 0.25rem; }
+    header p { color: rgba(255,255,255,0.8); font-size: 0.95rem; }
+    .container { max-width: 1400px; margin: 2rem auto; padding: 0 2rem; }
+    .stats-bar { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+    .stat-card { background: var(--surface); border: 1px solid var(--border-c); border-radius: 8px; padding: 1.5rem; text-align: center; }
+    .stat-value { font-size: 2rem; font-weight: 700; color: var(--primary); display: block; }
+    .stat-label { font-size: 0.9rem; color: var(--text-sec); margin-top: 0.5rem; }
+    .stat-card.urgent .stat-value { color: var(--err); }
+    .filter-tabs { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
+    .filter-tab { padding: 0.6rem 1.25rem; border: 1px solid var(--border-c); border-radius: 6px; background: var(--surface); color: var(--text-sec); cursor: pointer; font-size: 0.95rem; font-weight: 600; transition: all 0.2s; }
+    .filter-tab:hover { border-color: var(--primary); color: var(--text-c); }
+    .filter-tab.active { background: var(--primary); color: white; border-color: var(--primary); }
+    .filter-tab .tab-count { display: inline-block; background: rgba(255,255,255,0.2); padding: 0.1rem 0.5rem; border-radius: 10px; font-size: 0.8rem; margin-left: 0.4rem; }
+    .filter-tab.active .tab-count { background: rgba(255,255,255,0.3); }
+    .orders-section { background: var(--surface); border: 1px solid var(--border-c); border-radius: 8px; padding: 2rem; }
+    .orders-section h2 { font-size: 1.5rem; color: var(--primary); margin-bottom: 1.5rem; padding-bottom: 0.75rem; border-bottom: 2px solid var(--border-c); }
+    .order-card { background: var(--bg); border: 2px solid var(--border-c); border-radius: 8px; padding: 1.5rem; margin-bottom: 1.5rem; transition: box-shadow 0.2s; }
+    .order-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+    .order-card.urgent { border-color: var(--err); }
+    .order-card.accepted { border-color: var(--ok); }
+    .order-card.declined { border-color: #6b7280; }
+    .order-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border-c); }
+    .order-id { font-size: 1.25rem; font-weight: 600; color: var(--primary); }
+    .status-badge { padding: 0.4rem 0.9rem; border-radius: 6px; font-weight: 600; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.03em; }
+    .status-badge.pending { background: var(--warn); color: #0f172a; }
+    .status-badge.accepted { background: var(--ok); color: white; }
+    .status-badge.declined { background: #6b7280; color: white; }
+    .status-badge.modified { background: var(--info-c); color: white; }
+    .status-badge.picking, .status-badge.packed, .status-badge.shipped { background: #8b5cf6; color: white; }
+    .deadline-badge { background: var(--warn); color: #0f172a; padding: 0.35rem 0.75rem; border-radius: 6px; font-weight: 600; font-size: 0.85rem; margin-left: 0.5rem; }
+    .deadline-badge.urgent-dl { background: var(--err); color: white; animation: pulse 2s infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
+    .buyer-info { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+    .info-group { display: flex; flex-direction: column; }
+    .info-label { font-size: 0.85rem; color: var(--text-sec); margin-bottom: 0.25rem; }
+    .info-value { font-weight: 500; color: var(--text-c); }
+    .items-table { width: 100%; border-collapse: collapse; margin: 1.5rem 0; }
+    .items-table th { background: var(--surface); padding: 0.75rem; text-align: left; font-weight: 600; font-size: 0.9rem; color: var(--text-sec); border-bottom: 2px solid var(--border-c); }
+    .items-table td { padding: 0.75rem; border-bottom: 1px solid var(--border-c); }
+    .items-table tr:last-child td { border-bottom: none; }
+    .total-row { background: var(--surface); font-weight: 600; font-size: 1.1rem; }
+    .notes-section { margin: 1.25rem 0; background: var(--surface); border: 1px solid var(--border-c); border-radius: 8px; padding: 1rem; }
+    .notes-section label { display: block; font-weight: 600; margin-bottom: 0.5rem; color: var(--text-c); font-size: 0.9rem; }
+    .notes-section textarea { width: 100%; padding: 0.75rem; border: 1px solid var(--border-c); border-radius: 6px; font-family: inherit; font-size: 0.95rem; resize: vertical; min-height: 80px; background: var(--bg); color: var(--text-c); }
+    .notes-section .notes-actions { display: flex; justify-content: flex-end; margin-top: 0.5rem; align-items: center; }
+    .notes-section .btn-save-notes { padding: 0.4rem 1rem; background: var(--info-c); color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 0.85rem; font-weight: 600; }
+    .notes-section .btn-save-notes:hover { background: #2563eb; }
+    .notes-saved-indicator { color: var(--ok); font-size: 0.85rem; margin-right: 0.75rem; }
+    .action-buttons { display: flex; gap: 0.75rem; margin-top: 1.25rem; flex-wrap: wrap; align-items: center; }
+    .btn-group-primary { display: flex; gap: 0.75rem; flex: 1; }
+    .btn-group-secondary { display: flex; gap: 0.75rem; }
+    .btn { padding: 0.65rem 1.25rem; border: none; border-radius: 6px; font-size: 0.95rem; font-weight: 600; cursor: pointer; transition: all 0.2s; display: inline-flex; align-items: center; gap: 0.5rem; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-success { background: var(--ok); color: white; }
+    .btn-success:hover:not(:disabled) { background: #059669; transform: translateY(-1px); }
+    .btn-danger { background: var(--err); color: white; }
+    .btn-danger:hover:not(:disabled) { background: #dc2626; transform: translateY(-1px); }
+    .btn-warning { background: var(--warn); color: #0f172a; }
+    .btn-warning:hover:not(:disabled) { background: #d97706; transform: translateY(-1px); }
+    .btn-info { background: var(--info-c); color: white; }
+    .btn-info:hover:not(:disabled) { background: #2563eb; transform: translateY(-1px); }
+    .btn-print { background: #0891b2; color: white; }
+    .btn-print:hover:not(:disabled) { background: #0e7490; transform: translateY(-1px); }
+    .btn-outline { background: transparent; border: 1px solid var(--border-c); color: var(--text-sec); }
+    .btn-outline:hover { border-color: var(--text-c); color: var(--text-c); }
+    .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; }
+    .modal.active { display: flex; }
+    .modal-content { background: var(--surface); border-radius: 8px; padding: 2rem; max-width: 600px; width: 90%; max-height: 80vh; overflow-y: auto; color: var(--text-c); }
+    .modal-header { font-size: 1.5rem; font-weight: 600; margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 2px solid var(--border-c); }
+    .form-group { margin-bottom: 1.5rem; }
+    .form-group label { display: block; font-weight: 600; margin-bottom: 0.5rem; color: var(--text-c); }
+    .form-group textarea { width: 100%; padding: 0.75rem; border: 1px solid var(--border-c); border-radius: 6px; font-family: inherit; font-size: 1rem; resize: vertical; min-height: 100px; background: var(--bg); color: var(--text-c); }
+    .form-group input[type="number"] { width: 100px; padding: 0.5rem; border: 1px solid var(--border-c); border-radius: 6px; font-size: 1rem; background: var(--bg); color: var(--text-c); }
+    .modify-items { margin-top: 1rem; }
+    .modify-item { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem; background: var(--bg); border-radius: 6px; margin-bottom: 0.5rem; }
+    .item-name { font-weight: 500; flex: 1; }
+    .item-original { color: var(--text-sec); margin-right: 1rem; }
+    .toast { position: fixed; bottom: 2rem; right: 2rem; background: var(--surface); border-radius: 8px; padding: 1rem 1.5rem; box-shadow: 0 4px 16px rgba(0,0,0,0.3); z-index: 2000; display: none; animation: slideIn 0.3s; color: var(--text-c); }
+    .toast.active { display: block; }
+    .toast.success { border-left: 4px solid var(--ok); }
+    .toast.error { border-left: 4px solid var(--err); }
+    @keyframes slideIn { from { transform: translateX(400px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    .empty-state { text-align: center; padding: 3rem 2rem; color: var(--text-sec); }
+    .empty-state h3 { font-size: 1.5rem; margin-bottom: 1rem; color: var(--text-c); }
+    @media print { body { background: white; color: #000; } header, .stats-bar, .filter-tabs, .action-buttons, .notes-actions, .toast { display: none !important; } .order-card { border-color: #ccc; break-inside: avoid; } }
   </style>
 </head>
 <body>
   <header>
-    <h1 data-help-title="Wholesale Orders" data-help="Manage incoming orders from restaurants and grocery partners." data-help-ai="Pending Orders: 3. Deadline approaching for 'Smoke Co'.">Wholesale Orders Dashboard</h1>
-    <p>Review and respond to incoming wholesale orders</p>
+    <h1>Wholesale Orders Dashboard</h1>
+    <p>Review, respond to, and manage wholesale orders</p>
   </header>
-
   <div class="container">
     <div class="stats-bar">
       <div class="stat-card urgent">
         <span class="stat-value" id="pending-count">0</span>
-        <span class="stat-label">Pending Verification</span>
+        <span class="stat-label">Pending Orders</span>
       </div>
       <div class="stat-card">
         <span class="stat-value" id="accepted-count">0</span>
-        <span class="stat-label">Accepted This Week</span>
+        <span class="stat-label">Accepted</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-value" id="declined-count">0</span>
+        <span class="stat-label">Declined</span>
       </div>
       <div class="stat-card">
         <span class="stat-value" id="total-value">$0</span>
         <span class="stat-label">Pending Order Value</span>
       </div>
-      <div class="stat-card">
-        <span class="stat-value" id="avg-response">--</span>
-        <span class="stat-label">Avg Response Time</span>
-      </div>
     </div>
-
+    <div class="filter-tabs">
+      <button class="filter-tab active" data-filter="all" onclick="app.setFilter('all')">All <span class="tab-count" id="count-all">0</span></button>
+      <button class="filter-tab" data-filter="pending" onclick="app.setFilter('pending')">Pending <span class="tab-count" id="count-pending">0</span></button>
+      <button class="filter-tab" data-filter="accepted" onclick="app.setFilter('accepted')">Accepted <span class="tab-count" id="count-accepted">0</span></button>
+      <button class="filter-tab" data-filter="declined" onclick="app.setFilter('declined')">Declined <span class="tab-count" id="count-declined">0</span></button>
+    </div>
     <div class="orders-section">
-      <h2>Pending Orders (Require Your Response)</h2>
-      <div id="orders-container">
-        <!-- Orders populated by JavaScript -->
-      </div>
+      <h2 id="section-title">All Orders</h2>
+      <div id="orders-container"><div class="empty-state"><h3>Loading orders...</h3></div></div>
     </div>
   </div>
 
-  <!-- Decline Modal -->
   <div id="decline-modal" class="modal">
     <div class="modal-content">
       <div class="modal-header">Decline Order</div>
@@ -454,14 +160,13 @@
           <textarea id="decline-reason" required placeholder="Please explain why you cannot fulfill this order..."></textarea>
         </div>
         <div class="action-buttons">
-          <button type="button" class="btn btn-secondary" onclick="closeModal('decline-modal')">Cancel</button>
+          <button type="button" class="btn btn-outline" onclick="closeModal('decline-modal')">Cancel</button>
           <button type="submit" class="btn btn-danger">Confirm Decline</button>
         </div>
       </form>
     </div>
   </div>
 
-  <!-- Modify Modal -->
   <div id="modify-modal" class="modal">
     <div class="modal-content">
       <div class="modal-header">Modify Order Quantities</div>
@@ -469,344 +174,422 @@
         <input type="hidden" id="modify-order-id">
         <div class="form-group">
           <label>Adjust quantities as needed:</label>
-          <div id="modify-items-container" class="modify-items">
-            <!-- Items populated dynamically -->
-          </div>
+          <div id="modify-items-container" class="modify-items"></div>
         </div>
         <div class="form-group">
           <label for="modify-reason">Reason for modifications:</label>
           <textarea id="modify-reason" required placeholder="Explain why quantities are being adjusted..."></textarea>
         </div>
         <div class="action-buttons">
-          <button type="button" class="btn btn-secondary" onclick="closeModal('modify-modal')">Cancel</button>
+          <button type="button" class="btn btn-outline" onclick="closeModal('modify-modal')">Cancel</button>
           <button type="submit" class="btn btn-warning">Submit Modifications</button>
         </div>
       </form>
     </div>
   </div>
 
-  <!-- Toast Notification -->
   <div id="toast" class="toast"></div>
 
   <script>
-    const app = {
-      farmId: 'GR-00001', // Will be loaded from auth
+    var app = {
+      farmId: '',
       orders: [],
+      currentFilter: 'all',
 
-      async init() {
-        // Get farm ID from localStorage or config
-        const farmId = localStorage.getItem('farm_id') || 'GR-00001';
-        this.farmId = farmId;
-
-        await this.loadOrders();
-        this.updateStats();
+      init: function() {
+        this.farmId = localStorage.getItem('farm_id') || localStorage.getItem('farmId') || '';
+        var self = this;
+        this.loadOrders();
         this.setupEventListeners();
-
-        // Auto-refresh every 30 seconds
-        setInterval(() => this.loadOrders(), 30000);
+        setInterval(function() { self.loadOrders(); }, 30000);
       },
 
-      async loadOrders() {
-        try {
-          const response = await fetch(`/api/wholesale/orders/pending-verification/${this.farmId}`);
-          const data = await response.json();
-          
-          if (data.ok) {
-            this.orders = data.orders || [];
-            this.renderOrders();
-            this.updateStats();
+      getAuthHeaders: function() {
+        var headers = { 'Content-Type': 'application/json', 'X-Farm-ID': this.farmId };
+        var token = localStorage.getItem('deviceToken') || localStorage.getItem('auth_token');
+        if (token) headers['Authorization'] = 'Bearer ' + token;
+        return headers;
+      },
+
+      loadOrders: function() {
+        var self = this;
+        fetch('/api/activity-hub/orders/all?farm_id=' + encodeURIComponent(this.farmId), { headers: this.getAuthHeaders() })
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            if (data.ok) {
+              self.orders = data.orders || [];
+              self.updateStats();
+              self.updateFilterCounts();
+              self.renderOrders();
+            }
+          })
+          .catch(function(err) {
+            console.error('Failed to load orders:', err);
+            self.showToast('Failed to load orders', 'error');
+          });
+      },
+
+      mapStatus: function(raw) {
+        if (!raw) return 'pending';
+        var s = raw.toLowerCase();
+        if (s === 'pending_verification' || s === 'pending') return 'pending';
+        if (s === 'farm_accepted' || s === 'accepted') return 'accepted';
+        if (s === 'farm_declined' || s === 'declined') return 'declined';
+        if (s === 'farm_modified' || s === 'modified') return 'modified';
+        if (s === 'picking') return 'picking';
+        if (s === 'packed') return 'packed';
+        if (s === 'shipped') return 'shipped';
+        return 'pending';
+      },
+
+      getFilteredOrders: function() {
+        var self = this;
+        if (this.currentFilter === 'all') return this.orders;
+        return this.orders.filter(function(o) {
+          var m = self.mapStatus(o.status);
+          if (self.currentFilter === 'pending') return m === 'pending';
+          if (self.currentFilter === 'accepted') return m === 'accepted' || m === 'picking' || m === 'packed' || m === 'shipped' || m === 'modified';
+          if (self.currentFilter === 'declined') return m === 'declined';
+          return true;
+        });
+      },
+
+      setFilter: function(filter) {
+        this.currentFilter = filter;
+        document.querySelectorAll('.filter-tab').forEach(function(tab) {
+          tab.classList.toggle('active', tab.dataset.filter === filter);
+        });
+        var titles = { all: 'All Orders', pending: 'Pending Orders', accepted: 'Accepted Orders', declined: 'Declined Orders' };
+        document.getElementById('section-title').textContent = titles[filter] || 'All Orders';
+        this.renderOrders();
+      },
+
+      updateFilterCounts: function() {
+        var pending = 0, accepted = 0, declined = 0;
+        var self = this;
+        this.orders.forEach(function(o) {
+          var m = self.mapStatus(o.status);
+          if (m === 'pending') pending++;
+          else if (m === 'declined') declined++;
+          else accepted++;
+        });
+        document.getElementById('count-all').textContent = this.orders.length;
+        document.getElementById('count-pending').textContent = pending;
+        document.getElementById('count-accepted').textContent = accepted;
+        document.getElementById('count-declined').textContent = declined;
+      },
+
+      updateStats: function() {
+        var pending = 0, accepted = 0, declined = 0, pendingValue = 0;
+        var self = this;
+        this.orders.forEach(function(o) {
+          var m = self.mapStatus(o.status);
+          if (m === 'pending') {
+            pending++;
+            var items = o.items || [];
+            pendingValue += items.reduce(function(s, i) { return s + (i.price_per_unit * i.quantity); }, 0);
+          } else if (m === 'declined') {
+            declined++;
+          } else {
+            accepted++;
           }
-        } catch (error) {
-          console.error('Failed to load orders:', error);
-          this.showToast('Failed to load orders', 'error');
-        }
+        });
+        document.getElementById('pending-count').textContent = pending;
+        document.getElementById('accepted-count').textContent = accepted;
+        document.getElementById('declined-count').textContent = declined;
+        document.getElementById('total-value').textContent = '$' + pendingValue.toFixed(2);
       },
 
-      renderOrders() {
-        const container = document.getElementById('orders-container');
-        
-        if (this.orders.length === 0) {
-          container.innerHTML = `
-            <div class="empty-state">
-              <h3>No Pending Orders</h3>
-              <p>You're all caught up! New wholesale orders will appear here.</p>
-            </div>
-          `;
+      renderOrders: function() {
+        var container = document.getElementById('orders-container');
+        var filtered = this.getFilteredOrders();
+        if (filtered.length === 0) {
+          var name = this.currentFilter === 'all' ? '' : this.currentFilter + ' ';
+          container.innerHTML = '<div class="empty-state"><h3>No ' + name + 'orders</h3><p>Orders will appear here when placed.</p></div>';
           return;
         }
-
-        container.innerHTML = this.orders.map(order => this.renderOrderCard(order)).join('');
+        var self = this;
+        container.innerHTML = filtered.map(function(o) { return self.renderOrderCard(o); }).join('');
       },
 
-      renderOrderCard(order) {
-        const deadline = new Date(order.verification_deadline);
-        const now = new Date();
-        const hoursLeft = Math.max(0, (deadline - now) / (1000 * 60 * 60));
-        const isUrgent = hoursLeft < 6;
-
-        const items = order.items || [];
-        const total = items.reduce((sum, item) => sum + (item.price_per_unit * item.quantity), 0);
-
-        return `
-          <div class="order-card ${isUrgent ? 'urgent' : ''}">
-            <div class="order-header">
-              <div>
-                <div class="order-id">Order #${order.wholesale_order_id} - Sub-Order #${order.id}</div>
-                <div style="color: var(--text-secondary); font-size: 0.9rem; margin-top: 0.25rem;">
-                  Received: ${new Date(order.created_at).toLocaleString()}
-                </div>
-              </div>
-              <div class="deadline-badge ${isUrgent ? 'urgent' : ''}">
-                ${hoursLeft < 1 ? Math.round(hoursLeft * 60) + ' minutes' : Math.round(hoursLeft) + ' hours'} left
-              </div>
-            </div>
-
-            <div class="buyer-info">
-              <div class="info-group">
-                <span class="info-label">Buyer</span>
-                <span class="info-value">${order.buyer_name}</span>
-              </div>
-              <div class="info-group">
-                <span class="info-label">Contact</span>
-                <span class="info-value">${order.buyer_email}</span>
-              </div>
-              <div class="info-group">
-                <span class="info-label">Delivery Address</span>
-                <span class="info-value">${order.delivery_address}, ${order.delivery_city}, ${order.delivery_province}</span>
-              </div>
-              <div class="info-group">
-                <span class="info-label">Fulfillment</span>
-                <span class="info-value">${order.fulfillment_cadence.replace('_', ' ').toUpperCase()}</span>
-              </div>
-            </div>
-
-            <table class="items-table">
-              <thead>
-                <tr>
-                  <th>Product</th>
-                  <th>Quantity</th>
-                  <th>Price/Unit</th>
-                  <th>Subtotal</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${items.map(item => `
-                  <tr>
-                    <td>${item.product_name}</td>
-                    <td>${item.quantity} ${item.unit}</td>
-                    <td>$${Number(item.price_per_unit).toFixed(2)}</td>
-                    <td>$${(item.price_per_unit * item.quantity).toFixed(2)}</td>
-                  </tr>
-                `).join('')}
-                <tr class="total-row">
-                  <td colspan="3">Total</td>
-                  <td>$${total.toFixed(2)}</td>
-                </tr>
-              </tbody>
-            </table>
-
-            ${order.delivery_instructions ? `
-              <div style="background: var(--bg); padding: 1rem; border-radius: 6px; margin: 1rem 0;">
-                <strong>Delivery Instructions:</strong><br/>
-                ${order.delivery_instructions}
-              </div>
-            ` : ''}
-
-            <div class="action-buttons">
-              <button class="btn btn-success" onclick="app.acceptOrder(${order.id})">
-                Accept Order
-              </button>
-              <button class="btn btn-warning" onclick="app.openModifyModal(${order.id})">
-                Modify Quantities
-              </button>
-              <button class="btn btn-danger" onclick="app.openDeclineModal(${order.id})">
-                Decline Order
-              </button>
-            </div>
-          </div>
-        `;
+      getOrderId: function(order) {
+        return order.sub_order_id || order.id || order._id;
       },
 
-      updateStats() {
-        const pendingCount = this.orders.length;
-        const totalValue = this.orders.reduce((sum, order) => {
-          const items = order.items || [];
-          return sum + items.reduce((itemSum, item) => itemSum + (item.price_per_unit * item.quantity), 0);
-        }, 0);
+      renderOrderCard: function(order) {
+        var mapped = this.mapStatus(order.status);
+        var isPending = mapped === 'pending';
+        var items = order.items || [];
+        var total = order.sub_total || items.reduce(function(s, i) { return s + (i.price_per_unit * i.quantity); }, 0);
+        var oid = this.getOrderId(order);
+        var display = order.wholesale_order_id
+          ? 'Order #' + String(order.wholesale_order_id).slice(-8) + ' / Sub #' + String(oid).slice(-8)
+          : 'Order #' + String(oid).slice(-8);
 
-        document.getElementById('pending-count').textContent = pendingCount;
-        document.getElementById('total-value').textContent = '$' + totalValue.toFixed(2);
-      },
-
-      async acceptOrder(subOrderId) {
-        if (!confirm('Accept this order? You will be committed to fulfilling it.')) return;
-
-        try {
-          const response = await fetch('/api/wholesale/orders/farm-verify', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              farm_id: this.farmId,
-              sub_order_id: subOrderId,
-              action: 'accept'
-            })
-          });
-
-          const data = await response.json();
-          
-          if (data.ok) {
-            this.showToast('Order accepted successfully!', 'success');
-            await this.loadOrders();
-          } else {
-            throw new Error(data.message || 'Failed to accept order');
-          }
-        } catch (error) {
-          console.error('Accept error:', error);
-          this.showToast(error.message, 'error');
+        var deadlineHtml = '';
+        var urgentClass = '';
+        if (isPending && order.verification_deadline) {
+          var dl = new Date(order.verification_deadline);
+          var hrs = Math.max(0, (dl - new Date()) / 3600000);
+          var isUrg = hrs < 6;
+          urgentClass = isUrg ? ' urgent' : '';
+          var tStr = hrs < 1 ? Math.round(hrs * 60) + ' min left' : Math.round(hrs) + 'h left';
+          deadlineHtml = '<span class="deadline-badge' + (isUrg ? ' urgent-dl' : '') + '">' + tStr + '</span>';
         }
+
+        var labels = { pending: 'Awaiting Acceptance', accepted: 'Accepted', declined: 'Declined', modified: 'Modified', picking: 'Picking', packed: 'Packed', shipped: 'Shipped' };
+        var isAccepted = mapped === 'accepted' || mapped === 'picking' || mapped === 'packed' || mapped === 'shipped' || mapped === 'modified';
+        var cardCls = 'order-card' + urgentClass;
+        if (isAccepted) cardCls += ' accepted';
+        if (mapped === 'declined') cardCls += ' declined';
+        var notes = order.farm_notes || '';
+
+        var primaryBtns = '';
+        if (isPending) {
+          primaryBtns = '<div class="btn-group-primary">' +
+            '<button class="btn btn-success" onclick="app.acceptOrder(\'' + oid + '\')">Accept Order</button>' +
+            '<button class="btn btn-warning" onclick="app.openModifyModal(\'' + oid + '\')">Modify</button>' +
+            '<button class="btn btn-danger" onclick="app.openDeclineModal(\'' + oid + '\')">Decline</button>' +
+            '</div>';
+        }
+
+        var secondaryBtns = '<div class="btn-group-secondary">' +
+          '<button class="btn btn-print" onclick="app.printPackingSlip(\'' + oid + '\')">Print Packing Slip</button>' +
+          '<button class="btn btn-info" onclick="app.printInvoice(\'' + oid + '\')">Print Invoice</button>' +
+          '</div>';
+
+        var itemsHtml = items.map(function(it) {
+          return '<tr><td>' + it.product_name + '</td><td>' + it.quantity + ' ' + (it.unit || '') + '</td><td>$' + Number(it.price_per_unit).toFixed(2) + '</td><td>$' + (it.price_per_unit * it.quantity).toFixed(2) + '</td></tr>';
+        }).join('');
+
+        var deliveryInfo = [order.delivery_address, order.delivery_city, order.delivery_province].filter(Boolean).join(', ');
+
+        return '<div class="' + cardCls + '" id="order-card-' + oid + '" data-order-id="' + oid + '">' +
+          '<div class="order-header"><div>' +
+          '<div class="order-id">' + display + '</div>' +
+          '<div style="color:var(--text-sec);font-size:0.9rem;margin-top:0.25rem;">Received: ' + new Date(order.created_at).toLocaleString() + '</div>' +
+          '</div><div style="display:flex;align-items:center;gap:0.5rem;">' +
+          '<span class="status-badge ' + mapped + '" id="badge-' + oid + '">' + (labels[mapped] || mapped) + '</span>' +
+          deadlineHtml + '</div></div>' +
+          '<div class="buyer-info">' +
+          '<div class="info-group"><span class="info-label">Buyer</span><span class="info-value">' + (order.buyer_name || 'Wholesale Buyer') + '</span></div>' +
+          '<div class="info-group"><span class="info-label">Contact</span><span class="info-value">' + (order.buyer_email || '--') + '</span></div>' +
+          '<div class="info-group"><span class="info-label">Delivery</span><span class="info-value">' + deliveryInfo + '</span></div>' +
+          '<div class="info-group"><span class="info-label">Fulfillment</span><span class="info-value">' + (order.fulfillment_cadence || '').replace(/_/g, ' ').toUpperCase() + '</span></div>' +
+          '</div>' +
+          '<table class="items-table"><thead><tr><th>Product</th><th>Quantity</th><th>Price/Unit</th><th>Subtotal</th></tr></thead><tbody>' +
+          itemsHtml +
+          '<tr class="total-row"><td colspan="3">Total</td><td>$' + total.toFixed(2) + '</td></tr></tbody></table>' +
+          (order.delivery_instructions ? '<div style="background:var(--surface);padding:1rem;border-radius:6px;margin:1rem 0;"><strong>Delivery Instructions:</strong><br/>' + order.delivery_instructions + '</div>' : '') +
+          '<div class="notes-section">' +
+          '<label for="notes-' + oid + '">Order Notes (included on packing slip and invoice):</label>' +
+          '<textarea id="notes-' + oid + '" placeholder="Add notes for this order...">' + this.escapeHtml(notes) + '</textarea>' +
+          '<div class="notes-actions"><span class="notes-saved-indicator" id="notes-saved-' + oid + '"></span><button type="button" class="btn-save-notes" onclick="app.saveNotes(\'' + oid + '\')">Save Notes</button></div>' +
+          '</div>' +
+          '<div class="action-buttons">' + primaryBtns + secondaryBtns + '</div>' +
+          '</div>';
       },
 
-      openDeclineModal(subOrderId) {
+      escapeHtml: function(str) {
+        if (!str) return '';
+        return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      },
+
+      acceptOrder: function(subOrderId) {
+        if (!confirm('Accept this order? You will be committed to fulfilling it.')) return;
+        var self = this;
+        fetch('/api/activity-hub/orders/' + subOrderId + '/accept', {
+          method: 'POST', headers: this.getAuthHeaders(),
+          body: JSON.stringify({ farmId: this.farmId })
+        }).then(function(r) { return r.json(); }).then(function(data) {
+          if (data.ok) {
+            self.showToast('Order accepted', 'success');
+            self.updateCardStatus(subOrderId, 'farm_accepted');
+          } else { throw new Error(data.error || 'Failed to accept order'); }
+        }).catch(function(err) {
+          console.error('Accept error:', err);
+          self.showToast(err.message, 'error');
+        });
+      },
+
+      openDeclineModal: function(subOrderId) {
         document.getElementById('decline-order-id').value = subOrderId;
         document.getElementById('decline-modal').classList.add('active');
       },
 
-      openModifyModal(subOrderId) {
-        const order = this.orders.find(o => o.id === subOrderId);
+      submitDecline: function() {
+        var subOrderId = document.getElementById('decline-order-id').value;
+        var reason = document.getElementById('decline-reason').value;
+        var self = this;
+        fetch('/api/activity-hub/orders/' + subOrderId + '/decline', {
+          method: 'POST', headers: this.getAuthHeaders(),
+          body: JSON.stringify({ farmId: this.farmId, reason: reason })
+        }).then(function(r) { return r.json(); }).then(function(data) {
+          if (data.ok) {
+            self.showToast('Order declined', 'success');
+            closeModal('decline-modal');
+            document.getElementById('decline-form').reset();
+            self.updateCardStatus(subOrderId, 'farm_declined');
+          } else { throw new Error(data.error || 'Failed to decline order'); }
+        }).catch(function(err) {
+          console.error('Decline error:', err);
+          self.showToast(err.message, 'error');
+        });
+      },
+
+      openModifyModal: function(subOrderId) {
+        var order = this.orders.find(function(o) { return (o.sub_order_id || o.id || o._id) === subOrderId; });
         if (!order) return;
-
         document.getElementById('modify-order-id').value = subOrderId;
-        
-        const container = document.getElementById('modify-items-container');
-        container.innerHTML = order.items.map(item => `
-          <div class="modify-item">
-            <span class="item-name">${item.product_name}</span>
-            <span class="item-original">Original: ${item.quantity} ${item.unit}</span>
-            <input type="number" 
-                   step="0.5" 
-                   min="0" 
-                   value="${item.quantity}"
-                   data-item-id="${item.id}"
-                   data-original="${item.quantity}">
-          </div>
-        `).join('');
-
+        var container = document.getElementById('modify-items-container');
+        container.innerHTML = (order.items || []).map(function(item) {
+          return '<div class="modify-item"><span class="item-name">' + item.product_name + '</span><span class="item-original">Original: ' + item.quantity + ' ' + (item.unit || '') + '</span><input type="number" step="0.5" min="0" value="' + item.quantity + '" data-sku-id="' + (item.sku_id || item.id) + '" data-original="' + item.quantity + '"></div>';
+        }).join('');
         document.getElementById('modify-modal').classList.add('active');
       },
 
-      setupEventListeners() {
-        document.getElementById('decline-form').addEventListener('submit', async (e) => {
-          e.preventDefault();
-          await this.submitDecline();
+      submitModify: function() {
+        var subOrderId = document.getElementById('modify-order-id').value;
+        var reason = document.getElementById('modify-reason').value;
+        var mods = [];
+        document.querySelectorAll('#modify-items-container input[type="number"]').forEach(function(inp) {
+          var nq = parseFloat(inp.value), oq = parseFloat(inp.dataset.original);
+          if (nq !== oq) mods.push({ sku_id: inp.dataset.skuId, quantity: nq });
         });
-
-        document.getElementById('modify-form').addEventListener('submit', async (e) => {
-          e.preventDefault();
-          await this.submitModify();
-        });
-      },
-
-      async submitDecline() {
-        const subOrderId = document.getElementById('decline-order-id').value;
-        const reason = document.getElementById('decline-reason').value;
-
-        try {
-          const response = await fetch('/api/wholesale/orders/farm-verify', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              farm_id: this.farmId,
-              sub_order_id: parseInt(subOrderId),
-              action: 'decline',
-              decline_reason: reason
-            })
-          });
-
-          const data = await response.json();
-          
+        if (mods.length === 0) { this.showToast('No quantities were changed', 'error'); return; }
+        var self = this;
+        fetch('/api/activity-hub/orders/' + subOrderId + '/modify', {
+          method: 'POST', headers: this.getAuthHeaders(),
+          body: JSON.stringify({ farmId: this.farmId, modifications: { items: mods }, reason: reason })
+        }).then(function(r) { return r.json(); }).then(function(data) {
           if (data.ok) {
-            this.showToast('Order declined. System will seek alternative farms.', 'success');
-            closeModal('decline-modal');
-            await this.loadOrders();
-            document.getElementById('decline-form').reset();
-          } else {
-            throw new Error(data.message || 'Failed to decline order');
-          }
-        } catch (error) {
-          console.error('Decline error:', error);
-          this.showToast(error.message, 'error');
-        }
-      },
-
-      async submitModify() {
-        const subOrderId = document.getElementById('modify-order-id').value;
-        const reason = document.getElementById('modify-reason').value;
-        
-        const modifiedItems = [];
-        document.querySelectorAll('#modify-items-container input[type="number"]').forEach(input => {
-          const newQty = parseFloat(input.value);
-          const originalQty = parseFloat(input.dataset.original);
-          if (newQty !== originalQty) {
-            modifiedItems.push({
-              item_id: input.dataset.itemId,
-              original_quantity: originalQty,
-              new_quantity: newQty
-            });
-          }
-        });
-
-        if (modifiedItems.length === 0) {
-          this.showToast('No quantities were changed', 'error');
-          return;
-        }
-
-        try {
-          const response = await fetch('/api/wholesale/orders/farm-verify', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              farm_id: this.farmId,
-              sub_order_id: parseInt(subOrderId),
-              action: 'modify',
-              modified_items: modifiedItems,
-              modification_reason: reason
-            })
-          });
-
-          const data = await response.json();
-          
-          if (data.ok) {
-            this.showToast('Modifications submitted. Buyer will review changes.', 'success');
+            self.showToast('Modifications submitted for buyer review', 'success');
             closeModal('modify-modal');
-            await this.loadOrders();
             document.getElementById('modify-form').reset();
-          } else {
-            throw new Error(data.message || 'Failed to submit modifications');
-          }
-        } catch (error) {
-          console.error('Modify error:', error);
-          this.showToast(error.message, 'error');
-        }
+            self.updateCardStatus(subOrderId, 'farm_modified');
+          } else { throw new Error(data.error || 'Failed to submit modifications'); }
+        }).catch(function(err) {
+          console.error('Modify error:', err);
+          self.showToast(err.message, 'error');
+        });
       },
 
-      showToast(message, type = 'success') {
-        const toast = document.getElementById('toast');
+      updateCardStatus: function(orderId, newStatus) {
+        var order = this.orders.find(function(o) { return (o.sub_order_id || o.id || o._id) === orderId; });
+        if (order) order.status = newStatus;
+        this.updateStats();
+        this.updateFilterCounts();
+        this.renderOrders();
+      },
+
+      saveNotes: function(orderId) {
+        var textarea = document.getElementById('notes-' + orderId);
+        if (!textarea) return;
+        var notes = textarea.value;
+        var self = this;
+        fetch('/api/activity-hub/orders/' + orderId + '/notes', {
+          method: 'PATCH', headers: this.getAuthHeaders(),
+          body: JSON.stringify({ farm_id: this.farmId, notes: notes })
+        }).then(function(r) { return r.json(); }).then(function(data) {
+          if (data.ok) {
+            var order = self.orders.find(function(o) { return (o.sub_order_id || o.id || o._id) === orderId; });
+            if (order) order.farm_notes = notes;
+            var ind = document.getElementById('notes-saved-' + orderId);
+            if (ind) { ind.textContent = 'Saved'; setTimeout(function() { ind.textContent = ''; }, 3000); }
+          } else { self.showToast('Failed to save notes', 'error'); }
+        }).catch(function(err) { console.error('Save notes error:', err); self.showToast('Failed to save notes', 'error'); });
+      },
+
+      printPackingSlip: function(orderId) {
+        var order = this.orders.find(function(o) { return (o.sub_order_id || o.id || o._id) === orderId; });
+        if (!order) { this.showToast('Order not found', 'error'); return; }
+        var items = order.items || [];
+        var notes = order.farm_notes || '';
+        var ta = document.getElementById('notes-' + orderId);
+        if (ta && ta.value) notes = ta.value;
+        var rows = items.map(function(it) {
+          return '<tr><td>' + it.product_name + '</td><td style="text-align:center;">' + it.quantity + ' ' + (it.unit || '') + '</td><td style="text-align:center;">________</td></tr>';
+        }).join('');
+        var delivery = [order.delivery_address, order.delivery_city, order.delivery_province].filter(Boolean).join(', ');
+        var pw = window.open('', '_blank', 'width=800,height=700');
+        pw.document.write(
+          '<!DOCTYPE html><html><head><title>Packing Slip</title>' +
+          '<style>body{font-family:Arial,sans-serif;padding:2rem;color:#000}h1{font-size:1.5rem;border-bottom:2px solid #000;padding-bottom:.5rem;margin-bottom:1.5rem}' +
+          '.meta{margin-bottom:1.5rem;line-height:1.8}.meta strong{display:inline-block;width:140px}' +
+          'table{width:100%;border-collapse:collapse;margin:1.5rem 0}th{background:#eee;padding:.6rem;text-align:left;border-bottom:2px solid #333;font-size:.9rem}td{padding:.6rem;border-bottom:1px solid #ccc}' +
+          '.notes{margin:1.5rem 0;padding:1rem;border:1px solid #ccc;border-radius:4px;background:#f9f9f9}.notes h3{margin:0 0 .5rem;font-size:.95rem}' +
+          '.footer{margin-top:2.5rem;display:flex;gap:2rem}.footer div{flex:1}.sig{border-bottom:1px solid #000;height:2rem;margin-bottom:.3rem}' +
+          '@media print{body{padding:1rem}}</style></head><body>' +
+          '<h1>PACKING SLIP</h1>' +
+          '<div class="meta">' +
+          '<div><strong>Order ID:</strong> ' + (order.wholesale_order_id || orderId) + '</div>' +
+          '<div><strong>Date:</strong> ' + new Date().toLocaleDateString() + '</div>' +
+          '<div><strong>Buyer:</strong> ' + (order.buyer_name || '--') + '</div>' +
+          '<div><strong>Delivery:</strong> ' + delivery + '</div></div>' +
+          '<table><thead><tr><th>Product</th><th style="text-align:center">Qty</th><th style="text-align:center">Checked</th></tr></thead><tbody>' + rows + '</tbody></table>' +
+          (notes ? '<div class="notes"><h3>Notes:</h3><p>' + notes.replace(/\n/g, '<br>') + '</p></div>' : '') +
+          '<div class="footer"><div><div class="sig"></div><span>Packed by</span></div><div><div class="sig"></div><span>Date</span></div><div><div class="sig"></div><span>Verified by</span></div></div>' +
+          '<script>window.onload=function(){window.print();}<\/script></body></html>'
+        );
+        pw.document.close();
+      },
+
+      printInvoice: function(orderId) {
+        var order = this.orders.find(function(o) { return (o.sub_order_id || o.id || o._id) === orderId; });
+        if (!order) { this.showToast('Order not found', 'error'); return; }
+        var items = order.items || [];
+        var total = order.sub_total || items.reduce(function(s, i) { return s + (i.price_per_unit * i.quantity); }, 0);
+        var notes = order.farm_notes || '';
+        var ta = document.getElementById('notes-' + orderId);
+        if (ta && ta.value) notes = ta.value;
+        var rows = items.map(function(it) {
+          var lt = (it.price_per_unit * it.quantity).toFixed(2);
+          return '<tr><td>' + it.product_name + '</td><td style="text-align:center">' + it.quantity + ' ' + (it.unit || '') + '</td><td style="text-align:right">$' + Number(it.price_per_unit).toFixed(2) + '</td><td style="text-align:right">$' + lt + '</td></tr>';
+        }).join('');
+        var delivery = [order.delivery_address, order.delivery_city, order.delivery_province].filter(Boolean).join(', ');
+        var pw = window.open('', '_blank', 'width=800,height=700');
+        pw.document.write(
+          '<!DOCTYPE html><html><head><title>Invoice</title>' +
+          '<style>body{font-family:Arial,sans-serif;padding:2rem;color:#000}h1{font-size:1.5rem;margin-bottom:.25rem}' +
+          '.hdr{display:flex;justify-content:space-between;border-bottom:2px solid #000;padding-bottom:1rem;margin-bottom:1.5rem}' +
+          '.meta{line-height:1.8;margin-bottom:1.5rem}.meta strong{display:inline-block;width:140px}' +
+          'table{width:100%;border-collapse:collapse;margin:1.5rem 0}th{background:#eee;padding:.6rem;text-align:left;border-bottom:2px solid #333;font-size:.9rem}td{padding:.6rem;border-bottom:1px solid #ccc}' +
+          '.total td{font-weight:700;font-size:1.1rem;border-top:2px solid #333}' +
+          '.notes{margin:1.5rem 0;padding:1rem;border:1px solid #ccc;border-radius:4px;background:#f9f9f9}.notes h3{margin:0 0 .5rem;font-size:.95rem}' +
+          '.foot{margin-top:2rem;font-size:.85rem;color:#666;text-align:center}' +
+          '@media print{body{padding:1rem}}</style></head><body>' +
+          '<div class="hdr"><div><h1>INVOICE</h1><p style="color:#666">Wholesale Order</p></div>' +
+          '<div style="text-align:right"><strong>Date:</strong> ' + new Date().toLocaleDateString() + '<br><strong>Order:</strong> ' + (order.wholesale_order_id || orderId) + '</div></div>' +
+          '<div class="meta">' +
+          '<div><strong>Buyer:</strong> ' + (order.buyer_name || '--') + '</div>' +
+          '<div><strong>Email:</strong> ' + (order.buyer_email || '--') + '</div>' +
+          '<div><strong>Delivery:</strong> ' + delivery + '</div>' +
+          '<div><strong>Status:</strong> ' + (order.status || '').replace(/_/g, ' ').toUpperCase() + '</div></div>' +
+          '<table><thead><tr><th>Product</th><th style="text-align:center">Qty</th><th style="text-align:right">Unit Price</th><th style="text-align:right">Subtotal</th></tr></thead><tbody>' + rows +
+          '<tr class="total"><td colspan="3" style="text-align:right">Total</td><td style="text-align:right">$' + total.toFixed(2) + '</td></tr></tbody></table>' +
+          (notes ? '<div class="notes"><h3>Notes:</h3><p>' + notes.replace(/\n/g, '<br>') + '</p></div>' : '') +
+          '<div class="foot">Thank you for your order.</div>' +
+          '<script>window.onload=function(){window.print();}<\/script></body></html>'
+        );
+        pw.document.close();
+      },
+
+      setupEventListeners: function() {
+        var self = this;
+        document.getElementById('decline-form').addEventListener('submit', function(e) { e.preventDefault(); self.submitDecline(); });
+        document.getElementById('modify-form').addEventListener('submit', function(e) { e.preventDefault(); self.submitModify(); });
+      },
+
+      showToast: function(message, type) {
+        var toast = document.getElementById('toast');
         toast.textContent = message;
-        toast.className = `toast ${type} active`;
-        
-        setTimeout(() => {
-          toast.classList.remove('active');
-        }, 5000);
+        toast.className = 'toast ' + (type || 'success') + ' active';
+        setTimeout(function() { toast.classList.remove('active'); }, 5000);
       }
     };
 
-    function closeModal(modalId) {
-      document.getElementById(modalId).classList.remove('active');
-    }
-
-    document.addEventListener('DOMContentLoaded', () => {
-      app.init();
-    });
+    function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+    document.addEventListener('DOMContentLoaded', function() { app.init(); });
   </script>
   <script src="/js/light-engine-help.js"></script>
 </body>

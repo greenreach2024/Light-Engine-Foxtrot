@@ -94,6 +94,54 @@ async function findSubOrder(orderId) {
   ) || null;
 }
 
+
+/**
+ * GET /api/activity-hub/orders/all
+ * Get all orders for a farm with optional status filter
+ */
+router.get('/all', async (req, res) => {
+  try {
+    const farmId = req.headers['x-farm-id'] || req.query.farm_id;
+    if (!farmId) {
+      return res.status(400).json({ error: 'farm_id required' });
+    }
+    const statusFilter = req.query.status || null;
+    const orders = await orderStore.listFarmSubOrders(farmId, statusFilter);
+    orders.sort((a, b) => new Date(b.updated_at || b.created_at) - new Date(a.updated_at || a.created_at));
+    res.json({ ok: true, orders });
+  } catch (error) {
+    console.error('[Activity Hub] Error loading all orders:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * PATCH /api/activity-hub/orders/:orderId/notes
+ * Save farm notes on a sub-order (shown on packing slip / invoice)
+ */
+router.patch('/:orderId/notes', async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const farmId = req.headers['x-farm-id'] || req.body.farm_id;
+    const notes = (req.body.notes || '').slice(0, 2000);
+    if (!farmId) {
+      return res.status(400).json({ error: 'farm_id required' });
+    }
+    const sub = await orderStore.getSubOrder(orderId);
+    if (!sub) return res.status(404).json({ error: 'Sub-order not found' });
+    if (sub.farm_id !== farmId) return res.status(403).json({ error: 'Not your order' });
+    await orderStore.updateSubOrderStatus(orderId, sub.status, {
+      farm_notes: notes,
+      notes_updated_at: new Date().toISOString()
+    });
+    console.log(`[Activity Hub] Notes saved for sub-order ${orderId}`);
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('[Activity Hub] Error saving notes:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 /**
  * GET /api/activity-hub/orders/pending
  * Get pending orders for a farm

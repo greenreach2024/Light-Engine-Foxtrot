@@ -4204,9 +4204,9 @@ function renderOrderCard(order) {
                     </div>
                 ` : ''}
                 <button class="btn-secondary" onclick="printPackingSlip('${oid}')" style="
-                    background: rgba(107, 114, 128, 0.2);
-                    border: 1px solid #6b7280;
-                    color: #9ca3af;
+                    background: #0891b2;
+                    border: 1px solid #0891b2;
+                    color: white; font-weight: 600;
                     padding: 0.5rem 1rem;
                     border-radius: 6px;
                     cursor: pointer;

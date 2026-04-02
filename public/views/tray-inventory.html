@@ -2722,25 +2722,9 @@
         
         speakMessage('Order accepted successfully');
         
-        // Show success and option to start picking
-        const content = document.getElementById('orderVerifyContent');
-        content.innerHTML = `
-          <div style="text-align: center; padding: 2rem;">
-            <div style="font-size: 4rem; color: #10b981; margin-bottom: 1rem;">✓</div>
-            <h3 style="color: #10b981; margin-bottom: 1rem;">Order Accepted!</h3>
-            <p style="color: #cbd5e1; margin-bottom: 2rem;">The buyer has been notified.</p>
-            
-            <button onclick="startPicking('${orderId}')" class="button button-primary" style="width: 100%; margin-bottom: 1rem;">
-              🌱 Start Picking
-            </button>
-            <button onclick="loadPendingOrdersInModal()" class="button button-secondary" style="width: 100%;">
-              ← Back to Orders
-            </button>
-          </div>
-        `;
-        
-        // Refresh order count
+        // Refresh the order list to show updated status badge
         loadOrderPickList();
+        loadPendingOrdersInModal();
         
       } catch (error) {
         console.error('Error accepting order:', error);
@@ -2865,20 +2849,9 @@
         
         speakMessage('Order declined');
         
-        const content = document.getElementById('orderVerifyContent');
-        content.innerHTML = `
-          <div style="text-align: center; padding: 2rem;">
-            <div style="font-size: 4rem; color: #94a3b8; margin-bottom: 1rem;">✗</div>
-            <h3 style="color: #cbd5e1; margin-bottom: 1rem;">Order Declined</h3>
-            <p style="color: #94a3b8; margin-bottom: 2rem;">Searching for alternative farms...</p>
-            
-            <button onclick="loadPendingOrdersInModal()" class="button button-secondary" style="width: 100%;">
-              ← Back to Orders
-            </button>
-          </div>
-        `;
-        
+        // Refresh the order list to show updated status badge
         loadOrderPickList();
+        loadPendingOrdersInModal();
         
       } catch (error) {
         console.error('Error declining order:', error);
@@ -3237,17 +3210,29 @@
       loadPendingOrdersInModal();
     }
 
+    function getOrderStatusBadge(status) {
+      const s = (status || '').toLowerCase();
+      if (s === 'pending_verification' || s === 'pending') return { label: 'Awaiting Acceptance', color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.15)' };
+      if (s === 'farm_accepted' || s === 'accepted') return { label: 'Accepted', color: '#10b981', bg: 'rgba(16, 185, 129, 0.15)' };
+      if (s === 'farm_declined' || s === 'declined') return { label: 'Declined', color: '#6b7280', bg: 'rgba(107, 114, 128, 0.15)' };
+      if (s === 'farm_modified' || s === 'modified') return { label: 'Modified', color: '#3b82f6', bg: 'rgba(59, 130, 246, 0.15)' };
+      if (s === 'picking') return { label: 'Picking', color: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.15)' };
+      if (s === 'packed') return { label: 'Packed', color: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.15)' };
+      if (s === 'shipped') return { label: 'Shipped', color: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.15)' };
+      return { label: 'Pending', color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.15)' };
+    }
+
     async function loadPendingOrdersInModal() {
       try {
         const modal = document.getElementById('orderVerifyModal');
         const content = document.getElementById('orderVerifyContent');
         
-        modal.querySelector('.modal-header h2').textContent = 'Pending Orders';
+        modal.querySelector('.modal-header h2').textContent = 'Wholesale Orders';
         modal.classList.add('active');
         
         content.innerHTML = '<div class="spinner"></div>';
         
-        const response = await fetch(`${currentAPI}/api/activity-hub/orders/pending`, {
+        const response = await fetch(`${currentAPI}/api/activity-hub/orders/all?farm_id=${encodeURIComponent(farmId)}`, {
           headers: {
             'X-Farm-ID': farmId,
             ...getAuthHeaders()
@@ -3256,37 +3241,44 @@
         
         const data = await response.json();
         
-        if (!data.ok || data.orders.length === 0) {
-          content.innerHTML = '<div class="empty-state">No pending orders</div>';
+        if (!data.ok || !data.orders || data.orders.length === 0) {
+          content.innerHTML = '<div class="empty-state">No orders found</div>';
           return;
         }
         
         content.innerHTML = data.orders.map(order => {
-          const deadline = new Date(order.verification_deadline);
-          const hoursRemaining = Math.max(0, (deadline - new Date()) / (1000 * 60 * 60));
-          const isUrgent = hoursRemaining < 6;
-          const deadlineStr = deadline.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-          const borderColor = isUrgent ? '#ef4444' : 'rgba(59, 130, 246, 0.3)';
-          const textColor = isUrgent ? '#ef4444' : '#f59e0b';
-          const itemsHtml = order.items.map(item => 
+          const oid = order.sub_order_id || order.id || order._id;
+          const badge = getOrderStatusBadge(order.status);
+          const isPending = badge.label === 'Awaiting Acceptance' || badge.label === 'Pending';
+          const deadline = order.verification_deadline ? new Date(order.verification_deadline) : null;
+          const hoursRemaining = deadline ? Math.max(0, (deadline - new Date()) / (1000 * 60 * 60)) : 999;
+          const isUrgent = isPending && hoursRemaining < 6;
+          const deadlineStr = deadline ? deadline.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+          const borderColor = isUrgent ? '#ef4444' : (badge.label === 'Accepted' ? '#10b981' : badge.label === 'Declined' ? '#6b7280' : 'rgba(59, 130, 246, 0.3)');
+          const itemsHtml = (order.items || []).map(item => 
             '<div style="display: flex; justify-content: space-between; color: #f8fafc; padding: 0.25rem 0;">' +
               '<span>' + item.product_name + '</span>' +
-              '<span style="color: #60a5fa; font-weight: 600;">' + item.quantity + ' ' + item.unit + '</span>' +
+              '<span style="color: #60a5fa; font-weight: 600;">' + item.quantity + ' ' + (item.unit || '') + '</span>' +
             '</div>'
           ).join('');
+          const total = order.sub_total || (order.items || []).reduce((s, i) => s + (i.price_per_unit * i.quantity), 0);
           
+          const deadlineHtml = isPending && deadline ? `
+                  <div style="color: ${isUrgent ? '#ef4444' : '#f59e0b'}; font-weight: 600;">
+                    ${isUrgent ? 'URGENT: ' : ''}${Math.floor(hoursRemaining)}h remaining
+                  </div>
+                  <div style="color: #94a3b8; font-size: 0.9rem;">${deadlineStr}</div>` : '';
+
           return `
             <div class="order-card ${isUrgent ? 'urgent' : ''}" style="background: rgba(30, 41, 59, 0.8); padding: 1.5rem; border-radius: 12px; margin-bottom: 1rem; border: 2px solid ${borderColor};">
               <div style="display: flex; justify-content: space-between; margin-bottom: 1rem;">
                 <div>
-                  <div style="color: #60a5fa; font-weight: 700; font-size: 1.2rem; margin-bottom: 0.25rem;">Order #${order.id.slice(-8)}</div>
+                  <div style="color: #60a5fa; font-weight: 700; font-size: 1.2rem; margin-bottom: 0.25rem;">Order #${String(oid).slice(-8)}</div>
                   <div style="color: #cbd5e1;">${order.buyer_name || 'Wholesale Buyer'}</div>
                 </div>
                 <div style="text-align: right;">
-                  <div style="color: ${textColor}; font-weight: 600;">
-                    ${isUrgent ? '⚠️ ' : ''}${Math.floor(hoursRemaining)}h remaining
-                  </div>
-                  <div style="color: #94a3b8; font-size: 0.9rem;">${deadlineStr}</div>
+                  <span style="display: inline-block; padding: 0.3rem 0.75rem; border-radius: 6px; font-weight: 600; font-size: 0.85rem; color: ${badge.color}; background: ${badge.bg}; border: 1px solid ${badge.color};">${badge.label}</span>
+                  ${deadlineHtml}
                 </div>
               </div>
               
@@ -3295,11 +3287,11 @@
                 ${itemsHtml}
                 <div style="border-top: 1px solid rgba(148, 163, 184, 0.2); margin-top: 0.75rem; padding-top: 0.75rem; display: flex; justify-content: space-between; font-weight: 600; color: #34d399;">
                   <span>Total:</span>
-                  <span>$${order.sub_total.toFixed(2)}</span>
+                  <span>$${total.toFixed(2)}</span>
                 </div>
               </div>
               
-              <button onclick="openOrderDetail('${order.id}')" class="button button-primary" style="width: 100%;">View & Respond</button>
+              ${isPending ? `<button onclick="openOrderDetail('${oid}')" class="button button-primary" style="width: 100%;">View & Respond</button>` : ''}
             </div>
           `;
         }).join('');
