@@ -56,6 +56,7 @@ import { getBatchFarmSquareCredentials } from '../services/squareCredentials.js'
 import { processSquarePayments, refundPayment, saveCardOnFile, getCardOnFile, removeCardOnFile } from '../services/squarePaymentService.js';
 import { ingestPaymentRevenue, ingestFarmPayables, ingestFarmPayout } from '../services/revenue-accounting-connector.js';
 import emailService from '../services/email-service.js';
+import notificationStore from '../services/notification-store.js';
 import { farmStore } from '../lib/farm-data-store.js';
 import { assembleInvoice, renderInvoiceHTML } from '../lib/wholesale/invoice-generator.js';
 
@@ -593,6 +594,68 @@ function toDeliveryFee(value, fulfillmentMethod) {
   return Math.max(0, Number(value) || 0);
 }
 
+function normalizeRequirementList(rawValue) {
+  if (Array.isArray(rawValue)) {
+    return rawValue
+      .map(item => sanitizeText(String(item || '').trim()))
+      .filter(Boolean);
+  }
+  if (typeof rawValue === 'string') {
+    return rawValue
+      .split(/\r?\n|;/)
+      .map(item => sanitizeText(String(item || '').trim()))
+      .filter(Boolean);
+  }
+  return [];
+}
+
+function mergeRequirementLists(...values) {
+  const merged = [];
+  const seen = new Set();
+
+  values.forEach((value) => {
+    normalizeRequirementList(value).forEach((item) => {
+      const key = String(item || '').toLowerCase();
+      if (!key || seen.has(key)) return;
+      seen.add(key);
+      merged.push(item);
+    });
+  });
+
+  return merged;
+}
+
+function normalizeBuyerAccountPayload(rawBuyerAccount, sessionBuyer) {
+  const payload = rawBuyerAccount && typeof rawBuyerAccount === 'object' ? rawBuyerAccount : {};
+  const buyer = sessionBuyer || {};
+
+  const email = String(payload.email || buyer.email || '').trim().toLowerCase();
+  const businessName = sanitizeText(
+    String(payload.businessName || payload.business_name || payload.name || buyer.businessName || buyer.business_name || '').trim()
+  ) || null;
+  const contactName = sanitizeText(
+    String(payload.contactName || payload.contact_name || buyer.contactName || buyer.contact_name || payload.name || '').trim()
+  ) || null;
+  const canonicalName = businessName || contactName || (email ? email.split('@')[0] : 'Wholesale Buyer');
+
+  return {
+    ...payload,
+    email,
+    name: sanitizeText(String(canonicalName)),
+    businessName,
+    business_name: businessName,
+    contactName,
+    contact_name: contactName,
+    phone: sanitizeText(String(payload.phone || buyer.phone || '').trim()) || null,
+    keyContact: sanitizeText(String(payload.keyContact || buyer.keyContact || buyer.key_contact || '').trim()) || null,
+    key_contact: sanitizeText(String(payload.keyContact || buyer.keyContact || buyer.key_contact || '').trim()) || null,
+    backupContact: sanitizeText(String(payload.backupContact || buyer.backupContact || buyer.backup_contact || '').trim()) || null,
+    backup_contact: sanitizeText(String(payload.backupContact || buyer.backupContact || buyer.backup_contact || '').trim()) || null,
+    backupPhone: sanitizeText(String(payload.backupPhone || buyer.backupPhone || buyer.backup_phone || '').trim()) || null,
+    backup_phone: sanitizeText(String(payload.backupPhone || buyer.backupPhone || buyer.backup_phone || '').trim()) || null
+  };
+}
+
 async function persistDeliveryLedger({ order, allocation, deliveryFee, deliveryDate, deliveryAddress, fulfillmentMethod }) {
   if (!isDatabaseAvailable()) return;
   if (String(fulfillmentMethod || '').toLowerCase() !== 'delivery') return;
@@ -663,7 +726,7 @@ async function persistDeliveryLedger({ order, allocation, deliveryFee, deliveryD
         deliveryId,
         order.master_order_id,
         deliveryDate,
-        'flexible',
+          order?.time_slot || order?.preferred_delivery_window || 'flexible',
         null,
         assignedDriver?.driver_id || null,
         JSON.stringify(deliveryAddress || {}),
@@ -679,7 +742,9 @@ async function persistDeliveryLedger({ order, allocation, deliveryFee, deliveryD
         JSON.stringify({
           fulfillment_method: 'delivery',
           farm_sub_order: sub,
-          order_total: order?.grand_total || null
+            order_total: order?.grand_total || null,
+            preferred_delivery_window: order?.preferred_delivery_window || order?.time_slot || null,
+            delivery_requirements: Array.isArray(order?.delivery_requirements) ? order.delivery_requirements : []
         })
       ]
     );
@@ -2005,11 +2070,14 @@ router.get('/orders/:orderId/invoice', requireBuyerPortalAuth, async (req, res) 
   const networkFarms = await listNetworkFarms();
   const farmProfiles = {};
   for (const farm of networkFarms) {
+    const farmLocation = farm.location || {};
     farmProfiles[farm.farm_id] = {
-      name: farm.name,
-      city: farm.city || '',
-      state: farm.state || '',
-      location: farm.location || {},
+      name: farm.name || farm.farm_name || farm.farm_id,
+      city: farm.city || farmLocation.city || '',
+      state: farm.state || farmLocation.state || farmLocation.province || '',
+      phone: farm.phone || farm.contact?.phone || farm.contact?.phone_number || '',
+      contact: farm.contact || {},
+      location: farmLocation,
       practices: farm.practices || [],
       certifications: farm.certifications || []
     };
@@ -2046,6 +2114,127 @@ router.get('/orders/:orderId/invoice', requireBuyerPortalAuth, async (req, res) 
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.setHeader('Content-Disposition', `inline; filename="invoice-${masterOrderId.substring(0, 12)}.html"`);
   res.send(html);
+});
+
+// Send buyer contact requests to each fulfillment farm's E.V.I.E. inbox
+router.post('/orders/:orderId/contact-farms', requireBuyerPortalAuth, async (req, res) => {
+  try {
+    const orderId = req.params.orderId;
+    const order = await getOrderById(orderId, { includeArchived: true });
+
+    if (!order || order.buyer_id !== req.wholesaleBuyer.id) {
+      return res.status(404).json({ status: 'error', message: 'Order not found' });
+    }
+
+    const subOrders = Array.isArray(order.farm_sub_orders) ? order.farm_sub_orders : [];
+    if (subOrders.length === 0) {
+      return res.status(400).json({ status: 'error', message: 'No fulfillment farms were found for this order' });
+    }
+
+    const rawMessage = String(req.body?.message || '').trim();
+    const buyerAccount = order.buyer_account || {};
+    const buyerBusiness = sanitizeText(String(
+      buyerAccount.business_name
+      || buyerAccount.name
+      || req.wholesaleBuyer.businessName
+      || req.wholesaleBuyer.business_name
+      || req.wholesaleBuyer.contactName
+      || req.wholesaleBuyer.contact_name
+      || 'Wholesale Buyer'
+    )).trim();
+    const buyerName = sanitizeText(String(
+      buyerAccount.contact_name
+      || req.wholesaleBuyer.contactName
+      || req.wholesaleBuyer.contact_name
+      || ''
+    )).trim();
+    const buyerEmail = sanitizeText(String(
+      buyerAccount.email
+      || req.wholesaleBuyer.email
+      || ''
+    )).trim();
+    const buyerPhone = sanitizeText(String(
+      buyerAccount.phone
+      || req.wholesaleBuyer.phone
+      || ''
+    )).trim();
+    const messageText = sanitizeText(rawMessage.slice(0, 500)).trim();
+
+    const masterOrderId = String(order.master_order_id || order.id || orderId);
+    const shortOrderId = masterOrderId.substring(0, 12);
+    const deliveryDate = order.delivery_date
+      ? new Date(order.delivery_date).toLocaleDateString('en-CA')
+      : null;
+
+    const farmsById = new Map();
+    for (const subOrder of subOrders) {
+      const farmId = String(subOrder?.farm_id || '').trim();
+      if (!farmId || farmsById.has(farmId)) continue;
+      farmsById.set(farmId, subOrder);
+    }
+
+    const sentFarms = [];
+    const failedFarms = [];
+
+    for (const [farmId, subOrder] of farmsById.entries()) {
+      const itemPreview = (subOrder.items || subOrder.line_items || [])
+        .slice(0, 3)
+        .map((item) => {
+          const qty = Number(item.quantity || item.qty || 0);
+          const unit = sanitizeText(String(item.unit || 'unit')).trim();
+          const name = sanitizeText(String(item.product_name || item.sku_name || item.sku_id || 'item')).trim();
+          return `${qty} ${unit} ${name}`.trim();
+        })
+        .filter(Boolean)
+        .join(', ');
+
+      const bodyLines = [
+        `${buyerBusiness}${buyerName ? ` (${buyerName})` : ''} requested contact for wholesale order ${shortOrderId}.`,
+        messageText ? `Buyer note: ${messageText}` : 'Buyer requested a status and fulfillment update.',
+        deliveryDate ? `Requested delivery date: ${deliveryDate}` : '',
+        itemPreview ? `Items: ${itemPreview}` : '',
+        `Farm subtotal: $${Number(subOrder.subtotal || 0).toFixed(2)}`,
+        buyerEmail ? `Buyer email: ${buyerEmail}` : '',
+        buyerPhone ? `Buyer phone: ${buyerPhone}` : ''
+      ].filter(Boolean);
+
+      const notification = await notificationStore.pushNotification(farmId, {
+        category: 'order',
+        title: `Buyer contact request: Order ${shortOrderId}`,
+        body: bodyLines.join('\n'),
+        severity: 'info',
+        source: 'wholesale-buyer-portal'
+      });
+
+      if (notification) {
+        sentFarms.push({ farm_id: farmId, farm_name: subOrder.farm_name || farmId });
+      } else {
+        failedFarms.push({ farm_id: farmId, farm_name: subOrder.farm_name || farmId });
+      }
+    }
+
+    if (sentFarms.length === 0) {
+      return res.status(503).json({
+        status: 'error',
+        message: 'Farm E.V.I.E. inbox is temporarily unavailable'
+      });
+    }
+
+    return res.json({
+      status: 'ok',
+      data: {
+        requested_farms: sentFarms.length,
+        farms: sentFarms,
+        failed_farms: failedFarms
+      }
+    });
+  } catch (error) {
+    console.error('[wholesale] contact-farms failed:', error);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Unable to send farm contact request right now'
+    });
+  }
 });
 
 
@@ -2107,6 +2296,7 @@ router.post('/checkout/preview', checkoutLimiter, requireWholesaleDbForCriticalP
 
 router.post('/checkout/execute', checkoutLimiter, requireWholesaleDbForCriticalPaths, requireBuyerAuth, async (req, res, next) => {
   try {
+      const requestBody = req.body || {};
     const {
       buyer_account,
       delivery_date,
@@ -2118,16 +2308,43 @@ router.post('/checkout/execute', checkoutLimiter, requireWholesaleDbForCriticalP
       po_number,
       fulfillment_method,
       delivery_fee
-    } = req.body || {};
+      } = requestBody;
 
-    const normalizedDeliveryAddress = normalizeDeliveryAddress(delivery_address);
-    const deliveryFee = toDeliveryFee(delivery_fee, fulfillment_method);
+      const normalizedBuyerAccount = normalizeBuyerAccountPayload(buyer_account, req.wholesaleBuyer);
+      const normalizedDeliveryAddress = normalizeDeliveryAddress(delivery_address);
+      const isPickup = String(fulfillment_method || '').toLowerCase() === 'pickup';
+      const deliveryFee = toDeliveryFee(delivery_fee, fulfillment_method);
 
-    if (!buyer_account?.email) throw new ValidationError('buyer_account.email is required');
+      const preferredDeliveryWindow = sanitizeText(
+        String(
+          requestBody.preferred_delivery_window
+          || requestBody.delivery_window
+          || requestBody.time_slot
+          || ''
+        ).trim()
+      ) || (isPickup ? null : 'flexible');
+
+      const deliveryRequirements = mergeRequirementLists(
+        requestBody.delivery_requirements,
+        requestBody.deliveryRequirements,
+        requestBody.delivery_address?.instructions
+      );
+      const pickupRequirements = mergeRequirementLists(
+        requestBody.pickup_requirements,
+        requestBody.pickupRequirements
+      );
+
+      const requestedDeliverySchedule = sanitizeText(
+        String(requestBody.delivery_schedule || requestBody.deliverySchedule || '').trim()
+      ) || '';
+      const requestedPickupSchedule = sanitizeText(
+        String(requestBody.pickup_schedule || requestBody.pickupSchedule || '').trim()
+      ) || '';
+
+      if (!normalizedBuyerAccount?.email) throw new ValidationError('buyer_account.email is required');
     if (!delivery_date) throw new ValidationError('delivery_date is required');
-    const isPickup = String(fulfillment_method || '').toLowerCase() === 'pickup';
     const normalizedPaymentProvider = String(payment_provider || 'manual').toLowerCase();
-    const squareSourceId = req.body?.payment_source?.source_id || req.body?.payment_source?.sourceId || null;
+      const squareSourceId = requestBody?.payment_source?.source_id || requestBody?.payment_source?.sourceId || null;
     if (normalizedPaymentProvider === 'square' && !squareSourceId) {
       return res.status(400).json({
         status: 'error',
@@ -2158,21 +2375,95 @@ router.post('/checkout/execute', checkoutLimiter, requireWholesaleDbForCriticalP
         grand_total: Number((Number(result.allocation.grand_total || 0) + deliveryFee).toFixed(2))
       };
 
+        const farmMetaById = new Map(
+          (catalog?.farms || [])
+            .filter((farmMeta) => farmMeta?.farm_id)
+            .map((farmMeta) => [String(farmMeta.farm_id), farmMeta])
+        );
+
+        const enrichedFarmSubOrders = (result.allocation.farm_sub_orders || []).map((subOrder) => {
+          const farmMeta = farmMetaById.get(String(subOrder?.farm_id || '')) || {};
+          const standards = farmMeta.fulfillment_standards || {};
+
+          const deliverySchedule = sanitizeText(
+            String(
+              requestedDeliverySchedule
+              || standards.delivery_schedule
+              || standards.delivery_hours
+              || ''
+            ).trim()
+          ) || '';
+
+          const pickupSchedule = sanitizeText(
+            String(
+              requestedPickupSchedule
+              || standards.pickup_schedule
+              || standards.pickup_hours
+              || ''
+            ).trim()
+          ) || '';
+
+          return {
+            ...subOrder,
+            certifications_required: Array.isArray(farmMeta.certifications) ? farmMeta.certifications : [],
+            practices: Array.isArray(farmMeta.practices) ? farmMeta.practices : [],
+            fulfillment_standards: standards,
+            preferred_delivery_window: preferredDeliveryWindow,
+            time_slot: preferredDeliveryWindow,
+            delivery_schedule: deliverySchedule,
+            pickup_schedule: pickupSchedule,
+            delivery_requirements: mergeRequirementLists(
+              deliveryRequirements,
+              standards.delivery_requirements,
+              standards.deliveryRequirements
+            ),
+            pickup_requirements: mergeRequirementLists(
+              pickupRequirements,
+              standards.pickup_requirements,
+              standards.pickupRequirements
+            )
+          };
+        });
+
       const provisionalOrderId = `wo-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 
       const order = createOrder({
         orderId: provisionalOrderId,
         buyerId: req.wholesaleBuyer.id,
-        buyerAccount: buyer_account,
+          buyerAccount: normalizedBuyerAccount,
         poNumber: po_number,
         deliveryDate: delivery_date,
         deliveryAddress: normalizedDeliveryAddress,
         recurrence: recurrence || { cadence: 'one_time' },
-        farmSubOrders: result.allocation.farm_sub_orders,
+          farmSubOrders: enrichedFarmSubOrders,
         totals: orderTotals
       }, { persist: false, register: false });
+
+        const deliveryScheduleList = Array.from(new Set(
+          enrichedFarmSubOrders
+            .map((subOrder) => String(subOrder.delivery_schedule || '').trim())
+            .filter(Boolean)
+        ));
+        const pickupScheduleList = Array.from(new Set(
+          enrichedFarmSubOrders
+            .map((subOrder) => String(subOrder.pickup_schedule || '').trim())
+            .filter(Boolean)
+        ));
+
       order.fulfillment_method = String(fulfillment_method || 'delivery').toLowerCase();
       order.delivery_fee = deliveryFee;
+        order.preferred_delivery_window = preferredDeliveryWindow;
+        order.time_slot = preferredDeliveryWindow;
+        order.delivery_schedule = deliveryScheduleList.join(' | ');
+        order.pickup_schedule = pickupScheduleList.join(' | ');
+        order.delivery_requirements = mergeRequirementLists(
+          deliveryRequirements,
+          ...enrichedFarmSubOrders.map((subOrder) => subOrder.delivery_requirements)
+        );
+        order.pickup_requirements = mergeRequirementLists(
+          pickupRequirements,
+          ...enrichedFarmSubOrders.map((subOrder) => subOrder.pickup_requirements)
+        );
 
       const payment = createPayment({
         orderId: order.master_order_id,
@@ -2199,7 +2490,7 @@ router.post('/checkout/execute', checkoutLimiter, requireWholesaleDbForCriticalP
             masterOrderId: order.master_order_id,
             farmSubOrders: result.allocation.farm_sub_orders.map(sub => ({
               ...sub,
-              buyer_email: buyer_account.email
+                buyer_email: normalizedBuyerAccount.email
             })),
             paymentSource: { source_id: squareSourceId },
             commissionRate
@@ -2537,9 +2828,20 @@ router.post('/checkout/execute', checkoutLimiter, requireWholesaleDbForCriticalP
                 delivery_date: order.delivery_date,
                 created_at: order.created_at,
                 payment_status: payment.status,
-                buyer_name: buyer_account?.name || buyer_account?.email || 'Wholesale Buyer',
-                buyer_email: buyer_account?.email || '',
+                  buyer_name: normalizedBuyerAccount?.businessName || normalizedBuyerAccount?.name || normalizedBuyerAccount?.email || 'Wholesale Buyer',
+                  buyer_contact_name: normalizedBuyerAccount?.contactName || normalizedBuyerAccount?.contact_name || '',
+                  buyer_email: normalizedBuyerAccount?.email || '',
+                  buyer_phone: normalizedBuyerAccount?.phone || '',
                 delivery_address: normalizedDeliveryAddress?.street || '',
+                  preferred_delivery_window: order.preferred_delivery_window || order.time_slot || null,
+                  time_slot: order.time_slot || order.preferred_delivery_window || null,
+                  delivery_schedule: sub.delivery_schedule || order.delivery_schedule || '',
+                  pickup_schedule: sub.pickup_schedule || order.pickup_schedule || '',
+                  delivery_requirements: Array.isArray(sub.delivery_requirements) ? sub.delivery_requirements : (order.delivery_requirements || []),
+                  pickup_requirements: Array.isArray(sub.pickup_requirements) ? sub.pickup_requirements : (order.pickup_requirements || []),
+                  certifications_required: Array.isArray(sub.certifications_required) ? sub.certifications_required : [],
+                  practices: Array.isArray(sub.practices) ? sub.practices : [],
+                  fulfillment_standards: sub.fulfillment_standards || {},
                 subtotal: sub.subtotal || sub.total || 0,
                 verification_deadline: new Date(Date.now() + 24 * 3600000).toISOString(),
                 items: (sub.items || []).map((it) => ({
@@ -2568,7 +2870,7 @@ router.post('/checkout/execute', checkoutLimiter, requireWholesaleDbForCriticalP
       emailService.sendEmail({
         to: adminEmail,
         subject: '[CRITICAL] Wholesale checkout fell to demo fallback — order blocked',
-        text: `A wholesale checkout attempt was BLOCKED because network allocation did not run.\n\nBuyer: ${req.wholesaleBuyer?.id} (${buyer_account?.email})\nCart items: ${cart?.length || 0}\nTime: ${new Date().toISOString()}\n\nThis means shouldUseNetworkAllocation() returned false. Check WHOLESALE_CATALOG_MODE, database readiness, and network farm connectivity.`
+          text: `A wholesale checkout attempt was BLOCKED because network allocation did not run.\n\nBuyer: ${req.wholesaleBuyer?.id} (${normalizedBuyerAccount?.email || 'unknown'})\nCart items: ${cart?.length || 0}\nTime: ${new Date().toISOString()}\n\nThis means shouldUseNetworkAllocation() returned false. Check WHOLESALE_CATALOG_MODE, database readiness, and network farm connectivity.`
       }).catch(err => console.error('[Alert] Failed to send checkout fallback alert:', err.message));
     }
 

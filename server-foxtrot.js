@@ -225,6 +225,7 @@ import marketIntelligenceRouter from './routes/market-intelligence.js';
 import wholesaleWebhooksRouter from './routes/wholesale/webhooks.js';
 import wholesaleFulfillmentWebhooksRouter from './routes/wholesale/fulfillment-webhooks.js';
 import wholesaleRefundsRouter from './routes/wholesale/refunds.js';
+import notificationStore from './greenreach-central/services/notification-store.js';
 import { extractTenantId } from './server/middleware/multi-tenant.js';
 import { generateFarmSlug } from './lib/slug-generator.js';
 import wholesaleSquareOAuthRouter from './routes/wholesale/square-oauth.js';
@@ -8088,6 +8089,84 @@ app.get('/api/sustainability/nutrient-usage', asyncHandler(async (req, res) => {
 // These endpoints serve the farm admin UI (farm-admin.js)
 // ============================================================
 
+function normalizeWholesaleStatusUpdates(body = {}) {
+  if (Array.isArray(body?.updates)) {
+    return body.updates
+      .filter((entry) => entry && entry.order_id && entry.status)
+      .map((entry) => ({
+        order_id: String(entry.order_id),
+        status: String(entry.status),
+        farm_id: entry.farm_id ? String(entry.farm_id) : null,
+        timestamp: entry.timestamp ? String(entry.timestamp) : null,
+      }));
+  }
+
+  if (body && typeof body === 'object' && !Array.isArray(body)) {
+    return Object.entries(body)
+      .map(([orderId, value]) => {
+        if (!orderId || !value) return null;
+        if (typeof value === 'string') {
+          return {
+            order_id: String(orderId),
+            status: String(value),
+            farm_id: null,
+            timestamp: null,
+          };
+        }
+        if (typeof value === 'object' && value.status) {
+          return {
+            order_id: String(orderId),
+            status: String(value.status),
+            farm_id: value.farm_id ? String(value.farm_id) : null,
+            timestamp: value.timestamp ? String(value.timestamp) : null,
+          };
+        }
+        return null;
+      })
+      .filter(Boolean);
+  }
+
+  return [];
+}
+
+function normalizeWholesaleTrackingUpdates(body = {}) {
+  if (Array.isArray(body?.updates)) {
+    return body.updates
+      .filter((entry) => entry && entry.order_id && (entry.tracking_number || typeof entry.tracking_number === 'string'))
+      .map((entry) => ({
+        order_id: String(entry.order_id),
+        tracking_number: String(entry.tracking_number || '').trim(),
+        carrier: entry.carrier ? String(entry.carrier) : null,
+      }))
+      .filter((entry) => entry.tracking_number);
+  }
+
+  if (body && typeof body === 'object' && !Array.isArray(body)) {
+    return Object.entries(body)
+      .map(([orderId, value]) => {
+        if (!orderId || !value) return null;
+        if (typeof value === 'string') {
+          return {
+            order_id: String(orderId),
+            tracking_number: String(value).trim(),
+            carrier: null,
+          };
+        }
+        if (typeof value === 'object' && (value.tracking_number || typeof value.tracking_number === 'string')) {
+          return {
+            order_id: String(orderId),
+            tracking_number: String(value.tracking_number || '').trim(),
+            carrier: value.carrier ? String(value.carrier) : null,
+          };
+        }
+        return null;
+      })
+      .filter((entry) => entry && entry.tracking_number);
+  }
+
+  return [];
+}
+
 /**
  * GET /api/wholesale/order-events
  * Returns wholesale orders for the farm admin dashboard.
@@ -8095,7 +8174,7 @@ app.get('/api/sustainability/nutrient-usage', asyncHandler(async (req, res) => {
  */
 app.get('/api/wholesale/order-events', async (req, res) => {
   try {
-    const farmId = req.headers['x-farm-id'] || req.query.farm_id || 'LOCAL-FARM';
+    const farmId = String(req.headers['x-farm-id'] || req.query.farm_id || 'LOCAL-FARM').trim() || 'LOCAL-FARM';
 
     // Get all sub-orders for this farm (no status filter = all orders)
     const subOrders = await orderStore.listFarmSubOrders(farmId);
@@ -8115,9 +8194,14 @@ app.get('/api/wholesale/order-events', async (req, res) => {
         status: sub.status || 'pending',
         timestamp: sub.created_at || sub.updated_at || new Date().toISOString(),
         created_at: sub.created_at || null,
-        items: sub.items || [],
-        total_amount: sub.sub_total || 0,
+        items: sub.items || sub.line_items || [],
+        total_amount: sub.sub_total || sub.total_amount || sub.total || 0,
         buyer_name: sub.buyer_name || buyer.businessName || buyer.business_name || buyer.contactName || '',
+        buyer_business_name: buyer.businessName || buyer.business_name || buyer.name || '',
+        buyer_contact_name: buyer.contactName || buyer.contact_name || '',
+        buyer_key_contact: buyer.keyContact || buyer.key_contact || '',
+        buyer_backup_contact: buyer.backupContact || buyer.backup_contact || '',
+        buyer_backup_phone: buyer.backupPhone || buyer.backup_phone || '',
         buyer_email: sub.buyer_email || buyer.email || '',
         buyer_phone: buyer.phone || buyer.contactPhone || sub.buyer_phone || '',
         buyer_city: addr.city || buyer.city || '',
@@ -8125,9 +8209,16 @@ app.get('/api/wholesale/order-events', async (req, res) => {
         delivery_date: sub.delivery_date || data.delivery_date || null,
         delivery_address: addrStr,
         fulfillment_method: fm,
+        preferred_delivery_window: data.preferred_delivery_window || data.time_slot || sub.preferred_delivery_window || '',
+        time_slot: data.time_slot || sub.time_slot || '',
+        delivery_schedule: data.delivery_schedule || sub.delivery_schedule || '',
+        pickup_schedule: data.pickup_schedule || sub.pickup_schedule || '',
+        delivery_requirements: data.delivery_requirements || sub.delivery_requirements || [],
+        pickup_requirements: data.pickup_requirements || sub.pickup_requirements || [],
         po_number: data.po_number || sub.po_number || '',
         notes: data.notes || buyer.notes || sub.notes || '',
         certifications_required: buyer.certifications_required || data.certifications_required || [],
+        practices: data.practices || sub.practices || [],
         gap_certified: buyer.gap_certified || data.gap_certified || false,
         notifications: data.notifications || sub.notifications || [],
         verification_deadline: sub.verification_deadline || null
@@ -8147,7 +8238,7 @@ app.get('/api/wholesale/order-events', async (req, res) => {
  */
 app.get('/api/wholesale/order-statuses', async (req, res) => {
   try {
-    const farmId = req.headers['x-farm-id'] || req.query.farm_id || 'LOCAL-FARM';
+    const farmId = String(req.headers['x-farm-id'] || req.query.farm_id || 'LOCAL-FARM').trim() || 'LOCAL-FARM';
     const subOrders = await orderStore.listFarmSubOrders(farmId);
     const statuses = {};
     for (const sub of subOrders) {
@@ -8167,13 +8258,38 @@ app.get('/api/wholesale/order-statuses', async (req, res) => {
  */
 app.post('/api/wholesale/order-statuses', express.json(), async (req, res) => {
   try {
-    const statusUpdates = req.body || {};
-    for (const [orderId, status] of Object.entries(statusUpdates)) {
-      if (orderId && status) {
-        await orderStore.updateSubOrderStatus(orderId, status);
-      }
+    const updates = normalizeWholesaleStatusUpdates(req.body);
+    if (!updates.length) {
+      return res.status(400).json({ ok: false, error: 'No valid status updates provided' });
     }
-    res.json({ ok: true });
+
+    const results = [];
+    for (const update of updates) {
+      const orderId = String(update.order_id || '');
+      const status = String(update.status || '').trim();
+      if (!orderId || !status) {
+        results.push({ order_id: orderId, status, updated: false, reason: 'missing order_id or status' });
+        continue;
+      }
+
+      const updatedCount = await orderStore.updateSubOrderStatus(orderId, status, {
+        ...(update.farm_id ? { farm_id: update.farm_id } : {}),
+        ...(update.timestamp ? { status_updated_at: update.timestamp } : {}),
+      });
+
+      results.push({
+        order_id: orderId,
+        status,
+        updated: Number(updatedCount) > 0,
+      });
+    }
+
+    res.json({
+      ok: true,
+      success: true,
+      results,
+      updated: results.filter((entry) => entry.updated).length,
+    });
   } catch (error) {
     console.error('[wholesale] order-statuses POST error:', error.message);
     res.status(500).json({ error: error.message });
@@ -8186,7 +8302,7 @@ app.post('/api/wholesale/order-statuses', express.json(), async (req, res) => {
  */
 app.get('/api/wholesale/tracking-numbers', async (req, res) => {
   try {
-    const farmId = req.headers['x-farm-id'] || req.query.farm_id || 'LOCAL-FARM';
+    const farmId = String(req.headers['x-farm-id'] || req.query.farm_id || 'LOCAL-FARM').trim() || 'LOCAL-FARM';
     const subOrders = await orderStore.listFarmSubOrders(farmId);
     const tracking = {};
     for (const sub of subOrders) {
@@ -8208,14 +8324,39 @@ app.get('/api/wholesale/tracking-numbers', async (req, res) => {
  */
 app.post('/api/wholesale/tracking-numbers', express.json(), async (req, res) => {
   try {
-    const trackingUpdates = req.body || {};
-    for (const [orderId, trackingNumber] of Object.entries(trackingUpdates)) {
-      if (orderId && trackingNumber) {
-        const sub = await orderStore.getSubOrder(orderId);
-        if (sub) await orderStore.updateSubOrderStatus(orderId, sub.status || "packed", { tracking_number: trackingNumber });
-      }
+    const updates = normalizeWholesaleTrackingUpdates(req.body);
+    if (!updates.length) {
+      return res.status(400).json({ ok: false, error: 'No valid tracking updates provided' });
     }
-    res.json({ ok: true });
+
+    const results = [];
+    for (const update of updates) {
+      const orderId = String(update.order_id || '');
+      const trackingNumber = String(update.tracking_number || '').trim();
+      if (!orderId || !trackingNumber) {
+        results.push({ order_id: orderId, updated: false, reason: 'missing order_id or tracking_number' });
+        continue;
+      }
+
+      const sub = await orderStore.getSubOrder(orderId);
+      if (!sub) {
+        results.push({ order_id: orderId, updated: false, reason: 'sub-order not found' });
+        continue;
+      }
+
+      await orderStore.updateSubOrderStatus(orderId, sub.status || 'packed', {
+        tracking_number: trackingNumber,
+        ...(update.carrier ? { tracking_carrier: update.carrier } : {}),
+      });
+      results.push({ order_id: orderId, updated: true, tracking_number: trackingNumber });
+    }
+
+    res.json({
+      ok: true,
+      success: true,
+      results,
+      updated: results.filter((entry) => entry.updated).length,
+    });
   } catch (error) {
     console.error('[wholesale] tracking-numbers POST error:', error.message);
     res.status(500).json({ error: error.message });
@@ -13313,14 +13454,17 @@ app.get('/api/wholesale/orders/:orderId/invoice', requireBuyerAuth, asyncHandler
       );
       for (const row of farmResult.rows) {
         farmProfiles[row.farm_id] = {
-          name: row.name,
-          city: row.city || '',
-          state: row.state || '',
-          certifications: row.certifications || [],
-          practices: row.practices || [],
-          attributes: row.attributes || [],
-          location: {}
-        };
+					name: row.name,
+					city: row.city || '',
+					state: row.state || '',
+					phone: '',
+					contact: {},
+					certifications: row.certifications || [],
+					practices: row.practices || [],
+					attributes: row.attributes || [],
+					location: {}
+				};
+
       }
       // Try to get coordinates from farm_data table
       const fdResult = await pool.query(
@@ -13330,12 +13474,22 @@ app.get('/api/wholesale/orders/:orderId/invoice', requireBuyerAuth, asyncHandler
       );
       for (const row of fdResult.rows) {
         const data = row.data || {};
-        if (farmProfiles[row.farm_id] && data.location) {
-          farmProfiles[row.farm_id].location = {
-            lat: data.location.lat || data.location.latitude,
-            lng: data.location.lng || data.location.longitude
-          };
-        }
+        if (farmProfiles[row.farm_id]) {
+					const profile = farmProfiles[row.farm_id];
+					const profileLocation = data.location || {};
+
+					profile.location = {
+						...profileLocation,
+						lat: profileLocation.lat || profileLocation.latitude,
+						lng: profileLocation.lng || profileLocation.longitude
+					};
+					profile.contact = data.contact || profile.contact || {};
+					profile.phone = data.phone || data.contact?.phone || data.contact?.phone_number || profile.phone || '';
+					profile.city = profile.city || data.city || profileLocation.city || '';
+					profile.state = profile.state || data.state || data.province || profileLocation.state || profileLocation.province || '';
+					profile.address = data.address || profileLocation.address || profileLocation.address1 || profile.address || '';
+				}
+
       }
     } catch (dbErr) {
       console.warn('[Invoice] Farm profile query warning:', dbErr.message);
@@ -13381,6 +13535,104 @@ app.get('/api/wholesale/orders/:orderId/invoice', requireBuyerAuth, asyncHandler
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.setHeader('Content-Disposition', `inline; filename="invoice-${masterOrderId.substring(0, 12)}.html"`);
   res.send(html);
+}));
+
+// POST /api/wholesale/orders/:orderId/contact-farms
+// Pushes a buyer contact request into each fulfillment farm's E.V.I.E. inbox.
+app.post('/api/wholesale/orders/:orderId/contact-farms', requireBuyerAuth, asyncHandler(async (req, res) => {
+  const buyerId = req.wholesaleBuyer.id;
+  const orderId = req.params.orderId;
+  const order = await orderStore.getOrder(orderId);
+
+  if (!order || String(order.buyer_id) !== String(buyerId)) {
+    return res.status(404).json({ status: 'error', message: 'Order not found' });
+  }
+
+  const masterOrderId = order.master_order_id || order.id || orderId;
+  const subOrders = await orderStore.listSubOrders(masterOrderId);
+  if (!Array.isArray(subOrders) || subOrders.length === 0) {
+    return res.status(400).json({ status: 'error', message: 'No fulfillment farms were found for this order' });
+  }
+
+  const normalizeText = (value) => String(value || '').trim().replace(/\s+/g, ' ');
+  const rawMessage = normalizeText(req.body?.message || '').slice(0, 500);
+  const buyerAccount = order.buyer_account || {};
+  const buyerBusiness = normalizeText(
+    buyerAccount.business_name
+    || buyerAccount.name
+    || buyerAccount.contact_name
+    || 'Wholesale Buyer'
+  );
+  const buyerName = normalizeText(buyerAccount.contact_name || '');
+  const buyerEmail = normalizeText(buyerAccount.email || '');
+  const buyerPhone = normalizeText(buyerAccount.phone || '');
+  const shortOrderId = String(masterOrderId).substring(0, 12);
+  const deliveryDate = order.delivery_date
+    ? new Date(order.delivery_date).toLocaleDateString('en-CA')
+    : null;
+
+  const farmsById = new Map();
+  for (const subOrder of subOrders) {
+    const farmId = normalizeText(subOrder?.farm_id || '');
+    if (!farmId || farmsById.has(farmId)) continue;
+    farmsById.set(farmId, subOrder);
+  }
+
+  const sentFarms = [];
+  const failedFarms = [];
+
+  for (const [farmId, subOrder] of farmsById.entries()) {
+    const itemPreview = (subOrder.items || subOrder.line_items || [])
+      .slice(0, 3)
+      .map((item) => {
+        const qty = Number(item.quantity || item.qty || 0);
+        const unit = normalizeText(item.unit || 'unit');
+        const name = normalizeText(item.product_name || item.sku_name || item.sku_id || 'item');
+        return `${qty} ${unit} ${name}`.trim();
+      })
+      .filter(Boolean)
+      .join(', ');
+
+    const bodyLines = [
+      `${buyerBusiness}${buyerName ? ` (${buyerName})` : ''} requested contact for wholesale order ${shortOrderId}.`,
+      rawMessage ? `Buyer note: ${rawMessage}` : 'Buyer requested a status and fulfillment update.',
+      deliveryDate ? `Requested delivery date: ${deliveryDate}` : '',
+      itemPreview ? `Items: ${itemPreview}` : '',
+      `Farm subtotal: ${Number(subOrder.subtotal || 0).toFixed(2)}`,
+      buyerEmail ? `Buyer email: ${buyerEmail}` : '',
+      buyerPhone ? `Buyer phone: ${buyerPhone}` : ''
+    ].filter(Boolean);
+
+    const notification = await notificationStore.pushNotification(farmId, {
+      category: 'order',
+      title: `Buyer contact request: Order ${shortOrderId}`,
+      body: bodyLines.join('\n'),
+      severity: 'info',
+      source: 'wholesale-buyer-portal'
+    });
+
+    if (notification) {
+      sentFarms.push({ farm_id: farmId, farm_name: subOrder.farm_name || farmId });
+    } else {
+      failedFarms.push({ farm_id: farmId, farm_name: subOrder.farm_name || farmId });
+    }
+  }
+
+  if (sentFarms.length === 0) {
+    return res.status(503).json({
+      status: 'error',
+      message: 'Farm E.V.I.E. inbox is temporarily unavailable'
+    });
+  }
+
+  return res.json({
+    status: 'ok',
+    data: {
+      requested_farms: sentFarms.length,
+      farms: sentFarms,
+      failed_farms: failedFarms
+    }
+  });
 }));
 
 // GET /api/wholesale/inventory/check-overselling - Validate inventory availability

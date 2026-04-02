@@ -45,13 +45,40 @@ function normalizeStatusUpdates(body = {}) {
   if (Array.isArray(body?.updates)) {
     return body.updates
       .filter(u => u && u.order_id && typeof u.status === 'string')
-      .map(u => ({ order_id: String(u.order_id), status: String(u.status) }));
+      .map(u => ({
+        order_id: String(u.order_id),
+        status: String(u.status),
+        farm_id: u.farm_id ? String(u.farm_id) : null,
+        timestamp: u.timestamp ? String(u.timestamp) : null,
+        notify_buyer: u.notify_buyer !== false
+      }));
   }
 
   if (body && typeof body === 'object' && !Array.isArray(body)) {
     return Object.entries(body)
-      .filter(([order_id, status]) => order_id && typeof status === 'string')
-      .map(([order_id, status]) => ({ order_id: String(order_id), status: String(status) }));
+      .map(([order_id, value]) => {
+        if (!order_id) return null;
+        if (typeof value === 'string') {
+          return {
+            order_id: String(order_id),
+            status: String(value),
+            farm_id: null,
+            timestamp: null,
+            notify_buyer: true
+          };
+        }
+        if (value && typeof value === 'object' && typeof value.status === 'string') {
+          return {
+            order_id: String(order_id),
+            status: String(value.status),
+            farm_id: value.farm_id ? String(value.farm_id) : null,
+            timestamp: value.timestamp ? String(value.timestamp) : null,
+            notify_buyer: value.notify_buyer !== false
+          };
+        }
+        return null;
+      })
+      .filter(Boolean);
   }
 
   return [];
@@ -130,7 +157,195 @@ function normalizeQueueStatus(rawStatus) {
     return 'expired';
   }
 
+  // Fuzzy fallback for status variants coming from mixed parent/sub-order flows.
+  if (status.includes('pending') || status.includes('awaiting')) return 'pending_verification';
+  if (status.includes('accept') || status.includes('confirm')) return 'confirmed';
+  if (status.includes('pack')) return 'packed';
+  if (status.includes('ship') || status.includes('fulfill')) return 'shipped';
+  if (status.includes('deliver') || status.includes('pickup')) return 'delivered';
+  if (status.includes('cancel') || status.includes('reject') || status.includes('decline')) return 'expired';
+
   return status;
+}
+
+function findMatchingSubOrder(orderData = {}, orderId) {
+  const target = String(orderId || '').trim();
+  if (!target) return null;
+  const subOrders = Array.isArray(orderData.farm_sub_orders) ? orderData.farm_sub_orders : [];
+  return subOrders.find(sub => {
+    if (!sub) return false;
+    return [sub.sub_order_id, sub.id, sub.order_id]
+      .filter(Boolean)
+      .map(value => String(value))
+      .includes(target);
+  }) || null;
+}
+
+function formatAddressLine(address = {}) {
+  const street = address.street || address.address1 || '';
+  const city = address.city || '';
+  const state = address.state || address.province || '';
+  const zip = address.zip || address.postalCode || address.postal_code || '';
+  const cityLine = [city, state, zip].filter(Boolean).join(' ');
+  return [street, cityLine].filter(Boolean).join(', ');
+}
+
+function resolveBuyerName(orderData = {}, buyerEmail = '') {
+  const buyer = orderData.buyer_account || {};
+  const preferred = [
+    buyer.businessName,
+    buyer.business_name,
+    buyer.name,
+    buyer.contactName,
+    buyer.contact_name,
+    orderData.buyer_name,
+    orderData.buyer_business_name,
+    orderData.customer_name
+  ].find(value => typeof value === 'string' && value.trim());
+  if (preferred) return preferred.trim();
+  return buyerEmail ? String(buyerEmail).split('@')[0] : 'Valued Customer';
+}
+
+function resolveStatusLabel(status, fulfillmentMethod = 'delivery') {
+  const normalized = String(status || '').toLowerCase();
+  if (normalized === 'confirmed') return 'Confirmed';
+  if (normalized === 'packed') {
+    return String(fulfillmentMethod || '').toLowerCase() === 'pickup'
+      ? 'Ready for Pickup'
+      : 'Packed and Ready';
+  }
+  if (normalized === 'ready_for_pickup') return 'Ready for Pickup';
+  if (normalized === 'shipped') return 'Shipped';
+  if (normalized === 'delivered') return 'Delivered';
+  return normalized || 'Updated';
+}
+
+function shouldNotifyBuyerForStatus(status) {
+  const normalized = String(status || '').toLowerCase();
+  return ['confirmed', 'packed', 'ready_for_pickup', 'shipped', 'delivered'].includes(normalized);
+}
+
+function appendOrderNotification(orderData, notification) {
+  if (!notification || !orderData || typeof orderData !== 'object') return;
+  if (!Array.isArray(orderData.notifications)) orderData.notifications = [];
+  orderData.notifications.push(notification);
+  if (orderData.notifications.length > 40) {
+    orderData.notifications = orderData.notifications.slice(-40);
+  }
+}
+
+async function sendBuyerStatusNotification({ orderRecord, status, farmId, orderId }) {
+  const normalizedStatus = String(status || '').toLowerCase();
+  if (!shouldNotifyBuyerForStatus(normalizedStatus)) return null;
+
+  const data = orderRecord?.order_data || orderRecord || {};
+  const buyer = data.buyer_account || {};
+  const buyerEmail = orderRecord?.buyer_email || buyer.email || '';
+  if (!buyerEmail) return null;
+
+  const fulfillment = String(data.fulfillment_method || orderRecord?.fulfillment_method || 'delivery').toLowerCase();
+  const buyerName = resolveBuyerName(data, buyerEmail);
+  const statusLabel = resolveStatusLabel(normalizedStatus, fulfillment);
+  const deliveryDate = orderRecord?.delivery_date || data.delivery_date || '';
+  const preferredWindow = data.preferred_delivery_window || data.time_slot || '';
+  const pickupSchedule = data.pickup_schedule || '';
+  const deliverySchedule = data.delivery_schedule || '';
+  const addressLine = formatAddressLine(data.delivery_address || {});
+  const poNum = data.po_number || '';
+  const subjectOrderId = orderRecord?.master_order_id || data.master_order_id || orderId;
+  const subject = `Order ${subjectOrderId} - ${statusLabel}`;
+
+  const textLines = [
+    `Hello ${buyerName},`,
+    '',
+    `Your order ${subjectOrderId} has been updated to: ${statusLabel}.`
+  ];
+  if (poNum) textLines.push(`PO Number: ${poNum}`);
+  if (deliveryDate) textLines.push(`Scheduled ${fulfillment === 'pickup' ? 'Pickup' : 'Delivery'} Date: ${new Date(deliveryDate).toLocaleDateString()}`);
+  if (preferredWindow) textLines.push(`Preferred ${fulfillment === 'pickup' ? 'Pickup' : 'Delivery'} Window: ${preferredWindow}`);
+  if (pickupSchedule && fulfillment === 'pickup') textLines.push(`Pickup Schedule: ${pickupSchedule}`);
+  if (deliverySchedule && fulfillment !== 'pickup') textLines.push(`Delivery Schedule: ${deliverySchedule}`);
+  if (addressLine && fulfillment !== 'pickup') textLines.push(`Delivery Address: ${addressLine}`);
+  textLines.push('');
+  if (normalizedStatus === 'packed' || normalizedStatus === 'ready_for_pickup') {
+    textLines.push(
+      fulfillment === 'pickup'
+        ? 'Your order is packed and ready for pickup.'
+        : 'Your order has been packed and is ready for shipment.'
+    );
+  }
+  if (normalizedStatus === 'shipped') textLines.push('Your order is on its way.');
+  if (normalizedStatus === 'delivered') textLines.push('Your order has been delivered. Thank you for your business.');
+  textLines.push('', 'If you have questions, reply to this email or contact us directly.', '', '-- GreenReach Wholesale');
+
+  const htmlBody = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2 style="color: #2d5016;">Order Update: ${statusLabel}</h2>
+      <p>Hello ${buyerName},</p>
+      <p>Your order <strong>${subjectOrderId}</strong> has been updated to: <strong>${statusLabel}</strong>.</p>
+      ${poNum ? `<p><strong>PO Number:</strong> ${poNum}</p>` : ''}
+      ${deliveryDate ? `<p><strong>Scheduled ${fulfillment === 'pickup' ? 'Pickup' : 'Delivery'}:</strong> ${new Date(deliveryDate).toLocaleDateString()}</p>` : ''}
+      ${preferredWindow ? `<p><strong>Preferred ${fulfillment === 'pickup' ? 'Pickup' : 'Delivery'} Window:</strong> ${preferredWindow}</p>` : ''}
+      ${pickupSchedule && fulfillment === 'pickup' ? `<p><strong>Pickup Schedule:</strong> ${pickupSchedule}</p>` : ''}
+      ${deliverySchedule && fulfillment !== 'pickup' ? `<p><strong>Delivery Schedule:</strong> ${deliverySchedule}</p>` : ''}
+      ${addressLine && fulfillment !== 'pickup' ? `<p><strong>Delivery Address:</strong> ${addressLine}</p>` : ''}
+      ${(normalizedStatus === 'packed' || normalizedStatus === 'ready_for_pickup')
+        ? `<p>${fulfillment === 'pickup' ? 'Your order is packed and ready for pickup.' : 'Your order has been packed and is ready for shipment.'}</p>`
+        : ''}
+      ${normalizedStatus === 'shipped' ? '<p>Your order is on its way.</p>' : ''}
+      ${normalizedStatus === 'delivered' ? '<p>Your order has been delivered. Thank you for your business.</p>' : ''}
+      <hr style="border: none; border-top: 1px solid #ddd; margin: 20px 0;" />
+      <p style="color: #666; font-size: 0.9em;">If you have questions, reply to this email or contact us directly.</p>
+      <p style="color: #666; font-size: 0.9em;">-- GreenReach Wholesale</p>
+    </div>`;
+
+  try {
+    await emailService.sendEmail({
+      to: buyerEmail,
+      subject,
+      text: textLines.join('\n'),
+      html: htmlBody,
+      farmId: farmId || orderRecord?.farm_id || null
+    });
+
+    return {
+      sent_to: buyerEmail,
+      sent_at: new Date().toISOString(),
+      status_notified: normalizedStatus,
+      subject
+    };
+  } catch (emailErr) {
+    console.error(`[Buyer Notify] Failed to send email to ${buyerEmail}:`, emailErr.message);
+    return {
+      sent_to: buyerEmail,
+      sent_at: new Date().toISOString(),
+      status_notified: normalizedStatus,
+      subject,
+      error: emailErr.message
+    };
+  }
+}
+
+async function findWholesaleOrderRecord(orderId) {
+  const direct = await query(
+    `SELECT id, master_order_id, farm_id, status, buyer_email, delivery_date, order_data, created_at, updated_at
+     FROM wholesale_orders
+     WHERE id::text = $1 OR master_order_id = $1
+     ORDER BY updated_at DESC
+     LIMIT 1`,
+    [orderId]
+  );
+  if (direct.rows[0]) return direct.rows[0];
+
+  const fuzzy = await query(
+    `SELECT id, master_order_id, farm_id, status, buyer_email, delivery_date, order_data, created_at, updated_at
+     FROM wholesale_orders
+     WHERE order_data::text ILIKE $1
+     ORDER BY updated_at DESC
+     LIMIT 1`,
+    [`%${orderId}%`]
+  );
+  return fuzzy.rows[0] || null;
 }
 
 // POST /order-statuses — Bulk status update
@@ -143,45 +358,120 @@ router.post('/order-statuses', async (req, res) => {
 
     const results = [];
     if (await isDatabaseAvailable()) {
-      for (const { order_id, status } of updates) {
+      for (const update of updates) {
+        const orderId = String(update.order_id);
+        const nextStatus = normalizeQueueStatus(update.status);
+
         try {
-          // Validate transition if current status is known.
-          // Accept both DB id and master_order_id for compatibility.
-          const current = await query(
-            `SELECT status FROM wholesale_orders WHERE id::text = $1 OR master_order_id = $1 LIMIT 1`,
-            [order_id]
-          );
-          if (current.rows.length && !isValidOrderTransition(current.rows[0].status, status)) {
-            results.push({ order_id, status, updated: false, reason: `invalid transition: ${current.rows[0].status} -> ${status}` });
-            uiOrderStatuses.set(order_id, status);
+          const dbOrder = await findWholesaleOrderRecord(orderId);
+
+          if (!dbOrder) {
+            await query(
+              `UPDATE wholesale_orders SET status = $1, updated_at = NOW() WHERE id::text = $2 OR master_order_id = $2`,
+              [nextStatus, orderId]
+            ).catch(() => {});
+            uiOrderStatuses.set(orderId, nextStatus);
+            results.push({ order_id: orderId, status: nextStatus, updated: true, reason: 'overlay_only' });
             continue;
           }
+
+          const orderData = dbOrder.order_data || {};
+          const subOrder = findMatchingSubOrder(orderData, orderId);
+          const currentStatus = normalizeQueueStatus(subOrder?.status || dbOrder.status || orderData.status || '');
+
+          if (currentStatus && currentStatus !== nextStatus && !isValidOrderTransition(currentStatus, nextStatus)) {
+            uiOrderStatuses.set(orderId, nextStatus);
+            results.push({
+              order_id: orderId,
+              status: nextStatus,
+              updated: false,
+              reason: `invalid transition: ${currentStatus} -> ${nextStatus}`
+            });
+            continue;
+          }
+
+          if (subOrder) {
+            subOrder.status = nextStatus;
+            if (update.timestamp) {
+              subOrder.status_updated_at = update.timestamp;
+            }
+          }
+          orderData.status = nextStatus;
+          orderData.status_updated_at = update.timestamp || new Date().toISOString();
+
+          let notification = null;
+          const shouldNotify = update.notify_buyer !== false
+            && shouldNotifyBuyerForStatus(nextStatus)
+            && currentStatus !== nextStatus;
+          if (shouldNotify) {
+            notification = await sendBuyerStatusNotification({
+              orderRecord: { ...dbOrder, order_data: orderData },
+              status: nextStatus,
+              farmId: update.farm_id || dbOrder.farm_id,
+              orderId
+            });
+            appendOrderNotification(orderData, notification);
+          }
+
           await query(
-            `UPDATE wholesale_orders SET status = $1, updated_at = NOW() WHERE id::text = $2 OR master_order_id = $2`,
-            [status, order_id]
+            `UPDATE wholesale_orders
+                SET status = $1,
+                    order_data = $2::jsonb,
+                    updated_at = NOW()
+              WHERE id = $3`,
+            [nextStatus, JSON.stringify(orderData), dbOrder.id]
           );
-          // Keep in-memory order object in sync with DB column
-          const memOrder = await getOrderById(order_id, { includeArchived: true });
+
+          const memOrderKey = dbOrder.master_order_id || orderId;
+          const memOrder = await getOrderById(memOrderKey, { includeArchived: true });
           if (memOrder) {
-            memOrder.status = status;
-            memOrder.status_updated_at = new Date().toISOString();
+            memOrder.status = nextStatus;
+            memOrder.status_updated_at = orderData.status_updated_at;
+
+            if (subOrder && Array.isArray(memOrder.farm_sub_orders)) {
+              const memSub = findMatchingSubOrder(memOrder, orderId);
+              if (memSub) {
+                memSub.status = nextStatus;
+                if (update.timestamp) memSub.status_updated_at = update.timestamp;
+              }
+            }
+
+            if (Array.isArray(orderData.notifications)) {
+              memOrder.notifications = orderData.notifications;
+            }
             await saveOrder(memOrder).catch(() => {});
           }
-          uiOrderStatuses.set(order_id, status);
-          results.push({ order_id, status, updated: true });
-        } catch {
-          uiOrderStatuses.set(order_id, status);
-          results.push({ order_id, status, updated: false });
+
+          uiOrderStatuses.set(orderId, nextStatus);
+          if (dbOrder.master_order_id) uiOrderStatuses.set(String(dbOrder.master_order_id), nextStatus);
+          if (subOrder?.sub_order_id) uiOrderStatuses.set(String(subOrder.sub_order_id), nextStatus);
+          if (subOrder?.id) uiOrderStatuses.set(String(subOrder.id), nextStatus);
+
+          results.push({
+            order_id: orderId,
+            status: nextStatus,
+            updated: true,
+            notification
+          });
+        } catch (err) {
+          uiOrderStatuses.set(orderId, nextStatus);
+          results.push({ order_id: orderId, status: nextStatus, updated: false, reason: err.message });
         }
       }
     } else {
       updates.forEach(u => {
-        uiOrderStatuses.set(u.order_id, u.status);
-        results.push({ ...u, updated: true, note: 'in-memory' });
+        const normalized = normalizeQueueStatus(u.status);
+        uiOrderStatuses.set(u.order_id, normalized);
+        results.push({ ...u, status: normalized, updated: true, note: 'in-memory' });
       });
     }
 
-    res.json({ success: true, results, updated: results.filter(r => r.updated).length });
+    res.json({
+      success: true,
+      results,
+      updated: results.filter(r => r.updated).length,
+      notifications_sent: results.filter(r => r.notification && !r.notification.error).length
+    });
   } catch (error) {
     console.error('[Wholesale] Order statuses error:', error.message);
     res.status(500).json({ success: false, error: error.message });
@@ -401,9 +691,14 @@ router.get('/order-events', async (req, res) => {
             farm_name: subOrder?.farm_name || '',
             event: effectiveStatus,
             status: effectiveStatus,
-            buyer_name: buyer.businessName || buyer.business_name || buyer.contactName || buyer.contact_name || '',
+              buyer_name: buyer.businessName || buyer.business_name || buyer.name || buyer.contactName || buyer.contact_name || '',
+              buyer_business_name: buyer.businessName || buyer.business_name || buyer.name || '',
+              buyer_contact_name: buyer.contactName || buyer.contact_name || '',
             buyer_email: o.buyer_email || buyer.email || '',
             buyer_phone: buyer.phone || buyer.contactPhone || '',
+              buyer_key_contact: buyer.keyContact || buyer.key_contact || '',
+              buyer_backup_contact: buyer.backupContact || buyer.backup_contact || '',
+              buyer_backup_phone: buyer.backupPhone || buyer.backup_phone || '',
             buyer_city: addr.city || buyer.city || '',
             buyer_state: addr.state || addr.province || buyer.state || '',
             delivery_date: o.delivery_date || data.delivery_date || null,
@@ -411,6 +706,12 @@ router.get('/order-events', async (req, res) => {
               ? `${addr.street}, ${addr.city || ''} ${addr.state || addr.province || ''} ${addr.zip || addr.postal_code || ''}`.trim()
               : '',
             fulfillment_method: fm,
+              preferred_delivery_window: data.preferred_delivery_window || data.time_slot || subOrder?.preferred_delivery_window || '',
+              time_slot: data.time_slot || subOrder?.time_slot || '',
+              delivery_schedule: data.delivery_schedule || subOrder?.delivery_schedule || '',
+              pickup_schedule: data.pickup_schedule || subOrder?.pickup_schedule || '',
+              delivery_requirements: data.delivery_requirements || [],
+              pickup_requirements: data.pickup_requirements || [],
             po_number: data.po_number || '',
             amount: subOrder?.sub_total || subOrder?.total_amount || o.total_amount,
             total_amount: subOrder?.sub_total || subOrder?.total_amount || o.total_amount,
@@ -670,85 +971,17 @@ router.post('/order-status', requireFarmApiKey, async (req, res) => {
 
       console.log(`Updated order ${order_id} status to ${status}`);
 
-      // Send buyer email notification on meaningful status transitions
-      let notification = null;
-      const notifyStatuses = ['confirmed', 'packed', 'shipped', 'delivered'];
-      const buyerEmail = order.buyer_email || order.order_data?.buyer_account?.email || '';
-      if (buyerEmail && notifyStatuses.includes(status)) {
-        try {
-          const buyerName = order.order_data?.buyer_account?.contactName
-                         || order.order_data?.buyer_account?.businessName
-                         || 'Valued Customer';
-          const statusLabels = {
-            confirmed: 'Confirmed',
-            packed: 'Packed and Ready',
-            shipped: 'Shipped',
-            delivered: 'Delivered'
-          };
-          const deliveryDate = order.delivery_date || order.order_data?.delivery_date || '';
-          const fulfillment = String(order.order_data?.fulfillment_method || 'delivery').toLowerCase();
-          const addr = order.order_data?.delivery_address || {};
-          const addrLine = addr.street
-            ? `${addr.street}, ${addr.city || ''} ${addr.state || ''} ${addr.zip || ''}`
-            : '';
-          const poNum = order.order_data?.po_number || '';
-
-          const subject = `Order ${order.master_order_id || order_id} - ${statusLabels[status] || status}`;
-          const textLines = [
-            `Hello ${buyerName},`,
-            '',
-            `Your order ${order.master_order_id || order_id} has been updated to: ${statusLabels[status] || status}.`,
-          ];
-          if (poNum) textLines.push(`PO Number: ${poNum}`);
-          if (deliveryDate) textLines.push(`Scheduled ${fulfillment === 'pickup' ? 'Pickup' : 'Delivery'} Date: ${new Date(deliveryDate).toLocaleDateString()}`);
-          if (addrLine && fulfillment !== 'pickup') textLines.push(`Delivery Address: ${addrLine}`);
-          textLines.push('');
-          if (status === 'packed') textLines.push('Your order has been packed and is ready for ' + (fulfillment === 'pickup' ? 'pickup.' : 'shipment.'));
-          if (status === 'shipped') textLines.push('Your order is on its way!');
-          if (status === 'delivered') textLines.push('Your order has been delivered. Thank you for your business!');
-          textLines.push('', 'If you have questions, reply to this email or contact us directly.', '', '-- GreenReach Wholesale');
-
-          const htmlBody = `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-              <h2 style="color: #2d5016;">Order Update: ${statusLabels[status] || status}</h2>
-              <p>Hello ${buyerName},</p>
-              <p>Your order <strong>${order.master_order_id || order_id}</strong> has been updated to: <strong>${statusLabels[status] || status}</strong>.</p>
-              ${poNum ? `<p><strong>PO Number:</strong> ${poNum}</p>` : ''}
-              ${deliveryDate ? `<p><strong>Scheduled ${fulfillment === 'pickup' ? 'Pickup' : 'Delivery'}:</strong> ${new Date(deliveryDate).toLocaleDateString()}</p>` : ''}
-              ${addrLine && fulfillment !== 'pickup' ? `<p><strong>Delivery Address:</strong> ${addrLine}</p>` : ''}
-              ${status === 'packed' ? `<p>Your order has been packed and is ready for ${fulfillment === 'pickup' ? 'pickup' : 'shipment'}.</p>` : ''}
-              ${status === 'shipped' ? '<p>Your order is on its way!</p>' : ''}
-              ${status === 'delivered' ? '<p>Your order has been delivered. Thank you for your business!</p>' : ''}
-              <hr style="border: none; border-top: 1px solid #ddd; margin: 20px 0;" />
-              <p style="color: #666; font-size: 0.9em;">If you have questions, reply to this email or contact us directly.</p>
-              <p style="color: #666; font-size: 0.9em;">-- GreenReach Wholesale</p>
-            </div>`;
-
-          await emailService.sendEmail({
-            to: buyerEmail,
-            subject,
-            text: textLines.join('\n'),
-            html: htmlBody,
-            farmId: farm_id || order.farm_id
-          });
-
-          notification = {
-            sent_to: buyerEmail,
-            sent_at: new Date().toISOString(),
-            status_notified: status,
-            subject
-          };
-          console.log(`[Buyer Notify] Email sent to ${buyerEmail} for order ${order_id} -> ${status}`);
-        } catch (emailErr) {
-          console.error(`[Buyer Notify] Failed to send email to ${buyerEmail}:`, emailErr.message);
-          notification = { sent_to: buyerEmail, error: emailErr.message, sent_at: new Date().toISOString() };
-        }
-      }
+      // Send buyer email notification on meaningful status transitions.
+      const notification = await sendBuyerStatusNotification({
+        orderRecord: { ...order, order_data: order.order_data || order },
+        status,
+        farmId: farm_id || order.farm_id,
+        orderId: order_id
+      });
 
       // Persist notification record on the order
       if (notification) {
-        if (!order.notifications) order.notifications = [];
-        order.notifications.push(notification);
+        appendOrderNotification(order, notification);
         await saveOrder(order).catch(() => {});
       }
 

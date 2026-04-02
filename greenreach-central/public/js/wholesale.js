@@ -265,7 +265,7 @@
         if (reorderBtn) return this.reorder(reorderBtn.dataset.orderid);
 
         const contactBtn = target.closest('[data-action="contact-farm"]');
-        if (contactBtn) return this.showToast('Contact feature coming soon', 'info');
+        if (contactBtn) return this.contactFarms(contactBtn.dataset.orderid);
       });
     },
 
@@ -1728,6 +1728,63 @@
       } catch (error) {
         console.error('Reorder error:', error);
         this.showToast('Failed to reorder', 'error');
+      }
+    },
+
+    async contactFarms(orderId) {
+      const order = this.orders.find((o) => o.master_order_id === orderId);
+      if (!order) {
+        this.showToast('Order not found', 'error');
+        return;
+      }
+
+      const farmIds = new Set((order.farm_sub_orders || []).map((sub) => String(sub.farm_id || '').trim()).filter(Boolean));
+      const farmCount = farmIds.size;
+      if (!farmCount) {
+        this.showToast('No fulfillment farms found for this order', 'error');
+        return;
+      }
+
+      const shortOrderId = String(order.master_order_id || orderId).substring(0, 8);
+      const defaultMessage = `Hello, this is ${this.currentBuyer?.businessName || 'your wholesale buyer'}. Please share an update on order #${shortOrderId}.`;
+      const message = window.prompt(
+        `Send a note to ${farmCount} farm E.V.I.E. inbox${farmCount === 1 ? '' : 'es'}.`,
+        defaultMessage
+      );
+
+      if (message == null) return;
+
+      try {
+        this.showLoading('Sending to farm E.V.I.E. inbox...');
+
+        const { response, json } = await this.apiFetch(`/api/wholesale/orders/${encodeURIComponent(orderId)}/contact-farms`, {
+          method: 'POST',
+          body: JSON.stringify({ message: String(message || '').trim().slice(0, 500) })
+        });
+
+        this.hideLoading();
+
+        if (response.ok && json?.status === 'ok') {
+          const sentCount = Number(json?.data?.requested_farms || 0);
+          const failedCount = Array.isArray(json?.data?.failed_farms) ? json.data.failed_farms.length : 0;
+
+          if (failedCount > 0) {
+            this.showToast(`Sent to ${sentCount} farm E.V.I.E. inbox${sentCount === 1 ? '' : 'es'} (${failedCount} unavailable)`, 'info');
+          } else {
+            this.showToast(`Sent to ${sentCount} farm E.V.I.E. inbox${sentCount === 1 ? '' : 'es'}`, 'success');
+          }
+
+          if (window.EVIE && typeof window.EVIE.notice === 'function') {
+            window.EVIE.notice('Farm E.V.I.E. inbox notified');
+          }
+          return;
+        }
+
+        this.showToast(json?.message || 'Unable to reach farm E.V.I.E. inbox', 'error');
+      } catch (error) {
+        this.hideLoading();
+        console.error('Contact farms error:', error);
+        this.showToast('Unable to reach farm E.V.I.E. inbox', 'error');
       }
     },
 

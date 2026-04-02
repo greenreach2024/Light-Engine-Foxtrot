@@ -100,7 +100,15 @@ export async function refreshNetworkInventory() {
 
   results.forEach((result, idx) => {
     if (result.status === 'fulfilled' && result.value && !result.value.error) {
-      farmInventories.push(result.value);
+      const farmMeta = farmsWithUrl[idx] || {};
+      farmInventories.push({
+        ...result.value,
+        certifications: Array.isArray(farmMeta.certifications) ? farmMeta.certifications : [],
+        practices: Array.isArray(farmMeta.practices) ? farmMeta.practices : [],
+        fulfillment_standards: farmMeta.fulfillment_standards || {},
+        contact: farmMeta.contact || {},
+        location: farmMeta.location || {}
+      });
     } else {
       const farm = farmsWithUrl[idx];
       const farmId = farm?.farm_id || `farm-${idx}`;
@@ -418,7 +426,12 @@ export async function buildAggregateCatalog() {
       farm_id: f.farm_id,
       farm_name: f.farm_name,
       lot_count: f.lots.length,
-      timestamp: f.timestamp
+      timestamp: f.timestamp,
+      certifications: Array.isArray(f.certifications) ? f.certifications : [],
+      practices: Array.isArray(f.practices) ? f.practices : [],
+      fulfillment_standards: f.fulfillment_standards || {},
+      location: f.location || {},
+      contact: f.contact || {}
     })),
     lastRefresh: inventoryCache.lastRefresh,
     diagnostics: {

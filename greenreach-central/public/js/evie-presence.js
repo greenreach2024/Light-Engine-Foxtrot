@@ -29,6 +29,11 @@
   };
   var pollTimer = null;
   var proactiveTimer = null;
+  var notifData = [];
+  var notifUnread = 0;
+  var lastUnreadCount = 0;
+  var notifBaselineSeen = false;
+  var audioContextRef = null;
 
   // ── Auth ─────────────────────────────────────────────────────
   function getAuthHeaders() {
@@ -97,6 +102,63 @@
     return Math.floor(h / 24) + 'd ago';
   }
 
+  function unlockNotificationAudio() {
+    var AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextCtor) return;
+    if (!audioContextRef) audioContextRef = new AudioContextCtor();
+    if (audioContextRef.state === 'suspended') {
+      audioContextRef.resume().catch(function () { /* autoplay restrictions */ });
+    }
+  }
+
+  function playNotificationDong() {
+    var AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextCtor) return;
+    if (!audioContextRef) audioContextRef = new AudioContextCtor();
+
+    if (audioContextRef.state === 'suspended') {
+      audioContextRef.resume().catch(function () { /* autoplay restrictions */ });
+    }
+    if (audioContextRef.state !== 'running') return;
+
+    var now = audioContextRef.currentTime;
+    var master = audioContextRef.createGain();
+    master.gain.setValueAtTime(0.0001, now);
+    master.gain.exponentialRampToValueAtTime(0.2, now + 0.02);
+    master.gain.exponentialRampToValueAtTime(0.0001, now + 1.2);
+    master.connect(audioContextRef.destination);
+
+    function strike(freq, start, duration, peak, type) {
+      var osc = audioContextRef.createOscillator();
+      var amp = audioContextRef.createGain();
+      osc.type = type || 'sine';
+      osc.frequency.setValueAtTime(freq, start);
+      osc.frequency.exponentialRampToValueAtTime(Math.max(60, freq * 0.88), start + duration);
+      amp.gain.setValueAtTime(0.0001, start);
+      amp.gain.exponentialRampToValueAtTime(peak, start + 0.03);
+      amp.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+      osc.connect(amp);
+      amp.connect(master);
+      osc.start(start);
+      osc.stop(start + duration + 0.05);
+    }
+
+    strike(740, now + 0.01, 0.8, 0.22, 'triangle');
+    strike(1110, now + 0.06, 0.55, 0.08, 'sine');
+    strike(1480, now + 0.09, 0.35, 0.05, 'sine');
+  }
+
+  function triggerNotificationArrivalCue() {
+    var bell = document.getElementById('evie-notif-bell');
+    if (bell) {
+      bell.classList.remove('new-arrival');
+      void bell.offsetWidth;
+      bell.classList.add('new-arrival');
+      setTimeout(function () { bell.classList.remove('new-arrival'); }, 2200);
+    }
+    playNotificationDong();
+  }
+
   // ── Layer 1: Ambient Presence ────────────────────────────────
 
   var ambient = document.createElement('div');
@@ -128,6 +190,7 @@
   notifBell.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg><span class="evie-notif-count" id="evie-notif-count"></span>';
   notifBell.addEventListener('click', function (e) {
     e.stopPropagation();
+    unlockNotificationAudio();
     togglePanel(true);
     switchMode('inbox');
   });
@@ -282,6 +345,7 @@
   function inject() {
     document.body.appendChild(ambient);
     document.body.appendChild(panel);
+    document.addEventListener('pointerdown', unlockNotificationAudio, { once: true, passive: true });
     startPolling();
     attachChatEvents();
     refreshState();
@@ -466,19 +530,22 @@
   // ── Notification Badge + Loading ─────────────────────────────
 
   function updateNotifBadge(count) {
-    notifUnread = count;
+    var nextCount = Number(count || 0);
+    if (!Number.isFinite(nextCount) || nextCount < 0) nextCount = 0;
+
+    notifUnread = nextCount;
     var badge = document.getElementById('evie-notif-count');
     var bell = document.getElementById('evie-notif-bell');
     var inboxCount = document.getElementById('evie-notif-inbox-count');
-    if (badge) badge.textContent = count > 0 ? String(count) : '';
-    if (bell) bell.classList.toggle('has-unread', count > 0);
-    if (inboxCount) inboxCount.textContent = String(count);
+    if (badge) badge.textContent = nextCount > 0 ? String(nextCount) : '';
+    if (bell) bell.classList.toggle('has-unread', nextCount > 0);
+    if (inboxCount) inboxCount.textContent = String(nextCount);
 
     // Also update the inbox tab itself
     var inboxTab = tabBar.querySelector('[data-mode="inbox"]');
     if (inboxTab) {
       var existing = inboxTab.querySelector('.evie-tab-badge');
-      if (count > 0) {
+      if (nextCount > 0) {
         if (!existing) {
           var dot = document.createElement('span');
           dot.className = 'evie-tab-badge';
@@ -488,6 +555,17 @@
         existing.remove();
       }
     }
+
+    if (!notifBaselineSeen) {
+      notifBaselineSeen = true;
+      lastUnreadCount = nextCount;
+      return;
+    }
+
+    if (nextCount > lastUnreadCount) {
+      triggerNotificationArrivalCue();
+    }
+    lastUnreadCount = nextCount;
   }
 
   async function loadNotifications() {

@@ -478,6 +478,31 @@ app.post('/data/farm-settings.json', async (req, res) => {
   }
   try {
     await farmStore.set(fid, 'farm_settings', req.body);
+
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const standards = body.fulfillmentStandards || body.fulfillment_standards || {};
+    const normalizeList = (value) => {
+      if (Array.isArray(value)) {
+        return value.map((item) => String(item || '').trim()).filter(Boolean);
+      }
+      if (typeof value === 'string') {
+        return value.split(/\r?\n|;/).map((item) => String(item || '').trim()).filter(Boolean);
+      }
+      return [];
+    };
+
+    const fulfillmentStandards = {
+      pickup_schedule: String(standards.pickup_schedule || body.pickupSchedule || '').trim(),
+      delivery_schedule: String(standards.delivery_schedule || body.deliverySchedule || '').trim(),
+      pickup_requirements: normalizeList(standards.pickup_requirements || body.pickupRequirements),
+      delivery_requirements: normalizeList(standards.delivery_requirements || body.deliveryRequirements),
+    };
+
+    await upsertNetworkFarm(fid, {
+      fulfillment_standards: fulfillmentStandards
+    }).catch((networkErr) => {
+      logger.warn('[Farm Settings] Failed to sync fulfillment standards to network farm:', networkErr.message);
+    });
     return res.json({ success: true, dataType: 'farm_settings', farmId: fid });
   } catch (err) {
     logger.error('[Farm Settings] Save failed:', err.message);

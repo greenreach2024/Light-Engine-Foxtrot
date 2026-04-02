@@ -3701,6 +3701,151 @@ function normalizeWholesaleQueueStatus(rawStatus) {
     return status;
 }
 
+function normalizeWholesaleList(rawValue) {
+    if (Array.isArray(rawValue)) {
+        return rawValue.map((item) => String(item || '').trim()).filter(Boolean);
+    }
+    if (typeof rawValue === 'string') {
+        return rawValue
+            .split(/\r?\n|;/)
+            .map((item) => String(item || '').trim())
+            .filter(Boolean);
+    }
+    return [];
+}
+
+function mergeWholesaleLists(...values) {
+    const merged = [];
+    const seen = new Set();
+
+    values.forEach((value) => {
+        normalizeWholesaleList(value).forEach((item) => {
+            const key = item.toLowerCase();
+            if (!key || seen.has(key)) return;
+            seen.add(key);
+            merged.push(item);
+        });
+    });
+
+    return merged;
+}
+
+const WHOLESALE_ORDER_HISTORY_LIMIT = 300;
+
+function getWholesaleFarmId() {
+    const session = (typeof getSession === 'function') ? getSession() : null;
+    return session?.farmId
+        || session?.farm_id
+        || currentSession?.farmId
+        || currentSession?.farm_id
+        || localStorage.getItem('farm_id')
+        || localStorage.getItem('farmId')
+        || sessionStorage.getItem('farm_id')
+        || sessionStorage.getItem('farmId')
+        || 'LOCAL-FARM';
+}
+
+function getWholesaleHistoryStorageKey() {
+    const farmId = String(getWholesaleFarmId() || 'LOCAL-FARM').trim() || 'LOCAL-FARM';
+    return `le_wholesale_order_history:${farmId}`;
+}
+
+function normalizeWholesaleTimestamp(order) {
+    const ts = new Date(
+        order?.updated_at
+        || order?.timestamp
+        || order?.created_at
+        || Date.now()
+    ).getTime();
+    return Number.isFinite(ts) ? ts : 0;
+}
+
+function loadWholesaleOrderHistory() {
+    try {
+        const raw = localStorage.getItem(getWholesaleHistoryStorageKey());
+        if (!raw) return [];
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : [];
+    } catch (error) {
+        console.warn('[Wholesale] Could not parse order history:', error.message);
+        return [];
+    }
+}
+
+function saveWholesaleOrderHistory(orders) {
+    if (!Array.isArray(orders)) return;
+    try {
+        localStorage.setItem(getWholesaleHistoryStorageKey(), JSON.stringify(orders.slice(0, WHOLESALE_ORDER_HISTORY_LIMIT)));
+    } catch (error) {
+        console.warn('[Wholesale] Could not persist order history:', error.message);
+    }
+}
+
+function buildWholesaleRequestHeaders(extraHeaders = {}) {
+    const token = getSession()?.token || currentSession?.token || '';
+    const farmId = getWholesaleFarmId();
+    return {
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        ...(farmId ? { 'x-farm-id': String(farmId) } : {}),
+        ...extraHeaders
+    };
+}
+
+function mergeWholesaleOrders(liveOrders, statusData = {}, trackingData = {}) {
+    const orderMap = new Map();
+    const history = loadWholesaleOrderHistory();
+
+    const absorbOrder = (rawOrder) => {
+        if (!rawOrder || typeof rawOrder !== 'object') return;
+
+        const orderId = String(rawOrder.order_id || '').trim();
+        if (!orderId) return;
+
+        const existing = orderMap.get(orderId) || {};
+        const merged = {
+            ...existing,
+            ...rawOrder,
+            order_id: orderId
+        };
+
+        const overlaidStatus = Object.prototype.hasOwnProperty.call(statusData, orderId)
+            ? statusData[orderId]
+            : (merged.status || merged.event || 'pending_verification');
+        merged.status = normalizeWholesaleQueueStatus(overlaidStatus);
+
+        const overlaidTracking = Object.prototype.hasOwnProperty.call(trackingData, orderId)
+            ? trackingData[orderId]
+            : merged.tracking_number;
+        merged.tracking_number = overlaidTracking || null;
+
+        if (!merged.timestamp) {
+            merged.timestamp = merged.updated_at || merged.created_at || new Date().toISOString();
+        }
+
+        orderMap.set(orderId, merged);
+    };
+
+    history.forEach(absorbOrder);
+    (Array.isArray(liveOrders) ? liveOrders : []).forEach(absorbOrder);
+
+    const now = Date.now();
+    const mergedOrders = Array.from(orderMap.values())
+        .filter((order) => {
+            const status = normalizeWholesaleQueueStatus(order.status || order.event);
+            const timestamp = normalizeWholesaleTimestamp(order);
+            if ((status === 'expired' || status === 'delivered') && timestamp > 0) {
+                const ageDays = (now - timestamp) / (24 * 60 * 60 * 1000);
+                if (ageDays > 45) return false;
+            }
+            return true;
+        })
+        .sort((a, b) => normalizeWholesaleTimestamp(b) - normalizeWholesaleTimestamp(a))
+        .slice(0, WHOLESALE_ORDER_HISTORY_LIMIT);
+
+    saveWholesaleOrderHistory(mergedOrders);
+    return mergedOrders;
+}
+
 /**
  * Refresh wholesale orders from the API
  */
@@ -3714,9 +3859,7 @@ async function refreshWholesaleOrders() {
     
     try {
         const response = await fetch(`${API_BASE}/api/wholesale/order-events`, {
-            headers: {
-                'Authorization': `Bearer ${getSession()?.token || ''}`
-            }
+            headers: buildWholesaleRequestHeaders()
         });
         
         if (!response.ok) {
@@ -3725,8 +3868,14 @@ async function refreshWholesaleOrders() {
         
         const data = await response.json();
         const orders = data.events || [];
-        
-        if (orders.length === 0) {
+
+        // Load order statuses from storage
+        const statusData = await loadOrderStatuses();
+        const trackingData = await loadTrackingNumbers();
+
+        const mergedOrders = mergeWholesaleOrders(orders, statusData, trackingData);
+
+        if (mergedOrders.length === 0) {
             container.innerHTML = `
                 <div style="text-align: center; padding: 3rem; color: var(--text-muted);">
                     <div style="font-size: 3rem; margin-bottom: 1rem;"></div>
@@ -3736,29 +3885,9 @@ async function refreshWholesaleOrders() {
             `;
             return;
         }
-        
-        // Load order statuses from storage
-        const statusData = await loadOrderStatuses();
-        const trackingData = await loadTrackingNumbers();
-        
-        // Group orders by order_id
-        const orderMap = new Map();
-        orders.forEach(event => {
-            const orderId = event.order_id;
-            if (!orderMap.has(orderId)) {
-                orderMap.set(orderId, {
-                    ...event,
-                    status: normalizeWholesaleQueueStatus(
-                        statusData[orderId] || event.status || event.event || 'pending_verification'
-                    ),
-                    tracking_number: trackingData[orderId] || null
-                });
-            }
-        });
-        
+
         // Render orders
-        container.innerHTML = Array.from(orderMap.values())
-            .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+        container.innerHTML = mergedOrders
             .map(order => renderOrderCard(order))
             .join('');
             
@@ -3824,6 +3953,10 @@ function renderOrderCard(order) {
         || order.customer_name
         || (buyerEmail ? buyerEmail.split('@')[0] : '')
         || 'Buyer';
+    const buyerContactName = order.buyer_contact_name || '';
+    const buyerKeyContact = order.buyer_key_contact || '';
+    const buyerBackupContact = order.buyer_backup_contact || '';
+    const buyerBackupPhone = order.buyer_backup_phone || '';
     const buyerPhone = order.buyer_phone || '';
     const buyerLocation = [order.buyer_city, order.buyer_state].filter(Boolean).join(', ');
 
@@ -3833,12 +3966,21 @@ function renderOrderCard(order) {
     const fmLabel = isPickup ? 'Pickup' : 'Delivery';
     const deliveryDate = order.delivery_date ? new Date(order.delivery_date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : '';
     const deliveryAddr = order.delivery_address || '';
+    const preferredWindow = order.preferred_delivery_window || order.time_slot || '';
+    const deliverySchedule = order.delivery_schedule || '';
+    const pickupSchedule = order.pickup_schedule || '';
+    const scheduleLabel = isPickup ? 'Pickup Schedule' : 'Delivery Schedule';
+    const scheduleValue = isPickup ? pickupSchedule : deliverySchedule;
+    const deliveryRequirements = mergeWholesaleLists(order.delivery_requirements);
+    const pickupRequirements = mergeWholesaleLists(order.pickup_requirements);
+    const fulfillmentRequirements = isPickup ? pickupRequirements : deliveryRequirements;
     const poNumber = order.po_number || '';
     const notes = order.notes || '';
 
     // GAP / Certification
     const gapCertified = order.gap_certified;
-    const certsRequired = order.certifications_required || [];
+    const certsRequired = normalizeWholesaleList(order.certifications_required);
+    const practices = normalizeWholesaleList(order.practices);
 
     // Notifications
     const notifications = order.notifications || [];
@@ -3883,8 +4025,11 @@ function renderOrderCard(order) {
             <div style="background: var(--bg-secondary); padding: 1rem; border-radius: 6px; margin-bottom: 0.75rem;">
                 <h4 style="color: var(--text-secondary); margin-bottom: 0.5rem; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.5px;">Buyer Details</h4>
                 ${buyerName ? `<div style="color: var(--text-primary); font-weight: 600; font-size: 1rem; margin-bottom: 4px;">${buyerName}</div>` : ''}
+                ${buyerContactName ? `<div style="color: var(--text-secondary); font-size: 0.9rem;">Primary Contact: ${buyerContactName}</div>` : ''}
+                ${buyerKeyContact ? `<div style="color: var(--text-secondary); font-size: 0.9rem;">Key Contact: ${buyerKeyContact}</div>` : ''}
                 ${buyerEmail ? `<div style="color: var(--text-secondary); font-size: 0.9rem;">Email: ${buyerEmail}</div>` : ''}
                 ${buyerPhone ? `<div style="color: var(--text-secondary); font-size: 0.9rem;">Phone: ${buyerPhone}</div>` : ''}
+                ${buyerBackupContact ? `<div style="color: var(--text-secondary); font-size: 0.9rem;">Backup Contact: ${buyerBackupContact}${buyerBackupPhone ? ` (${buyerBackupPhone})` : ''}</div>` : ''}
                 ${buyerLocation ? `<div style="color: var(--text-secondary); font-size: 0.9rem;">Location: ${buyerLocation}</div>` : ''}
                 ${!buyerName && !buyerEmail ? '<div style="color: var(--text-muted); font-style: italic;">No buyer details available</div>' : ''}
             </div>
@@ -3901,6 +4046,16 @@ function renderOrderCard(order) {
                         <span style="color: var(--text-muted); font-size: 0.8rem;">Scheduled Date</span>
                         <div style="color: var(--text-primary); font-weight: 600;">${deliveryDate || 'Not scheduled'}</div>
                     </div>
+                    ${preferredWindow ? `
+                    <div>
+                        <span style="color: var(--text-muted); font-size: 0.8rem;">Preferred Window</span>
+                        <div style="color: var(--text-primary); font-weight: 600;">${preferredWindow}</div>
+                    </div>` : ''}
+                    ${scheduleValue ? `
+                    <div>
+                        <span style="color: var(--text-muted); font-size: 0.8rem;">${scheduleLabel}</span>
+                        <div style="color: var(--text-primary); font-weight: 600;">${scheduleValue}</div>
+                    </div>` : ''}
                     ${!isPickup && deliveryAddr ? `
                     <div style="grid-column: 1 / -1;">
                         <span style="color: var(--text-muted); font-size: 0.8rem;">Delivery Address</span>
@@ -3911,16 +4066,22 @@ function renderOrderCard(order) {
                         <span style="color: var(--text-muted); font-size: 0.8rem;">Pickup Location</span>
                         <div style="color: var(--text-primary);">Farm / Warehouse (confirm with buyer)</div>
                     </div>` : ''}
+                    ${fulfillmentRequirements.length ? `
+                    <div style="grid-column: 1 / -1;">
+                        <span style="color: var(--text-muted); font-size: 0.8rem;">${isPickup ? 'Pickup Requirements' : 'Delivery Requirements'}</span>
+                        <div style="color: var(--text-primary); line-height: 1.4;">${fulfillmentRequirements.join(' • ')}</div>
+                    </div>` : ''}
                 </div>
                 ${notes ? `<div style="margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid var(--border);"><span style="color: var(--text-muted); font-size: 0.8rem;">Notes:</span> <span style="color: var(--text-secondary);">${notes}</span></div>` : ''}
             </div>
 
             <!-- GAP / CERTIFICATIONS -->
-            ${gapCertified || certsRequired.length > 0 ? `
+            ${gapCertified || certsRequired.length > 0 || practices.length > 0 ? `
             <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.3); padding: 0.75rem 1rem; border-radius: 6px; margin-bottom: 0.75rem;">
                 <h4 style="color: #10b981; margin-bottom: 0.5rem; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.5px;">Certifications / Compliance</h4>
                 ${gapCertified ? '<div style="color: var(--text-primary); margin-bottom: 4px;">[GAP Certified] Good Agricultural Practices verified</div>' : ''}
                 ${certsRequired.length > 0 ? `<div style="color: var(--text-secondary); font-size: 0.9rem;">Required: ${certsRequired.join(', ')}</div>` : ''}
+                ${practices.length > 0 ? `<div style="color: var(--text-secondary); font-size: 0.9rem; margin-top: 4px;">Practices: ${practices.join(', ')}</div>` : ''}
             </div>` : ''}
 
             <!-- ORDER ITEMS -->
@@ -4090,25 +4251,36 @@ async function updateOrderStatus(orderId, newStatus) {
     console.log(`Updating order ${orderId} to status: ${newStatus}`);
 
     try {
-        // Load current statuses
-        const statusData = await loadOrderStatuses();
-        statusData[orderId] = newStatus;
+        const cachedOrder = (window._wholesaleOrderCache || {})[orderId] || {};
+        const farmId = cachedOrder.farm_id || getWholesaleFarmId() || null;
+        const result = await saveOrderStatuses([
+            {
+                order_id: orderId,
+                status: newStatus,
+                farm_id: farmId,
+                timestamp: new Date().toISOString(),
+                notify_buyer: true
+            }
+        ]);
 
-        // Save updated statuses
-        await saveOrderStatuses(statusData);
+        const updateResult = Array.isArray(result?.results)
+            ? result.results.find((entry) => String(entry.order_id) === String(orderId))
+            : null;
 
-        // Notify Central via callback endpoint (Central sends buyer email)
-        const result = await notifyCentralOfStatusChange(orderId, newStatus);
+        if (updateResult && updateResult.updated === false) {
+            throw new Error(updateResult.reason || 'Status transition rejected');
+        }
 
         // Refresh display
         await refreshWholesaleOrders();
 
         // Show notification result
-        if (result && result.notification && result.notification.sent_to) {
-            if (result.notification.error) {
-                showToast(`Order marked as ${newStatus}. Buyer email to ${result.notification.sent_to} failed.`, 'info');
+        const notification = updateResult?.notification || null;
+        if (notification && notification.sent_to) {
+            if (notification.error) {
+                showToast(`Order marked as ${newStatus}. Buyer email to ${notification.sent_to} failed.`, 'info');
             } else {
-                showToast(`Order marked as ${newStatus}. Buyer notified at ${result.notification.sent_to}.`, 'success');
+                showToast(`Order marked as ${newStatus}. Buyer notified at ${notification.sent_to}.`, 'success');
             }
         } else {
             showToast(`Order marked as ${newStatus}`, 'success');
@@ -4129,29 +4301,37 @@ async function addTrackingNumber(orderId) {
     }
     
     try {
-        // Load current statuses
-        const statusData = await loadOrderStatuses();
-        
-        // Add tracking number to order
-        if (!statusData[orderId]) {
-            statusData[orderId] = 'packed';
-        }
-        
         // Store tracking number separately
         const trackingData = await loadTrackingNumbers();
         trackingData[orderId] = trackingNumber.trim();
         await saveTrackingNumbers(trackingData);
-        
-        // Save updated statuses
-        await saveOrderStatuses(statusData);
-        
-        // Notify Central via callback endpoint
-        await notifyCentralOfTrackingNumber(orderId, trackingNumber.trim());
+
+        const cachedOrder = (window._wholesaleOrderCache || {})[orderId] || {};
+        const farmId = cachedOrder.farm_id || getWholesaleFarmId() || null;
+        const statusResult = await saveOrderStatuses([
+            {
+                order_id: orderId,
+                status: 'shipped',
+                farm_id: farmId,
+                timestamp: new Date().toISOString(),
+                notify_buyer: true
+            }
+        ]);
+        const updateResult = Array.isArray(statusResult?.results)
+            ? statusResult.results.find((entry) => String(entry.order_id) === String(orderId))
+            : null;
         
         // Refresh display
         await refreshWholesaleOrders();
-        
-        showToast('Tracking number added', 'success');
+
+        const notification = updateResult?.notification || null;
+        if (notification?.sent_to && !notification.error) {
+            showToast(`Tracking number added and buyer notified at ${notification.sent_to}`, 'success');
+        } else if (notification?.sent_to && notification.error) {
+            showToast(`Tracking number added. Buyer email to ${notification.sent_to} failed.`, 'info');
+        } else {
+            showToast('Tracking number added', 'success');
+        }
     } catch (error) {
         console.error('Failed to add tracking number:', error);
         showToast('Failed to add tracking number', 'error');
@@ -4175,6 +4355,10 @@ function printPackingSlip(orderId) {
     const total = parseFloat(order.total_amount) || 0;
 
     const buyerName = order.buyer_name || 'N/A';
+    const buyerContactName = order.buyer_contact_name || '';
+    const buyerKeyContact = order.buyer_key_contact || '';
+    const buyerBackupContact = order.buyer_backup_contact || '';
+    const buyerBackupPhone = order.buyer_backup_phone || '';
     const buyerEmail = order.buyer_email || '';
     const buyerPhone = order.buyer_phone || '';
     const buyerLocation = [order.buyer_city, order.buyer_state].filter(Boolean).join(', ');
@@ -4183,10 +4367,19 @@ function printPackingSlip(orderId) {
     const fmLabel = isPickup ? 'Pickup' : 'Delivery';
     const deliveryDate = order.delivery_date ? new Date(order.delivery_date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : 'Not scheduled';
     const deliveryAddr = order.delivery_address || '';
+    const preferredWindow = order.preferred_delivery_window || order.time_slot || '';
+    const deliverySchedule = order.delivery_schedule || '';
+    const pickupSchedule = order.pickup_schedule || '';
+    const scheduleLabel = isPickup ? 'Pickup Schedule' : 'Delivery Schedule';
+    const scheduleValue = isPickup ? pickupSchedule : deliverySchedule;
+    const deliveryRequirements = mergeWholesaleLists(order.delivery_requirements);
+    const pickupRequirements = mergeWholesaleLists(order.pickup_requirements);
+    const fulfillmentRequirements = isPickup ? pickupRequirements : deliveryRequirements;
     const poNumber = order.po_number || '';
     const notes = order.notes || '';
     const gapCertified = order.gap_certified;
-    const certsRequired = order.certifications_required || [];
+    const certsRequired = normalizeWholesaleList(order.certifications_required);
+    const practices = normalizeWholesaleList(order.practices);
     const notifications = order.notifications || [];
     const orderDate = order.created_at ? new Date(order.created_at).toLocaleString() : new Date(order.timestamp).toLocaleString();
 
@@ -4238,8 +4431,11 @@ function printPackingSlip(orderId) {
             <h2>Buyer Information</h2>
             <div class="section">
                 <div class="row"><span class="row-label">Business / Name:</span><span class="row-value">${buyerName}</span></div>
+                  ${buyerContactName ? `<div class="row"><span class="row-label">Primary Contact:</span><span class="row-value">${buyerContactName}</span></div>` : ''}
+                  ${buyerKeyContact ? `<div class="row"><span class="row-label">Key Contact:</span><span class="row-value">${buyerKeyContact}</span></div>` : ''}
                 ${buyerEmail ? `<div class="row"><span class="row-label">Email:</span><span class="row-value">${buyerEmail}</span></div>` : ''}
                 ${buyerPhone ? `<div class="row"><span class="row-label">Phone:</span><span class="row-value">${buyerPhone}</span></div>` : ''}
+                  ${buyerBackupContact ? `<div class="row"><span class="row-label">Backup Contact:</span><span class="row-value">${buyerBackupContact}${buyerBackupPhone ? ` (${buyerBackupPhone})` : ''}</span></div>` : ''}
                 ${buyerLocation ? `<div class="row"><span class="row-label">Location:</span><span class="row-value">${buyerLocation}</span></div>` : ''}
             </div>
 
@@ -4247,15 +4443,19 @@ function printPackingSlip(orderId) {
             <div class="section">
                 <div class="row"><span class="row-label">Method:</span><span class="row-value">${fmLabel}</span></div>
                 <div class="row"><span class="row-label">Scheduled Date:</span><span class="row-value">${deliveryDate}</span></div>
+                  ${preferredWindow ? `<div class="row"><span class="row-label">Preferred Window:</span><span class="row-value">${preferredWindow}</span></div>` : ''}
+                  ${scheduleValue ? `<div class="row"><span class="row-label">${scheduleLabel}:</span><span class="row-value">${scheduleValue}</span></div>` : ''}
                 ${!isPickup && deliveryAddr ? `<div class="row"><span class="row-label">Address:</span><span class="row-value">${deliveryAddr}</span></div>` : ''}
+                  ${fulfillmentRequirements.length ? `<div class="row"><span class="row-label">${isPickup ? 'Pickup Requirements' : 'Delivery Requirements'}:</span><span class="row-value">${fulfillmentRequirements.join(' | ')}</span></div>` : ''}
                 ${notes ? `<div class="row"><span class="row-label">Notes:</span><span class="row-value">${notes}</span></div>` : ''}
             </div>
 
-            ${gapCertified || certsRequired.length > 0 ? `
+              ${gapCertified || certsRequired.length > 0 || practices.length > 0 ? `
             <h2>Certifications / Compliance</h2>
             <div class="section">
                 ${gapCertified ? '<div><span class="cert-badge">GAP Certified</span> Good Agricultural Practices verified</div>' : ''}
                 ${certsRequired.length > 0 ? `<div style="margin-top: 4px;">Required: ${certsRequired.join(', ')}</div>` : ''}
+                  ${practices.length > 0 ? `<div style="margin-top: 4px;">Practices: ${practices.join(', ')}</div>` : ''}
             </div>` : ''}
 
             <h2>Items</h2>
@@ -4363,9 +4563,7 @@ async function notifyCentralOfStatusChange(orderId, newStatus) {
 async function loadOrderStatuses() {
     try {
         const response = await fetch(`${API_BASE}/api/wholesale/order-statuses`, {
-            headers: {
-                'Authorization': `Bearer ${getSession()?.token || ''}`
-            }
+            headers: buildWholesaleRequestHeaders()
         });
         
         if (response.ok) {
@@ -4383,18 +4581,57 @@ async function loadOrderStatuses() {
  * Save order statuses to storage
  */
 async function saveOrderStatuses(statusData) {
+    const updates = Array.isArray(statusData)
+        ? statusData
+            .filter((entry) => entry && entry.order_id && entry.status)
+            .map((entry) => ({
+                order_id: String(entry.order_id),
+                status: String(entry.status),
+                farm_id: entry.farm_id ? String(entry.farm_id) : null,
+                timestamp: entry.timestamp || new Date().toISOString(),
+                notify_buyer: entry.notify_buyer !== false
+            }))
+        : Object.entries(statusData || {})
+            .map(([order_id, value]) => {
+                if (!order_id || !value) return null;
+                if (typeof value === 'string') {
+                    return {
+                        order_id: String(order_id),
+                        status: String(value),
+                        farm_id: null,
+                        timestamp: new Date().toISOString(),
+                        notify_buyer: true
+                    };
+                }
+                if (typeof value === 'object' && value.status) {
+                    return {
+                        order_id: String(order_id),
+                        status: String(value.status),
+                        farm_id: value.farm_id ? String(value.farm_id) : null,
+                        timestamp: value.timestamp || new Date().toISOString(),
+                        notify_buyer: value.notify_buyer !== false
+                    };
+                }
+                return null;
+            })
+            .filter(Boolean);
+
+    if (!updates.length) {
+        throw new Error('No valid order status updates provided');
+    }
+
     const response = await fetch(`${API_BASE}/api/wholesale/order-statuses`, {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${getSession()?.token || ''}`
-        },
-        body: JSON.stringify(statusData)
+        headers: buildWholesaleRequestHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ updates })
     });
+    const data = await response.json().catch(() => ({}));
     
-    if (!response.ok) {
-        throw new Error('Failed to save order statuses');
+    if (!response.ok || data.success === false || data.ok === false) {
+        throw new Error(data.error || 'Failed to save order statuses');
     }
+
+    return data;
 }
 
 /**
@@ -4403,9 +4640,7 @@ async function saveOrderStatuses(statusData) {
 async function loadTrackingNumbers() {
     try {
         const response = await fetch(`${API_BASE}/api/wholesale/tracking-numbers`, {
-            headers: {
-                'Authorization': `Bearer ${getSession()?.token || ''}`
-            }
+            headers: buildWholesaleRequestHeaders()
         });
         
         if (response.ok) {
@@ -4423,13 +4658,22 @@ async function loadTrackingNumbers() {
  * Save tracking numbers to storage
  */
 async function saveTrackingNumbers(trackingData) {
+    const updates = Object.entries(trackingData || {})
+        .map(([order_id, tracking_number]) => {
+            const value = String(tracking_number || '').trim();
+            if (!order_id || !value) return null;
+            return { order_id: String(order_id), tracking_number: value };
+        })
+        .filter(Boolean);
+
+    if (!updates.length) {
+        return;
+    }
+
     const response = await fetch(`${API_BASE}/api/wholesale/tracking-numbers`, {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${getSession()?.token || ''}`
-        },
-        body: JSON.stringify(trackingData)
+        headers: buildWholesaleRequestHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ updates })
     });
     
     if (!response.ok) {
@@ -5666,6 +5910,23 @@ async function loadSettings() {
         setVal('settings-weight-unit', settings.weightUnit || 'lbs');
         setVal('settings-currency', settings.currency || 'USD');
         setVal('settings-timezone', settings.timezone || 'America/New_York');
+
+        // Fulfillment standards shown to wholesale buyers
+        const fulfillmentStandards = settings.fulfillmentStandards
+            || settings.fulfillment_standards
+            || setupData.farm?.fulfillment_standards
+            || farmData.fulfillment_standards
+            || {};
+        setVal('settings-pickup-schedule', fulfillmentStandards.pickup_schedule || settings.pickupSchedule || '');
+        setVal('settings-delivery-schedule', fulfillmentStandards.delivery_schedule || settings.deliverySchedule || '');
+        setVal(
+            'settings-pickup-requirements',
+            normalizeWholesaleList(fulfillmentStandards.pickup_requirements || settings.pickupRequirements).join('\n')
+        );
+        setVal(
+            'settings-delivery-requirements',
+            normalizeWholesaleList(fulfillmentStandards.delivery_requirements || settings.deliveryRequirements).join('\n')
+        );
         
         // Notifications
         setChk('notif-new-order', settings.notifNewOrder !== false);
@@ -5787,6 +6048,8 @@ async function saveSettings() {
     try {
         const val = (id) => { const el = document.getElementById(id); return el ? el.value : ''; };
         const chk = (id) => { const el = document.getElementById(id); return el ? el.checked : false; };
+        const pickupRequirements = normalizeWholesaleList(val('settings-pickup-requirements'));
+        const deliveryRequirements = normalizeWholesaleList(val('settings-delivery-requirements'));
 
         const settings = {
             // Display Preferences
@@ -5794,6 +6057,18 @@ async function saveSettings() {
             weightUnit: val('settings-weight-unit'),
             currency: val('settings-currency'),
             timezone: val('settings-timezone'),
+
+            // Fulfillment standards used in wholesale checkout and order cards
+            fulfillmentStandards: {
+                pickup_schedule: val('settings-pickup-schedule').trim(),
+                delivery_schedule: val('settings-delivery-schedule').trim(),
+                pickup_requirements: pickupRequirements,
+                delivery_requirements: deliveryRequirements
+            },
+            pickupSchedule: val('settings-pickup-schedule').trim(),
+            deliverySchedule: val('settings-delivery-schedule').trim(),
+            pickupRequirements,
+            deliveryRequirements,
             
             // Notifications
             notifNewOrder: chk('notif-new-order'),

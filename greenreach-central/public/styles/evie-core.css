@@ -35,9 +35,11 @@
 
   /* E.V.I.E. Text */
   --evie-text: #e5e7eb;
+  --evie-text-primary: #e5e7eb;
   --evie-text-secondary: #94a3b8;
   --evie-text-muted: #64748b;
   --evie-text-accent: #6ee7b7;
+  --evie-accent: #10b981;
 }
 
 /* ======================================================================
@@ -968,15 +970,30 @@
   color: var(--evie-text-secondary);
 }
 .evie-notif-bell:hover {
-  border-color: var(--evie-accent);
-  color: var(--evie-text-primary);
+  border-color: var(--evie-vitality);
+  color: var(--evie-text);
 }
 .evie-notif-bell.has-unread {
-  border-color: var(--evie-accent);
-  animation: evie-bell-pulse 2s ease-in-out infinite;
+  border-color: rgba(16, 185, 129, 0.65);
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.26);
+  animation: evie-bell-slow-pulse 3.8s ease-in-out infinite;
 }
 .evie-notif-bell.has-unread svg {
-  color: var(--evie-accent);
+  color: var(--evie-vitality);
+}
+
+.evie-notif-bell.new-arrival {
+  animation: evie-bell-arrival 1.8s ease-out 1, evie-bell-slow-pulse 3.8s ease-in-out infinite;
+}
+
+.evie-notif-bell.new-arrival::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border: 1px solid rgba(16, 185, 129, 0.45);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: evie-bell-arrival-ring 1.8s ease-out 1;
 }
 
 .evie-notif-count {
@@ -1001,9 +1018,35 @@
   opacity: 0;
 }
 
-@keyframes evie-bell-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); }
-  50% { box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
+@keyframes evie-bell-slow-pulse {
+  0%, 100% {
+    transform: scale(1);
+    background: rgba(24, 37, 53, 0.9);
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.18), 0 0 8px rgba(16, 185, 129, 0.15);
+  }
+  50% {
+    transform: scale(1.05);
+    background: rgba(16, 185, 129, 0.12);
+    box-shadow: 0 0 0 10px rgba(16, 185, 129, 0), 0 0 18px rgba(16, 185, 129, 0.32);
+  }
+}
+
+@keyframes evie-bell-arrival {
+  0% { transform: scale(0.85); }
+  30% { transform: scale(1.14); }
+  60% { transform: scale(0.98); }
+  100% { transform: scale(1); }
+}
+
+@keyframes evie-bell-arrival-ring {
+  0% {
+    opacity: 0.7;
+    transform: scale(0.85);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.5);
+  }
 }
 
 /* Inbox tab unread dot */

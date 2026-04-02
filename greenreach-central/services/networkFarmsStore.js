@@ -58,6 +58,7 @@ function normalizeNetworkFarm(farmId, farmData = {}) {
   const apiUrl = farmData.base_url || farmData.api_url || farmData.url || null;
   const status = farmData.status || 'active';
   const updatedAt = farmData.updated_at || farmData.last_sync || new Date().toISOString();
+  const fulfillmentStandards = farmData.fulfillment_standards || farmData.fulfillmentStandards || {};
 
   return {
     farm_id: farmId,
@@ -73,6 +74,7 @@ function normalizeNetworkFarm(farmId, farmData = {}) {
     location: farmData.location || {},
     certifications: farmData.certifications || [],
     practices: farmData.practices || [],
+    fulfillment_standards: fulfillmentStandards,
     last_sync: farmData.last_sync || updatedAt,
     updated_at: updatedAt,
     created_at: farmData.created_at || null
@@ -109,6 +111,7 @@ async function seedFromDatabase() {
         location: meta.location || {},
         certifications: Array.isArray(meta.certifications) ? meta.certifications : [],
         practices: Array.isArray(meta.practices) ? meta.practices : [],
+          fulfillment_standards: meta.fulfillment_standards || {},
         created_at: row.created_at,
         updated_at: row.updated_at,
         last_sync: row.last_sync
@@ -167,7 +170,8 @@ async function seedFromDatabase() {
                 contact: updated.contact || {},
                 location: updated.location || {},
                 certifications: updated.certifications || [],
-                practices: updated.practices || []
+                  practices: updated.practices || [],
+                  fulfillment_standards: updated.fulfillment_standards || {}
               };
               await query(
                 `UPDATE farms SET
@@ -216,7 +220,9 @@ export async function upsertNetworkFarm(farmId, farmData) {
     }
   }
 
+  const existingFarm = networkFarms.get(farmId) || {};
   const normalizedFarm = normalizeNetworkFarm(farmId, {
+    ...existingFarm,
     ...farmData,
     updated_at: new Date().toISOString()
   });
@@ -232,7 +238,8 @@ export async function upsertNetworkFarm(farmId, farmData) {
         contact: normalizedFarm.contact || {},
         location: normalizedFarm.location || {},
         certifications: Array.isArray(normalizedFarm.certifications) ? normalizedFarm.certifications : [],
-        practices: Array.isArray(normalizedFarm.practices) ? normalizedFarm.practices : []
+          practices: Array.isArray(normalizedFarm.practices) ? normalizedFarm.practices : [],
+          fulfillment_standards: normalizedFarm.fulfillment_standards || {}
       };
 
       await query(
