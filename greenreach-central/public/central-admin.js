@@ -1366,6 +1366,13 @@ function renderContextualSidebar() {
                     ]
                 },
                 {
+                    title: 'Admin Tools',
+                    items: [
+                        { label: 'Calendar', view: 'calendar' },
+                        { label: 'Tasks', view: 'tasks' }
+                    ]
+                },
+                {
                     title: 'Management',
                     items: [
                         { label: 'All Farms', view: 'farms' },
@@ -5613,6 +5620,16 @@ async function navigate(view, element) {
 
         case 'faye-core':
             loadIframeView('/faye-core.html');
+            break;
+
+        case 'calendar':
+            document.getElementById('calendar-view').style.display = 'block';
+            if (typeof loadCalendarEvents === 'function') { loadCalendarEvents(); loadCalendarDashboard(); }
+            break;
+
+        case 'tasks':
+            document.getElementById('tasks-view').style.display = 'block';
+            if (typeof loadTasks === 'function') { loadTasks(); loadCalendarDashboard(); }
             break;
             
         default:

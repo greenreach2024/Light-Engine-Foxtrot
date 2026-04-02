@@ -1098,24 +1098,288 @@ export const ADMIN_TOOL_CATALOG = {
   // ── Email & Communications ──
 
   'get_email_status': {
-    description: 'Check email service (AWS SES) connectivity and recent send status.',
+    description: 'Check email service (AWS SES) configuration, production status, and send quota.',
     category: 'read',
     required: [],
     optional: [],
     handler: async () => {
       try {
-        const emailService = (await import('../services/email-service.js')).default;
-        const testResult = await emailService.sendEmail({
-          to: 'health-check@internal.test',
-          subject: 'F.A.Y.E. SES health check',
-          text: 'Connectivity test'
-        });
+        const fromEmail = process.env.FROM_EMAIL || process.env.EMAIL_FROM || 'noreply@greenreachgreens.com';
+        const smtpConfigured = !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
+        let sesStatus = 'unknown';
+        let sesQuota = null;
+        try {
+          const { SESClient, GetSendQuotaCommand } = await import('@aws-sdk/client-ses');
+          const client = new SESClient({
+            region: process.env.AWS_REGION || 'us-east-1',
+            ...(process.env.AWS_ACCESS_KEY_ID ? {
+              credentials: { accessKeyId: process.env.AWS_ACCESS_KEY_ID, secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY }
+            } : {})
+          });
+          const quota = await client.send(new GetSendQuotaCommand({}));
+          sesQuota = { max24hr: quota.Max24HourSend, sent24hr: quota.SentLast24Hours, maxPerSecond: quota.MaxSendRate };
+          sesStatus = quota.Max24HourSend > 200 ? 'production' : 'sandbox';
+        } catch (sesErr) {
+          sesStatus = 'unavailable: ' + sesErr.message;
+        }
         return {
           ok: true,
-          ses_configured: !testResult.stub,
-          stub_mode: !!testResult.stub,
-          from_email: process.env.FROM_EMAIL || process.env.EMAIL_FROM || 'noreply@greenreachgreens.com'
+          ses_status: sesStatus,
+          ses_quota: sesQuota,
+          smtp_fallback: smtpConfigured,
+          from_email: fromEmail,
+          note: sesStatus === 'production' ? 'SES is in production mode -- emails can be sent to any recipient' : 'SES may have limited sending'
         };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  'send_test_email': {
+    description: 'Send a test email to verify email delivery is working. Requires a real recipient address.',
+    category: 'write',
+    required: ['to'],
+    optional: ['subject', 'message'],
+    handler: async (params) => {
+      try {
+        const emailService = (await import('../services/email-service.js')).default;
+        const result = await emailService.sendEmail({
+          to: String(params.to).trim(),
+          subject: params.subject || 'GreenReach Central -- Email Test',
+          text: params.message || 'This is a test email from GreenReach Central. If you received this, email delivery is working correctly.',
+          html: '<h2>GreenReach Central Email Test</h2><p>' + (params.message || 'This is a test email from GreenReach Central. If you received this, email delivery is working correctly.') + '</p><p style="color:#888;font-size:0.9em;">Sent at: ' + new Date().toISOString() + '</p>'
+        });
+        return { ok: result.success, via: result.via || 'unknown', messageId: result.messageId, stub: !!result.stub };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  // ── Calendar & Tasks ──
+
+  'list_calendar_events': {
+    description: 'List upcoming calendar events, optionally filtered by category or date range.',
+    category: 'read',
+    required: [],
+    optional: ['category', 'start_date', 'end_date', 'limit'],
+    handler: async (params) => {
+      try {
+        if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+        let where = [];
+        let vals = [];
+        let idx = 1;
+        if (params.category) { where.push(`category = $${idx++}`); vals.push(params.category); }
+        if (params.start_date) { where.push(`event_date >= $${idx++}`); vals.push(params.start_date); }
+        if (params.end_date) { where.push(`event_date <= $${idx++}`); vals.push(params.end_date); }
+        const sql = `SELECT * FROM admin_calendar_events ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY event_date ASC, start_time ASC LIMIT $${idx}`;
+        vals.push(params.limit || 25);
+        const result = await dbQuery(sql, vals).catch(() => ({ rows: [] }));
+        return { ok: true, events: result.rows, count: result.rows.length };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  'create_calendar_event': {
+    description: 'Create a new calendar event for the admin team.',
+    category: 'write',
+    trust_tier: 'auto',
+    required: ['title', 'event_date'],
+    optional: ['description', 'start_time', 'end_time', 'all_day', 'location', 'category', 'assigned_to'],
+    handler: async (params) => {
+      try {
+        if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+        const result = await dbQuery(
+          `INSERT INTO admin_calendar_events (title, description, event_date, start_time, end_time, all_day, location, category, assigned_to, created_by)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id, title, event_date`,
+          [params.title, params.description || null, params.event_date, params.start_time || null, params.end_time || null,
+           params.all_day || false, params.location || null, params.category || 'general',
+           params.assigned_to ? (Array.isArray(params.assigned_to) ? params.assigned_to : [params.assigned_to]) : null, 'faye']
+        );
+        return { ok: true, event: result.rows[0] };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  'update_calendar_event': {
+    description: 'Update an existing calendar event by ID.',
+    category: 'write',
+    trust_tier: 'auto',
+    required: ['id'],
+    optional: ['title', 'description', 'event_date', 'start_time', 'end_time', 'all_day', 'location', 'category', 'status'],
+    handler: async (params) => {
+      try {
+        if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+        const sets = [];
+        const vals = [];
+        let idx = 1;
+        for (const col of ['title','description','event_date','start_time','end_time','all_day','location','category','status']) {
+          if (params[col] !== undefined) { sets.push(`${col} = $${idx++}`); vals.push(params[col]); }
+        }
+        if (!sets.length) return { ok: false, error: 'No fields to update' };
+        sets.push(`updated_at = NOW()`);
+        vals.push(params.id);
+        const result = await dbQuery(`UPDATE admin_calendar_events SET ${sets.join(', ')} WHERE id = $${idx} RETURNING id, title`, vals);
+        return { ok: result.rows.length > 0, event: result.rows[0] || null };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  'delete_calendar_event': {
+    description: 'Delete a calendar event by ID.',
+    category: 'write',
+    trust_tier: 'confirm',
+    required: ['id'],
+    optional: [],
+    handler: async (params) => {
+      try {
+        if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+        const result = await dbQuery('DELETE FROM admin_calendar_events WHERE id = $1 RETURNING id', [params.id]);
+        return { ok: result.rows.length > 0, deleted: result.rows.length };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  'list_tasks': {
+    description: 'List admin tasks, optionally filtered by status, priority, or assignee.',
+    category: 'read',
+    required: [],
+    optional: ['status', 'priority', 'assigned_to', 'category', 'limit'],
+    handler: async (params) => {
+      try {
+        if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+        let where = [];
+        let vals = [];
+        let idx = 1;
+        if (params.status) { where.push(`status = $${idx++}`); vals.push(params.status); }
+        if (params.priority) { where.push(`priority = $${idx++}`); vals.push(params.priority); }
+        if (params.assigned_to) { where.push(`assigned_to = $${idx++}`); vals.push(params.assigned_to); }
+        if (params.category) { where.push(`category = $${idx++}`); vals.push(params.category); }
+        const sql = `SELECT * FROM admin_tasks ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY CASE priority WHEN 'urgent' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 WHEN 'low' THEN 4 END, due_date ASC NULLS LAST LIMIT $${idx}`;
+        vals.push(params.limit || 25);
+        const result = await dbQuery(sql, vals).catch(() => ({ rows: [] }));
+        return { ok: true, tasks: result.rows, count: result.rows.length };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  'create_task': {
+    description: 'Create a new admin task with priority and optional due date.',
+    category: 'write',
+    trust_tier: 'auto',
+    required: ['title'],
+    optional: ['description', 'priority', 'due_date', 'due_time', 'assigned_to', 'category', 'tags'],
+    handler: async (params) => {
+      try {
+        if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+        const result = await dbQuery(
+          `INSERT INTO admin_tasks (title, description, priority, due_date, due_time, assigned_to, category, tags, created_by)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id, title, priority, status`,
+          [params.title, params.description || null, params.priority || 'medium', params.due_date || null,
+           params.due_time || null, params.assigned_to || null, params.category || 'general',
+           params.tags ? (Array.isArray(params.tags) ? params.tags : [params.tags]) : null, 'faye']
+        );
+        return { ok: true, task: result.rows[0] };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  'update_task': {
+    description: 'Update an existing task by ID. Can change status, priority, description, due date, etc.',
+    category: 'write',
+    trust_tier: 'auto',
+    required: ['id'],
+    optional: ['title', 'description', 'status', 'priority', 'due_date', 'due_time', 'assigned_to', 'category'],
+    handler: async (params) => {
+      try {
+        if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+        const sets = [];
+        const vals = [];
+        let idx = 1;
+        for (const col of ['title','description','status','priority','due_date','due_time','assigned_to','category']) {
+          if (params[col] !== undefined) { sets.push(`${col} = $${idx++}`); vals.push(params[col]); }
+        }
+        if (!sets.length) return { ok: false, error: 'No fields to update' };
+        if (params.status === 'completed') { sets.push(`completed_at = NOW()`); sets.push(`completed_by = 'faye'`); }
+        sets.push(`updated_at = NOW()`);
+        vals.push(params.id);
+        const result = await dbQuery(`UPDATE admin_tasks SET ${sets.join(', ')} WHERE id = $${idx} RETURNING id, title, status`, vals);
+        return { ok: result.rows.length > 0, task: result.rows[0] || null };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  'complete_task': {
+    description: 'Mark a task as completed by ID.',
+    category: 'write',
+    trust_tier: 'auto',
+    required: ['id'],
+    optional: [],
+    handler: async (params) => {
+      try {
+        if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+        const result = await dbQuery(
+          `UPDATE admin_tasks SET status = 'completed', completed_at = NOW(), completed_by = 'faye', updated_at = NOW() WHERE id = $1 RETURNING id, title`,
+          [params.id]
+        );
+        return { ok: result.rows.length > 0, task: result.rows[0] || null };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  'create_reminder': {
+    description: 'Create a reminder for a task or calendar event. Can be sent via email or SMS.',
+    category: 'write',
+    trust_tier: 'auto',
+    required: ['remind_at', 'method', 'recipient'],
+    optional: ['task_id', 'event_id'],
+    handler: async (params) => {
+      try {
+        if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+        if (!params.task_id && !params.event_id) return { ok: false, error: 'Must specify either task_id or event_id' };
+        const result = await dbQuery(
+          `INSERT INTO admin_task_reminders (task_id, event_id, remind_at, method, recipient)
+           VALUES ($1, $2, $3, $4, $5) RETURNING id, remind_at, method`,
+          [params.task_id || null, params.event_id || null, params.remind_at, params.method || 'email', params.recipient]
+        );
+        return { ok: true, reminder: result.rows[0] };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  'get_calendar_dashboard': {
+    description: 'Get a summary dashboard of upcoming events, pending tasks, overdue tasks, and due reminders.',
+    category: 'read',
+    required: [],
+    optional: [],
+    handler: async () => {
+      try {
+        if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+        const [events, pendingTasks, overdueTasks, reminders] = await Promise.all([
+          dbQuery(`SELECT id, title, event_date, start_time, category FROM admin_calendar_events WHERE event_date >= CURRENT_DATE AND status = 'scheduled' ORDER BY event_date LIMIT 10`).catch(() => ({ rows: [] })),
+          dbQuery(`SELECT id, title, priority, due_date, assigned_to FROM admin_tasks WHERE status IN ('pending','in_progress') ORDER BY CASE priority WHEN 'urgent' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 ELSE 4 END LIMIT 10`).catch(() => ({ rows: [] })),
+          dbQuery(`SELECT id, title, priority, due_date FROM admin_tasks WHERE status IN ('pending','in_progress') AND due_date < CURRENT_DATE ORDER BY due_date`).catch(() => ({ rows: [] })),
+          dbQuery(`SELECT r.*, t.title as task_title, e.title as event_title FROM admin_task_reminders r LEFT JOIN admin_tasks t ON r.task_id = t.id LEFT JOIN admin_calendar_events e ON r.event_id = e.id WHERE r.sent = false AND r.remind_at <= NOW() + INTERVAL '1 hour'`).catch(() => ({ rows: [] }))
+        ]);
+        return { ok: true, upcoming_events: events.rows, pending_tasks: pendingTasks.rows, overdue_tasks: overdueTasks.rows, due_reminders: reminders.rows };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  'get_sms_status': {
+    description: 'Check if SMS service is configured and available. Shows approved recipients and SNS status.',
+    category: 'read',
+    required: [],
+    optional: [],
+    handler: async () => {
+      try {
+        const approved = smsService.getApprovedRecipients();
+        // Try a quick SNS connection check
+        let snsAvailable = false;
+        try {
+          const { SNSClient, GetSMSAttributesCommand } = await import('@aws-sdk/client-sns');
+          const client = new SNSClient({ region: process.env.AWS_REGION || 'us-east-1' });
+          await client.send(new GetSMSAttributesCommand({ attributes: ['DefaultSMSType'] }));
+          snsAvailable = true;
+        } catch { snsAvailable = false; }
+        return { ok: true, sns_available: snsAvailable, approved_recipients: approved, mode: snsAvailable ? 'production' : 'stub' };
       } catch (err) { return { ok: false, error: err.message }; }
     }
   },

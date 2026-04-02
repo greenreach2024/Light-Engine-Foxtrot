@@ -3098,9 +3098,12 @@ router.post('/checkout/execute', checkoutLimiter, requireWholesaleDbForCriticalP
               }
             } catch (_) { /* non-fatal URL parse */ }
             if (!farmUrl && process.env.FARM_EDGE_URL) farmUrl = process.env.FARM_EDGE_URL;
-            if (!farmUrl) continue;
+            if (!farmUrl) {
+              console.warn(`[Checkout] No farm URL for ${sub.farm_id} -- Activity Hub notification skipped`);
+              continue;
+            }
             try {
-              await farmCallWithTimeout(farmUrl, '/api/wholesale/order-events', {
+              const notifyResult = await farmCallWithTimeout(farmUrl, '/api/wholesale/order-events', {
                 type: 'wholesale_order_created',
                 order_id: order.master_order_id,
                 farm_id: sub.farm_id,
@@ -3128,10 +3131,19 @@ router.post('/checkout/execute', checkoutLimiter, requireWholesaleDbForCriticalP
                   sku_id: it.sku_id, product_name: it.product_name, quantity: it.quantity, unit: it.unit,
                   price_per_unit: it.price_per_unit || it.unit_price || 0
                 }))
-              }, sub.farm_id, farm, 3000);
-            } catch { /* notification is best-effort */ }
+              }, sub.farm_id, farm, 8000);
+              if (!notifyResult?.ok) {
+                console.error(`[Checkout] Activity Hub notification FAILED for farm ${sub.farm_id}: HTTP ${notifyResult?.status}`, JSON.stringify(notifyResult?.json || {}).substring(0, 200));
+              } else {
+                console.log(`[Checkout] Activity Hub notified for farm ${sub.farm_id}, order ${order.master_order_id}`);
+              }
+            } catch (notifyErr) {
+              console.error(`[Checkout] Activity Hub notification error for farm ${sub.farm_id}:`, notifyErr.message);
+            }
           }
-        } catch { /* ignore */ }
+        } catch (outerErr) {
+          console.error('[Checkout] Farm notification loop error:', outerErr.message);
+        }
       })();
 
       // Order confirmation email + audit (non-blocking)

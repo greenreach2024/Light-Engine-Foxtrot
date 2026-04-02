@@ -79,6 +79,7 @@ import wholesaleFulfillmentRouter from './routes/wholesale-fulfillment.js';
 import producerPortalRouter from './routes/producer-portal.js';
 import wholesaleExportsRouter from './routes/wholesale-exports.js';
 import miscStubsRouter from './routes/misc-stubs.js';
+import adminCalendarRouter from './routes/admin-calendar.js';
 
 // Research Platform routes
 import researchStudiesRouter from './routes/research-studies.js';
@@ -3350,7 +3351,8 @@ app.use('/api/delivery/driver-applications', driverApplicationsRoutes); // Publi
 app.use('/api/campaign', campaignRoutes); // Field of Dreams campaign (public)
 app.use('/api/admin/network-devices', adminAuthMiddleware, networkDevicesRoutes); // I-3.11: Network device analytics
 app.use('/api/admin/assistant', adminAuthMiddleware, requireAdminRole('admin', 'editor'), adminAssistantRouter); // F.A.Y.E. admin AI assistant
-app.use('/api/admin/ops', adminAuthMiddleware, requireAdminRole('admin'), adminOpsAgentRouter); // F.A.Y.E. tool catalog & gateway
+app.use('/api/admin/ops', adminAuthMiddleware, requireAdminRole('admin'), adminOpsAgentRouter);
+app.use('/api/admin/calendar', adminAuthMiddleware, adminCalendarRouter); // F.A.Y.E. tool catalog & gateway
 app.use('/api/admin/scott', adminAuthMiddleware, requireAdminRole('admin', 'editor'), scottMarketingRouter); // S.C.O.T.T. marketing agent
 app.use('/api/admin/marketing', adminAuthMiddleware, requireAdminRole('admin', 'editor'), adminMarketingRouter); // Marketing dashboard endpoints (queue, publish, settings)
 app.use('/api/reports', authOrAdminMiddleware, reportsRoutes); // Financial exports and reports

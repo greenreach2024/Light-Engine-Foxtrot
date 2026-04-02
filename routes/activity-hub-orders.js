@@ -106,7 +106,62 @@ router.get('/all', async (req, res) => {
       return res.status(400).json({ error: 'farm_id required' });
     }
     const statusFilter = req.query.status || null;
-    const orders = await orderStore.listFarmSubOrders(farmId, statusFilter);
+    let orders = await orderStore.listFarmSubOrders(farmId, statusFilter);
+
+    // PostgreSQL fallback: if NeDB is empty, hydrate from Central's wholesale_orders table
+    if (orders.length === 0) {
+      try {
+        let sql = `SELECT master_order_id, status, order_data, created_at
+                    FROM wholesale_orders ORDER BY created_at DESC LIMIT 200`;
+        const pgResult = await pool.query(sql);
+        const hydratedSubs = [];
+        for (const row of (pgResult.rows || [])) {
+          const od = row.order_data || {};
+          for (const sub of (od.farm_sub_orders || [])) {
+            if (String(sub.farm_id) !== String(farmId)) continue;
+            if (statusFilter && sub.status !== statusFilter) continue;
+            const subOrderId = `SO-${row.master_order_id}-${sub.farm_id}`;
+            const items = (sub.items || []).map(it => ({
+              sku_id: it.sku_id || '',
+              product_name: it.product_name || it.sku_id || 'Unknown',
+              quantity: Number(it.quantity) || 0,
+              unit: it.unit || 'lb',
+              price_per_unit: Number(it.price_per_unit || it.unit_price) || 0,
+              line_total: (Number(it.price_per_unit || it.unit_price) || 0) * (Number(it.quantity) || 0)
+            }));
+            const subtotal = items.reduce((sum, it) => sum + it.line_total, 0);
+            const subOrder = {
+              sub_order_id: subOrderId,
+              master_order_id: row.master_order_id,
+              farm_id: sub.farm_id,
+              farm_name: sub.farm_name || sub.farm_id,
+              status: sub.status || od.status || row.status || 'pending_verification',
+              items,
+              sub_total: sub.subtotal || subtotal,
+              verification_deadline: sub.verification_deadline || new Date(new Date(row.created_at).getTime() + 24 * 3600000).toISOString(),
+              payment_status: od.payment?.status || row.status || 'pending',
+              buyer_name: od.buyer_account?.businessName || od.buyer_account?.name || 'Wholesale Buyer',
+              buyer_email: od.buyer_account?.email || '',
+              delivery_date: od.delivery_date || null,
+              created_at: row.created_at,
+              updated_at: row.created_at
+            };
+            hydratedSubs.push(subOrder);
+            // Backfill NeDB so future reads are fast
+            orderStore.saveSubOrder(subOrder).catch(err =>
+              console.warn(`[Activity Hub] NeDB backfill failed for ${subOrderId}:`, err.message)
+            );
+          }
+        }
+        if (hydratedSubs.length > 0) {
+          console.log(`[Activity Hub] Hydrated ${hydratedSubs.length} sub-orders from PostgreSQL for farm ${farmId}`);
+          orders = hydratedSubs;
+        }
+      } catch (pgErr) {
+        console.warn('[Activity Hub] PostgreSQL fallback failed (non-fatal):', pgErr.message);
+      }
+    }
+
     orders.sort((a, b) => new Date(b.updated_at || b.created_at) - new Date(a.updated_at || a.created_at));
     res.json({ ok: true, orders });
   } catch (error) {
@@ -154,7 +209,52 @@ router.get('/pending', async (req, res) => {
       return res.status(400).json({ error: 'farm_id required' });
     }
 
-    const pendingOrders = await orderStore.listFarmSubOrders(farmId, 'pending_verification');
+    let pendingOrders = await orderStore.listFarmSubOrders(farmId, 'pending_verification');
+
+    // PostgreSQL fallback for pending orders
+    if (pendingOrders.length === 0) {
+      try {
+        const pgResult = await pool.query(
+          `SELECT master_order_id, status, order_data, created_at
+           FROM wholesale_orders
+           WHERE status IN ('pending_payment', 'confirmed', 'pending_verification')
+           ORDER BY created_at DESC LIMIT 100`
+        );
+        for (const row of (pgResult.rows || [])) {
+          const od = row.order_data || {};
+          for (const sub of (od.farm_sub_orders || [])) {
+            if (String(sub.farm_id) !== String(farmId)) continue;
+            const subOrderId = `SO-${row.master_order_id}-${sub.farm_id}`;
+            const existing = await orderStore.getSubOrder(subOrderId);
+            if (existing) continue;
+            const items = (sub.items || []).map(it => ({
+              sku_id: it.sku_id || '', product_name: it.product_name || it.sku_id || 'Unknown',
+              quantity: Number(it.quantity) || 0, unit: it.unit || 'lb',
+              price_per_unit: Number(it.price_per_unit || it.unit_price) || 0,
+              line_total: (Number(it.price_per_unit || it.unit_price) || 0) * (Number(it.quantity) || 0)
+            }));
+            const subOrder = {
+              sub_order_id: subOrderId, master_order_id: row.master_order_id,
+              farm_id: sub.farm_id, farm_name: sub.farm_name || sub.farm_id,
+              status: 'pending_verification', items,
+              sub_total: sub.subtotal || items.reduce((s, i) => s + i.line_total, 0),
+              verification_deadline: new Date(new Date(row.created_at).getTime() + 24 * 3600000).toISOString(),
+              payment_status: od.payment?.status || 'pending',
+              buyer_name: od.buyer_account?.businessName || 'Wholesale Buyer',
+              delivery_date: od.delivery_date || null,
+              created_at: row.created_at, updated_at: row.created_at
+            };
+            pendingOrders.push(subOrder);
+            orderStore.saveSubOrder(subOrder).catch(() => {});
+          }
+        }
+        if (pendingOrders.length > 0) {
+          console.log(`[Activity Hub] Hydrated ${pendingOrders.length} pending orders from PostgreSQL for farm ${farmId}`);
+        }
+      } catch (pgErr) {
+        console.warn('[Activity Hub] Pending PG fallback failed:', pgErr.message);
+      }
+    }
 
     pendingOrders.sort((a, b) => {
       const deadlineA = new Date(a.verification_deadline || 0);
@@ -687,6 +787,70 @@ router.post('/:orderId/pack', async (req, res) => {
 
   } catch (error) {
     console.error('[Activity Hub] Error packing order:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/activity-hub/orders/sync
+ * Force-sync orders from Central's PostgreSQL into NeDB.
+ * Called by admin or on startup to backfill Activity Hub.
+ */
+router.post('/sync', async (req, res) => {
+  try {
+    const farmId = req.headers['x-farm-id'] || req.body.farm_id;
+    if (!farmId) {
+      return res.status(400).json({ error: 'farm_id required' });
+    }
+    const pgResult = await pool.query(
+      `SELECT master_order_id, status, order_data, created_at
+       FROM wholesale_orders ORDER BY created_at DESC LIMIT 500`
+    );
+    let synced = 0;
+    let skipped = 0;
+    for (const row of (pgResult.rows || [])) {
+      const od = row.order_data || {};
+      for (const sub of (od.farm_sub_orders || [])) {
+        if (String(sub.farm_id) !== String(farmId)) continue;
+        const subOrderId = `SO-${row.master_order_id}-${sub.farm_id}`;
+        const existing = await orderStore.getSubOrder(subOrderId);
+        if (existing) { skipped++; continue; }
+        const items = (sub.items || []).map(it => ({
+          sku_id: it.sku_id || '', product_name: it.product_name || it.sku_id || 'Unknown',
+          quantity: Number(it.quantity) || 0, unit: it.unit || 'lb',
+          price_per_unit: Number(it.price_per_unit || it.unit_price) || 0,
+          line_total: (Number(it.price_per_unit || it.unit_price) || 0) * (Number(it.quantity) || 0)
+        }));
+        await orderStore.saveSubOrder({
+          sub_order_id: subOrderId, master_order_id: row.master_order_id,
+          farm_id: sub.farm_id, farm_name: sub.farm_name || sub.farm_id,
+          status: sub.status || od.status || row.status || 'pending_verification', items,
+          sub_total: sub.subtotal || items.reduce((s, i) => s + i.line_total, 0),
+          verification_deadline: sub.verification_deadline || new Date(new Date(row.created_at).getTime() + 24 * 3600000).toISOString(),
+          payment_status: od.payment?.status || 'pending',
+          buyer_name: od.buyer_account?.businessName || 'Wholesale Buyer',
+          delivery_date: od.delivery_date || null,
+          created_at: row.created_at, updated_at: row.created_at
+        });
+        synced++;
+      }
+      // Also save master order
+      const existing = await orderStore.getOrder(row.master_order_id);
+      if (!existing) {
+        await orderStore.saveOrder({
+          master_order_id: row.master_order_id,
+          buyer_name: od.buyer_account?.businessName || 'Wholesale Buyer',
+          buyer_email: od.buyer_account?.email || '',
+          delivery_date: od.delivery_date || null,
+          status: od.status || row.status || 'pending',
+          created_at: row.created_at
+        });
+      }
+    }
+    console.log(`[Activity Hub] Sync complete: ${synced} new sub-orders, ${skipped} already existed`);
+    res.json({ ok: true, synced, skipped, total_pg_orders: pgResult.rows.length });
+  } catch (error) {
+    console.error('[Activity Hub] Sync error:', error);
     res.status(500).json({ error: error.message });
   }
 });
