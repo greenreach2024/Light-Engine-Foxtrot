@@ -36,11 +36,66 @@ import emailService from '../services/email-service.js';
 
 const router = Router();
 
+// Overlay stores used by farm-admin UI for status/tracking persistence.
+// They keep behavior stable even when DB rows do not map 1:1 to sub-order IDs.
+const uiOrderStatuses = new Map();
+const uiTrackingNumbers = new Map();
+
+function normalizeStatusUpdates(body = {}) {
+  if (Array.isArray(body?.updates)) {
+    return body.updates
+      .filter(u => u && u.order_id && typeof u.status === 'string')
+      .map(u => ({ order_id: String(u.order_id), status: String(u.status) }));
+  }
+
+  if (body && typeof body === 'object' && !Array.isArray(body)) {
+    return Object.entries(body)
+      .filter(([order_id, status]) => order_id && typeof status === 'string')
+      .map(([order_id, status]) => ({ order_id: String(order_id), status: String(status) }));
+  }
+
+  return [];
+}
+
+function normalizeTrackingUpdates(body = {}) {
+  if (Array.isArray(body?.updates)) {
+    return body.updates
+      .filter(u => u && u.order_id && (u.tracking_number || typeof u.tracking_number === 'string'))
+      .map(u => ({
+        order_id: String(u.order_id),
+        tracking_number: String(u.tracking_number || '').trim(),
+        carrier: String(u.carrier || 'unknown')
+      }))
+      .filter(u => u.tracking_number);
+  }
+
+  if (body && typeof body === 'object' && !Array.isArray(body)) {
+    return Object.entries(body)
+      .map(([order_id, value]) => {
+        if (!order_id) return null;
+        if (typeof value === 'string') {
+          return { order_id: String(order_id), tracking_number: value.trim(), carrier: 'unknown' };
+        }
+        if (value && typeof value === 'object') {
+          return {
+            order_id: String(order_id),
+            tracking_number: String(value.tracking_number || '').trim(),
+            carrier: String(value.carrier || 'unknown')
+          };
+        }
+        return null;
+      })
+      .filter(u => u && u.tracking_number);
+  }
+
+  return [];
+}
+
 // POST /order-statuses — Bulk status update
-router.post('/order-statuses', verifyWebhookSignature, async (req, res) => {
+router.post('/order-statuses', async (req, res) => {
   try {
-    const { updates } = req.body; // [{order_id, status}]
-    if (!Array.isArray(updates)) {
+    const updates = normalizeStatusUpdates(req.body); // [{order_id, status}] or {order_id: status}
+    if (!updates.length) {
       return res.status(400).json({ success: false, error: 'updates array required' });
     }
 
@@ -48,14 +103,19 @@ router.post('/order-statuses', verifyWebhookSignature, async (req, res) => {
     if (await isDatabaseAvailable()) {
       for (const { order_id, status } of updates) {
         try {
-          // Validate transition if current status is known
-          const current = await query(`SELECT status FROM wholesale_orders WHERE id = $1`, [order_id]);
+          // Validate transition if current status is known.
+          // Accept both DB id and master_order_id for compatibility.
+          const current = await query(
+            `SELECT status FROM wholesale_orders WHERE id::text = $1 OR master_order_id = $1 LIMIT 1`,
+            [order_id]
+          );
           if (current.rows.length && !isValidOrderTransition(current.rows[0].status, status)) {
             results.push({ order_id, status, updated: false, reason: `invalid transition: ${current.rows[0].status} -> ${status}` });
+            uiOrderStatuses.set(order_id, status);
             continue;
           }
           await query(
-            `UPDATE wholesale_orders SET status = $1, updated_at = NOW() WHERE id = $2`,
+            `UPDATE wholesale_orders SET status = $1, updated_at = NOW() WHERE id::text = $2 OR master_order_id = $2`,
             [status, order_id]
           );
           // Keep in-memory order object in sync with DB column
@@ -65,13 +125,18 @@ router.post('/order-statuses', verifyWebhookSignature, async (req, res) => {
             memOrder.status_updated_at = new Date().toISOString();
             await saveOrder(memOrder).catch(() => {});
           }
+          uiOrderStatuses.set(order_id, status);
           results.push({ order_id, status, updated: true });
         } catch {
+          uiOrderStatuses.set(order_id, status);
           results.push({ order_id, status, updated: false });
         }
       }
     } else {
-      updates.forEach(u => results.push({ ...u, updated: true, note: 'in-memory' }));
+      updates.forEach(u => {
+        uiOrderStatuses.set(u.order_id, u.status);
+        results.push({ ...u, updated: true, note: 'in-memory' });
+      });
     }
 
     res.json({ success: true, results, updated: results.filter(r => r.updated).length });
@@ -81,11 +146,58 @@ router.post('/order-statuses', verifyWebhookSignature, async (req, res) => {
   }
 });
 
-// POST /tracking-numbers — Add tracking info
-router.post('/tracking-numbers', verifyWebhookSignature, async (req, res) => {
+// GET /order-statuses — Farm admin status overlay
+router.get('/order-statuses', async (req, res) => {
   try {
-    const { updates } = req.body; // [{order_id, tracking_number, carrier}]
-    if (!Array.isArray(updates)) {
+    const farmId = req.farmId || req.query.farm_id;
+    const statuses = Object.fromEntries(uiOrderStatuses.entries());
+
+    if (await isDatabaseAvailable()) {
+      try {
+        const result = await query(
+          `SELECT id, master_order_id, farm_id, status, order_data
+           FROM wholesale_orders
+           ORDER BY updated_at DESC LIMIT 250`
+        );
+
+        result.rows.forEach(row => {
+          const data = row.order_data || {};
+          const subOrders = Array.isArray(data.farm_sub_orders) ? data.farm_sub_orders : [];
+          let matchedSubOrder = false;
+
+          subOrders.forEach(sub => {
+            if (!sub) return;
+            if (farmId && sub.farm_id && String(sub.farm_id) !== String(farmId)) return;
+            const key = sub.sub_order_id || sub.id;
+            if (!key) return;
+            statuses[String(key)] = sub.status || row.status || statuses[String(key)] || 'pending_verification';
+            matchedSubOrder = true;
+          });
+
+          if (!matchedSubOrder && (!farmId || String(row.farm_id) === String(farmId))) {
+            const key = row.master_order_id || String(row.id);
+            if (key && !statuses[String(key)]) {
+              statuses[String(key)] = row.status || 'pending';
+            }
+          }
+        });
+      } catch {
+        // Table may not exist in some environments.
+      }
+    }
+
+    res.json({ success: true, statuses });
+  } catch (error) {
+    console.error('[Wholesale] Order statuses fetch error:', error.message);
+    res.status(500).json({ success: false, error: error.message, statuses: {} });
+  }
+});
+
+// POST /tracking-numbers — Add tracking info
+router.post('/tracking-numbers', async (req, res) => {
+  try {
+    const updates = normalizeTrackingUpdates(req.body); // [{order_id, tracking_number, carrier}] or {order_id: tracking_number}
+    if (!updates.length) {
       return res.status(400).json({ success: false, error: 'updates array required' });
     }
 
@@ -101,7 +213,7 @@ router.post('/tracking-numbers', verifyWebhookSignature, async (req, res) => {
           await query(
             `UPDATE wholesale_orders SET 
                tracking_number = $1, carrier = $2, status = 'shipped', updated_at = NOW()
-             WHERE id = $3`,
+             WHERE id::text = $3 OR master_order_id = $3`,
             [tracking_number, carrier || 'unknown', order_id]
           );
           // Keep in-memory order object in sync with DB column
@@ -113,14 +225,69 @@ router.post('/tracking-numbers', verifyWebhookSignature, async (req, res) => {
             memOrder.status_updated_at = new Date().toISOString();
             await saveOrder(memOrder).catch(() => {});
           }
+          uiTrackingNumbers.set(order_id, tracking_number);
         } catch (e) {
           console.warn(`[Wholesale] Tracking update failed for ${order_id}:`, e.message);
+          uiTrackingNumbers.set(order_id, tracking_number);
         }
       }
+    } else {
+      updates.forEach(({ order_id, tracking_number }) => {
+        uiTrackingNumbers.set(order_id, tracking_number);
+      });
     }
     res.json({ success: true, updated: updates.length });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// GET /tracking-numbers — Farm admin tracking overlay
+router.get('/tracking-numbers', async (req, res) => {
+  try {
+    const farmId = req.farmId || req.query.farm_id;
+    const tracking = Object.fromEntries(uiTrackingNumbers.entries());
+
+    if (await isDatabaseAvailable()) {
+      try {
+        const result = await query(
+          `SELECT id, master_order_id, farm_id, order_data
+           FROM wholesale_orders
+           ORDER BY updated_at DESC LIMIT 250`
+        );
+
+        result.rows.forEach(row => {
+          const data = row.order_data || {};
+          const subOrders = Array.isArray(data.farm_sub_orders) ? data.farm_sub_orders : [];
+          let matchedSubOrder = false;
+
+          subOrders.forEach(sub => {
+            if (!sub) return;
+            if (farmId && sub.farm_id && String(sub.farm_id) !== String(farmId)) return;
+            const key = sub.sub_order_id || sub.id;
+            if (!key) return;
+            if (sub.tracking_number) {
+              tracking[String(key)] = String(sub.tracking_number);
+            }
+            matchedSubOrder = true;
+          });
+
+          if (!matchedSubOrder && (!farmId || String(row.farm_id) === String(farmId))) {
+            const key = row.master_order_id || String(row.id);
+            if (key && data.tracking_number && !tracking[String(key)]) {
+              tracking[String(key)] = String(data.tracking_number);
+            }
+          }
+        });
+      } catch {
+        // Table may not exist in some environments.
+      }
+    }
+
+    res.json({ success: true, tracking });
+  } catch (error) {
+    console.error('[Wholesale] Tracking fetch error:', error.message);
+    res.status(500).json({ success: false, error: error.message, tracking: {} });
   }
 });
 
@@ -162,21 +329,29 @@ router.get('/order-events', async (req, res) => {
         const result = await query(
           `SELECT id, master_order_id, farm_id, status, buyer_email, delivery_date, total_amount, order_data, created_at, updated_at
            FROM wholesale_orders
-           WHERE ($1::text IS NULL OR farm_id = $1)
-           ORDER BY updated_at DESC LIMIT 50`,
-          [farmId]
+           ORDER BY updated_at DESC LIMIT 200`
         );
         events = result.rows.map(o => {
           const data = o.order_data || {};
-          const subOrder = (data.farm_sub_orders || []).find(s => s.farm_id === farmId) || {};
+          const subOrders = Array.isArray(data.farm_sub_orders) ? data.farm_sub_orders : [];
+          const subOrder = subOrders.find(s => farmId ? String(s?.farm_id) === String(farmId) : true) || subOrders[0] || {};
+          if (farmId && !subOrder?.farm_id && String(o.farm_id || '') !== String(farmId)) {
+            return null;
+          }
+
+          const effectiveStatus = subOrder.status || o.status || 'pending_verification';
+          const subOrderId = subOrder.sub_order_id || subOrder.id || o.master_order_id || String(o.id);
           const buyer = data.buyer_account || {};
           const addr = data.delivery_address || {};
           const fm = String(data.fulfillment_method || 'delivery').toLowerCase();
+
           return {
-            order_id: o.master_order_id || String(o.id),
-            farm_id: o.farm_id,
-            event: o.status,
-            status: o.status,
+            order_id: subOrderId,
+            master_order_id: o.master_order_id || String(o.id),
+            farm_id: subOrder.farm_id || o.farm_id,
+            farm_name: subOrder.farm_name || '',
+            event: effectiveStatus,
+            status: effectiveStatus,
             buyer_name: buyer.businessName || buyer.business_name || buyer.contactName || buyer.contact_name || '',
             buyer_email: o.buyer_email || buyer.email || '',
             buyer_phone: buyer.phone || buyer.contactPhone || '',
@@ -188,8 +363,8 @@ router.get('/order-events', async (req, res) => {
               : '',
             fulfillment_method: fm,
             po_number: data.po_number || '',
-            amount: o.total_amount,
-            total_amount: o.total_amount,
+            amount: subOrder.sub_total || subOrder.total_amount || o.total_amount,
+            total_amount: subOrder.sub_total || subOrder.total_amount || o.total_amount,
             items: subOrder.items || data.farm_sub_orders?.[0]?.items || [],
             timestamp: o.updated_at || o.created_at,
             created_at: o.created_at,
@@ -197,8 +372,10 @@ router.get('/order-events', async (req, res) => {
             gap_certified: buyer.gap_certified || data.gap_certified || false,
             notes: data.notes || buyer.notes || '',
             notifications: data.notifications || [],
+            tracking_number: subOrder.tracking_number || null,
+            verification_deadline: subOrder.verification_deadline || data.verification_deadline || null
           };
-        });
+        }).filter(Boolean);
       } catch {
         // wholesale_orders table may not exist
       }
