@@ -48,16 +48,19 @@
     .order-card.urgent { border-color: var(--err); }
     .order-card.accepted { border-color: var(--ok); }
     .order-card.declined { border-color: #6b7280; }
+    .order-card.expired { border-color: #9ca3af; opacity: 0.7; }
     .order-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border-c); }
     .order-id { font-size: 1.25rem; font-weight: 600; color: var(--primary); }
     .status-badge { padding: 0.4rem 0.9rem; border-radius: 6px; font-weight: 600; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.03em; }
     .status-badge.pending { background: var(--warn); color: #0f172a; }
     .status-badge.accepted { background: var(--ok); color: white; }
     .status-badge.declined { background: #6b7280; color: white; }
+    .status-badge.expired { background: #9ca3af; color: white; }
     .status-badge.modified { background: var(--info-c); color: white; }
     .status-badge.picking, .status-badge.packed, .status-badge.shipped { background: #8b5cf6; color: white; }
     .deadline-badge { background: var(--warn); color: #0f172a; padding: 0.35rem 0.75rem; border-radius: 6px; font-weight: 600; font-size: 0.85rem; margin-left: 0.5rem; }
     .deadline-badge.urgent-dl { background: var(--err); color: white; animation: pulse 2s infinite; }
+    .deadline-badge.expired-dl { background: #9ca3af; color: white; }
     @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
     .buyer-info { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
     .info-group { display: flex; flex-direction: column; }
@@ -127,11 +130,15 @@
       </div>
       <div class="stat-card">
         <span class="stat-value" id="accepted-count">0</span>
-        <span class="stat-label">Accepted</span>
+        <span class="stat-label">Active</span>
       </div>
       <div class="stat-card">
         <span class="stat-value" id="declined-count">0</span>
         <span class="stat-label">Declined</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-value" id="expired-count">0</span>
+        <span class="stat-label">Expired</span>
       </div>
       <div class="stat-card">
         <span class="stat-value" id="total-value">$0</span>
@@ -141,8 +148,9 @@
     <div class="filter-tabs">
       <button class="filter-tab active" data-filter="all" onclick="app.setFilter('all')">All <span class="tab-count" id="count-all">0</span></button>
       <button class="filter-tab" data-filter="pending" onclick="app.setFilter('pending')">Pending <span class="tab-count" id="count-pending">0</span></button>
-      <button class="filter-tab" data-filter="accepted" onclick="app.setFilter('accepted')">Accepted <span class="tab-count" id="count-accepted">0</span></button>
+      <button class="filter-tab" data-filter="active" onclick="app.setFilter('active')">Active <span class="tab-count" id="count-active">0</span></button>
       <button class="filter-tab" data-filter="declined" onclick="app.setFilter('declined')">Declined <span class="tab-count" id="count-declined">0</span></button>
+      <button class="filter-tab" data-filter="expired" onclick="app.setFilter('expired')">Expired <span class="tab-count" id="count-expired">0</span></button>
     </div>
     <div class="orders-section">
       <h2 id="section-title">All Orders</h2>
@@ -242,14 +250,27 @@
         return 'pending';
       },
 
+      isExpired: function(order) {
+        if (!order || !order.verification_deadline) return false;
+        var s = (order.status || '').toLowerCase();
+        if (s !== 'pending_verification' && s !== 'pending') return false;
+        return new Date(order.verification_deadline) < new Date();
+      },
+
+      getEffectiveStatus: function(order) {
+        if (this.isExpired(order)) return 'expired';
+        return this.mapStatus(order.status);
+      },
+
       getFilteredOrders: function() {
         var self = this;
         if (this.currentFilter === 'all') return this.orders;
         return this.orders.filter(function(o) {
-          var m = self.mapStatus(o.status);
+          var m = self.getEffectiveStatus(o);
           if (self.currentFilter === 'pending') return m === 'pending';
-          if (self.currentFilter === 'accepted') return m === 'accepted' || m === 'picking' || m === 'packed' || m === 'shipped' || m === 'modified';
+          if (self.currentFilter === 'active') return m === 'accepted' || m === 'picking' || m === 'packed' || m === 'shipped' || m === 'modified';
           if (self.currentFilter === 'declined') return m === 'declined';
+          if (self.currentFilter === 'expired') return m === 'expired';
           return true;
         });
       },
@@ -259,44 +280,49 @@
         document.querySelectorAll('.filter-tab').forEach(function(tab) {
           tab.classList.toggle('active', tab.dataset.filter === filter);
         });
-        var titles = { all: 'All Orders', pending: 'Pending Orders', accepted: 'Accepted Orders', declined: 'Declined Orders' };
+        var titles = { all: 'All Orders', pending: 'Pending Orders', active: 'Active Orders', declined: 'Declined Orders', expired: 'Expired Orders' };
         document.getElementById('section-title').textContent = titles[filter] || 'All Orders';
         this.renderOrders();
       },
 
       updateFilterCounts: function() {
-        var pending = 0, accepted = 0, declined = 0;
+        var pending = 0, active = 0, declined = 0, expired = 0;
         var self = this;
         this.orders.forEach(function(o) {
-          var m = self.mapStatus(o.status);
-          if (m === 'pending') pending++;
+          var m = self.getEffectiveStatus(o);
+          if (m === 'expired') expired++;
+          else if (m === 'pending') pending++;
           else if (m === 'declined') declined++;
-          else accepted++;
+          else active++;
         });
         document.getElementById('count-all').textContent = this.orders.length;
         document.getElementById('count-pending').textContent = pending;
-        document.getElementById('count-accepted').textContent = accepted;
+        document.getElementById('count-active').textContent = active;
         document.getElementById('count-declined').textContent = declined;
+        document.getElementById('count-expired').textContent = expired;
       },
 
       updateStats: function() {
-        var pending = 0, accepted = 0, declined = 0, pendingValue = 0;
+        var pending = 0, active = 0, declined = 0, expired = 0, pendingValue = 0;
         var self = this;
         this.orders.forEach(function(o) {
-          var m = self.mapStatus(o.status);
-          if (m === 'pending') {
+          var m = self.getEffectiveStatus(o);
+          if (m === 'expired') {
+            expired++;
+          } else if (m === 'pending') {
             pending++;
             var items = o.items || [];
             pendingValue += items.reduce(function(s, i) { return s + (i.price_per_unit * i.quantity); }, 0);
           } else if (m === 'declined') {
             declined++;
           } else {
-            accepted++;
+            active++;
           }
         });
         document.getElementById('pending-count').textContent = pending;
-        document.getElementById('accepted-count').textContent = accepted;
+        document.getElementById('accepted-count').textContent = active;
         document.getElementById('declined-count').textContent = declined;
+        document.getElementById('expired-count').textContent = expired;
         document.getElementById('total-value').textContent = '$' + pendingValue.toFixed(2);
       },
 
@@ -317,8 +343,9 @@
       },
 
       renderOrderCard: function(order) {
-        var mapped = this.mapStatus(order.status);
+        var mapped = this.getEffectiveStatus(order);
         var isPending = mapped === 'pending';
+        var isExpiredOrder = mapped === 'expired';
         var items = order.items || [];
         var total = order.sub_total || items.reduce(function(s, i) { return s + (i.price_per_unit * i.quantity); }, 0);
         var oid = this.getOrderId(order);
@@ -328,7 +355,9 @@
 
         var deadlineHtml = '';
         var urgentClass = '';
-        if (isPending && order.verification_deadline) {
+        if (isExpiredOrder && order.verification_deadline) {
+          deadlineHtml = '<span class="deadline-badge expired-dl">Deadline passed</span>';
+        } else if (isPending && order.verification_deadline) {
           var dl = new Date(order.verification_deadline);
           var hrs = Math.max(0, (dl - new Date()) / 3600000);
           var isUrg = hrs < 6;
@@ -337,15 +366,16 @@
           deadlineHtml = '<span class="deadline-badge' + (isUrg ? ' urgent-dl' : '') + '">' + tStr + '</span>';
         }
 
-        var labels = { pending: 'Awaiting Acceptance', accepted: 'Accepted', declined: 'Declined', modified: 'Modified', picking: 'Picking', packed: 'Packed', shipped: 'Shipped' };
+        var labels = { pending: 'Awaiting Acceptance', accepted: 'Accepted', declined: 'Declined', modified: 'Modified', picking: 'Picking', packed: 'Packed', shipped: 'Shipped', expired: 'Expired' };
         var isAccepted = mapped === 'accepted' || mapped === 'picking' || mapped === 'packed' || mapped === 'shipped' || mapped === 'modified';
         var cardCls = 'order-card' + urgentClass;
         if (isAccepted) cardCls += ' accepted';
         if (mapped === 'declined') cardCls += ' declined';
+        if (isExpiredOrder) cardCls += ' expired';
         var notes = order.farm_notes || '';
 
         var primaryBtns = '';
-        if (isPending) {
+        if (isPending && !isExpiredOrder) {
           primaryBtns = '<div class="btn-group-primary">' +
             '<button class="btn btn-success" onclick="app.acceptOrder(\'' + oid + '\')">Accept Order</button>' +
             '<button class="btn btn-warning" onclick="app.openModifyModal(\'' + oid + '\')">Modify</button>' +
