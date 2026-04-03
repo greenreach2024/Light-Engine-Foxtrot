@@ -13836,7 +13836,7 @@ app.use('/api/wholesale/oauth/square', wholesaleSquareOAuthRouter);
 const getCentralPaymentControlTarget = () =>
   process.env.GREENREACH_CENTRAL_URL
   || process.env.CENTRAL_URL
-  || 'https://greenreachgreens.com'); }
+  || 'https://greenreachgreens.com';
 
 function attachPaymentProxyHeaders(proxyReq, req) {
   if (req.headers['authorization']) {
