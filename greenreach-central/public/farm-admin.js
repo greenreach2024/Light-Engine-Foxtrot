@@ -6455,7 +6455,7 @@ async function generatePairingQR() {
             text: qrData,
             width: 256,
             height: 256,
-            colorDark: '#1a2332',
+            colorDark: '#1e293b',
             colorLight: '#ffffff',
             correctLevel: QRCode.CorrectLevel.H
         });
@@ -6563,7 +6563,7 @@ async function generateWizardActivityHubQRCodes() {
                     text: appStoreUrl,
                     width: 200,
                     height: 200,
-                    colorDark: '#1a2332',
+                    colorDark: '#1e293b',
                     colorLight: '#ffffff',
                     correctLevel: QRCode.CorrectLevel.H
                 });
@@ -6602,7 +6602,7 @@ async function generateWizardActivityHubQRCodes() {
                     text: pairingUrl,
                     width: 200,
                     height: 200,
-                    colorDark: '#1a2332',
+                    colorDark: '#1e293b',
                     colorLight: '#ffffff',
                     correctLevel: QRCode.CorrectLevel.H
                 });
@@ -6646,7 +6646,7 @@ async function generateSetupActivityHubQR() {
                     text: activityHubUrl,
                     width: 200,
                     height: 200,
-                    colorDark: '#1a2332',
+                    colorDark: '#1e293b',
                     colorLight: '#ffffff',
                     correctLevel: QRCode.CorrectLevel.H
                 });
@@ -6709,7 +6709,7 @@ function showActivityHubDownloadQR() {
                 text: activityHubUrl,
                 width: 256,
                 height: 256,
-                colorDark: '#1a2332',
+                colorDark: '#1e293b',
                 colorLight: '#ffffff',
                 correctLevel: QRCode.CorrectLevel.H
             });

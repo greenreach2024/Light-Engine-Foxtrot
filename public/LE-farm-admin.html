@@ -34,7 +34,7 @@
 
         .nav-btn {
             background: rgba(59, 130, 246, 0.2);
-            border: 2px solid #3b82f6;
+            border: 1px solid rgba(148, 163, 184, 0.12);
             color: #93c5fd;
             padding: 0.75rem 1.5rem;
             font-size: 1rem;
@@ -664,7 +664,7 @@
 
         .nav-button {
             background: rgba(59, 130, 246, 0.2);
-            border: 2px solid #3b82f6;
+            border: 1px solid rgba(148, 163, 184, 0.12);
             color: #93c5fd;
             padding: 0.75rem 1.25rem;
             border-radius: 8px;
@@ -699,7 +699,7 @@
             top: calc(100% + 0.5rem);
             left: 0;
             background: rgba(15, 23, 42, 0.95);
-            border: 2px solid #3b82f6;
+            border: 1px solid rgba(148, 163, 184, 0.12);
             border-radius: 8px;
             padding: 0.5rem;
             min-width: 200px;
@@ -3495,12 +3495,12 @@
                                     Show Download QR Code
                                 </button>
                                 <div id="activityHubDownloadQRContainer" style="display: none; background: white; padding: 20px; border-radius: 8px; text-align: center;">
-                                    <h4 style="color: #1a2332; margin-bottom: 10px;">Scan to Install Activity Hub</h4>
+                                    <h4 style="color: #f1f5f9; margin-bottom: 10px;">Scan to Install Activity Hub</h4>
                                     <div id="activityHubDownloadQRCode" style="display: inline-block;"></div>
                                     <p style="color: #6b7280; font-size: 0.85rem; margin-top: 10px;">
                                         Open your iPad camera and point it at this code to install the app.
                                     </p>
-                                    <button class="btn-secondary" onclick="closeActivityHubDownloadQR()" style="margin-top: 15px; background: #e5e7eb; color: #1a2332;">
+                                    <button class="btn-secondary" onclick="closeActivityHubDownloadQR()" style="margin-top: 15px; background: rgba(99, 102, 241, 0.12); color: #a5b4fc;">
                                         Close
                                     </button>
                                 </div>
@@ -3516,13 +3516,13 @@
                                     Generate Pairing QR Code
                                 </button>
                                 <div id="pairingQRContainer" style="display: none; background: white; padding: 20px; border-radius: 8px; text-align: center;">
-                                    <h4 style="color: #1a2332; margin-bottom: 10px;">Scan with Tablet</h4>
+                                    <h4 style="color: #f1f5f9; margin-bottom: 10px;">Scan with Tablet</h4>
                                     <div id="pairingQRCode" style="display: inline-block;"></div>
                                     <p style="color: #6b7280; font-size: 0.85rem; margin-top: 10px;">
-                                        Farm: <strong id="pairingFarmName" style="color: #1a2332;"></strong><br>
+                                        Farm: <strong id="pairingFarmName" style="color: #f1f5f9;"></strong><br>
                                         Token expires in 24 hours
                                     </p>
-                                    <button class="btn-secondary" onclick="closePairingQR()" style="margin-top: 15px; background: #e5e7eb; color: #1a2332;">
+                                    <button class="btn-secondary" onclick="closePairingQR()" style="margin-top: 15px; background: rgba(99, 102, 241, 0.12); color: #a5b4fc;">
                                         Close
                                     </button>
                                 </div>
@@ -5175,8 +5175,6 @@
         }
     </script>
 
-    <!-- Chart.js for sustainability charts -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     
     <!-- Intro Card Component -->
     <script src="/js/intro-card.js?v=5"></script>
@@ -5570,12 +5568,12 @@
 
   <!-- Voice Command Modal (Phase 5 T47) -->
   <div id="voiceCommandModal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.6); z-index:9999; align-items:center; justify-content:center;">
-    <div style="background:var(--bg-primary, #1a2332); border:1px solid var(--border, #2a3a4e); border-radius:16px; padding:32px; max-width:440px; width:90%; text-align:center; position:relative;">
+    <div style="background:var(--bg-primary, #0f172a); border:1px solid var(--border, rgba(148, 163, 184, 0.12)); border-radius:16px; padding:32px; max-width:440px; width:90%; text-align:center; position:relative;">
       <button onclick="closeVoiceModal()" style="position:absolute; top:12px; right:12px; background:none; border:none; color:var(--text-secondary, #94a3b8); font-size:20px; cursor:pointer;">X</button>
       <h3 style="color:var(--text-primary, #e2e8f0); margin:0 0 8px 0; font-size:18px; font-weight:600;">Voice Command</h3>
       <p style="color:var(--text-secondary, #94a3b8); font-size:13px; margin:0 0 20px 0;">Speak a farming action: seed, harvest, move, quality check, or loss report</p>
       <div id="voiceStatus" style="color:var(--accent-green, #34d399); font-size:14px; margin-bottom:16px; min-height:20px;"></div>
-      <div id="voiceTranscript" style="background:var(--bg-secondary, #0f1923); border:1px solid var(--border, #2a3a4e); border-radius:8px; padding:16px; min-height:48px; color:var(--text-primary, #e2e8f0); font-size:15px; margin-bottom:16px; display:none;"></div>
+      <div id="voiceTranscript" style="background:var(--bg-secondary, #0f1923); border:1px solid var(--border, rgba(148, 163, 184, 0.12)); border-radius:8px; padding:16px; min-height:48px; color:var(--text-primary, #e2e8f0); font-size:15px; margin-bottom:16px; display:none;"></div>
       <div id="voiceParsed" style="display:none; background:var(--bg-secondary, #0f1923); border:1px solid rgba(52,211,153,0.3); border-radius:8px; padding:16px; margin-bottom:16px; text-align:left;">
         <div style="color:var(--text-secondary, #94a3b8); font-size:12px; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:8px;">Parsed Intent</div>
         <div id="voiceParsedAction" style="color:var(--accent-green, #34d399); font-size:16px; font-weight:600; margin-bottom:4px;"></div>
@@ -5587,7 +5585,7 @@
       </div>
       <div id="voiceConfirmBtns" style="display:none; margin-top:12px; gap:12px; justify-content:center;">
         <button onclick="executeVoiceAction()" style="background:var(--accent-green, #34d399); color:#0f1923; border:none; border-radius:8px; padding:10px 24px; font-size:14px; font-weight:600; cursor:pointer;">Execute</button>
-        <button onclick="resetVoiceModal()" style="background:var(--bg-secondary, #0f1923); color:var(--text-secondary, #94a3b8); border:1px solid var(--border, #2a3a4e); border-radius:8px; padding:10px 24px; font-size:14px; cursor:pointer;">Cancel</button>
+        <button onclick="resetVoiceModal()" style="background:var(--bg-secondary, #0f1923); color:var(--text-secondary, #94a3b8); border:1px solid var(--border, rgba(148, 163, 184, 0.12)); border-radius:8px; padding:10px 24px; font-size:14px; cursor:pointer;">Cancel</button>
       </div>
     </div>
   </div>
