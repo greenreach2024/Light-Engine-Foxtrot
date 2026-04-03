@@ -13374,6 +13374,52 @@ app.use('/api/admin/health', adminHealthRouter);
 app.use('/api/crop-pricing', cropPricingRouter);
 app.use("/api/admin/pricing", adminPricingRouter);
 
+// Proxy buyer-facing wholesale routes to Central (LE has no PostgreSQL)
+// Keeps sync/webhooks/admin/fulfillment/reservations local for inter-service use
+const WHOLESALE_PROXY_PATHS = [
+  '/buyers', '/catalog', '/checkout', '/orders',
+  '/delivery', '/network/farms', '/inventory'
+];
+
+app.use('/api/wholesale', (req, res, next) => {
+  const subPath = req.path;
+  const shouldProxy = WHOLESALE_PROXY_PATHS.some(p => subPath.startsWith(p));
+  if (!shouldProxy) return next();
+
+  const centralTarget = getCentralApiTarget();
+  createProxyMiddleware({
+    target: centralTarget,
+    router: () => centralTarget,
+    changeOrigin: true,
+    xfwd: true,
+    logLevel: 'warn',
+    timeout: 15000,
+    proxyTimeout: 15000,
+    agent: keepAliveHttpsAgent,
+    pathRewrite: (path) => '/api/wholesale' + path,
+    onProxyReq(proxyReq, _req) {
+      console.log('[-> wholesale] ' + _req.method + ' /api/wholesale' + _req.path + ' -> central');
+      if (_req.headers['authorization']) proxyReq.setHeader('Authorization', _req.headers['authorization']);
+      if (_req.headers['x-farm-id']) proxyReq.setHeader('X-Farm-ID', _req.headers['x-farm-id']);
+      if (_req.headers['content-type']) proxyReq.setHeader('Content-Type', _req.headers['content-type']);
+    },
+    onProxyRes(proxyRes, _req) {
+      const origin = _req.headers && _req.headers.origin;
+      if (origin) {
+        proxyRes.headers['access-control-allow-origin'] = origin;
+        proxyRes.headers['access-control-allow-credentials'] = 'true';
+      }
+    },
+    onError(err, _req, _res) {
+      console.error('[wholesale proxy] Error: ' + err.message);
+      if (!_res.headersSent) {
+        _res.writeHead(502, { 'Content-Type': 'application/json' });
+        _res.end(JSON.stringify({ error: 'wholesale_proxy_error', detail: String(err.message) }));
+      }
+    }
+  })(req, res, next);
+});
+
 /**
  * Light Engine: Wholesale Inventory Sync Routes
  * Exposes farm inventory to GreenReach for catalog aggregation
