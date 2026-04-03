@@ -13381,49 +13381,50 @@ const WHOLESALE_PROXY_PATHS = [
   '/delivery', '/network/farms', '/inventory'
 ];
 
+const wholesaleCentralProxy = createProxyMiddleware({
+  target: getCentralApiTarget(),
+  router: () => getCentralApiTarget(),
+  changeOrigin: true,
+  xfwd: true,
+  logLevel: 'warn',
+  timeout: 15000,
+  proxyTimeout: 15000,
+  agent: keepAliveHttpsAgent,
+  pathRewrite: (path) => '/api/wholesale' + path,
+  onProxyReq(proxyReq, _req) {
+    console.log('[-> wholesale] ' + _req.method + ' /api/wholesale' + _req.path + ' -> ' + getCentralApiTarget());
+    if (_req.headers['authorization']) proxyReq.setHeader('Authorization', _req.headers['authorization']);
+    if (_req.headers['x-farm-id']) proxyReq.setHeader('X-Farm-ID', _req.headers['x-farm-id']);
+    // Re-serialize body -- Express body parsers already consumed the stream
+    if (_req.body && Object.keys(_req.body).length > 0) {
+      const bodyData = JSON.stringify(_req.body);
+      proxyReq.setHeader('Content-Type', 'application/json');
+      proxyReq.setHeader('Content-Length', Buffer.byteLength(bodyData));
+      proxyReq.write(bodyData);
+    }
+  },
+  onProxyRes(proxyRes, _req) {
+    const origin = _req.headers && _req.headers.origin;
+    if (origin) {
+      proxyRes.headers['access-control-allow-origin'] = origin;
+      proxyRes.headers['access-control-allow-credentials'] = 'true';
+    }
+  },
+  onError(err, _req, _res) {
+    console.error('[wholesale proxy] Error: ' + err.message);
+    if (!_res.headersSent) {
+      _res.writeHead(502, { 'Content-Type': 'application/json' });
+      _res.end(JSON.stringify({ error: 'wholesale_proxy_error', detail: String(err.message) }));
+    }
+  }
+});
+
 app.use('/api/wholesale', (req, res, next) => {
   const subPath = req.path;
   const shouldProxy = WHOLESALE_PROXY_PATHS.some(p => subPath.startsWith(p));
   if (!shouldProxy) return next();
-
-  const centralTarget = getCentralApiTarget();
-  createProxyMiddleware({
-    target: centralTarget,
-    router: () => centralTarget,
-    changeOrigin: true,
-    xfwd: true,
-    logLevel: 'warn',
-    timeout: 15000,
-    proxyTimeout: 15000,
-    agent: keepAliveHttpsAgent,
-    pathRewrite: (path) => '/api/wholesale' + path,
-    onProxyReq(proxyReq, _req) {
-      console.log('[-> wholesale] ' + _req.method + ' /api/wholesale' + _req.path + ' -> central');
-      if (_req.headers['authorization']) proxyReq.setHeader('Authorization', _req.headers['authorization']);
-      if (_req.headers['x-farm-id']) proxyReq.setHeader('X-Farm-ID', _req.headers['x-farm-id']);
-      // Re-serialize body — Express body parsers already consumed the stream
-      if (_req.body && Object.keys(_req.body).length > 0) {
-        const bodyData = JSON.stringify(_req.body);
-        proxyReq.setHeader('Content-Type', 'application/json');
-        proxyReq.setHeader('Content-Length', Buffer.byteLength(bodyData));
-        proxyReq.write(bodyData);
-      }
-    },
-    onProxyRes(proxyRes, _req) {
-      const origin = _req.headers && _req.headers.origin;
-      if (origin) {
-        proxyRes.headers['access-control-allow-origin'] = origin;
-        proxyRes.headers['access-control-allow-credentials'] = 'true';
-      }
-    },
-    onError(err, _req, _res) {
-      console.error('[wholesale proxy] Error: ' + err.message);
-      if (!_res.headersSent) {
-        _res.writeHead(502, { 'Content-Type': 'application/json' });
-        _res.end(JSON.stringify({ error: 'wholesale_proxy_error', detail: String(err.message) }));
-      }
-    }
-  })(req, res, next);
+  console.log('[wholesale proxy] Forwarding ' + req.method + ' ' + req.originalUrl + ' to Central');
+  wholesaleCentralProxy(req, res, next);
 });
 
 /**
