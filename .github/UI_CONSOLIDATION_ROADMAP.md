@@ -101,7 +101,9 @@ phase card clicks.
 
 ---
 
-## Phase 2 -- Main Nav Consolidation (LE-farm-admin.html)
+## Phase 2 -- Main Nav Consolidation (LE-farm-admin.html) [COMPLETED]
+
+Commit: 5fe3b169. Backup tag: pre-tesla-ui-v2. Deployed 2026-04-03.
 
 **Scope**: LE-farm-admin.html navigation architecture.
 

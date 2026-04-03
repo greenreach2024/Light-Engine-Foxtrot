@@ -1078,10 +1078,11 @@
         }
     </style>
   <link rel="stylesheet" href="/styles/evie-core.css">
+  <link rel="stylesheet" href="/css/tesla-nav.css">
   <script src="/lib/chart.umd.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 </head>
-<body>
+<body class="tesla-layout">
     <!-- DEBUG BANNER REMOVED: Developer debug banner removed to reduce visible banners in production. Re-enable in dev with localStorage.setItem('gr.debug','true') -->
     
     <!-- PRIVATE MODE BANNER: Shows when localStorage is restricted -->
@@ -1105,84 +1106,94 @@
     </script>
     
     <!-- Page Header Navigation -->
-    <header class="page-header">
-        <div>
-            <h1 id="farmNameHeader">Farm Admin Dashboard</h1>
-            <small id="headerFarmId" style="color: var(--text-muted); font-family: monospace; font-size: 12px; display: block; margin-top: 4px;"></small>
+    <header class="page-header tesla-header">
+        <div class="tesla-header__brand">
+            <h1 id="farmNameHeader">Farm Admin</h1>
+            <small id="headerFarmId" style="color: #64748b; font-family: monospace; font-size: 11px; display: block; margin-top: 2px;"></small>
         </div>
-        <div class="header-actions">
-            <nav class="nav-menu">
-                <!-- Getting Started AI Assist -->
-                <div class="nav-item getting-started" id="ai-assist-getting-started">
-                    <button class="nav-button getting-started" style="background: linear-gradient(135deg, rgba(16,185,129,0.15), rgba(59,130,246,0.15)); border: 1px solid rgba(16,185,129,0.3);">
-                        🚀 Getting Started
-                        <span class="nav-arrow">▼</span>
-                    </button>
-                    <div class="dropdown-menu" style="width: 320px;">
-                        <div id="ai-assist-steps" style="padding: 12px 16px;">
-                            <p style="margin: 0 0 10px; font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Recommended Next Steps</p>
-                            <div id="ai-assist-items" style="display: flex; flex-direction: column; gap: 4px;">Loading...</div>
-                        </div>
-                    </div>
+        <nav class="tesla-tabs" id="teslaTabs">
+            <!-- Tab 1: Operations -->
+            <div class="tesla-tab" data-tab="operations">
+                <button class="tesla-tab__trigger" type="button">Operations</button>
+                <div class="tesla-tab__panel">
+                    <a href="#dashboard" class="nav-item active" data-section="dashboard">Dashboard</a>
+                    <a href="#iframe-view" class="nav-item" data-section="iframe-view" data-url="/views/farm-summary.html">Farm Summary</a>
+                    <a href="#iframe-view" class="nav-item" data-section="iframe-view" data-url="/views/tray-inventory.html">Activity Hub</a>
+                    <a href="#iframe-view" class="nav-item" data-section="iframe-view" data-url="/views/nutrient-management.html">Nutrient Management</a>
+                    <a href="#iframe-view" class="nav-item" data-section="iframe-view" data-url="/views/room-heatmap.html">Heat Map</a>
+                    <a href="/farm-vitality.html" class="nav-item">Farm Vitality</a>
                 </div>
-
-                <!-- Dropdown 1: Inventory Management (Amber) -->
-                <div class="nav-item inventory">
-                    <button class="nav-button inventory active">
-                        Inventory Management
-                        <span class="nav-arrow">▼</span>
-                    </button>
-                    <div class="dropdown-menu">
-                        <a href="/views/planting-scheduler.html" class="dropdown-item">Planting Scheduler</a>
-                        <a href="/views/tray-setup.html" class="dropdown-item">Tray Setup</a>
-                        <a href="/views/farm-inventory.html" class="dropdown-item">Farm Inventory</a>
-                        <a href="/views/tray-inventory.html" class="dropdown-item">Activity Hub</a>
-                        <a href="/LE-farm-admin.html#traceability" class="dropdown-item">Lot Traceability</a>
-                        <a href="/views/procurement-portal.html" class="dropdown-item">Procurement Portal</a>
-                        <a href="/LE-qr-generator.html" class="dropdown-item" target="_blank">QR Label Generator</a>
-                    </div>
+            </div>
+            <!-- Tab 2: Growing -->
+            <div class="tesla-tab" data-tab="growing">
+                <button class="tesla-tab__trigger" type="button">Growing</button>
+                <div class="tesla-tab__panel">
+                    <a href="#iframe-view" class="nav-item" data-section="iframe-view" data-url="/views/planting-scheduler.html">Planting Scheduler</a>
+                    <a href="#iframe-view" class="nav-item" data-section="iframe-view" data-url="/views/tray-setup.html">Tray Setup</a>
+                    <a href="#iframe-view" class="nav-item" data-section="iframe-view" data-url="/views/farm-inventory.html">Inventory</a>
+                    <a href="#iframe-view" class="nav-item" data-section="iframe-view" data-url="/views/crop-weight-analytics.html">Crop Weight Analytics</a>
                 </div>
-
-                <!-- Dropdown 2: Farm Monitoring (Green) -->
-                <div class="nav-item farm-monitoring">
-                    <button class="nav-button farm-monitoring">
-                        Farm Monitoring
-                        <span class="nav-arrow">▼</span>
-                    </button>
-                    <div class="dropdown-menu">
-                        <a href="/views/farm-summary.html" class="dropdown-item">Farm Summary</a>
-                        <a href="/farm-vitality.html" class="dropdown-item">Farm Vitality Dashboard</a>
-                        <a href="/views/nutrient-management.html" class="dropdown-item">Nutrient Management</a>
-                        <a href="/views/room-heatmap.html" class="dropdown-item">Heat Map</a>
-                    </div>
+            </div>
+            <!-- Tab 3: Business -->
+            <div class="tesla-tab" data-tab="business">
+                <button class="tesla-tab__trigger" type="button">Business</button>
+                <div class="tesla-tab__panel">
+                    <a href="#iframe-view" class="nav-item" data-section="iframe-view" data-url="/farm-sales-pos.html">Farm Sales Terminal</a>
+                    <a href="#wholesale-orders" class="nav-item" data-section="wholesale-orders">Wholesale Orders</a>
+                    <a href="#pricing" class="nav-item" data-section="pricing">Crop Pricing</a>
+                    <a href="#crop-value" class="nav-item" data-section="crop-value">Crop Value</a>
+                    <a href="#inventory-mgmt" class="nav-item" data-section="inventory-mgmt">Farm Supplies</a>
+                    <a href="#iframe-view" class="nav-item" data-section="iframe-view" data-url="/views/procurement-portal.html">Procurement Portal</a>
+                    <a href="#exports" class="nav-item" data-section="exports">Exports</a>
                 </div>
-
-                <!-- Dropdown 3: Admin (Purple) -->
-                <div class="nav-item admin">
-                    <button class="nav-button admin">
-                        Admin
-                        <span class="nav-arrow">▼</span>
-                    </button>
-                    <div class="dropdown-menu">
-                        <a href="/LE-farm-admin.html" class="dropdown-item active">Admin</a>
-                        <a href="/LE-dashboard.html" class="dropdown-item">Setup/Update</a>
-                    </div>
+            </div>
+            <!-- Tab 4: Settings -->
+            <div class="tesla-tab" data-tab="settings">
+                <button class="tesla-tab__trigger" type="button">Settings</button>
+                <div class="tesla-tab__panel">
+                    <a href="#iframe-view" class="nav-item" data-section="iframe-view" data-url="/LE-dashboard.html">Setup / Update</a>
+                    <a href="#users" class="nav-item" data-section="users">Users &amp; Access</a>
+                    <a href="#accounting" class="nav-item" data-section="accounting">Financial Summary</a>
+                    <a href="#payments" class="nav-item" data-section="payments">Payment Methods</a>
+                    <a href="#settings" class="nav-item" data-section="settings">Settings</a>
+                    <a href="#help" class="nav-item" data-section="help">Help &amp; Docs</a>
                 </div>
-
-                <!-- Dropdown 4: Sales (Cyan) -->
-                <div class="nav-item sales">
-                    <button class="nav-button sales">
-                        Sales
-                        <span class="nav-arrow">▼</span>
-                    </button>
-                    <div class="dropdown-menu dropdown-right">
-                        <a href="/farm-sales-pos.html" class="dropdown-item">Farm Sales Terminal</a>
-                        <a href="/LE-farm-admin.html#iframe-view" class="dropdown-item" onclick="document.querySelector('[data-url="/LE-wholesale-orders.html"]').click();return false;">Wholesale Orders</a>
-                    </div>
-                </div>
-            </nav>
+            </div>
+        </nav>
+        <div class="tesla-header__actions">
+            <a href="/evie-core.html" class="tesla-evie-btn nav-item" data-section="iframe-view" data-url="/evie-core.html">E.V.I.E.</a>
+            <button class="tesla-close-btn" onclick="logout()">Close</button>
         </div>
     </header>
+    <script>
+    // Tesla Tab Controller -- open/close dropdown panels
+    (function initTeslaTabs() {
+      var tabs = document.querySelectorAll('.tesla-tab');
+      tabs.forEach(function(tab) {
+        var trigger = tab.querySelector('.tesla-tab__trigger');
+        if (!trigger) return;
+        trigger.addEventListener('click', function(e) {
+          e.stopPropagation();
+          var wasOpen = tab.classList.contains('is-open');
+          // Close all tabs first
+          tabs.forEach(function(t) { t.classList.remove('is-open'); });
+          if (!wasOpen) tab.classList.add('is-open');
+        });
+      });
+      // Close tabs on outside click
+      document.addEventListener('click', function(e) {
+        if (!e.target.closest('.tesla-tab')) {
+          tabs.forEach(function(t) { t.classList.remove('is-open'); });
+        }
+      });
+      // Close tab when a nav-item inside it is clicked
+      document.querySelectorAll('.tesla-tab__panel .nav-item').forEach(function(item) {
+        item.addEventListener('click', function() {
+          tabs.forEach(function(t) { t.classList.remove('is-open'); });
+        });
+      });
+    })();
+    </script>
 
     <div class="main-layout">
         <!-- Sidebar -->

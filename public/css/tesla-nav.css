@@ -1,0 +1,297 @@
+
+/* ════════════════════════════════════════════════════════════════════
+   Tesla Nav -- Phase 2 Tab Navigation
+   Replaces sidebar + header dropdowns with a single horizontal tab bar.
+   ════════════════════════════════════════════════════════════════════ */
+
+/* -- Header Override ------------------------------------------------ */
+
+.tesla-header {
+  background: linear-gradient(180deg, #0a0f1a 0%, #0f1520 100%);
+  padding: 0 2rem;
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+  backdrop-filter: none;
+  height: 56px;
+  position: sticky;
+  top: 0;
+  z-index: 200;
+}
+
+.tesla-header::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg,
+    transparent 0%,
+    rgba(99, 102, 241, 0.3) 30%,
+    rgba(139, 92, 246, 0.4) 50%,
+    rgba(99, 102, 241, 0.3) 70%,
+    transparent 100%
+  );
+}
+
+.tesla-header__brand h1 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #f1f5f9;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+}
+
+/* -- Tab Bar -------------------------------------------------------- */
+
+.tesla-tabs {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  flex: 1;
+  height: 100%;
+}
+
+.tesla-tab {
+  position: relative;
+  height: 100%;
+  display: flex;
+  align-items: center;
+}
+
+.tesla-tab__trigger {
+  appearance: none;
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 0 1.25rem;
+  height: 100%;
+  cursor: pointer;
+  transition: color 0.2s ease;
+  white-space: nowrap;
+  position: relative;
+}
+
+.tesla-tab__trigger:hover {
+  color: #e2e8f0;
+}
+
+.tesla-tab__trigger::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%) scaleX(0);
+  width: 80%;
+  height: 2px;
+  background: linear-gradient(90deg, #6366f1, #8b5cf6);
+  border-radius: 1px;
+  transition: transform 0.25s ease;
+}
+
+.tesla-tab:hover .tesla-tab__trigger::after,
+.tesla-tab.is-open .tesla-tab__trigger::after {
+  transform: translateX(-50%) scaleX(1);
+}
+
+.tesla-tab.is-open .tesla-tab__trigger {
+  color: #f1f5f9;
+}
+
+/* -- Tab Dropdown --------------------------------------------------- */
+
+.tesla-tab__panel {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  min-width: 220px;
+  background: linear-gradient(145deg, #0f172a 0%, #1e293b 100%);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-top: none;
+  border-radius: 0 0 12px 12px;
+  padding: 8px 0;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+  z-index: 300;
+}
+
+.tesla-tab.is-open .tesla-tab__panel {
+  display: block;
+}
+
+.tesla-tab__panel .nav-item {
+  display: block;
+  padding: 10px 20px;
+  color: #cbd5e1;
+  font-size: 0.82rem;
+  font-weight: 500;
+  text-decoration: none;
+  transition: all 0.15s ease;
+  border-radius: 0;
+  margin: 0;
+  gap: 0;
+}
+
+.tesla-tab__panel .nav-item:hover {
+  background: rgba(99, 102, 241, 0.1);
+  color: #f1f5f9;
+}
+
+.tesla-tab__panel .nav-item.active {
+  background: rgba(99, 102, 241, 0.15);
+  color: #a5b4fc;
+}
+
+/* -- EVIE Button ---------------------------------------------------- */
+
+.tesla-evie-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 16px;
+  background: rgba(99, 102, 241, 0.12);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  border-radius: 20px;
+  color: #a5b4fc;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-decoration: none;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.tesla-evie-btn:hover {
+  background: rgba(99, 102, 241, 0.22);
+  border-color: rgba(99, 102, 241, 0.5);
+  color: #c7d2fe;
+  box-shadow: 0 0 12px rgba(99, 102, 241, 0.2);
+}
+
+/* -- Close Button --------------------------------------------------- */
+
+.tesla-close-btn {
+  appearance: none;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  color: #fca5a5;
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.tesla-close-btn:hover {
+  background: rgba(239, 68, 68, 0.18);
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+/* -- Header Actions Container --------------------------------------- */
+
+.tesla-header__actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+}
+
+/* -- Layout Override: Remove Sidebar -------------------------------- */
+
+.tesla-layout .main-layout {
+  display: block;
+}
+
+.tesla-layout .sidebar {
+  display: none;
+}
+
+.tesla-layout .main-content {
+  padding: 0;
+}
+
+.tesla-layout #section-iframe-view {
+  margin: 0;
+  width: 100%;
+  height: calc(100vh - 56px);
+}
+
+/* -- Inline Section Dark Polish ------------------------------------- */
+
+.tesla-layout .main-content {
+  background: #0a0f1a;
+  min-height: calc(100vh - 56px);
+  padding: 24px 32px;
+}
+
+.tesla-layout .content-section h2,
+.tesla-layout .content-section h3 {
+  color: #f1f5f9;
+}
+
+.tesla-layout .content-section p,
+.tesla-layout .content-section label,
+.tesla-layout .content-section .text-muted {
+  color: #94a3b8;
+}
+
+.tesla-layout .content-section .card,
+.tesla-layout .content-section .kpi-card {
+  background: linear-gradient(145deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 41, 59, 0.9) 100%);
+  border: 1px solid rgba(148, 163, 184, 0.08);
+  border-radius: 14px;
+}
+
+.tesla-layout .content-section table th {
+  background: rgba(15, 23, 42, 0.6);
+  color: #94a3b8;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.tesla-layout .content-section table td {
+  color: #cbd5e1;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.06);
+}
+
+/* -- Responsive ----------------------------------------------------- */
+
+@media (max-width: 768px) {
+  .tesla-header {
+    height: auto;
+    flex-wrap: wrap;
+    padding: 12px 16px;
+    gap: 8px;
+  }
+
+  .tesla-tabs {
+    order: 3;
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .tesla-tab__trigger {
+    padding: 8px 12px;
+    font-size: 0.8rem;
+  }
+
+  .tesla-tab__panel {
+    position: fixed;
+    left: 0;
+    right: 0;
+    border-radius: 0;
+    min-width: 100vw;
+  }
+}
+
+/* -- Tab JS Controller (inline) ------------------------------------- */
+/* Handled by the inline script block below the header */
