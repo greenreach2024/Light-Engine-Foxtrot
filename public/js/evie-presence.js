@@ -130,6 +130,90 @@
     return Math.floor(h / 24) + 'd ago';
   }
 
+  // -- Alert Domain-to-Page routing map --
+  var ALERT_PAGE_MAP = {
+    environment: { url: '/views/environment.html', title: 'Environment' },
+    nutrient:    { url: '/views/nutrient-management.html', title: 'Nutrient Management' },
+    inventory:   { url: '/views/farm-inventory.html', title: 'Farm Inventory' },
+    planting:    { url: '/views/planting-scheduler.html', title: 'Planting Scheduler' },
+    harvest:     { url: '/views/harvest-tracking.html', title: 'Harvest Tracking' },
+    payment:     { section: 'payments', title: 'Payments' },
+    order:       { section: 'wholesale-orders', title: 'Wholesale Orders' },
+    general:     { url: '/views/farm-summary.html', title: 'Farm Summary' }
+  };
+
+  function navigateToAlertPage(domain) {
+    var route = ALERT_PAGE_MAP[domain] || ALERT_PAGE_MAP.general;
+    if (window.parent && window.parent !== window && window.parent.EVIE) {
+      window.parent.postMessage({ type: 'evie-navigate', route: route }, '*');
+      return;
+    }
+    if (route.section) {
+      var navItem = document.querySelector('[data-section="' + route.section + '"]');
+      if (navItem) { navItem.click(); return; }
+      window.location.hash = '#' + route.section;
+      return;
+    }
+    if (route.url) {
+      if (typeof window.renderEmbeddedView === 'function') {
+        window.renderEmbeddedView(route.url, route.title);
+      } else {
+        var iframe = document.getElementById('admin-iframe');
+        if (iframe) {
+          iframe.src = route.url;
+          var iframeSec = document.getElementById('section-iframe-view');
+          if (iframeSec) {
+            document.querySelectorAll('.content-section').forEach(function (s) { s.style.display = 'none'; });
+            iframeSec.style.display = 'block';
+          }
+        } else {
+          window.location.href = route.url;
+        }
+      }
+    }
+  }
+
+  function dismissAlertFromPanel(alertId) {
+    fetch(API_BASE + '/alerts/' + encodeURIComponent(alertId) + '/dismiss', {
+      method: 'POST',
+      headers: Object.assign({ 'Content-Type': 'application/json' }, getAuthHeaders()),
+      body: JSON.stringify({ reason: 'Dismissed from EVIE panel' })
+    }).then(function (resp) {
+      if (resp.ok) {
+        var card = document.querySelector('[data-alert-id="' + alertId + '"]');
+        if (card) {
+          card.style.opacity = '0';
+          card.style.transform = 'translateX(20px)';
+          setTimeout(function () { card.remove(); updateAlertCount(); }, 300);
+        }
+        setTimeout(refreshState, 500);
+      }
+    }).catch(function () { /* silent */ });
+  }
+
+  function updateAlertCount() {
+    var list = document.getElementById('evie-alert-list');
+    var countEl = document.getElementById('evie-alert-count');
+    if (list && countEl) {
+      countEl.textContent = String(list.querySelectorAll('.evie-signal-card').length);
+    }
+  }
+
+  function askEvieAboutAlert(alert) {
+    var question = 'Tell me about the ' + (alert.alert_type || alert.domain || '') +
+      ' alert' + (alert.zone ? ' in ' + alert.zone : '') + ': ' + alert.title +
+      '. What should I do?';
+    switchMode('converse');
+    if (!panelOpen) togglePanel(true);
+    setTimeout(function () {
+      var inp = document.getElementById('evie-conv-input');
+      if (inp) {
+        inp.value = question;
+        sendChat(question);
+      }
+    }, 200);
+  }
+
   function unlockNotificationAudio() {
     var AudioContextCtor = window.AudioContext || window.webkitAudioContext;
     if (!AudioContextCtor) return;
@@ -787,14 +871,56 @@
       } else {
         alerts.forEach(function (a) {
           var card = document.createElement('div');
-          card.className = 'evie-signal-card signal-' + (a.severity || 'info');
-          card.innerHTML =
-            '<div class="evie-signal-title">' + esc(a.title) + '</div>' +
+          card.className = 'evie-signal-card signal-' + (a.severity || 'info') + ' evie-alert-clickable';
+          if (a.id) card.dataset.alertId = a.id;
+
+          var headerHtml =
+            '<div class="evie-alert-header">' +
+            '  <div class="evie-signal-title">' + esc(a.title) + '</div>' +
+            '  <div class="evie-alert-expand-icon">&#9662;</div>' +
+            '</div>' +
             '<div class="evie-signal-detail">' + esc(a.detail || '') + '</div>' +
             '<div class="evie-signal-meta">' +
             (a.domain ? '<span>' + esc(a.domain) + '</span>' : '') +
+            (a.zone ? '<span>' + esc(a.zone) + '</span>' : '') +
             (a.since ? '<span>' + timeAgo(a.since) + '</span>' : '') +
             '</div>';
+
+          var expandedHtml = '<div class="evie-alert-expanded">';
+          if (a.reading != null || a.target_min != null || a.target_max != null) {
+            expandedHtml += '<div class="evie-alert-readings">';
+            if (a.reading != null) expandedHtml += '<div class="evie-alert-reading-item"><span class="label">Current</span><span class="value">' + a.reading + '</span></div>';
+            if (a.target_min != null) expandedHtml += '<div class="evie-alert-reading-item"><span class="label">Min Target</span><span class="value">' + a.target_min + '</span></div>';
+            if (a.target_max != null) expandedHtml += '<div class="evie-alert-reading-item"><span class="label">Max Target</span><span class="value">' + a.target_max + '</span></div>';
+            expandedHtml += '</div>';
+          }
+          expandedHtml += '<div class="evie-alert-actions">';
+          expandedHtml += '<button class="evie-alert-btn evie-alert-btn-navigate" data-domain="' + esc(a.domain || a.alert_type || 'general') + '">Go to Page</button>';
+          expandedHtml += '<button class="evie-alert-btn evie-alert-btn-ask">Ask E.V.I.E.</button>';
+          if (a.id) expandedHtml += '<button class="evie-alert-btn evie-alert-btn-dismiss" data-alert-id="' + esc(a.id) + '">Dismiss</button>';
+          expandedHtml += '</div>';
+          expandedHtml += '</div>';
+
+          card.innerHTML = headerHtml + expandedHtml;
+
+          card.addEventListener('click', function (e) {
+            if (e.target.closest('.evie-alert-btn')) return;
+            card.classList.toggle('expanded');
+          });
+
+          card.addEventListener('click', function (e) {
+            var btn = e.target.closest('.evie-alert-btn');
+            if (!btn) return;
+            e.stopPropagation();
+            if (btn.classList.contains('evie-alert-btn-dismiss')) {
+              dismissAlertFromPanel(btn.dataset.alertId);
+            } else if (btn.classList.contains('evie-alert-btn-navigate')) {
+              navigateToAlertPage(btn.dataset.domain);
+            } else if (btn.classList.contains('evie-alert-btn-ask')) {
+              askEvieAboutAlert(a);
+            }
+          });
+
           alertList.appendChild(card);
         });
       }
@@ -991,6 +1117,20 @@
   window.addEventListener('message', function (e) {
     if (e.data && e.data.type === 'evie-page-context' && e.data.context) {
       window.EVIE.pageContext = e.data.context;
+    }
+    if (e.data && e.data.type === 'evie-navigate' && e.data.route) {
+      var route = e.data.route;
+      if (route.section) {
+        var navItem = document.querySelector('[data-section="' + route.section + '"]');
+        if (navItem) navItem.click();
+      } else if (route.url) {
+        if (typeof window.renderEmbeddedView === 'function') {
+          window.renderEmbeddedView(route.url, route.title || '');
+        } else {
+          var iframe = document.getElementById('admin-iframe');
+          if (iframe) iframe.src = route.url;
+        }
+      }
     }
   });
 

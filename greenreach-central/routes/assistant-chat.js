@@ -4868,11 +4868,17 @@ router.get('/state', async (req, res) => {
     var alertArr = (Array.isArray(alertsRaw) ? alertsRaw : (alertsRaw.alerts || [])).filter(function (a) { return !a.resolved && !a.dismissed; });
     var alertItems = alertArr.map(function (a) {
       return {
+        id: a.id || null,
+        alert_type: a.alert_type || a.type || 'general',
         title: a.title || a.message || 'Alert',
         detail: a.detail || a.description || '',
         domain: a.domain || a.category || 'general',
         severity: a.severity || a.level || 'info',
-        since: a.created_at || a.timestamp
+        since: a.created_at || a.timestamp,
+        zone: a.zone || null,
+        reading: a.reading != null ? a.reading : null,
+        target_min: a.target_min != null ? a.target_min : null,
+        target_max: a.target_max != null ? a.target_max : null
       };
     });
 
@@ -5752,5 +5758,42 @@ router.post('/notifications/push', async (req, res) => {
     return res.status(500).json({ ok: false, error: 'Failed to push notification' });
   }
 });
+
+// -- Alert Actions (dismiss/resolve from EVIE panel) --
+router.post('/alerts/:alertId/dismiss', async (req, res) => {
+  try {
+    const alertId = req.params.alertId;
+    const reason = req.body?.reason || 'Dismissed from EVIE';
+
+    // Update system-alerts.json
+    const alertsPath = path.join(DATA_DIR, 'system-alerts.json');
+    let alerts = [];
+    try {
+      if (fs.existsSync(alertsPath)) {
+        alerts = JSON.parse(fs.readFileSync(alertsPath, 'utf8'));
+        if (!Array.isArray(alerts)) alerts = alerts.alerts || [];
+      }
+    } catch { alerts = []; }
+
+    const alert = alerts.find(function (a) { return a.id === alertId; });
+    if (!alert) {
+      return res.status(404).json({ ok: false, error: 'Alert not found' });
+    }
+
+    alert.dismissed = true;
+    alert.dismissed_at = new Date().toISOString();
+    alert.dismiss_reason = reason;
+
+    const tmpPath = alertsPath + '.tmp';
+    fs.writeFileSync(tmpPath, JSON.stringify(alerts, null, 2));
+    fs.renameSync(tmpPath, alertsPath);
+
+    return res.json({ ok: true, alert_id: alertId, dismissed: true });
+  } catch (err) {
+    logger.error('[Alerts] Dismiss error:', err.message);
+    return res.status(500).json({ ok: false, error: 'Failed to dismiss alert' });
+  }
+});
+
 
 export default router;

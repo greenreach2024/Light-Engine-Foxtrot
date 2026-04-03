@@ -623,6 +623,146 @@
   color: var(--evie-text-muted);
 }
 
+/* -- Actionable Alert Cards --------------------------------------------- */
+
+.evie-alert-clickable {
+  cursor: pointer;
+  position: relative;
+}
+
+.evie-alert-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.evie-alert-expand-icon {
+  font-size: 12px;
+  color: var(--evie-text-muted);
+  transition: transform 0.25s ease;
+  flex-shrink: 0;
+  line-height: 1;
+  margin-top: 2px;
+}
+
+.evie-alert-clickable.expanded .evie-alert-expand-icon {
+  transform: rotate(180deg);
+}
+
+.evie-alert-expanded {
+  display: none;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  animation: evie-alert-expand 0.25s ease;
+}
+
+.evie-alert-clickable.expanded .evie-alert-expanded {
+  display: block;
+}
+
+@keyframes evie-alert-expand {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.evie-alert-readings {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.evie-alert-reading-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  padding: 8px 12px;
+  min-width: 72px;
+}
+
+.evie-alert-reading-item .label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--evie-text-muted);
+  margin-bottom: 4px;
+}
+
+.evie-alert-reading-item .value {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--evie-text);
+}
+
+.evie-alert-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.evie-alert-btn {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--evie-text-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.evie-alert-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--evie-text);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.evie-alert-btn-navigate {
+  background: rgba(56, 189, 248, 0.12);
+  border-color: rgba(56, 189, 248, 0.25);
+  color: var(--evie-sensing);
+}
+
+.evie-alert-btn-navigate:hover {
+  background: rgba(56, 189, 248, 0.22);
+  border-color: rgba(56, 189, 248, 0.4);
+}
+
+.evie-alert-btn-ask {
+  background: rgba(168, 85, 247, 0.12);
+  border-color: rgba(168, 85, 247, 0.25);
+  color: #c084fc;
+}
+
+.evie-alert-btn-ask:hover {
+  background: rgba(168, 85, 247, 0.22);
+  border-color: rgba(168, 85, 247, 0.4);
+}
+
+.evie-alert-btn-dismiss {
+  background: rgba(251, 146, 60, 0.1);
+  border-color: rgba(251, 146, 60, 0.2);
+  color: var(--evie-alert);
+}
+
+.evie-alert-btn-dismiss:hover {
+  background: rgba(251, 146, 60, 0.2);
+  border-color: rgba(251, 146, 60, 0.35);
+}
+
+/* Dismiss animation */
+.evie-signal-card[data-alert-id] {
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
 /* -- Confidence Bar ---------------------------------------------------- */
 
 .evie-confidence-bar {
