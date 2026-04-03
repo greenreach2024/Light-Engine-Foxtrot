@@ -1606,6 +1606,25 @@
     }
   </style>
   <!-- farm-assistant.css removed -- superseded by EVIE (evie-presence.js) -->
+
+    /* Hide old dropdown nav when loaded inside LE-farm-admin iframe */
+    <style id="iframe-nav-hide">
+      @media all {
+        .nav-menu, .portal-header .header-actions .nav-menu,
+        .portal-header .nav-menu { /* already hidden by iframe detection below */ }
+      }
+    </style>
+    <script>
+      (function() {
+        try {
+          if (window.self !== window.top) {
+            var s = document.createElement('style');
+            s.textContent = '.nav-menu, .portal-header .header-actions, .breadcrumb { display: none !important; } .portal-header { padding: 0.5rem 2rem; min-height: auto; border-bottom: 1px solid rgba(148,163,184,0.12); } .portal-header h1 { font-size: 1.1rem; }';
+            document.head.appendChild(s);
+          }
+        } catch(e) {}
+      })();
+    </script>
 </head>
 <body class="le-theme">
   <div class="header">
