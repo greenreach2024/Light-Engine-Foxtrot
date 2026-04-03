@@ -16,8 +16,8 @@
 
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-      color: #e4e4e7;
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+      color: #f1f5f9;
       overflow: hidden;
       height: 100vh;
       display: flex;
@@ -45,7 +45,7 @@
     .header h1 {
       font-size: 2rem;
       font-weight: 700;
-      color: #60a5fa;
+      color: #f1f5f9;
       letter-spacing: -0.5px;
     }
 
@@ -57,7 +57,7 @@
     .btn {
       padding: 0.75rem 1.5rem;
       border: 2px solid;
-      border-radius: 8px;
+      border-radius: 14px;
       font-size: 0.875rem;
       font-weight: 600;
       cursor: pointer;
@@ -136,7 +136,7 @@
     .sidebar h2, .details-panel h2 {
       margin: 0 0 1.5rem 0;
       font-size: 1.25rem;
-      color: #60a5fa;
+      color: #f1f5f9;
       border-bottom: 2px solid rgba(59, 130, 246, 0.3);
       padding-bottom: 0.75rem;
       font-weight: 700;
@@ -165,12 +165,12 @@
       padding: 1rem;
       background: rgba(15, 23, 42, 0.6);
       border: 2px solid rgba(59, 130, 246, 0.3);
-      border-radius: 8px;
+      border-radius: 14px;
       text-align: center;
       cursor: grab;
       transition: all 0.2s;
       user-select: none;
-      color: #e4e4e7;
+      color: #f1f5f9;
     }
 
     .tool-item:hover {
@@ -224,7 +224,7 @@
     .canvas-header h2 {
       margin: 0;
       font-size: 1.25rem;
-      color: #60a5fa;
+      color: #f1f5f9;
       font-weight: 700;
     }
 
@@ -249,7 +249,7 @@
       border: 1px solid rgba(59, 130, 246, 0.3);
       border-radius: 6px;
       background: rgba(15, 23, 42, 0.8);
-      color: #e4e4e7;
+      color: #f1f5f9;
       font-size: 0.875rem;
     }
 
@@ -259,7 +259,7 @@
       gap: 0.5rem;
       margin-bottom: 1rem;
       padding: 0.75rem 1rem;
-      border-radius: 8px;
+      border-radius: 14px;
       border: 1px solid rgba(59, 130, 246, 0.35);
       background: rgba(14, 116, 144, 0.18);
       color: #cffafe;
@@ -288,7 +288,7 @@
 
     #mapCanvas {
       border: 2px solid rgba(59, 130, 246, 0.3);
-      border-radius: 8px;
+      border-radius: 14px;
       cursor: crosshair;
       display: block;
       max-width: 100%;
@@ -309,14 +309,14 @@
       padding: 0.75rem;
       background: rgba(15, 23, 42, 0.6);
       border: 1px solid rgba(59, 130, 246, 0.3);
-      border-radius: 8px;
+      border-radius: 14px;
       margin-bottom: 0.5rem;
       display: flex;
       justify-content: space-between;
       align-items: center;
       cursor: pointer;
       transition: all 0.2s;
-      color: #e4e4e7;
+      color: #f1f5f9;
     }
 
     .device-item:hover {
@@ -335,7 +335,7 @@
     .device-name {
       font-size: 0.875rem;
       font-weight: 600;
-      color: #e4e4e7;
+      color: #f1f5f9;
       margin-bottom: 0.125rem;
     }
 
@@ -357,7 +357,7 @@
 
     .zone-item {
       padding: 0.75rem;
-      border-radius: 8px;
+      border-radius: 14px;
       display: flex;
       justify-content: space-between;
       align-items: center;
@@ -391,7 +391,7 @@
     }
 
     .detail-value {
-      color: #e4e4e7;
+      color: #f1f5f9;
       font-weight: 600;
     }
 
@@ -405,7 +405,7 @@
     .telemetry-card {
       background: rgba(15, 23, 42, 0.6);
       padding: 0.75rem;
-      border-radius: 8px;
+      border-radius: 14px;
       text-align: center;
       border: 1px solid rgba(59, 130, 246, 0.2);
     }
@@ -421,7 +421,7 @@
     .telemetry-value {
       font-size: 1.25rem;
       font-weight: 700;
-      color: #60a5fa;
+      color: #f1f5f9;
     }
 
     .action-buttons {
@@ -439,7 +439,7 @@
     .stats-bar {
       background: rgba(15, 23, 42, 0.6);
       padding: 0.75rem;
-      border-radius: 8px;
+      border-radius: 14px;
       margin-top: 1rem;
       font-size: 0.875rem;
       color: #94a3b8;
@@ -447,21 +447,21 @@
     }
 
     .stats-bar strong {
-      color: #e4e4e7;
+      color: #f1f5f9;
     }
 
     .legend {
       margin-top: 1.5rem;
       padding: 1rem;
       background: rgba(15, 23, 42, 0.4);
-      border-radius: 8px;
+      border-radius: 14px;
       border: 1px solid rgba(59, 130, 246, 0.2);
     }
 
     .legend-title {
       font-size: 0.875rem;
       font-weight: 600;
-      color: #60a5fa;
+      color: #f1f5f9;
       margin-bottom: 0.75rem;
       text-transform: uppercase;
       letter-spacing: 0.05em;
@@ -596,7 +596,7 @@
           <div class="canvas-controls">
             <label>
               Room:
-              <select id="roomSelect" onchange="changeRoom()" style="padding: 0.375rem 0.75rem; border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 6px; background: rgba(15, 23, 42, 0.8); color: #e4e4e7; font-size: 0.875rem; min-width: 150px; margin-right: 0.5rem;">
+              <select id="roomSelect" onchange="changeRoom()" style="padding: 0.375rem 0.75rem; border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 6px; background: rgba(15, 23, 42, 0.8); color: #f1f5f9; font-size: 0.875rem; min-width: 150px; margin-right: 0.5rem;">
                 <option value="">Loading rooms...</option>
               </select>
             </label>
@@ -1698,7 +1698,7 @@
           
           let html = `
             <div class="details-content">
-              <div style="text-align: center; font-size: 32px; margin-bottom: 10px; color: #60a5fa;">${resolvedIcon}</div>
+              <div style="text-align: center; font-size: 32px; margin-bottom: 10px; color: #f1f5f9;">${resolvedIcon}</div>
               <div class="detail-row">
                 <span class="detail-label">Name</span>
                 <span class="detail-value">${device.name || 'Unknown'}</span>
@@ -1757,7 +1757,7 @@
       } else if (item.zone) {
         const html = `
           <div class="details-content">
-            <div style="width: 100%; height: 60px; background: ${item.color}; border-radius: 8px; margin-bottom: 15px;"></div>
+            <div style="width: 100%; height: 60px; background: ${item.color}; border-radius: 14px; margin-bottom: 15px;"></div>
             <div class="detail-row">
               <span class="detail-label">Zone</span>
               <span class="detail-value">${item.name}</span>
@@ -1771,7 +1771,7 @@
               <span class="detail-value">${item.x2 - item.x1 + 1} × ${item.y2 - item.y1 + 1} cells</span>
             </div>
 
-            <div style="margin: 1rem 0; padding: 1rem; background: rgba(59, 130, 246, 0.1); border-radius: 8px; border: 1px solid rgba(59, 130, 246, 0.3);">
+            <div style="margin: 1rem 0; padding: 1rem; background: rgba(59, 130, 246, 0.1); border-radius: 14px; border: 1px solid rgba(59, 130, 246, 0.3);">
               <div style="font-size: 0.75rem; font-weight: 600; color: #93c5fd; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.05em;">Environmental Setpoints</div>
               <div style="font-size: 0.8rem; color: #cbd5e1;">
                 Managed by grow recipes. Default: <strong>22°C</strong> and <strong>60% RH</strong> until a recipe is selected.

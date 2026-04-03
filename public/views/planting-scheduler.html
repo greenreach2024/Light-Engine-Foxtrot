@@ -17,8 +17,8 @@
 
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-      color: #e4e4e7;
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+      color: #f1f5f9;
       overflow-x: hidden;
       min-height: 100vh;
       display: flex;
@@ -32,7 +32,7 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      border-bottom: 2px solid #3b82f6;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.12);
       backdrop-filter: blur(10px);
       position: sticky;
       top: 0;
@@ -42,7 +42,7 @@
     .header h1 {
       font-size: 2rem;
       font-weight: 700;
-      color: #60a5fa;
+      color: #f1f5f9;
       letter-spacing: -0.5px;
     }
 
@@ -59,7 +59,7 @@
       padding: 0.75rem 1.5rem;
       font-size: 1rem;
       font-weight: 600;
-      border-radius: 8px;
+      border-radius: 14px;
       cursor: pointer;
       transition: all 0.3s ease;
       text-decoration: none;
@@ -90,7 +90,7 @@
       padding: 0.75rem 1.25rem;
       font-size: 0.95rem;
       font-weight: 600;
-      border-radius: 8px;
+      border-radius: 14px;
       cursor: pointer;
       transition: all 0.3s ease;
       white-space: nowrap;
@@ -107,7 +107,7 @@
 
     .nav-button.active {
       background: rgba(59, 130, 246, 0.4);
-      border-color: #60a5fa;
+      border-color: #f1f5f9;
       color: white;
     }
 
@@ -126,7 +126,7 @@
       left: 0;
       background: rgba(15, 23, 42, 0.95);
       border: 2px solid #3b82f6;
-      border-radius: 8px;
+      border-radius: 14px;
       padding: 0.5rem;
       min-width: 200px;
       opacity: 0;
@@ -205,7 +205,7 @@
 
     /* Card Styles */
     .card {
-      background: rgba(30, 41, 59, 0.6);
+      background: rgba(15, 23, 42, 0.95);
       border-radius: 16px;
       padding: 2rem;
       border: 1px solid rgba(59, 130, 246, 0.2);
@@ -219,7 +219,7 @@
     .card h2 {
       font-size: 1.5rem;
       margin-bottom: 1.5rem;
-      color: #60a5fa;
+      color: #f1f5f9;
       font-weight: 600;
       border-bottom: 2px solid rgba(59, 130, 246, 0.3);
       padding-bottom: 0.75rem;
@@ -285,7 +285,7 @@
     .summary-card .value {
       font-size: 2.5rem;
       font-weight: 700;
-      color: #60a5fa;
+      color: #f1f5f9;
       line-height: 1.2;
     }
 
@@ -302,7 +302,7 @@
 
     .timeline-section-title {
       font-size: 1.5rem;
-      color: #60a5fa;
+      color: #f1f5f9;
       margin-bottom: 1.5rem;
       font-weight: 600;
       border-bottom: 2px solid rgba(59, 130, 246, 0.3);
@@ -354,7 +354,7 @@
     .variety-name {
       font-size: 1.25rem;
       font-weight: 600;
-      color: #e4e4e7;
+      color: #f1f5f9;
       flex: 1;
     }
 
@@ -402,7 +402,7 @@
     }
 
     .variety-stat-value {
-      color: #60a5fa;
+      color: #f1f5f9;
       font-size: 1.75rem;
       font-weight: 700;
       line-height: 1;
@@ -467,7 +467,7 @@
 
     .timeline-item:hover {
       transform: translateX(4px);
-      border-left-color: #60a5fa;
+      border-left-color: #f1f5f9;
       background: rgba(15, 23, 42, 0.8);
     }
 
@@ -490,13 +490,13 @@
     .timeline-date {
       font-size: 1.1rem;
       font-weight: 600;
-      color: #60a5fa;
+      color: #f1f5f9;
       margin-bottom: 0.5rem;
     }
 
     .timeline-task {
       font-size: 1rem;
-      color: #e4e4e7;
+      color: #f1f5f9;
       margin-bottom: 0.25rem;
     }
 
@@ -568,7 +568,7 @@
     .tray-table td {
       background: rgba(15, 23, 42, 0.6);
       padding: 1rem;
-      color: #e4e4e7;
+      color: #f1f5f9;
       border-bottom: 1px solid rgba(148, 163, 184, 0.1);
     }
 
@@ -648,7 +648,7 @@
     }
 
     .light-adjustment-header h4 {
-      color: #60a5fa;
+      color: #f1f5f9;
       font-size: 1.1rem;
     }
 
@@ -691,8 +691,8 @@
 
     .adjustment-phase {
       flex: 1;
-      background: rgba(30, 41, 59, 0.6);
-      border-radius: 8px;
+      background: rgba(15, 23, 42, 0.95);
+      border-radius: 14px;
       padding: 1rem;
       text-align: center;
       border: 1px solid rgba(148, 163, 184, 0.2);
@@ -715,7 +715,7 @@
     .adjustment-phase .phase-ppfd {
       font-size: 1.5rem;
       font-weight: 700;
-      color: #60a5fa;
+      color: #f1f5f9;
     }
 
     /* Manual Scheduling Form */
@@ -743,9 +743,9 @@
     .form-group select {
       background: rgba(15, 23, 42, 0.6);
       border: 1px solid rgba(148, 163, 184, 0.3);
-      border-radius: 8px;
+      border-radius: 14px;
       padding: 0.75rem;
-      color: #e4e4e7;
+      color: #f1f5f9;
       font-size: 1rem;
       transition: all 0.2s ease;
     }
@@ -819,9 +819,9 @@
       visibility: hidden;
       width: 250px;
       background: rgba(15, 23, 42, 0.95);
-      color: #e4e4e7;
+      color: #f1f5f9;
       text-align: left;
-      border-radius: 8px;
+      border-radius: 14px;
       padding: 0.75rem;
       position: absolute;
       z-index: 1000;
@@ -893,7 +893,7 @@
     }
 
     .modal-content {
-      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
       border-radius: 12px;
       max-width: 900px;
       width: 90%;
@@ -918,7 +918,7 @@
     .modal-title {
       font-size: 1.5rem;
       font-weight: 600;
-      color: #60a5fa;
+      color: #f1f5f9;
       margin: 0;
     }
 
@@ -949,9 +949,9 @@
     }
 
     .tray-detail-card {
-      background: rgba(30, 41, 59, 0.6);
+      background: rgba(15, 23, 42, 0.95);
       border: 1px solid rgba(59, 130, 246, 0.2);
-      border-radius: 8px;
+      border-radius: 14px;
       padding: 1.5rem;
       transition: all 0.2s ease;
     }
@@ -975,7 +975,7 @@
     .tray-detail-id {
       font-size: 1.25rem;
       font-weight: 600;
-      color: #60a5fa;
+      color: #f1f5f9;
     }
 
     .tray-detail-urgency {
@@ -1033,13 +1033,13 @@
     }
 
     .tray-detail-value {
-      color: #e4e4e7;
+      color: #f1f5f9;
       font-size: 1rem;
       font-weight: 500;
     }
 
     .tray-detail-value.highlight {
-      color: #60a5fa;
+      color: #f1f5f9;
       font-weight: 600;
     }
 
@@ -1333,7 +1333,7 @@
       
       <div class="form-group" style="margin-bottom: 1rem;">
         <label for="aiGroupSelect">Select Group for Recommendations</label>
-        <select id="aiGroupSelect" style="padding: 0.75rem; border-radius: 8px; border: 2px solid #3b82f6; background: rgba(0,0,0,0.3); color: #e4e4e7;">
+        <select id="aiGroupSelect" style="padding: 0.75rem; border-radius: 14px; border: 2px solid #3b82f6; background: rgba(0,0,0,0.3); color: #f1f5f9;">
           <option value="">Choose a group to replant...</option>
         </select>
       </div>
@@ -1351,7 +1351,7 @@
       <!-- Recommendations Display -->
       <div id="recommendationsDisplay" style="display: none; max-height: 70vh; overflow-y: auto; padding-right: 0.25rem;">
         <div style="background: rgba(59, 130, 246, 0.1); border: 2px solid #3b82f6; border-radius: 12px; padding: 1.5rem; margin-bottom: 1rem;">
-          <h3 style="color: #60a5fa; margin-bottom: 1rem;">Top Recommendation</h3>
+          <h3 style="color: #f1f5f9; margin-bottom: 1rem;">Top Recommendation</h3>
           <div id="topRecommendation"></div>
         </div>
 
@@ -1411,7 +1411,7 @@
         </div>
 
         <!-- Scope summary -->
-        <div id="manualScopeSummary" style="grid-column: 1 / -1; display: none; padding: 0.75rem; background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 8px; color: #94a3b8; font-size: 0.85rem;">
+        <div id="manualScopeSummary" style="grid-column: 1 / -1; display: none; padding: 0.75rem; background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 14px; color: #94a3b8; font-size: 0.85rem;">
         </div>
 
         <!-- Step 3: Cadence -->
@@ -3183,7 +3183,7 @@
               <div><strong>Items:</strong> ${items.length} tray(s)</div>
             </div>
             ${plan.batches ? `
-              <h4 style="color: #60a5fa; margin-bottom: 0.5rem;">Batches</h4>
+              <h4 style="color: #f1f5f9; margin-bottom: 0.5rem;">Batches</h4>
               ${plan.batches.map((b, i) => `
                 <div style="padding: 0.5rem; background: rgba(30,41,59,0.5); border-radius: 6px; margin-bottom: 0.4rem;">
                   Batch ${i+1}: ${b.seedDate} → Harvest ~${b.expectedHarvestDate || 'TBD'}
@@ -3192,7 +3192,7 @@
               `).join('')}
             ` : ''}
             ${plan.activityHubTasks ? `
-              <div style="margin-top: 1rem; padding: 0.75rem; background: rgba(34,197,94,0.1); border: 1px solid rgba(34,197,94,0.3); border-radius: 8px;">
+              <div style="margin-top: 1rem; padding: 0.75rem; background: rgba(34,197,94,0.1); border: 1px solid rgba(34,197,94,0.3); border-radius: 14px;">
                 <strong style="color: #22c55e;">Activity Hub Synced</strong>
                 <span style="color: #94a3b8;"> — ${plan.activityHubTasks.length} task(s) created</span>
               </div>
@@ -3672,21 +3672,21 @@
           </div>
 
           <div>
-            <h4 style="margin-bottom: 0.5rem; color: #60a5fa;">Planned Batches</h4>
+            <h4 style="margin-bottom: 0.5rem; color: #f1f5f9;">Planned Batches</h4>
             ${batches.length ? batches.map(b => `
-              <div style="background: rgba(0,0,0,0.24); border-radius: 8px; padding: 0.65rem; margin-bottom: 0.5rem;">
+              <div style="background: rgba(0,0,0,0.24); border-radius: 14px; padding: 0.65rem; margin-bottom: 0.5rem;">
                 Batch ${b.batchNumber}: Seed ${b.seedDate} → Harvest ${b.expectedHarvestDate || '—'} · ${b.trayCount} trays · ${Number(b.totalPlants || 0).toLocaleString()} plants
               </div>
             `).join('') : '<div style="color:#94a3b8;">No batches generated.</div>'}
           </div>
 
           <div style="background: rgba(59,130,246,0.1); border: 1px solid #3b82f6; border-radius: 10px; padding: 0.9rem;">
-            <h4 style="margin-bottom: 0.5rem; color: #60a5fa;">Activity Hub Synced</h4>
+            <h4 style="margin-bottom: 0.5rem; color: #f1f5f9;">Activity Hub Synced</h4>
             <p style="color:#94a3b8; font-size:0.85rem; margin-bottom:0.5rem;">
               ${activityTasks.length} task${activityTasks.length !== 1 ? 's' : ''} automatically synced to Activity Hub.
             </p>
             ${activityTasks.map(t => `
-              <div style="background: rgba(0,0,0,0.24); border-radius: 8px; padding: 0.5rem; margin-bottom: 0.4rem; font-size: 0.85rem;">
+              <div style="background: rgba(0,0,0,0.24); border-radius: 14px; padding: 0.5rem; margin-bottom: 0.4rem; font-size: 0.85rem;">
                 <strong>${t.title}</strong> — Due: ${t.dueDate} · ${t.trayCount} trays
               </div>
             `).join('')}
@@ -3851,7 +3851,7 @@
         <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1rem;">
           ${justifications.map(j => {
             const style = iconMap[j.type] || { icon: 'ℹ️', color: '#94a3b8', bg: 'rgba(148,163,184,0.15)' };
-            return `<div style="background: ${style.bg}; border: 1px solid ${style.color}33; border-radius: 8px; padding: 0.6rem 0.75rem; font-size: 0.82rem; line-height: 1.4;">
+            return `<div style="background: ${style.bg}; border: 1px solid ${style.color}33; border-radius: 14px; padding: 0.6rem 0.75rem; font-size: 0.82rem; line-height: 1.4;">
               <div style="color: ${style.color}; font-weight: 600; margin-bottom: 0.2rem;">
                 ${style.icon} ${j.type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
               </div>
@@ -3893,7 +3893,7 @@
       topDiv.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 1rem;">
           <div>
-            <h3 style="color: #60a5fa; margin-bottom: 0.5rem;">
+            <h3 style="color: #f1f5f9; margin-bottom: 0.5rem;">
               ${topRec.cropName}
             </h3>
             <div style="color: #94a3b8; font-size: 0.9rem;">
@@ -3901,7 +3901,7 @@
             </div>
           </div>
           <div style="text-align: right;">
-            <div style="font-size: 2rem; font-weight: bold; color: #60a5fa;">
+            <div style="font-size: 2rem; font-weight: bold; color: #f1f5f9;">
               ${Math.round(topRec.scores.overall)}
             </div>
             <div style="color: #94a3b8; font-size: 0.85rem;">Overall Score</div>
@@ -3924,8 +3924,8 @@
           <strong style="color: #cbd5e1;">Seasonal score</strong> estimates crop fit to current seasonal conditions and demand trends.
         </div>
 
-        <details style="background: rgba(0,0,0,0.3); padding: 1rem; border-radius: 8px; cursor: pointer; margin-bottom: 1rem;">
-          <summary style="font-weight: 600; color: #60a5fa; user-select: none;">
+        <details style="background: rgba(0,0,0,0.3); padding: 1rem; border-radius: 14px; cursor: pointer; margin-bottom: 1rem;">
+          <summary style="font-weight: 600; color: #f1f5f9; user-select: none;">
             View Technical Details
           </summary>
           <div style="margin-top: 1rem; font-size: 0.9rem; color: #94a3b8;">
@@ -3946,10 +3946,10 @@
       const altDiv = document.getElementById('alternativeRecommendations');
       if (recommendations.alternatives && recommendations.alternatives.length > 0) {
         altDiv.innerHTML = recommendations.alternatives.map(alt => `
-          <div style="background: rgba(59, 130, 246, 0.1); border: 1px solid #3b82f6; border-radius: 8px; padding: 1rem; margin-bottom: 0.75rem;">
+          <div style="background: rgba(59, 130, 246, 0.1); border: 1px solid #3b82f6; border-radius: 14px; padding: 1rem; margin-bottom: 0.75rem;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
               <div>
-                <div style="font-weight: 600; color: #60a5fa; margin-bottom: 0.25rem;">
+                <div style="font-weight: 600; color: #f1f5f9; margin-bottom: 0.25rem;">
                   ${alt.cropName}
                 </div>
                 <div style="font-size: 0.85rem; color: #94a3b8;">
@@ -3989,7 +3989,7 @@
     function renderScoreBadge(label, score) {
       const color = score >= 85 ? '#60a5fa' : score >= 70 ? '#3b82f6' : score >= 50 ? '#f59e0b' : '#ef4444';
       return `
-        <div style="background: rgba(0,0,0,0.3); padding: 0.75rem; border-radius: 8px; text-align: center;">
+        <div style="background: rgba(0,0,0,0.3); padding: 0.75rem; border-radius: 14px; text-align: center;">
           <div style="font-size: 1.5rem; font-weight: bold; color: ${color};">
             ${Math.round(score)}
           </div>
@@ -4024,7 +4024,7 @@
       modalBody.innerHTML = `
         <div style="display: grid; gap: 0.75rem;">
           <p style="color: #94a3b8; margin-bottom: 0.5rem;">
-            How would you like to schedule <strong style="color: #60a5fa;">${cropName}</strong>?
+            How would you like to schedule <strong style="color: #f1f5f9;">${cropName}</strong>?
           </p>
           <button class="timeline-btn primary" onclick="implementWithCadence('${cropId}','${encodeURIComponent(cropName)}','one_time')">
             Single Seeding (One-time)

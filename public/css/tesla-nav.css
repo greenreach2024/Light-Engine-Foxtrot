@@ -295,3 +295,187 @@
 
 /* -- Tab JS Controller (inline) ------------------------------------- */
 /* Handled by the inline script block below the header */
+
+/* -- Phase 4: Global Glassmorphism for Inline Sections -------------- */
+
+.tesla-layout .content-section {
+  background: #0f172a;
+  min-height: calc(100vh - 56px);
+}
+
+/* Glass card treatment for all card-like elements */
+.tesla-layout .content-section .card,
+.tesla-layout .content-section .stat-card,
+.tesla-layout .content-section .kpi-card,
+.tesla-layout .content-section .panel,
+.tesla-layout .content-section .tile,
+.tesla-layout .content-section .widget,
+.tesla-layout .content-section .info-card,
+.tesla-layout .content-section .summary-card {
+  background: linear-gradient(145deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 41, 59, 0.9) 100%);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 14px;
+  box-shadow: 0 0 20px rgba(99, 102, 241, 0.06);
+}
+
+/* Typography refinement */
+.tesla-layout .content-section h2,
+.tesla-layout .content-section h3 {
+  color: #f1f5f9;
+  letter-spacing: -0.02em;
+}
+
+.tesla-layout .content-section h4,
+.tesla-layout .content-section h5 {
+  color: #e2e8f0;
+  letter-spacing: -0.01em;
+}
+
+.tesla-layout .content-section p,
+.tesla-layout .content-section label,
+.tesla-layout .content-section .text-muted {
+  color: #94a3b8;
+}
+
+.tesla-layout .content-section span {
+  color: #cbd5e1;
+}
+
+/* Table styling */
+.tesla-layout .content-section table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.tesla-layout .content-section table th {
+  background: rgba(15, 23, 42, 0.6);
+  color: #94a3b8;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.tesla-layout .content-section table td {
+  color: #cbd5e1;
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.06);
+}
+
+.tesla-layout .content-section table tr:hover {
+  background: rgba(99, 102, 241, 0.04);
+}
+
+/* Input styling */
+.tesla-layout .content-section input,
+.tesla-layout .content-section select,
+.tesla-layout .content-section textarea {
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  color: #f1f5f9;
+  border-radius: 10px;
+  padding: 8px 12px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.tesla-layout .content-section input:focus,
+.tesla-layout .content-section select:focus,
+.tesla-layout .content-section textarea:focus {
+  outline: none;
+  border-color: rgba(99, 102, 241, 0.5);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+.tesla-layout .content-section input::placeholder,
+.tesla-layout .content-section textarea::placeholder {
+  color: #64748b;
+}
+
+/* Button styling */
+.tesla-layout .content-section button,
+.tesla-layout .content-section .btn {
+  background: rgba(99, 102, 241, 0.12);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  color: #a5b4fc;
+  border-radius: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.tesla-layout .content-section button:hover,
+.tesla-layout .content-section .btn:hover {
+  background: rgba(99, 102, 241, 0.22);
+  border-color: rgba(99, 102, 241, 0.5);
+}
+
+.tesla-layout .content-section .btn-primary {
+  background: rgba(139, 92, 246, 0.15);
+  border-color: rgba(139, 92, 246, 0.3);
+  color: #c4b5fd;
+}
+
+.tesla-layout .content-section .btn-primary:hover {
+  background: rgba(139, 92, 246, 0.28);
+  border-color: rgba(139, 92, 246, 0.5);
+}
+
+.tesla-layout .content-section .btn-success,
+.tesla-layout .content-section .btn-green {
+  background: rgba(16, 185, 129, 0.12);
+  border-color: rgba(16, 185, 129, 0.3);
+  color: #6ee7b7;
+}
+
+.tesla-layout .content-section .btn-danger {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #fca5a5;
+}
+
+/* Modal styling */
+.tesla-layout .modal-content,
+.tesla-layout .modal-body {
+  background: linear-gradient(145deg, #0f172a 0%, #1e293b 100%);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 16px;
+  color: #f1f5f9;
+}
+
+.tesla-layout .modal-header {
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+  color: #f1f5f9;
+}
+
+.tesla-layout .modal-footer {
+  border-top: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+/* Badge styling */
+.tesla-layout .content-section .badge,
+.tesla-layout .content-section .tag {
+  border-radius: 8px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
+/* Scrollbar styling for inline sections */
+.tesla-layout .content-section::-webkit-scrollbar {
+  width: 6px;
+}
+
+.tesla-layout .content-section::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.tesla-layout .content-section::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.15);
+  border-radius: 3px;
+}
+
+.tesla-layout .content-section::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.25);
+}

@@ -133,7 +133,7 @@ Commit: a9649718. Backup tag: pre-tesla-ui-v3. Deployed 2026-04-03.
 
 ---
 
-## Phase 4 -- Global Visual Unification
+## Phase 4 -- Global Visual Unification [COMPLETED]
 
 Apply Orchestrator dark design system (--so-* CSS variables) as the
 global theme across all views. Every card, every panel gets the dark

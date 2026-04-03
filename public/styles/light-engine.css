@@ -1,19 +1,23 @@
 /* Light Engine Global Theme */
-/* Based on Farm Admin Design */
+/* Phase 4: Unified Dark Glassmorphism */
 
 :root {
-  --bg-primary: #0a0f1e;
-  --bg-secondary: #111827;
-  --bg-card: #1a2332;
-  --border: #2d3748;
-  --text-primary: #e5e7eb;
-  --text-secondary: #9ca3af;
-  --text-muted: #6b7280;
+  --bg-primary: #0f172a;
+  --bg-secondary: #1e293b;
+  --bg-card: #1e293b;
+  --border: rgba(148, 163, 184, 0.12);
+  --text-primary: #f1f5f9;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
   --accent-blue: #3b82f6;
   --accent-green: #10b981;
   --accent-yellow: #f59e0b;
   --accent-red: #ef4444;
   --accent-purple: #8b5cf6;
+  --accent-indigo: #6366f1;
+  --glass-card: linear-gradient(145deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 41, 59, 0.9) 100%);
+  --glass-border: 1px solid rgba(148, 163, 184, 0.12);
+  --glow-indigo: 0 0 20px rgba(99, 102, 241, 0.08);
 }
 
 * {
@@ -38,126 +42,127 @@ a {
 
 /* Page Header */
 .page-header {
-  background: rgba(0, 0, 0, 0.3);
+  background: rgba(15, 23, 42, 0.8);
   padding: 1.5rem 2rem;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  border-bottom: 2px solid #3b82f6;
-  backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+  backdrop-filter: blur(12px);
   position: sticky;
   top: 0;
   z-index: 100;
 }
 
 .page-header h1 {
-  font-size: 2rem;
+  font-size: 1.35rem;
   font-weight: 700;
-  color: #60a5fa;
-  letter-spacing: -0.5px;
+  color: #f1f5f9;
+  letter-spacing: -0.02em;
   margin: 0;
 }
 
 /* Nav Buttons */
 .nav-btn {
-  background: rgba(59, 130, 246, 0.2);
-  border: 2px solid #3b82f6;
-  color: #93c5fd;
-  padding: 0.75rem 1.5rem;
-  font-size: 1rem;
+  background: rgba(99, 102, 241, 0.12);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  color: #a5b4fc;
+  padding: 0.6rem 1.25rem;
+  font-size: 0.85rem;
   font-weight: 600;
-  border-radius: 8px;
+  border-radius: 10px;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.2s ease;
   text-decoration: none;
   display: inline-block;
 }
 
 .nav-btn:hover {
-  background: rgba(59, 130, 246, 0.35);
-  transform: scale(1.05);
+  background: rgba(99, 102, 241, 0.22);
+  border-color: rgba(99, 102, 241, 0.5);
+  transform: translateY(-1px);
 }
 
 .nav-btn.farm-summary {
-  background: rgba(16, 185, 129, 0.2);
-  border-color: #10b981;
+  background: rgba(16, 185, 129, 0.12);
+  border-color: rgba(16, 185, 129, 0.3);
   color: #6ee7b7;
 }
 
 .nav-btn.farm-summary:hover {
-  background: rgba(16, 185, 129, 0.35);
+  background: rgba(16, 185, 129, 0.22);
 }
 
 .nav-btn.farm-admin {
-  background: rgba(139, 92, 246, 0.2);
-  border-color: #8b5cf6;
+  background: rgba(139, 92, 246, 0.12);
+  border-color: rgba(139, 92, 246, 0.3);
   color: #c4b5fd;
 }
 
 .nav-btn.farm-admin:hover {
-  background: rgba(139, 92, 246, 0.35);
+  background: rgba(139, 92, 246, 0.22);
 }
 
 .nav-btn.inventory {
-  background: rgba(245, 158, 11, 0.2);
-  border-color: #f59e0b;
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(245, 158, 11, 0.3);
   color: #fcd34d;
 }
 
 .nav-btn.inventory:hover {
-  background: rgba(245, 158, 11, 0.35);
+  background: rgba(245, 158, 11, 0.22);
 }
 
 .nav-btn.nutrient {
-  background: rgba(6, 182, 212, 0.2);
-  border-color: #06b6d4;
+  background: rgba(6, 182, 212, 0.12);
+  border-color: rgba(6, 182, 212, 0.3);
   color: #67e8f9;
 }
 
 .nav-btn.nutrient:hover {
-  background: rgba(6, 182, 212, 0.35);
+  background: rgba(6, 182, 212, 0.22);
 }
 
 /* Alerts */
 .alert-badge {
   display: inline-block;
   padding: 4px 8px;
-  border-radius: 4px;
+  border-radius: 6px;
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
 }
 
 .alert-critical {
-  background: rgba(239, 68, 68, 0.2);
+  background: rgba(239, 68, 68, 0.15);
   color: #fca5a5;
-  border: 1px solid #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.3);
 }
 
 .alert-warning {
-  background: rgba(245, 158, 11, 0.2);
+  background: rgba(245, 158, 11, 0.15);
   color: #fcd34d;
-  border: 1px solid #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.3);
 }
 
 .alert-low {
-  background: rgba(59, 130, 246, 0.2);
+  background: rgba(59, 130, 246, 0.15);
   color: #93c5fd;
-  border: 1px solid #3b82f6;
+  border: 1px solid rgba(59, 130, 246, 0.3);
 }
 
 .alert-normal {
-  background: rgba(16, 185, 129, 0.2);
+  background: rgba(16, 185, 129, 0.15);
   color: #6ee7b7;
-  border: 1px solid #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.3);
 }
 
 /* --- Cards & Containers --- */
 
 .card {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  background: var(--glass-card);
+  border: var(--glass-border);
+  border-radius: 14px;
   padding: 24px;
   margin-bottom: 24px;
 }
@@ -178,18 +183,19 @@ a {
 }
 
 .kpi-card {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  background: var(--glass-card);
+  border: var(--glass-border);
+  border-radius: 14px;
   padding: 20px;
 }
 
 .kpi-label {
-  font-size: 12px;
+  font-size: 0.7rem;
   color: var(--text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.08em;
   margin-bottom: 8px;
+  font-weight: 600;
 }
 
 .kpi-value {
@@ -218,26 +224,27 @@ a {
 
 .action-card {
   padding: 20px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  background: var(--glass-card);
+  border: var(--glass-border);
+  border-radius: 14px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.2s ease;
   text-decoration: none;
   color: var(--text-primary);
   display: block;
 }
 
 .action-card:hover {
-  border-color: var(--accent-blue);
+  border-color: rgba(99, 102, 241, 0.3);
   transform: translateY(-2px);
+  box-shadow: var(--glow-indigo);
 }
 
 .action-icon {
   font-size: 18px;
   font-weight: 700;
   margin-bottom: 12px;
-  color: var(--accent-blue);
+  color: var(--accent-indigo);
 }
 
 .action-title {
@@ -262,9 +269,9 @@ a {
 
 .usage-item {
   padding: 16px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: 6px;
+  background: var(--glass-card);
+  border: var(--glass-border);
+  border-radius: 12px;
 }
 
 .usage-label {
@@ -281,14 +288,14 @@ a {
 
 .usage-bar {
   height: 6px;
-  background: var(--border);
+  background: rgba(148, 163, 184, 0.12);
   border-radius: 3px;
   overflow: hidden;
 }
 
 .usage-fill {
   height: 100%;
-  background: linear-gradient(90deg, var(--accent-green) 0%, var(--accent-blue) 100%);
+  background: linear-gradient(90deg, var(--accent-green) 0%, var(--accent-indigo) 100%);
   transition: width 0.3s;
 }
 
@@ -302,10 +309,10 @@ a {
   width: 50px;
   height: 50px;
   border-radius: 50%;
-  background: var(--accent-blue);
+  background: var(--accent-indigo);
   color: white;
   border: none;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.25);
   font-size: 24px;
   cursor: pointer;
   z-index: 9999;
@@ -317,7 +324,7 @@ a {
 
 #le-help-toggle:hover {
   transform: scale(1.1);
-  background: #2563eb;
+  background: #4f46e5;
 }
 
 #le-help-toggle.active {
@@ -329,12 +336,12 @@ a {
 body.le-help-active [data-help] {
   cursor: help;
   position: relative;
-  outline: 2px dashed rgba(59, 130, 246, 0.5);
+  outline: 2px dashed rgba(99, 102, 241, 0.4);
   outline-offset: 2px;
 }
 
 body.le-help-active [data-help]:hover {
-  outline: 2px solid var(--accent-blue);
+  outline: 2px solid var(--accent-indigo);
   z-index: 1000;
 }
 
@@ -342,16 +349,16 @@ body.le-help-active [data-help]:hover {
 #le-help-popup {
   position: fixed;
   display: none;
-  background: rgba(17, 24, 39, 0.95);
-  backdrop-filter: blur(10px);
-  border: 1px solid var(--accent-blue);
-  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.95);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  border-radius: 14px;
   padding: 16px;
   width: 300px;
   color: var(--text-primary);
-  box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
   z-index: 10000;
-  pointer-events: none; /* Let clicks pass through */
+  pointer-events: none;
   animation: fadeIn 0.2s ease;
 }
 
@@ -362,7 +369,7 @@ body.le-help-active [data-help]:hover {
 
 #le-help-popup h3 {
   margin: 0 0 8px 0;
-  color: var(--accent-blue);
+  color: var(--accent-indigo);
   font-size: 16px;
   display: flex;
   align-items: center;
@@ -377,7 +384,7 @@ body.le-help-active [data-help]:hover {
 }
 
 #le-help-popup .ai-insight {
-  background: rgba(139, 92, 246, 0.1); /* Purple tint */
+  background: rgba(139, 92, 246, 0.1);
   border-left: 3px solid var(--accent-purple);
   padding: 8px 12px;
   border-radius: 4px;

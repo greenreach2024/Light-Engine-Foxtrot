@@ -30,7 +30,7 @@
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
       background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-      color: #e4e4e7;
+      color: #f1f5f9;
       min-height: 100vh;
       padding-bottom: 2rem;
     }
@@ -53,7 +53,7 @@
     .page-header h1 {
       font-size: 2rem;
       font-weight: 700;
-      color: #60a5fa;
+      color: #f1f5f9;
       margin-bottom: 0.5rem;
     }
 
@@ -81,12 +81,12 @@
 
     .nav-button, .nav-link-button {
       background: rgba(59, 130, 246, 0.2);
-      border: 2px solid #3b82f6;
+      border: 1px solid rgba(148, 163, 184, 0.12);
       color: #93c5fd;
       padding: 0.75rem 1.25rem;
       font-size: 0.95rem;
       font-weight: 600;
-      border-radius: 8px;
+      border-radius: 14px;
       cursor: pointer;
       transition: all 0.3s ease;
       white-space: nowrap;
@@ -103,7 +103,7 @@
 
     .nav-button.active {
       background: rgba(59, 130, 246, 0.4);
-      border-color: #60a5fa;
+      border-color: #f1f5f9;
       color: white;
     }
 
@@ -121,8 +121,8 @@
       top: calc(100% + 0.5rem);
       left: 0;
       background: rgba(15, 23, 42, 0.95);
-      border: 2px solid #3b82f6;
-      border-radius: 8px;
+      border: 1px solid rgba(148, 163, 184, 0.12);
+      border-radius: 14px;
       padding: 0.5rem;
       min-width: 200px;
       opacity: 0;
@@ -435,7 +435,7 @@
 
     .wizard-actions button {
       padding: 0.6rem 1rem;
-      border-radius: 8px;
+      border-radius: 14px;
       background: rgba(37, 99, 235, 0.12);
       border: 1px solid rgba(37, 99, 235, 0.35);
       color: #bfdbfe;
@@ -732,7 +732,7 @@
         <div class="split">
           <label>
             <span style="display: block; margin-bottom: 0.5rem; font-size: 0.82rem; color: var(--neutral-300);">Hydroponic System</span>
-            <select name="hydroponicSystem" id="hydroponicSystem" style="width: 100%; padding: 0.5rem; background: rgba(30, 41, 59, 0.9); border: 1px solid var(--card-border); border-radius: 8px; color: var(--neutral-300); font-size: 0.82rem;">
+            <select name="hydroponicSystem" id="hydroponicSystem" style="width: 100%; padding: 0.5rem; background: rgba(30, 41, 59, 0.9); border: 1px solid var(--card-border); border-radius: 14px; color: var(--neutral-300); font-size: 0.82rem;">
               <option value="DWC">Deep Water Culture (DWC)</option>
               <option value="NFT">Nutrient Film Technique (NFT)</option>
               <option value="LPA">Low Pressure Aeroponics</option>
@@ -741,18 +741,18 @@
           </label>
           <label>
             <span style="display: block; margin-bottom: 0.5rem; font-size: 0.82rem; color: var(--neutral-300);">Irrigation Mode</span>
-            <select name="irrigationMode" id="irrigationMode" style="width: 100%; padding: 0.5rem; background: rgba(30, 41, 59, 0.9); border: 1px solid var(--card-border); border-radius: 8px; color: var(--neutral-300); font-size: 0.82rem;">
+            <select name="irrigationMode" id="irrigationMode" style="width: 100%; padding: 0.5rem; background: rgba(30, 41, 59, 0.9); border: 1px solid var(--card-border); border-radius: 14px; color: var(--neutral-300); font-size: 0.82rem;">
               <option value="always_on">Always On</option>
               <option value="cycle">On/Off Cycle</option>
             </select>
           </label>
           <label class="irrigation-cycle-field">
             <span style="display: block; margin-bottom: 0.5rem; font-size: 0.82rem; color: var(--neutral-300);">On Duration (minutes)</span>
-            <input type="number" name="irrigationOnMinutes" min="1" max="240" step="1" style="width: 100%; padding: 0.5rem; background: rgba(30, 41, 59, 0.9); border: 1px solid var(--card-border); border-radius: 8px; color: var(--neutral-100);" />
+            <input type="number" name="irrigationOnMinutes" min="1" max="240" step="1" style="width: 100%; padding: 0.5rem; background: rgba(30, 41, 59, 0.9); border: 1px solid var(--card-border); border-radius: 14px; color: var(--neutral-100);" />
           </label>
           <label class="irrigation-cycle-field">
             <span style="display: block; margin-bottom: 0.5rem; font-size: 0.82rem; color: var(--neutral-300);">Off Duration (minutes)</span>
-            <input type="number" name="irrigationOffMinutes" min="1" max="240" step="1" style="width: 100%; padding: 0.5rem; background: rgba(30, 41, 59, 0.9); border: 1px solid var(--card-border); border-radius: 8px; color: var(--neutral-100);" />
+            <input type="number" name="irrigationOffMinutes" min="1" max="240" step="1" style="width: 100%; padding: 0.5rem; background: rgba(30, 41, 59, 0.9); border: 1px solid var(--card-border); border-radius: 14px; color: var(--neutral-100);" />
           </label>
           <label style="display: flex; gap: 0.5rem; align-items: center; margin-top: 1.8rem;">
             <input type="checkbox" name="dayNightSync" id="dayNightSync" style="width: auto;" />
@@ -774,7 +774,7 @@
       <div style="display: flex; gap: 1.5rem; align-items: center; margin-bottom: 1.5rem;">
         <div style="flex: 1;">
           <label style="display: block; margin-bottom: 0.5rem; font-size: 0.82rem; color: var(--neutral-300);">Nutrient Provider</label>
-          <select id="tank1Provider" style="width: 100%; padding: 0.5rem; background: rgba(30, 41, 59, 0.9); border: 1px solid var(--card-border); border-radius: 8px; color: var(--neutral-300); font-size: 0.82rem;">
+          <select id="tank1Provider" style="width: 100%; padding: 0.5rem; background: rgba(30, 41, 59, 0.9); border: 1px solid var(--card-border); border-radius: 14px; color: var(--neutral-300); font-size: 0.82rem;">
             <option value="EZ-GRO FIRE PROFESSIONAL - Veg and Growth" selected>EZ-GRO FIRE PROFESSIONAL - Veg and Growth</option>
             <option value="EZ-GRO FIRE PROFESSIONAL - Two Part - Flower and Fruit">EZ-GRO FIRE PROFESSIONAL - Two Part - Flower and Fruit</option>
             <option value="General Hydroponics Flora Series">General Hydroponics Flora Series</option>
@@ -841,7 +841,7 @@
         <div id="tank1AutodoseSummary" style="font-size: 0.85rem; color: var(--neutral-300);"></div>
       </div>
       <!-- Collapsible Vegetative Groups Section -->
-      <div id="tank1VegGroupsToggle" style="margin-top: 1rem; padding: 0.5rem; background: rgba(34, 197, 94, 0.05); border-radius: 8px; cursor: pointer; user-select: none; border: 1px solid rgba(34, 197, 94, 0.2);" onclick="toggleVegGroups()">
+      <div id="tank1VegGroupsToggle" style="margin-top: 1rem; padding: 0.5rem; background: rgba(34, 197, 94, 0.05); border-radius: 14px; cursor: pointer; user-select: none; border: 1px solid rgba(34, 197, 94, 0.2);" onclick="toggleVegGroups()">
         <div style="display: flex; align-items: center; justify-content: space-between;">
           <span style="font-size: 0.82rem; color: var(--neutral-300); font-weight: 500;">
             <span id="vegGroupsIcon" style="display: inline-block; transition: transform 0.2s;">▶</span>
@@ -849,7 +849,7 @@
           </span>
         </div>
       </div>
-      <div id="tank1VegGroups" style="display: none; margin-top: 0.5rem; padding: 0.75rem; background: rgba(34, 197, 94, 0.1); border-radius: 8px; font-size: 0.82rem; color: var(--neutral-300);"></div>
+      <div id="tank1VegGroups" style="display: none; margin-top: 0.5rem; padding: 0.75rem; background: rgba(34, 197, 94, 0.1); border-radius: 14px; font-size: 0.82rem; color: var(--neutral-300);"></div>
 
       <!-- Trending Signals -->
       <div style="margin-top: 2rem; background: rgba(15, 23, 42, 0.75); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 14px; padding: 1.5rem; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);">
@@ -876,7 +876,7 @@
       <div class="list" id="tank1RecentDoses"></div>
 
       <!-- Calibration -->
-      <div id="tank1CalibrationToggle" style="margin-top: 2rem; padding: 0.75rem 1rem; background: rgba(59, 130, 246, 0.1); border-radius: 8px; cursor: pointer; user-select: none; border: 1px solid rgba(59, 130, 246, 0.3); display: flex; align-items: center; justify-content: space-between;" onclick="toggleCalibration('tank1')">
+      <div id="tank1CalibrationToggle" style="margin-top: 2rem; padding: 0.75rem 1rem; background: rgba(59, 130, 246, 0.1); border-radius: 14px; cursor: pointer; user-select: none; border: 1px solid rgba(59, 130, 246, 0.3); display: flex; align-items: center; justify-content: space-between;" onclick="toggleCalibration('tank1')">
         <h3 style="font-size: 1.1rem; color: #93c5fd; margin: 0; display: flex; align-items: center; gap: 0.5rem;">
           <span id="tank1CalibrationIcon" style="display: inline-block; transition: transform 0.2s;">▶</span>
           Calibration
@@ -892,13 +892,13 @@
           <form id="tank1CalibrationForm">
           <label style="display: block; margin-bottom: 0.75rem;">
             <span style="display: block; margin-bottom: 0.5rem; font-size: 0.82rem; color: var(--neutral-300);">Run Time (seconds)</span>
-            <input type="number" step="0.1" min="1" name="calRunTime" style="width: 100%; padding: 0.5rem; background: rgba(30, 41, 59, 0.9); border: 1px solid var(--card-border); border-radius: 8px; color: var(--neutral-100);" />
+            <input type="number" step="0.1" min="1" name="calRunTime" style="width: 100%; padding: 0.5rem; background: rgba(30, 41, 59, 0.9); border: 1px solid var(--card-border); border-radius: 14px; color: var(--neutral-100);" />
           </label>
           <label style="display: block; margin-bottom: 0.75rem;">
             <span style="display: block; margin-bottom: 0.5rem; font-size: 0.875rem; color: var(--neutral-300);">Measured Volume (mL)</span>
-            <input type="number" step="0.1" min="1" name="calVolume" style="width: 100%; padding: 0.5rem; background: rgba(30, 41, 59, 0.9); border: 1px solid var(--card-border); border-radius: 8px; color: var(--neutral-100);" />
+            <input type="number" step="0.1" min="1" name="calVolume" style="width: 100%; padding: 0.5rem; background: rgba(30, 41, 59, 0.9); border: 1px solid var(--card-border); border-radius: 14px; color: var(--neutral-100);" />
           </label>
-            <button type="submit" style="width: 100%; padding: 0.75rem; background: var(--accent-blue); border: none; border-radius: 8px; color: white; font-weight: 600; cursor: pointer;">Compute Calibration</button>
+            <button type="submit" style="width: 100%; padding: 0.75rem; background: var(--accent-blue); border: none; border-radius: 14px; color: white; font-weight: 600; cursor: pointer;">Compute Calibration</button>
           </form>
           <div class="list" id="tank1CalibrationSummary"></div>
         </div>
@@ -911,7 +911,7 @@
 
       <!-- Nutrient Composition -->
       <div id="tank1NutrientToggle" 
-           style="margin-top: 2rem; padding: 0.75rem 1rem; background: rgba(59, 130, 246, 0.1); border-radius: 8px; cursor: pointer; user-select: none; border: 1px solid rgba(59, 130, 246, 0.3);"
+           style="margin-top: 2rem; padding: 0.75rem 1rem; background: rgba(59, 130, 246, 0.1); border-radius: 14px; cursor: pointer; user-select: none; border: 1px solid rgba(59, 130, 246, 0.3);"
            onclick="toggleNutrientComposition('tank1')">
         <h3 style="margin: 0; font-size: 1.1rem; color: #93c5fd;">
           <span id="tank1NutrientIcon" style="display: inline-block; transition: transform 0.2s;">▶</span>
@@ -932,7 +932,7 @@
       <div style="display: flex; gap: 1.5rem; align-items: center; margin-bottom: 1.5rem;">
         <div style="flex: 1;">
           <label style="display: block; margin-bottom: 0.5rem; font-size: 0.82rem; color: var(--neutral-300);">Nutrient Provider</label>
-          <select id="tank2Provider" style="width: 100%; padding: 0.5rem; background: rgba(30, 41, 59, 0.9); border: 1px solid var(--card-border); border-radius: 8px; color: var(--neutral-100); font-size: 0.82rem;">
+          <select id="tank2Provider" style="width: 100%; padding: 0.5rem; background: rgba(30, 41, 59, 0.9); border: 1px solid var(--card-border); border-radius: 14px; color: var(--neutral-100); font-size: 0.82rem;">
             <option value="EZ-GRO FIRE PROFESSIONAL - Two Part - Flower and Fruit" selected>EZ-GRO FIRE PROFESSIONAL - Two Part - Flower and Fruit</option>
             <option value="EZ-GRO FIRE PROFESSIONAL - Veg and Growth">EZ-GRO FIRE PROFESSIONAL - Veg and Growth</option>
             <option value="General Hydroponics Flora Series">General Hydroponics Flora Series</option>
@@ -998,7 +998,7 @@
         <div id="tank2SetpointStatus" style="font-size: 0.9rem; color: var(--neutral-300);"></div>
         <div id="tank2AutodoseSummary" style="font-size: 0.85rem; color: var(--neutral-300);"></div>
       </div>
-      <div id="tank2FruitingGroups" style="margin-top: 1rem; padding: 0.75rem; background: rgba(244, 63, 94, 0.1); border-radius: 8px; font-size: 0.82rem; color: var(--neutral-300);"></div>
+      <div id="tank2FruitingGroups" style="margin-top: 1rem; padding: 0.75rem; background: rgba(244, 63, 94, 0.1); border-radius: 14px; font-size: 0.82rem; color: var(--neutral-300);"></div>
 
       <!-- Trending Signals -->
       <div style="margin-top: 2rem; background: rgba(15, 23, 42, 0.75); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 14px; padding: 1.5rem; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);">
@@ -1025,7 +1025,7 @@
       <div class="list" id="tank2RecentDoses"></div>
 
       <!-- Calibration -->
-      <div id="tank2CalibrationToggle" style="margin-top: 2rem; padding: 0.75rem 1rem; background: rgba(59, 130, 246, 0.1); border-radius: 8px; cursor: pointer; user-select: none; border: 1px solid rgba(59, 130, 246, 0.3); display: flex; align-items: center; justify-content: space-between;" onclick="toggleCalibration('tank2')">
+      <div id="tank2CalibrationToggle" style="margin-top: 2rem; padding: 0.75rem 1rem; background: rgba(59, 130, 246, 0.1); border-radius: 14px; cursor: pointer; user-select: none; border: 1px solid rgba(59, 130, 246, 0.3); display: flex; align-items: center; justify-content: space-between;" onclick="toggleCalibration('tank2')">
         <h3 style="font-size: 1.1rem; color: #93c5fd; margin: 0; display: flex; align-items: center; gap: 0.5rem;">
           <span id="tank2CalibrationIcon" style="display: inline-block; transition: transform 0.2s;">▶</span>
           Calibration
@@ -1041,13 +1041,13 @@
           <form id="tank2CalibrationForm">
           <label style="display: block; margin-bottom: 0.75rem;">
             <span style="display: block; margin-bottom: 0.5rem; font-size: 0.82rem; color: var(--neutral-300);">Run Time (seconds)</span>
-            <input type="number" step="0.1" min="1" name="calRunTime" style="width: 100%; padding: 0.5rem; background: rgba(30, 41, 59, 0.9); border: 1px solid var(--card-border); border-radius: 8px; color: var(--neutral-100);" />
+            <input type="number" step="0.1" min="1" name="calRunTime" style="width: 100%; padding: 0.5rem; background: rgba(30, 41, 59, 0.9); border: 1px solid var(--card-border); border-radius: 14px; color: var(--neutral-100);" />
           </label>
           <label style="display: block; margin-bottom: 0.75rem;">
             <span style="display: block; margin-bottom: 0.5rem; font-size: 0.82rem; color: var(--neutral-300);">Measured Volume (mL)</span>
-            <input type="number" step="0.1" min="1" name="calVolume" style="width: 100%; padding: 0.5rem; background: rgba(30, 41, 59, 0.9); border: 1px solid var(--card-border); border-radius: 8px; color: var(--neutral-100);" />
+            <input type="number" step="0.1" min="1" name="calVolume" style="width: 100%; padding: 0.5rem; background: rgba(30, 41, 59, 0.9); border: 1px solid var(--card-border); border-radius: 14px; color: var(--neutral-100);" />
           </label>
-            <button type="submit" style="width: 100%; padding: 0.75rem; background: var(--accent-blue); border: none; border-radius: 8px; color: white; font-weight: 600; cursor: pointer;">Compute Calibration</button>
+            <button type="submit" style="width: 100%; padding: 0.75rem; background: var(--accent-blue); border: none; border-radius: 14px; color: white; font-weight: 600; cursor: pointer;">Compute Calibration</button>
           </form>
           <div class="list" id="tank2CalibrationSummary"></div>
         </div>
@@ -1060,7 +1060,7 @@
 
       <!-- Nutrient Composition -->
       <div id="tank2NutrientToggle" 
-           style="margin-top: 2rem; padding: 0.75rem 1rem; background: rgba(59, 130, 246, 0.1); border-radius: 8px; cursor: pointer; user-select: none; border: 1px solid rgba(59, 130, 246, 0.3);"
+           style="margin-top: 2rem; padding: 0.75rem 1rem; background: rgba(59, 130, 246, 0.1); border-radius: 14px; cursor: pointer; user-select: none; border: 1px solid rgba(59, 130, 246, 0.3);"
            onclick="toggleNutrientComposition('tank2')">
         <h3 style="margin: 0; font-size: 1.1rem; color: #93c5fd;">
           <span id="tank2NutrientIcon" style="display: inline-block; transition: transform 0.2s;">▶</span>
