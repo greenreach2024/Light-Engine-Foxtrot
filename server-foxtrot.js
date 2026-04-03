@@ -13401,7 +13401,13 @@ app.use('/api/wholesale', (req, res, next) => {
       console.log('[-> wholesale] ' + _req.method + ' /api/wholesale' + _req.path + ' -> central');
       if (_req.headers['authorization']) proxyReq.setHeader('Authorization', _req.headers['authorization']);
       if (_req.headers['x-farm-id']) proxyReq.setHeader('X-Farm-ID', _req.headers['x-farm-id']);
-      if (_req.headers['content-type']) proxyReq.setHeader('Content-Type', _req.headers['content-type']);
+      // Re-serialize body — Express body parsers already consumed the stream
+      if (_req.body && Object.keys(_req.body).length > 0) {
+        const bodyData = JSON.stringify(_req.body);
+        proxyReq.setHeader('Content-Type', 'application/json');
+        proxyReq.setHeader('Content-Length', Buffer.byteLength(bodyData));
+        proxyReq.write(bodyData);
+      }
     },
     onProxyRes(proxyRes, _req) {
       const origin = _req.headers && _req.headers.origin;
@@ -13830,7 +13836,7 @@ app.use('/api/wholesale/oauth/square', wholesaleSquareOAuthRouter);
 const getCentralPaymentControlTarget = () =>
   process.env.GREENREACH_CENTRAL_URL
   || process.env.CENTRAL_URL
-  || 'https://greenreachgreens.com';
+  || 'https://greenreachgreens.com'); }
 
 function attachPaymentProxyHeaders(proxyReq, req) {
   if (req.headers['authorization']) {
@@ -23597,10 +23603,10 @@ app.get('/api/farm/info', (req, res) => {
 // Market intelligence routes (/api/planning/demand-forecast, /capacity, /recommendations) live in
 // greenreach-central/routes/planning.js and are served by Central, not Foxtrot.
 
-const getCentralApiTarget = () =>
+function getCentralApiTarget() { return (
   process.env.GREENREACH_CENTRAL_URL
   || process.env.CENTRAL_URL
-  || 'https://greenreachgreens.com';
+  || 'https://greenreachgreens.com'); }
 
 app.use('/api/accounting', proxyCorsMiddleware, createProxyMiddleware({
   target: getCentralApiTarget(),
