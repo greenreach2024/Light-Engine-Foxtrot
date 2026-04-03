@@ -189,7 +189,7 @@ const pendingActions = new Map();
 // ── Autonomous Action Trust Tiers ─────────────────────────────────────
 const TRUST_TIERS = {
   // AUTO: Execute immediately, notify after
-  auto: new Set(['dismiss_alert', 'save_user_memory', 'escalate_to_faye', 'reply_to_faye', 'get_faye_directives', 'read_skill_file']),
+  auto: new Set(['dismiss_alert', 'save_user_memory', 'escalate_to_faye', 'reply_to_faye', 'get_faye_directives', 'read_skill_file', 'get_gwen_messages', 'reply_to_gwen']),
   // QUICK-CONFIRM: Execute with brief undo window
   quick_confirm: new Set(['mark_harvest_complete']),
   // CONFIRM: Ask before executing (default for write tools)
@@ -1193,6 +1193,37 @@ const GPT_TOOLS = [
           priority: { type: 'string', description: 'low, normal, high. Default normal.' }
         },
         required: ['title', 'request']
+      }
+    }
+  },
+  // --- Inter-Agent Communication (E.V.I.E. <-> G.W.E.N.) ---
+  {
+    type: 'function',
+    function: {
+      name: 'get_gwen_messages',
+      description: 'Check for messages from G.W.E.N. (research agent) -- data requests for environment readings, harvest timing coordination with experiments, research findings that affect farm operations, or questions about crop conditions.',
+      parameters: {
+        type: 'object',
+        properties: {
+          limit: { type: 'number', description: 'Max messages to retrieve (default 10)' }
+        }
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'reply_to_gwen',
+      description: 'Send a reply or farm data to G.W.E.N. in response to her research requests. Share environment readings, crop status, harvest schedules, or operational context that supports ongoing studies.',
+      parameters: {
+        type: 'object',
+        properties: {
+          subject: { type: 'string', description: 'Brief subject line' },
+          body: { type: 'string', description: 'Message body with farm data or response' },
+          message_type: { type: 'string', description: 'Type: "response", "data_share", "status_update"' },
+          reply_to_id: { type: 'string', description: 'Message ID being replied to (from get_gwen_messages)' }
+        },
+        required: ['subject', 'body']
       }
     }
   },
@@ -3431,6 +3462,41 @@ async function executeExtendedTool(toolName, params, farmId) {
           request_id: result.id,
           review_cycle: 'weekly'
         };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+
+    // ── G.W.E.N. Inter-Agent Communication ──
+
+    case 'get_gwen_messages': {
+      try {
+        const limit = params.limit || 10;
+        const msgs = await query(
+          `SELECT id, from_agent AS sender, subject, body, priority, status, created_at
+           FROM inter_agent_messages WHERE to_agent = 'evie' AND from_agent = 'gwen' AND status = 'pending'
+           ORDER BY created_at DESC LIMIT $1`, [limit]
+        ).catch(() => ({ rows: [] }));
+        if (msgs.rows.length > 0) {
+          await query(
+            `UPDATE inter_agent_messages SET status = 'read'
+             WHERE to_agent = 'evie' AND from_agent = 'gwen' AND status = 'pending'`
+          ).catch(() => {});
+        }
+        return { ok: true, count: msgs.rows.length, messages: msgs.rows };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+
+    case 'reply_to_gwen': {
+      try {
+        await query(
+          `INSERT INTO inter_agent_messages (from_agent, to_agent, message_type, subject, body, priority, reply_to_id, status, created_at)
+           VALUES ('evie', 'gwen', $1, $2, $3, 'normal', $4, 'pending', NOW())`,
+          [params.message_type || 'response', String(params.subject).slice(0, 200), String(params.body).slice(0, 2000), params.reply_to_id ? parseInt(params.reply_to_id, 10) : null]
+        );
+        return { ok: true, message: `Message sent to G.W.E.N.: "${params.subject}"` };
       } catch (err) {
         return { ok: false, error: err.message };
       }

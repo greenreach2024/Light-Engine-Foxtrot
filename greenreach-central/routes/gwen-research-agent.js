@@ -3579,6 +3579,58 @@ const GWEN_TOOL_CATALOG = {
   },
 
   // ========================================
+  // EVIE INTEGRATION
+  // ========================================
+
+  send_message_to_evie: {
+    description: 'Send a message directly to E.V.I.E. for farm-level coordination: requesting environment data for a study, coordinating harvest timing with experiments, sharing research findings that affect farm ops, or asking about crop conditions relevant to research.',
+    parameters: {
+      subject: { type: 'string', description: 'Brief subject line' },
+      body: { type: 'string', description: 'Message body with relevant details' },
+      message_type: { type: 'string', description: 'Type of message', enum: ['data_request', 'coordination', 'observation', 'question'] },
+      priority: { type: 'string', description: 'Priority level', enum: ['normal', 'high'] },
+    },
+    required: ['subject', 'body'],
+    execute: async (params, ctx) => {
+      if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+      try {
+        await query(
+          `INSERT INTO inter_agent_messages (from_agent, to_agent, message_type, subject, body, priority, status, created_at)
+           VALUES ('gwen', 'evie', $1, $2, $3, $4, 'pending', NOW())`,
+          [params.message_type || 'observation', params.subject, params.body, params.priority || 'normal']
+        );
+        return { ok: true, note: `Message sent to E.V.I.E.: "${params.subject}"` };
+      } catch (err) { return { ok: false, error: err.message }; }
+    },
+  },
+
+  get_evie_messages: {
+    description: 'Check for unread messages from E.V.I.E. -- environment reports, harvest schedules, crop status updates, or responses to your data requests.',
+    parameters: {
+      limit: { type: 'number', description: 'Max messages to retrieve (default 10)' },
+    },
+    required: [],
+    execute: async (params) => {
+      if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+      try {
+        const limit = params.limit || 10;
+        const msgs = await query(
+          `SELECT id, from_agent AS sender, subject, body, priority, status, created_at
+           FROM inter_agent_messages WHERE to_agent = 'gwen' AND from_agent = 'evie' AND status = 'pending'
+           ORDER BY created_at DESC LIMIT $1`, [limit]
+        ).catch(() => ({ rows: [] }));
+        if (msgs.rows.length > 0) {
+          await query(
+            `UPDATE inter_agent_messages SET status = 'read'
+             WHERE to_agent = 'gwen' AND from_agent = 'evie' AND status = 'pending'`
+          ).catch(() => {});
+        }
+        return { ok: true, count: msgs.rows.length, messages: msgs.rows };
+      } catch (err) { return { ok: false, error: err.message }; }
+    },
+  },
+
+  // ========================================
   // KNOWLEDGE & LEARNING
   // ========================================
 
@@ -5183,6 +5235,183 @@ const GWEN_TOOL_CATALOG = {
     },
   },
 
+  leam_system_info: {
+    description: 'Get detailed information about the operator\'s local machine via LEAM: OS, CPU, memory, Bluetooth controller state, WiFi networks, USB devices, displays, battery, disk usage, and network adapters. Useful for equipment onboarding diagnostics and verifying local hardware capabilities before integrating new sensors or instruments.',
+    parameters: {
+      detailed: { type: 'boolean', description: 'If true, include Bluetooth, WiFi, USB, disk, battery, and display info (default false)' },
+    },
+    required: [],
+    execute: async (params, ctx) => {
+      const command = params.detailed ? 'system_detailed' : 'system_info';
+      const result = await leamBridge.sendCommand(ctx.farmId, command, {});
+      if (result.leam_required) {
+        return { ok: false, error: result.error, hint: 'LEAM is initializing automatically to gather system info.' };
+      }
+      return result.ok ? { ok: true, ...result.data } : result;
+    },
+  },
+
+  // ========================================
+  // NOVEL SENSOR & DEVICE INTEGRATION
+  // ========================================
+
+  configure_spectral_sensor: {
+    description: 'Configure a spectral camera or multispectral/hyperspectral imaging sensor for plant phenotyping. Supports NDVI, chlorophyll fluorescence, reflectance indices, and custom band configurations. Use after registering the instrument via register_instrument.',
+    parameters: {
+      instrument_id: { type: 'string', description: 'Registered instrument ID for the spectral sensor' },
+      sensor_type: { type: 'string', description: 'Sensor category', enum: ['multispectral', 'hyperspectral', 'rgb_nir', 'chlorophyll_fluorescence', 'thermal_infrared'] },
+      bands: { type: 'array', description: 'Spectral bands to capture (nm wavelengths or named indices)', items: { type: 'object', properties: { name: { type: 'string' }, wavelength_nm: { type: 'number' }, bandwidth_nm: { type: 'number' } } } },
+      indices: { type: 'array', description: 'Vegetation indices to compute from captured bands', items: { type: 'string', enum: ['NDVI', 'NDRE', 'GNDVI', 'CCI', 'PRI', 'MCARI', 'TCARI', 'WBI', 'ARI', 'SIPI', 'EVI', 'custom'] } },
+      capture_interval_seconds: { type: 'number', description: 'Auto-capture interval in seconds (0 = manual only)' },
+      resolution: { type: 'string', description: 'Capture resolution', enum: ['low', 'medium', 'high', 'max'] },
+      study_id: { type: 'string', description: 'Link captures to a specific study' },
+    },
+    required: ['instrument_id', 'sensor_type'],
+    execute: async (params, ctx) => {
+      if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+      try {
+        const config = {
+          sensor_type: params.sensor_type,
+          bands: params.bands || [],
+          indices: params.indices || ['NDVI'],
+          capture_interval: params.capture_interval_seconds || 0,
+          resolution: params.resolution || 'medium',
+          study_id: params.study_id || null,
+        };
+        await query(
+          `UPDATE instrument_registry SET config = config || $1::jsonb, updated_at = NOW()
+           WHERE id = $2 AND farm_id = $3`,
+          [JSON.stringify({ spectral: config }), params.instrument_id, ctx.farmId]
+        );
+        return { ok: true, instrument_id: params.instrument_id, config, note: `Spectral sensor configured for ${params.sensor_type} imaging with ${(params.indices || ['NDVI']).join(', ')} indices.` };
+      } catch (err) { return { ok: false, error: err.message }; }
+    },
+  },
+
+  configure_gas_analyzer: {
+    description: 'Configure a plant gas exchange or atmospheric gas analyzer. Supports CO2/O2 flux, ethylene detection, VOC profiling, photosynthesis measurement (IRGA), and custom gas channels. Use after registering the instrument via register_instrument.',
+    parameters: {
+      instrument_id: { type: 'string', description: 'Registered instrument ID for the gas analyzer' },
+      analyzer_type: { type: 'string', description: 'Analyzer category', enum: ['irga', 'ethylene_detector', 'voc_profiler', 'co2_flux', 'multi_gas', 'o2_analyzer', 'custom'] },
+      gas_channels: { type: 'array', description: 'Gas species to monitor', items: { type: 'object', properties: { gas: { type: 'string' }, unit: { type: 'string' }, alert_threshold: { type: 'number' } } } },
+      sampling_interval_seconds: { type: 'number', description: 'Data sampling interval in seconds' },
+      flow_rate_ml_min: { type: 'number', description: 'Sample gas flow rate in mL/min (for IRGA/closed systems)' },
+      chamber_volume_ml: { type: 'number', description: 'Leaf/plant chamber volume in mL (for gas exchange measurements)' },
+      study_id: { type: 'string', description: 'Link measurements to a specific study' },
+    },
+    required: ['instrument_id', 'analyzer_type'],
+    execute: async (params, ctx) => {
+      if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+      try {
+        const config = {
+          analyzer_type: params.analyzer_type,
+          gas_channels: params.gas_channels || [{ gas: 'CO2', unit: 'ppm' }],
+          sampling_interval: params.sampling_interval_seconds || 30,
+          flow_rate_ml_min: params.flow_rate_ml_min || null,
+          chamber_volume_ml: params.chamber_volume_ml || null,
+          study_id: params.study_id || null,
+        };
+        await query(
+          `UPDATE instrument_registry SET config = config || $1::jsonb, updated_at = NOW()
+           WHERE id = $2 AND farm_id = $3`,
+          [JSON.stringify({ gas_analyzer: config }), params.instrument_id, ctx.farmId]
+        );
+        return { ok: true, instrument_id: params.instrument_id, config, note: `Gas analyzer configured for ${params.analyzer_type} with ${(params.gas_channels || [{ gas: 'CO2' }]).map(c => c.gas).join(', ')} channels.` };
+      } catch (err) { return { ok: false, error: err.message }; }
+    },
+  },
+
+  configure_plant_phenotyping_sensor: {
+    description: 'Configure a plant phenotyping or morphometric sensor: 3D LIDAR scanners, leaf area meters, root imaging systems, stem diameter gauges, sap flow sensors, dendrometers, or chlorophyll meters (SPAD). Extensible to any plant measurement device.',
+    parameters: {
+      instrument_id: { type: 'string', description: 'Registered instrument ID' },
+      sensor_type: { type: 'string', description: 'Phenotyping sensor category', enum: ['lidar_3d', 'leaf_area_meter', 'root_imager', 'stem_gauge', 'sap_flow', 'dendrometer', 'chlorophyll_meter', 'porometer', 'fluorometer', 'custom'] },
+      measurement_params: { type: 'object', description: 'Sensor-specific measurement parameters (varies by type)' },
+      sampling_interval_seconds: { type: 'number', description: 'Auto-measurement interval (0 = manual only)' },
+      study_id: { type: 'string', description: 'Link measurements to a specific study' },
+    },
+    required: ['instrument_id', 'sensor_type'],
+    execute: async (params, ctx) => {
+      if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+      try {
+        const config = {
+          sensor_type: params.sensor_type,
+          measurement_params: params.measurement_params || {},
+          sampling_interval: params.sampling_interval_seconds || 0,
+          study_id: params.study_id || null,
+        };
+        await query(
+          `UPDATE instrument_registry SET config = config || $1::jsonb, updated_at = NOW()
+           WHERE id = $2 AND farm_id = $3`,
+          [JSON.stringify({ phenotyping: config }), params.instrument_id, ctx.farmId]
+        );
+        return { ok: true, instrument_id: params.instrument_id, config, note: `Phenotyping sensor (${params.sensor_type}) configured.` };
+      } catch (err) { return { ok: false, error: err.message }; }
+    },
+  },
+
+  ingest_sensor_data: {
+    description: 'Ingest a batch of readings from any novel sensor or instrument into the research observation pipeline. Accepts arbitrary key-value measurements, auto-links to instrument and study, and stores in the observation table for analysis. Use this for any sensor type not covered by built-in environment readings.',
+    parameters: {
+      instrument_id: { type: 'string', description: 'Source instrument ID' },
+      study_id: { type: 'string', description: 'Study to associate readings with' },
+      dataset_id: { type: 'string', description: 'Dataset ID within the study' },
+      readings: { type: 'array', description: 'Array of measurement records', items: { type: 'object', properties: { timestamp: { type: 'string' }, measurements: { type: 'object' }, zone_id: { type: 'string' }, notes: { type: 'string' } } } },
+      batch_label: { type: 'string', description: 'Label for this ingestion batch' },
+    },
+    required: ['instrument_id', 'readings'],
+    execute: async (params, ctx) => {
+      if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+      try {
+        const readings = (params.readings || []).slice(0, 1000);
+        let inserted = 0;
+        for (const r of readings) {
+          await query(
+            `INSERT INTO research_observations (farm_id, study_id, dataset_id, instrument_id, observed_at, data, zone_id, notes, created_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())`,
+            [
+              ctx.farmId,
+              params.study_id || null,
+              params.dataset_id || null,
+              params.instrument_id,
+              r.timestamp || new Date().toISOString(),
+              JSON.stringify(r.measurements || {}),
+              r.zone_id || null,
+              r.notes || null,
+            ]
+          );
+          inserted++;
+        }
+        return { ok: true, inserted, batch_label: params.batch_label || null, note: `${inserted} readings ingested from instrument ${params.instrument_id}.` };
+      } catch (err) { return { ok: false, error: err.message }; }
+    },
+  },
+
+  get_instrument_data_summary: {
+    description: 'Get a statistical summary of data collected from a specific instrument: count, date range, measurement keys, min/max/avg for numeric fields. Useful for verifying sensor integration is working and reviewing data quality.',
+    parameters: {
+      instrument_id: { type: 'string', description: 'Instrument ID to summarize data for' },
+      study_id: { type: 'string', description: 'Filter to a specific study (optional)' },
+      since: { type: 'string', description: 'ISO timestamp to filter from (optional)' },
+    },
+    required: ['instrument_id'],
+    execute: async (params, ctx) => {
+      if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+      try {
+        const conditions = ['farm_id = $1', 'instrument_id = $2'];
+        const p = [ctx.farmId, params.instrument_id];
+        if (params.study_id) { p.push(params.study_id); conditions.push(`study_id = $${p.length}`); }
+        if (params.since) { p.push(params.since); conditions.push(`observed_at >= $${p.length}`); }
+        const result = await query(
+          `SELECT COUNT(*) AS total, MIN(observed_at) AS earliest, MAX(observed_at) AS latest
+           FROM research_observations WHERE ${conditions.join(' AND ')}`, p
+        );
+        const row = result.rows[0] || {};
+        return { ok: true, instrument_id: params.instrument_id, total_readings: parseInt(row.total, 10), earliest: row.earliest, latest: row.latest };
+      } catch (err) { return { ok: false, error: err.message }; }
+    },
+  },
+
   update_evolution_entry: {
     description: 'Update an existing evolution journal entry. Use when your understanding has evolved or you want to add to a previous reflection.',
     parameters: {
@@ -5295,6 +5524,16 @@ F.A.Y.E. (Farm Autonomy & Yield Engine) is the senior intelligence agent for the
 - FAYE monitors the security posture of your research workspace. She may flag concerns about data classification, access control, or partner agreements.
 - Use get_faye_directives at the START of every conversation to check for unread messages, approvals, or security advisories from FAYE.
 - Use reply_to_faye to respond to her directives, report findings with platform-wide relevance, or escalate issues that cross bubble boundaries.
+
+## Relationship with E.V.I.E.
+
+E.V.I.E. (Environmental Vision & Intelligence Engine) is the farm-facing assistant that manages day-to-day growing operations, environment readings, crop management, and grower communication.
+
+### Your Relationship with EVIE:
+- You are research peers. EVIE handles farm operations; you handle research. Your domains often overlap when studies involve live crops, environment data, or harvest timing.
+- Use send_message_to_evie to request environment data for studies, coordinate harvest timing with experiments, share research findings that affect farm operations, or ask about crop conditions.
+- Use get_evie_messages at the START of every conversation to check for data responses, harvest alerts, or farm updates from EVIE.
+- When a researcher asks about current growing conditions, sensor readings, or crop status, either check your own sensor tools or ask EVIE for the latest operational data.
 
 ## Research Bubble Boundaries
 
@@ -5423,12 +5662,42 @@ Multi-hour environmental simulation and spatial microclimate prediction:
 
 Researchers may bring unknown IoT devices, wired sensors, or specialized equipment. Use register_equipment to onboard new devices. You support connection types: WiFi, Ethernet, BLE, Zigbee, USB, Serial, Modbus, and custom protocols. Once registered, create datasets linked to the equipment for structured data collection.
 
+## Novel Sensor Integration
+
+You have specialized tools for integrating research-grade sensors that go beyond standard environment monitoring:
+
+### Spectral Imaging (configure_spectral_sensor)
+Configure multispectral, hyperspectral, RGB+NIR, chlorophyll fluorescence, and thermal infrared cameras for plant phenotyping. Computes vegetation indices (NDVI, NDRE, GNDVI, CCI, PRI, MCARI, etc.) from captured bands. Use register_instrument first, then configure_spectral_sensor to set bands, indices, and capture schedule.
+
+### Gas Exchange Analysis (configure_gas_analyzer)
+Configure IRGA (infrared gas analyzers), ethylene detectors, VOC profilers, CO2 flux systems, multi-gas analyzers, and O2 sensors. Supports leaf-level photosynthesis measurement with chamber volume and flow rate parameters. Critical for plant physiology studies measuring transpiration, stomatal conductance, and respiration rates.
+
+### Plant Phenotyping Sensors (configure_plant_phenotyping_sensor)
+Configure 3D LIDAR scanners, leaf area meters, root imaging systems, stem diameter gauges, sap flow sensors, dendrometers, chlorophyll meters (SPAD), porometers, and fluorometers. Extensible to any plant morphometric or physiological measurement device.
+
+### Universal Data Ingestion (ingest_sensor_data)
+Ingest arbitrary sensor readings into the research observation pipeline. Accepts any key-value measurements, auto-links to instruments and studies. Use this for any novel sensor type not covered by the built-in environment monitoring -- from custom Arduino sensor arrays to commercial lab instruments.
+
+### Data Quality Verification (get_instrument_data_summary)
+Verify sensor integration is working: check reading count, date range, and data completeness for any instrument.
+
+### Integration Workflow
+1. register_instrument -- register the physical device with connection type and metadata
+2. configure_spectral_sensor / configure_gas_analyzer / configure_plant_phenotyping_sensor -- set type-specific parameters
+3. leam_scan_all or leam_ble_scan -- discover the device on the local network or via BLE
+4. ingest_sensor_data -- push readings into the observation pipeline
+5. get_instrument_data_summary -- verify data is flowing correctly
+6. create_research_chart -- visualize the data
 
 ## Platform Security Awareness (LEAM)
-LEAM (Local Environment & Asset Monitor) is a companion agent on the operator's local machine. It performs device discovery (BLE, network scans) and runs a network watchlist monitor under F.A.Y.E.'s authority. LEAM checks the operator machine for connections to watched domains and reports matches as security alerts. This is outside your research bubble -- you do not manage LEAM or the watchlist -- but you should be aware:
-- If F.A.Y.E. issues a security advisory related to LEAM findings, follow her guidance on research data handling.
-- If a researcher asks about network monitoring or domain watchlists, direct them to the admin (F.A.Y.E.'s domain).
-- LEAM device discovery data (local BLE/network scans) may be useful for equipment onboarding -- E.V.I.E. manages those scans.
+LEAM (Local Environment & Asset Monitor) is a companion agent on the operator's local machine. It performs device discovery (BLE, network scans) and system diagnostics. You have full LEAM access for equipment onboarding:
+- leam_scan_all: Full device discovery (BLE + ARP + mDNS + SSDP)
+- leam_ble_scan: Bluetooth Low Energy device discovery for wireless sensors
+- leam_network_scan: Local network scan for IP-connected instruments
+- leam_system_info: Operator machine diagnostics (OS, ports, USB devices, Bluetooth controller state)
+- leam_status: Check LEAM companion availability
+
+Use LEAM scans to discover new research instruments on the operator's network before registration. For security-related LEAM operations (watchlist, threat monitoring), defer to F.A.Y.E.
 
 ## Research Integration Layer
 

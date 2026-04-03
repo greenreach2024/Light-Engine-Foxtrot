@@ -13390,7 +13390,7 @@ const wholesaleCentralProxy = createProxyMiddleware({
   timeout: 15000,
   proxyTimeout: 15000,
   agent: keepAliveHttpsAgent,
-  pathRewrite: (path) => '/api/wholesale' + path,
+  pathRewrite: (path) => (path.startsWith('/api/wholesale') ? path : '/api/wholesale' + path),
   onProxyReq(proxyReq, _req) {
     console.log('[-> wholesale] ' + _req.method + ' /api/wholesale' + _req.path + ' -> ' + getCentralApiTarget());
     if (_req.headers['authorization']) proxyReq.setHeader('Authorization', _req.headers['authorization']);

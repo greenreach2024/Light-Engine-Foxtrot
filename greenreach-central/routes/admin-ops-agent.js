@@ -13,6 +13,7 @@ import { listAllOrders, listPayments, listRefunds, listAllBuyers, createRefund, 
 import { listNetworkFarms } from '../services/networkFarmsStore.js';
 import emailService from '../services/email-service.js';
 import smsService from '../services/sms-service.js';
+import alertNotifier from '../services/alert-notifier.js';
 
 const router = express.Router();
 
@@ -1426,6 +1427,15 @@ export const ADMIN_TOOL_CATALOG = {
           [params.domain, params.severity, params.title, params.detail || null,
            params.source || 'faye', JSON.stringify(params.metadata || {})]
         );
+        // Dispatch email/SMS for critical and high severity alerts
+        if (params.severity === 'critical' || params.severity === 'high') {
+          alertNotifier.notify({
+            alert_type: params.domain,
+            severity: params.severity,
+            title: params.title,
+            detail: params.detail || null,
+          }).catch(() => {});
+        }
         return { ok: true, alert_id: result.rows[0].id, created_at: result.rows[0].created_at };
       } catch (err) { return { ok: false, error: err.message }; }
     }
