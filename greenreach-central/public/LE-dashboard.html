@@ -18,6 +18,7 @@
   <link rel="stylesheet" href="./styles/iot-manager.css?v={{BUILD_TIME}}">
   <link rel="stylesheet" href="/css/pwa.css?v={{BUILD_TIME}}">
   <link rel="stylesheet" href="/styles/nav-color-palette.css">
+  <link rel="stylesheet" href="/css/setup-orchestrator.css?v={{BUILD_TIME}}">
   <script src="/js/console-wrapper.js?v={{BUILD_TIME}}"></script>
   <script>
     // Use current page protocol (HTTPS in production, HTTP in local dev)
@@ -219,10 +220,10 @@
         <span class="sidebar-group__icon" aria-hidden="true"></span>
       </button>
       <div class="sidebar-group__items" role="menu" hidden>
-        <button type="button" class="sidebar-link" data-sidebar-link data-group="business-setup" data-wizard="payment-setup">
+        <button type="button" class="sidebar-link" data-group="business-setup" data-wizard="payment-setup">
           Payment Processing Setup
         </button>
-        <button type="button" class="sidebar-link" data-sidebar-link data-group="business-setup" data-wizard="store-setup">
+        <button type="button" class="sidebar-link" data-group="business-setup" data-wizard="store-setup">
           Online Store Setup
         </button>
         <a class="sidebar-link" href="./views/procurement-portal.html" role="menuitem">
@@ -409,6 +410,17 @@
       </section>
 
       <!-- All main dashboard cards open below the environment and AI card -->
+
+      <!-- Setup Orchestrator -- AI-guided configuration -->
+      <div id="setupOrchestrator" class="setup-orchestrator setup-orchestrator--loading">
+        <div class="setup-orchestrator__header">
+          <div class="setup-orchestrator__title-group">
+            <div class="setup-orchestrator__label">Setup Orchestrator</div>
+            <h2 class="setup-orchestrator__title">Farm Configuration</h2>
+            <p class="setup-orchestrator__subtitle">Loading setup progress...</p>
+          </div>
+        </div>
+      </div>
       <div id="mainDashboardCards">
         <section id="farmPanel" class="card card--compact" data-panel="farm-registration">
               <header class="panel-header">
@@ -1975,7 +1987,7 @@
       
       <div class="wizard-content">
         <!-- Step 1: Domain Setup -->
-        <div class="wizard-panel" data-panel="1" style="display: block;">
+        <div class="wizard-panel" data-wizard-step="1" style="display: block;">
           <h3>Choose Your Store URL</h3>
           <p class="wizard-description">Select how customers will access your online store.</p>
           
@@ -2042,7 +2054,7 @@
         </div>
         
         <!-- Step 2: Branding -->
-        <div class="wizard-panel" data-panel="2" style="display: none;">
+        <div class="wizard-panel" data-wizard-step="2" style="display: none;">
           <h3>Customize Your Store Branding</h3>
           <p class="wizard-description">Make your store reflect your farm's unique identity.</p>
           
@@ -2105,7 +2117,7 @@
         </div>
         
         <!-- Step 3: Store Settings -->
-        <div class="wizard-panel" data-panel="3" style="display: none;">
+        <div class="wizard-panel" data-wizard-step="3" style="display: none;">
           <h3>Configure Store Settings</h3>
           <p class="wizard-description">Set up how your store will operate.</p>
           
@@ -2167,7 +2179,7 @@
         </div>
         
         <!-- Step 4: Launch -->
-        <div class="wizard-panel" data-panel="4" style="display: none;">
+        <div class="wizard-panel" data-wizard-step="4" style="display: none;">
           <h3>Ready to Launch Your Store!</h3>
           <p class="wizard-description">Review your setup and launch your online store.</p>
           
@@ -2378,7 +2390,7 @@
       modal.querySelectorAll('.wizard-panel').forEach(p => p.style.display = 'none');
       
       // Show panel 1
-      const panel1 = modal.querySelector('.wizard-panel[data-panel="1"]');
+      const panel1 = modal.querySelector('.wizard-panel[data-wizard-step="1"]');
       if (panel1) {
         panel1.style.display = 'block';
         requestAnimationFrame(() => { panel1.style.display = 'block'; });
@@ -2443,9 +2455,9 @@
     
     function storeWizardNext() {
       if (storeWizardStep < 4) {
-        document.querySelector('#storeWizardModal .wizard-panel[data-panel="' + storeWizardStep + '"]').style.display = 'none';
+        document.querySelector('#storeWizardModal .wizard-panel[data-wizard-step="' + storeWizardStep + '"]').style.display = 'none';
         storeWizardStep++;
-        document.querySelector('#storeWizardModal .wizard-panel[data-panel="' + storeWizardStep + '"]').style.display = 'block';
+        document.querySelector('#storeWizardModal .wizard-panel[data-wizard-step="' + storeWizardStep + '"]').style.display = 'block';
         updateStoreWizardProgress();
         
         if (storeWizardStep === 4) {
@@ -2456,9 +2468,9 @@
     
     function storeWizardPrev() {
       if (storeWizardStep > 1) {
-        document.querySelector('#storeWizardModal .wizard-panel[data-panel="' + storeWizardStep + '"]').style.display = 'none';
+        document.querySelector('#storeWizardModal .wizard-panel[data-wizard-step="' + storeWizardStep + '"]').style.display = 'none';
         storeWizardStep--;
-        document.querySelector('#storeWizardModal .wizard-panel[data-panel="' + storeWizardStep + '"]').style.display = 'block';
+        document.querySelector('#storeWizardModal .wizard-panel[data-wizard-step="' + storeWizardStep + '"]').style.display = 'block';
         updateStoreWizardProgress();
       }
     }
@@ -2622,7 +2634,7 @@
     }
 
     function initializeSidebar() {
-      setupSidebarGroups();
+      // setupSidebarGroups() REMOVED -- app.foxtrot.js initializeSidebarNavigation handles group accordion.
       setupWizardHandlers();
       grLog('Sidebar initialized successfully');
 
@@ -2651,6 +2663,7 @@
   </script>
   <script src="/js/farm-assistant.js?v=20260319b"></script>
   <script src="/js/pwa-installer.js"></script>
+  <script src="/js/setup-orchestrator.js?v={{BUILD_TIME}}" defer></script>
   
   <!-- Setup Completion Guard -->
   <script>

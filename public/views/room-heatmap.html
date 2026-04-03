@@ -768,6 +768,7 @@
   </style>
   <link rel="stylesheet" href="/styles/farm-assistant.css">
   <link rel="stylesheet" href="/styles/nav-color-palette.css">
+  <link rel="stylesheet" href="/styles/evie-core.css">
 </head>
 <body class="le-theme">
   <!-- Header -->
@@ -1399,7 +1400,7 @@
               console.log('[Heat Map] Auto-refresh: updated telemetry from', STATE.iotDevicesAll.length, 'IoT devices');
             }
             // Secondary: also refresh env zone data for history/trends
-            const res = await fetch('/env?hours=24');
+            const res = await fetchWithFarmAuth('/env?hours=24&t=' + Date.now(), { cache: 'no-store' });
             if (res.ok) {
               STATE.envData = await res.json();
               STATE.envLastLoadedAt = Date.now();
@@ -1506,7 +1507,7 @@
         // Load environmental data (prefer live API with history)
         // Request last 24h to enable trend-aware UI and freshness
         try {
-          const envResponse = await fetch('/env?hours=24');
+          const envResponse = await fetchWithFarmAuth('/env?hours=24&t=' + Date.now(), { cache: 'no-store' });
           if (!envResponse.ok) throw new Error(`Failed to load /env: ${envResponse.status}`);
           STATE.envData = await envResponse.json();
           STATE.envLastLoadedAt = Date.now();
@@ -3088,6 +3089,7 @@
       }
     })();
   </script>
-  <script src="/js/farm-assistant.js?v=20260318e"></script>
+  <script src="/js/evie-presence.js"></script>
+<script src="/js/le-nav.js"></script>
 </body>
 </html>

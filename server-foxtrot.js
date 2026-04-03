@@ -23792,6 +23792,34 @@ app.use('/api/admin/calendar', proxyCorsMiddleware, createProxyMiddleware({
   }
 }));
 
+// Setup Agent API proxy -- forwards /api/setup-agent/* to Central for setup orchestration
+app.use('/api/setup-agent', proxyCorsMiddleware, createProxyMiddleware({
+  target: getCentralApiTarget(),
+  router: () => getCentralApiTarget(),
+  changeOrigin: true,
+  xfwd: true,
+  logLevel: 'warn',
+  timeout: 15000,
+  proxyTimeout: 15000,
+  agent: keepAliveHttpsAgent,
+  pathRewrite: (path) => (path.startsWith('/api/setup-agent') ? path : `/api/setup-agent${path}`),
+  onProxyReq(proxyReq, req) {
+    if (req.headers['authorization']) proxyReq.setHeader('Authorization', req.headers['authorization']);
+    if (req.headers['x-farm-id']) proxyReq.setHeader('X-Farm-ID', req.headers['x-farm-id']);
+  },
+  onProxyRes(proxyRes, req) {
+    const origin = req.headers?.origin;
+    proxyRes.headers['access-control-allow-origin'] = origin || '*';
+    proxyRes.headers['access-control-allow-headers'] = 'Content-Type, Authorization, X-Requested-With, X-Farm-ID';
+    proxyRes.headers['access-control-allow-methods'] = 'GET,POST,OPTIONS';
+  },
+  onError(err, req, res) {
+    console.warn('[proxy:/api/setup-agent] error:', err?.message || err);
+    res.statusCode = 502;
+    res.end(JSON.stringify({ error: 'proxy_error', target: 'central-setup-agent', detail: String(err) }));
+  }
+}));
+
 // Circuit-breaker short-circuit when controller is unhealthy  
 app.use('/api', (req, res, next) => {
   console.log(`[API Middleware] path=${req.path}, originalUrl=${req.originalUrl}`);

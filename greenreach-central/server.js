@@ -105,6 +105,7 @@ import { requireResearchTier } from './middleware/feature-gate.js';
 import purchaseRouter from './routes/purchase.js';
 import farmOpsAgentRouter from './routes/farm-ops-agent.js';
 import assistantChatRouter from './routes/assistant-chat.js';
+import setupAgentRouter from './routes/setup-agent.js';
 import stripePaymentsRouter from './routes/stripe-payments.js';
 import paymentWebhooksRouter from './routes/payment-webhooks.js';
 import adminAssistantRouter from './routes/admin-assistant.js';
@@ -3768,6 +3769,7 @@ app.use('/', purchaseRouter);                                // Purchase/checkou
 app.use('/', miscStubsRouter);                               // Misc stubs + path aliases (full /api/* paths)
 app.use('/api/farm-ops', authMiddleware, farmOpsAgentRouter);                 // Farm operations agent (daily to-do, tool gateway, command taxonomy)
 app.use('/api/assistant', authMiddleware, assistantChatRouter);                // AI assistant chat (GPT-4o-mini + function calling)
+app.use('/api/setup-agent', authMiddleware, setupAgentRouter);              // Setup orchestrator progress + guidance
 
 // ── Phase 4 Ticket 4.2: Harvest schedule conflict detection ────────────
 app.get('/api/network/harvest-conflicts', authMiddleware, async (req, res) => {

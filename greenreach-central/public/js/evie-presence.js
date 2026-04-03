@@ -14,6 +14,34 @@
 (function () {
   'use strict';
 
+  // -- Iframe Detection --
+  // When inside an iframe whose parent already has EVIE,
+  // expose a bridge API but skip the full orb/panel injection.
+  var inIframe = false;
+  try { inIframe = window.self !== window.top; } catch (_) { inIframe = true; }
+
+  var parentHasEvie = false;
+  if (inIframe) {
+    try { parentHasEvie = !!(window.parent && window.parent.EVIE); } catch (_) { /* cross-origin */ }
+  }
+
+  // Detect page context for context-aware suggestions
+  var pageContext = (function () {
+    var path = window.location.pathname.toLowerCase();
+    if (path.indexOf('farm-inventory') >= 0) return 'inventory';
+    if (path.indexOf('planting-scheduler') >= 0) return 'planting';
+    if (path.indexOf('nutrient') >= 0) return 'nutrients';
+    if (path.indexOf('tray-inventory') >= 0) return 'activity-hub';
+    if (path.indexOf('farm-summary') >= 0) return 'farm-summary';
+    if (path.indexOf('crop-weight') >= 0) return 'harvest-analytics';
+    if (path.indexOf('room-heatmap') >= 0) return 'heatmap';
+    if (path.indexOf('procurement') >= 0) return 'procurement';
+    if (path.indexOf('wholesale') >= 0) return 'wholesale';
+    if (path.indexOf('maintenance') >= 0) return 'maintenance';
+    if (path.indexOf('research') >= 0) return 'research';
+    return 'general';
+  })();
+
   var API_BASE = '/api/assistant';
   var STATE_POLL_INTERVAL = 30000;  // 30s
   var PROACTIVE_CHECK_INTERVAL = 60000; // 60s
@@ -343,6 +371,23 @@
 
   // ── Inject into DOM ──────────────────────────────────────────
   function inject() {
+    // If inside iframe and parent already has EVIE, expose bridge only
+    if (parentHasEvie) {
+      window.EVIE = {
+        open: function () { try { window.parent.EVIE.open(); } catch (_) {} },
+        close: function () { try { window.parent.EVIE.close(); } catch (_) {} },
+        ask: function (t) { try { window.parent.EVIE.ask(t); } catch (_) {} },
+        notice: function (t) { try { window.parent.EVIE.notice(t); } catch (_) {} },
+        pageContext: pageContext,
+        getState: function () { try { return window.parent.EVIE.getState(); } catch (_) { return {}; } }
+      };
+      // Notify parent of page context for context-aware suggestions
+      try {
+        window.parent.postMessage({ type: 'evie-page-context', context: pageContext }, '*');
+      } catch (_) {}
+      return;
+    }
+
     document.body.appendChild(ambient);
     document.body.appendChild(panel);
     document.addEventListener('pointerdown', unlockNotificationAudio, { once: true, passive: true });
@@ -637,6 +682,25 @@
       setEvieState('idle');
     }
 
+    // Farm-health reactive glow (C3)
+    var envWarnings = (data.environment || []).filter(function (e) {
+      return e.status === 'warning' || e.status === 'caution';
+    }).length;
+    var envCritical = (data.environment || []).filter(function (e) {
+      return e.status === 'critical' || e.status === 'danger';
+    }).length;
+    if (envCritical > 0 || alertCount >= 3) {
+      setFarmHealth('critical');
+    } else if (envWarnings > 0 || alertCount >= 1) {
+      setFarmHealth('warning');
+    } else {
+      setFarmHealth('good');
+    }
+
+    // Insight beacon
+    var hasInsights = (data.insights || []).length > 0;
+    setHasInsight(hasInsights);
+
     // Proactive message
     if (data.proactive_message) {
       statusEl.textContent = data.proactive_message;
@@ -886,6 +950,26 @@
 
   // ── Public API ───────────────────────────────────────────────
 
+  // Farm-health reactive glow
+  var currentHealth = 'good';
+  function setFarmHealth(status) {
+    var valid = { good: 1, warning: 1, critical: 1 };
+    if (!valid[status]) return;
+    currentHealth = status;
+    var orb = document.querySelector('.evie-orb-container');
+    if (!orb) return;
+    orb.className = orb.className.replace(/evie-farm-health--\S+/g, '').trim();
+    orb.classList.add('evie-farm-health--' + status);
+  }
+
+  // Insight beacon
+  function setHasInsight(flag) {
+    var orb = document.querySelector('.evie-orb-container');
+    if (!orb) return;
+    if (flag) { orb.classList.add('evie-has-insight'); }
+    else { orb.classList.remove('evie-has-insight'); }
+  }
+
   window.EVIE = {
     open: function () { togglePanel(true); },
     close: function () { togglePanel(false); },
@@ -897,7 +981,17 @@
     },
     notice: showProactiveNotice,
     refresh: refreshState,
-    getState: function () { return stateData; }
+    getState: function () { return stateData; },
+    pageContext: pageContext,
+    setFarmHealth: setFarmHealth,
+    setHasInsight: setHasInsight
   };
+
+  // Listen for page context messages from iframed sub-pages
+  window.addEventListener('message', function (e) {
+    if (e.data && e.data.type === 'evie-page-context' && e.data.context) {
+      window.EVIE.pageContext = e.data.context;
+    }
+  });
 
 })();

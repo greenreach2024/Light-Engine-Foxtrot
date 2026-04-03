@@ -250,6 +250,50 @@
   animation: none;
 }
 
+
+/* -- Farm-health reactive glow ----------------------------------------- */
+/* Applied to .evie-orb-container alongside evie-state-idle.
+   JS sets the class based on sensor/environment health status.         */
+.evie-farm-health--good.evie-state-idle .evie-orb-core {
+  --evie-vitality-glow: rgba(16, 185, 129, 0.35);
+  background: radial-gradient(circle, var(--evie-vitality), rgba(16, 185, 129, 0.6));
+}
+.evie-farm-health--warning.evie-state-idle .evie-orb-core {
+  --evie-vitality-glow: rgba(245, 158, 11, 0.35);
+  background: radial-gradient(circle, var(--evie-alert), rgba(245, 158, 11, 0.6));
+  animation: evie-health-warn-pulse 3s ease-in-out infinite;
+}
+.evie-farm-health--warning.evie-state-idle .evie-orb-halo--outer {
+  box-shadow: 0 0 24px rgba(245, 158, 11, 0.25);
+}
+.evie-farm-health--critical.evie-state-idle .evie-orb-core {
+  --evie-vitality-glow: rgba(239, 68, 68, 0.35);
+  background: radial-gradient(circle, var(--evie-critical), rgba(239, 68, 68, 0.6));
+  animation: evie-health-critical-pulse 2s ease-in-out infinite;
+}
+.evie-farm-health--critical.evie-state-idle .evie-orb-halo--inner {
+  border-color: rgba(239, 68, 68, 0.4);
+  opacity: 0.6;
+}
+.evie-farm-health--critical.evie-state-idle .evie-orb-halo--outer {
+  box-shadow: 0 0 28px rgba(239, 68, 68, 0.3);
+}
+
+/* -- Insight notification pulse ---------------------------------------- */
+/* Added when EVIE has a proactive insight waiting. Subtle beacon.       */
+.evie-has-insight .evie-orb-core::after {
+  content: '';
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--evie-confirming, #34d399);
+  box-shadow: 0 0 8px var(--evie-confirming-glow, rgba(52, 211, 153, 0.4));
+  animation: evie-insight-beacon 2s ease-in-out infinite;
+}
+
 /* ======================================================================
    KEYFRAMES
    ====================================================================== */
@@ -1184,3 +1228,19 @@
     right: 16px;
   }
 }
+
+@keyframes evie-health-warn-pulse {
+  0%, 100% { transform: translate(-50%, -50%) scale(1); box-shadow: 0 0 16px rgba(245, 158, 11, 0.3), 0 0 32px rgba(245, 158, 11, 0.15); }
+  50%      { transform: translate(-50%, -50%) scale(1.05); box-shadow: 0 0 22px rgba(245, 158, 11, 0.4), 0 0 44px rgba(245, 158, 11, 0.2); }
+}
+
+@keyframes evie-health-critical-pulse {
+  0%, 100% { transform: translate(-50%, -50%) scale(1); box-shadow: 0 0 16px rgba(239, 68, 68, 0.35), 0 0 32px rgba(239, 68, 68, 0.15); }
+  50%      { transform: translate(-50%, -50%) scale(1.06); box-shadow: 0 0 24px rgba(239, 68, 68, 0.5), 0 0 48px rgba(239, 68, 68, 0.25); }
+}
+
+@keyframes evie-insight-beacon {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.5; transform: scale(1.3); }
+}
+

@@ -1136,6 +1136,7 @@
   </style>
   <link rel="stylesheet" href="/styles/farm-assistant.css">
   <link rel="stylesheet" href="/styles/nav-color-palette.css">
+  <link rel="stylesheet" href="/styles/evie-core.css">
 </head>
 <body class="le-theme">
   <!-- Tray Details Modal -->
@@ -1246,6 +1247,7 @@
         <div class="label">Market Demand</div>
         <div class="value" id="demandForecastTotal">--</div>
         <div class="subvalue" id="demandForecastTrend">Loading forecast...</div>
+        <div class="subvalue" id="demandForecastAI" style="font-size:11px; margin-top:2px; color:#6366f1;"></div>
       </div>
     </div>
 
@@ -2689,12 +2691,14 @@
 
         const el = document.getElementById('demandForecastTotal');
         const sub = document.getElementById('demandForecastTrend');
+        const aiEl = document.getElementById('demandForecastAI');
         if (!el || !sub) return;
 
         if (data.success && data.data && data.data.forecast && data.data.forecast.length > 0) {
-          const totalDemand = data.data.totalDemand || 
-            data.data.forecast.reduce((s, f) => s + (f.projectedDemand || 0), 0);
-          el.textContent = totalDemand + ' units';
+          const avg = data.data.averageTrend || 0;
+          const sign = avg > 0 ? '+' : '';
+          el.textContent = sign + avg + '%';
+          el.style.color = avg > 0 ? '#10b981' : avg < 0 ? '#ef4444' : '';
 
           // Count trends
           const inc = data.data.forecast.filter(f => f.trend === 'increasing').length;
@@ -2703,16 +2707,34 @@
           if (inc) parts.push(inc + ' rising');
           if (dec) parts.push(dec + ' falling');
           sub.textContent = parts.length ? parts.join(', ') : 'Stable demand';
+
+          // AI outlook summary
+          if (aiEl) {
+            const bullish = data.data.forecast.filter(f => f.aiOutlook === 'bullish').length;
+            const bearish = data.data.forecast.filter(f => f.aiOutlook === 'bearish').length;
+            const hasAI = data.data.forecast.some(f => f.aiOutlook);
+            if (hasAI) {
+              const aiParts = [];
+              if (bullish) aiParts.push(bullish + ' bullish');
+              if (bearish) aiParts.push(bearish + ' bearish');
+              aiEl.textContent = aiParts.length ? 'AI: ' + aiParts.join(', ') : 'AI: stable outlook';
+            } else {
+              aiEl.textContent = '';
+            }
+          }
         } else {
           el.textContent = '--';
           sub.textContent = 'No forecast data';
+          if (aiEl) aiEl.textContent = '';
         }
       } catch (err) {
         console.warn('[Scheduler] Demand KPI unavailable:', err.message);
         const el = document.getElementById('demandForecastTotal');
         const sub = document.getElementById('demandForecastTrend');
+        const aiEl = document.getElementById('demandForecastAI');
         if (el) el.textContent = '--';
         if (sub) sub.textContent = 'Unavailable';
+        if (aiEl) aiEl.textContent = '';
       }
     }
 
@@ -4245,6 +4267,7 @@
       }
     })();
   </script>
-  <script src="/js/farm-assistant.js?v=20260318e"></script>
+  <script src="/js/evie-presence.js"></script>
+<script src="/js/le-nav.js"></script>
 </body>
 </html>

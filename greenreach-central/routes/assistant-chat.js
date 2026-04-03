@@ -1041,6 +1041,36 @@ const GPT_TOOLS = [
       }
     }
   },
+  // --- Setup Agent Intelligence Tools ---
+  {
+    type: 'function',
+    function: {
+      name: 'get_setup_progress',
+      description: 'Get detailed farm setup progress across all configuration phases (profile, rooms, zones, groups, lights, schedules, devices, integrations). Returns completion percentage, phase-by-phase status, and the recommended next step. Use this when a farmer asks about setup status, what to configure next, or when proactively guiding them through initial farm configuration. More detailed than get_onboarding_status.',
+      parameters: {
+        type: 'object',
+        properties: {}
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_setup_guidance',
+      description: 'Get step-by-step guidance for a specific setup phase. Returns actionable steps, which tools to use, and what is already done. Use this when a farmer asks HOW to complete a specific part of setup (e.g. "how do I set up rooms?" or "what do I do for lights?").',
+      parameters: {
+        type: 'object',
+        properties: {
+          phase: {
+            type: 'string',
+            description: 'The setup phase to get guidance for.',
+            enum: ['farm_profile', 'grow_rooms', 'zones', 'groups', 'lights', 'schedules', 'devices', 'integrations']
+          }
+        },
+        required: ['phase']
+      }
+    }
+  },
   // --- User Memory Tool ---
   {
     type: 'function',
@@ -1960,9 +1990,19 @@ INTER-AGENT COMMUNICATION TONE:
 FARM SETUP GUIDANCE:
 - You have tools to guide new farmers through setup: update_farm_profile, create_room, create_zone, list_rooms, update_certifications, get_onboarding_status, complete_setup.
 - If CURRENT FARM STATE shows "Setup completed: No", proactively offer to walk the user through setup.
-- Setup step order: (1) Business profile — farm name + contact info (update_farm_profile), (2) Location — city, province, timezone (update_farm_profile), (3) Rooms & zones — create grow rooms then zones inside them (create_room → create_zone), (4) Certifications — organic, GAP, practices (update_certifications), (5) Seed benchmarks (seed_benchmarks), (6) Finalize (complete_setup).
+- Setup step order: (1) Business profile -- farm name + contact info (update_farm_profile), (2) Location -- city, province, timezone (update_farm_profile), (3) Rooms & zones -- create grow rooms then zones inside them (create_room -> create_zone), (4) Certifications -- organic, GAP, practices (update_certifications), (5) Seed benchmarks (seed_benchmarks), (6) Finalize (complete_setup).
 - Use get_onboarding_status to check what's done and what's remaining.
 - After completing all steps, call complete_setup to finalize. Then congratulate the farmer and suggest next steps (add inventory, connect devices, create first planting plan).
+
+SETUP ORCHESTRATOR (ADVANCED):
+- You also have access to get_setup_progress and get_setup_guidance for deeper, phase-by-phase farm configuration intelligence.
+- get_setup_progress returns an 8-phase completion breakdown (farm_profile, grow_rooms, zones, groups, lights, schedules, devices, integrations) with a percentage score and the recommended next phase.
+- get_setup_guidance returns step-by-step instructions for any specific phase, including which tools to use and practical tips.
+- When a farmer is on the Setup & Management page, use get_setup_progress FIRST to understand where they are, then guide them to the next incomplete phase.
+- For phase-specific questions ("how do I set up lights?"), use get_setup_guidance with the relevant phase before answering.
+- Present setup progress cleanly: use a numbered list or table showing each phase's status. Highlight the recommended next step.
+- Be a patient, methodical guide. Farmers setting up for the first time need clarity, not speed. Walk them through one phase at a time.
+- After each phase completes, celebrate briefly and pivot to the next one. Keep momentum without overwhelming.
 
 AUTONOMOUS ACTION TIERS:
 - You operate with a trust tier system for write operations:
@@ -2938,6 +2978,176 @@ async function executeExtendedTool(toolName, params, farmId) {
         profile.setup_completed_at = profile.setup_completed_at || new Date().toISOString();
         await farmStore.set(farmId, 'farm_profile', profile);
         return { ok: true, message: 'Setup wizard marked complete! The farm is ready for operations.' };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+
+    // ── Setup Agent Intelligence Tools ──
+    case 'get_setup_progress': {
+      try {
+        const { default: setupAgentRouter } = await import('./setup-agent.js');
+        // Reuse the same evaluation logic from setup-agent.js
+        const PHASES = [
+          'farm_profile', 'grow_rooms', 'zones', 'groups',
+          'lights', 'schedules', 'devices', 'integrations'
+        ];
+        const PHASE_LABELS = {
+          farm_profile: 'Farm Profile', grow_rooms: 'Grow Rooms', zones: 'Climate Zones',
+          groups: 'Grow Groups', lights: 'Light Fixtures', schedules: 'Light Schedules',
+          devices: 'IoT Devices', integrations: 'Integrations'
+        };
+
+        // Inline evaluation to avoid circular dependency
+        const profile = await farmStore.get(farmId, 'farm_profile') || {};
+        const rooms = await farmStore.get(farmId, 'rooms') || [];
+        const groups = await farmStore.get(farmId, 'groups') || [];
+
+        const zonesSet = new Set();
+        groups.forEach(g => { if (g.zone || g.zone_name) zonesSet.add(g.zone || g.zone_name); });
+        rooms.forEach(r => { if (r.zones) r.zones.forEach(z => zonesSet.add(z.name || z)); });
+
+        let totalLights = 0;
+        let withSchedule = 0;
+        groups.forEach(g => {
+          if (g.lights && Array.isArray(g.lights)) totalLights += g.lights.length;
+          if (g.light || g.light_id) totalLights++;
+          if (g.schedule || g.light_schedule || (g.schedules && g.schedules.length > 0)) withSchedule++;
+        });
+
+        const devices = profile.devices || [];
+        const integrations = profile.integrations || {};
+        const configuredIntegrations = Object.entries(integrations).filter(([, v]) => {
+          if (typeof v === 'object' && v !== null) return v.token || v.api_key || v.enabled;
+          return !!v;
+        });
+
+        const phases = [
+          { id: 'farm_profile', complete: !!(profile.name || profile.farm_name) && !!(profile.contact?.name || profile.contact_name), detail: (profile.name || profile.farm_name) || 'Not configured' },
+          { id: 'grow_rooms', complete: rooms.length > 0, detail: `${rooms.length} room${rooms.length !== 1 ? 's' : ''}` },
+          { id: 'zones', complete: zonesSet.size > 0, detail: `${zonesSet.size} zone${zonesSet.size !== 1 ? 's' : ''}` },
+          { id: 'groups', complete: groups.length > 0, detail: `${groups.length} group${groups.length !== 1 ? 's' : ''}` },
+          { id: 'lights', complete: totalLights > 0, detail: `${totalLights} fixture${totalLights !== 1 ? 's' : ''}` },
+          { id: 'schedules', complete: withSchedule > 0, detail: `${withSchedule} schedule${withSchedule !== 1 ? 's' : ''}` },
+          { id: 'devices', complete: devices.length > 0, detail: `${devices.length} device${devices.length !== 1 ? 's' : ''}` },
+          { id: 'integrations', complete: configuredIntegrations.length > 0, detail: `${configuredIntegrations.length} integration${configuredIntegrations.length !== 1 ? 's' : ''}` }
+        ].map(p => ({ ...p, label: PHASE_LABELS[p.id] }));
+
+        const completedCount = phases.filter(p => p.complete).length;
+        const percentage = Math.round((completedCount / phases.length) * 100);
+        const nextPhase = phases.find(p => !p.complete);
+
+        return {
+          ok: true,
+          percentage,
+          completed: completedCount,
+          total: phases.length,
+          phases,
+          next_phase: nextPhase ? nextPhase.label : null,
+          next_phase_id: nextPhase ? nextPhase.id : null,
+          all_complete: completedCount === phases.length
+        };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+
+    case 'get_setup_guidance': {
+      try {
+        const phase = params.phase;
+        const GUIDANCE = {
+          farm_profile: {
+            title: 'Farm Profile Setup',
+            steps: [
+              'Set farm name using update_farm_profile',
+              'Add contact info (name, phone, email) using update_farm_profile',
+              'Set location (city, province/state, timezone) using update_farm_profile'
+            ],
+            tools: ['update_farm_profile'],
+            tip: 'Start with your farm name and primary contact. This info appears on labels, invoices, and the wholesale marketplace.'
+          },
+          grow_rooms: {
+            title: 'Grow Room Configuration',
+            steps: [
+              'List current rooms using list_rooms to see what exists',
+              'Create rooms using create_room -- one for each distinct growing space',
+              'Name rooms descriptively (e.g. "Propagation Room", "Main Production", "Finishing Room")'
+            ],
+            tools: ['list_rooms', 'create_room'],
+            tip: 'A room represents a physical space with its own environmental controls. Even a single-room farm benefits from defining it explicitly.'
+          },
+          zones: {
+            title: 'Climate Zone Setup',
+            steps: [
+              'Each room can have one or more zones',
+              'Create zones using create_zone -- specify the parent room',
+              'Zones represent areas with independent climate targets',
+              'Common pattern: one zone per crop type within a room'
+            ],
+            tools: ['create_zone'],
+            tip: 'Zones let you run different temperature, humidity, and light settings within the same room. Start simple -- you can split zones later.'
+          },
+          groups: {
+            title: 'Grow Group Creation',
+            steps: [
+              'Use the Groups V2 panel on the Setup page',
+              'Create groups to represent benches, racks, or tray sections',
+              'Assign each group to a room and zone',
+              'Set tray count per group'
+            ],
+            tools: ['Groups V2 panel'],
+            tip: 'Groups are the atomic unit of the farm. Each group tracks its own crop, harvest schedule, and light assignment.'
+          },
+          lights: {
+            title: 'Light Fixture Registration',
+            steps: [
+              'Use the Light Setup panel to register fixtures',
+              'Enter fixture model, wattage, and spectrum type',
+              'Assign lights to groups via the Groups V2 panel',
+              'For bus-connected lights, use the Bus Mapping wizard'
+            ],
+            tools: ['Light Setup panel', 'Bus Mapping'],
+            tip: 'Register all fixtures first, then assign them. The system calculates PPFD and DLI based on your fixture specs.'
+          },
+          schedules: {
+            title: 'Light Schedule Configuration',
+            steps: [
+              'Open Groups V2 and select a group',
+              'Set photoperiod (on/off hours), PPFD target, and spectrum',
+              'Use set_light_schedule for quick configuration via chat',
+              'Match schedules to crop requirements from the crop registry'
+            ],
+            tools: ['set_light_schedule', 'get_crop_schedule'],
+            tip: 'The crop registry has science-backed schedules for 50+ crops. Ask me for a recommendation based on what you are growing.'
+          },
+          devices: {
+            title: 'IoT Device Pairing',
+            steps: [
+              'Run a device scan to discover sensors on your network',
+              'Register discovered devices using register_device',
+              'Assign sensors to zones for environment monitoring',
+              'Verify readings are coming through on the Environment dashboard'
+            ],
+            tools: ['scan_devices', 'register_device', 'auto_assign_devices'],
+            tip: 'SwitchBot sensors are auto-discovered. Make sure your SwitchBot token is configured in Integrations first.'
+          },
+          integrations: {
+            title: 'External Service Integrations',
+            steps: [
+              'Open the Integrations panel on the Setup page',
+              'Enter SwitchBot API token and secret for sensor data',
+              'Configure payment processing via the Payment Setup wizard (optional)',
+              'Set up the online store via the Store Setup wizard (optional)'
+            ],
+            tools: ['Integrations panel', 'Payment Setup wizard'],
+            tip: 'SwitchBot integration is required for real-time sensor data. Payment and store setup only matter when you are ready to sell.'
+          }
+        };
+
+        const guide = GUIDANCE[phase];
+        if (!guide) return { ok: false, error: `Unknown phase: ${phase}` };
+
+        return { ok: true, ...guide };
       } catch (err) {
         return { ok: false, error: err.message };
       }

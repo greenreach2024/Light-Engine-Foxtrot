@@ -9203,3 +9203,113 @@ async function speakConfirmation(action, params) {
         // TTS is best-effort
     }
 }
+
+
+// ── Iframe child navigation (le-nav.js) ────────────────────────
+window.addEventListener('message', function (event) {
+    if (!event.data || event.data.type !== 'le-nav') return;
+    if (event.data.action === 'dashboard') {
+        var dashNav = document.querySelector('.nav-item[data-section="dashboard"]');
+        if (dashNav) dashNav.click();
+    }
+});
+
+
+// ── EVIE Morning Brief (A3) ────────────────────────────────────
+var _briefLoaded = false;
+
+async function loadEvieMorningBrief() {
+    var el = document.getElementById('evie-morning-brief');
+    if (!el) return;
+
+    try {
+        var token = (typeof currentSession !== 'undefined' && currentSession && currentSession.token) ||
+            sessionStorage.getItem('token') || localStorage.getItem('token');
+        var farmId = (typeof currentSession !== 'undefined' && currentSession && currentSession.farmId) ||
+            sessionStorage.getItem('farm_id') || sessionStorage.getItem('farmId') ||
+            localStorage.getItem('farm_id') || localStorage.getItem('farmId');
+
+        var headers = { 'Content-Type': 'application/json' };
+        if (token) headers['Authorization'] = 'Bearer ' + token;
+        if (farmId) headers['x-farm-id'] = farmId;
+
+        var resp = await fetch((window.API_BASE || window.location.origin) + '/api/assistant/state', { headers: headers });
+        if (!resp.ok) return;
+        var data = await resp.json();
+        if (!data.ok) return;
+
+        // Build greeting
+        var hour = new Date().getHours();
+        var greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+        var farmName = data.farm_name || 'your farm';
+        var greetEl = document.getElementById('evie-brief-greeting');
+        if (greetEl) greetEl.textContent = greeting + ' -- ' + farmName;
+
+        var timeEl = document.getElementById('evie-brief-time');
+        if (timeEl) timeEl.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+        // Build body
+        var lines = [];
+        var alerts = data.alerts || 0;
+        var risks = data.risks || [];
+        var recs = data.recommendations || [];
+        var tasks = data.tasks || [];
+
+        if (alerts > 0) {
+            lines.push('<strong style="color:#f59e0b;">' + alerts + ' alert' + (alerts > 1 ? 's' : '') + '</strong> need attention.');
+        }
+        if (risks.length > 0) {
+            lines.push('Top risk: ' + escapeHtml(risks[0].title || risks[0].description || 'Unknown'));
+        }
+        if (recs.length > 0) {
+            lines.push('Suggestion: ' + escapeHtml(recs[0].title || recs[0].description || ''));
+        }
+        if (tasks.length > 0) {
+            var pending = tasks.filter(function (t) { return t.status !== 'completed'; });
+            if (pending.length > 0) {
+                lines.push(pending.length + ' task' + (pending.length > 1 ? 's' : '') + ' pending today.');
+            }
+        }
+        if (lines.length === 0) {
+            lines.push('All systems nominal. No alerts or pending actions.');
+        }
+
+        var bodyEl = document.getElementById('evie-brief-body');
+        if (bodyEl) bodyEl.innerHTML = lines.join('<br>');
+
+        // Action buttons
+        var actionsEl = document.getElementById('evie-brief-actions');
+        if (actionsEl) {
+            actionsEl.innerHTML = '';
+            if (alerts > 0) {
+                var btn = document.createElement('button');
+                btn.textContent = 'View Alerts';
+                btn.style.cssText = 'padding:6px 12px;border-radius:6px;border:1px solid rgba(245,158,11,0.4);background:rgba(245,158,11,0.1);color:#fbbf24;font-size:12px;cursor:pointer;';
+                btn.onclick = function () { if (window.EVIE) window.EVIE.open(); };
+                actionsEl.appendChild(btn);
+            }
+            var askBtn = document.createElement('button');
+            askBtn.textContent = 'Ask E.V.I.E.';
+            askBtn.style.cssText = 'padding:6px 12px;border-radius:6px;border:1px solid rgba(16,185,129,0.3);background:rgba(16,185,129,0.08);color:#34d399;font-size:12px;cursor:pointer;';
+            askBtn.onclick = function () { if (window.EVIE) window.EVIE.open(); };
+            actionsEl.appendChild(askBtn);
+        }
+
+        el.style.display = 'block';
+        _briefLoaded = true;
+    } catch (e) {
+        console.warn('[Morning Brief] Failed to load:', e.message);
+    }
+}
+
+function escapeHtml(str) {
+    var div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
+
+// Load on first dashboard paint, then every 5 minutes
+document.addEventListener('DOMContentLoaded', function () {
+    setTimeout(loadEvieMorningBrief, 1500); // After initial data loads
+    setInterval(loadEvieMorningBrief, 300000); // 5 min
+});
