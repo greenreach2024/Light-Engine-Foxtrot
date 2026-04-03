@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Farm Supplies</title>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        :root {
+            --bg-primary: #0a0f1e;
+            --bg-card: #1a2332;
+            --bg-secondary: #111827;
+            --border: #2d3748;
+            --text-primary: #e5e7eb;
+            --text-secondary: #94a3b8;
+            --accent-blue: #3b82f6;
+            --accent-green: #10b981;
+            --accent-yellow: #f59e0b;
+            --accent-red: #ef4444;
+            --accent-purple: #8b5cf6;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            padding: 20px;
+            line-height: 1.5;
+        }
+        h1 { font-size: 1.5rem; margin-bottom: 20px; }
+        h2 { font-size: 1.1rem; margin-bottom: 12px; color: var(--text-secondary); }
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        .stat-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 16px;
+        }
+        .stat-card .value {
+            font-size: 1.8rem;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+        .stat-card .label {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            margin-bottom: 20px;
+            overflow: hidden;
+        }
+        .card-header {
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .card-header h2 { margin: 0; }
+        .tabs-row {
+            display: flex;
+            gap: 4px;
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border);
+        }
+        .tab-btn {
+            padding: 6px 14px;
+            background: transparent;
+            border: 1px solid transparent;
+            border-radius: 6px;
+            color: var(--text-secondary);
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .tab-btn:hover { background: rgba(59, 130, 246, 0.08); color: var(--text-primary); }
+        .tab-btn.active {
+            background: rgba(59, 130, 246, 0.15);
+            border-color: rgba(59, 130, 246, 0.3);
+            color: #93c5fd;
+        }
+        .tab-panel { display: none; }
+        .tab-panel.active { display: block; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            padding: 10px 14px;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+            font-size: 0.85rem;
+        }
+        th {
+            color: var(--text-secondary);
+            font-weight: 600;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        .badge-ok { background: rgba(16,185,129,0.15); color: #10b981; }
+        .badge-warn { background: rgba(245,158,11,0.15); color: #f59e0b; }
+        .badge-crit { background: rgba(239,68,68,0.15); color: #ef4444; }
+        .alert-row {
+            padding: 10px 14px;
+            margin: 8px 16px;
+            background: var(--bg-secondary);
+            border-radius: 6px;
+            font-size: 0.85rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .empty { text-align: center; padding: 40px; color: var(--text-secondary); }
+    </style>
+</head>
+<body>
+    <h1>Farm Supplies</h1>
+
+    <div class="stats-row" id="statsRow">
+        <div class="stat-card" style="border-left: 3px solid var(--accent-red);">
+            <div class="value" id="critAlerts">--</div>
+            <div class="label">Critical Alerts</div>
+        </div>
+        <div class="stat-card" style="border-left: 3px solid var(--accent-yellow);">
+            <div class="value" id="warnAlerts">--</div>
+            <div class="label">Warnings</div>
+        </div>
+        <div class="stat-card" style="border-left: 3px solid var(--accent-green);">
+            <div class="value" id="totalValue">--</div>
+            <div class="label">Total Value</div>
+        </div>
+        <div class="stat-card" style="border-left: 3px solid var(--accent-blue);">
+            <div class="value" id="maintDue">--</div>
+            <div class="label">Maintenance Due</div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="tabs-row">
+            <button class="tab-btn active" data-panel="seeds">Seeds</button>
+            <button class="tab-btn" data-panel="nutrients">Nutrients</button>
+            <button class="tab-btn" data-panel="packaging">Packaging</button>
+            <button class="tab-btn" data-panel="equipment">Equipment</button>
+            <button class="tab-btn" data-panel="lab">Lab Supplies</button>
+        </div>
+
+        <div id="panel-seeds" class="tab-panel active">
+            <table><thead><tr><th>Variety</th><th>Qty</th><th>Grow Media</th><th>Expiration</th><th>Status</th></tr></thead>
+            <tbody id="seedsBody"><tr><td colspan="5" class="empty">Loading...</td></tr></tbody></table>
+        </div>
+        <div id="panel-nutrients" class="tab-panel">
+            <table><thead><tr><th>Type</th><th>Remaining</th><th>Used / Week</th><th>Days Left</th><th>Level</th></tr></thead>
+            <tbody id="nutrientsBody"><tr><td colspan="5" class="empty">Loading...</td></tr></tbody></table>
+        </div>
+        <div id="panel-packaging" class="tab-panel">
+            <table><thead><tr><th>Type</th><th>Stock</th><th>Reorder Point</th><th>Cost/Unit</th><th>Status</th></tr></thead>
+            <tbody id="packagingBody"><tr><td colspan="5" class="empty">Loading...</td></tr></tbody></table>
+        </div>
+        <div id="panel-equipment" class="tab-panel">
+            <table><thead><tr><th>Name</th><th>Category</th><th>Status</th><th>Last Maint.</th><th>Next Maint.</th></tr></thead>
+            <tbody id="equipmentBody"><tr><td colspan="5" class="empty">Loading...</td></tr></tbody></table>
+        </div>
+        <div id="panel-lab" class="tab-panel">
+            <table><thead><tr><th>Name</th><th>Qty</th><th>Unit</th><th>Reorder</th><th>Status</th></tr></thead>
+            <tbody id="labBody"><tr><td colspan="5" class="empty">Loading...</td></tr></tbody></table>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header"><h2>Reorder Alerts</h2></div>
+        <div id="alertsList" style="padding: 8px;"><div class="empty">Loading...</div></div>
+    </div>
+
+    <script>
+    (function() {
+        var API = window.location.origin + '/api/inventory';
+
+        // Tab switching
+        document.querySelectorAll('.tab-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); });
+                document.querySelectorAll('.tab-panel').forEach(function(p) { p.classList.remove('active'); });
+                btn.classList.add('active');
+                document.getElementById('panel-' + btn.getAttribute('data-panel')).classList.add('active');
+            });
+        });
+
+        function badge(level) {
+            if (level === 'critical') return '<span class="badge badge-crit">CRITICAL</span>';
+            if (level === 'warning') return '<span class="badge badge-warn">WARNING</span>';
+            if (level === 'low') return '<span class="badge badge-warn">LOW</span>';
+            return '<span class="badge badge-ok">OK</span>';
+        }
+
+        function statusBadge(s) {
+            if (s === 'maintenance_overdue' || s === 'out_of_service') return '<span class="badge badge-crit">' + s.replace(/_/g,' ').toUpperCase() + '</span>';
+            if (s === 'maintenance_due') return '<span class="badge badge-warn">DUE SOON</span>';
+            return '<span class="badge badge-ok">Operational</span>';
+        }
+
+        function d(iso) { return iso ? new Date(iso).toLocaleDateString() : '--'; }
+
+        async function load() {
+            try {
+                var r = await Promise.all([
+                    fetch(API + '/dashboard').then(function(r) { return r.json(); }),
+                    fetch(API + '/reorder-alerts').then(function(r) { return r.json(); }),
+                    fetch(API + '/seeds/list').then(function(r) { return r.json(); }),
+                    fetch(API + '/usage/weekly-summary?days=7').then(function(r) { return r.json(); }),
+                    fetch(API + '/equipment/list').then(function(r) { return r.json(); }),
+                    fetch(API + '/supplies/list').then(function(r) { return r.json(); })
+                ]);
+                var dash = r[0], alerts = r[1], seeds = r[2], usage = r[3], equip = r[4], supplies = r[5];
+
+                // Stats
+                if (dash.ok && dash.dashboard) {
+                    var db = dash.dashboard;
+                    document.getElementById('critAlerts').textContent = db.critical_alerts || 0;
+                    document.getElementById('warnAlerts').textContent = db.warning_alerts || 0;
+                    document.getElementById('totalValue').textContent = '$' + (db.total_value || 0).toLocaleString();
+                    document.getElementById('maintDue').textContent = db.maintenance_due || 0;
+                }
+
+                // Seeds
+                if (seeds.ok && seeds.seeds) {
+                    var weeklyUsage = (usage.ok && usage.summary) ? usage.summary : {};
+                    document.getElementById('seedsBody').innerHTML = seeds.seeds.length === 0
+                        ? '<tr><td colspan="5" class="empty">No seeds in inventory</td></tr>'
+                        : seeds.seeds.map(function(s) {
+                            var al = s.quantity <= 0 ? 'critical' : s.quantity < 100 ? 'warning' : 'normal';
+                            return '<tr><td>' + s.variety + '</td><td>' + s.quantity + '</td><td>' + (s.grow_media_kg || 0) + ' kg</td><td>' + d(s.expiration) + '</td><td>' + badge(al) + '</td></tr>';
+                        }).join('');
+                }
+
+                // Nutrients — use dashboard data if available
+                if (dash.ok && dash.dashboard && dash.dashboard.nutrients) {
+                    document.getElementById('nutrientsBody').innerHTML = dash.dashboard.nutrients.length === 0
+                        ? '<tr><td colspan="5" class="empty">No nutrients tracked</td></tr>'
+                        : dash.dashboard.nutrients.map(function(n) {
+                            var pct = (n.volume_remaining_ml / n.volume_ml * 100).toFixed(0);
+                            var al = pct < 15 ? 'critical' : pct < 30 ? 'warning' : 'normal';
+                            return '<tr><td>' + n.name + '</td><td>' + n.volume_remaining_ml + 'ml</td><td>--</td><td>--</td><td>' + badge(al) + '</td></tr>';
+                        }).join('');
+                }
+
+                // Packaging — use alerts to derive packaging status
+                if (dash.ok && dash.dashboard && dash.dashboard.packaging) {
+                    document.getElementById('packagingBody').innerHTML = dash.dashboard.packaging.length === 0
+                        ? '<tr><td colspan="5" class="empty">No packaging tracked</td></tr>'
+                        : dash.dashboard.packaging.map(function(p) {
+                            var al = p.stock_level <= p.reorder_point ? (p.stock_level <= 0 ? 'critical' : 'warning') : 'normal';
+                            return '<tr><td>' + p.type + '</td><td>' + p.stock_level + '</td><td>' + p.reorder_point + '</td><td>$' + (p.cost_per_unit || 0).toFixed(2) + '</td><td>' + badge(al) + '</td></tr>';
+                        }).join('');
+                }
+
+                // Equipment
+                if (equip.ok && equip.equipment) {
+                    document.getElementById('equipmentBody').innerHTML = equip.equipment.length === 0
+                        ? '<tr><td colspan="5" class="empty">No equipment registered</td></tr>'
+                        : equip.equipment.map(function(e) {
+                            return '<tr><td>' + e.name + '</td><td>' + e.category + '</td><td>' + statusBadge(e.status) + '</td><td>' + d(e.last_maintenance) + '</td><td>' + d(e.next_maintenance) + '</td></tr>';
+                        }).join('');
+                }
+
+                // Lab supplies
+                if (supplies.ok && supplies.supplies) {
+                    document.getElementById('labBody').innerHTML = supplies.supplies.length === 0
+                        ? '<tr><td colspan="5" class="empty">No lab supplies tracked</td></tr>'
+                        : supplies.supplies.map(function(s) {
+                            var al = s.quantity <= s.reorder_threshold ? (s.quantity <= 0 ? 'critical' : 'warning') : 'normal';
+                            return '<tr><td>' + s.name + '</td><td>' + s.quantity + '</td><td>' + s.unit + '</td><td>' + s.reorder_threshold + '</td><td>' + badge(al) + '</td></tr>';
+                        }).join('');
+                }
+
+                // Alerts
+                if (alerts.ok && alerts.alerts) {
+                    var el = document.getElementById('alertsList');
+                    if (alerts.alerts.length === 0) {
+                        el.innerHTML = '<div class="empty">No reorder alerts</div>';
+                    } else {
+                        el.innerHTML = alerts.alerts.map(function(a) {
+                            var color = a.alert_level === 'critical' ? 'var(--accent-red)' : a.alert_level === 'warning' ? 'var(--accent-yellow)' : 'var(--accent-blue)';
+                            return '<div class="alert-row" style="border-left:3px solid ' + color + '"><div><strong>' + a.item_name + '</strong> - ' + a.category + '<div style="font-size:12px;color:var(--text-secondary);margin-top:2px;">' + a.message + '</div></div><span class="badge ' + (a.alert_level === 'critical' ? 'badge-crit' : 'badge-warn') + '">' + a.alert_level.toUpperCase() + '</span></div>';
+                        }).join('');
+                    }
+                }
+            } catch(e) {
+                console.error('Farm supplies load error:', e);
+                document.getElementById('seedsBody').innerHTML = '<tr><td colspan="5" class="empty">Failed to load data</td></tr>';
+            }
+        }
+
+        load();
+        setInterval(load, 120000);
+    })();
+    </script>
+</body>
+</html>

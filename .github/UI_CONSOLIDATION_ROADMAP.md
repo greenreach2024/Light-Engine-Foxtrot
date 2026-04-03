@@ -120,7 +120,9 @@ EVIE absorbs: Sustainability/ESG, Traceability, Quality Control, Help/Docs.
 
 ---
 
-## Phase 3 -- View Merging
+## Phase 3 -- View Merging [COMPLETED]
+
+Commit: a9649718. Backup tag: pre-tesla-ui-v3. Deployed 2026-04-03.
 
 | New View | Merges |
 |----------|--------|
