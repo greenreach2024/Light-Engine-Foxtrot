@@ -115,25 +115,41 @@
     .evie-reply .evie-num { color: var(--evie-sensing); font-weight: 700; font-variant-numeric: tabular-nums; }
 
     /* -- Compact layout when embedded in admin iframe -- */
+    .evie-core-page.embedded {
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
     .evie-core-page.embedded .evie-core-hero {
-      padding: 16px 24px 8px;
+      padding: 10px 24px 4px;
+      flex-shrink: 0;
     }
     .evie-core-page.embedded .evie-orb-container.evie-orb--hero {
-      width: 80px; height: 80px;
+      width: 56px; height: 56px;
     }
-    .evie-core-page.embedded .evie-orb--hero .evie-orb-core { width: 28px; height: 28px; }
-    .evie-core-page.embedded .evie-orb--hero .evie-orb-halo--inner { width: 44px; height: 44px; }
-    .evie-core-page.embedded .evie-orb--hero .evie-orb-halo--mid { width: 60px; height: 60px; }
-    .evie-core-page.embedded .evie-orb--hero .evie-orb-halo--outer { width: 80px; height: 80px; }
+    .evie-core-page.embedded .evie-orb--hero .evie-orb-core { width: 20px; height: 20px; }
+    .evie-core-page.embedded .evie-orb--hero .evie-orb-halo--inner { width: 32px; height: 32px; }
+    .evie-core-page.embedded .evie-orb--hero .evie-orb-halo--mid { width: 42px; height: 42px; }
+    .evie-core-page.embedded .evie-orb--hero .evie-orb-halo--outer { width: 56px; height: 56px; }
     .evie-core-page.embedded .evie-core-hero-label {
-      font-size: 10px;
-      margin-top: 8px;
+      font-size: 9px;
+      margin-top: 4px;
     }
     .evie-core-page.embedded .evie-core-grid {
-      padding-top: 12px;
+      padding-top: 8px;
+      flex: 1;
+      overflow-y: auto;
+      min-height: 0;
     }
     .evie-core-page.embedded .evie-stats-row {
-      margin-bottom: 8px;
+      margin-bottom: 6px;
+    }
+    .evie-core-page.embedded .evie-core-topbar {
+      flex-shrink: 0;
+    }
+    .evie-core-page.embedded .evie-core-chat-bar {
+      flex-shrink: 0;
     }
     .evie-core-page.embedded .evie-stat-value {
       font-size: 22px;
@@ -164,7 +180,7 @@
   </div>
 
   <!-- Stats Row -->
-  <div style="max-width:960px;margin:0 auto;padding:0 24px">
+  <div class="evie-core-stats-wrap" style="max-width:960px;margin:0 auto;padding:0 24px;flex-shrink:0">
     <div class="evie-stats-row">
       <div class="evie-stat">
         <div class="evie-stat-value" id="stat-rooms">--</div>
