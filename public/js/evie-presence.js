@@ -455,19 +455,20 @@
 
   // ── Inject into DOM ──────────────────────────────────────────
   function inject() {
-    // If inside iframe and parent already has EVIE, expose bridge only
-    if (parentHasEvie) {
+    // If inside any iframe, expose bridge only (top-level admin shell owns the orb).
+    // Uses window.top so the bridge works at any nesting depth.
+    if (inIframe) {
       window.EVIE = {
-        open: function () { try { window.parent.EVIE.open(); } catch (_) {} },
-        close: function () { try { window.parent.EVIE.close(); } catch (_) {} },
-        ask: function (t) { try { window.parent.EVIE.ask(t); } catch (_) {} },
-        notice: function (t) { try { window.parent.EVIE.notice(t); } catch (_) {} },
+        open: function () { try { window.top.EVIE.open(); } catch (_) {} },
+        close: function () { try { window.top.EVIE.close(); } catch (_) {} },
+        ask: function (t) { try { window.top.EVIE.ask(t); } catch (_) {} },
+        notice: function (t) { try { window.top.EVIE.notice(t); } catch (_) {} },
         pageContext: pageContext,
-        getState: function () { try { return window.parent.EVIE.getState(); } catch (_) { return {}; } }
+        getState: function () { try { return window.top.EVIE.getState(); } catch (_) { return {}; } }
       };
-      // Notify parent of page context for context-aware suggestions
+      // Notify top-level admin of page context for context-aware suggestions
       try {
-        window.parent.postMessage({ type: 'evie-page-context', context: pageContext }, '*');
+        window.top.postMessage({ type: 'evie-page-context', context: pageContext }, '*');
       } catch (_) {}
       return;
     }

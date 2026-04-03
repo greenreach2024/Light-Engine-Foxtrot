@@ -2488,7 +2488,59 @@ const GWEN_TOOL_CATALOG = {
     },
   },
 
-  simulate_environment_scenario: {
+  calculate_room_requirements: {
+    description: 'Calculate complete equipment requirements for a grow room based on dimensions, ceiling height, hydroponic system type, HVAC, and target crops. Returns counts and models for lights, fans, dehumidifiers, and HVAC units, plus placement recommendations and a human-readable summary. Uses the equipment reference database with manufacturer-grade specs. Call this for research-grade equipment planning when a farmer or researcher needs to know exactly what equipment a room needs.',
+    parameters: {
+      room_area_m2: { type: 'number', description: 'Room floor area in square meters' },
+      ceiling_height_m: { type: 'number', description: 'Ceiling height in meters' },
+      hydro_system: { type: 'string', description: 'Hydroponic system type: nft, dwc, ebb_flow, dutch_bucket, vertical_tower, aeroponics, wicking (optional)' },
+      hvac_type: { type: 'string', description: 'HVAC type: mini_split, portable, central, none (optional)' },
+      crops: { type: 'array', description: 'Array of crop names to optimize layout for (optional)' },
+      plant_count: { type: 'number', description: 'Total plant count (optional -- auto-calculated from room size and hydro system)' },
+    },
+    required: ['room_area_m2', 'ceiling_height_m'],
+    execute: async (params) => {
+      try {
+        const equipDb = await import('../lib/equipment-db.js');
+        const { buildFarmLayout } = await import('../lib/farm-builder.js');
+
+        // Use equipment-db for detailed thermal/equipment calcs
+        const roomReqs = equipDb.default.calculateRoomRequirements({
+          area_m2: parseFloat(params.room_area_m2),
+          ceiling_height_m: parseFloat(params.ceiling_height_m),
+          target_ppfd: 400,
+          target_temp_c: 22,
+          target_rh: 65,
+          ambient_temp_c: 25,
+          hydro_system: params.hydro_system || undefined,
+        });
+
+        // Use farm-builder for crop-aware layout if crops provided
+        let layout = null;
+        if (params.crops && params.crops.length > 0) {
+          layout = buildFarmLayout({
+            room_area_m2: parseFloat(params.room_area_m2),
+            ceiling_height_m: parseFloat(params.ceiling_height_m),
+            hydro_system: params.hydro_system || undefined,
+            hvac_type: params.hvac_type || undefined,
+            crops: params.crops,
+            plant_count: params.plant_count ? parseInt(params.plant_count) : undefined,
+          });
+        }
+
+        return {
+          ok: true,
+          equipment_requirements: roomReqs,
+          crop_optimized_layout: layout,
+          methodology: 'Equipment sizing from manufacturer specs (equipment-db.js). Crop targets from lighting-recipes.json per-day entries. Air exchange calculated at 60 ACH base with thermal load adjustment. Dehumidification from transpiration estimates at 3-5 mL/hr/plant.',
+        };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    },
+  },
+
+    simulate_environment_scenario: {
     description: 'Run a what-if environmental scenario: predict how room temperature, humidity, and CO2 evolve over a multi-hour period given equipment schedules, weather changes, and crop stage. Supports light cycle on/off transitions, heater thermostat behavior, and dehumidifier cycling.',
     parameters: {
       room_length_m: { type: 'number', description: 'Room length in meters' },

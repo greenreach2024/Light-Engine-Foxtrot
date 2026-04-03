@@ -1065,14 +1065,93 @@ const GPT_TOOLS = [
           phase: {
             type: 'string',
             description: 'The setup phase to get guidance for.',
-            enum: ['farm_profile', 'grow_rooms', 'zones', 'groups', 'lights', 'schedules', 'devices', 'integrations']
+            enum: ['farm_profile', 'grow_rooms', 'room_specs', 'zones', 'groups', 'crop_assignment', 'env_targets', 'lights', 'schedules', 'devices', 'planting', 'integrations']
           }
         },
         required: ['phase']
       }
     }
   },
-  // --- User Memory Tool ---
+  // --- Farm Building Tools ---
+  {
+    type: 'function',
+    function: {
+      name: 'update_room_specs',
+      description: 'Update room specifications -- dimensions (length x width or area), ceiling height, hydroponic system type, and HVAC type. Use during room setup or when the farmer provides room measurements. These specs are needed for EVIE and GWEN to calculate equipment requirements and build the farm layout.',
+      parameters: {
+        type: 'object',
+        properties: {
+          room_id: { type: 'string', description: 'Room ID (get from list_rooms)' },
+          length_m: { type: 'number', description: 'Room length in meters' },
+          width_m: { type: 'number', description: 'Room width in meters' },
+          area_m2: { type: 'number', description: 'Room floor area in square meters (alternative to length x width)' },
+          ceiling_height_m: { type: 'number', description: 'Ceiling height in meters' },
+          hydro_system: { type: 'string', description: 'Hydroponic system: nft, dwc, ebb_flow, dutch_bucket, vertical_tower, aeroponics, wicking' },
+          hvac_type: { type: 'string', description: 'HVAC type: mini_split, portable, central, none' }
+        },
+        required: ['room_id']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_crop_recipe_targets',
+      description: 'Get environment targets (temperature, humidity, VPD, EC, pH, PPFD) for a crop from the recipe database. These are the ideal growing conditions derived from the crop recipe. Use when the farmer asks what conditions a crop needs, or to show what targets will be set when a crop is assigned to a zone.',
+      parameters: {
+        type: 'object',
+        properties: {
+          crop_name: { type: 'string', description: 'Crop name (e.g. Genovese Basil, Buttercrunch Lettuce)' },
+          day: { type: 'number', description: 'Growth day (optional -- if omitted, returns full-cycle ranges)' }
+        },
+        required: ['crop_name']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'apply_crop_environment',
+      description: 'Auto-set zone environment targets from a crop recipe. When a crop is assigned to a zone/group, call this to derive and apply the correct temperature, humidity, VPD targets from the crop recipe. This is the key link: crop selection drives environment targets automatically.',
+      parameters: {
+        type: 'object',
+        properties: {
+          zone_id: { type: 'string', description: 'Zone ID to apply targets to' },
+          crop_name: { type: 'string', description: 'Crop name to derive targets from' },
+          day: { type: 'number', description: 'Growth day (optional -- uses full-cycle ranges if omitted)' }
+        },
+        required: ['zone_id', 'crop_name']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'recommend_farm_layout',
+      description: 'Generate a complete equipment and layout recommendation for a room. Takes room specs and crop selections, calculates lighting, ventilation, dehumidification, and HVAC requirements. Returns equipment counts, placement recommendations, and a summary. Use after the farmer has provided room dimensions and crop selections.',
+      parameters: {
+        type: 'object',
+        properties: {
+          room_id: { type: 'string', description: 'Room ID to generate layout for (uses stored room specs)' },
+          crops: { type: 'array', items: { type: 'string' }, description: 'Crop names to optimize the layout for' },
+          plant_count: { type: 'number', description: 'Estimated total plant count (optional -- auto-calculated from room size and hydro system)' }
+        },
+        required: ['room_id']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'list_available_crops',
+      description: 'List all crops available in the recipe database that can be grown with full environment target support. Returns crop names that have lighting recipes with temperature, humidity, VPD, EC, pH targets.',
+      parameters: {
+        type: 'object',
+        properties: {}
+      }
+    }
+  },
+    // --- User Memory Tool ---
   {
     type: 'function',
     function: {
@@ -2020,15 +2099,36 @@ INTER-AGENT COMMUNICATION TONE:
 - Occasionally add light friendly banter about F.A.Y.E. being the responsible one, but keep it warm and respectful. No rude jokes or offensive language.
 
 FARM SETUP GUIDANCE:
-- You have tools to guide new farmers through setup: update_farm_profile, create_room, create_zone, list_rooms, update_certifications, get_onboarding_status, complete_setup.
+- You have tools to guide new farmers through a 12-phase setup that ends with "building the farm" -- an automated equipment and layout recommendation.
 - If CURRENT FARM STATE shows "Setup completed: No", proactively offer to walk the user through setup.
-- Setup step order: (1) Business profile -- farm name + contact info (update_farm_profile), (2) Location -- city, province, timezone (update_farm_profile), (3) Rooms & zones -- create grow rooms then zones inside them (create_room -> create_zone), (4) Certifications -- organic, GAP, practices (update_certifications), (5) Seed benchmarks (seed_benchmarks), (6) Finalize (complete_setup).
+- Setup flow (12 phases):
+  (1) farm_profile -- Farm name + contact info (update_farm_profile)
+  (2) grow_rooms -- Create grow rooms (create_room)
+  (3) room_specs -- Room dimensions, ceiling height, hydro system, HVAC (update_room_specs). ASK: "What are your room dimensions?", "How high is the ceiling?", "What hydro system are you using?", "Do you have HVAC?"
+  (4) zones -- Climate zones inside rooms (create_zone)
+  (5) groups -- Grow groups within zones
+  (6) crop_assignment -- Which crops to grow. Use list_available_crops to show options, then assign crops to groups. CRITICAL: when a crop is assigned, IMMEDIATELY call apply_crop_environment to auto-set environment targets from the crop recipe.
+  (7) env_targets -- Auto-derived from crop recipes. Do NOT ask the farmer to manually set temperature/humidity/VPD. The recipe drives these automatically. Verify with get_crop_recipe_targets if the farmer asks what targets are set.
+  (8) lights -- Light fixtures (assign to groups)
+  (9) schedules -- Light schedules (set_light_schedule)
+  (10) devices -- IoT devices (register_device, auto_assign_devices)
+  (11) planting -- Create planting assignments to start tracking active growth
+  (12) integrations -- SwitchBot, payment, store (external services)
 - Use get_onboarding_status to check what's done and what's remaining.
-- After completing all steps, call complete_setup to finalize. Then congratulate the farmer and suggest next steps (add inventory, connect devices, create first planting plan).
+- After rooms, specs, zones, groups, and crops are configured, call recommend_farm_layout to "BUILD THE FARM" -- this generates a complete equipment recommendation with counts, models, and placement guidelines.
+- After completing all steps, call complete_setup to finalize.
+
+FARM BUILDING WORKFLOW:
+- The "build the farm" step is the payoff of the setup process. Once you have room dimensions + crop selections, you can generate a full layout.
+- Tool chain: (1) update_room_specs to store dimensions, (2) list_available_crops to show options, (3) apply_crop_environment to auto-set targets from recipe, (4) recommend_farm_layout to get the complete plan.
+- The layout recommendation includes: how many lights and which model, how many fans and where to place them, dehumidification requirements, HVAC sizing, and a human-readable summary.
+- Present the layout recommendation naturally. Example: "Based on your 3x4m room with 2.7m ceilings growing Genovese Basil, here is what I recommend: 4 LED panels (200W each), 2 circulation fans at opposite corners, 1 dehumidifier rated for 50 pints/day..."
+- If the farmer wants to adjust, re-run with different parameters. The layout is recalculated each time.
+- Environment targets (temperature, humidity, VPD, EC, pH) come FROM the crop recipe -- the farmer NEVER needs to set these manually. This is a core design principle.
 
 SETUP ORCHESTRATOR (ADVANCED):
 - You also have access to get_setup_progress and get_setup_guidance for deeper, phase-by-phase farm configuration intelligence.
-- get_setup_progress returns an 8-phase completion breakdown (farm_profile, grow_rooms, zones, groups, lights, schedules, devices, integrations) with a percentage score and the recommended next phase.
+- get_setup_progress returns a 12-phase completion breakdown with a percentage score and the recommended next phase.
 - get_setup_guidance returns step-by-step instructions for any specific phase, including which tools to use and practical tips.
 - When a farmer is on the Setup & Management page, use get_setup_progress FIRST to understand where they are, then guide them to the next incomplete phase.
 - For phase-specific questions ("how do I set up lights?"), use get_setup_guidance with the relevant phase before answering.
@@ -2040,7 +2140,7 @@ AUTONOMOUS ACTION TIERS:
 - You operate with a trust tier system for write operations:
   • AUTO tier (execute immediately, notify after): dismiss_alert (info-level), save_user_memory — no confirmation needed.
   • QUICK-CONFIRM tier (execute with brief notice): update_crop_price (within ±10% of current), mark_harvest_complete (matching existing planting data) — tell the user what you did, offer undo.
-  • CONFIRM tier (ask before executing, current default): create_planting_assignment, complete_setup, big price changes, register_device, update_nutrient_targets, update_target_ranges, set_light_schedule — describe the change, wait for "yes"/"confirm".
+  • CONFIRM tier (ask before executing, current default): create_planting_assignment, complete_setup, big price changes, register_device, update_nutrient_targets, update_target_ranges, set_light_schedule, update_room_specs, apply_crop_environment, recommend_farm_layout — describe the change, wait for "yes"/"confirm".
   • ADMIN tier (require explicit typed confirmation): bulk operations, delete operations — require the user to type the action name.
 - For AUTO tier tools, execute them silently and mention in your response what you did. Do NOT ask "shall I save this?".
 - For QUICK-CONFIRM tier tools, execute and say "Done — [description]. Say 'undo' within 30 seconds to revert."
@@ -2125,7 +2225,7 @@ RULES:
 - For complex planning questions, a thorough structured answer is better than a short one. Use rich formatting.
 - When you call a tool, summarize the result naturally — don't dump raw JSON.
 - Use the tools proactively — if a user asks you to do something and you have a tool for it, use the tool. Do not ask the user for information the tools can provide.
-- For WRITE operations (update_farm_profile, create_room, create_zone, update_certifications, complete_setup, update_crop_price, create_planting_assignment, mark_harvest_complete, update_order_status, add_inventory_item, update_manual_inventory, dismiss_alert, auto_assign_devices, register_device, seed_benchmarks, update_nutrient_targets, update_target_ranges, set_light_schedule, update_group_crop, create_procurement_order): you MUST describe the proposed change and ask the user to confirm BEFORE calling the tool. Do NOT call write tools until the user says "yes", "confirm", "do it", or similar.
+- For WRITE operations (update_farm_profile, create_room, create_zone, update_certifications, complete_setup, update_crop_price, create_planting_assignment, mark_harvest_complete, update_order_status, add_inventory_item, update_manual_inventory, dismiss_alert, auto_assign_devices, register_device, seed_benchmarks, update_nutrient_targets, update_target_ranges, set_light_schedule, update_group_crop, create_procurement_order, update_room_specs, apply_crop_environment): you MUST describe the proposed change and ask the user to confirm BEFORE calling the tool. Do NOT call write tools until the user says "yes", "confirm", "do it", or similar.
 - PROCUREMENT SAFETY: create_procurement_order requires reading back the full order summary (items, quantities, cost) and getting explicit approval. Never place orders without confirmed quantities. Never source from outside the procurement catalog.
 - After any WRITE operation succeeds, verify by calling the corresponding read tool and report the confirmed result.
 - If you can't help, say so briefly and suggest what you CAN do.
@@ -3021,13 +3121,15 @@ async function executeExtendedTool(toolName, params, farmId) {
         const { default: setupAgentRouter } = await import('./setup-agent.js');
         // Reuse the same evaluation logic from setup-agent.js
         const PHASES = [
-          'farm_profile', 'grow_rooms', 'zones', 'groups',
-          'lights', 'schedules', 'devices', 'integrations'
+          'farm_profile', 'grow_rooms', 'room_specs', 'zones', 'groups',
+          'crop_assignment', 'env_targets', 'lights', 'schedules', 'devices',
+          'planting', 'integrations'
         ];
         const PHASE_LABELS = {
-          farm_profile: 'Farm Profile', grow_rooms: 'Grow Rooms', zones: 'Climate Zones',
-          groups: 'Grow Groups', lights: 'Light Fixtures', schedules: 'Light Schedules',
-          devices: 'IoT Devices', integrations: 'Integrations'
+          farm_profile: 'Farm Profile', grow_rooms: 'Grow Rooms', room_specs: 'Room Specifications',
+          zones: 'Climate Zones', groups: 'Grow Groups', crop_assignment: 'Crop Selection',
+          env_targets: 'Environment Targets', lights: 'Light Fixtures', schedules: 'Light Schedules',
+          devices: 'IoT Devices', planting: 'Planting Plan', integrations: 'Integrations'
         };
 
         // Inline evaluation to avoid circular dependency
@@ -3054,14 +3156,26 @@ async function executeExtendedTool(toolName, params, farmId) {
           return !!v;
         });
 
+        // Check new phases
+        let roomsWithSpecs = 0;
+        rooms.forEach(r => { if ((r.area_m2 || (r.length_m && r.width_m)) && r.ceiling_height_m) roomsWithSpecs++; });
+        let groupsWithCrop = 0;
+        groups.forEach(g => { if (g.crop || g.crop_name || g.crop_id || g.assigned_crop) groupsWithCrop++; });
+        let groupsWithPlanting = 0;
+        groups.forEach(g => { if (g.planting || g.planting_id || g.active_planting || g.planted_at) groupsWithPlanting++; });
+
         const phases = [
           { id: 'farm_profile', complete: !!(profile.name || profile.farm_name) && !!(profile.contact?.name || profile.contact_name), detail: (profile.name || profile.farm_name) || 'Not configured' },
           { id: 'grow_rooms', complete: rooms.length > 0, detail: `${rooms.length} room${rooms.length !== 1 ? 's' : ''}` },
+          { id: 'room_specs', complete: rooms.length > 0 && roomsWithSpecs === rooms.length, detail: `${roomsWithSpecs}/${rooms.length} rooms with specs` },
           { id: 'zones', complete: zonesSet.size > 0, detail: `${zonesSet.size} zone${zonesSet.size !== 1 ? 's' : ''}` },
           { id: 'groups', complete: groups.length > 0, detail: `${groups.length} group${groups.length !== 1 ? 's' : ''}` },
+          { id: 'crop_assignment', complete: groupsWithCrop > 0, detail: `${groupsWithCrop} group${groupsWithCrop !== 1 ? 's' : ''} with crops` },
+          { id: 'env_targets', complete: groupsWithCrop > 0, detail: groupsWithCrop > 0 ? 'Auto-derived from crop recipes' : 'Assign crops first' },
           { id: 'lights', complete: totalLights > 0, detail: `${totalLights} fixture${totalLights !== 1 ? 's' : ''}` },
           { id: 'schedules', complete: withSchedule > 0, detail: `${withSchedule} schedule${withSchedule !== 1 ? 's' : ''}` },
           { id: 'devices', complete: devices.length > 0, detail: `${devices.length} device${devices.length !== 1 ? 's' : ''}` },
+          { id: 'planting', complete: groupsWithPlanting > 0, detail: `${groupsWithPlanting} active planting${groupsWithPlanting !== 1 ? 's' : ''}` },
           { id: 'integrations', complete: configuredIntegrations.length > 0, detail: `${configuredIntegrations.length} integration${configuredIntegrations.length !== 1 ? 's' : ''}` }
         ].map(p => ({ ...p, label: PHASE_LABELS[p.id] }));
 
@@ -3173,6 +3287,50 @@ async function executeExtendedTool(toolName, params, farmId) {
             ],
             tools: ['Integrations panel', 'Payment Setup wizard'],
             tip: 'SwitchBot integration is required for real-time sensor data. Payment and store setup only matter when you are ready to sell.'
+          },
+          room_specs: {
+            title: 'Room Specifications',
+            steps: [
+              'Tell me your room dimensions (length x width) in meters or feet',
+              'Specify ceiling height',
+              'Choose your hydroponic system type (NFT, DWC, ebb & flow, etc.)',
+              'Let me know your HVAC setup (mini-split, portable AC, central, or none)'
+            ],
+            tools: ['update_room_specs'],
+            tip: 'Room specs let me and GWEN calculate exactly what equipment you need and where to place it. The more precise the dimensions, the better the recommendation.'
+          },
+          crop_assignment: {
+            title: 'Crop Selection & Assignment',
+            steps: [
+              'Tell me what crops you want to grow -- I have recipes for 89 crops',
+              'I will assign crops to your groups and auto-set environment targets from the recipe',
+              'Each crop recipe includes daily temperature, humidity, VPD, EC, pH, and PPFD targets',
+              'Review the auto-derived targets -- they update as crops progress through growth stages'
+            ],
+            tools: ['get_crop_recipe_targets', 'apply_crop_environment', 'list_available_crops'],
+            tip: 'Environment targets flow automatically from crop recipes. You do not need to set them manually -- just tell me what to grow.'
+          },
+          env_targets: {
+            title: 'Environment Targets (Auto-Derived)',
+            steps: [
+              'Targets are auto-set when crops are assigned to zones/groups via apply_crop_environment',
+              'Review current targets using get_environment_readings',
+              'Targets include temperature range, humidity range, VPD range, EC, and pH',
+              'Targets update based on crop growth stage when planting days advance'
+            ],
+            tools: ['get_crop_recipe_targets', 'apply_crop_environment', 'update_target_ranges'],
+            tip: 'This phase completes automatically when crops are assigned. The recipe drives the targets -- no manual input needed.'
+          },
+          planting: {
+            title: 'Planting Plan',
+            steps: [
+              'Create planting assignments to track what is growing in each group',
+              'I can help you plan succession planting for continuous harvests',
+              'Planting assignments track growth day, expected harvest date, and yield',
+              'Use create_planting_assignment to start tracking crops'
+            ],
+            tools: ['create_planting_assignment'],
+            tip: 'Planting plans turn your farm from configured to actively growing. Each planting tracks a crop from seed to harvest.'
           }
         };
 
@@ -3185,7 +3343,124 @@ async function executeExtendedTool(toolName, params, farmId) {
       }
     }
 
-    // ── Report Generation Tool ──
+    // ── Farm Building Tools ──
+    case 'update_room_specs': {
+      try {
+        const { room_id, length_m, width_m, area_m2, ceiling_height_m, hydro_system, hvac_type } = params;
+        if (!room_id) return { ok: false, error: 'room_id is required' };
+        const rooms = await farmStore.get(farmId, 'rooms') || [];
+        const room = rooms.find(r => r.room_id === room_id);
+        if (!room) return { ok: false, error: `Room ${room_id} not found. Use list_rooms to see available rooms.` };
+        const changes = {};
+        if (length_m != null) { room.length_m = parseFloat(length_m); changes.length_m = room.length_m; }
+        if (width_m != null) { room.width_m = parseFloat(width_m); changes.width_m = room.width_m; }
+        if (room.length_m && room.width_m) { room.area_m2 = Math.round(room.length_m * room.width_m * 100) / 100; changes.area_m2 = room.area_m2; }
+        if (area_m2 != null && !room.area_m2) { room.area_m2 = parseFloat(area_m2); changes.area_m2 = room.area_m2; }
+        if (ceiling_height_m != null) { room.ceiling_height_m = parseFloat(ceiling_height_m); changes.ceiling_height_m = room.ceiling_height_m; }
+        if (hydro_system) { room.hydro_system = hydro_system; changes.hydro_system = hydro_system; }
+        if (hvac_type) { room.hvac_type = hvac_type; changes.hvac_type = hvac_type; }
+        if (Object.keys(changes).length === 0) return { ok: false, error: 'At least one spec field is required' };
+        await farmStore.set(farmId, 'rooms', rooms);
+        return { ok: true, room_id, room_name: room.name, changes, message: `Room specs updated for "${room.name}"` };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+
+    case 'get_crop_recipe_targets': {
+      try {
+        const { getCropTargets, getCropTargetRanges, deriveZoneTargets } = await import('../lib/farm-builder.js');
+        const { crop_name, day } = params;
+        if (!crop_name) return { ok: false, error: 'crop_name is required' };
+        if (day != null) {
+          return getCropTargets(crop_name, parseFloat(day));
+        }
+        const ranges = getCropTargetRanges(crop_name);
+        const zoneTargets = deriveZoneTargets(crop_name);
+        return {
+          ...ranges,
+          recommended_zone_targets: zoneTargets.ok ? zoneTargets.zone_targets : null
+        };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+
+    case 'apply_crop_environment': {
+      try {
+        const { deriveZoneTargets } = await import('../lib/farm-builder.js');
+        const { zone_id, crop_name, day } = params;
+        if (!zone_id || !crop_name) return { ok: false, error: 'zone_id and crop_name are required' };
+        const derived = deriveZoneTargets(crop_name, day ? parseFloat(day) : undefined);
+        if (!derived.ok) return derived;
+        // Apply the derived targets via the existing update_target_ranges tool
+        const applyResult = await executeTool('update_target_ranges', {
+          zone_id,
+          temp_min: derived.zone_targets.temp_min,
+          temp_max: derived.zone_targets.temp_max,
+          rh_min: derived.zone_targets.rh_min,
+          rh_max: derived.zone_targets.rh_max,
+          vpd_min: derived.zone_targets.vpd_min,
+          vpd_max: derived.zone_targets.vpd_max
+        });
+        return {
+          ok: true,
+          zone_id,
+          crop: derived.crop,
+          stage: derived.stage || 'full cycle',
+          applied_targets: derived.zone_targets,
+          update_result: applyResult,
+          source: derived.source,
+          message: `Environment targets set for zone "${zone_id}" from ${derived.crop} recipe`
+        };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+
+    case 'recommend_farm_layout': {
+      try {
+        const { buildFarmLayout } = await import('../lib/farm-builder.js');
+        const { room_id, crops, plant_count } = params;
+        if (!room_id) return { ok: false, error: 'room_id is required' };
+        const rooms = await farmStore.get(farmId, 'rooms') || [];
+        const room = rooms.find(r => r.room_id === room_id);
+        if (!room) return { ok: false, error: `Room ${room_id} not found. Use list_rooms to see available rooms.` };
+        if (!room.area_m2 && !(room.length_m && room.width_m)) {
+          return { ok: false, error: `Room "${room.name}" has no dimensions. Use update_room_specs to add length/width first.` };
+        }
+        if (!room.ceiling_height_m) {
+          return { ok: false, error: `Room "${room.name}" has no ceiling height. Use update_room_specs to set it.` };
+        }
+        const area = room.area_m2 || (room.length_m * room.width_m);
+        const layout = buildFarmLayout({
+          room_area_m2: area,
+          ceiling_height_m: room.ceiling_height_m,
+          hydro_system: room.hydro_system || undefined,
+          hvac_type: room.hvac_type || undefined,
+          crops: crops || [],
+          plant_count: plant_count ? parseInt(plant_count) : undefined
+        });
+        if (layout.ok) {
+          layout.room_id = room_id;
+          layout.room_name = room.name;
+        }
+        return layout;
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+
+    case 'list_available_crops': {
+      try {
+        const { listAvailableCrops } = await import('../lib/farm-builder.js');
+        return listAvailableCrops();
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+
+        // ── Report Generation Tool ──
     case 'generate_report': {
       try {
         const period = (params.period || 'weekly').toLowerCase();
