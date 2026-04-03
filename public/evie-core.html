@@ -113,6 +113,31 @@
     .evie-reply strong { color: var(--evie-text-accent); }
     .evie-reply em     { color: var(--evie-text-secondary); font-style: normal; opacity: 0.85; }
     .evie-reply .evie-num { color: var(--evie-sensing); font-weight: 700; font-variant-numeric: tabular-nums; }
+
+    /* -- Compact layout when embedded in admin iframe -- */
+    .evie-core-page.embedded .evie-core-hero {
+      padding: 16px 24px 8px;
+    }
+    .evie-core-page.embedded .evie-orb-container.evie-orb--hero {
+      width: 80px; height: 80px;
+    }
+    .evie-core-page.embedded .evie-orb--hero .evie-orb-core { width: 28px; height: 28px; }
+    .evie-core-page.embedded .evie-orb--hero .evie-orb-halo--inner { width: 44px; height: 44px; }
+    .evie-core-page.embedded .evie-orb--hero .evie-orb-halo--mid { width: 60px; height: 60px; }
+    .evie-core-page.embedded .evie-orb--hero .evie-orb-halo--outer { width: 80px; height: 80px; }
+    .evie-core-page.embedded .evie-core-hero-label {
+      font-size: 10px;
+      margin-top: 8px;
+    }
+    .evie-core-page.embedded .evie-core-grid {
+      padding-top: 12px;
+    }
+    .evie-core-page.embedded .evie-stats-row {
+      margin-bottom: 8px;
+    }
+    .evie-core-page.embedded .evie-stat-value {
+      font-size: 22px;
+    }
   </style>
 </head>
 <body class="evie-core-page">
@@ -121,8 +146,8 @@
   <div class="evie-core-topbar">
     <h1>E.V.I.E.</h1>
     <div style="display:flex;gap:16px;align-items:center">
-      <a href="/evie-demo.html" style="font-size:12px;font-weight:700;letter-spacing:0.5px;color:#000;background:linear-gradient(135deg,#10b981,#059669);padding:7px 20px;border-radius:7px;text-decoration:none;box-shadow:0 0 20px rgba(16,185,129,0.5),0 2px 8px rgba(0,0,0,0.3);">E.V.I.E. Demo</a>
-      <a href="/faye-demo.html" style="font-size:12px;font-weight:700;letter-spacing:0.5px;color:#000;background:linear-gradient(135deg,#f59e0b,#d97706);padding:7px 20px;border-radius:7px;text-decoration:none;box-shadow:0 0 20px rgba(245,158,11,0.5),0 2px 8px rgba(0,0,0,0.3);">F.A.Y.E. Demo</a>
+      <a href="/evie-demo.html" target="_blank" rel="noopener" style="font-size:12px;font-weight:700;letter-spacing:0.5px;color:#000;background:linear-gradient(135deg,#10b981,#059669);padding:7px 20px;border-radius:7px;text-decoration:none;box-shadow:0 0 20px rgba(16,185,129,0.5),0 2px 8px rgba(0,0,0,0.3);">E.V.I.E. Demo</a>
+      <a href="/faye-demo.html" target="_blank" rel="noopener" style="font-size:12px;font-weight:700;letter-spacing:0.5px;color:#000;background:linear-gradient(135deg,#f59e0b,#d97706);padding:7px 20px;border-radius:7px;text-decoration:none;box-shadow:0 0 20px rgba(245,158,11,0.5),0 2px 8px rgba(0,0,0,0.3);">F.A.Y.E. Demo</a>
     </div>
   </div>
 
@@ -217,6 +242,13 @@
   <script>
   (function () {
     'use strict';
+
+    // Detect if embedded in admin iframe and apply compact layout
+    var inIframe = false;
+    try { inIframe = window.self !== window.top; } catch (_) { inIframe = true; }
+    if (inIframe) {
+      document.body.classList.add('embedded');
+    }
 
     var API_BASE = '/api/assistant';
     var conversationId = null;
