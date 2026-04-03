@@ -29,6 +29,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { createRequire } from 'module';
 import notificationStore from '../services/notification-store.js';
+import alertNotifier from '../services/alert-notifier.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -4320,6 +4321,9 @@ async function logSystemAlert(alertData) {
     }
 
     logger.warn(`[System Alert] ${alert.severity}: ${alert.message}`);
+
+    // Dispatch email + SMS for high/critical alerts (fire-and-forget)
+    alertNotifier.notify(alert);
   } catch (err) {
     logger.error('[System Alert] Failed to log alert:', err.message);
   }
@@ -5752,6 +5756,9 @@ router.post('/notifications/push', async (req, res) => {
       return res.status(400).json({ ok: false, error: 'farm_id and title are required' });
     }
     const result = await notificationStore.pushNotification(farm_id, { category, title, body, severity, source });
+
+    // Dispatch email + SMS for high/critical severity notifications
+    alertNotifier.notify({ alert_type: category || 'notification', severity, title, detail: body, farm_id });
     return res.json({ ok: true, notification: result });
   } catch (err) {
     logger.error('[Notifications] Push error:', err.message);
