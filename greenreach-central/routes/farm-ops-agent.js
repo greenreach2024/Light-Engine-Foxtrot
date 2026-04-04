@@ -730,7 +730,8 @@ export const TOOL_CATALOG = {
     optional: ['farm_id', 'status'],
     handler: async (params) => {
       if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
-      const farm_id = params.farm_id || 'demo-farm';
+      const farm_id = params.farm_id;
+      if (!farm_id) return { ok: false, error: 'farm_id is required' };
       const status = params.status || 'active';
       try {
         const result = await dbQuery(
@@ -758,7 +759,8 @@ export const TOOL_CATALOG = {
     optional: ['farm_id', 'days_ahead'],
     handler: async (params) => {
       if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
-      const farm_id = params.farm_id || 'demo-farm';
+      const farm_id = params.farm_id;
+      if (!farm_id) return { ok: false, error: 'farm_id is required' };
       const daysAhead = params.days_ahead || 60;
       const cutoff = new Date();
       cutoff.setDate(cutoff.getDate() + daysAhead);
@@ -797,7 +799,8 @@ export const TOOL_CATALOG = {
     required: [],
     optional: ['farm_id'],
     handler: async (params) => {
-      const farm_id = params.farm_id || 'demo-farm';
+      const farm_id = params.farm_id;
+      if (!farm_id) return { ok: false, error: 'farm_id is required' };
       const groups = await farmStore.get(farm_id, 'groups') || [];
       const totalCapacity = groups.reduce((sum, g) => {
         const trays = Number(g.trays) || (Array.isArray(g.trays) ? g.trays.length : 0) || Number(g.trayCount) || 0;
@@ -821,7 +824,8 @@ export const TOOL_CATALOG = {
     required: [],
     optional: ['farm_id'],
     handler: async (params) => {
-      const farm_id = params.farm_id || 'demo-farm';
+      const farm_id = params.farm_id;
+      if (!farm_id) return { ok: false, error: 'farm_id is required' };
       // Read from farmStore (legacy JSON)
       const storeInventory = await farmStore.get(farm_id, 'inventory') || [];
       // Read from farm_inventory DB table (auto + manual quantities)
@@ -883,7 +887,8 @@ export const TOOL_CATALOG = {
     required: [],
     optional: ['farm_id'],
     handler: async (params) => {
-      const farm_id = params.farm_id || 'demo-farm';
+      const farm_id = params.farm_id;
+      if (!farm_id) return { ok: false, error: 'farm_id is required' };
       if (!isDatabaseAvailable()) return { ok: true, insights: [], message: 'Database unavailable' };
       try {
         const result = await dbQuery(
@@ -1575,7 +1580,8 @@ export const TOOL_CATALOG = {
     optional: ['retail_price', 'wholesale_price', 'farm_id'],
     undoable: true,
     handler: async (params) => {
-      const farm_id = params.farm_id || 'demo-farm';
+      const farm_id = params.farm_id;
+      if (!farm_id) return { ok: false, error: 'farm_id is required' };
       const resolvedName = resolveCropName(params.crop);
       const data = await farmStore.get(farm_id, 'crop_pricing') || { crops: [] };
       const crops = Array.isArray(data) ? data : (data.crops || []);
@@ -1664,7 +1670,8 @@ export const TOOL_CATALOG = {
     undoable: true,
     handler: async (params) => {
       if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
-      const farm_id = params.farm_id || 'demo-farm';
+      const farm_id = params.farm_id;
+      if (!farm_id) return { ok: false, error: 'farm_id is required' };
       const seed_date = params.seed_date || new Date().toISOString().split('T')[0];
       const canonicalCrop = resolveCropName(params.crop_name);
       const growDays = cropUtils.getCropGrowDays(canonicalCrop);
@@ -1762,7 +1769,7 @@ export const TOOL_CATALOG = {
       // Auto-add to inventory (harvest → inventory pipeline)
       let inventoryUpdated = false;
       try {
-        const farm_id = 'demo-farm';
+        const farm_id = params.farm_id || null;
         let inventory = await farmStore.get(farm_id, 'inventory') || [];
         if (!Array.isArray(inventory)) inventory = Object.values(inventory);
         const existing = inventory.find(i => (i.crop || i.name || '').toLowerCase() === params.crop.toLowerCase());
@@ -1832,7 +1839,8 @@ export const TOOL_CATALOG = {
     optional: ['farm_id', 'unit', 'status', 'zone'],
     undoable: true,
     handler: async (params) => {
-      const farm_id = params.farm_id || 'demo-farm';
+      const farm_id = params.farm_id;
+      if (!farm_id) return { ok: false, error: 'farm_id is required' };
       let inventory = await farmStore.get(farm_id, 'inventory') || [];
       if (!Array.isArray(inventory)) inventory = Object.values(inventory);
       const existing = inventory.find(i => (i.crop || i.name || '').toLowerCase() === params.crop_name.toLowerCase());
@@ -1887,7 +1895,8 @@ export const TOOL_CATALOG = {
     undoable: true,
     handler: async (params) => {
       if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
-      const farm_id = params.farm_id || 'demo-farm';
+      const farm_id = params.farm_id;
+      if (!farm_id) return { ok: false, error: 'farm_id is required' };
       const cropName = String(params.crop_name).trim();
       const manualQty = Math.max(0, Number(params.quantity_lbs) || 0);
       const productId = cropName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
@@ -2104,7 +2113,8 @@ export const TOOL_CATALOG = {
     required: [],
     optional: ['farm_id', 'crop', 'tray_format', 'tray_count', 'pricing_tier'],
     handler: async (params) => {
-      const farm_id = params.farm_id || 'demo-farm';
+      const farm_id = params.farm_id;
+      if (!farm_id) return { ok: false, error: 'farm_id is required' };
 
       // Resolve tray format for plant count
       let plantsPerTray = 50;

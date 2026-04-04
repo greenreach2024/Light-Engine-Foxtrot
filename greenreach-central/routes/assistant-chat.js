@@ -2365,6 +2365,8 @@ When a user mentions a tool name (e.g. "room mapping tool", "heat map", "plantin
 async function executeExtendedTool(toolName, params, farmId) {
   // First check if it's in the standard catalog
   if (TOOL_CATALOG[toolName]) {
+    // Inject authenticated farmId so TOOL_CATALOG handlers query the real farm
+    if (!params.farm_id && farmId) params.farm_id = farmId;
     return await executeTool(toolName, params);
   }
 
