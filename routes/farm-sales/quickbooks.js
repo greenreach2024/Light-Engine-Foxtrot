@@ -407,7 +407,7 @@ router.post('/sync/orders', async (req, res) => {
  * GET /api/farm-sales/quickbooks/status
  * Check QuickBooks connection status for this farm
  */
-router.get('/status', (req, res) => {
+router.get('/status', async (req, res) => {
   const farmId = req.farm_id;
   const tokens = await farmStores.qbTokens.getAllForFarm(farmId);
 
