@@ -30,6 +30,7 @@ import { fileURLToPath } from 'url';
 import { createRequire } from 'module';
 import notificationStore from '../services/notification-store.js';
 import alertNotifier from '../services/alert-notifier.js';
+import { ENFORCEMENT_PROMPT_BLOCK, sendEnforcedResponse } from '../middleware/agent-enforcement.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1891,7 +1892,9 @@ async function buildSystemPrompt(farmId) {
     interAgentBlock = await buildInterAgentContext('evie') || '';
   } catch { /* non-fatal */ }
 
-  return `You are E.V.I.E. (Environmental Vision & Intelligence Engine) — the GreenReach Farm Assistant and an expert indoor vertical-farming advisor. You help farmers manage their CEA (Controlled Environment Agriculture) operations through natural conversation. You have access to real-time farm data, 89 crop growth recipes (including microgreens and sprouts), market intelligence, and can execute actions. You are evolving toward full autonomous farm operations — proactive, predictive, and self-directed.
+  return `
+${ENFORCEMENT_PROMPT_BLOCK}
+You are E.V.I.E. (Environmental Vision & Intelligence Engine) — the GreenReach Farm Assistant and an expert indoor vertical-farming advisor. You help farmers manage their CEA (Controlled Environment Agriculture) operations through natural conversation. You have access to real-time farm data, 89 crop growth recipes (including microgreens and sprouts), market intelligence, and can execute actions. You are evolving toward full autonomous farm operations — proactive, predictive, and self-directed.
 
 CURRENT FARM STATE:
 ${farmContext || 'No farm data available — user may need to set up their farm first.'}
@@ -5250,14 +5253,14 @@ router.post('/chat', async (req, res) => {
     // Check if there's a pending action to signal to the frontend
     const pendingAction = pendingActions.get(convId);
 
-    return res.json({
+    return sendEnforcedResponse(res, {
       ok: true,
       reply: replyText,
       conversation_id: convId,
       tool_calls: toolCallResults.length > 0 ? toolCallResults : undefined,
       pending_action: pendingAction ? { tool: pendingAction.tool, params: pendingAction.params } : undefined,
       model: MODEL
-    });
+    }, { hadToolData: toolCallResults.length > 0, agent: 'evie' });
 
   } catch (error) {
     // Attempt Anthropic fallback before giving up
@@ -5289,7 +5292,7 @@ router.post('/chat', async (req, res) => {
         trackEngagement(farmId, { messages: 1, toolCalls: fbToolNames.length, toolsUsed: fbToolNames });
 
         const fbPendingAction = pendingActions.get(convId);
-        return res.json({
+        return sendEnforcedResponse(res, {
           ok: true,
           reply: fallbackResult.reply,
           conversation_id: convId,
@@ -5297,7 +5300,7 @@ router.post('/chat', async (req, res) => {
           pending_action: fbPendingAction ? { tool: fbPendingAction.tool, params: fbPendingAction.params } : undefined,
           model: fallbackResult.model,
           provider: 'anthropic'
-        });
+        }, { hadToolData: fallbackResult.toolCalls.length > 0, agent: 'evie' });
       } catch (fallbackErr) {
         console.error('[E.V.I.E.] Both LLMs failed. OpenAI:', error.message, 'Anthropic:', fallbackErr.message);
       }

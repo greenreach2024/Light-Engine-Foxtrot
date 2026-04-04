@@ -27,6 +27,7 @@ import { listNetworkFarms } from '../services/networkFarmsStore.js';
 import { listAllOrders, listAllBuyers } from '../services/wholesaleMemoryStore.js';
 import { buildLearningContext, learnFromConversation, buildAutonomyContext, getAllDomainOwnership, getTopInsights, buildInterAgentContext, getConversationRecap } from '../services/faye-learning.js';
 import { buildPolicyContext, checkIntegrityGate, checkSecurityGate } from '../services/faye-policy.js';
+import { ENFORCEMENT_PROMPT_BLOCK, sendEnforcedResponse } from '../middleware/agent-enforcement.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -279,7 +280,9 @@ async function buildSystemPrompt(adminId, adminName, adminRole, adminEmail) {
   const dateStr = now.toLocaleDateString('en-CA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
   const timeStr = now.toLocaleTimeString('en-CA', { hour: '2-digit', minute: '2-digit', timeZoneName: 'short' });
 
-  return `You are ${identity.name} (${identity.full_name}) — a governed farm operations intelligence layer that observes, learns, recommends, and progressively automates decisions across the GreenReach network.
+  return `${ENFORCEMENT_PROMPT_BLOCK}
+
+You are ${identity.name} (${identity.full_name}) — a governed farm operations intelligence layer that observes, learns, recommends, and progressively automates decisions across the GreenReach network.
 Version: ${identity.version}
 
 ## Identity & Mission
@@ -936,12 +939,12 @@ router.post('/chat', async (req, res) => {
       const updatedHistory = [...history, { role: 'user', content: sanitized }, { role: 'assistant', content: result.reply }];
       await upsertConversation(convId, updatedHistory, adminId);
 
-      return res.json({
+      return sendEnforcedResponse(res, {
         ok: true, reply: result.reply, conversation_id: convId,
         action_executed: { tool: pending.tool, success: actionResult.ok !== false },
         tool_calls: result.toolCalls?.length > 0 ? result.toolCalls : undefined,
         model: result.model, provider: result.provider
-      });
+      }, { hadToolData: true, agent: 'faye' });
     }
 
     // ── Check for pending action cancellation ──
@@ -1005,7 +1008,7 @@ router.post('/chat', async (req, res) => {
       summarizeConversation(updatedHistory, adminId).catch(() => {});
     }
 
-    return res.json({
+    return sendEnforcedResponse(res, {
       ok: true,
       reply: result.reply,
       conversation_id: convId,
@@ -1013,7 +1016,7 @@ router.post('/chat', async (req, res) => {
       pending_action: result.pending_action ? { tool: result.pending_action.tool, tier: result.pending_action.tier, description: result.pending_action.description } : undefined,
       model: result.model,
       provider: result.provider
-    });
+    }, { hadToolData: result.toolCalls.length > 0, agent: 'faye' });
 
   } catch (err) {
     console.error('[F.A.Y.E.] Chat error:', err.message);

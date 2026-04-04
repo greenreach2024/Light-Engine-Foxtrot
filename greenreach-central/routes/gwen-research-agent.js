@@ -21,6 +21,7 @@ import { query, isDatabaseAvailable } from '../config/database.js';
 import { trackAiUsage, estimateChatCost } from '../lib/ai-usage-tracker.js';
 import { executeTool } from './farm-ops-agent.js';
 import leamBridge from '../lib/leam-bridge.js';
+import { ENFORCEMENT_PROMPT_BLOCK, sendEnforcedResponse } from '../middleware/agent-enforcement.js';
 
 const router = Router();
 
@@ -5525,7 +5526,9 @@ function buildOpenAIToolDefinitions() {
 
 // -- System Prompt -------------------------------------------------------
 
-const GWEN_SYSTEM_PROMPT = `You are G.W.E.N. -- Grants, Workplans, Evidence & Navigation.
+const GWEN_SYSTEM_PROMPT = `
+${ENFORCEMENT_PROMPT_BLOCK}
+You are G.W.E.N. -- Grants, Workplans, Evidence & Navigation.
 
 ## Identity & Role
 
@@ -6119,13 +6122,13 @@ router.post('/chat', async (req, res) => {
     const updatedHistory = [...history, { role: 'assistant', content: result.reply }];
     await upsertConversation(convId, updatedHistory, userId);
 
-    res.json({
+    sendEnforcedResponse(res, {
       ok: true,
       reply: result.reply,
       conversation_id: convId,
       tool_calls: result.tool_calls || [],
       model: result.model,
-    });
+    }, { hadToolData: (result.tool_calls || []).length > 0, agent: 'gwen' });
   } catch (err) {
     console.error('[GWEN] Chat error:', err.message);
     const msg = err.message || '';
