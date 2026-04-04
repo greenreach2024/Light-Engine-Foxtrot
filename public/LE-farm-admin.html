@@ -1079,6 +1079,7 @@
         }
     </style>
   <link rel="stylesheet" href="/styles/evie-core.css">
+  <link rel="stylesheet" href="/styles/infotainment-nav.css">
   <link rel="stylesheet" href="/css/tesla-nav.css">
   <script src="/lib/chart.umd.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
@@ -1190,6 +1191,42 @@
       });
     })();
     </script>
+
+    <!-- INFOTAINMENT NAVIGATION SYSTEM -->
+    <div class="infotainment-layout" id="infotainment-layout" style="display: none;">
+        <!-- EVIE Hero Bar -->
+        <div class="evie-hero-bar">
+            <div class="evie-hero-orb" id="evie-hero-orb" title="Talk to E.V.I.E."></div>
+            <div class="evie-search-wrapper">
+                <svg class="evie-search-icon" width="18" height="18"><use href="/icons/farm-nav-icons.svg#icon-search"></use></svg>
+                <input type="text" id="evie-search-input" class="evie-search-input" placeholder="What do you need? Search or ask E.V.I.E. ..." autocomplete="off" />
+                <div id="evie-search-results" class="evie-search-results"></div>
+            </div>
+            <div class="evie-hero-chips" id="evie-hero-chips">
+                <span class="evie-chip" id="chip-environment">-- F / -- %</span>
+                <span class="evie-chip" id="chip-tasks">0 t                <span class="evie-chip" id=<div class="evie-hero-farm-name" id="evie-hero-farm-name"></div>
+        </div>
+
+        <!-- Breadcrumb -->
+        <div id="infotainment-breadcrumb" class="infotainment-breadcrumb"></div>
+
+        <!-- Navigation Layers -->
+        <div class="infotainment-content">
+            <!-- Layer 0: Home (Dashboard + Category Grid) -->
+            <div id="infotainment-layer-home" class="infotainment-layer is-active">
+                <!-- Dashboard section moved here by JS -->
+                <div id="infotainment-category-grid" class="infotainment-grid"></div>
+            </div>
+            <!-- Layer 1: Category Sub-items -->
+            <div id="infotainment-layer-category" class="infotainment-layer">
+                <div id="infotainment-sub-grid" class="infotainment-sub-grid"></div>
+            </div>
+            <!-- Layer 2: Content View -->
+            <div id="infotainment-layer-content" class="infotainment-layer">
+                <!-- Content sections moved here by JS -->
+            </div>
+        </div>
+    </div>
 
     <div class="main-layout">
         <!-- Sidebar -->
@@ -3873,6 +3910,8 @@
     <script src="/farm-admin.js?v=20260402-wholesale-queue-hotfix"></script>
     <script src="/js/plan-features.js?v=20260313"></script>
     <script src="/js/onboarding-checklist.js?v=20260313"></script>
+    <script src="/js/infotainment-nav.js"></script>
+    <script src="/js/search-routing.js"></script>
 
     <!-- AI Assist Getting Started Dropdown -->
     <script>
