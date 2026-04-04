@@ -6485,7 +6485,7 @@ function closePairingQR() {
 // FIRST-TIME SETUP FUNCTIONS
 // ============================================================================
 
-let currentSetupStep = 1;
+let currentSetupStep = 0;
 const totalSetupSteps = 7;
 let setupData = {
     rooms: [],
@@ -6898,7 +6898,8 @@ async function showFirstTimeSetup() {
         }
         
         // Start at Step 2 for Cloud customers (skip activation code)
-        currentSetupStep = isCloudPlan ? 2 : 1;
+        // Step 0 (intent) is always shown first
+        currentSetupStep = 0;
         console.log(`[Setup] Starting wizard at step ${currentSetupStep} (Cloud: ${isCloudPlan})`);
         
         updateSetupStepDisplay();
@@ -6914,6 +6915,31 @@ async function setupNextStep() {
         return;
     }
     
+    // If step 0, capture user intent and route accordingly
+    if (currentSetupStep === 0) {
+        var intentEl = document.querySelector('input[name="setup-intent"]:checked');
+        setupData.userIntent = intentEl ? intentEl.value : 'full-farm';
+        localStorage.setItem('setup_user_intent', setupData.userIntent);
+        console.log('[Setup] User intent:', setupData.userIntent);
+        if (setupData.userIntent === 'explore') {
+            // Skip entire wizard for explorers
+            var modal = document.getElementById('first-time-setup-modal');
+            if (modal) modal.style.display = 'none';
+            return;
+        }
+        if (setupData.userIntent === 'sales-accounting') {
+            // Skip to Step 2 (Business Profile) -- no activation code needed
+            currentSetupStep = 2;
+            updateSetupStepDisplay();
+            return;
+        }
+        // full-farm: proceed to Step 1 (activation) -- but skip if cloud plan
+        var isCloud = localStorage.getItem('plan_type') === 'cloud' || localStorage.getItem('is_cloud_farm') === 'true';
+        currentSetupStep = isCloud ? 2 : 1;
+        updateSetupStepDisplay();
+        return;
+    }
+
     // If step 1, verify activation code
     if (currentSetupStep === 1) {
         const activationCode = document.getElementById('setup-activation-code').value.trim();
@@ -6960,8 +6986,15 @@ async function setupNextStep() {
  * Navigate to previous setup step
  */
 function setupPreviousStep() {
-    if (currentSetupStep > 1) {
-        currentSetupStep--;
+    if (currentSetupStep > 0) {
+        // If at step 2 with sales-accounting intent, go back to step 0
+        if (currentSetupStep === 2 && setupData.userIntent === 'sales-accounting') {
+            currentSetupStep = 0;
+        } else if (currentSetupStep === 2 && (localStorage.getItem('plan_type') === 'cloud' || localStorage.getItem('is_cloud_farm') === 'true')) {
+            currentSetupStep = 0; // Cloud plan: skip step 1 going back too
+        } else {
+            currentSetupStep--;
+        }
         updateSetupStepDisplay();
     }
 }
@@ -6970,8 +7003,8 @@ function setupPreviousStep() {
  * Update setup step display
  */
 function updateSetupStepDisplay() {
-    // Hide all steps
-    for (let i = 1; i <= totalSetupSteps; i++) {
+    // Hide all steps (including step 0)
+    for (let i = 0; i <= totalSetupSteps; i++) {
         const step = document.getElementById(`setup-step-${i}`);
         if (step) step.style.display = 'none';
     }
@@ -6994,7 +7027,7 @@ function updateSetupStepDisplay() {
     const nextBtn = document.getElementById('setup-next-btn');
     const completeBtn = document.getElementById('setup-complete-btn');
     
-    if (backBtn) backBtn.style.display = currentSetupStep > 1 ? 'block' : 'none';
+    if (backBtn) backBtn.style.display = currentSetupStep > 0 ? 'block' : 'none';
     if (nextBtn) nextBtn.style.display = currentSetupStep < totalSetupSteps ? 'block' : 'none';
     if (completeBtn) completeBtn.style.display = currentSetupStep === totalSetupSteps ? 'block' : 'none';
 }
@@ -9312,4 +9345,102 @@ function escapeHtml(str) {
 document.addEventListener('DOMContentLoaded', function () {
     setTimeout(loadEvieMorningBrief, 1500); // After initial data loads
     setInterval(loadEvieMorningBrief, 300000); // 5 min
+    setTimeout(loadDashboardFarmValue, 2000); // Load farm value KPI
 });
+
+
+// ── Dashboard Farm Value KPI ───────────────────────────────────
+async function loadDashboardFarmValue() {
+    var el = document.getElementById('kpi-farm-value');
+    if (!el) return;
+    try {
+        // Reuse cropValueData if already loaded, otherwise load it
+        if (typeof loadCropValueData === 'function') {
+            var data = cropValueData || await loadCropValueData();
+            if (data && typeof data.totalValue === 'number') {
+                el.textContent = '$' + data.totalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                var changeEl = document.getElementById('kpi-farm-value-change');
+                if (changeEl) {
+                    changeEl.textContent = data.activeTrays + ' active tray' + (data.activeTrays !== 1 ? 's' : '') + ', ' + data.cropCount + ' crop' + (data.cropCount !== 1 ? 's' : '');
+                }
+            }
+        }
+    } catch (e) {
+        console.warn('[Farm Value KPI] Error:', e.message);
+    }
+}
+
+
+// ── EVIE Status Bar Toolbar Buttons ─────────────────────────────
+(function initEvieBarToolbar() {
+    document.addEventListener('DOMContentLoaded', function() {
+        // Mic button
+        var micBtn = document.getElementById('evie-bar-mic');
+        if (micBtn) {
+            var SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+            var barRecognition = null;
+            var barListening = false;
+            if (SpeechRec) {
+                barRecognition = new SpeechRec();
+                barRecognition.continuous = false;
+                barRecognition.interimResults = false;
+                barRecognition.lang = 'en-US';
+                barRecognition.onresult = function(event) {
+                    var transcript = '';
+                    for (var i = event.resultIndex; i < event.results.length; i++) {
+                        transcript += event.results[i][0].transcript;
+                    }
+                    transcript = transcript.trim();
+                    if (transcript && window.EVIE && typeof window.EVIE.ask === 'function') {
+                        window.EVIE.ask(transcript);
+                    }
+                };
+                barRecognition.onend = function() {
+                    barListening = false;
+                    micBtn.style.background = 'rgba(59,130,246,0.12)';
+                    micBtn.style.color = '#60a5fa';
+                };
+                barRecognition.onerror = function() {
+                    barListening = false;
+                    micBtn.style.background = 'rgba(59,130,246,0.12)';
+                    micBtn.style.color = '#60a5fa';
+                };
+            }
+            micBtn.addEventListener('click', function() {
+                if (!barRecognition) return;
+                if (barListening) {
+                    barRecognition.stop();
+                    barListening = false;
+                } else {
+                    barRecognition.start();
+                    barListening = true;
+                    micBtn.style.background = 'rgba(239,68,68,0.2)';
+                    micBtn.style.color = '#f87171';
+                }
+            });
+        }
+
+        // Help button
+        var helpBtn = document.getElementById('evie-bar-help');
+        if (helpBtn) {
+            helpBtn.addEventListener('click', function() {
+                if (window.LightEngineHelp && typeof window.LightEngineHelp.toggle === 'function') {
+                    window.LightEngineHelp.toggle();
+                    var active = helpBtn.classList.toggle('evie-bar-help-active');
+                    helpBtn.style.background = active ? 'rgba(239,68,68,0.2)' : 'rgba(148,163,184,0.1)';
+                    helpBtn.style.color = active ? '#f87171' : '#94a3b8';
+                }
+            });
+        }
+
+        // EVIE button
+        var evieBtn = document.getElementById('evie-bar-evie');
+        if (evieBtn) {
+            evieBtn.addEventListener('click', function() {
+                if (window.EVIE && typeof window.EVIE.open === 'function') {
+                    window.EVIE.open();
+                }
+            });
+        }
+    });
+})();

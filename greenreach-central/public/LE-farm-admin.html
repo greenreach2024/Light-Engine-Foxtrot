@@ -1222,6 +1222,30 @@
         </div>
 
         <!-- Breadcrumb -->
+
+        <!-- EVIE Status Bar (visible on all pages) -->
+        <div id="evie-morning-brief" style="padding:10px 20px;border-radius:0;background:linear-gradient(135deg,rgba(16,185,129,0.08),rgba(6,182,212,0.06));border-bottom:1px solid rgba(16,185,129,0.15);display:none;">
+            <div style="display:flex;align-items:center;gap:10px;">
+                <div style="width:8px;height:8px;border-radius:50%;background:#10b981;box-shadow:0 0 6px rgba(16,185,129,0.5);flex-shrink:0;"></div>
+                <strong style="color:var(--text-primary);font-size:13px;" id="evie-brief-greeting">E.V.I.E. Daily Brief</strong>
+                <span style="font-size:11px;color:var(--text-muted);" id="evie-brief-time"></span>
+                <div id="evie-brief-body" style="flex:1;font-size:12px;line-height:1.4;color:var(--text-secondary);margin-left:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></div>
+                <div id="evie-brief-actions" style="display:flex;gap:6px;flex-shrink:0;"></div>
+                <!-- Integrated toolbar buttons -->
+                <div style="display:flex;gap:6px;margin-left:8px;flex-shrink:0;" id="evie-bar-toolbar">
+                    <button id="evie-bar-mic" title="Voice input" style="width:32px;height:32px;border-radius:8px;background:rgba(59,130,246,0.12);color:#60a5fa;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background 0.15s;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+                    </button>
+                    <button id="evie-bar-help" title="Toggle Help Mode" style="width:32px;height:32px;border-radius:8px;background:rgba(148,163,184,0.1);color:#94a3b8;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background 0.15s;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                    </button>
+                    <button id="evie-bar-evie" title="Open E.V.I.E." style="width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,rgba(139,92,246,0.15),rgba(59,130,246,0.1));color:#a78bfa;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background 0.15s;">
+                        <div style="width:16px;height:16px;border-radius:50%;background:radial-gradient(circle at 40% 35%,#c4b5fd,#7c3aed 60%,#4c1d95);box-shadow:0 0 6px rgba(139,92,246,0.4);"></div>
+                    </button>
+                </div>
+            </div>
+        </div>
+
         <div id="infotainment-breadcrumb" class="infotainment-breadcrumb"></div>
 
         <!-- Navigation Layers -->
@@ -1424,16 +1448,7 @@
                     </div>
                 </div>
 
-                <!-- EVIE Morning Brief -->
-                <div id="evie-morning-brief" style="padding:16px 20px;border-radius:10px;background:linear-gradient(135deg,rgba(16,185,129,0.08),rgba(6,182,212,0.06));border:1px solid rgba(16,185,129,0.2);margin-bottom:16px;display:none;">
-                    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
-                        <div style="width:10px;height:10px;border-radius:50%;background:#10b981;box-shadow:0 0 8px rgba(16,185,129,0.5);flex-shrink:0;"></div>
-                        <strong style="color:var(--text-primary);font-size:14px;" id="evie-brief-greeting">E.V.I.E. Daily Brief</strong>
-                        <span style="margin-left:auto;font-size:11px;color:var(--text-muted);" id="evie-brief-time"></span>
-                    </div>
-                    <div id="evie-brief-body" style="font-size:13px;line-height:1.6;color:var(--text-secondary);"></div>
-                    <div id="evie-brief-actions" style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;"></div>
-                </div>
+
 
                 <!-- KPI Grid -->
                 <div class="kpi-grid">
@@ -1465,6 +1480,13 @@
                         <div class="kpi-value" id="kpi-harvest">--</div>
                         <div class="kpi-change">
                             <span id="kpi-harvest-change">Loading...</span>
+                        </div>
+                    </div>
+                    <div class="kpi-card" data-help-title="Today's Farm Value" data-help="The total estimated retail value of all crops currently in production at your farm. Calculated from current inventory, growth stages, and retail pricing. For detailed breakdown, ask E.V.I.E. or visit Crop Value.">
+                        <div class="kpi-label">Today's Farm Value</div>
+                        <div class="kpi-value" id="kpi-farm-value">--</div>
+                        <div class="kpi-change">
+                            <span id="kpi-farm-value-change">Loading...</span>
                         </div>
                     </div>
                 </div>
@@ -5254,7 +5276,8 @@
         
         <!-- Progress Indicator -->
         <div style="display: flex; gap: 8px; margin-top: 20px;">
-          <div class="setup-progress-step" data-step="1" style="flex: 1; height: 4px; background: var(--accent-blue); border-radius: 2px; transition: all 0.3s;"></div>
+          <div class="setup-progress-step" data-step="0" style="flex: 1; height: 4px; background: var(--accent-blue); border-radius: 2px; transition: all 0.3s;"></div>
+          <div class="setup-progress-step" data-step="1" style="flex: 1; height: 4px; background: var(--border); border-radius: 2px; transition: all 0.3s;"></div>
           <div class="setup-progress-step" data-step="2" style="flex: 1; height: 4px; background: var(--border); border-radius: 2px; transition: all 0.3s;"></div>
           <div class="setup-progress-step" data-step="3" style="flex: 1; height: 4px; background: var(--border); border-radius: 2px; transition: all 0.3s;"></div>
           <div class="setup-progress-step" data-step="4" style="flex: 1; height: 4px; background: var(--border); border-radius: 2px; transition: all 0.3s;"></div>
@@ -5267,6 +5290,35 @@
       <!-- Content Area -->
       <div style="flex: 1; overflow-y: auto; padding: 30px;">
         <!-- Step 1: Activation -->
+        <div id="setup-step-0" class="setup-step">
+          <h3 style="margin: 0 0 10px 0; font-size: 18px; color: var(--text-primary);">How will you use Light Engine?</h3>
+          <p style="margin: 0 0 20px 0; color: var(--text-secondary); font-size: 14px;">Tell us what matters most so we can tailor your experience.</p>
+          
+          <div style="display: flex; flex-direction: column; gap: 12px;">
+            <label style="display: flex; align-items: flex-start; gap: 12px; padding: 16px; border: 2px solid var(--border); border-radius: 10px; cursor: pointer; transition: border-color 0.2s;" onclick="this.querySelector('input').checked=true; document.querySelectorAll('.setup-intent-option').forEach(o=>o.style.borderColor='var(--border)'); this.style.borderColor='var(--accent-blue)';" class="setup-intent-option">
+              <input type="radio" name="setup-intent" value="full-farm" style="margin-top: 2px;" checked>
+              <div>
+                <strong style="color: var(--text-primary); font-size: 15px;">Full Farm Management</strong>
+                <p style="margin: 4px 0 0; color: var(--text-secondary); font-size: 13px;">Growing operations, sensors, environment monitoring, inventory, scheduling, sales, and accounting.</p>
+              </div>
+            </label>
+            <label style="display: flex; align-items: flex-start; gap: 12px; padding: 16px; border: 2px solid var(--border); border-radius: 10px; cursor: pointer; transition: border-color 0.2s;" onclick="this.querySelector('input').checked=true; document.querySelectorAll('.setup-intent-option').forEach(o=>o.style.borderColor='var(--border)'); this.style.borderColor='var(--accent-blue)';" class="setup-intent-option">
+              <input type="radio" name="setup-intent" value="sales-accounting">
+              <div>
+                <strong style="color: var(--text-primary); font-size: 15px;">Sales and Accounting Only</strong>
+                <p style="margin: 4px 0 0; color: var(--text-secondary); font-size: 13px;">Point of sale, wholesale orders, invoicing, financial reports, and bookkeeping. No farm sensors or grow operations.</p>
+              </div>
+            </label>
+            <label style="display: flex; align-items: flex-start; gap: 12px; padding: 16px; border: 2px solid var(--border); border-radius: 10px; cursor: pointer; transition: border-color 0.2s;" onclick="this.querySelector('input').checked=true; document.querySelectorAll('.setup-intent-option').forEach(o=>o.style.borderColor='var(--border)'); this.style.borderColor='var(--accent-blue)';" class="setup-intent-option">
+              <input type="radio" name="setup-intent" value="explore">
+              <div>
+                <strong style="color: var(--text-primary); font-size: 15px;">Just Exploring</strong>
+                <p style="margin: 4px 0 0; color: var(--text-secondary); font-size: 13px;">Take a look around first. You can always configure more later from Settings.</p>
+              </div>
+            </label>
+          </div>
+        </div>
+
         <div id="setup-step-1" class="setup-step">
           <h3 style="margin: 0 0 10px 0; font-size: 18px; color: var(--text-primary);">Activate Your Light Engine</h3>
           <p style="margin: 0 0 20px 0; color: var(--text-secondary); font-size: 14px;">Enter the 8-character activation code included with your Light Engine device.</p>

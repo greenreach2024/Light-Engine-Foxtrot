@@ -14,6 +14,11 @@
 (function () {
   'use strict';
 
+  // If the EVIE status bar toolbar is present, skip the floating toolbar
+  if (document.getElementById('evie-bar-toolbar')) {
+    return;
+  }
+
   var STORAGE_KEY = 'farm_toolbar_position';
   var recognition = null;
   var isListening = false;
