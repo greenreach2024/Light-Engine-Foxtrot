@@ -208,6 +208,8 @@ function enforceResponseShape(reply, opts = {}) {
  * @param {object} payload - The response payload ({ ok, reply, ... })
  * @param {object} opts - { hadToolData, agent }
  */
+const CIRCUIT_BREAKER_THRESHOLD = 3;
+
 function sendEnforcedResponse(res, payload, opts = {}) {
   if (!payload.reply) {
     return res.json(payload);
@@ -226,8 +228,21 @@ function sendEnforcedResponse(res, payload, opts = {}) {
       hadToolData: opts.hadToolData ?? true
     };
 
-    // Fire-and-forget log to console (and optionally to DB in future)
     console.warn('[ENFORCEMENT_LOG]', JSON.stringify(logEntry));
+  }
+
+  // Circuit-breaker: block response when violations exceed threshold
+  if (result.violations.length >= CIRCUIT_BREAKER_THRESHOLD) {
+    console.error(`[ENFORCEMENT:${(opts.agent || 'unknown').toUpperCase()}] CIRCUIT BREAKER: ${result.violations.length} violations — response blocked`);
+    return res.json({
+      ok: true,
+      reply: 'I was not able to produce a response that meets quality standards. Please rephrase your question, or ask me to check a specific data source.',
+      enforcement: {
+        blocked: true,
+        violations: result.violations.length,
+        flags: result.violations.map(v => v.split(':')[0])
+      }
+    });
   }
 
   // Add enforcement metadata to response (visible to frontend for debugging)

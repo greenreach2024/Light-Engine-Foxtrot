@@ -1466,7 +1466,8 @@ router.post('/telemetry', authenticateFarm, async (req, res) => {
             if (val !== null && val !== undefined && !isNaN(Number(val))) {
               await query(
                 `INSERT INTO sensor_readings (farm_id, zone_id, sensor_type, value, unit, recorded_at)
-                 VALUES ($1, $2, $3, $4, $5, $6)`,
+                 VALUES ($1, $2, $3, $4, $5, $6)
+                 ON CONFLICT (farm_id, zone_id, sensor_type, recorded_at) DO NOTHING`,
                 [farmId, zoneId, sensorType, Number(val), unit, telemetryData.timestamp]
               ).catch(() => {});
             }
@@ -2027,7 +2028,7 @@ export async function startSensorCleanupScheduler() {
     try {
       if (!await isDatabaseAvailable()) return;
       const result = await query(
-        `DELETE FROM sensor_readings WHERE recorded_at < NOW() - INTERVAL '${RETENTION_DAYS} days'`
+        `DELETE FROM sensor_readings WHERE recorded_at < NOW() - INTERVAL '1 day' * $1`, [RETENTION_DAYS]
       );
       if (result.rowCount > 0) {
         logger.info(`[SensorCleanup] Purged ${result.rowCount} readings older than ${RETENTION_DAYS} days`);

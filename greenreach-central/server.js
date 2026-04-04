@@ -532,7 +532,7 @@ app.get('/data/farm-settings.json', async (req, res) => {
 // ── One-time DB seed: bootstrap farm_profile + rooms from flat file ─────────
 // Call POST /api/admin/seed-farm after deploy to ensure DB has all profile data.
 // Idempotent: skips if farm_profile already has meaningful data in DB.
-app.post("/api/admin/seed-farm", async (req, res) => {
+app.post("/api/admin/seed-farm", adminAuthMiddleware, async (req, res) => {
   const fid = process.env.FARM_ID;
   if (!fid) return res.status(400).json({ error: "No FARM_ID configured" });
   try {
@@ -603,7 +603,7 @@ app.post("/api/admin/seed-farm", async (req, res) => {
 
 
 // Seed crop pricing from flat file into DB
-app.post("/api/admin/seed-pricing", async (req, res) => {
+app.post("/api/admin/seed-pricing", adminAuthMiddleware, async (req, res) => {
   const fid = process.env.FARM_ID;
   if (!fid) return res.status(400).json({ error: "No FARM_ID configured" });
   try {
@@ -1696,7 +1696,7 @@ const limiter = rateLimit({
   legacyHeaders: false,
   skip: (req) => {
     // Skip rate limiting for debug/tracking endpoints (logging only)
-    return req.path.startsWith('/api/debug/') || req.path.startsWith('/api/sync/');
+    return req.path.startsWith('/api/debug/');
   },
   skipFailedRequests: true
 });
@@ -3283,7 +3283,7 @@ app.use('/api/admin/auth', adminAuthRoutes); // Central admin authentication
 app.use('/api/farm/square', squareOAuthProxyRoutes); // Central-owned Square control plane
 app.use('/api/farm/stripe', stripeConnectControlRouter); // Central-owned Stripe control plane
 
-app.use('/api', customProductsRouter);                       // /api/farm/products/* -- Custom product CRUD (MUST precede /api/farm auth)
+app.use('/api', authMiddleware, customProductsRouter);                       // /api/farm/products/* -- Custom product CRUD (MUST precede /api/farm auth)
 app.use('/api/farms', authOrAdminMiddleware, farmRoutes);
 app.use('/api/farm', authOrAdminMiddleware, farmRoutes); // Singular route for profile endpoint
 app.use('/api/setup-wizard', authMiddleware, setupWizardRoutes); // First-time farm setup wizard
@@ -4082,7 +4082,7 @@ app.get('/api/network/benchmarking', authMiddleware, async (req, res) => {
  * Routes a buyer order to the best farm based on quality scores, distance, and capacity.
  * Uses quality-weighted scoring: quality (40%), proximity (30%), capacity (20%), price (10%).
  */
-app.post('/api/wholesale/orders/route', async (req, res) => {
+app.post('/api/wholesale/orders/route', authMiddleware, async (req, res) => {
   try {
     const { sku_id, quantity, buyer_location, preferences } = req.body;
     if (!sku_id || !quantity) {
@@ -4207,7 +4207,7 @@ app.post('/api/wholesale/orders/route', async (req, res) => {
  * GET /api/wholesale/quality-scores
  * Returns aggregated quality scores per farm per crop for routing decisions.
  */
-app.get('/api/wholesale/quality-scores', async (req, res) => {
+app.get('/api/wholesale/quality-scores', authMiddleware, async (req, res) => {
   try {
     const db = getDatabase();
     let farms = [];
@@ -4261,7 +4261,7 @@ app.get('/api/wholesale/quality-scores', async (req, res) => {
  * - Seasonality
  * - Competition (number of farms offering same crop)
  */
-app.post('/api/wholesale/dynamic-pricing', async (req, res) => {
+app.post('/api/wholesale/dynamic-pricing', authMiddleware, async (req, res) => {
   try {
     const { crops } = req.body;
     const targetCrops = crops || [];
@@ -4411,7 +4411,7 @@ app.post('/api/wholesale/dynamic-pricing', async (req, res) => {
  * GET /api/wholesale/pricing-recommendations
  * Quick pricing recommendations for all crops (no body needed).
  */
-app.get('/api/wholesale/pricing-recommendations', async (req, res) => {
+app.get('/api/wholesale/pricing-recommendations', authMiddleware, async (req, res) => {
   try {
     // Internally call the dynamic pricing engine with no filters
     const basePricing = {
@@ -4542,7 +4542,7 @@ app.get('/api/network/trends', authMiddleware, async (req, res) => {
 
 
 // ── Phase 4 Ticket 4.7: A/B Recipe Experiment API ─────────────────────
-app.post('/api/experiments', async (req, res) => {
+app.post('/api/experiments', authMiddleware, async (req, res) => {
   try {
     const exp = await createExperiment(req.body);
     res.json({ ok: true, experiment: exp });
@@ -4551,7 +4551,7 @@ app.post('/api/experiments', async (req, res) => {
   }
 });
 
-app.get('/api/experiments', async (req, res) => {
+app.get('/api/experiments', authMiddleware, async (req, res) => {
   try {
     const status = req.query.status || null;
     const experiments = await listExperiments(status);
@@ -4561,7 +4561,7 @@ app.get('/api/experiments', async (req, res) => {
   }
 });
 
-app.get('/api/experiments/:id', async (req, res) => {
+app.get('/api/experiments/:id', authMiddleware, async (req, res) => {
   try {
     const exp = await getExperiment(req.params.id);
     if (!exp) return res.status(404).json({ ok: false, error: 'Experiment not found' });
@@ -4571,7 +4571,7 @@ app.get('/api/experiments/:id', async (req, res) => {
   }
 });
 
-app.post('/api/experiments/:id/activate', async (req, res) => {
+app.post('/api/experiments/:id/activate', authMiddleware, async (req, res) => {
   try {
     const exp = await activateExperiment(req.params.id);
     if (!exp) return res.status(404).json({ ok: false, error: 'Experiment not found or not in draft' });
@@ -4581,7 +4581,7 @@ app.post('/api/experiments/:id/activate', async (req, res) => {
   }
 });
 
-app.post('/api/experiments/:id/observe', async (req, res) => {
+app.post('/api/experiments/:id/observe', authMiddleware, async (req, res) => {
   try {
     const { farm_id, arm, outcomes, group_id } = req.body;
     await recordObservation(req.params.id, farm_id, arm, outcomes, group_id);
@@ -4591,7 +4591,7 @@ app.post('/api/experiments/:id/observe', async (req, res) => {
   }
 });
 
-app.post('/api/experiments/:id/analyze', async (req, res) => {
+app.post('/api/experiments/:id/analyze', authMiddleware, async (req, res) => {
   try {
     const analysis = await analyzeExperiment(req.params.id);
     res.json({ ok: true, analysis });
@@ -4600,7 +4600,7 @@ app.post('/api/experiments/:id/analyze', async (req, res) => {
   }
 });
 
-app.post('/api/experiments/:id/complete', async (req, res) => {
+app.post('/api/experiments/:id/complete', authMiddleware, async (req, res) => {
   try {
     const { findings } = req.body;
     const exp = await completeExperiment(req.params.id, findings);
@@ -4611,7 +4611,7 @@ app.post('/api/experiments/:id/complete', async (req, res) => {
   }
 });
 
-app.get('/api/experiments/farm/:farmId', async (req, res) => {
+app.get('/api/experiments/farm/:farmId', authMiddleware, async (req, res) => {
   try {
     const experiments = await getExperimentsForFarm(req.params.farmId);
     res.json({ ok: true, experiments });
@@ -4621,7 +4621,7 @@ app.get('/api/experiments/farm/:farmId', async (req, res) => {
 });
 
 // ── Phase 4 Ticket 4.8: Governance Review Report ──────────────────────
-app.get('/api/governance/report', async (req, res) => {
+app.get('/api/governance/report', authMiddleware, async (req, res) => {
   try {
     const months = parseInt(req.query.months) || 1;
     const report = await generateGovernanceReport({ months });
@@ -4642,7 +4642,7 @@ app.get('/api/governance/report', async (req, res) => {
  * GET /api/production/plan
  * Generate weekly seeding plan for the network without distributing.
  */
-app.get('/api/production/plan', async (req, res) => {
+app.get('/api/production/plan', authMiddleware, async (req, res) => {
   try {
     const forecastWeeks = parseInt(req.query.weeks) || 4;
     const result = await generateWeeklyPlan({ forecastWeeks });
@@ -4656,7 +4656,7 @@ app.get('/api/production/plan', async (req, res) => {
  * POST /api/production/plan/distribute
  * Generate and push weekly seeding plans to all farms.
  */
-app.post('/api/production/plan/distribute', async (req, res) => {
+app.post('/api/production/plan/distribute', authMiddleware, async (req, res) => {
   try {
     const forecastWeeks = parseInt(req.body?.weeks) || 4;
     const result = await generateAndDistributePlan({ forecastWeeks });
@@ -4670,7 +4670,7 @@ app.post('/api/production/plan/distribute', async (req, res) => {
  * GET /api/production/demand
  * Get demand forecast from wholesale order history.
  */
-app.get('/api/production/demand', async (req, res) => {
+app.get('/api/production/demand', authMiddleware, async (req, res) => {
   try {
     const forecast = await gatherDemandForecast();
     res.json({ ok: true, forecast });
@@ -4683,7 +4683,7 @@ app.get('/api/production/demand', async (req, res) => {
  * GET /api/production/supply
  * Get current network supply status.
  */
-app.get('/api/production/supply', async (req, res) => {
+app.get('/api/production/supply', authMiddleware, async (req, res) => {
   try {
     const supply = await getNetworkSupply();
     res.json({ ok: true, supply, count: supply.length });
@@ -4699,7 +4699,7 @@ app.get('/api/production/supply', async (req, res) => {
  * Get predicted inventory — products available before harvest with confidence levels.
  * Buyers see "Available Feb 28" with confidence level for pre-ordering.
  */
-app.get('/api/wholesale/predicted-inventory', async (req, res) => {
+app.get('/api/wholesale/predicted-inventory', authMiddleware, async (req, res) => {
   try {
     const { generatePredictedInventory } = await import('./services/wholesaleNetworkAggregator.js');
     const predictions = await generatePredictedInventory();
@@ -5136,7 +5136,7 @@ async function startServer() {
  * POST /api/network/recipe-versions/push
  * Pushes a recipe version update to all active farms in the network.
  */
-app.get('/api/network/recipe-versions', async (req, res) => {
+app.get('/api/network/recipe-versions', authMiddleware, async (req, res) => {
   try {
     const versionsPath = path.join(__dirname, 'data', 'network-recipe-versions.json');
     if (!fs.existsSync(versionsPath)) {
@@ -5149,7 +5149,7 @@ app.get('/api/network/recipe-versions', async (req, res) => {
   }
 });
 
-app.post('/api/network/recipe-versions/push', async (req, res) => {
+app.post('/api/network/recipe-versions/push', authMiddleware, async (req, res) => {
   try {
     const { crop, modifiers, version, push_mode } = req.body;
     if (!crop || !modifiers) {

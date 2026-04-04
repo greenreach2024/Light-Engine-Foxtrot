@@ -1142,12 +1142,22 @@ export const ADMIN_TOOL_CATALOG = {
     optional: ['subject', 'message'],
     handler: async (params) => {
       try {
+        const recipient = String(params.to || '').trim();
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(recipient)) {
+          return { ok: false, error: 'Invalid email address format.' };
+        }
+        const blockedDomains = ['example.com', 'test.com', 'mailinator.com', 'guerrillamail.com'];
+        const domain = recipient.split('@')[1].toLowerCase();
+        if (blockedDomains.includes(domain)) {
+          return { ok: false, error: 'Blocked email domain.' };
+        }
         const emailService = (await import('../services/email-service.js')).default;
         const result = await emailService.sendEmail({
-          to: String(params.to).trim(),
+          to: recipient,
           subject: params.subject || 'GreenReach Central -- Email Test',
           text: params.message || 'This is a test email from GreenReach Central. If you received this, email delivery is working correctly.',
-          html: '<h2>GreenReach Central Email Test</h2><p>' + (params.message || 'This is a test email from GreenReach Central. If you received this, email delivery is working correctly.') + '</p><p style="color:#888;font-size:0.9em;">Sent at: ' + new Date().toISOString() + '</p>'
+          html: '<h2>GreenReach Central Email Test</h2><p>' + String(params.message || 'This is a test email from GreenReach Central. If you received this, email delivery is working correctly.').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</p><p style="color:#888;font-size:0.9em;">Sent at: ' + new Date().toISOString() + '</p>'
         });
         return { ok: result.success, via: result.via || 'unknown', messageId: result.messageId, stub: !!result.stub };
       } catch (err) { return { ok: false, error: err.message }; }

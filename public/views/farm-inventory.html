@@ -933,9 +933,37 @@
           `;
         }
 
-        // Calculate unique crops (support both 'crop' field and 'plan' field)
+        // Fetch DB-backed inventory (manual + custom + auto entries with prices)
+        let dbInventoryProducts = [];
+        let cropPricingMap = {};
+        try {
+          const [invResp, pricingResp] = await Promise.all([
+            fetchWithFarmAuth(`${API_BASE}/api/inventory/${encodeURIComponent(farmId)}`).catch(() => null),
+            fetchWithFarmAuth(`${API_BASE}/api/crop-pricing`).catch(() => null)
+          ]);
+          if (invResp && invResp.ok) {
+            const invData = await invResp.json();
+            dbInventoryProducts = (invData.products || []).filter(p => p.status !== 'inactive');
+          }
+          if (pricingResp && pricingResp.ok) {
+            const pricingData = await pricingResp.json();
+            (pricingData.pricing?.crops || []).forEach(c => {
+              if (c.crop) cropPricingMap[c.crop.toLowerCase()] = c;
+            });
+          }
+        } catch (e) {
+          console.warn('[loadInventory] DB inventory/pricing fetch failed (non-fatal):', e);
+        }
+
+        // Calculate unique crops: tray groups + manual/custom DB entries
         // Guard: only call extractCropDisplayName when plan is truthy to avoid 'Unknown' for empty farms
         const uniqueCrops = new Set(groupsData.map(g => g.crop || (g.plan ? extractCropDisplayName(g.plan) : '')).filter(Boolean));
+        // Add manual and custom entry crop names to the unique count
+        dbInventoryProducts.forEach(p => {
+          if (p.product_name && (p.inventory_source === 'manual' || p.inventory_source === 'custom' || p.inventory_source === 'hybrid' || p.is_custom)) {
+            uniqueCrops.add(p.product_name);
+          }
+        });
 
         // When forecast API returns empty (all groups are draft/unplanted),
         // build synthetic tray data from groups.json so the UI still shows
@@ -1023,10 +1051,10 @@
 
         console.log('[loadInventory] Rendering...');
         const renderSteps = [
-          ['SummaryCards', () => renderSummaryCards(enrichedCurrent, uniqueCrops.size)],
+          ['SummaryCards', () => renderSummaryCards(enrichedCurrent, uniqueCrops.size, dbInventoryProducts, cropPricingMap)],
           ['Forecast', () => renderForecast(enrichedForecast)],
           ['ByLocation', () => renderInventoryByLocation(enrichedCurrent, groupsData, enrichedForecast, roomIdToName)],
-          ['ByCrop', () => renderInventoryByCrop(enrichedCurrent, groupsData, enrichedForecast)],
+          ['ByCrop', () => renderInventoryByCrop(enrichedCurrent, groupsData, enrichedForecast, dbInventoryProducts, cropPricingMap)],
           ['ByHarvest', () => renderInventoryByHarvest(enrichedCurrent, groupsData, enrichedForecast, roomIdToName)]
         ];
         let renderErrors = 0;
@@ -1093,12 +1121,26 @@
       `;
     }
 
-    function renderSummaryCards(data, cropCount) {
+    function renderSummaryCards(data, cropCount, dbProducts, pricingMap) {
       // API returns: {activeTrays, totalPlants, farmCount}
       const totalTrays = data.activeTrays || 0;
       const totalPlants = data.totalPlants || 0;
-      const farmCount = data.farmCount || 0;
       const crops = cropCount || 0;
+      dbProducts = dbProducts || [];
+      pricingMap = pricingMap || {};
+
+      // Calculate today's total retail value from all DB inventory (auto + manual + custom)
+      let totalRetailValue = 0;
+      dbProducts.forEach(p => {
+        const qty = Number(p.available_lbs ?? p.quantity_available ?? 0);
+        let price = Number(p.retail_price || p.price || 0);
+        // If no price set on the inventory row, look up from crop pricing
+        if (!price && p.product_name) {
+          const cp = pricingMap[p.product_name.toLowerCase()];
+          if (cp && cp.retailPrice) price = Number(cp.retailPrice);
+        }
+        totalRetailValue += qty * price;
+      });
 
       document.getElementById('summaryCards').innerHTML = `
         <div class="summary-card">
@@ -1114,12 +1156,12 @@
         <div class="summary-card">
           <div class="label">Crop Varieties</div>
           <div class="value">${crops}</div>
-          <div class="subvalue">Different crops</div>
+          <div class="subvalue">All sources</div>
         </div>
         <div class="summary-card">
-          <div class="label">Farms</div>
-          <div class="value">${farmCount}</div>
-          <div class="subvalue">Active locations</div>
+          <div class="label">Today's Total Value</div>
+          <div class="value">$${totalRetailValue.toFixed(2)}</div>
+          <div class="subvalue">Retail inventory value</div>
         </div>
       `;
     }
@@ -1352,8 +1394,10 @@
       `;
     }
 
-    function renderInventoryByCrop(currentData, groupsData, forecastData) {
+    function renderInventoryByCrop(currentData, groupsData, forecastData, dbProducts, pricingMap) {
       console.log('[renderInventoryByCrop] Called');
+      dbProducts = dbProducts || [];
+      pricingMap = pricingMap || {};
       
       // Create map of trays by group
       const traysByGroup = {};
@@ -1384,9 +1428,27 @@
           cropMap[crop].push({ group, trays });
         }
       });
+
+      // Track which crop names already have tray-based entries (case-insensitive)
+      const trayCropNamesLower = new Set(Object.keys(cropMap).map(n => n.toLowerCase()));
+
+      // Add manual/custom DB inventory entries that are not already in tray-based groups
+      const manualCustomByCrop = {};
+      dbProducts.forEach(p => {
+        if (!p.product_name) return;
+        const src = p.is_custom ? 'custom' : (p.inventory_source || 'auto');
+        // Include manual, custom, and hybrid entries
+        if (src === 'manual' || src === 'custom' || src === 'hybrid') {
+          const cropName = p.product_name;
+          if (!manualCustomByCrop[cropName]) {
+            manualCustomByCrop[cropName] = [];
+          }
+          manualCustomByCrop[cropName].push(p);
+        }
+      });
       
-      // Render by crop
-      const html = Object.keys(cropMap).sort().map(cropName => {
+      // Render by crop: tray-based groups
+      const trayHtml = Object.keys(cropMap).sort().map(cropName => {
         const cropGroups = cropMap[cropName];
         const totalTrays = cropGroups.reduce((sum, item) => sum + item.trays.length, 0);
         const totalPlants = cropGroups.reduce((sum, item) => {
@@ -1398,6 +1460,16 @@
             return sum + avgDays;
           }, 0) / cropGroups.length
         );
+        // Check if this crop also has manual/custom entries to show inline
+        const mcEntries = manualCustomByCrop[cropName] || [];
+        const mcLbs = mcEntries.reduce((s, p) => s + Number(p.available_lbs ?? p.quantity_available ?? 0), 0);
+        const mcRetailValue = mcEntries.reduce((s, p) => {
+          let price = Number(p.retail_price || p.price || 0);
+          if (!price) { const cp = pricingMap[cropName.toLowerCase()]; if (cp) price = Number(cp.retailPrice || 0); }
+          return s + Number(p.available_lbs ?? p.quantity_available ?? 0) * price;
+        }, 0);
+        // Remove from manualCustomByCrop so it does not appear again below
+        delete manualCustomByCrop[cropName];
         
         return `
           <div class="location-section" style="background: rgba(30, 41, 59, 0.6); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem;">
@@ -1406,7 +1478,7 @@
                 ${cropName}
                 <span id="arrow-crop-${cropName}" style="font-size: 0.9rem; color: #94a3b8; margin-left: 0.5rem;">▼ ${cropGroups.length} varieties</span>
               </h3>
-              <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; color: #94a3b8; font-size: 0.95rem;">
+              <div style="display: grid; grid-template-columns: repeat(${mcLbs > 0 ? 4 : 3}, 1fr); gap: 1rem; color: #94a3b8; font-size: 0.95rem;">
                 <div>
                   <span style="color: #64748b;">Trays:</span>
                   <span style="color: #f8fafc; font-weight: 600; margin-left: 0.5rem;">${totalTrays}</span>
@@ -1419,6 +1491,10 @@
                   <span style="color: #64748b;">Avg Days:</span>
                   <span style="color: #f8fafc; font-weight: 600; margin-left: 0.5rem;">${avgDaysToHarvest}</span>
                 </div>
+                ${mcLbs > 0 ? `<div>
+                  <span style="color: #64748b;">Manual/Custom:</span>
+                  <span style="color: #fbbf24; font-weight: 600; margin-left: 0.5rem;">${mcLbs.toFixed(1)} lb ($${mcRetailValue.toFixed(2)})</span>
+                </div>` : ''}
               </div>
             </div>
             
@@ -1503,6 +1579,58 @@
         `;
       }).join('');
       
+      // Render manual/custom-only crops (not already shown in tray-based sections)
+      const mcOnlyHtml = Object.keys(manualCustomByCrop).sort().map(cropName => {
+        const entries = manualCustomByCrop[cropName];
+        const totalLbs = entries.reduce((s, p) => s + Number(p.available_lbs ?? p.quantity_available ?? 0), 0);
+        const totalValue = entries.reduce((s, p) => {
+          let price = Number(p.retail_price || p.price || 0);
+          if (!price) { const cp = pricingMap[cropName.toLowerCase()]; if (cp) price = Number(cp.retailPrice || 0); }
+          return s + Number(p.available_lbs ?? p.quantity_available ?? 0) * price;
+        }, 0);
+        const srcLabel = entries.some(e => e.is_custom) ? 'Custom' : 'Manual';
+        const srcColor = entries.some(e => e.is_custom) ? '#a78bfa' : '#fbbf24';
+        return `
+          <div class="location-section" style="background: rgba(30, 41, 59, 0.6); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem;">
+            <div style="margin-bottom: 1rem;">
+              <h3 style="color: ${srcColor}; font-size: 1.4rem; margin-bottom: 0.5rem;">
+                ${cropName}
+                <span style="font-size: 0.8rem; background: ${srcColor}22; color: ${srcColor}; padding: 2px 8px; border-radius: 6px; margin-left: 0.5rem;">${srcLabel} Entry</span>
+              </h3>
+              <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; color: #94a3b8; font-size: 0.95rem;">
+                <div>
+                  <span style="color: #64748b;">Available:</span>
+                  <span style="color: #f8fafc; font-weight: 600; margin-left: 0.5rem;">${totalLbs.toFixed(2)} lb</span>
+                </div>
+                <div>
+                  <span style="color: #64748b;">Retail Value:</span>
+                  <span style="color: #f8fafc; font-weight: 600; margin-left: 0.5rem;">$${totalValue.toFixed(2)}</span>
+                </div>
+                <div>
+                  <span style="color: #64748b;">Entries:</span>
+                  <span style="color: #f8fafc; font-weight: 600; margin-left: 0.5rem;">${entries.length}</span>
+                </div>
+              </div>
+            </div>
+            ${entries.map(p => {
+              const qty = Number(p.available_lbs ?? p.quantity_available ?? 0);
+              let price = Number(p.retail_price || p.price || 0);
+              if (!price) { const cp = pricingMap[cropName.toLowerCase()]; if (cp) price = Number(cp.retailPrice || 0); }
+              const wholesale = Number(p.wholesale_price || 0);
+              const src = p.is_custom ? 'custom' : (p.inventory_source || 'manual');
+              return '<div style="background: rgba(15, 23, 42, 0.6); border-radius: 14px; padding: 1rem; margin-bottom: 0.75rem; border-left: 3px solid ' + srcColor + ';">'
+                + '<div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem; color: #94a3b8; font-size: 0.9rem;">'
+                + '<div><div style="color: #64748b; font-size: 0.85rem;">Available</div><div style="color: #f8fafc; font-weight: 500;">' + qty.toFixed(2) + ' lb</div></div>'
+                + '<div><div style="color: #64748b; font-size: 0.85rem;">Retail</div><div style="color: #f8fafc; font-weight: 500;">$' + price.toFixed(2) + '/lb</div></div>'
+                + '<div><div style="color: #64748b; font-size: 0.85rem;">Wholesale</div><div style="color: #f8fafc; font-weight: 500;">$' + wholesale.toFixed(2) + '/lb</div></div>'
+                + '<div><div style="color: #64748b; font-size: 0.85rem;">Source</div><div style="color: #f8fafc; font-weight: 500;"><span class="source-badge ' + src + '">' + src + '</span></div></div>'
+                + '</div></div>';
+            }).join('')}
+          </div>
+        `;
+      }).join('');
+
+      const html = trayHtml + mcOnlyHtml;
       document.getElementById('cropView').innerHTML = html || `
         <div class="empty-state">
           <h3>No Crop Data</h3>

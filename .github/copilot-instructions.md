@@ -23,6 +23,27 @@ The farm runs entirely on AWS Elastic Beanstalk. The Light Engine EB instance IS
 7. **NO cross-origin redirects between LE and Central.** LE has no custom domain (only the raw EB CNAME). Never redirect UI page requests from one server to the other -- it breaks iframes, CSP, and HTTPS. Both servers serve the same static UI files directly.
 8. **NEVER use the raw EB URL in code.** The `light-engine-foxtrot-prod-v2.eba-ukiyyqf9.us-east-1.elasticbeanstalk.com` hostname is for deployment only. Do not hardcode it in redirects, links, fetch calls, or any runtime code.
 
+### Recent Fixes (Apr 4, 2026)
+
+24. **Re-Audit Correction Plan (25 findings, all remediated)**
+    - RE-AUDIT-REPORT.md: Full platform + AI agent audit. 2 P0, 4 P1, 11 P2, 8 P3.
+    - **S1 (P0)**: `greenreach-central/routes/wholesale-fulfillment.js` -- removed duplicate `isDatabaseAvailable` ESM import (line 25). Module was failing to load; all fulfillment endpoints were dead.
+    - **SEC1 (P0)**: `greenreach-central/server.js` -- added `authMiddleware` to `customProductsRouter` mount. CRUD on `/api/farm/products/*` was exposed without auth.
+    - **SEC2 (P1)**: `greenreach-central/server.js` -- added `authMiddleware` or `adminAuthMiddleware` to 22 inline endpoints (experiments, dynamic-pricing, governance, production, admin seed, recipe versions). All were callable without authentication.
+    - **A10 (P1)**: `greenreach-central/routes/gwen-research-agent.js` -- replaced `execSync(cmd)` with `execFileSync(bin, args)` in `execute_code` tool. Eliminated shell interpretation (command injection via `$()` or backticks). Also restricted env vars to PATH/HOME/TMPDIR/MPLBACKEND only.
+    - **A14 (P1)**: `greenreach-central/middleware/agent-enforcement.js` -- added circuit-breaker: when 3+ violations detected, response is blocked and replaced with safe fallback. Previously advisory-only (logged but never blocked).
+    - **SEC5 (P2)**: `greenreach-central/server.js` -- removed `/api/sync/` from rate limiter skip. Only `/api/debug/` (logging-only) is now skipped.
+    - **A1/A6/A11 (P2)**: Fail-closed auth fallbacks. EVIE no longer falls back to `'demo-farm'`, FAYE no longer falls back to `'unknown'`, GWEN no longer falls back to `'anon'`. All three return 401 when identity is missing.
+    - **A2/A7 (P2)**: Tightened confirmation regex. Removed `yes`, `ok`, `sure`, `yeah`, `yep` from both EVIE and FAYE. Now requires explicit: `confirm`, `do it`, `go ahead`, `proceed`, `approved`.
+    - **A3/A8 (P2)**: Added `.slice(0, 8000)` tool result truncation to EVIE (3 paths: Anthropic, OpenAI main, OpenAI stream) and FAYE (1 path). GWEN already had this.
+    - **A4 (P2)**: Confirmed-action summaries in EVIE now route through `sendEnforcedResponse` instead of plain `res.json()`.
+    - **A9 (P2)**: FAYE `send_test_email` tool: added email format validation, blocked disposable domains (mailinator, guerrillamail, etc.), and HTML-escaped `params.message` in email body (XSS fix).
+    - **A12 (P2)**: GWEN `get_network_sensor_data` now returns error if no active data sharing agreement exists. Previously returned data with advisory `has_agreement: false`.
+    - **S2 (P2)**: `greenreach-central/routes/sync.js` -- added `ON CONFLICT DO NOTHING` to sensor_readings INSERT. Added unique index `idx_sensor_readings_dedup` on `(farm_id, zone_id, sensor_type, recorded_at)`.
+    - **S3 (P3)**: `greenreach-central/routes/sync.js` -- parameterized cleanup query (was `'${RETENTION_DAYS} days'`, now uses `$1` param).
+    - **S4 (P2)**: `server-foxtrot.js` -- fixed setup_completed read to query `farms` table (was `users` table, which never had the column populated).
+    - Files changed: `wholesale-fulfillment.js`, `server.js` (Central), `gwen-research-agent.js`, `agent-enforcement.js`, `assistant-chat.js`, `admin-assistant.js`, `admin-ops-agent.js`, `sync.js`, `database.js`, `server-foxtrot.js`
+
 ### Recent Fixes (Apr 2, 2026)
 
 21. **Activity Hub order sync fix**

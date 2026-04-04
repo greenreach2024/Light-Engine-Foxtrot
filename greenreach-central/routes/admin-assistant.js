@@ -27,7 +27,7 @@ import { listNetworkFarms } from '../services/networkFarmsStore.js';
 import { listAllOrders, listAllBuyers } from '../services/wholesaleMemoryStore.js';
 import { buildLearningContext, learnFromConversation, buildAutonomyContext, getAllDomainOwnership, getTopInsights, buildInterAgentContext, getConversationRecap } from '../services/faye-learning.js';
 import { buildPolicyContext, checkIntegrityGate, checkSecurityGate } from '../services/faye-policy.js';
-import { ENFORCEMENT_PROMPT_BLOCK, sendEnforcedResponse } from '../middleware/agent-enforcement.js';
+import { ENFORCEMENT_PROMPT_BLOCK, enforceResponseShape, sendEnforcedResponse } from '../middleware/agent-enforcement.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -91,7 +91,7 @@ async function logDecision(toolName, params, result) {
 }
 
 // ── Confirmation Pattern Detection ─────────────────────────────────
-const CONFIRM_PATTERNS = /^(yes|confirm|do it|go ahead|proceed|approve|ok|execute|run it|yep|yeah)$/i;
+const CONFIRM_PATTERNS = /^(confirm|do it|go ahead|proceed|approve|execute|run it)$/i;
 
 async function getConversation(convId, adminId) {
   const cached = conversations.get(convId);
@@ -890,7 +890,10 @@ router.post('/chat', async (req, res) => {
     return res.status(400).json({ ok: false, error: 'Message is required' });
   }
 
-  const adminId = String(req.admin?.id || 'unknown');
+  const adminId = req.admin?.id ? String(req.admin.id) : null;
+    if (!adminId) {
+      return res.status(401).json({ ok: false, error: 'Admin authentication required.' });
+    }
   const adminName = req.admin?.name || req.admin?.email || 'Admin';
   const adminRole = req.admin?.role || 'admin';
   const adminEmail = req.admin?.email || '';
@@ -1036,7 +1039,10 @@ router.post('/chat/stream', async (req, res) => {
     return res.status(400).json({ ok: false, error: 'Message is required' });
   }
 
-  const adminId = String(req.admin?.id || 'unknown');
+  const adminId = req.admin?.id ? String(req.admin.id) : null;
+  if (!adminId) {
+    return res.status(401).json({ ok: false, error: 'Admin authentication required.' });
+  }
   const adminName = req.admin?.name || req.admin?.email || 'Admin';
   const adminRole = req.admin?.role || 'admin';
   const adminEmail = req.admin?.email || '';
@@ -1133,7 +1139,7 @@ router.post('/chat/stream', async (req, res) => {
           }
 
           toolCallResults.push({ tool: block.name, params: block.input, success: toolResult?.ok !== false, tier });
-          toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: JSON.stringify(toolResult) });
+          toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: JSON.stringify(toolResult).slice(0, 8000) });
           sendEvent('tool_done', { tool: block.name, success: toolResult?.ok !== false });
         }
 
@@ -1191,10 +1197,23 @@ router.post('/chat/stream', async (req, res) => {
     ];
     await upsertConversation(convId, updatedHistory, adminId);
 
+    // Enforcement: check assembled reply before signaling done
+    const hadToolData = result.toolCalls.length > 0;
+    const enforcement = enforceResponseShape(result.reply, { hadToolData, agent: 'faye' });
+    if (enforcement.violationCount >= 3) {
+      sendEvent('enforcement', {
+        blocked: true,
+        violations: enforcement.violationCount,
+        flags: enforcement.violations.map(v => v.split(':')[0]),
+        replacement: 'I was not able to produce a response that meets quality standards. Please rephrase your question, or ask me to check a specific data source.'
+      });
+    }
+
     sendEvent('done', {
       conversation_id: convId,
       tool_calls: result.toolCalls.length > 0 ? result.toolCalls : undefined,
-      model: result.model, provider: result.provider
+      model: result.model, provider: result.provider,
+      enforcement: enforcement.violationCount > 0 ? { violations: enforcement.violationCount, flags: enforcement.violations.map(v => v.split(':')[0]) } : undefined
     });
 
   } catch (err) {
@@ -1208,7 +1227,10 @@ router.post('/chat/stream', async (req, res) => {
 // ── GET /briefing — Operations Briefing ───────────────────────────
 
 router.get('/briefing', async (req, res) => {
-  const adminId = String(req.admin?.id || 'unknown');
+  const adminId = req.admin?.id ? String(req.admin.id) : null;
+  if (!adminId) {
+    return res.status(401).json({ ok: false, error: 'Admin authentication required.' });
+  }
   const adminName = req.admin?.name || 'Admin';
 
   try {
@@ -1476,7 +1498,10 @@ router.get('/status', async (_req, res) => {
 // ── GET /memory — Get admin memory ────────────────────────────────
 
 router.get('/memory', async (req, res) => {
-  const adminId = String(req.admin?.id || 'unknown');
+  const adminId = req.admin?.id ? String(req.admin.id) : null;
+  if (!adminId) {
+    return res.status(401).json({ ok: false, error: 'Admin authentication required.' });
+  }
   const memory = await getAdminMemory(adminId);
   return res.json({ ok: true, memory });
 });
@@ -1488,7 +1513,10 @@ router.post('/memory', async (req, res) => {
   if (!key || typeof key !== 'string') {
     return res.status(400).json({ ok: false, error: 'Key is required' });
   }
-  const adminId = String(req.admin?.id || 'unknown');
+  const adminId = req.admin?.id ? String(req.admin.id) : null;
+  if (!adminId) {
+    return res.status(401).json({ ok: false, error: 'Admin authentication required.' });
+  }
   const saved = await setAdminMemory(adminId, key.trim().slice(0, 100), String(value || '').slice(0, 2000));
   return res.json({ ok: saved });
 });

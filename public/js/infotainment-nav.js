@@ -25,6 +25,7 @@
         { id: 'farm-inventory',     label: 'Crop Inventory',      icon: 'icon-crop-inventory',    section: 'iframe-view', url: '/views/farm-inventory.html' },
         { id: 'crop-weight',        label: 'Crop Weight Analytics', icon: 'icon-weight-analytics', section: 'iframe-view', url: '/views/crop-weight-analytics.html' },
         { id: 'room-heatmap',       label: 'Heat Map',            icon: 'icon-heatmap',           section: 'iframe-view', url: '/views/room-heatmap.html' },
+        { id: 'room-mapper',       label: 'Room Mapper',          icon: 'icon-heatmap',           section: 'iframe-view', url: '/views/room-mapper.html' },
         { id: 'farm-vitality',      label: 'Farm Vitality',       icon: 'icon-vitality',          section: 'external',    url: '/farm-vitality.html' }
       ]
     },
@@ -54,6 +55,7 @@
         { id: 'pricing',          label: 'Pricing',             icon: 'icon-pricing',       section: 'pricing' },
         { id: 'crop-value',       label: 'Crop Value',          icon: 'icon-crop-value',    section: 'crop-value' },
         { id: 'traceability',     label: 'Lot Traceability',    icon: 'icon-traceability',  section: 'traceability' },
+        { id: 'harvest-donations', label: 'Harvest & Donations', icon: 'icon-sustainability', section: 'harvest-donations' },
         { id: 'sustainability',   label: 'Sustainability',      icon: 'icon-sustainability', section: 'sustainability' },
         { id: 'quality',          label: 'Quality Control',     icon: 'icon-quality',       section: 'quality' },
         { id: 'accounting',       label: 'Accounting',          icon: 'icon-accounting',    section: 'accounting' }

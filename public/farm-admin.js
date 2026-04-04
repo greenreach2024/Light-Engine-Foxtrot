@@ -924,6 +924,11 @@ function setupNavigation() {
                     loadUsers();
                 } else if (section === 'quality') {
                     loadQualityControl();
+                } else if (section === 'devices') {
+                    var devFrame = document.getElementById('device-manager-frame');
+                    if (devFrame && !devFrame.src.includes('iot-manager')) devFrame.src = '/views/iot-manager.html?embedded=1';
+                } else if (section === 'harvest-donations') {
+                    loadHarvestDonationData();
                 }
             }
         });
@@ -3675,6 +3680,56 @@ function initializeAdminTooltipTracking() {
 // WHOLESALE ORDERS MANAGEMENT
 // ============================================================================
 
+// Active wholesale tab filter
+var _currentWholesaleTab = 'all';
+
+function filterWholesaleTab(tab) {
+    _currentWholesaleTab = tab;
+    // Update tab active states
+    document.querySelectorAll('.wo-tab').forEach(function(btn) {
+        var isActive = btn.getAttribute('data-wo-tab') === tab;
+        btn.style.borderBottomColor = isActive ? 'var(--accent-green)' : 'transparent';
+        btn.style.color = isActive ? 'var(--accent-green)' : 'var(--text-muted)';
+        if (isActive) btn.classList.add('active');
+        else btn.classList.remove('active');
+    });
+    // Update title
+    var titles = { all: 'Order Queue', 'new': 'New Orders', accepted: 'Accepted Orders', declined: 'Declined Orders' };
+    var titleEl = document.getElementById('wo-tab-title');
+    if (titleEl) titleEl.textContent = titles[tab] || 'Order Queue';
+    // Filter visible order cards
+    var cards = document.querySelectorAll('.wholesale-order-card');
+    cards.forEach(function(card) {
+        var oid = card.getAttribute('data-order-id');
+        var order = (window._wholesaleOrderCache || {})[oid];
+        if (!order) { card.style.display = ''; return; }
+        var status = normalizeWholesaleQueueStatus(order.status || order.event);
+        var show = false;
+        if (tab === 'all') show = true;
+        else if (tab === 'new') show = (status === 'pending_verification' || status === 'pending');
+        else if (tab === 'accepted') show = (status === 'confirmed' || status === 'processing' || status === 'packed' || status === 'shipped' || status === 'delivered');
+        else if (tab === 'declined') show = (status === 'expired');
+        card.style.display = show ? '' : 'none';
+    });
+    // Show empty message if no visible cards
+    var container = document.getElementById('wholesale-orders-container');
+    if (container) {
+        var visibleCards = container.querySelectorAll('.wholesale-order-card:not([style*="display: none"])');
+        var emptyMsg = container.querySelector('.wo-empty-tab-msg');
+        if (visibleCards.length === 0 && cards.length > 0) {
+            if (!emptyMsg) {
+                var div = document.createElement('div');
+                div.className = 'wo-empty-tab-msg';
+                div.style.cssText = 'text-align: center; padding: 2rem; color: var(--text-muted);';
+                div.innerHTML = '<p>No ' + (titles[tab] || 'orders').toLowerCase() + ' found</p>';
+                container.appendChild(div);
+            }
+        } else if (emptyMsg) {
+            emptyMsg.remove();
+        }
+    }
+}
+
 function normalizeWholesaleQueueStatus(rawStatus) {
     const status = String(rawStatus || '').trim().toLowerCase();
     if (!status) return 'pending_verification';
@@ -4770,23 +4825,24 @@ function showToast(message, type = 'info') {
  */
 async function loadAccountingData() {
     const period = document.getElementById('accountingPeriod')?.value || 'month';
-    console.log(` Loading financial data for period: ${period}`);
-    
-    // Check QuickBooks connection status
+    console.log('[Financial] Loading data for period:', period);
+
     await checkQuickBooksStatus();
-    
+
     try {
-        // Calculate date range based on period
         const now = new Date();
         let startDate = new Date();
-        
+
         switch(period) {
             case 'today':
                 startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
                 break;
-            case 'week':
-                startDate = new Date(now.setDate(now.getDate() - 7));
+            case 'week': {
+                const d = new Date();
+                d.setDate(d.getDate() - 7);
+                startDate = d;
                 break;
+            }
             case 'month':
                 startDate = new Date(now.getFullYear(), now.getMonth(), 1);
                 break;
@@ -4797,71 +4853,91 @@ async function loadAccountingData() {
                 startDate = new Date(now.getFullYear(), 0, 1);
                 break;
         }
-        
-        // Fetch sales data from farm-sales API
-        const ordersResponse = await fetch(`${API_BASE}/api/farm-sales/orders?startDate=${startDate.toISOString()}`);
-        const ordersData = await ordersResponse.json();
-        
-        // Calculate revenue by channel
+
+        // Fetch wholesale orders
+        const ordersResponse = await fetch(`${API_BASE}/api/farm-sales/orders?limit=100`);
+        const ordersData = ordersResponse.ok ? await ordersResponse.json() : { orders: [], summary: {} };
+
+        // Filter orders by date range
+        const filteredOrders = (ordersData.orders || []).filter(o => {
+            const orderDate = new Date(o.created_at);
+            return orderDate >= startDate;
+        });
+
         let wholesaleRevenue = 0;
         let retailRevenue = 0;
         let wholesaleCount = 0;
         let retailCount = 0;
-        
-        if (ordersData.orders) {
-            ordersData.orders.forEach(order => {
-                const amount = parseFloat(order.total_amount || 0);
-                if (order.channel === 'wholesale' || order.channel === 'b2b') {
-                    wholesaleRevenue += amount;
-                    wholesaleCount++;
-                } else {
-                    retailRevenue += amount;
-                    retailCount++;
-                }
-            });
-        }
-        
+
+        filteredOrders.forEach(order => {
+            const amount = parseFloat(order.totals?.total || order.total_amount || order.total || 0);
+            const channel = (order.channel || order.order_type || 'wholesale').toLowerCase();
+            if (channel === 'retail' || channel === 'pos') {
+                retailRevenue += amount;
+                retailCount++;
+            } else {
+                wholesaleRevenue += amount;
+                wholesaleCount++;
+            }
+        });
+
         const totalRevenue = wholesaleRevenue + retailRevenue;
-        
-        // Calculate expenses
-        const wholesaleFees = wholesaleRevenue * 0.15; // 15% commission estimate
-        const supportFees = 0; // Annual support fee (prorated)
-        const processingFees = totalRevenue * 0.029 + (wholesaleCount + retailCount) * 0.30; // Square fees
-        const totalExpenses = wholesaleFees + supportFees + processingFees;
-        
-        // Calculate net profit
+        const orderCount = wholesaleCount + retailCount;
+
+        // Calculate expenses from real rates
+        const WHOLESALE_COMMISSION_RATE = 0.12;
+        const SQUARE_PERCENT = 0.029;
+        const SQUARE_PER_TXN = 0.30;
+        const wholesaleFees = wholesaleRevenue * WHOLESALE_COMMISSION_RATE;
+        const supportFees = 0;
+        const processingFees = orderCount > 0 ? (totalRevenue * SQUARE_PERCENT + orderCount * SQUARE_PER_TXN) : 0;
+
+        // Fetch procurement spending
+        let procurementTotal = 0;
+        try {
+            const procRes = await fetch(`${API_BASE}/api/procurement/orders`);
+            if (procRes.ok) {
+                const procData = await procRes.json();
+                const procOrders = procData.orders || procData.data || [];
+                procOrders.forEach(po => {
+                    const poDate = new Date(po.created_at || po.order_date);
+                    if (poDate >= startDate) {
+                        procurementTotal += parseFloat(po.total || po.amount || 0);
+                    }
+                });
+            }
+        } catch { /* procurement API may not be available */ }
+
+        const totalExpenses = wholesaleFees + supportFees + processingFees + procurementTotal;
         const netProfit = totalRevenue - totalExpenses;
         const profitMargin = totalRevenue > 0 ? ((netProfit / totalRevenue) * 100).toFixed(1) : 0;
-        
-        // Update summary cards
-        document.getElementById('total-revenue').textContent = `$${totalRevenue.toFixed(2)}`;
-        document.getElementById('wholesale-revenue').textContent = `$${wholesaleRevenue.toFixed(2)}`;
-        document.getElementById('wholesale-count').textContent = `${wholesaleCount} orders`;
-        document.getElementById('retail-revenue').textContent = `$${retailRevenue.toFixed(2)}`;
-        document.getElementById('retail-count').textContent = `${retailCount} orders`;
-        document.getElementById('total-expenses').textContent = `$${totalExpenses.toFixed(2)}`;
-        
-        // Update net profit
-        document.getElementById('net-profit').textContent = `$${netProfit.toFixed(2)}`;
-        document.getElementById('profit-margin').textContent = `${profitMargin}%`;
-        
-        // Update expense breakdown
-        document.getElementById('wholesale-fees').textContent = `$${wholesaleFees.toFixed(2)}`;
-        document.getElementById('support-fees').textContent = `$${supportFees.toFixed(2)}`;
-        document.getElementById('processing-fees').textContent = `$${processingFees.toFixed(2)}`;
-        document.getElementById('total-expenses-summary').textContent = `$${totalExpenses.toFixed(2)}`;
-        
-        // Load operations data
+
+        const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+        setText('total-revenue', `$${totalRevenue.toFixed(2)}`);
+        setText('wholesale-revenue', `$${wholesaleRevenue.toFixed(2)}`);
+        setText('wholesale-count', `${wholesaleCount} orders`);
+        setText('retail-revenue', `$${retailRevenue.toFixed(2)}`);
+        setText('retail-count', `${retailCount} orders`);
+        setText('total-expenses', `$${totalExpenses.toFixed(2)}`);
+        setText('expenses-breakdown', orderCount > 0 ? `${orderCount} transactions` : 'No transactions');
+        setText('procurement-spending', `$${procurementTotal.toFixed(2)}`);
+        setText('net-profit', `$${netProfit.toFixed(2)}`);
+        setText('profit-margin', totalRevenue > 0 ? `${profitMargin}% margin` : '--');
+
+        setText('wholesale-fees', `$${wholesaleFees.toFixed(2)}`);
+        setText('wholesale-fee-desc', `12% commission on $${wholesaleRevenue.toFixed(2)} wholesale`);
+        setText('support-fees', `$${supportFees.toFixed(2)}`);
+        setText('processing-fees', `$${processingFees.toFixed(2)}`);
+        setText('processing-fee-desc', orderCount > 0 ? `2.9% + $0.30 on ${orderCount} transactions` : 'Square transaction fees');
+        setText('procurement-supply-costs', `$${procurementTotal.toFixed(2)}`);
+        setText('total-expenses-summary', `$${totalExpenses.toFixed(2)}`);
+
         await loadOperationsData(startDate);
-        
-        // Load revenue breakdown table
-        await loadRevenueBreakdown(ordersData.orders || []);
-        
-        // Load procurement spending data
+        await loadRevenueBreakdown(filteredOrders);
         await loadProcurementFinancials();
-        
+
     } catch (error) {
-        console.error(' Error loading accounting data:', error);
+        console.error('[Financial] Error loading accounting data:', error);
         showToast('Failed to load financial data', 'error');
     }
 }
@@ -9476,11 +9552,6 @@ async function loadEvieMorningBrief() {
     }
 }
 
-function escapeHtml(str) {
-    var div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
-}
 
 // Load on first dashboard paint, then every 5 minutes
 document.addEventListener('DOMContentLoaded', function () {
@@ -9585,3 +9656,153 @@ async function loadDashboardFarmValue() {
         }
     });
 })();
+
+// ============================================================================
+// HARVEST & DONATIONS MANAGEMENT
+// ============================================================================
+
+var _donationsCache = [];
+
+async function loadHarvestDonationData() {
+    var TRACE_API = window.location.origin;
+    try {
+        var res = await fetch(TRACE_API + '/api/traceability/stats');
+        var data = res.ok ? await res.json() : {};
+        var stats = data.stats || {};
+        document.getElementById('hd-total-weight').textContent = (stats.total_weight_kg ? stats.total_weight_kg.toFixed(1) + ' kg' : stats.total_weight ? stats.total_weight + ' kg' : '--');
+        document.getElementById('hd-total-events').textContent = (stats.total_records || stats.total || 0) + ' harvest events';
+        document.getElementById('hd-crop-count').textContent = stats.crops_tracked || stats.crops || '--';
+        document.getElementById('hd-crop-list').textContent = '';
+    } catch (e) {
+        console.error('Failed to load harvest stats:', e);
+    }
+
+    try {
+        var listRes = await fetch(TRACE_API + '/api/traceability');
+        var listData = listRes.ok ? await listRes.json() : {};
+        var records = listData.records || [];
+
+        var totalWeight = 0;
+        records.forEach(function(r) { totalWeight += parseFloat(r.weight_kg || r.weight || 0); });
+        if (totalWeight > 0) {
+            document.getElementById('hd-total-weight').textContent = totalWeight.toFixed(1) + ' kg';
+        }
+
+        var crops = {};
+        records.forEach(function(r) { if (r.crop_name || r.crop) crops[r.crop_name || r.crop] = true; });
+        var cropNames = Object.keys(crops);
+        document.getElementById('hd-crop-count').textContent = cropNames.length || '--';
+        document.getElementById('hd-crop-list').textContent = cropNames.slice(0, 4).join(', ') + (cropNames.length > 4 ? '...' : '');
+
+        if (records.length > 0) {
+            var last = records[0];
+            var lastDate = last.harvest_date || last.created_at;
+            document.getElementById('hd-last-harvest').textContent = lastDate ? new Date(lastDate).toLocaleDateString() : '--';
+            document.getElementById('hd-last-crop').textContent = last.crop_name || last.crop || '';
+        }
+
+        var tbody = document.getElementById('hd-harvest-list');
+        if (records.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 40px; color: var(--text-secondary);">No harvest records yet. Use E.V.I.E. or the Activity Hub to record harvests.</td></tr>';
+        } else {
+            tbody.innerHTML = records.slice(0, 50).map(function(r) {
+                var d = r.harvest_date || r.created_at || '';
+                var dateStr = d ? new Date(d).toLocaleDateString() : '--';
+                var weight = parseFloat(r.weight_kg || r.weight || 0);
+                var quality = r.quality_score ? (r.quality_score + '/10') : '--';
+                return '<tr>' +
+                    '<td>' + dateStr + '</td>' +
+                    '<td>' + (r.crop_name || r.crop || '--') + '</td>' +
+                    '<td>' + (r.variety || '--') + '</td>' +
+                    '<td>' + (weight > 0 ? weight.toFixed(1) + ' kg' : '--') + '</td>' +
+                    '<td style="font-family: monospace; font-size: 0.85rem;">' + (r.lot_number || r.lot_code || '--') + '</td>' +
+                    '<td>' + quality + '</td>' +
+                '</tr>';
+            }).join('');
+        }
+    } catch (e) {
+        console.error('Failed to load harvest records:', e);
+        document.getElementById('hd-harvest-list').innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 40px; color: var(--text-secondary);">Error loading harvest records</td></tr>';
+    }
+
+    loadDonations();
+}
+
+function loadDonations() {
+    try {
+        var raw = localStorage.getItem('farm_donations');
+        _donationsCache = raw ? JSON.parse(raw) : [];
+    } catch (e) {
+        _donationsCache = [];
+    }
+    renderDonations();
+}
+
+function renderDonations() {
+    var tbody = document.getElementById('hd-donation-list');
+    if (!tbody) return;
+
+    var totalDonated = 0;
+    _donationsCache.forEach(function(d) { totalDonated += parseFloat(d.weight || 0); });
+
+    document.getElementById('hd-total-donated').textContent = totalDonated > 0 ? totalDonated.toFixed(1) + ' kg' : '0 kg';
+    document.getElementById('hd-donation-count').textContent = _donationsCache.length + ' donation' + (_donationsCache.length !== 1 ? 's' : '');
+
+    if (_donationsCache.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 40px; color: var(--text-secondary);">No donations recorded yet. Click "+ Record Donation" to add one.</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = _donationsCache.sort(function(a, b) {
+        return new Date(b.date) - new Date(a.date);
+    }).map(function(d) {
+        return '<tr>' +
+            '<td>' + (d.date ? new Date(d.date).toLocaleDateString() : '--') + '</td>' +
+            '<td>' + (d.recipient || '--') + '</td>' +
+            '<td>' + (d.crop || '--') + '</td>' +
+            '<td>' + (parseFloat(d.weight || 0).toFixed(1)) + ' kg</td>' +
+            '<td>' + (d.notes || '--') + '</td>' +
+        '</tr>';
+    }).join('');
+}
+
+function showAddDonationModal() {
+    document.getElementById('donation-date').value = new Date().toISOString().split('T')[0];
+    document.getElementById('donation-recipient').value = '';
+    document.getElementById('donation-crop').value = '';
+    document.getElementById('donation-weight').value = '';
+    document.getElementById('donation-notes').value = '';
+    document.getElementById('addDonationModal').style.display = 'flex';
+}
+
+function saveDonation() {
+    var date = document.getElementById('donation-date').value;
+    var recipient = document.getElementById('donation-recipient').value.trim();
+    var crop = document.getElementById('donation-crop').value.trim();
+    var weight = parseFloat(document.getElementById('donation-weight').value) || 0;
+    var notes = document.getElementById('donation-notes').value.trim();
+
+    if (!recipient) { showToast('Please enter a recipient', 'error'); return; }
+    if (!crop) { showToast('Please enter a crop', 'error'); return; }
+    if (weight <= 0) { showToast('Please enter a valid weight', 'error'); return; }
+
+    _donationsCache.push({
+        id: Date.now().toString(36),
+        date: date || new Date().toISOString().split('T')[0],
+        recipient: recipient,
+        crop: crop,
+        weight: weight,
+        notes: notes
+    });
+
+    try {
+        localStorage.setItem('farm_donations', JSON.stringify(_donationsCache));
+    } catch (e) {
+        console.error('Failed to save donation:', e);
+    }
+
+    document.getElementById('addDonationModal').style.display = 'none';
+    renderDonations();
+    showToast('Donation recorded', 'success');
+}
+

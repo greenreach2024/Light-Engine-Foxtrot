@@ -14531,8 +14531,8 @@ app.get('/api/setup-wizard/status', async (req, res) => {
     
     // Check if user has setup_completed flag
     const userResult = await pool.query(
-      'SELECT setup_completed FROM users WHERE farm_id = $1 AND email = $2',
-      [farmId, email]
+      'SELECT setup_completed FROM farms WHERE farm_id = $1',
+      [farmId]
     );
     
     if (userResult.rows.length === 0) {

@@ -3765,6 +3765,7 @@ async function runMigrations(client) {
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_sensor_readings_farm_time ON sensor_readings (farm_id, recorded_at DESC)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_sensor_readings_farm_zone_type ON sensor_readings (farm_id, zone_id, sensor_type, recorded_at DESC)`);
+    await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_sensor_readings_dedup ON sensor_readings (farm_id, zone_id, sensor_type, recorded_at)`);
     logger.info('sensor_readings table ready (migration 055)');
   } catch (err) {
     logger.warn('Migration 055 warning:', err.message);

@@ -30,7 +30,7 @@ import { fileURLToPath } from 'url';
 import { createRequire } from 'module';
 import notificationStore from '../services/notification-store.js';
 import alertNotifier from '../services/alert-notifier.js';
-import { ENFORCEMENT_PROMPT_BLOCK, sendEnforcedResponse } from '../middleware/agent-enforcement.js';
+import { ENFORCEMENT_PROMPT_BLOCK, enforceResponseShape, sendEnforcedResponse } from '../middleware/agent-enforcement.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1781,7 +1781,7 @@ async function buildSystemPrompt(farmId) {
 
   // Inject valid zones and capacity from groups data
   try {
-    const groups = await farmStore.get(farmId || 'demo-farm', 'groups') || [];
+    const groups = await farmStore.get(farmId, 'groups') || [];
     const zones = [...new Set(groups.map(g => g.zone).filter(Boolean))];
     const roomNames = [...new Set(groups.map(g => g.room).filter(Boolean))];
     if (zones.length > 0) {
@@ -2336,7 +2336,28 @@ SKILL REFERENCE LIBRARY:
 - When asked about social media, marketing, content strategy, posting, social accounts, brand presence, or platform selection: call read_skill_file with skill_name "social-media-marketing" BEFORE answering.
 - When asked about device setup, sensor onboarding, adding new devices, pairing sensors, BLE setup, SwitchBot configuration, device discovery, or IoT integration: call read_skill_file with skill_name "device-setup-onboarding" BEFORE answering.
 - Skill documents contain research-backed principles and frameworks. Use them to ground your recommendations in published evidence, not guesswork.
-- Do NOT summarise the entire skill document to the user. Extract the specific principles and research that apply to their question.`;
+- Do NOT summarise the entire skill document to the user. Extract the specific principles and research that apply to their question.
+
+PLATFORM PAGES & NAVIGATION:
+When a user asks about a specific tool, page, or feature by name, tell them where to find it in the admin dashboard. Here are the key pages available:
+- Room Mapping Tool: Settings tab > Device Manager, or navigate to /views/room-mapper.html. Visual room layout with zone creation and device placement.
+- Device Manager: Settings tab > Device Manager, or /views/iot-manager.html. Scan, register, and manage IoT devices (SwitchBot, Kasa, Shelly).
+- Environment Dashboard: Operations tab > Environment, or /views/environment.html. Live sensor readings, zone targets, alerts.
+- Heat Map: /views/room-heatmap.html. Temperature and humidity distribution visualization.
+- Planting Scheduler: /views/planting-scheduler.html. Seed-to-harvest timelines with AI crop recommendations.
+- Farm Summary: /views/farm-summary.html. Real-time view of all zones, groups, and environmental data.
+- Farm Inventory: /views/farm-inventory.html. Crop inventory with growth stages and harvest estimates.
+- Nutrient Management: Operations tab > Nutrient Management, or /views/nutrient-management.html.
+- Tray Inventory / Activity Hub: Operations tab > Activity Hub, or /views/tray-inventory.html.
+- Crop Weight Analytics: /views/crop-weight-analytics.html. Harvest weight tracking and benchmarks.
+- Farm Sales Terminal: Business tab > Farm Sales Terminal, or /farm-sales-pos.html. POS for retail sales.
+- Wholesale Orders: Business tab > Wholesale Orders. View and manage wholesale order activity.
+- Crop Pricing: Business tab > Crop Pricing. Set retail and wholesale prices.
+- Procurement Portal: /views/procurement-portal.html. Order supplies from approved suppliers.
+- Financial Summary: Settings tab > Financial Summary. Revenue, expenses, and profit reporting.
+- Setup / Update: Settings tab > Setup / Update, or /LE-dashboard.html. Farm configuration and zone setup.
+- Users & Access: Settings tab > Users & Access. Team member management and roles.
+When a user mentions a tool name (e.g. "room mapping tool", "heat map", "planting scheduler"), direct them to the correct page. Do not say "I do not have data on that" if it is a known platform feature.`;
 }
 
 // ── Tool Execution Layer ──────────────────────────────────────────────
@@ -4938,7 +4959,7 @@ async function chatWithAnthropicFallback(systemPrompt, history, userMessage, far
       }
 
       toolCallResults.push({ tool: name, params: input, success: toolResult?.ok !== false });
-      toolResults.push({ type: 'tool_result', tool_use_id: id, content: JSON.stringify(toolResult) });
+      toolResults.push({ type: 'tool_result', tool_use_id: id, content: JSON.stringify(toolResult).slice(0, 8000) });
     }
 
     messages.push({ role: 'assistant', content: response.content });
@@ -5012,7 +5033,10 @@ router.post('/chat', async (req, res) => {
   }
 
   const sanitizedMessage = message.trim().slice(0, 2000);
-  const farmId = req.farmId || farm_id || 'demo-farm';
+  const farmId = req.farmId || farm_id;
+  if (!farmId) {
+    return res.status(401).json({ ok: false, error: 'Authentication required — no farm identity.' });
+  }
 
   if (!checkRateLimit(farmId)) {
     return res.status(429).json({ ok: false, error: 'Too many messages — please wait a moment before sending another.' });
@@ -5022,7 +5046,7 @@ router.post('/chat', async (req, res) => {
   const toolCallResults = [];
 
   // ── Handle pending action confirmations ──
-  const isConfirm = /^(__confirm_action__|yes|yeah|yep|confirm|do it|go ahead|proceed|approved|sure|ok)$/i.test(sanitizedMessage);
+  const isConfirm = /^(__confirm_action__|confirm|do it|go ahead|proceed|approved)$/i.test(sanitizedMessage);
   const isCancel = /^(__cancel_action__|cancel|no|nah|never mind|abort|don't|stop)$/i.test(sanitizedMessage);
 
   if (pendingActions.has(convId) && (isConfirm || isCancel)) {
@@ -5071,10 +5095,10 @@ router.post('/chat', async (req, res) => {
 
       await upsertConversation(convId, [...history, { role: 'user', content: sanitizedMessage }, { role: 'assistant', content: replyText }], farmId);
 
-      return res.json({
+      return sendEnforcedResponse(res, {
         ok: true, reply: replyText, conversation_id: convId,
         tool_calls: toolCallResults.length > 0 ? toolCallResults : undefined, model: MODEL
-      });
+      }, { hadToolData: true, agent: 'evie' });
     } catch (err) {
       return res.json({ ok: true, reply: `Sorry, the action failed: ${err.message}`, conversation_id: convId });
     }
@@ -5202,7 +5226,7 @@ router.post('/chat', async (req, res) => {
         messages.push({
           role: 'tool',
           tool_call_id: toolCall.id,
-          content: JSON.stringify(toolResult)
+          content: JSON.stringify(toolResult).slice(0, 8000)
         });
       }
 
@@ -5328,7 +5352,7 @@ router.post('/chat', async (req, res) => {
 
 router.get('/state', async (req, res) => {
   try {
-    const farmId = req.farmId || req.query.farm_id || 'demo-farm';
+    const farmId = req.user?.farmId || req.farmId || req.query.farm_id;
 
     // Rooms + environment readings
     const roomsRaw = readJSON('rooms.json', {});
@@ -5579,7 +5603,10 @@ router.post('/chat/stream', async (req, res) => {
   }
 
   const sanitizedMessage = message.trim().slice(0, 2000);
-  const farmId = req.farmId || farm_id || 'demo-farm';
+  const farmId = req.farmId || farm_id;
+  if (!farmId) {
+    return res.status(401).json({ ok: false, error: 'Authentication required.' });
+  }
 
   if (!checkRateLimit(farmId)) {
     return res.status(429).json({ ok: false, error: 'Too many messages — please wait.' });
@@ -5683,7 +5710,7 @@ router.post('/chat/stream', async (req, res) => {
         toolCallResults.push({ tool: fnName, params: fnArgs, success: toolResult?.ok !== false });
         sendEvent('tool_done', { tool: fnName, success: toolResult?.ok !== false });
 
-        messages.push({ role: 'tool', tool_call_id: toolCall.id, content: JSON.stringify(toolResult) });
+        messages.push({ role: 'tool', tool_call_id: toolCall.id, content: JSON.stringify(toolResult).slice(0, 8000) });
       }
 
       completion = await openai.chat.completions.create({
@@ -5745,12 +5772,25 @@ router.post('/chat/stream', async (req, res) => {
       const toolNames = toolCallResults.map(t => t.tool);
       trackEngagement(farmId, { messages: 1, toolCalls: toolNames.length, toolsUsed: toolNames });
 
+      // Enforcement: check assembled reply before signaling done
+      const hadToolData = toolCallResults.length > 0;
+      const enforcement = enforceResponseShape(fullReply, { hadToolData, agent: 'evie' });
+      if (enforcement.violationCount >= 3) {
+        sendEvent('enforcement', {
+          blocked: true,
+          violations: enforcement.violationCount,
+          flags: enforcement.violations.map(v => v.split(':')[0]),
+          replacement: 'I was not able to produce a response that meets quality standards. Please rephrase your question, or ask me to check a specific data source.'
+        });
+      }
+
       const pendingAction = pendingActions.get(convId);
       sendEvent('done', {
         conversation_id: convId,
         tool_calls: toolCallResults.length > 0 ? toolCallResults : undefined,
         pending_action: pendingAction ? { tool: pendingAction.tool, params: pendingAction.params } : undefined,
-        model: streamModel
+        model: streamModel,
+        enforcement: enforcement.violationCount > 0 ? { violations: enforcement.violationCount, flags: enforcement.violations.map(v => v.split(':')[0]) } : undefined
       });
     }
   } catch (error) {
@@ -5790,13 +5830,26 @@ router.post('/chat/stream', async (req, res) => {
           status: 'success'
         });
 
+        // Enforcement: check fallback reply before signaling done
+        const fbHadToolData = fallbackResult.toolCalls.length > 0;
+        const fbEnforcement = enforceResponseShape(fallbackResult.reply, { hadToolData: fbHadToolData, agent: 'evie' });
+        if (fbEnforcement.violationCount >= 3) {
+          sendEvent('enforcement', {
+            blocked: true,
+            violations: fbEnforcement.violationCount,
+            flags: fbEnforcement.violations.map(v => v.split(':')[0]),
+            replacement: 'I was not able to produce a response that meets quality standards. Please rephrase your question, or ask me to check a specific data source.'
+          });
+        }
+
         const fbPendingAction = pendingActions.get(convId);
         sendEvent('done', {
           conversation_id: convId,
           tool_calls: fallbackResult.toolCalls.length > 0 ? fallbackResult.toolCalls : undefined,
           pending_action: fbPendingAction ? { tool: fbPendingAction.tool, params: fbPendingAction.params } : undefined,
           model: fallbackResult.model,
-          provider: 'anthropic'
+          provider: 'anthropic',
+          enforcement: fbEnforcement.violationCount > 0 ? { violations: fbEnforcement.violationCount, flags: fbEnforcement.violations.map(v => v.split(':')[0]) } : undefined
         });
         res.end();
         return;
@@ -5860,7 +5913,7 @@ const briefingCache = new Map();
 const BRIEFING_TTL_MS = 4 * 60 * 60 * 1000;
 
 router.get('/morning-briefing', async (req, res) => {
-  const farmId = req.farmId || req.query.farm_id || 'demo-farm';
+  const farmId = req.user?.farmId || req.farmId || req.query.farm_id;
   const cacheKey = `${farmId}:${new Date().toISOString().slice(0, 10)}`;
 
   // Return cached briefing if fresh
@@ -5969,7 +6022,7 @@ router.get('/morning-briefing', async (req, res) => {
  * Light polling endpoint — frontend calls every 5 min.
  */
 router.get('/nudges', async (req, res) => {
-  const farmId = req.farmId || req.query.farm_id || 'demo-farm';
+  const farmId = req.user?.farmId || req.farmId || req.query.farm_id;
   const nudges = [];
 
   try {
@@ -6095,7 +6148,7 @@ function getFeedbackSummary(farmId) {
 // GET /api/assistant/memory?farm_id=... — return all memory for a farm
 router.get('/memory', async (req, res) => {
   try {
-    const farmId = req.farmId || req.query.farm_id || 'demo-farm';
+    const farmId = req.user?.farmId || req.farmId || req.query.farm_id;
     const mem = await getUserMemory(farmId);
     return res.json({ ok: true, memory: mem, count: Object.keys(mem).length });
   } catch (err) {
@@ -6111,7 +6164,7 @@ router.post('/memory', async (req, res) => {
     if (!key || !value) {
       return res.status(400).json({ ok: false, error: 'key and value are required' });
     }
-    const farmId = req.farmId || farm_id || 'demo-farm';
+    const farmId = req.user?.farmId || req.farmId || farm_id;
     const saved = await saveUserMemory(farmId, key, value);
     return res.json({ ok: saved, key, value });
   } catch (err) {
@@ -6128,7 +6181,7 @@ router.post('/memory', async (req, res) => {
  */
 router.get('/engagement-report', async (req, res) => {
   try {
-    const farmId = req.farmId || req.query.farm_id || 'demo-farm';
+    const farmId = req.user?.farmId || req.farmId || req.query.farm_id;
     const periodParam = req.query.period || 'current';
 
     if (!isDatabaseAvailable()) {
@@ -6242,7 +6295,7 @@ router.get('/engagement-report', async (req, res) => {
  */
 router.get('/notifications', async (req, res) => {
   try {
-    const farmId = req.farmId || req.query.farm_id || 'demo-farm';
+    const farmId = req.user?.farmId || req.farmId || req.query.farm_id;
     const unreadOnly = req.query.unread_only === 'true';
     const limit = Math.min(parseInt(req.query.limit) || 30, 100);
     const offset = parseInt(req.query.offset) || 0;
@@ -6262,7 +6315,7 @@ router.get('/notifications', async (req, res) => {
  */
 router.post('/notifications/read', async (req, res) => {
   try {
-    const farmId = req.farmId || req.body?.farm_id || 'demo-farm';
+    const farmId = req.user?.farmId || req.farmId || req.body?.farm_id;
     const { id, all } = req.body || {};
 
     if (all) {

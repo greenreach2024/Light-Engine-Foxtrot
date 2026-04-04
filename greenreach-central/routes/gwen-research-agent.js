@@ -473,6 +473,9 @@ const GWEN_TOOL_CATALOG = {
         const agreement = await query(
           `SELECT id FROM data_sharing_agreements WHERE farm_id = $1 AND status = 'active'
            AND data_types::text LIKE '%sensor%'`, [ctx.farmId]).catch(() => ({ rows: [] }));
+        if (agreement.rows.length === 0) {
+          return { ok: false, error: 'No active data sharing agreement found. Request access from the target farm first.' };
+        }
         const hours = Math.min(params.hours_back || 24, 168);
         const result = await query(
           `SELECT data_type, data, updated_at FROM farm_data
@@ -481,8 +484,8 @@ const GWEN_TOOL_CATALOG = {
            ORDER BY updated_at DESC LIMIT 200`, [params.target_farm_id, hours]);
         return {
           ok: true, readings: result.rows, count: result.rows.length,
-          has_agreement: agreement.rows.length > 0,
-          note: agreement.rows.length === 0 ? 'No active data sharing agreement found -- data access may be limited' : null,
+          has_agreement: true,
+
         };
       } catch (err) { return { ok: false, error: err.message }; }
     },
@@ -4448,19 +4451,18 @@ const GWEN_TOOL_CATALOG = {
         const execId = logResult.rows[0].id;
         const start = Date.now();
 
-        // Sandboxed execution
-        const { execSync } = await import('child_process');
-        const cmd = lang === 'python'
-          ? `python3 -c ${JSON.stringify(params.code)}`
-          : `Rscript -e ${JSON.stringify(params.code)}`;
+        // Sandboxed execution (execFileSync avoids shell interpretation)
+        const { execFileSync } = await import('child_process');
+        const execBin = lang === 'python' ? 'python3' : 'Rscript';
+        const execArgs = lang === 'python' ? ['-c', params.code] : ['-e', params.code];
 
         let output = '';
         let error = null;
         try {
-          output = execSync(cmd, {
+          output = execFileSync(execBin, execArgs, {
             timeout: 30000,
             maxBuffer: 1024 * 1024,
-            env: { ...process.env, MPLBACKEND: 'Agg' },
+            env: { PATH: process.env.PATH, HOME: '/tmp', TMPDIR: '/tmp', MPLBACKEND: 'Agg' },
             cwd: '/tmp',
           }).toString();
         } catch (execErr) {
@@ -6061,7 +6063,10 @@ async function chatWithOpenAI(client, messages, ctx) {
 
 // POST /chat -- Main conversational endpoint
 router.post('/chat', async (req, res) => {
-  const userId = req.user?.userId || req.userId || req.adminId || req.user?.email || 'anon';
+  const userId = req.user?.userId || req.userId || req.adminId || req.user?.email;
+  if (!userId) {
+    return res.status(401).json({ ok: false, error: 'Authentication required for research agent.' });
+  }
   const farmId = req.user?.farmId || req.farmId || req.body.farm_id;
   if (!farmId) {
     return res.status(400).json({ ok: false, error: 'farm_id required' });

@@ -22,7 +22,7 @@ import express from 'express';
 import { query, isDatabaseAvailable } from '../config/database.js';
 import { verifyWebhookSignature } from '../middleware/webhook-signature.js';
 import { requireFarmApiKey } from '../middleware/farmApiKeyAuth.js';
-import { query as dbQuery, isDatabaseAvailable } from '../config/database.js';
+import { query as dbQuery } from '../config/database.js';
 import {
   getOrderById,
   saveOrder,
