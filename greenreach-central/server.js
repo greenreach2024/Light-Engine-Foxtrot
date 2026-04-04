@@ -1964,7 +1964,7 @@ function mergeCompatibilityPlans(plans) {
   return merged;
 }
 
-app.get('/plans', authMiddleware, async (req, res) => {
+app.get('/plans', async (req, res) => {
   try {
     const fid = farmStore.farmIdFromReq(req);
     let plans = await farmStore.get(fid, 'plans');
@@ -2401,6 +2401,44 @@ app.get('/api/schedule-executor/status', authMiddleware, (_req, res) => {
 
 app.get('/api/schedule-executor/ml-anomalies', authMiddleware, (_req, res) => {
   return res.json({ success: true, anomalies: [], count: 0 });
+});
+
+// ── Stub routes for LE-only endpoints (farm-summary.html fetches these when served from Central) ──
+
+app.get('/api/harvest/predictions/all', (_req, res) => {
+  return res.json({ ok: true, predictions: [], count: 0, timestamp: new Date().toISOString() });
+});
+
+app.get('/api/farm/dedicated-crops', (_req, res) => {
+  return res.json({ ok: true, crops: [] });
+});
+
+app.get('/api/ai/learning-correlations', (_req, res) => {
+  return res.json({ ok: true, correlations: [], count: 0, timestamp: new Date().toISOString() });
+});
+
+app.get('/api/harvest/experiment-records', (_req, res) => {
+  return res.json({ ok: true, records: [], count: 0 });
+});
+
+app.get('/api/harvest/experiment-stats', (_req, res) => {
+  return res.json({ ok: true, stats: { total: 0, crops: {}, outcomes: {} } });
+});
+
+app.get('/api/recipe-modifiers', (_req, res) => {
+  return res.json({ ok: true, local: [], network: [], timestamp: new Date().toISOString() });
+});
+
+app.get('/api/recipe-modifiers/autonomous/status', (_req, res) => {
+  return res.json({ ok: true, enabled: false, message: 'Autonomous recipe modifiers run on the farm device' });
+});
+
+app.post('/api/recipe-modifiers/network/:crop/accept', (_req, res) => {
+  return res.json({ ok: true, message: 'Recipe modifier operations run on the farm device' });
+});
+
+app.post('/api/recipe-modifiers/network/:crop/dismiss', (_req, res) => {
+  return res.json({ ok: true, message: 'Recipe modifier operations run on the farm device' });
 });
 
 app.get('/api/ml/anomalies/statistics', authMiddleware, (_req, res) => {

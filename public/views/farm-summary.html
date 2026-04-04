@@ -2054,6 +2054,9 @@
   </script>
 
   <script>
+    // Logging utility (suppress in production, verbose in dev)
+    function grLog(...args) { if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') console.log('[GR]', ...args); }
+
     // Auth helper for /data/ routes through greenreach-central multi-tenant middleware.
     // Read token from both sessionStorage and localStorage to support private-mode sessions.
     function fetchWithFarmAuth(url, opts = {}) {
