@@ -541,6 +541,12 @@
   }
 }
 
+/* ---- Hide floating EVIE orb when infotainment hero bar provides one ---- */
+
+body.infotainment-active .evie-ambient {
+  display: none !important;
+}
+
 /* ---- Hide old sidebar and page-header when infotainment is active ---- */
 
 body.infotainment-active .sidebar,
@@ -561,6 +567,8 @@ body.infotainment-active .infotainment-layout {
 
 .infotainment-content #section-iframe-view {
   padding: 0;
+  margin: 0;
+  width: 100%;
   height: calc(100vh - 100px);
 }
 
