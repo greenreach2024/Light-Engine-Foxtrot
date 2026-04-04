@@ -28,10 +28,15 @@ async function ensureTable() {
         severity      TEXT NOT NULL DEFAULT 'info',
         source        TEXT,
         read          BOOLEAN NOT NULL DEFAULT FALSE,
+        action_url    TEXT,
+        action_label  TEXT,
         created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
     `);
     await query(`CREATE INDEX IF NOT EXISTS idx_farm_notif_farm ON farm_notifications(farm_id, read, created_at DESC)`);
+    // Add action columns if missing (existing deployments)
+    await query(`ALTER TABLE farm_notifications ADD COLUMN IF NOT EXISTS action_url TEXT`).catch(() => {});
+    await query(`ALTER TABLE farm_notifications ADD COLUMN IF NOT EXISTS action_label TEXT`).catch(() => {});
     tableReady = true;
     return true;
   } catch (err) {
@@ -54,8 +59,8 @@ async function pushNotification(farmId, notification) {
   }
   try {
     const result = await query(
-      `INSERT INTO farm_notifications (farm_id, category, title, body, severity, source)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO farm_notifications (farm_id, category, title, body, severity, source, action_url, action_label)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING id, created_at`,
       [
         farmId,
@@ -63,7 +68,9 @@ async function pushNotification(farmId, notification) {
         notification.title,
         notification.body || null,
         notification.severity || 'info',
-        notification.source || null
+        notification.source || null,
+        notification.action_url || null,
+        notification.action_label || null
       ]
     );
     console.log(`[NotificationStore] Pushed notification for farm ${farmId}: ${notification.title}`);
@@ -98,7 +105,7 @@ async function getNotifications(farmId, options = {}) {
     const unreadCount = parseInt(countResult.rows[0]?.cnt || '0', 10);
 
     const rows = await query(
-      `SELECT id, category, title, body, severity, source, read, created_at
+      `SELECT id, category, title, body, severity, source, read, action_url, action_label, created_at
        FROM farm_notifications
        WHERE ${where}
        ORDER BY created_at DESC

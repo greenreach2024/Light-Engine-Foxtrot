@@ -1351,6 +1351,41 @@
   color: var(--evie-accent);
 }
 
+/* Actionable notification — clickable with visible target */
+.evie-notif-item.actionable {
+  cursor: pointer;
+}
+.evie-notif-item.actionable:hover {
+  border-color: var(--evie-accent, #10b981);
+  background: rgba(16, 185, 129, 0.10);
+}
+.evie-notif-item.actionable.read:hover {
+  opacity: 0.85;
+}
+.evie-notif-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--evie-accent, #10b981);
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.evie-notif-action-btn:hover {
+  background: rgba(16, 185, 129, 0.22);
+  border-color: var(--evie-accent, #10b981);
+  color: #fff;
+}
+.evie-notif-action-btn svg {
+  flex-shrink: 0;
+}
+
 /* ======================================================================
    RESPONSIVE
    ====================================================================== */

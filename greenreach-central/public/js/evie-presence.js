@@ -714,6 +714,24 @@
     }
   }
 
+  // Category-to-action defaults — where to navigate when no explicit action_url
+  var NOTIF_ACTION_MAP = {
+    order:     { url: 'section:wholesale-orders',               label: 'View Orders' },
+    alert:     { url: 'iframe:/views/farm-summary.html',        label: 'View Farm Status' },
+    harvest:   { url: 'iframe:/views/tray-inventory.html',      label: 'View Activity Hub' },
+    inventory: { url: 'iframe:/views/farm-inventory.html',      label: 'View Inventory' },
+    nutrient:  { url: 'iframe:/views/nutrient-management.html', label: 'View Nutrients' },
+    quality:   { url: 'section:quality',                        label: 'View Quality' },
+    sales:     { url: 'iframe:/farm-sales-pos.html',            label: 'View Sales' },
+    pricing:   { url: 'section:pricing',                        label: 'View Pricing' },
+    environment: { url: 'iframe:/views/environment.html',       label: 'View Environment' }
+  };
+
+  function getNotifAction(n) {
+    if (n.action_url) return { url: n.action_url, label: n.action_label || 'Open' };
+    return NOTIF_ACTION_MAP[n.category] || null;
+  }
+
   function renderNotifications() {
     var list = document.getElementById('evie-notif-list');
     if (!list) return;
@@ -730,15 +748,21 @@
       };
       var icon = catIcon[n.category] || catIcon.general;
       var readClass = n.read ? 'read' : 'unread';
-      html += '<div class="evie-notif-item ' + readClass + '" data-id="' + n.id + '">' +
+      var action = getNotifAction(n);
+      var hasAction = !!action;
+
+      html += '<div class="evie-notif-item ' + readClass + (hasAction ? ' actionable' : '') + '" data-id="' + n.id + '"' +
+        (hasAction ? ' onclick="window._evieNotifAction(' + n.id + ',\'' + esc(action.url) + '\')"' : '') + '>' +
         '<div class="evie-notif-icon">' + icon + '</div>' +
         '<div class="evie-notif-content">' +
         '  <div class="evie-notif-title">' + esc(n.title) + '</div>' +
         (n.body ? '  <div class="evie-notif-body">' + esc(n.body) + '</div>' : '') +
         '  <div class="evie-notif-meta">' + timeAgo(new Date(n.created_at).getTime()) +
         (n.source ? ' | ' + esc(n.source) : '') + '</div>' +
+        (hasAction ? '  <button class="evie-notif-action-btn" onclick="event.stopPropagation(); window._evieNotifAction(' + n.id + ',\'' + esc(action.url) + '\')">' + esc(action.label) +
+        ' <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg></button>' : '') +
         '</div>' +
-        (!n.read ? '<button class="evie-notif-read-btn" onclick="window._evieMarkRead(' + n.id + ')">Mark read</button>' : '') +
+        (!n.read && !hasAction ? '<button class="evie-notif-read-btn" onclick="window._evieMarkRead(' + n.id + ')">Mark read</button>' : '') +
         '</div>';
     });
     list.innerHTML = html;
@@ -754,6 +778,40 @@
       });
       loadNotifications();
     } catch (e) { /* silent */ }
+  };
+
+  // Navigate to the target of an actionable notification, mark it read, close the panel
+  window._evieNotifAction = async function (id, actionUrl) {
+    // Mark read first (fire-and-forget)
+    fetch(API_BASE + '/notifications/read', {
+      method: 'POST',
+      headers: Object.assign({ 'Content-Type': 'application/json' }, getAuthHeaders()),
+      body: JSON.stringify({ id: id })
+    }).then(function () { loadNotifications(); }).catch(function () {});
+
+    // Close the EVIE panel
+    var panel = document.getElementById('evie-intel-panel');
+    if (panel) panel.classList.remove('open');
+
+    // Route to the target
+    if (actionUrl.indexOf('section:') === 0) {
+      // Internal section — click the sidebar nav item
+      var section = actionUrl.replace('section:', '');
+      var navItem = document.querySelector('.nav-item[data-section="' + section + '"]');
+      if (navItem) navItem.click();
+    } else if (actionUrl.indexOf('iframe:') === 0) {
+      // Iframe page — find matching nav item or trigger embedded view directly
+      var iframeUrl = actionUrl.replace('iframe:', '');
+      var navItem = document.querySelector('.nav-item[data-section="iframe-view"][data-url="' + iframeUrl + '"]');
+      if (navItem) {
+        navItem.click();
+      } else if (typeof window.renderEmbeddedView === 'function') {
+        window.renderEmbeddedView(iframeUrl, 'Notification');
+      }
+    } else if (actionUrl.indexOf('http') === 0 || actionUrl.indexOf('/') === 0) {
+      // Direct URL — navigate
+      window.location.href = actionUrl;
+    }
   };
 
   function updateAmbient(data) {

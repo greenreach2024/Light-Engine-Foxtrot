@@ -6232,11 +6232,11 @@ router.post('/notifications/read', async (req, res) => {
  */
 router.post('/notifications/push', async (req, res) => {
   try {
-    const { farm_id, category, title, body, severity, source } = req.body || {};
+    const { farm_id, category, title, body, severity, source, action_url, action_label } = req.body || {};
     if (!farm_id || !title) {
       return res.status(400).json({ ok: false, error: 'farm_id and title are required' });
     }
-    const result = await notificationStore.pushNotification(farm_id, { category, title, body, severity, source });
+    const result = await notificationStore.pushNotification(farm_id, { category, title, body, severity, source, action_url, action_label });
 
     // Dispatch email + SMS for high/critical severity notifications
     alertNotifier.notify({ alert_type: category || 'notification', severity, title, detail: body, farm_id });
