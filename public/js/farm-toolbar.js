@@ -15,7 +15,15 @@
   'use strict';
 
   // If the EVIE status bar toolbar is present, skip the floating toolbar
+  // but still hide the old standalone buttons
   if (document.getElementById('evie-bar-toolbar')) {
+    var hideStyle = document.createElement('style');
+    hideStyle.textContent =
+      '#le-help-toggle { display: none !important; }' +
+      '.evie-ambient { display: none !important; }' +
+      '#voiceFab { display: none !important; }';
+    document.head.appendChild(hideStyle);
+    document.body.classList.add('farm-toolbar-active');
     return;
   }
 

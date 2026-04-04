@@ -49,6 +49,10 @@
           transition: bottom 0.3s ease;
       `;
       
+      // Hide standalone toggle when EVIE status bar toolbar is present
+      if (document.getElementById('evie-bar-toolbar')) {
+        toggleBtn.style.display = 'none';
+      }
       document.body.appendChild(toggleBtn);
 
       // 2. Help Popup Container
