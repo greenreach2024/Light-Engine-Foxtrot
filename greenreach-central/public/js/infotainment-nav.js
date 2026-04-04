@@ -40,7 +40,8 @@
         { id: 'calendar',      label: 'Calendar',       icon: 'icon-calendar',     section: 'iframe-view', url: '/views/calendar.html' },
         { id: 'evie-core',         label: 'E.V.I.E. Core',        icon: 'icon-evie',        section: 'iframe-view', url: '/evie-core.html' },
         { id: 'gwen',              label: 'G.W.E.N.',             icon: 'icon-gwen',        section: 'iframe-view', url: '/gwen-core.html' },
-        { id: 'research-workspace', label: 'Research Workspace',  icon: 'icon-research',    section: 'iframe-view', url: '/views/research-workspace.html' }
+        { id: 'research-workspace', label: 'Research Workspace',  icon: 'icon-research',    section: 'iframe-view', url: '/views/research-workspace.html' },
+        { id: 'research-overview',  label: 'Research Overview',   icon: 'icon-research',    section: 'iframe-view', url: '/research-subscription.html' }
       ]
     },
     business: {
@@ -67,6 +68,7 @@
         { id: 'exports',  label: 'Exports',  icon: 'icon-exports',  section: 'exports' },
         { id: 'payments', label: 'Payments', icon: 'icon-payments', section: 'payments' },
         { id: 'help',     label: 'Help',     icon: 'icon-help',     section: 'help' },
+        { id: 'contact-support', label: 'Contact Support', icon: 'icon-help', section: 'external', url: 'mailto:support@lightengine.io' },
       ]
     }
   };

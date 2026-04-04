@@ -34,6 +34,7 @@
     { keywords: ['evie', 'e.v.i.e', 'ai', 'intelligence', 'copilot', 'assistant'], label: 'E.V.I.E. Core', icon: 'icon-evie', category: 'Operations', catKey: 'operations', itemId: 'evie-core' },
     { keywords: ['gwen', 'g.w.e.n', 'research agent', 'analysis', 'data analysis'], label: 'G.W.E.N.', icon: 'icon-gwen', category: 'Operations', catKey: 'operations', itemId: 'gwen' },
     { keywords: ['research', 'workspace', 'studies', 'datasets', 'notebooks', 'lab', 'experiment', 'protocol'], label: 'Research Workspace', icon: 'icon-research', category: 'Operations', catKey: 'operations', itemId: 'research-workspace' },
+    { keywords: ['research overview', 'subscription', 'research features', 'research plan', 'study design', 'compliance'], label: 'Research Overview', icon: 'icon-research', category: 'Operations', catKey: 'operations', itemId: 'research-overview' },
 
     // Business
     { keywords: ['sales', 'pos', 'point of sale', 'retail', 'transaction', 'cash register'], label: 'Farm Sales Terminal', icon: 'icon-pos', category: 'Business', catKey: 'business', itemId: 'farm-sales' },
@@ -52,6 +53,7 @@
     { keywords: ['export', 'exports', 'download', 'csv', 'report'], label: 'Exports', icon: 'icon-exports', category: 'Settings', catKey: 'settings', itemId: 'exports' },
     { keywords: ['payment', 'payments', 'billing', 'square', 'card', 'bank'], label: 'Payments', icon: 'icon-payments', category: 'Settings', catKey: 'settings', itemId: 'payments' },
     { keywords: ['help', 'support', 'guide', 'how to', 'documentation'], label: 'Help', icon: 'icon-help', category: 'Settings', catKey: 'settings', itemId: 'help' },
+    { keywords: ['contact', 'support', 'email', 'help desk', 'technical support', 'report issue'], label: 'Contact Support', icon: 'icon-help', category: 'Settings', catKey: 'settings', itemId: 'contact-support' },
 
     // Category-level shortcuts
     { keywords: ['growing', 'grow', 'crops', 'garden'], label: 'Growing', icon: 'icon-growing', category: '', catKey: 'growing', itemId: null },
