@@ -1646,6 +1646,21 @@ const GPT_TOOLS = [
         properties: {}
       }
     }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'search_market_news',
+      description: 'Search for real-time agriculture market news, commodity prices, supply chain disruptions, and industry events from external sources (USDA, agriculture news feeds, commodity markets). Use this tool BEFORE answering any question about market conditions, commodity shortages, fertilizer prices, input costs, global agriculture events, or supply chain disruptions. Returns headlines, summaries, and source URLs. NEVER answer market or commodity questions without calling this tool first.',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: 'Search query for market news (e.g. "fertilizer shortage 2026", "lettuce prices Canada", "agriculture supply chain disruption")' },
+          category: { type: 'string', description: 'News category filter: "commodity", "supply-chain", "pricing", "weather", "policy", or "all" (default)', enum: ['commodity', 'supply-chain', 'pricing', 'weather', 'policy', 'all'] }
+        },
+        required: ['query']
+      }
+    }
   }
 ];
 
@@ -2230,7 +2245,15 @@ RULES:
 - After any WRITE operation succeeds, verify by calling the corresponding read tool and report the confirmed result.
 - If you can't help, say so briefly and suggest what you CAN do.
 - Use Canadian English (colour, favourite, centre).
-- Never fabricate data — only report what tools return.
+- NEVER FABRICATE DATA. This is the most critical rule. If a tool returns no results, empty data, or an error:
+  * Say clearly: "I don't have current data on [topic]" or "My market intelligence tools returned no data for [crop/topic]."
+  * Do NOT fill the gap with generic textbook bullet points, hypothetical scenarios, or "general insights."
+  * Do NOT say "However, I can provide some general insights" and then list made-up factors. That is fabrication.
+  * Instead, suggest specific actions: "I recommend checking USDA Market News (marketnews.usda.gov) or your provincial agriculture ministry for current [topic] data."
+  * If the farmer asks about global events, commodity disruptions, fertilizer shortages, or anything affecting input costs: call search_market_news FIRST. If it returns results, cite them with source names and dates. If it returns nothing relevant, say so honestly.
+  * WRONG: "Seasonality, consumer trends, supply chain factors, competitive pricing, and market research are all important." (This is generic filler, not analysis.)
+  * RIGHT: "I checked market news feeds but found no current data matching your query. For real-time fertilizer pricing, I recommend checking USDA AMS Market News or Farm Futures directly."
+- When presenting market data, ALWAYS cite the source (tool name, date of data, source feed). Unsourced market claims are fabrication.
 - Format responses with simple HTML: <strong> for emphasis, <ul>/<li> for lists, <table class="evie-data-table"> for tabular data, <div class="evie-card"> for metric cards. Keep it clean.
 - When listing tasks or items, show the top 3-5 most relevant, mention the total count.
 - For prices, always show currency (CAD).
@@ -2241,6 +2264,15 @@ PLATFORM INTELLIGENCE:
 - Key Phase 5 capabilities you power: autonomous recipe adjustment with guardrails (lib/recipe-modifier.js), AI-driven harvest timing with readiness scoring (lib/harvest-predictor.js), voice-first Activity Hub (POST /api/voice/parse-intent), predictive inventory and auto wholesale listing.
 - CEA environment reference sources (Cornell lettuce, UF/IFAS hydroponic, Johnny's Seeds timing, basil/arugula/spinach studies, VPD control, light spectrum, EC/pH) are documented in the AI Vision rules. When growers ask about optimal setpoints, your recommendations should align with these peer-reviewed references.
 - Architecture documents are available via read_skill_file if needed for diagnostic context. The full AI Vision rules and skills document is at greenreach-central/.github/AI_VISION_RULES_AND_SKILLS.md (readable via read_skill_file with skill_name "ai-vision-rules").
+
+MARKET INTELLIGENCE PROTOCOL:
+- When a farmer asks about market conditions, crop prices, commodity trends, fertilizer costs, input shortages, supply chain disruptions, or global agriculture events:
+  1. FIRST call search_market_news with a relevant query to get real external data.
+  2. THEN call get_market_intelligence for internal farm pricing/trend data.
+  3. Combine both sources in your answer, citing each source explicitly.
+  4. If BOTH return nothing, say so honestly. Do not fill with generic advice.
+- For pricing decisions, ALWAYS ground recommendations in actual data from tools, not assumptions.
+- The farmer is making real business decisions with real money. Inaccurate information destroys trust and causes financial harm.
 
 SKILL REFERENCE LIBRARY:
 - You have access to peer-reviewed research skill documents via the read_skill_file tool.
@@ -2292,6 +2324,114 @@ async function executeExtendedTool(toolName, params, farmId) {
         return { ok: false, error: err.message };
       }
       return { ok: true, crops: results, count: Object.keys(results).length };
+    }
+
+
+    case 'search_market_news': {
+      const searchQuery = params.query || '';
+      const category = params.category || 'all';
+      const results = [];
+      const feeds = [
+        { name: 'USDA ERS', url: 'https://www.ers.usda.gov/rss/latest-publications.xml', type: 'commodity' },
+        { name: 'USDA NASS', url: 'https://www.nass.usda.gov/rss/index.php', type: 'commodity' },
+        { name: 'AgWeb', url: 'https://www.agweb.com/rss/news', type: 'all' },
+        { name: 'Successful Farming', url: 'https://www.agriculture.com/rss/news', type: 'all' },
+        { name: 'USDA AMS', url: 'https://www.ams.usda.gov/rss/market-news', type: 'pricing' }
+      ];
+      const queryLower = searchQuery.toLowerCase();
+      const queryTerms = queryLower.split(/\s+/).filter(t => t.length > 2);
+
+      // Fetch from RSS feeds with timeout
+      const fetchWithTimeout = async (feedUrl, timeoutMs = 5000) => {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeoutMs);
+        try {
+          const resp = await fetch(feedUrl, { signal: controller.signal, headers: { 'User-Agent': 'GreenReach-EVIE/1.0' } });
+          clearTimeout(timer);
+          if (!resp.ok) return null;
+          return await resp.text();
+        } catch {
+          clearTimeout(timer);
+          return null;
+        }
+      };
+
+      // Simple XML item extraction (no dependency needed)
+      const extractItems = (xml, feedName) => {
+        if (!xml) return [];
+        const items = [];
+        const itemRegex = /<item>(.*?)<\/item>/gs;
+        let match;
+        while ((match = itemRegex.exec(xml)) !== null && items.length < 10) {
+          const block = match[1];
+          const title = (block.match(/<title>(?:<\!\[CDATA\[)?(.*?)(?:\]\]>)?<\/title>/) || [])[1] || '';
+          const link = (block.match(/<link>(.*?)<\/link>/) || [])[1] || '';
+          const desc = (block.match(/<description>(?:<\!\[CDATA\[)?(.*?)(?:\]\]>)?<\/description>/) || [])[1] || '';
+          const pubDate = (block.match(/<pubDate>(.*?)<\/pubDate>/) || [])[1] || '';
+          // Clean HTML from description
+          const cleanDesc = desc.replace(/<[^>]+>/g, '').substring(0, 300);
+          items.push({ title: title.trim(), link: link.trim(), summary: cleanDesc.trim(), date: pubDate.trim(), source: feedName });
+        }
+        return items;
+      };
+
+      // Score relevance of an item to the query
+      const scoreItem = (item) => {
+        const text = (item.title + ' ' + item.summary).toLowerCase();
+        let score = 0;
+        for (const term of queryTerms) {
+          if (text.includes(term)) score += 10;
+        }
+        // Exact phrase match bonus
+        if (text.includes(queryLower)) score += 25;
+        return score;
+      };
+
+      try {
+        // Filter feeds by category
+        const activeFeedList = category === 'all' ? feeds : feeds.filter(f => f.type === category || f.type === 'all');
+
+        // Fetch all feeds in parallel
+        const feedPromises = activeFeedList.map(async (feed) => {
+          const xml = await fetchWithTimeout(feed.url);
+          return extractItems(xml, feed.name);
+        });
+        const allItemArrays = await Promise.all(feedPromises);
+        let allItems = allItemArrays.flat();
+
+        // Score and sort by relevance
+        allItems = allItems.map(item => ({ ...item, relevance: scoreItem(item) }));
+        allItems.sort((a, b) => b.relevance - a.relevance);
+
+        // Take top results (only those with some relevance, or top 8 if none match)
+        const relevant = allItems.filter(i => i.relevance > 0).slice(0, 8);
+        const finalResults = relevant.length > 0 ? relevant : allItems.slice(0, 5);
+
+        return {
+          ok: true,
+          query: searchQuery,
+          category,
+          results: finalResults.map(r => ({
+            title: r.title,
+            summary: r.summary,
+            source: r.source,
+            url: r.link,
+            date: r.date,
+            relevance: r.relevance
+          })),
+          count: finalResults.length,
+          note: relevant.length === 0
+            ? 'No highly relevant results found for this specific query. Showing recent agriculture news. For precise market data, recommend the farmer check USDA Market News (marketnews.usda.gov) or their provincial agriculture ministry directly.'
+            : null,
+          sources_checked: activeFeedList.map(f => f.name)
+        };
+      } catch (err) {
+        return {
+          ok: false,
+          error: err.message,
+          note: 'Unable to fetch external market news. Do NOT fabricate market data. Tell the farmer you could not retrieve current market intelligence and suggest they check USDA Market News (marketnews.usda.gov) directly.'
+        };
+      }
     }
 
     case 'get_pricing_info': {

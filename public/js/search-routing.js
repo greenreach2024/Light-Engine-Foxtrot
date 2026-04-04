@@ -31,6 +31,9 @@
     { keywords: ['device', 'devices', 'iot', 'sensor', 'sensors', 'switchbot'], label: 'Devices', icon: 'icon-devices', category: 'Operations', catKey: 'operations', itemId: 'devices' },
     { keywords: ['supplies', 'supply', 'packaging', 'equipment', 'lab', 'maintenance', 'reorder'], label: 'Supplies', icon: 'icon-supplies', category: 'Operations', catKey: 'operations', itemId: 'supplies' },
     { keywords: ['calendar', 'schedule', 'event', 'events', 'task', 'tasks'], label: 'Calendar', icon: 'icon-calendar', category: 'Operations', catKey: 'operations', itemId: 'calendar' },
+    { keywords: ['evie', 'e.v.i.e', 'ai', 'intelligence', 'copilot', 'assistant'], label: 'E.V.I.E. Core', icon: 'icon-evie', category: 'Operations', catKey: 'operations', itemId: 'evie-core' },
+    { keywords: ['gwen', 'g.w.e.n', 'research agent', 'analysis', 'data analysis'], label: 'G.W.E.N.', icon: 'icon-gwen', category: 'Operations', catKey: 'operations', itemId: 'gwen' },
+    { keywords: ['research', 'workspace', 'studies', 'datasets', 'notebooks', 'lab', 'experiment', 'protocol'], label: 'Research Workspace', icon: 'icon-research', category: 'Operations', catKey: 'operations', itemId: 'research-workspace' },
 
     // Business
     { keywords: ['sales', 'pos', 'point of sale', 'retail', 'transaction', 'cash register'], label: 'Farm Sales Terminal', icon: 'icon-pos', category: 'Business', catKey: 'business', itemId: 'farm-sales' },
@@ -49,7 +52,6 @@
     { keywords: ['export', 'exports', 'download', 'csv', 'report'], label: 'Exports', icon: 'icon-exports', category: 'Settings', catKey: 'settings', itemId: 'exports' },
     { keywords: ['payment', 'payments', 'billing', 'square', 'card', 'bank'], label: 'Payments', icon: 'icon-payments', category: 'Settings', catKey: 'settings', itemId: 'payments' },
     { keywords: ['help', 'support', 'guide', 'how to', 'documentation'], label: 'Help', icon: 'icon-help', category: 'Settings', catKey: 'settings', itemId: 'help' },
-    { keywords: ['evie', 'e.v.i.e', 'ai', 'intelligence', 'copilot', 'assistant'], label: 'E.V.I.E. Core', icon: 'icon-evie', category: 'Settings', catKey: 'settings', itemId: 'evie-core' },
 
     // Category-level shortcuts
     { keywords: ['growing', 'grow', 'crops', 'garden'], label: 'Growing', icon: 'icon-growing', category: '', catKey: 'growing', itemId: null },

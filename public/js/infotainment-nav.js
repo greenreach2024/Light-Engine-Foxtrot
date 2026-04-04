@@ -37,7 +37,10 @@
         { id: 'setup-update',  label: 'Setup / Update', icon: 'icon-setup',        section: 'iframe-view', url: '/LE-dashboard.html' },
         { id: 'devices',       label: 'Devices',        icon: 'icon-devices',      section: 'devices' },
         { id: 'supplies',      label: 'Supplies',       icon: 'icon-supplies',     section: 'inventory-mgmt' },
-        { id: 'calendar',      label: 'Calendar',       icon: 'icon-calendar',     section: 'iframe-view', url: '/views/calendar.html' }
+        { id: 'calendar',      label: 'Calendar',       icon: 'icon-calendar',     section: 'iframe-view', url: '/views/calendar.html' },
+        { id: 'evie-core',         label: 'E.V.I.E. Core',        icon: 'icon-evie',        section: 'iframe-view', url: '/evie-core.html' },
+        { id: 'gwen',              label: 'G.W.E.N.',             icon: 'icon-gwen',        section: 'iframe-view', url: '/gwen-core.html' },
+        { id: 'research-workspace', label: 'Research Workspace',  icon: 'icon-research',    section: 'iframe-view', url: '/views/research-workspace.html' }
       ]
     },
     business: {
@@ -64,7 +67,6 @@
         { id: 'exports',  label: 'Exports',  icon: 'icon-exports',  section: 'exports' },
         { id: 'payments', label: 'Payments', icon: 'icon-payments', section: 'payments' },
         { id: 'help',     label: 'Help',     icon: 'icon-help',     section: 'help' },
-        { id: 'evie-core', label: 'E.V.I.E. Core', icon: 'icon-evie', section: 'iframe-view', url: '/evie-core.html' }
       ]
     }
   };
