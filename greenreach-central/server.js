@@ -114,6 +114,9 @@ import scottMarketingRouter from './routes/scott-marketing-agent.js';
 import researchIntegrationsRouter from './routes/research-integrations.js';
 import gwenResearchRouter from './routes/gwen-research-agent.js';
 import adminMarketingRouter from './routes/admin-marketing.js';
+import billingReceiptsRouter from './routes/billing-receipts.js';
+import { startSquareTokenRefreshScheduler } from './services/square-token-refresh.js';
+import { startSensorCleanupScheduler } from './routes/sync.js';
 
 // Grant wizard — enabled by default (set ENABLE_GRANT_WIZARD=false to disable)
 import adminPricingRoutes from './routes/admin-pricing.js';
@@ -3624,7 +3627,8 @@ app.get('/api/bus/:busId/scan', authMiddleware, (req, res) => edgeProxy(req, res
 
 
 app.use('/api/ml/insights', authMiddleware, mlForecastRoutes); // ML temperature forecast (Light Engine feature)
-app.use('/api/billing', authOrAdminMiddleware, billingRoutes); // Billing usage (cloud)
+app.use('/api/billing', authOrAdminMiddleware, billingRoutes);
+app.use("/api/billing/receipts", authOrAdminMiddleware, billingReceiptsRouter);
 app.use('/api/stripe', authOrAdminMiddleware, stripePaymentsRouter); // Stripe payment operations
 app.use('/api/webhooks', paymentWebhooksRouter); // Square + Stripe webhook receivers (no auth — signature-verified)
 app.use('/api/accounting', authOrAdminMiddleware, accountingRoutes); // Canonical accounting ledger + close controls (accepts farm OR admin auth)
@@ -4885,6 +4889,12 @@ async function startServer() {
           // Table may not exist yet or DB temporarily unavailable — silently skip
         }
       }, 30 * 60 * 1000); // 30 minutes
+
+      // Start Square token auto-refresh scheduler
+      startSquareTokenRefreshScheduler();
+
+      // Start nightly sensor readings cleanup (90-day retention)
+      startSensorCleanupScheduler().catch(e => logger.warn('[Boot] Sensor cleanup scheduler error:', e.message));
     } catch (error) {
       app.locals.databaseReady = false;
       logger.warn('Database unavailable; starting in limited mode', {

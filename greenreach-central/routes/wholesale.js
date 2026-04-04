@@ -2791,6 +2791,25 @@ router.post('/checkout/execute', checkoutLimiter, requireWholesaleDbForCriticalP
             payment.provider = 'square';
             payment.notes = `Square payment failed: ${paymentResult.paymentResults.filter(r => !r.success).map(r => `Farm ${r.farmId}: ${r.error}`).join('; ')}`;
             console.error('[Checkout] Square payments failed:', paymentResult);
+
+            // Auto-refund any successful sub-payments in a partial failure
+            const successfulSubPayments = (paymentResult.paymentResults || []).filter(r => r.success && r.paymentId);
+            if (successfulSubPayments.length > 0) {
+              console.warn(`[Checkout] Partial failure: ${successfulSubPayments.length} successful sub-payment(s) need auto-refund`);
+              const partialRefundResults = [];
+              for (const pr of successfulSubPayments) {
+                const refResult = await refundPayment({
+                  paymentId: pr.paymentId,
+                  farmId: pr.farmId,
+                  amountCents: pr.amountMoney?.amount || 0,
+                  reason: `Partial checkout failure for order — other farm payments failed`,
+                  orderId: order.master_order_id
+                }).catch(err => ({ success: false, error: err.message }));
+                partialRefundResults.push({ farmId: pr.farmId, ...refResult });
+                console.log(`[Checkout] Partial-failure auto-refund farm ${pr.farmId}: ${refResult.success ? 'OK' : refResult.error}`);
+              }
+              payment.partial_refund_results = partialRefundResults;
+            }
           }
         } else {
           console.log('[Checkout] Not all farms have Square connected - using manual payment');
@@ -3041,13 +3060,19 @@ router.post('/checkout/execute', checkoutLimiter, requireWholesaleDbForCriticalP
           broker_fee: payment.broker_fee_amount || 0,
           tax_amount: orderTotals.tax_total || 0,
           source_type: 'wholesale',
-        }).catch(err => console.warn('[Accounting] Revenue ingest error:', err.message));
+        }).then(r => {
+          if (r?.ok !== false) console.log('[Accounting] Revenue ingested for order', order.master_order_id);
+          else console.warn('[Accounting] Revenue ingest returned:', r);
+        }).catch(err => console.error('[Accounting] Revenue ingest FAILED:', err.message, err.stack?.split('\n')[1] || ''));
 
         ingestFarmPayables({
           order_id: order.master_order_id,
           payment_id: payment.payment_id,
           farm_sub_orders: result.allocation.farm_sub_orders,
-        }).catch(err => console.warn('[Accounting] Farm payable ingest error:', err.message));
+          provider: payment.provider || 'square',
+        }).then(r => {
+          console.log('[Accounting] Farm payables ingested for order', order.master_order_id);
+        }).catch(err => console.error('[Accounting] Farm payable ingest FAILED:', err.message, err.stack?.split('\n')[1] || ''));
 
         if (payment.square_details?.payments) {
           for (const pr of payment.square_details.payments) {

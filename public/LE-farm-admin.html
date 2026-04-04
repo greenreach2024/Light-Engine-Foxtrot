@@ -5289,36 +5289,46 @@
       
       <!-- Content Area -->
       <div style="flex: 1; overflow-y: auto; padding: 30px;">
-        <!-- Step 1: Activation -->
+        <!-- Step 0: Intent Selection -->
         <div id="setup-step-0" class="setup-step">
-          <h3 style="margin: 0 0 10px 0; font-size: 18px; color: var(--text-primary);">How will you use Light Engine?</h3>
-          <p style="margin: 0 0 20px 0; color: var(--text-secondary); font-size: 14px;">Tell us what matters most so we can tailor your experience.</p>
+          <h3 style="margin: 0 0 10px 0; font-size: 18px; color: var(--text-primary);">How will you use GreenReach?</h3>
+          <p style="margin: 0 0 24px 0; color: var(--text-secondary); font-size: 14px;">Choose a path to customize your setup experience.</p>
           
           <div style="display: flex; flex-direction: column; gap: 12px;">
-            <label style="display: flex; align-items: flex-start; gap: 12px; padding: 16px; border: 2px solid var(--border); border-radius: 10px; cursor: pointer; transition: border-color 0.2s;" onclick="this.querySelector('input').checked=true; document.querySelectorAll('.setup-intent-option').forEach(o=>o.style.borderColor='var(--border)'); this.style.borderColor='var(--accent-blue)';" class="setup-intent-option">
-              <input type="radio" name="setup-intent" value="full-farm" style="margin-top: 2px;" checked>
+            <label id="intent-grow" style="display: flex; align-items: flex-start; gap: 14px; padding: 16px; border: 2px solid var(--border); border-radius: 10px; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.borderColor='var(--accent-green)'" onmouseout="if(!document.getElementById('intent-radio-grow').checked)this.style.borderColor='var(--border)'">
+              <input type="radio" name="setup-intent" id="intent-radio-grow" value="grow" style="margin-top: 3px; width: 18px; height: 18px;" checked onchange="updateIntentSelection()">
               <div>
-                <strong style="color: var(--text-primary); font-size: 15px;">Full Farm Management</strong>
-                <p style="margin: 4px 0 0; color: var(--text-secondary); font-size: 13px;">Growing operations, sensors, environment monitoring, inventory, scheduling, sales, and accounting.</p>
+                <div style="font-weight: 600; color: var(--text-primary); font-size: 15px;">I want to grow crops</div>
+                <div style="color: var(--text-secondary); font-size: 13px; margin-top: 4px;">Quick start -- tell us what you want to grow and we will set up your farm with smart defaults. You can always customize later.</div>
               </div>
             </label>
-            <label style="display: flex; align-items: flex-start; gap: 12px; padding: 16px; border: 2px solid var(--border); border-radius: 10px; cursor: pointer; transition: border-color 0.2s;" onclick="this.querySelector('input').checked=true; document.querySelectorAll('.setup-intent-option').forEach(o=>o.style.borderColor='var(--border)'); this.style.borderColor='var(--accent-blue)';" class="setup-intent-option">
-              <input type="radio" name="setup-intent" value="sales-accounting">
+            
+            <label id="intent-full" style="display: flex; align-items: flex-start; gap: 14px; padding: 16px; border: 2px solid var(--border); border-radius: 10px; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.borderColor='var(--accent-blue)'" onmouseout="if(!document.getElementById('intent-radio-full').checked)this.style.borderColor='var(--border)'">
+              <input type="radio" name="setup-intent" id="intent-radio-full" value="full-farm" style="margin-top: 3px; width: 18px; height: 18px;" onchange="updateIntentSelection()">
               <div>
-                <strong style="color: var(--text-primary); font-size: 15px;">Sales and Accounting Only</strong>
-                <p style="margin: 4px 0 0; color: var(--text-secondary); font-size: 13px;">Point of sale, wholesale orders, invoicing, financial reports, and bookkeeping. No farm sensors or grow operations.</p>
+                <div style="font-weight: 600; color: var(--text-primary); font-size: 15px;">Full farm setup</div>
+                <div style="color: var(--text-secondary); font-size: 13px; margin-top: 4px;">Configure rooms, zones, lighting, devices, and automation step by step. Best for experienced growers with specific hardware.</div>
               </div>
             </label>
-            <label style="display: flex; align-items: flex-start; gap: 12px; padding: 16px; border: 2px solid var(--border); border-radius: 10px; cursor: pointer; transition: border-color 0.2s;" onclick="this.querySelector('input').checked=true; document.querySelectorAll('.setup-intent-option').forEach(o=>o.style.borderColor='var(--border)'); this.style.borderColor='var(--accent-blue)';" class="setup-intent-option">
-              <input type="radio" name="setup-intent" value="explore">
+            
+            <label id="intent-sales" style="display: flex; align-items: flex-start; gap: 14px; padding: 16px; border: 2px solid var(--border); border-radius: 10px; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.borderColor='var(--accent-yellow)'" onmouseout="if(!document.getElementById('intent-radio-sales').checked)this.style.borderColor='var(--border)'">
+              <input type="radio" name="setup-intent" id="intent-radio-sales" value="sales-only" style="margin-top: 3px; width: 18px; height: 18px;" onchange="updateIntentSelection()">
               <div>
-                <strong style="color: var(--text-primary); font-size: 15px;">Just Exploring</strong>
-                <p style="margin: 4px 0 0; color: var(--text-secondary); font-size: 13px;">Take a look around first. You can always configure more later from Settings.</p>
+                <div style="font-weight: 600; color: var(--text-primary); font-size: 15px;">Sales, products & accounting only</div>
+                <div style="color: var(--text-secondary); font-size: 13px; margin-top: 4px;">Skip farm setup entirely. Go straight to custom products, wholesale marketplace, admin tools, and accounting.</div>
+              </div>
+            </label>
+            
+            <label id="intent-explore" style="display: flex; align-items: flex-start; gap: 14px; padding: 16px; border: 2px solid var(--border); border-radius: 10px; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.borderColor='var(--text-muted)'" onmouseout="if(!document.getElementById('intent-radio-explore').checked)this.style.borderColor='var(--border)'">
+              <input type="radio" name="setup-intent" id="intent-radio-explore" value="explore" style="margin-top: 3px; width: 18px; height: 18px;" onchange="updateIntentSelection()">
+              <div>
+                <div style="font-weight: 600; color: var(--text-primary); font-size: 15px;">Just exploring</div>
+                <div style="color: var(--text-secondary); font-size: 13px; margin-top: 4px;">Browse the platform with sample data. No setup required.</div>
               </div>
             </label>
           </div>
         </div>
-
+        
         <div id="setup-step-1" class="setup-step">
           <h3 style="margin: 0 0 10px 0; font-size: 18px; color: var(--text-primary);">Activate Your Light Engine</h3>
           <p style="margin: 0 0 20px 0; color: var(--text-secondary); font-size: 14px;">Enter the 8-character activation code included with your Light Engine device.</p>
@@ -5351,7 +5361,7 @@
               <input type="email" id="setup-contact-email" placeholder="contact@yourfarm.com" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);" required>
             </div>
             <div>
-              <label style="display: block; margin-bottom: 6px; font-weight: 500; color: var(--text-secondary); font-size: 13px;">Phone</label>
+              <label id="setup-phone-label" style="display: block; margin-bottom: 6px; font-weight: 500; color: var(--text-secondary); font-size: 13px;">Phone <span id="setup-phone-required" style="display: none; color: var(--accent-yellow);">*</span></label>
               <input type="tel" id="setup-contact-phone" placeholder="+1 (555) 123-4567" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
             </div>
             <div>
@@ -5417,6 +5427,44 @@
         </div>
         
         <!-- Step 4: Rooms & Zones -->
+
+        <!-- Step: Payment Connection (shown for sales-only path) -->
+        <div id="setup-step-payment" class="setup-step" style="display: none;">
+          <h3 style="margin: 0 0 10px 0; font-size: 18px; color: var(--text-primary);">Connect Payment Processor</h3>
+          <p style="margin: 0 0 20px 0; color: var(--text-secondary); font-size: 14px;">Connect your payment processor to accept orders through the wholesale marketplace and point of sale.</p>
+          
+          <div style="display: flex; flex-direction: column; gap: 16px;">
+            <!-- Square Connection -->
+            <div id="setup-square-status" style="padding: 20px; border: 2px solid var(--border); border-radius: 10px; background: var(--bg-secondary);">
+              <div style="display: flex; align-items: center; justify-content: space-between;">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                  <div style="width: 40px; height: 40px; background: #006AFF; border-radius: 8px; display: flex; align-items: center; justify-content: center;">
+                    <span style="color: white; font-weight: 700; font-size: 18px;">S</span>
+                  </div>
+                  <div>
+                    <div style="font-weight: 600; color: var(--text-primary); font-size: 15px;">Square</div>
+                    <div id="setup-square-status-text" style="color: var(--text-muted); font-size: 13px;">Not connected</div>
+                  </div>
+                </div>
+                <button id="setup-square-connect-btn" onclick="connectSquareFromSetup()" style="padding: 8px 20px; background: #006AFF; border: none; color: white; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px;">Connect Square</button>
+              </div>
+            </div>
+            
+            <!-- Info box -->
+            <div style="padding: 14px 18px; background: rgba(59,130,246,0.08); border: 1px solid rgba(59,130,246,0.25); border-radius: 8px;">
+              <p style="margin: 0; font-size: 13px; color: var(--text-secondary); line-height: 1.6;">
+                <strong style="color: var(--accent-blue);">Why connect now?</strong><br>
+                Your payment processor is required for wholesale marketplace orders, point-of-sale transactions, and invoice payments. 
+                Invoices will display your business name, address, and phone number from Step 2.
+              </p>
+            </div>
+            
+            <!-- Skip option -->
+            <div style="text-align: center; padding-top: 8px;">
+              <span style="font-size: 12px; color: var(--text-muted);">You can also connect payment processors later from Settings &gt; Payment Methods.</span>
+            </div>
+          </div>
+        </div>
         <div id="setup-step-4" class="setup-step" style="display: none;">
           <h3 style="margin: 0 0 10px 0; font-size: 18px; color: var(--text-primary);">Grow Spaces</h3>
           <p style="margin: 0 0 20px 0; color: var(--text-secondary); font-size: 14px;">Add your grow rooms and zones within each room.</p>

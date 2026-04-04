@@ -187,7 +187,7 @@ export async function refundPayment({ paymentId, farmId, amountCents, reason, or
       .digest('hex');
 
     const refundResponse = await provider.refundPayment({
-      paymentId,
+      providerPaymentId: paymentId,
       amountMoney: { amount: amountCents, currency: 'CAD' },
       reason: reason || 'Order cancelled',
       idempotencyKey,

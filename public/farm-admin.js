@@ -6927,8 +6927,8 @@ async function setupNextStep() {
             if (modal) modal.style.display = 'none';
             return;
         }
-        if (setupData.userIntent === 'sales-accounting') {
-            // Skip to Step 2 (Business Profile) -- no activation code needed
+        if (setupData.userIntent === 'sales-only' || setupData.userIntent === 'sales-accounting') {
+            // Skip to Step 2 (Business Profile) -- no activation/grow steps needed
             currentSetupStep = 2;
             updateSetupStepDisplay();
             return;
@@ -6953,6 +6953,12 @@ async function setupNextStep() {
         if (!activated) {
             return; // Error already shown
         }
+    }
+    
+    // Sales-only path: after Location (step 3), show Payment Connection step
+    if ((setupData.userIntent === 'sales-only' || setupData.userIntent === 'sales-accounting') && currentSetupStep === 3) {
+        showSalesOnlyPaymentStep();
+        return;
     }
     
     // Move to next step
@@ -6986,9 +6992,16 @@ async function setupNextStep() {
  * Navigate to previous setup step
  */
 function setupPreviousStep() {
+    // If on the payment step (sales-only path), go back to step 3
+    if (setupData._onPaymentStep) {
+        setupData._onPaymentStep = false;
+        currentSetupStep = 3;
+        updateSetupStepDisplay();
+        return;
+    }
     if (currentSetupStep > 0) {
-        // If at step 2 with sales-accounting intent, go back to step 0
-        if (currentSetupStep === 2 && setupData.userIntent === 'sales-accounting') {
+        // If at step 2 with sales-only or sales-accounting intent, go back to step 0
+        if (currentSetupStep === 2 && (setupData.userIntent === 'sales-only' || setupData.userIntent === 'sales-accounting')) {
             currentSetupStep = 0;
         } else if (currentSetupStep === 2 && (localStorage.getItem('plan_type') === 'cloud' || localStorage.getItem('is_cloud_farm') === 'true')) {
             currentSetupStep = 0; // Cloud plan: skip step 1 going back too
@@ -7035,11 +7048,127 @@ function updateSetupStepDisplay() {
 /**
  * Validate current setup step
  */
+
+/**
+ * Update visual selection state for intent cards
+ */
+function updateIntentSelection() {
+    const selected = document.querySelector('input[name="setup-intent"]:checked');
+    if (!selected) return;
+    setupData.userIntent = selected.value;
+    localStorage.setItem('setup_user_intent', selected.value);
+    
+    // Update card highlights
+    // Show phone required indicator for sales-only path
+    var phoneReq = document.getElementById('setup-phone-required');
+    if (phoneReq) phoneReq.style.display = (setupData.userIntent === 'sales-only' || setupData.userIntent === 'sales-accounting') ? 'inline' : 'none';
+    
+    // Show phone required indicator for sales-only path
+    var phoneReq = document.getElementById('setup-phone-required');
+    if (phoneReq) phoneReq.style.display = (setupData.userIntent === 'sales-only' || setupData.userIntent === 'sales-accounting') ? 'inline' : 'none';
+    
+    ['grow', 'full-farm', 'sales-only', 'explore'].forEach(val => {
+        const label = document.getElementById('intent-' + (val === 'full-farm' ? 'full' : val === 'sales-only' ? 'sales' : val));
+        if (label) {
+            label.style.borderColor = (val === selected.value) ? 'var(--accent-green)' : 'var(--border)';
+        }
+    });
+}
+
+/**
+ * Show the payment connection step for sales-only path
+ */
+function showSalesOnlyPaymentStep() {
+    // Hide all step divs
+    for (let i = 0; i <= totalSetupSteps; i++) {
+        const stepEl = document.getElementById('setup-step-' + i);
+        if (stepEl) stepEl.style.display = 'none';
+    }
+    
+    // Show payment step
+    const paymentStep = document.getElementById('setup-step-payment');
+    if (paymentStep) paymentStep.style.display = 'block';
+    
+    // Update buttons: show Back + Complete Setup (skip Next)
+    var backBtn = document.getElementById('setup-back-btn');
+    var nextBtn = document.getElementById('setup-next-btn');
+    var completeBtn = document.getElementById('setup-complete-btn');
+    if (backBtn) backBtn.style.display = 'block';
+    if (nextBtn) nextBtn.style.display = 'none';
+    if (completeBtn) completeBtn.style.display = 'block';
+    
+    // Update progress bar -- highlight steps 0-3 as complete
+    document.querySelectorAll('.setup-progress-step').forEach((bar, index) => {
+        if (index < 4) {
+            bar.style.background = 'var(--accent-green)';
+        } else {
+            bar.style.background = 'var(--border)';
+        }
+    });
+    
+    // Mark that we are on the payment step
+    setupData._onPaymentStep = true;
+    
+    // Check Square status
+    checkSquareStatusForSetup();
+}
+
+/**
+ * Check Square connection status for the setup payment step
+ */
+async function checkSquareStatusForSetup() {
+    try {
+        const farmId = currentSession?.farmId || localStorage.getItem('farm_id') || 'LOCAL-FARM';
+        const resp = await fetch('/api/farm/square/status', {
+            headers: getPaymentAuthHeaders(farmId)
+        });
+        if (resp.ok) {
+            const data = await resp.json();
+            if (data.ok && data.data && data.data.connected) {
+                var statusText = document.getElementById('setup-square-status-text');
+                var connectBtn = document.getElementById('setup-square-connect-btn');
+                var statusBox = document.getElementById('setup-square-status');
+                if (statusText) statusText.textContent = 'Connected: ' + (data.data.location_name || 'Active');
+                if (statusText) statusText.style.color = 'var(--accent-green)';
+                if (connectBtn) { connectBtn.textContent = 'Connected'; connectBtn.disabled = true; connectBtn.style.background = 'var(--accent-green)'; }
+                if (statusBox) statusBox.style.borderColor = 'var(--accent-green)';
+            }
+        }
+    } catch (e) {
+        console.log('[Setup] Could not check Square status:', e.message);
+    }
+}
+
+/**
+ * Connect Square from the setup wizard payment step
+ */
+function connectSquareFromSetup() {
+    // Reuse the existing connectSquare function
+    connectSquare();
+    // Also listen for completion to update the setup step UI
+    window.addEventListener('message', function handleSetupSquare(event) {
+        if (event.data && event.data.type === 'square-connected') {
+            window.removeEventListener('message', handleSetupSquare);
+            checkSquareStatusForSetup();
+        }
+    });
+}
+
 function validateSetupStep(step) {
     let isValid = true;
     let errorMessage = '';
     
     switch (step) {
+        case 0:
+            // Intent selection - always valid (one radio is always checked)
+            const intentEl = document.querySelector('input[name="setup-intent"]:checked');
+            if (intentEl) {
+                setupData.userIntent = intentEl.value;
+                localStorage.setItem('setup_user_intent', intentEl.value);
+            }
+            isValid = true;
+            break;
+            
         case 1:
             const code = document.getElementById('setup-activation-code').value.trim();
             if (!code || code.length !== 8) {
@@ -7065,6 +7194,9 @@ function validateSetupStep(step) {
             } else if (!contactEmail.includes('@')) {
                 isValid = false;
                 errorMessage = 'Please enter a valid email address';
+            } else if ((setupData.userIntent === 'sales-only' || setupData.userIntent === 'sales-accounting') && !document.getElementById('setup-contact-phone').value.trim()) {
+                isValid = false;
+                errorMessage = 'Phone number is required for sales and accounting (displayed on invoices and wholesale profile).';
             }
             break;
             
@@ -7505,13 +7637,18 @@ async function completeSetup() {
         const attributes = Array.from(document.querySelectorAll('input[name="attribute"]:checked'))
             .map(cb => cb.value);
         
-        // Submit tray formats before completing setup
-        console.log('[Setup] Submitting tray formats...');
-        const trayFormatsResult = await submitTrayFormats();
-        if (trayFormatsResult.success) {
-            console.log('[Setup] Tray formats submitted:', trayFormatsResult.message);
+        // Submit tray formats before completing setup (skip for sales-only)
+        const isSalesOnly = setupData.userIntent === 'sales-only' || setupData.userIntent === 'sales-accounting';
+        if (!isSalesOnly) {
+            console.log('[Setup] Submitting tray formats...');
+            const trayFormatsResult = await submitTrayFormats();
+            if (trayFormatsResult.success) {
+                console.log('[Setup] Tray formats submitted:', trayFormatsResult.message);
+            } else {
+                console.warn('[Setup] Tray formats submission had issues:', trayFormatsResult);
+            }
         } else {
-            console.warn('[Setup] Tray formats submission had issues:', trayFormatsResult);
+            console.log('[Setup] Sales-only path: skipping tray formats');
         }
         
         // Call setup completion API
@@ -7547,6 +7684,7 @@ async function completeSetup() {
                     longitude: longitude ? parseFloat(longitude) : null
                 },
                 rooms: setupData.rooms || [],
+                userIntent: setupData.userIntent || 'full-farm',
                 certifications: {
                     certifications: certifications,
                     practices: practices,
@@ -7566,6 +7704,9 @@ async function completeSetup() {
         if (!response.ok || !data.success) {
             throw new Error(data.message || 'Setup failed');
         }
+        
+        // Store intent for EVIE post-wizard bridge
+        localStorage.setItem('setup_user_intent', setupData.userIntent || 'full-farm');
         
         // Also save to localStorage for index.html farm wizard compatibility
         const farmData = {

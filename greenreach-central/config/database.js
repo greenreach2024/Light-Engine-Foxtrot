@@ -3731,6 +3731,45 @@ async function runMigrations(client) {
     logger.warn('Migration 053 warning:', err.message);
   }
 
+  // --- Migration 054: Sequential invoice numbering ---
+  try {
+    await pool.query(`
+      CREATE SEQUENCE IF NOT EXISTS invoice_number_seq START WITH 1001;
+      CREATE TABLE IF NOT EXISTS invoice_numbers (
+        id SERIAL PRIMARY KEY,
+        invoice_number TEXT UNIQUE NOT NULL,
+        order_id TEXT NOT NULL,
+        farm_id TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_invoice_numbers_order ON invoice_numbers(order_id);
+    `);
+    logger.info('invoice_numbers table + sequence ready (migration 054)');
+  } catch (err) {
+    logger.warn('Migration 054 warning:', err.message);
+  }
+
+  // --- Migration 055: Sensor readings timeseries table ---
+  try {
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS sensor_readings (
+        id SERIAL PRIMARY KEY,
+        farm_id TEXT NOT NULL,
+        zone_id TEXT,
+        sensor_type TEXT NOT NULL,
+        value NUMERIC NOT NULL,
+        unit TEXT DEFAULT 'unknown',
+        recorded_at TIMESTAMPTZ DEFAULT NOW(),
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_sensor_readings_farm_time ON sensor_readings (farm_id, recorded_at DESC)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_sensor_readings_farm_zone_type ON sensor_readings (farm_id, zone_id, sensor_type, recorded_at DESC)`);
+    logger.info('sensor_readings table ready (migration 055)');
+  } catch (err) {
+    logger.warn('Migration 055 warning:', err.message);
+  }
+
     logger.info('Database migrations completed');
 }
 

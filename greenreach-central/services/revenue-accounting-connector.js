@@ -223,6 +223,7 @@ export async function ingestFarmPayables({
   payment_id,
   farm_sub_orders = [],
   currency = 'CAD',
+  provider = 'square',
 }) {
   try {
     await ensureDb();

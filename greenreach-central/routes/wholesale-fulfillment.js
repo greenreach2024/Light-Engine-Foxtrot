@@ -22,6 +22,7 @@ import express from 'express';
 import { query, isDatabaseAvailable } from '../config/database.js';
 import { verifyWebhookSignature } from '../middleware/webhook-signature.js';
 import { requireFarmApiKey } from '../middleware/farmApiKeyAuth.js';
+import { query as dbQuery, isDatabaseAvailable } from '../config/database.js';
 import {
   getOrderById,
   saveOrder,
@@ -876,6 +877,40 @@ router.post('/orders/:orderId/fulfill', requireFarmApiKey, express.json(), async
       tracking_number: order.tracking_number,
       tracking_carrier: order.tracking_carrier
     });
+
+    // Deduct inventory for fulfilled wholesale items (guard against double-deduction)
+    if (farmId && isDatabaseAvailable() && !order.inventory_deducted_at) {
+      try {
+        // Find this farm's sub-order items
+        const subOrders = order.farm_sub_orders || order.order_data?.farm_sub_orders || [];
+        const farmSub = subOrders.find(s => String(s.farm_id) === String(farmId));
+        const items = farmSub?.items || farmSub?.line_items || [];
+
+        for (const item of items) {
+          const qty = Number(item.quantity || item.qty || 0);
+          const skuId = item.sku_id || item.product_id || item.sku;
+          if (qty > 0 && skuId) {
+            await dbQuery(
+              `UPDATE farm_inventory SET
+                sold_quantity_lbs = COALESCE(sold_quantity_lbs, 0) + $1,
+                quantity_available = COALESCE(auto_quantity_lbs, 0)
+                  + COALESCE(manual_quantity_lbs, 0)
+                  - (COALESCE(sold_quantity_lbs, 0) + $1),
+                last_updated = NOW()
+               WHERE farm_id = $2 AND (sku = $3 OR product_id = $3)`,
+              [qty, farmId, skuId]
+            ).catch(e => console.warn(`[wholesale] Inventory deduct failed for ${skuId}:`, e.message));
+          }
+        }
+
+        // Mark order as deducted to prevent double-deduction on re-fulfill
+        order.inventory_deducted_at = new Date().toISOString();
+        await saveOrder(order).catch(() => {});
+        console.log(`[wholesale] Deducted inventory for ${items.length} item(s) on order ${orderId}`);
+      } catch (invErr) {
+        console.warn(`[wholesale] Inventory deduction error for order ${orderId}:`, invErr.message);
+      }
+    }
 
     return res.json({ status: 'ok', order_id: orderId, new_status: 'fulfilled' });
   } catch (error) {

@@ -1148,4 +1148,178 @@ router.post('/connectors/github-billing/sync', async (req, res) => {
   }
 });
 
+// ─── Financial Reports ──────────────────────────────────────
+
+/**
+ * GET /api/accounting/reports/income-statement
+ * Revenue - COGS - Expenses grouped by account
+ * Query: from, to (ISO dates), farm_id (optional)
+ */
+router.get('/reports/income-statement', async (req, res) => {
+  if (!await isDatabaseAvailable()) {
+    return res.status(503).json({ ok: false, error: 'database_unavailable' });
+  }
+
+  try {
+    const farmId = req.query.farm_id || req.farmId || null;
+    const from = req.query.from || new Date(new Date().getFullYear(), 0, 1).toISOString();
+    const to = req.query.to || new Date().toISOString();
+
+    let baseSql = `
+      SELECT
+        account_type,
+        account_name,
+        SUM(CASE WHEN entry_type = 'credit' THEN amount ELSE 0 END) as total_credits,
+        SUM(CASE WHEN entry_type = 'debit' THEN amount ELSE 0 END) as total_debits,
+        COUNT(*) as entry_count
+      FROM ledger_entries
+      WHERE created_at >= $1 AND created_at <= $2
+    `;
+    const params = [from, to];
+    let idx = 3;
+
+    if (farmId) {
+      baseSql += ` AND farm_id = $${idx++}`;
+      params.push(farmId);
+    }
+
+    baseSql += ` GROUP BY account_type, account_name ORDER BY account_type, account_name`;
+
+    const result = await query(baseSql, params);
+
+    // Categorize into Revenue, COGS, Expenses
+    const revenue = [];
+    const cogs = [];
+    const expenses = [];
+    let totalRevenue = 0;
+    let totalCOGS = 0;
+    let totalExpenses = 0;
+
+    for (const row of result.rows) {
+      const net = Number(row.total_credits) - Number(row.total_debits);
+      const entry = {
+        account: row.account_name,
+        credits: Number(row.total_credits),
+        debits: Number(row.total_debits),
+        net: Math.abs(net),
+        entries: Number(row.entry_count)
+      };
+
+      const type = (row.account_type || '').toLowerCase();
+      if (type === 'revenue' || type === 'income' || type === 'sales') {
+        revenue.push(entry);
+        totalRevenue += Math.abs(net);
+      } else if (type === 'cogs' || type === 'cost_of_goods_sold') {
+        cogs.push(entry);
+        totalCOGS += Math.abs(net);
+      } else if (type === 'expense' || type === 'operating_expense') {
+        expenses.push(entry);
+        totalExpenses += Math.abs(net);
+      }
+    }
+
+    const grossProfit = totalRevenue - totalCOGS;
+    const netIncome = grossProfit - totalExpenses;
+
+    return res.json({
+      ok: true,
+      report: 'income_statement',
+      period: { from, to },
+      farm_id: farmId,
+      revenue: { items: revenue, total: totalRevenue },
+      cost_of_goods_sold: { items: cogs, total: totalCOGS },
+      gross_profit: grossProfit,
+      expenses: { items: expenses, total: totalExpenses },
+      net_income: netIncome,
+      generated_at: new Date().toISOString()
+    });
+  } catch (error) {
+    return res.status(500).json({ ok: false, error: 'income_statement_failed', message: error.message });
+  }
+});
+
+/**
+ * GET /api/accounting/reports/balance-sheet
+ * Assets, Liabilities, Equity snapshot
+ * Query: as_of (ISO date), farm_id (optional)
+ */
+router.get('/reports/balance-sheet', async (req, res) => {
+  if (!await isDatabaseAvailable()) {
+    return res.status(503).json({ ok: false, error: 'database_unavailable' });
+  }
+
+  try {
+    const farmId = req.query.farm_id || req.farmId || null;
+    const asOf = req.query.as_of || new Date().toISOString();
+
+    let baseSql = `
+      SELECT
+        account_type,
+        account_name,
+        SUM(CASE WHEN entry_type = 'debit' THEN amount ELSE 0 END) as total_debits,
+        SUM(CASE WHEN entry_type = 'credit' THEN amount ELSE 0 END) as total_credits,
+        COUNT(*) as entry_count
+      FROM ledger_entries
+      WHERE created_at <= $1
+    `;
+    const params = [asOf];
+    let idx = 2;
+
+    if (farmId) {
+      baseSql += ` AND farm_id = $${idx++}`;
+      params.push(farmId);
+    }
+
+    baseSql += ` GROUP BY account_type, account_name ORDER BY account_type, account_name`;
+
+    const result = await query(baseSql, params);
+
+    const assets = [];
+    const liabilities = [];
+    const equity = [];
+    let totalAssets = 0;
+    let totalLiabilities = 0;
+    let totalEquity = 0;
+
+    for (const row of result.rows) {
+      // Normal balance: assets are debit-normal, liabilities/equity are credit-normal
+      const entry = {
+        account: row.account_name,
+        debits: Number(row.total_debits),
+        credits: Number(row.total_credits),
+        entries: Number(row.entry_count)
+      };
+
+      const type = (row.account_type || '').toLowerCase();
+      if (type === 'asset' || type === 'cash' || type === 'receivable' || type === 'accounts_receivable') {
+        entry.balance = Number(row.total_debits) - Number(row.total_credits);
+        assets.push(entry);
+        totalAssets += entry.balance;
+      } else if (type === 'liability' || type === 'payable' || type === 'accounts_payable') {
+        entry.balance = Number(row.total_credits) - Number(row.total_debits);
+        liabilities.push(entry);
+        totalLiabilities += entry.balance;
+      } else if (type === 'equity' || type === 'retained_earnings' || type === 'owners_equity') {
+        entry.balance = Number(row.total_credits) - Number(row.total_debits);
+        equity.push(entry);
+        totalEquity += entry.balance;
+      }
+    }
+
+    return res.json({
+      ok: true,
+      report: 'balance_sheet',
+      as_of: asOf,
+      farm_id: farmId,
+      assets: { items: assets, total: totalAssets },
+      liabilities: { items: liabilities, total: totalLiabilities },
+      equity: { items: equity, total: totalEquity },
+      balanced: Math.abs(totalAssets - (totalLiabilities + totalEquity)) < 0.01,
+      generated_at: new Date().toISOString()
+    });
+  } catch (error) {
+    return res.status(500).json({ ok: false, error: 'balance_sheet_failed', message: error.message });
+  }
+});
+
 export default router;

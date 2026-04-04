@@ -1454,6 +1454,27 @@ router.post('/telemetry', authenticateFarm, async (req, res) => {
         [farmId, 'telemetry', JSON.stringify(telemetryData)]
       );
       logger.info(`[Sync] Stored telemetry in database for farm ${farmId}`);
+
+      // Also INSERT individual sensor readings for timeseries history
+      try {
+        for (const zone of (telemetryData.zones || [])) {
+          const zoneId = zone.zone_id || zone.id || zone.name || 'default';
+          const readings = zone.readings || zone.sensors || {};
+          for (const [sensorType, reading] of Object.entries(readings)) {
+            const val = typeof reading === 'object' ? reading.value : reading;
+            const unit = typeof reading === 'object' ? (reading.unit || 'unknown') : 'unknown';
+            if (val !== null && val !== undefined && !isNaN(Number(val))) {
+              await query(
+                `INSERT INTO sensor_readings (farm_id, zone_id, sensor_type, value, unit, recorded_at)
+                 VALUES ($1, $2, $3, $4, $5, $6)`,
+                [farmId, zoneId, sensorType, Number(val), unit, telemetryData.timestamp]
+              ).catch(() => {});
+            }
+          }
+        }
+      } catch (tsErr) {
+        logger.warn(`[Sync] Sensor timeseries insert error:`, tsErr.message);
+      }
     } else {
       // Store in memory
       if (!inMemoryStore.telemetry) {
@@ -1938,5 +1959,88 @@ router.post('/device-integrations', authenticateFarm, async (req, res) => {
     });
   }
 });
+
+/**
+ * GET /api/sync/env/history
+ * Query historical sensor readings for trend analysis
+ * Query params: zone_id, sensor_type, from, to, limit
+ */
+router.get('/env/history', authenticateFarm, async (req, res) => {
+  try {
+    const { farmId } = req;
+    const { zone_id, sensor_type, from, to, limit: rawLimit } = req.query;
+    const maxRows = Math.min(parseInt(rawLimit) || 500, 5000);
+
+    if (!await isDatabaseAvailable()) {
+      return res.status(503).json({ success: false, error: 'Database unavailable' });
+    }
+
+    let sql = `SELECT zone_id, sensor_type, value, unit, recorded_at
+               FROM sensor_readings WHERE farm_id = $1`;
+    const params = [farmId];
+    let idx = 2;
+
+    if (zone_id) {
+      sql += ` AND zone_id = $${idx++}`;
+      params.push(zone_id);
+    }
+    if (sensor_type) {
+      sql += ` AND sensor_type = $${idx++}`;
+      params.push(sensor_type);
+    }
+    if (from) {
+      sql += ` AND recorded_at >= $${idx++}`;
+      params.push(from);
+    }
+    if (to) {
+      sql += ` AND recorded_at <= $${idx++}`;
+      params.push(to);
+    }
+
+    sql += ` ORDER BY recorded_at DESC LIMIT $${idx}`;
+    params.push(maxRows);
+
+    const result = await query(sql, params);
+
+    return res.json({
+      success: true,
+      farm_id: farmId,
+      readings: result.rows,
+      count: result.rows.length,
+      query: { zone_id, sensor_type, from, to, limit: maxRows }
+    });
+  } catch (error) {
+    logger.error('[Sync] Error fetching env history:', error);
+    return res.status(500).json({ success: false, error: 'Failed to fetch sensor history' });
+  }
+});
+
+/**
+ * Nightly cleanup: purge sensor readings older than 90 days.
+ * Called once from server boot, then runs every 24 hours.
+ */
+export async function startSensorCleanupScheduler() {
+  const RETENTION_DAYS = 90;
+  const INTERVAL_MS = 24 * 60 * 60 * 1000;
+
+  async function cleanup() {
+    try {
+      if (!await isDatabaseAvailable()) return;
+      const result = await query(
+        `DELETE FROM sensor_readings WHERE recorded_at < NOW() - INTERVAL '${RETENTION_DAYS} days'`
+      );
+      if (result.rowCount > 0) {
+        logger.info(`[SensorCleanup] Purged ${result.rowCount} readings older than ${RETENTION_DAYS} days`);
+      }
+    } catch (err) {
+      logger.warn('[SensorCleanup] Cleanup error:', err.message);
+    }
+  }
+
+  // Run after 5 minutes, then daily
+  setTimeout(cleanup, 5 * 60 * 1000);
+  const handle = setInterval(cleanup, INTERVAL_MS);
+  handle.unref();
+}
 
 export default router;

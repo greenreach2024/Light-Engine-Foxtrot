@@ -7024,7 +7024,51 @@ app.post('/api/setup/complete', asyncHandler(async (req, res) => {
         [farmName || 'Unnamed Farm', ownerName, contactEmail, contactPhone, 'active', farmId]
       );
       console.log('[setup-wizard] Updated farm profile for:', farmId);
-      
+
+      // Mark setup as completed in the farms table
+      try {
+        await pool.query(
+          `UPDATE farms SET setup_completed = true, updated_at = NOW() WHERE farm_id = $1`,
+          [farmId]
+        );
+        console.log('[setup-wizard] Marked setup_completed=true for:', farmId);
+      } catch (scErr) {
+        console.warn('[setup-wizard] Could not set setup_completed:', scErr.message);
+      }
+
+      // Sync setup data to Central farmStore for cross-service consistency
+      const centralUrl = process.env.CENTRAL_URL || process.env.GREENREACH_CENTRAL_URL;
+      if (centralUrl) {
+        try {
+          const syncPayload = {
+            farmId,
+            farmName: farmName || 'Unnamed Farm',
+            ownerName,
+            contactEmail,
+            contactPhone,
+            certifications: certifications || {},
+            rooms: rooms || [],
+            store: store || {},
+            completedAt: new Date().toISOString()
+          };
+          const apiKey = process.env.GREENREACH_API_KEY || process.env.WHOLESALE_FARM_API_KEY || '';
+          await fetch(new URL('/api/setup-wizard/complete', centralUrl).toString(), {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Farm-ID': farmId,
+              'X-API-Key': apiKey,
+              'Authorization': req.headers?.authorization || ''
+            },
+            body: JSON.stringify(syncPayload),
+            signal: AbortSignal.timeout(10000)
+          });
+          console.log('[setup-wizard] Synced setup completion to Central for:', farmId);
+        } catch (syncErr) {
+          console.warn('[setup-wizard] Central sync failed (non-fatal):', syncErr.message);
+        }
+      }
+
       // TODO: Save store configuration when storefront columns are added to schema
       // if (store && store.enabled) {
       //   try {

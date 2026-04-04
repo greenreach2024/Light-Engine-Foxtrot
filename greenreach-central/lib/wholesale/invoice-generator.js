@@ -11,6 +11,30 @@
  * - Farm practices display (pesticide, herbicide, GMO, organic)
  */
 
+/**
+ * Get next sequential invoice number from DB.
+ * Falls back to order-based ID if DB unavailable.
+ */
+let _invoiceQuery = null;
+export async function getNextInvoiceNumber(orderId, farmId) {
+  try {
+    if (!_invoiceQuery) {
+      const db = await import('../../config/database.js');
+      _invoiceQuery = db.query;
+    }
+    const result = await _invoiceQuery(
+      `INSERT INTO invoice_numbers (invoice_number, order_id, farm_id)
+       VALUES ('INV-' || LPAD(nextval('invoice_number_seq')::text, 6, '0'), $1, $2)
+       ON CONFLICT (order_id) DO UPDATE SET order_id = EXCLUDED.order_id
+       RETURNING invoice_number`,
+      [orderId, farmId || null]
+    );
+    return result.rows[0]?.invoice_number || `INV-${orderId}`;
+  } catch {
+    return `INV-${orderId}`;
+  }
+}
+
 // Weight units that qualify for per-100g / per-oz breakdowns
 const WEIGHT_UNITS = new Set(['oz', 'lb', 'g', 'kg', 'lb_case', 'pint', 'quart', 'unit', 'bunch', 'clamshell']);
 
@@ -303,7 +327,8 @@ export function assembleInvoice({ order, subOrders, farmProfiles, buyerProfile }
       tax_rate: sub.tax_rate || 0,
       tax_label: sub.tax_label || 'TAX',
       tax_amount: sub.tax_amount || 0,
-      total: sub.total || 0
+      total: sub.total || 0,
+      tax_registration_number: profile.tax_registration_number || profile.gst_number || profile.hst_number || null
     };
   });
 
@@ -470,6 +495,7 @@ export function renderInvoiceHTML(invoice) {
           ${farm.city || farm.state ? `<div class="farm-location">${esc(farm.city)}${farm.city && farm.state ? ', ' : ''}${esc(farm.state)}</div>` : ''}
           ${farm.address ? `<div class="farm-trace"><strong>Address:</strong> ${esc(farm.address)}</div>` : '<div class="farm-trace missing">Address: Missing in farm profile</div>'}
           ${farm.phone ? `<div class="farm-trace"><strong>Phone:</strong> ${esc(farm.phone)}</div>` : '<div class="farm-trace missing">Phone: Missing in farm profile</div>'}
+          ${farm.tax_registration_number ? `<div class="farm-trace"><strong>GST/HST Reg:</strong> ${esc(farm.tax_registration_number)}</div>` : ''}
           ${badgesHTML}
           ${farmEnvHTML}
         </div>

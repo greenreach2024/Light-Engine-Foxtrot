@@ -20,6 +20,7 @@
 import express from 'express';
 import { farmAuthMiddleware } from '../../lib/farm-auth.js';
 import { farmStores } from '../../lib/farm-store.js';
+import { query as dbQuery } from '../../lib/database.js';
 import { 
   generateAuthUrl, 
   exchangeCodeForToken, 
@@ -38,23 +39,57 @@ import {
 
 const router = express.Router();
 
-// Initialize QuickBooks token store (multi-tenant)
+// Initialize QuickBooks token store (multi-tenant, DB-backed with in-memory cache)
 if (!farmStores.qbTokens) {
   farmStores.qbTokens = {
-    getAllForFarm: (farmId) => {
-      const tokens = farmStores.qbTokens._store || {};
-      return tokens[farmId] || null;
-    },
-    setForFarm: (farmId, data) => {
-      if (!farmStores.qbTokens._store) {
-        farmStores.qbTokens._store = {};
+    _cache: {},
+    getAllForFarm: async (farmId) => {
+      // Check cache first
+      if (farmStores.qbTokens._cache[farmId]) {
+        return farmStores.qbTokens._cache[farmId];
       }
-      farmStores.qbTokens._store[farmId] = data;
+      // Try database
+      try {
+        const result = await dbQuery(
+          `SELECT data FROM farm_data WHERE farm_id = $1 AND data_type = 'quickbooks_oauth'`,
+          [farmId]
+        );
+        if (result.rows.length && result.rows[0].data) {
+          const data = typeof result.rows[0].data === 'string'
+            ? JSON.parse(result.rows[0].data) : result.rows[0].data;
+          farmStores.qbTokens._cache[farmId] = data;
+          return data;
+        }
+      } catch (e) {
+        console.warn('[QB] DB token lookup failed, using cache:', e.message);
+      }
+      return null;
+    },
+    setForFarm: async (farmId, data) => {
+      farmStores.qbTokens._cache[farmId] = data;
+      // Persist to database
+      try {
+        await dbQuery(
+          `INSERT INTO farm_data (farm_id, data_type, data, updated_at)
+           VALUES ($1, 'quickbooks_oauth', $2, NOW())
+           ON CONFLICT (farm_id, data_type)
+           DO UPDATE SET data = $2, updated_at = NOW()`,
+          [farmId, JSON.stringify(data)]
+        );
+      } catch (e) {
+        console.warn('[QB] DB token persist failed:', e.message);
+      }
       return data;
     },
-    deleteForFarm: (farmId) => {
-      if (farmStores.qbTokens._store) {
-        delete farmStores.qbTokens._store[farmId];
+    deleteForFarm: async (farmId) => {
+      delete farmStores.qbTokens._cache[farmId];
+      try {
+        await dbQuery(
+          `DELETE FROM farm_data WHERE farm_id = $1 AND data_type = 'quickbooks_oauth'`,
+          [farmId]
+        );
+      } catch (e) {
+        console.warn('[QB] DB token delete failed:', e.message);
       }
     }
   };
@@ -144,7 +179,7 @@ router.get('/callback', async (req, res) => {
     tokenData.realm_id = realmId;
     
     // Store tokens for this farm
-    farmStores.qbTokens.setForFarm(farmId, tokenData);
+    await farmStores.qbTokens.setForFarm(farmId, tokenData);
     
     // Get user info for confirmation
     const userInfo = await getUserInfo(tokenData.access_token);
@@ -175,7 +210,7 @@ router.get('/status', async (req, res) => {
   const farmId = req.farm_id;
   
   try {
-    const tokenData = farmStores.qbTokens.getAllForFarm(farmId);
+    const tokenData = await farmStores.qbTokens.getAllForFarm(farmId);
     
     if (!tokenData) {
       return res.json({
@@ -193,7 +228,7 @@ router.get('/status', async (req, res) => {
       try {
         const newTokenData = await refreshAccessToken(tokenData.refresh_token);
         newTokenData.realm_id = tokenData.realm_id;
-        farmStores.qbTokens.setForFarm(farmId, newTokenData);
+        await farmStores.qbTokens.setForFarm(farmId, newTokenData);
         
         return res.json({
           ok: true,
@@ -237,13 +272,13 @@ router.post('/disconnect', async (req, res) => {
   const farmId = req.farm_id;
   
   try {
-    const tokenData = farmStores.qbTokens.getAllForFarm(farmId);
+    const tokenData = await farmStores.qbTokens.getAllForFarm(farmId);
     
     if (tokenData?.access_token) {
       await revokeToken(tokenData.access_token);
     }
     
-    farmStores.qbTokens.deleteForFarm(farmId);
+    await farmStores.qbTokens.deleteForFarm(farmId);
     
     res.json({
       ok: true,
@@ -269,7 +304,7 @@ router.post('/sync/customer', async (req, res) => {
   const { customer_id } = req.body;
   
   try {
-    const tokenData = farmStores.qbTokens.getAllForFarm(farmId);
+    const tokenData = await farmStores.qbTokens.getAllForFarm(farmId);
     
     if (!tokenData) {
       return res.status(400).json({
@@ -323,7 +358,7 @@ router.post('/sync/orders', async (req, res) => {
   const { start_date, end_date } = req.body;
   
   try {
-    const tokenData = farmStores.qbTokens.getAllForFarm(farmId);
+    const tokenData = await farmStores.qbTokens.getAllForFarm(farmId);
     
     if (!tokenData) {
       return res.status(400).json({
@@ -374,7 +409,7 @@ router.post('/sync/orders', async (req, res) => {
  */
 router.get('/status', (req, res) => {
   const farmId = req.farm_id;
-  const tokens = farmStores.qbTokens.getAllForFarm(farmId);
+  const tokens = await farmStores.qbTokens.getAllForFarm(farmId);
 
   if (!tokens) {
     return res.json({
@@ -403,7 +438,7 @@ router.get('/status', (req, res) => {
 router.post('/disconnect', (req, res) => {
   const farmId = req.farm_id;
   
-  farmStores.qbTokens.deleteForFarm(farmId);
+  await farmStores.qbTokens.deleteForFarm(farmId);
 
   res.json({
     ok: true,
@@ -424,7 +459,7 @@ router.post('/sync-invoices', async (req, res) => {
     const { order_ids } = req.body;
 
     // Check connection
-    const tokens = farmStores.qbTokens.getAllForFarm(farmId);
+    const tokens = await farmStores.qbTokens.getAllForFarm(farmId);
     if (!tokens) {
       return res.status(400).json({
         ok: false,
@@ -504,7 +539,7 @@ router.post('/sync-payments', async (req, res) => {
     const { payment_ids } = req.body;
 
     // Check connection
-    const tokens = farmStores.qbTokens.getAllForFarm(farmId);
+    const tokens = await farmStores.qbTokens.getAllForFarm(farmId);
     if (!tokens) {
       return res.status(400).json({
         ok: false,
