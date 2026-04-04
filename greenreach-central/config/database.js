@@ -530,6 +530,10 @@ async function runMigrations(client) {
       ALTER TABLE farm_inventory ADD COLUMN IF NOT EXISTS is_taxable BOOLEAN DEFAULT TRUE;
       ALTER TABLE farm_inventory ADD COLUMN IF NOT EXISTS is_custom BOOLEAN DEFAULT FALSE;
 
+      -- Migration: sku_id and sku_name columns used by manual inventory POST/PUT/sync routes
+      ALTER TABLE farm_inventory ADD COLUMN IF NOT EXISTS sku_id VARCHAR(255);
+      ALTER TABLE farm_inventory ADD COLUMN IF NOT EXISTS sku_name VARCHAR(255);
+
       UPDATE farm_inventory
          SET product_id = COALESCE(product_id, sku)
        WHERE product_id IS NULL;

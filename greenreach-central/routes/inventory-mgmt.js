@@ -1,5 +1,6 @@
 import express from 'express';
 import { farmStore } from '../lib/farm-data-store.js';
+import { query, isDatabaseAvailable } from '../config/database.js';
 
 const router = express.Router();
 
@@ -49,11 +50,37 @@ router.get('/dashboard', async (req, res) => {
       ...supplies.map(i => ({ ...i, _cat: 'supplies' })),
     ];
 
-    const totalValue = allItems.reduce((s, i) => {
+    const suppliesTotalValue = allItems.reduce((s, i) => {
       const qty = i.quantity || i.qtyOnHand || i.volume_remaining_ml || 0;
       const cost = i.costPerUnit || i.cost_per_unit || i.price || 0;
       return s + qty * cost;
     }, 0);
+
+    // Include crop inventory value from farm_inventory table (manual + auto entries)
+    let cropInventoryValue = 0;
+    let cropInventoryCount = 0;
+    if (await isDatabaseAvailable()) {
+      try {
+        const cropResult = await query(
+          `SELECT
+            COUNT(*) AS crop_count,
+            COALESCE(SUM(
+              GREATEST(0,
+                COALESCE(auto_quantity_lbs, 0) + COALESCE(manual_quantity_lbs, 0) - COALESCE(sold_quantity_lbs, 0)
+              ) * COALESCE(retail_price, price, 0)
+            ), 0) AS crop_value
+           FROM farm_inventory
+           WHERE farm_id = $1 AND COALESCE(status, 'active') != 'inactive'`,
+          [fid]
+        );
+        cropInventoryValue = Number(cropResult.rows[0]?.crop_value) || 0;
+        cropInventoryCount = Number(cropResult.rows[0]?.crop_count) || 0;
+      } catch (err) {
+        console.warn('[inventory-mgmt] crop inventory query failed:', err.message);
+      }
+    }
+
+    const totalValue = suppliesTotalValue + cropInventoryValue;
 
     // Build reorder alerts per category
     const alertsByCategory = { seeds: [], nutrients: [], packaging: [], equipment: [], supplies: [] };
@@ -74,6 +101,9 @@ router.get('/dashboard', async (req, res) => {
     res.json({
       ok: true,
       total_value: Math.round(totalValue * 100) / 100,
+      supplies_value: Math.round(suppliesTotalValue * 100) / 100,
+      crop_inventory_value: Math.round(cropInventoryValue * 100) / 100,
+      crop_inventory_count: cropInventoryCount,
       category_counts: {
         seeds: seeds.length,
         nutrients: nutrients.length,

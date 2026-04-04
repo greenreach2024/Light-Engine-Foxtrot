@@ -1954,6 +1954,26 @@
         document.getElementById('mi-qty').value = '';
         document.getElementById('mi-category').value = '';
         await loadManualInventory();
+
+        // Also refresh summary cards to reflect updated totals
+        try {
+          const farmId = sessionStorage.getItem('farm_id') || sessionStorage.getItem('farmId') || localStorage.getItem('farm_id') || localStorage.getItem('farmId') || getParentFarmId() || 'local-farm';
+          const refreshResp = await fetchWithFarmAuth(`${API_BASE}/api/inventory/${encodeURIComponent(farmId)}`);
+          if (refreshResp && refreshResp.ok) {
+            const refreshData = await refreshResp.json();
+            dbInventoryProducts = (refreshData.products || []).filter(p => p.status !== 'inactive');
+            const allCrops = new Set();
+            dbInventoryProducts.forEach(p => { if (p.product_name) allCrops.add(p.product_name); });
+            renderSummaryCards(
+              { activeTrays: document.querySelector('.summary-card .value')?.textContent || 0, totalPlants: 0, farmCount: 1 },
+              allCrops.size,
+              dbInventoryProducts,
+              cropPricingMap
+            );
+          }
+        } catch (summaryErr) {
+          console.warn('[ManualInv] Summary refresh failed (non-fatal):', summaryErr);
+        }
       } catch (err) {
         console.error('[ManualInv] Save error:', err);
         alert('Failed to save: ' + err.message);

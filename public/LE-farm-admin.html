@@ -1586,13 +1586,17 @@
                         <div class="stat-value" id="warningAlerts">0</div>
                         <div class="stat-label">Warnings</div>
                     </div>
-                    <div class="stat-card" style="border-left: 4px solid #4caf50;" data-help-title="Total Inventory Value" data-help="Shows the calculated dollar value of all your farm supplies, seeds, nutrients, packaging, and equipment currently in stock. This helps track capital invested in inventory.">
+                    <div class="stat-card" style="border-left: 4px solid #4caf50;" data-help-title="Total Inventory Value" data-help="Shows the combined dollar value of all farm supplies (seeds, nutrients, packaging, equipment) plus crop inventory (manual and auto-synced entries from Farm Inventory). This helps track total capital invested in inventory.">
                         <div class="stat-value" id="totalInventoryValue">$0</div>
                         <div class="stat-label">Total Value</div>
                     </div>
                     <div class="stat-card" style="border-left: 4px solid #2196f3;" data-help-title="Maintenance Due" data-help="Number of equipment items that have maintenance scheduled this week. Check the Equipment tab to see which devices need service, cleaning, or calibration.">
                         <div class="stat-value" id="maintenanceDue">0</div>
                         <div class="stat-label">Maintenance Due</div>
+                    </div>
+                    <div class="stat-card" style="border-left: 4px solid #9c27b0;" data-help-title="Crop Inventory" data-help="Number of crop products tracked in the Farm Inventory (manual entries and auto-synced from planting groups). The crop value is included in Total Value above.">
+                        <div class="stat-value" id="cropInventoryCount">0</div>
+                        <div class="stat-label">Crop Products</div>
                     </div>
                 </div>
 
@@ -4401,6 +4405,10 @@
                 if (dashboard.ok) {
                     document.getElementById('totalInventoryValue').textContent = 
                         `$${dashboard.total_value.toLocaleString()}`;
+                    
+                    // Show crop inventory count
+                    const cropCountEl = document.getElementById('cropInventoryCount');
+                    if (cropCountEl) cropCountEl.textContent = dashboard.crop_inventory_count || 0;
                     
                     // Count alerts by severity
                     let critical = 0, warning = 0;
