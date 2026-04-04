@@ -435,7 +435,7 @@ router.get('/status', async (req, res) => {
  * POST /api/farm-sales/quickbooks/disconnect
  * Disconnect QuickBooks integration
  */
-router.post('/disconnect', (req, res) => {
+router.post('/disconnect', async (req, res) => {
   const farmId = req.farm_id;
   
   await farmStores.qbTokens.deleteForFarm(farmId);
