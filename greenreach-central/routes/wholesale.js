@@ -3569,7 +3569,7 @@ router.post('/network/bootstrap', async (req, res) => {
 
     const farm = await upsertNetworkFarm(farmId, {
       farm_id: farmId,
-      name: payload.name || farmId,
+      name: payload.farm_name || payload.name || farmId,
       api_url: payload.api_url || null,
       url: payload.api_url || null,
       status: payload.status || 'active',
@@ -3603,7 +3603,7 @@ router.post('/network/farms', adminAuthMiddleware, async (req, res, next) => {
 
     const farm = await upsertNetworkFarm(farmId, {
       farm_id: farmId,
-      name: payload.name || farmId,
+      name: payload.farm_name || payload.name || farmId,
       api_url: payload.api_url || payload.url || null,
       url: payload.url || payload.api_url || null,
       status: payload.status || 'active',

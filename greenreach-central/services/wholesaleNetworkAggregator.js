@@ -176,6 +176,23 @@ export async function refreshNetworkInventory() {
         contact: farmMeta.contact || {},
         location: farmMeta.location || {}
       });
+
+      // Write back farm_name from LE response if it differs from stored name
+      // (handles case where farm was registered without a proper name)
+      const responseFarmName = result.value?.farm_name;
+      const storedFarmName = farmMeta.farm_name || farmMeta.name;
+      if (responseFarmName && responseFarmName !== storedFarmName && responseFarmName !== farmMeta.farm_id) {
+        farmMeta.farm_name = responseFarmName;
+        farmMeta.name = responseFarmName;
+        try {
+          const { upsertNetworkFarm } = await import('./networkFarmsStore.js');
+          await upsertNetworkFarm(farmMeta.farm_id, { ...farmMeta, name: responseFarmName, farm_name: responseFarmName });
+          logger.info(`[NetworkAgg] Updated farm name for ${farmMeta.farm_id}: ${responseFarmName}`);
+        } catch (nameErr) {
+          // Non-fatal — name update is best-effort
+          logger.warn(`[NetworkAgg] Could not persist farm name update: ${nameErr.message}`);
+        }
+      }
     } else {
       const farm = farmsWithUrl[idx];
       const farmId = farm?.farm_id || `farm-${idx}`;
