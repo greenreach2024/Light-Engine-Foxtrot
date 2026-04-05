@@ -454,7 +454,7 @@ router.get('/farm-sales/inventory', authMiddleware, async (req, res) => {
             COALESCE(sku, product_id) AS sku_id,
             product_name AS name,
             COALESCE(retail_price, wholesale_price, price, 0) AS retail_price,
-            COALESCE(quantity_available, 0) AS available,
+            COALESCE(quantity_available, 0) AS quantity_available,
             0 AS reserved,
             COALESCE(unit, 'unit') AS unit,
             COALESCE(category, 'Uncategorized') AS category,

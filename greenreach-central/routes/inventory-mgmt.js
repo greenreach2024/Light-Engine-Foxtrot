@@ -63,14 +63,14 @@ router.get('/dashboard', async (req, res) => {
       try {
         const cropResult = await query(
           `SELECT
-            COUNT(*) AS crop_count,
+            COUNT(*) FILTER (WHERE COALESCE(quantity_available, 0) > 0) AS crop_count,
             COALESCE(SUM(
-              GREATEST(0,
-                COALESCE(auto_quantity_lbs, 0) + COALESCE(manual_quantity_lbs, 0) - COALESCE(sold_quantity_lbs, 0)
-              ) * COALESCE(retail_price, price, 0)
+              COALESCE(quantity_available, 0) * COALESCE(retail_price, wholesale_price, price, 0)
             ), 0) AS crop_value
            FROM farm_inventory
-           WHERE farm_id = $1 AND COALESCE(status, 'active') != 'inactive'`,
+           WHERE farm_id = $1
+             AND COALESCE(status, 'active') != 'inactive'
+             AND COALESCE(quantity_available, 0) > 0`,
           [fid]
         );
         cropInventoryValue = Number(cropResult.rows[0]?.crop_value) || 0;
