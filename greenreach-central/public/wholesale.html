@@ -1531,8 +1531,11 @@
       signOut() {
         this.currentBuyer = null;
         localStorage.removeItem('greenreach_active_buyer');
+        localStorage.removeItem('wholesale_token');
         this.updateBuyerProfile();
         this.populateCheckoutForm();
+        this.cart = [];
+        this.renderCart();
         this.orders = [];
         this.loadOrders();
         this.showToast('Signed out', 'info');
