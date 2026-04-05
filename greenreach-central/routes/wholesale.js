@@ -1360,6 +1360,68 @@ router.get('/catalog', async (req, res, next) => {
         }
       }
 
+      // ------------------------------------------------------------------
+      // Always merge custom products from DB into catalog items.
+      // Custom products live only in Central's farm_inventory table, not in
+      // the LE network sync cache, so the network aggregate never includes
+      // them.  This block supplements whatever the network returned.
+      // ------------------------------------------------------------------
+      if (isDatabaseAvailable()) {
+        try {
+          const existingSkus = new Set(items.map(it => it.sku_id));
+          const customResult = await query(
+            `SELECT i.product_id, i.product_name, i.sku, i.sku_name,
+                    i.quantity_available, i.manual_quantity_lbs,
+                    i.wholesale_price, i.retail_price, i.unit, i.quantity_unit,
+                    i.category, i.farm_id, i.inventory_source, i.is_custom,
+                    i.description, i.thumbnail_url,
+                    f.name AS farm_name, f.metadata AS farm_metadata
+             FROM farm_inventory i
+             JOIN farms f ON f.farm_id = i.farm_id
+             WHERE f.status IN ('active','online')
+               AND (i.is_custom = TRUE OR LOWER(i.inventory_source) = 'custom')
+               AND COALESCE(i.quantity_available, i.manual_quantity_lbs, 0) > 0
+             ORDER BY i.product_name`
+          );
+          for (const row of (customResult.rows || [])) {
+            const skuId = row.sku || row.product_id || row.product_name;
+            if (existingSkus.has(skuId)) continue; // already in catalog
+            const qty = Number(row.quantity_available ?? row.manual_quantity_lbs ?? 0);
+            items.push({
+              sku_id: skuId,
+              product_name: row.product_name || row.sku_name || skuId,
+              category: row.category || 'produce',
+              unit: row.quantity_unit || row.unit || 'lb',
+              price_per_unit: Number(row.wholesale_price ?? row.retail_price ?? 0),
+              wholesale_price: Number(row.wholesale_price ?? 0),
+              retail_price: Number(row.retail_price ?? 0),
+              inventory_source: row.inventory_source || 'custom',
+              is_custom: true,
+              description: row.description || null,
+              thumbnail_url: row.thumbnail_url || null,
+              total_qty_available: qty,
+              qty_available: qty,
+              farms: [{
+                farm_id: row.farm_id,
+                farm_name: row.farm_name,
+                quantity_available: qty,
+                qty_available: qty,
+                price_per_unit: Number(row.wholesale_price ?? row.retail_price ?? 0),
+                inventory_source: row.inventory_source || 'custom',
+                is_custom: true,
+                quality_flags: ['custom_product'],
+                location: row.farm_metadata?.location || row.farm_metadata || null
+              }]
+            });
+            if (!networkFarmLocationById.has(String(row.farm_id || '')) && row.farm_metadata) {
+              networkFarmLocationById.set(String(row.farm_id || ''), row.farm_metadata?.location || row.farm_metadata);
+            }
+          }
+        } catch (dbErr) {
+          console.warn('[Wholesale Catalog] Custom product merge failed:', dbErr.message);
+        }
+      }
+
       if (farmId) {
         items = items
           .map((it) => ({ ...it, farms: (it.farms || []).filter((f) => f.farm_id === farmId) }))

@@ -528,7 +528,7 @@ export async function buildAggregateCatalog(options = {}) {
           const farmCoords = extractCoordinates(farmLocation);
 
           if (skuIsCustom && enforceCustomSearchArea) {
-            if (!buyerCoords || !farmCoords) return null;
+            if (!buyerCoords || !farmCoords) return farm;
             const distanceKm = haversineDistanceKm(
               buyerCoords.latitude,
               buyerCoords.longitude,
