@@ -2195,22 +2195,34 @@
     window.deleteCustomProduct = deleteCustomProduct;
     window.triggerImageUpload = triggerImageUpload;
 
-    // Seed product name datalist from crop registry
+    // Seed product name datalist from crop pricing API (all farm recipes)
     let _cropCategories = {};
     async function loadCropNames() {
       try {
-        const resp = await fetch('/data/crop-registry.json');
-        if (!resp.ok) return;
-        const reg = await resp.json();
-        const crops = reg.crops || {};
-        const names = Object.keys(crops).sort();
+        // Primary source: crop pricing API has all lighting recipe crops + manually added crops
+        const resp = await fetchWithFarmAuth(API_BASE + '/api/crop-pricing');
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const data = await resp.json();
+        const crops = data.pricing?.crops || [];
+        const names = crops.map(c => c.crop).filter(Boolean).sort();
         const dl = document.getElementById('crop-names-list');
         dl.innerHTML = names.map(n => `<option value="${escHtml(n)}">`).join('');
-        // Build category lookup for auto-fill
-        const catMap = { lettuce:'Leafy Greens', arugula:'Leafy Greens', kale:'Leafy Greens', specialty_greens:'Leafy Greens', asian_greens:'Leafy Greens', basil:'Herbs' };
-        for (const [name, info] of Object.entries(crops)) {
-          if (info.category) _cropCategories[name.toLowerCase()] = catMap[info.category] || info.category;
-        }
+        // Build category lookup for auto-fill from crop name patterns
+        const catPatterns = [
+          [/lettuce|bibb|butterhead|oakleaf|romaine|gem|eazyleaf|pelleted|endive|escarole|sorrel/i, 'Leafy Greens'],
+          [/arugula/i, 'Leafy Greens'],
+          [/kale|chard|spinach|tatsoi|pak choi|mizuna|komatsuna|watercress/i, 'Leafy Greens'],
+          [/basil|thyme|oregano|parsley|tarragon|rosemary|sage|marjoram|dill|chervil|lovage|spearmint|lemon balm/i, 'Herbs'],
+          [/microgreen/i, 'Microgreens'],
+          [/sprout/i, 'Vegetables'],
+          [/tomato|marzano|better boy|celebrity|heatmaster|sun gold|brandywine/i, 'Vegetables'],
+          [/strawberr|albion|chandler|eversweet|jewel|monterey|ozark|seascape|sequoia|tribute|tristar|mara de bois|fort laramie/i, 'Fruit'],
+        ];
+        names.forEach(n => {
+          for (const [pattern, cat] of catPatterns) {
+            if (pattern.test(n)) { _cropCategories[n.toLowerCase()] = cat; break; }
+          }
+        });
         // Auto-fill category when crop selected from list
         document.getElementById('mi-name').addEventListener('change', () => {
           const val = document.getElementById('mi-name').value.trim().toLowerCase();

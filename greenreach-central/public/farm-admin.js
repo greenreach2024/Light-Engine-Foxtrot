@@ -914,8 +914,6 @@ function setupNavigation() {
                 // Load section-specific data
                 if (section === 'wholesale-orders') {
                     refreshWholesaleOrders();
-                } else if (section === 'crop-value') {
-                    renderCropValue();
                 } else if (section === 'accounting') {
                     loadAccountingData();
                 } else if (section === 'payments') {
@@ -982,7 +980,7 @@ function setupNavigation() {
                 const sectionEl = document.getElementById(`section-${section}`);
                 if (sectionEl) {
                     sectionEl.style.display = 'block';
-                    if (section === 'crop-value') renderCropValue();
+
                 }
                 const matchNav = document.querySelector(`.nav-item[data-section="${section}"]`);
                 if (matchNav) matchNav.classList.add('active');

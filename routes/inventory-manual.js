@@ -11,6 +11,33 @@
 
 import express from 'express';
 import jwt from 'jsonwebtoken';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename_im = fileURLToPath(import.meta.url);
+const __dirname_im = path.dirname(__filename_im);
+
+/**
+ * Look up retail and wholesale price for a crop from crop-pricing.json.
+ */
+function lookupCropPricing(cropName) {
+  try {
+    const pricingFile = path.resolve(__dirname_im, '../public/data/crop-pricing.json');
+    const data = JSON.parse(fs.readFileSync(pricingFile, 'utf8'));
+    const crops = data.crops || [];
+    const match = crops.find(c => c.crop && c.crop.toLowerCase() === cropName.toLowerCase());
+    if (match) {
+      return {
+        retailPrice: Number(match.retailPrice) || 0,
+        wholesalePrice: Number(match.wholesalePrice) || 0
+      };
+    }
+  } catch (e) {
+    console.warn('[inventory-manual] Could not read crop-pricing.json:', e.message);
+  }
+  return { retailPrice: 0, wholesalePrice: 0 };
+}
 
 const router = express.Router();
 
@@ -122,10 +149,23 @@ router.get('/:farmId', async (req, res) => {
       [farmId]
     );
 
+    // Enrich rows: if retail_price is 0, look up from crop-pricing.json
+    const enriched = result.rows.map(row => {
+      if ((!row.retail_price || Number(row.retail_price) === 0) && row.product_name) {
+        const pricing = lookupCropPricing(row.product_name);
+        if (pricing.retailPrice > 0) {
+          row.retail_price = pricing.retailPrice;
+          row.wholesale_price = row.wholesale_price && Number(row.wholesale_price) > 0 ? row.wholesale_price : pricing.wholesalePrice;
+          row.price = pricing.retailPrice;
+        }
+      }
+      return row;
+    });
+
     res.json({
       farm_id: farmId,
-      products: result.rows,
-      count: result.rows.length
+      products: enriched,
+      count: enriched.length
     });
   } catch (err) {
     console.error('[inventory-manual] GET /:farmId error:', err.message);
@@ -154,7 +194,12 @@ router.post('/manual', async (req, res) => {
     const manualQty = Math.max(0, Number(quantity_lbs) || 0);
     const productId = product_name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
 
-    console.log('[inventory-manual] POST: farm=' + farmId + ' product=' + product_name + ' qty=' + manualQty);
+    // Auto-apply pricing from crop-pricing.json
+    const pricing = lookupCropPricing(product_name);
+    const retailPrice = pricing.retailPrice;
+    const wholesalePrice = pricing.wholesalePrice;
+
+    console.log('[inventory-manual] POST: farm=' + farmId + ' product=' + product_name + ' qty=' + manualQty + ' retail=$' + retailPrice + ' wholesale=$' + wholesalePrice);
 
     let result;
     try {
@@ -164,7 +209,7 @@ router.post('/manual', async (req, res) => {
         "  quantity, unit, price, available_for_wholesale," +
         "  manual_quantity_lbs, quantity_available, quantity_unit," +
         "  wholesale_price, retail_price, inventory_source, category, last_updated" +
-        ") VALUES ($1,$2,$3,$4,$5,$6,$7,'lb',0,true,$8,$9,'lb',0,0,'manual',$10,NOW())" +
+        ") VALUES ($1,$2,$3,$4,$5,$6,$7,'lb',$11,true,$8,$9,'lb',$12,$11,'manual',$10,NOW())" +
         " ON CONFLICT (farm_id, product_id) DO UPDATE SET" +
         "  product_name = EXCLUDED.product_name," +
         "  manual_quantity_lbs = EXCLUDED.manual_quantity_lbs," +
@@ -174,6 +219,9 @@ router.post('/manual', async (req, res) => {
         "    ELSE 'manual'" +
         "  END," +
         "  category = COALESCE(EXCLUDED.category, farm_inventory.category)," +
+        "  retail_price = CASE WHEN EXCLUDED.retail_price > 0 THEN EXCLUDED.retail_price ELSE farm_inventory.retail_price END," +
+        "  wholesale_price = CASE WHEN EXCLUDED.wholesale_price > 0 THEN EXCLUDED.wholesale_price ELSE farm_inventory.wholesale_price END," +
+        "  price = CASE WHEN EXCLUDED.price > 0 THEN EXCLUDED.price ELSE farm_inventory.price END," +
         "  last_updated = NOW()" +
         " RETURNING *",
         [
@@ -186,7 +234,9 @@ router.post('/manual', async (req, res) => {
           manualQty,            // $7 quantity
           manualQty,            // $8 manual_quantity_lbs
           manualQty,            // $9 quantity_available
-          category || null      // $10 category
+          category || null,     // $10 category
+          retailPrice,          // $11 retail_price / price
+          wholesalePrice        // $12 wholesale_price
         ]
       );
     } catch (insertErr) {

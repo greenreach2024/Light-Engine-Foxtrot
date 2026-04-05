@@ -1153,7 +1153,6 @@
                     <a href="#iframe-view" class="nav-item" data-section="iframe-view" data-url="/farm-sales-pos.html">Farm Sales Terminal</a>
                     <a href="#wholesale-orders" class="nav-item" data-section="wholesale-orders">Wholesale Orders</a>
                     <a href="#pricing" class="nav-item" data-section="pricing">Crop Pricing</a>
-                    <a href="#crop-value" class="nav-item" data-section="crop-value">Crop Value</a>
                     <a href="#iframe-view" class="nav-item" data-section="iframe-view" data-url="/views/supplies.html">Supplies</a>
                     <a href="#exports" class="nav-item" data-section="exports">Exports</a>
                     <a href="#harvest-donations" class="nav-item" data-section="harvest-donations">Harvest & Donations</a>
@@ -1386,10 +1385,7 @@
                         <span class="nav-item-icon">■</span>
                         Crop Pricing
                     </a>
-                    <a href="#crop-value" class="nav-item" data-section="crop-value" data-help-title="Crop Value" data-help="Real-time calculation of the dollar value of all crops currently growing in your farm. Helps track standing inventory value for financial planning.">
-                        <span class="nav-item-icon">■</span>
-                        Crop Value
-                    </a>
+
                     <a href="#users" class="nav-item" data-section="users" data-help-title="Users & Access" data-help="Add, remove, and configure team members. Set access permissions, roles, and send invitations to growers, managers, or view-only users.">
                         <span class="nav-item-icon">■</span>
                         Users & Access
@@ -1521,12 +1517,7 @@
                             <div class="action-desc">Set pricing for crops & products</div>
                             <div class="card-info-tooltip">Quick tool to update and export crop pricing</div>
                         </a>
-                        <a href="#crop-value" class="action-card card-highlight" data-section="crop-value" data-help-title="Crop Value" data-help="View the real-time estimated dollar value of all crops currently in production at your farm. This calculation uses current pricing, growth stages, and projected harvest dates to show standing inventory value." data-help-ai="Current standing inventory value: $12,450. Projected value at harvest: $18,200.">
-                            <div class="action-icon">CV</div>
-                            <div class="action-title">Crop Value</div>
-                            <div class="action-desc">In the moment snapshot of today's crop value</div>
-                            <div class="card-info-tooltip">Real-time valuation of all crops in production</div>
-                        </a>
+
                         <a href="#iframe-view" class="action-card card-highlight" data-section="iframe-view" data-url="/views/planting-scheduler.html" data-help-title="AI Growth Copilot" data-help="Open AI Crop Recommendations in Planting Scheduler to get growth-focused crop and seeding suggestions, compare alternatives, and apply the top recommendation." data-help-ai="Next action: open AI Crop Recommendations and accept the top schedule for your selected group.">
                             <div class="action-icon">AI</div>
                             <div class="action-title">AI Growth Copilot</div>
@@ -3793,123 +3784,6 @@
                 </div>
             </div>
 
-            <div id="section-crop-value" class="content-section" style="display: none;">
-                <div class="header">
-                    <h1>Crop Value Assessment</h1>
-                    <p style="color: var(--text-secondary);\">\n                        Insurance valuation based on current inventory, growth stages, and retail pricing.\n                    </p>
-                </div>
-
-                <!-- Today's Total Value Card -->
-                <div class="metric-card" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); margin-bottom: 30px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <div>
-                            <div style="font-size: 14px; opacity: 0.9; margin-bottom: 5px;">Today's Total Farm Value</div>
-                            <div id="total-farm-value" style="font-size: 48px; font-weight: 700;">$0.00</div>
-                            <div id="total-farm-weight" style="font-size: 14px; opacity: 0.8; margin-top: 5px;">0 oz total inventory</div>
-                        </div>
-                        <div style="text-align: right;">
-                            <div style="font-size: 14px; opacity: 0.9;">Last Updated</div>
-                            <div id="value-timestamp" style="font-size: 12px; opacity: 0.8;">--</div>
-                            <button onclick="refreshCropValue()" style="margin-top: 10px; padding: 8px 16px; background: rgba(255,255,255,0.2); border: none; border-radius: 6px; color: white; cursor: pointer; font-size: 12px;">
-                                Refresh Values
-                            </button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Summary Cards -->
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 30px;">
-                    <div class="metric-card">
-                        <div class="metric-label">Active Trays</div>
-                        <div id="value-active-trays" class="metric-value">0</div>
-                    </div>
-                    <div class="metric-card">
-                        <div class="metric-label">Total Quantity</div>
-                        <div id="value-total-plants" class="metric-value">0</div>
-                    </div>
-                    <div class="metric-card">
-                        <div class="metric-label">Crop Varieties</div>
-                        <div id="value-crop-count" class="metric-value">0</div>
-                    </div>
-                    <div class="metric-card">
-                        <div class="metric-label">Avg Value/Item</div>
-                        <div id="value-avg-per-tray" class="metric-value">$0.00</div>
-                    </div>
-                </div>
-
-                <!-- Value by Crop Type -->
-                <div class="card" style="margin-bottom: 30px;">
-                    <h2>Value by Crop Type</h2>
-                    <div class="table-container">
-                        <table id="crop-value-table">
-                            <thead>
-                                <tr>
-                                    <th>Crop</th>
-                                    <th>Active Trays</th>
-                                    <th>Quantity</th>
-                                    <th>Avg Days</th>
-                                    <th>Price/oz</th>
-                                    <th>Total Value</th>
-                                    <th>% of Total</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <!-- Populated by JavaScript -->
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <!-- Value by Growth Stage -->
-                <div class="card" style="margin-bottom: 30px;">
-                    <h2>Value by Growth Stage</h2>
-                    <div class="table-container">
-                        <table id="growth-stage-value-table">
-                            <thead>
-                                <tr>
-                                    <th>Growth Stage</th>
-                                    <th>Days Range</th>
-                                    <th>Trays</th>
-                                    <th>Quantity</th>
-                                    <th>Total Value</th>
-                                    <th>% of Total</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <!-- Populated by JavaScript -->
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <!-- Detailed Tray Inventory -->
-                <div class="card">
-                    <h2>Detailed Tray Inventory</h2>
-                    <p style="color: var(--text-secondary); margin-bottom: 15px; font-size: 14px;">
-                        Individual tray valuations for insurance documentation.
-                    </p>
-                    <div class="table-container">
-                        <table id="tray-value-table">
-                            <thead>
-                                <tr>
-                                    <th>Tray ID</th>
-                                    <th>Crop</th>
-                                    <th>Seeding Date</th>
-                                    <th>Days Post Seed</th>
-                                    <th>Quantity</th>
-                                    <th>Growth %</th>
-                                    <th>Est. Weight</th>
-                                    <th>Tray Value</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <!-- Populated by JavaScript -->
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-
             <div id="section-wholesale-orders" class="content-section" style="display: none;">
                 <div class="header">
                     <h1>Wholesale Orders</h1>
@@ -4129,7 +4003,7 @@
         }
       })();
     </script>
-    <script src="/farm-admin.js?v=20260405-crop-value-fix"></script>
+    <script src="/farm-admin.js?v=20260405-inventory-pricing-fix"></script>
     <script src="/js/plan-features.js?v=20260313"></script>
     <script src="/js/onboarding-checklist.js?v=20260313"></script>
     <script src="/js/infotainment-nav.js"></script>
