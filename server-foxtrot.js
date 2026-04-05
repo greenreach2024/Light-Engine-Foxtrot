@@ -13463,8 +13463,12 @@ const wholesaleCentralProxy = createProxyMiddleware({
   }
 });
 
+// Inventory reservation sub-paths must stay local on LE (wholesaleSyncRouter handles them)
+const WHOLESALE_INVENTORY_LOCAL = ['/inventory/reserve', '/inventory/release', '/inventory/confirm'];
+
 app.use('/api/wholesale', (req, res, next) => {
   const subPath = req.path;
+  if (WHOLESALE_INVENTORY_LOCAL.some(p => subPath.startsWith(p))) return next();
   const shouldProxy = WHOLESALE_PROXY_PATHS.some(p => subPath.startsWith(p));
   if (!shouldProxy) return next();
   console.log('[wholesale proxy] Forwarding ' + req.method + ' ' + req.originalUrl + ' to Central');
