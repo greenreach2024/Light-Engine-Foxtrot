@@ -35,6 +35,7 @@ import crypto from 'crypto';
 import { createRequire } from 'module';
 import farmStore from '../lib/farm-data-store.js';
 import { query as dbQuery, isDatabaseAvailable } from '../config/database.js';
+import leamBridge from '../lib/leam-bridge.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1236,6 +1237,37 @@ export const TOOL_CATALOG = {
         }
       }
 
+      // 1b. LEAM companion agent scan (BLE + network discovery)
+      if (scanMode !== 'wired') {
+        try {
+          const leamStatus = leamBridge.getClientStatus(farmId);
+          if (leamStatus.connected) {
+            const leamResult = await leamBridge.sendCommand(farmId, 'scan_all', {
+              duration: 12000
+            });
+            if (leamResult.ok && leamResult.data) {
+              const leamDevices = Array.isArray(leamResult.data.devices) ? leamResult.data.devices : [];
+              for (const d of leamDevices) {
+                const devId = d.deviceId || d.id || d.mac || null;
+                // Avoid duplicates from other sources
+                if (devId && discovered.some(x => x.device_id === devId)) continue;
+                discovered.push({
+                  name: d.name || d.deviceName || 'Unknown Device',
+                  device_id: devId,
+                  type: inferDeviceType(d.deviceType || d.type || ''),
+                  device_type_raw: d.deviceType || d.type || 'unknown',
+                  protocol: d.protocol || 'ble',
+                  brand: d.brand || '',
+                  source: 'leam'
+                });
+              }
+            }
+          }
+        } catch (err) {
+          // LEAM scan failed or not connected -- continue with other sources
+        }
+      }
+
       // 2. SwitchBot cloud API scan using stored credentials
       if (!protocol || protocol === 'all' || protocol === 'switchbot') {
         try {
@@ -1289,6 +1321,17 @@ export const TOOL_CATALOG = {
       const existingDevices = raw.devices || {};
       const existingIds = new Set(Object.keys(existingDevices));
       const existingNames = new Set(Object.values(existingDevices).map(d => (d.name || '').toLowerCase()));
+
+      // Also check DB-stored devices via farmStore
+      try {
+        const dbDevices = await farmStore.get(farmId, 'devices');
+        if (Array.isArray(dbDevices)) {
+          for (const d of dbDevices) {
+            if (d.device_code) existingIds.add(d.device_code);
+            if (d.name) existingNames.add(d.name.toLowerCase());
+          }
+        }
+      } catch { /* non-fatal */ }
 
       const newDevices = discovered.filter(d => {
         if (d.device_id && existingIds.has(d.device_id)) return false;
