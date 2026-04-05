@@ -1043,7 +1043,7 @@
           (sku) => `
           <div class="sku-card">
             ${sku.thumbnail_url
-              ? `<div class="sku-thumbnail"><img src="${escapeAttr(sku.thumbnail_url)}" alt="${escapeAttr(sku.product_name)}" loading="lazy" onerror="this.parentElement.outerHTML='<div class=\'sku-thumbnail-placeholder\'>&#9751;</div>'" /></div>`
+              ? `<div class="sku-thumbnail"><img src="${escapeAttr(sku.thumbnail_url)}" alt="${escapeAttr(sku.product_name)}" loading="lazy" onerror="this.style.display=&quot;none&quot;;this.parentElement.classList.add(&quot;sku-thumbnail-placeholder&quot;);this.parentElement.innerHTML=&quot;&#9751;&quot;" /></div>`
               : '<div class="sku-thumbnail-placeholder">&#9751;</div>'}
             <div class="sku-header">
               <div class="sku-name">${escapeHtml(sku.product_name)}</div>
