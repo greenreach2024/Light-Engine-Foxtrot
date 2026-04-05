@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 280" fill="none">
+  <rect width="400" height="280" rx="8" fill="#f0fdf4"/>
+  <g transform="translate(200,120)">
+    <!-- Leaf shape -->
+    <path d="M0,-52 C28,-52 52,-28 52,0 C52,28 28,52 0,52 C-28,52 -52,28 -52,0 C-52,-28 -28,-52 0,-52Z" fill="#dcfce7" stroke="#86efac" stroke-width="1.5"/>
+    <!-- Stem -->
+    <line x1="0" y1="14" x2="0" y2="52" stroke="#4ade80" stroke-width="3" stroke-linecap="round"/>
+    <!-- Left leaf -->
+    <path d="M0,8 C-18,-12 -38,-8 -38,-8 C-38,-8 -22,8 0,8Z" fill="#4ade80" opacity="0.8"/>
+    <!-- Right leaf -->
+    <path d="M0,0 C18,-20 38,-16 38,-16 C38,-16 22,0 0,0Z" fill="#4ade80" opacity="0.8"/>
+    <!-- Small sprout -->
+    <path d="M0,-14 C8,-28 20,-24 20,-24 C20,-24 10,-12 0,-14Z" fill="#22c55e" opacity="0.7"/>
+  </g>
+  <text x="200" y="210" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif" font-size="15" font-weight="500" fill="#64748b">Product Image</text>
+  <text x="200" y="232" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif" font-size="12" fill="#94a3b8">Coming Soon</text>
+</svg>
