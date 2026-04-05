@@ -197,7 +197,7 @@ router.post('/', async (req, res) => {
     if (err.code === '23505') {
       return res.status(409).json({ success: false, error: 'A product with this SKU already exists' });
     }
-    return res.status(500).json({ success: false, error: 'Failed to create product', detail: err.message });
+    return res.status(500).json({ success: false, error: 'Failed to create product' });
   }
 });
 
