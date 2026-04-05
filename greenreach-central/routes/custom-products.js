@@ -169,7 +169,7 @@ router.post('/', async (req, res) => {
       ) VALUES (
         $1, $2, $3, $4, $5, $6,
         $7, $8, TRUE,
-        $9::numeric, $10::numeric, COALESCE($9::numeric, $10::numeric),
+        $9, $10, $14,
         $11, $11, $12,
         $13, 'custom', 'active',
         NOW(), NOW()
@@ -183,6 +183,7 @@ router.post('/', async (req, res) => {
         Number(quantity_available) || 0,
         unit,
         available_for_wholesale === false ? false : true,
+        wholesale_price != null ? Number(wholesale_price) : (retail_price != null ? Number(retail_price) : null),
       ]
     );
 
