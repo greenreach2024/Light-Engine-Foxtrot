@@ -846,6 +846,23 @@ export const TOOL_CATALOG = {
           dbInventory = result.rows;
         } catch { /* table may not exist yet */ }
       }
+      // Enrich DB inventory with crop-pricing fallback (same as inventory page)
+      if (dbInventory.length > 0) {
+        try {
+          const pricingData = await farmStore.get(farm_id, 'crop_pricing') || { crops: [] };
+          const priceMap = {};
+          (pricingData.crops || []).forEach(c => {
+            if (c.crop) priceMap[c.crop.toLowerCase()] = c;
+          });
+          for (const row of dbInventory) {
+            const cp = row.product_name ? priceMap[row.product_name.toLowerCase()] : null;
+            if (cp) {
+              if (!Number(row.retail_price) && cp.retailPrice) row.retail_price = Number(cp.retailPrice);
+              if (!Number(row.wholesale_price) && cp.wholesalePrice) row.wholesale_price = Number(cp.wholesalePrice);
+            }
+          }
+        } catch { /* crop_pricing lookup failed */ }
+      }
       return {
         ok: true,
         farm_inventory: dbInventory,

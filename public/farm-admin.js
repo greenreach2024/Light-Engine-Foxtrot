@@ -914,8 +914,6 @@ function setupNavigation() {
                 // Load section-specific data
                 if (section === 'wholesale-orders') {
                     refreshWholesaleOrders();
-                } else if (section === 'crop-value') {
-                    renderCropValue();
                 } else if (section === 'accounting') {
                     loadAccountingData();
                 } else if (section === 'payments') {
@@ -982,7 +980,7 @@ function setupNavigation() {
                 const sectionEl = document.getElementById(`section-${section}`);
                 if (sectionEl) {
                     sectionEl.style.display = 'block';
-                    if (section === 'crop-value') renderCropValue();
+
                 }
                 const matchNav = document.querySelector(`.nav-item[data-section="${section}"]`);
                 if (matchNav) matchNav.classList.add('active');
@@ -3276,6 +3274,18 @@ async function loadCropValueData() {
         const session = (typeof getSession === 'function') ? getSession() : null;
         const authHeaders = session?.token ? { 'Authorization': `Bearer ${session.token}` } : {};
 
+        // Load crop-pricing as fallback for items without DB prices
+        let cropPricingMap = {};
+        try {
+            const cpResp = await fetch(`${API_BASE}/api/crop-pricing`, { headers: authHeaders });
+            if (cpResp.ok) {
+                const cpData = await cpResp.json();
+                (cpData?.pricing?.crops || []).forEach(c => {
+                    if (c.crop) cropPricingMap[c.crop.toLowerCase()] = c;
+                });
+            }
+        } catch { /* crop-pricing unavailable */ }
+
         // Prefer product inventory because manual edits are written to farm_inventory.
         try {
             const productResponse = await fetch(`${API_BASE}/api/farm-sales/inventory`, {
@@ -3297,12 +3307,14 @@ async function loadCropValueData() {
 
                     for (const item of inventoryItems) {
                         const crop = item.product_name || item.name || item.sku_name || item.sku || 'Unknown';
-                        const weightLbs = Number(item.quantity_available ?? item.qty_available ?? item.quantity ?? 0);
+                        const weightLbs = Number(item.available ?? item.quantity_available ?? item.qty_available ?? item.quantity ?? 0);
                         if (weightLbs <= 0) continue;
 
                         const params = cropGrowthParams[crop] || {};
                         const dbPrice = Number(item.retail_price ?? item.unit_price ?? item.price ?? 0);
-                        const retailPricePerLb = dbPrice > 0 ? dbPrice : (params.retailPricePerLb || 0);
+                        const cpEntry = cropPricingMap[crop.toLowerCase()];
+                        const cpPrice = cpEntry ? Number(cpEntry.retailPrice || 0) : 0;
+                        const retailPricePerLb = dbPrice > 0 ? dbPrice : (cpPrice > 0 ? cpPrice : (params.retailPricePerLb || 0));
                         const yieldFactor = params.yieldFactor || 1;
                         const pricePerOz = retailPricePerLb / 16;
                         const value = weightLbs * retailPricePerLb * yieldFactor;
@@ -3343,6 +3355,7 @@ async function loadCropValueData() {
                         cropSummary[crop].plants += estPlants;
                         cropSummary[crop].weightLbs += weightLbs;
                         cropSummary[crop].value += value;
+                        cropSummary[crop].retailPricePerLb = retailPricePerLb;
 
                         if (!stageSummary[stageLabel]) {
                             stageSummary[stageLabel] = { trays: 0, plants: 0, weightLbs: 0, value: 0, minDays: 0, maxDays: 0 };
