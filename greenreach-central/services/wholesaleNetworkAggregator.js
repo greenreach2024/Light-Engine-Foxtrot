@@ -2,7 +2,7 @@
  * Wholesale Network Aggregator Service
  * Aggregates real inventory data across registered network farms
  */
-import { listNetworkFarms } from './networkFarmsStore.js';
+import { listNetworkFarms, upsertNetworkFarm } from './networkFarmsStore.js';
 import { generatePredictedInventoryEnhanced } from './harvest-prediction-engine.js';
 import logger from '../utils/logger.js';
 import { listAllOrders } from './wholesaleMemoryStore.js';
@@ -184,14 +184,9 @@ export async function refreshNetworkInventory() {
       if (responseFarmName && responseFarmName !== storedFarmName && responseFarmName !== farmMeta.farm_id) {
         farmMeta.farm_name = responseFarmName;
         farmMeta.name = responseFarmName;
-        try {
-          const { upsertNetworkFarm } = await import('./networkFarmsStore.js');
-          await upsertNetworkFarm(farmMeta.farm_id, { ...farmMeta, name: responseFarmName, farm_name: responseFarmName });
-          logger.info(`[NetworkAgg] Updated farm name for ${farmMeta.farm_id}: ${responseFarmName}`);
-        } catch (nameErr) {
-          // Non-fatal — name update is best-effort
-          logger.warn(`[NetworkAgg] Could not persist farm name update: ${nameErr.message}`);
-        }
+        upsertNetworkFarm(farmMeta.farm_id, { ...farmMeta, name: responseFarmName, farm_name: responseFarmName })
+          .then(() => logger.info(`[NetworkAgg] Updated farm name for ${farmMeta.farm_id}: ${responseFarmName}`))
+          .catch((nameErr) => logger.warn(`[NetworkAgg] Could not persist farm name update: ${nameErr.message}`));
       }
     } else {
       const farm = farmsWithUrl[idx];
