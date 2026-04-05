@@ -33,7 +33,7 @@ export async function generateHarvestPredictions(pool, opts = {}) {
     const { rows } = await pool.query(`
       SELECT
         er.farm_id,
-        f.farm_name,
+        f.name AS farm_name,
         er.crop,
         er.recorded_at,
         COALESCE(

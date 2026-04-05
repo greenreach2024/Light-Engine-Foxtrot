@@ -439,7 +439,7 @@ router.get('/dashboard', async (req, res) => {
 async function processReminders() {
   try {
     await ensureTables();
-    const { rows: due } = await pool.query(
+    const { rows: due } = await query(
       `SELECT r.*, t.title as task_title, e.title as event_title
        FROM admin_task_reminders r
        LEFT JOIN admin_tasks t ON r.task_id = t.id
@@ -468,7 +468,7 @@ async function processReminders() {
             html: `<h3>${label}</h3><p>${body}</p>`
           });
         }
-        await pool.query('UPDATE admin_task_reminders SET sent = true, sent_at = NOW() WHERE id = $1', [rem.id]);
+        await query('UPDATE admin_task_reminders SET sent = true, sent_at = NOW() WHERE id = $1', [rem.id]);
         console.log(`[Calendar] Reminder ${rem.id} sent via ${rem.method} to ${rem.recipient}`);
       } catch (sendErr) {
         console.error(`[Calendar] Failed to send reminder ${rem.id}:`, sendErr.message);

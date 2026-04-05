@@ -1155,7 +1155,7 @@ async function syncFarmIdentity(edgeUrl) {
 
     await dbQuery(
       `INSERT INTO farms (farm_id, name, email, api_url, metadata, status, registration_code, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5::jsonb, 'active', encode(gen_random_bytes(8), 'hex'), NOW(), NOW())
+       VALUES ($1, $2, $3, $4, $5::jsonb, 'active', substr(md5(random()::text), 1, 16), NOW(), NOW())
        ON CONFLICT (farm_id) DO UPDATE SET
          name = COALESCE(NULLIF($2, ''), farms.name),
          email = COALESCE(NULLIF($3, ''), farms.email),
