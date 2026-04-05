@@ -679,7 +679,7 @@ function filterCustomCatalogItemsBySearchArea(items, options = {}) {
           const farmCoords = extractCoordinates(farmLocation);
 
           if (customItem) {
-            if (!buyerCoords || !farmCoords) return null;
+            if (!buyerCoords || !farmCoords) return farm;
             const distanceKm = haversineDistanceKm(
               buyerCoords.latitude,
               buyerCoords.longitude,
@@ -1549,10 +1549,10 @@ router.get('/catalog', async (req, res, next) => {
       if (!isCustomRow) return true;
 
       const buyerCoords = extractCoordinates(buyerLocation);
-      if (!buyerCoords) return false;
+      if (!buyerCoords) return true;
 
       const farmCoords = extractCoordinates(farmLocation);
-      if (!farmCoords) return false;
+      if (!farmCoords) return true;
 
       return haversineDistanceKm(
         buyerCoords.latitude,
