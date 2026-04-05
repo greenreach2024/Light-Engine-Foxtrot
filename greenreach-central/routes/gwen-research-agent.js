@@ -5188,68 +5188,6 @@ const GWEN_TOOL_CATALOG = {
     },
   },
 
-  scan_bus_channels: {
-    description: 'Scan wired bus channels (I2C, SPI, 1-Wire, UART) for connected devices. Returns discovered channels with addresses and suggested types. Use this for targeted wired-only scanning.',
-    parameters: {
-      bus_type: { type: 'string', description: 'Bus type to scan: "i2c", "spi", "1wire", "uart", or "all" (default).' },
-      timeout_ms: { type: 'number', description: 'Scan timeout in milliseconds (default 5000).' },
-    },
-    required: [],
-    execute: async (params, ctx) => {
-      return await executeTool('scan_bus_channels', { ...params, farm_id: ctx.farmId });
-    },
-  },
-
-  save_bus_mapping: {
-    description: 'Map a discovered wired bus channel to a device. WRITE operation -- describe the mapping and ask the researcher to confirm before executing.',
-    parameters: {
-      bus_address: { type: 'string', description: 'Physical bus address (e.g. "0x48", "28-00000abcdef").' },
-      device_id: { type: 'string', description: 'Device identifier to map to (auto-generated if omitted).' },
-      bus_type: { type: 'string', description: 'Bus type: "i2c", "spi", "1wire", "uart".' },
-      device_name: { type: 'string', description: 'Human-readable device name.' },
-      device_type: { type: 'string', description: 'Device type: sensor, light_controller, fan_controller, etc.' },
-      group_name: { type: 'string', description: 'Optional group/zone to assign the mapping to.' },
-    },
-    required: ['bus_address', 'bus_type'],
-    execute: async (params, ctx) => {
-      return await executeTool('save_bus_mapping', { ...params, farm_id: ctx.farmId });
-    },
-  },
-
-  leam_scan_all: {
-    description: 'Full device scan using the operator\'s local machine: BLE + ARP + mDNS + SSDP/UPnP. Discovers nearby devices the cloud server cannot see: BLE sensors, speakers, smart plugs, TVs, printers, etc. LEAM companion agent is auto-managed.',
-    parameters: {
-      duration: { type: 'number', description: 'Scan duration in milliseconds (default 12000, max 30000)' },
-    },
-    required: [],
-    execute: async (params, ctx) => {
-      const result = await leamBridge.sendCommand(ctx.farmId, 'scan_all', {
-        duration: params.duration || 12000
-      });
-      if (result.leam_required) {
-        return { ok: false, error: result.error, hint: 'LEAM is initializing automatically. If this persists, check that the LEAM service is installed on the operator machine.' };
-      }
-      return result.ok ? { ok: true, ...result.data } : result;
-    },
-  },
-
-  leam_ble_scan: {
-    description: 'Scan for Bluetooth Low Energy devices near the operator\'s machine. Discovers BLE sensors, speakers, smart plugs, wearables. Returns device name, MAC, signal strength (RSSI), device type classification, and advertised services.',
-    parameters: {
-      duration: { type: 'number', description: 'BLE scan duration in milliseconds (default 10000, max 30000)' },
-    },
-    required: [],
-    execute: async (params, ctx) => {
-      const result = await leamBridge.sendCommand(ctx.farmId, 'ble_scan', {
-        duration: params.duration || 10000
-      });
-      if (result.leam_required) {
-        return { ok: false, error: result.error, hint: 'LEAM is initializing automatically for BLE scanning.' };
-      }
-      return result.ok ? { ok: true, ...result.data } : result;
-    },
-  },
-
   leam_network_scan: {
     description: 'Scan the local network for all connected devices using ARP + mDNS/Bonjour + UPnP/SSDP. Finds smart TVs, AirPlay speakers, printers, file servers, IoT hubs, routers, and any IP-connected device.',
     parameters: {
@@ -5500,7 +5438,7 @@ const GWEN_TOOL_CATALOG = {
 // -- Build Tool Definitions for LLM ------------------------------------
 
 function buildToolDefinitions() {
-  return Object.entries(GWEN_TOOL_CATALOG).map(([name, tool]) => ({
+  const all = Object.entries(GWEN_TOOL_CATALOG).map(([name, tool]) => ({
     name,
     description: tool.description,
     input_schema: {
@@ -5509,10 +5447,15 @@ function buildToolDefinitions() {
       required: tool.required || [],
     },
   }));
+  if (all.length > 128) {
+    console.warn('[GWEN] Tool count', all.length, 'exceeds 128 limit -- trimming');
+    return all.slice(0, 128);
+  }
+  return all;
 }
 
 function buildOpenAIToolDefinitions() {
-  return Object.entries(GWEN_TOOL_CATALOG).map(([name, tool]) => ({
+  const all = Object.entries(GWEN_TOOL_CATALOG).map(([name, tool]) => ({
     type: 'function',
     function: {
       name,
@@ -5524,6 +5467,11 @@ function buildOpenAIToolDefinitions() {
       },
     },
   }));
+  if (all.length > 127) {
+    console.warn('[GWEN] OpenAI tool count', all.length, 'exceeds safe limit -- trimming to 127');
+    return all.slice(0, 127);
+  }
+  return all;
 }
 
 // -- System Prompt -------------------------------------------------------

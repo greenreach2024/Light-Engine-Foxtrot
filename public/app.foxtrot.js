@@ -11644,8 +11644,8 @@ class RoomWizard {
             resultsDiv.innerHTML = `<div style="padding: 20px; text-align: center; color: #ef4444; font-size: 13px;">Equipment database has invalid structure.</div>`;
           }
         })
-        }).catch(err => {
-          grLog('[IoT] Failed to persist devices to server:', err?.message || err);
+        .catch(err => {
+          console.warn('[Equipment] Failed to load equipment database:', err?.message || err);
           resultsDiv.innerHTML = `<div style="padding: 20px; text-align: center; color: #ef4444; font-size: 13px;">Failed to load equipment database: ${err.message}</div>`;
         });
       return;
