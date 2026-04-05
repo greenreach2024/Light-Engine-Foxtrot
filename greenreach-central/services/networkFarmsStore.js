@@ -245,7 +245,7 @@ export async function upsertNetworkFarm(farmId, farmData) {
 
       await query(
         `INSERT INTO farms (farm_id, name, contact_name, api_url, api_key, api_secret, jwt_secret, status, plan_type, metadata, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'network', $9::jsonb, NOW(), NOW())
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'light-engine', $9::jsonb, NOW(), NOW())
          ON CONFLICT (farm_id) DO UPDATE SET
            name = COALESCE(NULLIF($2, ''), farms.name),
            api_url = COALESCE(NULLIF($4, ''), farms.api_url),
