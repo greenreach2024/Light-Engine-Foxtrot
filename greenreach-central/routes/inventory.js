@@ -113,7 +113,19 @@ export async function recalculateAutoInventoryFromGroups(farmId) {
  */
 async function resolveCropPricing(farmId, productName) {
   try {
-    const pricingData = await farmStore.get(farmId, 'crop_pricing');
+    let pricingData = await farmStore.get(farmId, 'crop_pricing');
+
+    // Fallback: if farmStore returned empty (no crop_pricing in farm_data DB),
+    // read the static crop-pricing.json file so pricing is always available.
+    if (!pricingData?.crops?.length) {
+      try {
+        const cpPath = path.join(process.cwd(), 'public', 'data', 'crop-pricing.json');
+        if (fs.existsSync(cpPath)) {
+          pricingData = JSON.parse(fs.readFileSync(cpPath, 'utf8'));
+        }
+      } catch (_) { /* static file optional */ }
+    }
+
     if (!pricingData?.crops?.length) return { retailPrice: 0, wholesalePrice: 0 };
     const normalizeCropKey = (value) => String(value || '')
       .toLowerCase()
@@ -631,10 +643,40 @@ router.get('/:farmId', async (req, res) => {
       [farmId]
     );
 
+    // Fix corrupted rows: manual entries should not have auto_quantity_lbs > 0
+    // Also enrich rows with pricing from crop-pricing.json when DB price is $0
+    const enriched = [];
+    for (const row of result.rows) {
+      // Data correction: zero out auto_quantity_lbs on manual-only entries
+      if (row.inventory_source === 'manual' && Number(row.auto_quantity_lbs || 0) > 0) {
+        const correctManual = Number(row.manual_quantity_lbs || 0);
+        row.auto_quantity_lbs = 0;
+        row.available_lbs = correctManual - Number(row.sold_quantity_lbs || 0);
+        row.manual_available_lbs = Math.max(0, Math.min(correctManual, row.available_lbs));
+        row.auto_available_lbs = 0;
+        // Fire-and-forget DB correction
+        query(
+          'UPDATE farm_inventory SET auto_quantity_lbs = 0, quantity_available = manual_quantity_lbs - COALESCE(sold_quantity_lbs, 0) WHERE id = $1',
+          [row.id]
+        ).catch(e => console.warn('[Inventory] auto_qty correction failed:', e.message));
+      }
+      // Enrich missing prices from crop-pricing.json
+      if ((!row.retail_price || Number(row.retail_price) === 0) && row.product_name) {
+        const pricing = await resolveCropPricing(farmId, row.product_name);
+        if (pricing.retailPrice > 0) {
+          row.retail_price = pricing.retailPrice;
+          row.wholesale_price = (row.wholesale_price && Number(row.wholesale_price) > 0)
+            ? row.wholesale_price : pricing.wholesalePrice;
+          row.price = pricing.retailPrice;
+        }
+      }
+      enriched.push(row);
+    }
+
     res.json({ 
       farm_id: farmId,
-      products: result.rows,
-      count: result.rows.length
+      products: enriched,
+      count: enriched.length
     });
   } catch (error) {
     console.error('[Inventory] Error:', error);
@@ -682,16 +724,17 @@ router.post('/manual', async (req, res) => {
       result = await query(
         `INSERT INTO farm_inventory (
           farm_id, product_id, product_name, sku_id, sku_name, sku, quantity, unit, price,
-          available_for_wholesale, manual_quantity_lbs, quantity_available,
+          available_for_wholesale, manual_quantity_lbs, auto_quantity_lbs, quantity_available,
           quantity_unit, wholesale_price, retail_price, inventory_source,
           category, variety, last_updated
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'manual',$16,$17,NOW())
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,0,$12,$13,$14,$15,'manual',$16,$17,NOW())
         ON CONFLICT (farm_id, product_id) DO UPDATE SET
           product_name = EXCLUDED.product_name,
           sku_id = EXCLUDED.sku_id,
           sku_name = EXCLUDED.sku_name,
           manual_quantity_lbs = EXCLUDED.manual_quantity_lbs,
-          quantity_available = COALESCE(farm_inventory.auto_quantity_lbs, 0) + EXCLUDED.manual_quantity_lbs - COALESCE(farm_inventory.sold_quantity_lbs, 0),
+          auto_quantity_lbs = 0,
+          quantity_available = EXCLUDED.manual_quantity_lbs - COALESCE(farm_inventory.sold_quantity_lbs, 0),
           quantity_unit = EXCLUDED.quantity_unit,
           wholesale_price = CASE
             WHEN EXCLUDED.wholesale_price > 0 THEN EXCLUDED.wholesale_price
@@ -706,10 +749,7 @@ router.post('/manual', async (req, res) => {
             ELSE COALESCE(farm_inventory.price, 0)
           END,
           available_for_wholesale = EXCLUDED.available_for_wholesale,
-          inventory_source = CASE
-            WHEN COALESCE(farm_inventory.auto_quantity_lbs, 0) > 0 THEN 'hybrid'
-            ELSE 'manual'
-          END,
+          inventory_source = 'manual',
           category = COALESCE(EXCLUDED.category, farm_inventory.category),
           variety = COALESCE(EXCLUDED.variety, farm_inventory.variety),
           last_updated = NOW()

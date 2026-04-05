@@ -4,9 +4,42 @@
  */
 
 import express from 'express';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { farmAuthMiddleware } from '../../lib/farm-auth.js';
 import { farmStores } from '../../lib/farm-store.js';
 import { convertToWholesaleLots } from '../../lib/wholesale-integration.js';
+
+const __filename_fsi = fileURLToPath(import.meta.url);
+const __dirname_fsi = path.dirname(__filename_fsi);
+
+// Cached crop pricing data (loaded once from static file)
+let _cropPricingCache = null;
+function getCropPricing() {
+  if (_cropPricingCache) return _cropPricingCache;
+  try {
+    const cpPath = path.resolve(__dirname_fsi, '../../public/data/crop-pricing.json');
+    const data = JSON.parse(fs.readFileSync(cpPath, 'utf8'));
+    _cropPricingCache = data.crops || [];
+  } catch (_) { _cropPricingCache = []; }
+  return _cropPricingCache;
+}
+
+function lookupCropPrice(productName) {
+  const crops = getCropPricing();
+  const key = (productName || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  if (!key) return { retail: 0, wholesale: 0 };
+  let match = crops.find(c => (c.crop || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim() === key);
+  if (!match) {
+    match = crops.find(c => {
+      const ck = (c.crop || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+      return ck && (ck.includes(key) || key.includes(ck));
+    });
+  }
+  if (!match) return { retail: 0, wholesale: 0 };
+  return { retail: Number(match.retailPrice) || 0, wholesale: Number(match.wholesalePrice) || 0 };
+}
 
 const router = express.Router();
 
@@ -56,10 +89,10 @@ router.get('/', async (req, res) => {
             available: availableQty,
             quantity_available: availableQty,
             reserved: reservedQty,
-            unit_price: Number(row.retail_price || row.price || 0),
-            retail_price: Number(row.retail_price || row.price || 0),
-            wholesale_price: Number(row.wholesale_price || row.price || 0),
-            price: Number(row.retail_price || row.price || 0),
+            unit_price: Number(row.retail_price || row.price || 0) || lookupCropPrice(row.product_name).retail,
+            retail_price: Number(row.retail_price || row.price || 0) || lookupCropPrice(row.product_name).retail,
+            wholesale_price: Number(row.wholesale_price || row.price || 0) || lookupCropPrice(row.product_name).wholesale,
+            price: Number(row.retail_price || row.price || 0) || lookupCropPrice(row.product_name).retail,
             inventory_source: row.inventory_source || existing.inventory_source || 'manual',
             last_updated: row.last_updated,
             updated_at: row.last_updated
