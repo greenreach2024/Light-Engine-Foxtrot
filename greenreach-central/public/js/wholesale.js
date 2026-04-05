@@ -2105,7 +2105,7 @@
         // Call market intelligence API for real-time price alerts
         const headers = {};
         if (this.token) headers['Authorization'] = `Bearer ${this.token}`;
-        const response = await fetch('/api/market-intelligence/price-alerts?threshold=7', { headers });
+        const response = await fetch('/api/wholesale/market/price-alerts?threshold=7', { headers });
         if (!response.ok) {
           // Silently handle auth/permission errors - price alerts are optional
           priceContent.innerHTML = '<div class="loading-state">All monitored prices stable (no significant changes detected)</div>';

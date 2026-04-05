@@ -303,10 +303,11 @@ app.use(helmet({
       styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net", "https://cdnjs.cloudflare.com", "https://web.squarecdn.com"],
       imgSrc: ["'self'", "data:", "https:"],
       connectSrc: ["'self'", "https:", "wss:", "https://connect.squareup.com", "https://pci-connect.squareup.com", "https://connect.stripe.com", "https://api.stripe.com", "https://www.google-analytics.com", "https://analytics.google.com"],
-      fontSrc: ["'self'", "data:", "https://cdn.jsdelivr.net", "https://cash-f.squarecdn.com"],
+      fontSrc: ["'self'", "data:", "https://cdn.jsdelivr.net", "https://cash-f.squarecdn.com", "https://square-fonts-production-f.squarecdn.com", "https://d1g145x70srn7h.cloudfront.net"],
       objectSrc: ["'none'"],
       mediaSrc: ["'self'", "blob:"],
-      frameSrc: ["'self'", "https://web.squarecdn.com", "https://pci-connect.squareup.com", "https://connect.stripe.com"],  // Allow Square + Stripe iframes
+      frameSrc: ["'self'", "https://web.squarecdn.com", "https://pci-connect.squareup.com", "https://connect.stripe.com", "https://www.securesuite.net"],  // Allow Square + Stripe iframes
+      formAction: ["'self'", "https://www.securesuite.net"],  // Allow 3DS form submissions
       upgradeInsecureRequests: null
     },
   },
@@ -3552,6 +3553,8 @@ app.use('/api/alerts', authMiddleware, alertsRoutes);
 app.use('/api/sync', syncRoutes); // Farms authenticate via API key
 app.use('/api/farm-settings', farmSettingsRoutes); // Settings sync between Central and Light Engine (API key auth)
 app.use('/api/recipes', recipesRoutes); // Read-only public recipes API
+// Public price-alerts for wholesale buyers (market data is not farm-specific)
+app.get("/api/wholesale/market/price-alerts", (req, res, next) => { req.url = "/price-alerts"; next(); }, marketIntelligenceRoutes);
 app.use('/api/wholesale', wholesaleRoutes); // Core wholesale: catalog, orders, payments, network farms
 app.use('/api/square-proxy', squareOAuthProxyRoutes); // Compatibility alias for legacy admin UI callers
 app.use('/api/admin', adminRoutes); // Admin dashboard API (sub-mounts /wholesale, /recipes, /pricing, /delivery, /ai)
