@@ -235,6 +235,20 @@ if (DEPLOYMENT_MODE === 'cloud' || process.env.NODE_ENV === 'production') {
   });
 }
 
+// ── www → non-www redirect (prevents localStorage split across origins) ──
+// localStorage is scoped per origin. If user visits www.greenreachgreens.com,
+// tokens stored there are invisible from greenreachgreens.com, causing login loops.
+if (DEPLOYMENT_MODE === 'cloud' || process.env.NODE_ENV === 'production') {
+  app.use((req, res, next) => {
+    const host = req.headers.host || '';
+    if (host.startsWith('www.')) {
+      const bare = host.replace(/^www\./, '');
+      return res.redirect(301, `https://${bare}${req.url}`);
+    }
+    next();
+  });
+}
+
 // ── Request correlation IDs (#19) ──
 app.use((req, res, next) => {
   req.id = req.headers['x-request-id'] || randomUUID();
@@ -746,6 +760,7 @@ app.use((req, res, next) => {
         (hasGuard  ? '' : _GUARD_TAG);
       html = html.replace(/(<head[^>]*>)/i, `$1\n  ${inject}`);
     }
+    res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
     res.type('html').send(html);
     return;
   }

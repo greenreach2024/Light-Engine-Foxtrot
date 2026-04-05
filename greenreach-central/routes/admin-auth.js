@@ -181,6 +181,7 @@ router.post('/login', async (req, res) => {
       // Create session in database
       const expiresAt = new Date(Date.now() + 12 * 60 * 60 * 1000); // 12 hours
       const tokenHash = hashToken(token);
+      console.info('[Admin Auth] Creating session: hash=' + tokenHash.substring(0, 12) + '..., email=' + user.email + ', expires=' + expiresAt.toISOString());
 
       await req.db.query(`
         INSERT INTO admin_sessions (

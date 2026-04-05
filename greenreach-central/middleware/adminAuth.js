@@ -123,6 +123,7 @@ export async function adminAuthMiddleware(req, res, next) {
       const { rows } = await req.db.query(sessionQuery, [tokenHash]);
       
       if (rows.length === 0) {
+        console.warn('[Admin Auth] Session not found in DB for token hash:', tokenHash.substring(0, 12) + '..., email from JWT:', decoded.email, ', path:', req.path);
         return res.status(401).json({
           success: false,
           error: 'Invalid session',
@@ -134,6 +135,7 @@ export async function adminAuthMiddleware(req, res, next) {
 
       // Check if session is expired
       if (new Date(session.expires_at) < new Date()) {
+        console.warn('[Admin Auth] Session expired for', session.email, '- expired:', session.expires_at);
         return res.status(401).json({
           success: false,
           error: 'Session expired',
