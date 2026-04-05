@@ -1709,12 +1709,14 @@
 
         // Countdown timer to April 22, 2026
         function updateCountdown() {
+            const el = document.getElementById('countdown-timer');
+            if (!el) return;
             const launchDate = new Date('April 22, 2026 00:00:00').getTime();
             const now = new Date().getTime();
             const distance = launchDate - now;
 
             if (distance < 0) {
-                document.getElementById('countdown-timer').innerHTML = '<span style="font-size: 1.2rem; color: #10b981;">Now Available!</span>';
+                el.innerHTML = '<span style="font-size: 1.2rem; color: #10b981;">Now Available!</span>';
                 return;
             }
 
@@ -1723,10 +1725,14 @@
             const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
             const seconds = Math.floor((distance % (1000 * 60)) / 1000);
 
-            document.getElementById('days').textContent = days;
-            document.getElementById('hours').textContent = hours.toString().padStart(2, '0');
-            document.getElementById('minutes').textContent = minutes.toString().padStart(2, '0');
-            document.getElementById('seconds').textContent = seconds.toString().padStart(2, '0');
+            const daysEl = document.getElementById('days');
+            if (daysEl) daysEl.textContent = days;
+            const hoursEl = document.getElementById('hours');
+            if (hoursEl) hoursEl.textContent = hours.toString().padStart(2, '0');
+            const minutesEl = document.getElementById('minutes');
+            if (minutesEl) minutesEl.textContent = minutes.toString().padStart(2, '0');
+            const secondsEl = document.getElementById('seconds');
+            if (secondsEl) secondsEl.textContent = seconds.toString().padStart(2, '0');
         }
 
         // Close modal on outside click and initialize countdown

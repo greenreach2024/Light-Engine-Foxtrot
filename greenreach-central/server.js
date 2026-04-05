@@ -3488,6 +3488,7 @@ app.use('/api/admin/auth', adminAuthRoutes); // Central admin authentication
 app.use('/api/farm/square', squareOAuthProxyRoutes); // Central-owned Square control plane
 app.use('/api/farm/stripe', stripeConnectControlRouter); // Central-owned Stripe control plane
 
+app.use('/', purchaseRouter);                                // Purchase/checkout pipeline (Square) — MUST precede /api/farms auth
 app.use('/api/farm/products', authOrAdminMiddleware, customProductsRouter);                       // /api/farm/products/* -- Custom product CRUD (MUST precede /api/farm auth)
 app.use('/api/farms', authOrAdminMiddleware, farmRoutes);
 app.use('/api/farm', authOrAdminMiddleware, farmRoutes); // Singular route for profile endpoint
@@ -3976,7 +3977,6 @@ app.get('/api/wholesale/demand-analysis', authMiddleware, async (req, res) => {
   }
 });
 
-app.use('/', purchaseRouter);                                // Purchase/checkout pipeline (Square)
 app.use('/', miscStubsRouter);                               // Misc stubs + path aliases (full /api/* paths)
 app.use('/api/farm-ops', authMiddleware, farmOpsAgentRouter);                 // Farm operations agent (daily to-do, tool gateway, command taxonomy)
 app.use('/api/assistant', authMiddleware, assistantChatRouter);                // AI assistant chat (GPT-4o-mini + function calling)
