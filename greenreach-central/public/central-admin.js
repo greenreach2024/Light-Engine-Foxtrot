@@ -11228,8 +11228,13 @@ function showAddProductModal(editData) {
                         </label>
                     </div>
                     <label style="color: var(--text-secondary); font-size: 13px;">Thumbnail Image
-                        <input type="file" id="cpf-thumbnail" accept="image/*"
+                        <input type="file" id="cpf-thumbnail" accept="image/jpeg,image/png,image/webp"
                             style="width: 100%; padding: 8px; margin-top: 4px; background: var(--bg-main); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px;">
+                        <div style="margin-top: 6px; font-size: 11px; color: #64748b; line-height: 1.5;">
+                            Max 2 MB. Formats: JPG, PNG, or WebP. Recommended: 800x800 px square.<br>
+                            To reduce size: use WebP format, resize to 800x800, or compress at 80% quality.<br>
+                            Free tools: <span style="color:#94a3b8;">squoosh.app</span> (browser) or Preview > Export (macOS).
+                        </div>
                         ${editData && editData.thumbnail_url ? '<div style="margin-top: 6px;"><img src="' + editData.thumbnail_url + '" style="max-height: 60px; border-radius: 4px;" alt="Current thumbnail"></div>' : ''}
                     </label>
                 </div>

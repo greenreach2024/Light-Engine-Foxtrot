@@ -2095,7 +2095,7 @@
       tbody.innerHTML = products.map(function(p) {
         var imgCell = p.thumbnail_url
           ? '<img src="' + escHtml(p.thumbnail_url) + '" alt="" style="width:48px;height:48px;object-fit:cover;border-radius:6px;cursor:pointer;" onclick="triggerImageUpload(' + p.id + ')">'
-          : '<div onclick="triggerImageUpload(' + p.id + ')" style="width:48px;height:48px;border:1px dashed #475569;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#64748b;font-size:0.7rem;">+ IMG</div>';
+          : '<div onclick="triggerImageUpload(' + p.id + ')" title="Upload image (max 2 MB, JPG/PNG/WebP, 800x800 recommended)" style="width:48px;height:48px;border:1px dashed #475569;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#64748b;font-size:0.7rem;">+ IMG</div>';
         var retail = p.retail_price != null ? ('$' + Number(p.retail_price).toFixed(2)) : '--';
         var wholesale = p.wholesale_price != null ? ('$' + Number(p.wholesale_price).toFixed(2)) : '--';
         var taxBadge = p.is_taxable ? '<span style="color:#22c55e;">Yes</span>' : '<span style="color:#64748b;">No</span>';
@@ -2109,7 +2109,7 @@
           + '<td>' + wholesale + '</td>'
           + '<td>' + taxBadge + '</td>'
           + '<td>'
-          + '<button onclick="triggerImageUpload(' + p.id + ')" style="background:none;border:1px solid #334155;color:#94a3b8;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:0.8rem;margin-right:4px;" title="Upload image">IMG</button>'
+          + '<button onclick="triggerImageUpload(' + p.id + ')" style="background:none;border:1px solid #334155;color:#94a3b8;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:0.8rem;margin-right:4px;" title="Upload image (max 2 MB, JPG/PNG/WebP, 800x800 recommended)">IMG</button>'
           + '<button onclick="deleteCustomProduct(' + p.id + ', \'' + safeName + '\')" style="background:none;border:1px solid #7f1d1d;color:#ef4444;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:0.8rem;" title="Delete product">DEL</button>'
           + '</td>'
           + '</tr>';
@@ -2172,7 +2172,7 @@
       input.onchange = async function() {
         var file = input.files[0];
         if (!file) return;
-        if (file.size > 2 * 1024 * 1024) return alert('Image must be under 2MB.');
+        if (file.size > 2 * 1024 * 1024) return alert('Image must be under 2 MB.\n\nTo reduce file size:\n- Use WebP or JPG format (not PNG)\n- Resize to 800x800 pixels\n- Compress at 80% quality\n\nFree tools: squoosh.app (browser) or Preview > Export (macOS).');
         var fd = new FormData();
         fd.append('image', file);
         try {
