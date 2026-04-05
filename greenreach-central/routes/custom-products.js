@@ -69,7 +69,7 @@ function validateProductFields(body) {
 // ─────────────────────────────────────────────────────────
 // GET /api/farm/products -- List custom products for farm
 // ─────────────────────────────────────────────────────────
-router.get('/farm/products', async (req, res) => {
+router.get('/', async (req, res) => {
   try {
     const farmId = getFarmId(req);
     if (!farmId) return res.status(400).json({ success: false, error: 'Farm ID required' });
@@ -101,7 +101,7 @@ router.get('/farm/products', async (req, res) => {
 // ─────────────────────────────────────────────────────────
 // GET /api/farm/products/:productId -- Get single product
 // ─────────────────────────────────────────────────────────
-router.get('/farm/products/:productId', async (req, res) => {
+router.get('/:productId', async (req, res) => {
   try {
     const farmId = getFarmId(req);
     if (!farmId) return res.status(400).json({ success: false, error: 'Farm ID required' });
@@ -132,7 +132,7 @@ router.get('/farm/products/:productId', async (req, res) => {
 // ─────────────────────────────────────────────────────────
 // POST /api/farm/products -- Create custom product
 // ─────────────────────────────────────────────────────────
-router.post('/farm/products', async (req, res) => {
+router.post('/', async (req, res) => {
   try {
     const farmId = getFarmId(req);
     if (!farmId) return res.status(400).json({ success: false, error: 'Farm ID required' });
@@ -200,7 +200,7 @@ router.post('/farm/products', async (req, res) => {
 // ─────────────────────────────────────────────────────────
 // PUT /api/farm/products/:productId -- Update custom product
 // ─────────────────────────────────────────────────────────
-router.put('/farm/products/:productId', async (req, res) => {
+router.put('/:productId', async (req, res) => {
   try {
     const farmId = getFarmId(req);
     if (!farmId) return res.status(400).json({ success: false, error: 'Farm ID required' });
@@ -278,7 +278,7 @@ router.put('/farm/products/:productId', async (req, res) => {
 // ─────────────────────────────────────────────────────────
 // DELETE /api/farm/products/:productId -- Soft-delete
 // ─────────────────────────────────────────────────────────
-router.delete('/farm/products/:productId', async (req, res) => {
+router.delete('/:productId', async (req, res) => {
   try {
     const farmId = getFarmId(req);
     if (!farmId) return res.status(400).json({ success: false, error: 'Farm ID required' });
@@ -305,7 +305,7 @@ router.delete('/farm/products/:productId', async (req, res) => {
 // ─────────────────────────────────────────────────────────
 // POST /api/farm/products/:productId/image -- Upload thumbnail
 // ─────────────────────────────────────────────────────────
-router.post('/farm/products/:productId/image', upload.single('image'), async (req, res) => {
+router.post('/:productId/image', upload.single('image'), async (req, res) => {
   try {
     const farmId = getFarmId(req);
     if (!farmId) return res.status(400).json({ success: false, error: 'Farm ID required' });
