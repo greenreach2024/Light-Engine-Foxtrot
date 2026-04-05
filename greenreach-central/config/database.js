@@ -6,7 +6,7 @@ import fs from 'fs';
 import path from 'path';
 import pg from 'pg';
 import logger from '../utils/logger.js';
-
+import bcrypt from 'bcryptjs';
 const { Pool } = pg;
 
 let pool = null;
@@ -3774,6 +3774,27 @@ async function runMigrations(client) {
   } catch (err) {
     logger.warn('Migration 055 warning:', err.message);
   }
+
+
+    // --- Admin user bootstrap: seed default admin if table is empty ---
+    try {
+      const adminEmail = process.env.ADMIN_EMAIL || 'info@greenreachgreens.com';
+      const adminPassword = process.env.ADMIN_PASSWORD;
+      if (adminPassword) {
+        const { rows: existing } = await client.query('SELECT COUNT(*)::int AS cnt FROM admin_users');
+        if (existing[0].cnt === 0) {
+          const hash = await bcrypt.hash(adminPassword, 12);
+          await client.query(
+            `INSERT INTO admin_users (email, password_hash, name, role, active)
+             VALUES ($1, $2, $3, $4, TRUE)`,
+            [adminEmail.toLowerCase(), hash, 'Admin', 'admin']
+          );
+          logger.info(`Default admin user seeded: ${adminEmail}`);
+        }
+      }
+    } catch (seedErr) {
+      logger.warn('Admin user seed warning:', seedErr.message);
+    }
 
     logger.info('Database migrations completed');
 }
