@@ -72,7 +72,7 @@ export async function createBuyer({ businessName, contactName, email, password, 
     businessName: String(businessName || '').trim(),
     contactName: String(contactName || '').trim(),
     email: normalizedEmail,
-    buyerType: String(buyerType || '').trim(),
+    buyerType: String(buyerType || 'restaurant').trim(),
     location: location && typeof location === 'object' ? {
       address1: String(location.address1 || '').trim() || null,
       city: String(location.city || '').trim() || null,
