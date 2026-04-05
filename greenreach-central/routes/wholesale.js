@@ -106,6 +106,14 @@ function sanitizeText(str) {
     .replace(/'/g, '&#x27;');
 }
 
+// trimField: safe text cleanup for JSON API storage.
+// Unlike sanitizeText, does NOT HTML-encode (client escapes at render time).
+function trimField(val) {
+  if (val == null) return val;
+  if (typeof val !== 'string') return val;
+  return val.trim();
+}
+
 // ── Farm API-key auth (shared middleware) ────────────────────────────
 import { requireFarmApiKey, loadFarmApiKeys } from '../middleware/farmApiKeyAuth.js';
 import { transitionOrderStatus } from '../services/orderStateMachine.js';
@@ -2046,24 +2054,24 @@ router.put('/buyers/me', requireBuyerPortalAuth, async (req, res, next) => {
     const { businessName, contactName, email, phone, buyerType, address, city, province, postalCode, country, keyContact, backupContact, backupPhone } = req.body || {};
 
     const location = {
-      address1: sanitizeText(address) || req.wholesaleBuyer.location?.address1 || null,
-      city: sanitizeText(city) || req.wholesaleBuyer.location?.city || null,
-      state: sanitizeText(province) || req.wholesaleBuyer.location?.state || null,
-      postalCode: sanitizeText(postalCode) || req.wholesaleBuyer.location?.postalCode || null,
-      country: sanitizeText(country) || req.wholesaleBuyer.location?.country || null,
+      address1: trimField(address) || req.wholesaleBuyer.location?.address1 || null,
+      city: trimField(city) || req.wholesaleBuyer.location?.city || null,
+      state: trimField(province) || req.wholesaleBuyer.location?.state || null,
+      postalCode: trimField(postalCode) || req.wholesaleBuyer.location?.postalCode || null,
+      country: trimField(country) || req.wholesaleBuyer.location?.country || null,
       latitude: req.wholesaleBuyer.location?.latitude || null,
       longitude: req.wholesaleBuyer.location?.longitude || null
     };
 
     const updated = await updateBuyer(req.wholesaleBuyer.id, {
-      businessName: sanitizeText(businessName),
-      contactName: sanitizeText(contactName),
+      businessName: trimField(businessName),
+      contactName: trimField(contactName),
       email: email ? String(email).trim().toLowerCase() : undefined,
-      phone: sanitizeText(phone),
-      keyContact: sanitizeText(keyContact),
-      backupContact: sanitizeText(backupContact),
-      backupPhone: sanitizeText(backupPhone),
-      buyerType: sanitizeText(buyerType),
+      phone: trimField(phone),
+      keyContact: trimField(keyContact),
+      backupContact: trimField(backupContact),
+      backupPhone: trimField(backupPhone),
+      buyerType: trimField(buyerType),
       location
     });
 

@@ -493,13 +493,15 @@ router.post('/:farmId/sync', async (req, res) => {
 
       await query(
         `INSERT INTO farm_inventory (
-          farm_id, product_id, product_name, sku, quantity, unit, price,
+          farm_id, product_id, product_name, sku_id, sku_name, sku, quantity, unit, price,
           available_for_wholesale, auto_quantity_lbs, quantity_available,
           quantity_unit, wholesale_price, retail_price, inventory_source,
           category, variety, synced_at, last_updated
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,NOW(),NOW())
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,NOW(),NOW())
         ON CONFLICT (farm_id, product_id) DO UPDATE SET
           product_name = EXCLUDED.product_name,
+          sku_id = EXCLUDED.sku_id,
+          sku_name = EXCLUDED.sku_name,
           sku = EXCLUDED.sku,
           quantity = EXCLUDED.quantity,
           unit = EXCLUDED.unit,
@@ -524,6 +526,8 @@ router.post('/:farmId/sync', async (req, res) => {
           farmId,
           productId,
           product.product_name,
+          product.sku || productId,              // sku_id
+          product.product_name,                   // sku_name
           product.sku || productId,
           autoQty,
           product.unit || 'lb',
