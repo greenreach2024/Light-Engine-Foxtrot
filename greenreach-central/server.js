@@ -144,6 +144,7 @@ import { farmStore, initFarmStore } from './lib/farm-data-store.js';
 import { initDatabase, getDatabase, query, isDatabaseAvailable } from './config/database.js';
 import { startHealthCheckService, stopHealthCheckService } from './services/healthCheck.js';
 import { startNightlyAuditService } from './services/nightly-audit.js';
+import emailService from './services/email-service.js';
 import { startNightlyChecklist } from './services/nightly-checklist.js';
 import { startSubscriptionScheduler } from './services/subscriptionScheduler.js';
 import { startFayeIntelligence } from './services/faye-intelligence.js';
@@ -1845,6 +1846,31 @@ app.post('/api/debug/track', express.json(), (req, res) => {
   });
   
   res.json({ success: true, logged: events.length });
+});
+
+// Email transport diagnostic -- admin-only, sends a test email to verify delivery
+app.post('/api/admin/test-email', adminAuthMiddleware, async (req, res) => {
+  try {
+    const to = process.env.ADMIN_ALERT_EMAIL || process.env.ADMIN_EMAIL;
+    if (!to) return res.json({ success: false, error: 'No ADMIN_ALERT_EMAIL configured' });
+
+    const ts = new Date().toISOString();
+    const result = await emailService.sendEmail({
+      to,
+      subject: `GreenReach Email Test -- ${ts}`,
+      text: `Email transport test at ${ts}. If you receive this, delivery is working.`,
+      html: `<div style="font-family:sans-serif;padding:16px">
+        <h3 style="color:#388e3c">Email Transport Test</h3>
+        <p>Sent at <strong>${ts}</strong></p>
+        <p>Transport: production</p>
+      </div>`
+    });
+    logger.info(`[EmailTest] Result: ${JSON.stringify(result)}`);
+    res.json({ success: result.success, via: result.via, messageId: result.messageId, error: result.error || null });
+  } catch (err) {
+    logger.error('[EmailTest] Error:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 // Live environmental data — prefer DB telemetry (pushed by sync-service from the
