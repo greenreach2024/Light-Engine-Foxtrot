@@ -31,12 +31,48 @@ export function startNightlyAuditService() {
 
   logger.info(`${TAG} Scheduled for ${next.toISOString()} (in ${Math.round(msUntilNext / 60000)} min)`);
 
+  // Verify email transport works 30s after startup
+  setTimeout(() => verifyEmailTransport(), 30_000);
+
   setTimeout(() => {
     runNightlyAudit().catch(e => logger.error(`${TAG} Fatal:`, e));
     auditInterval = setInterval(() => {
       runNightlyAudit().catch(e => logger.error(`${TAG} Fatal:`, e));
     }, 24 * 60 * 60 * 1000);
   }, msUntilNext);
+}
+
+/**
+ * Send a one-time transport verification email after startup.
+ * Logs success/failure so operators can confirm email delivery.
+ */
+async function verifyEmailTransport() {
+  const to = process.env.ADMIN_ALERT_EMAIL || process.env.ADMIN_EMAIL;
+  if (!to) {
+    logger.warn(`${TAG} No ADMIN_ALERT_EMAIL set -- cannot verify email transport`);
+    return;
+  }
+  try {
+    const ts = new Date().toISOString();
+    const result = await emailService.sendEmail({
+      to,
+      subject: `GreenReach Central -- Email Transport OK (${ts})`,
+      text: `Email transport verified at ${ts}.\nAudit scheduled for ${AUDIT_HOUR}:00 UTC daily.\nThis is an automated startup check.`,
+      html: `<div style="font-family:sans-serif;max-width:500px;padding:16px">
+        <h3 style="color:#388e3c;margin:0 0 8px">Email Transport Verified</h3>
+        <p>Central started at <strong>${ts}</strong></p>
+        <p>Nightly audit scheduled for <strong>${AUDIT_HOUR}:00 UTC</strong> daily.</p>
+        <p style="font-size:12px;color:#888">This is an automated startup check. If you receive this, email delivery is working.</p>
+      </div>`
+    });
+    if (result.success) {
+      logger.info(`${TAG} Email transport OK (via ${result.via || 'unknown'}, id: ${result.messageId})`);
+    } else {
+      logger.error(`${TAG} Email transport FAILED: ${result.error || 'no transport configured'}`);
+    }
+  } catch (err) {
+    logger.error(`${TAG} Email transport verify error:`, err.message);
+  }
 }
 
 export function stopNightlyAuditService() {
@@ -134,20 +170,18 @@ export async function runNightlyAudit() {
   }
 
   // Log summary
-  const emoji = overallStatus === 'pass' ? '✅' : overallStatus === 'warn' ? '⚠️' : '❌';
+  const emoji = overallStatus === 'pass' ? '[OK]' : overallStatus === 'warn' ? '[WARN]' : '[FAIL]';
   logger.info(`${TAG} ${emoji} Audit complete: ${result.summary.passed}/${result.summary.total} passed, ${result.summary.warnings} warnings, ${result.summary.failures} failures (${result.summary.duration_ms}ms)`);
 
   if (failures.length > 0) {
     logger.error(`${TAG} FAILURES:`, failures.map(f => `${f.name}: ${f.message}`).join('; '));
   }
 
-  // ── Email alert on failures or warnings ──
-  if (overallStatus !== 'pass') {
-    try {
-      await sendAuditAlert(result);
-    } catch (alertErr) {
-      logger.warn(`${TAG} Could not send audit alert email:`, alertErr.message);
-    }
+  // -- Email audit report (always send -- pass, warn, or fail) --
+  try {
+    await sendAuditReport(result);
+  } catch (alertErr) {
+    logger.warn(`${TAG} Could not send audit report email:`, alertErr.message);
   }
 
   return result;
@@ -157,7 +191,7 @@ export async function runNightlyAudit() {
 
 const ALERT_EMAIL = process.env.ADMIN_ALERT_EMAIL || process.env.ADMIN_EMAIL || null;
 
-async function sendAuditAlert(result) {
+async function sendAuditReport(result) {
   if (!ALERT_EMAIL) {
     logger.warn(`${TAG} No ADMIN_ALERT_EMAIL configured — skipping email notification`);
     return;
@@ -166,11 +200,11 @@ async function sendAuditAlert(result) {
   const { status, checks, summary, audit_date } = result;
   const failures = checks.filter(c => c.status === 'fail');
   const warnings = checks.filter(c => c.status === 'warn');
-  const statusLabel = status === 'fail' ? 'FAILURE' : 'WARNING';
-  const statusColor = status === 'fail' ? '#d32f2f' : '#f57c00';
+  const statusLabel = status === 'fail' ? 'FAILURE' : status === 'warn' ? 'WARNING' : 'ALL CLEAR';
+  const statusColor = status === 'fail' ? '#d32f2f' : status === 'warn' ? '#f57c00' : '#388e3c';
 
   const checkRows = checks.map(c => {
-    const icon = c.status === 'pass' ? '✅' : c.status === 'warn' ? '⚠️' : '❌';
+    const icon = c.status === 'pass' ? '[OK]' : c.status === 'warn' ? '[WARN]' : '[FAIL]';
     const bg = c.status === 'pass' ? '#e8f5e9' : c.status === 'warn' ? '#fff3e0' : '#ffebee';
     return `<tr style="background:${bg}">
       <td style="padding:6px 10px">${icon} ${c.name.replace(/_/g, ' ')}</td>
@@ -182,13 +216,13 @@ async function sendAuditAlert(result) {
   const html = `
 <div style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;max-width:640px;margin:0 auto">
   <div style="background:${statusColor};color:#fff;padding:16px 20px;border-radius:8px 8px 0 0">
-    <h2 style="margin:0;font-size:20px">🌱 GreenReach Nightly Audit: ${statusLabel}</h2>
+    <h2 style="margin:0;font-size:20px">GreenReach Nightly Audit: ${statusLabel}</h2>
     <p style="margin:6px 0 0;opacity:0.9">${audit_date} &mdash; ${summary.failures} failure(s), ${summary.warnings} warning(s), ${summary.passed} passed</p>
   </div>
 
   ${failures.length > 0 ? `
   <div style="background:#ffebee;padding:14px 20px;border-left:4px solid #d32f2f">
-    <h3 style="margin:0 0 8px;color:#b71c1c;font-size:15px">❌ Failures Requiring Attention</h3>
+    <h3 style="margin:0 0 8px;color:#b71c1c;font-size:15px">[FAIL] Failures Requiring Attention</h3>
     <ul style="margin:0;padding-left:20px">
       ${failures.map(f => `<li><strong>${f.name.replace(/_/g, ' ')}</strong>: ${f.message}</li>`).join('\n      ')}
     </ul>
@@ -196,7 +230,7 @@ async function sendAuditAlert(result) {
 
   ${warnings.length > 0 ? `
   <div style="background:#fff3e0;padding:14px 20px;border-left:4px solid #f57c00">
-    <h3 style="margin:0 0 8px;color:#e65100;font-size:15px">⚠️ Warnings</h3>
+    <h3 style="margin:0 0 8px;color:#e65100;font-size:15px">[WARN] Warnings</h3>
     <ul style="margin:0;padding-left:20px">
       ${warnings.map(w => `<li><strong>${w.name.replace(/_/g, ' ')}</strong>: ${w.message}</li>`).join('\n      ')}
     </ul>
@@ -222,13 +256,13 @@ async function sendAuditAlert(result) {
 
   const text = `GreenReach Nightly Audit: ${statusLabel} (${audit_date})\n\n` +
     `${summary.failures} failure(s), ${summary.warnings} warning(s), ${summary.passed}/${summary.total} passed\n\n` +
-    (failures.length ? 'FAILURES:\n' + failures.map(f => `  ❌ ${f.name}: ${f.message}`).join('\n') + '\n\n' : '') +
-    (warnings.length ? 'WARNINGS:\n' + warnings.map(w => `  ⚠️ ${w.name}: ${w.message}`).join('\n') + '\n\n' : '') +
+    (failures.length ? 'FAILURES:\n' + failures.map(f => `  [FAIL] ${f.name}: ${f.message}`).join('\n') + '\n\n' : '') +
+    (warnings.length ? 'WARNINGS:\n' + warnings.map(w => `  [WARN] ${w.name}: ${w.message}`).join('\n') + '\n\n' : '') +
     'Full details available on the admin dashboard or via E.V.I.E.';
 
   const emailResult = await emailService.sendEmail({
     to: ALERT_EMAIL,
-    subject: `🌱 GreenReach Audit ${statusLabel} — ${audit_date}`,
+    subject: `GreenReach Nightly Audit: ${statusLabel} -- ${audit_date}`,
     text,
     html
   });

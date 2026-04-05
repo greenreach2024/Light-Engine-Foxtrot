@@ -21,7 +21,7 @@ import { executeAdminTool } from '../routes/admin-ops-agent.js';
 
 const TAG = '[F.A.Y.E. Intelligence]';
 const CHECK_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
-const BRIEFING_HOUR = 7; // 7 AM daily email briefing
+const BRIEFING_HOUR = parseInt(process.env.FAYE_BRIEFING_HOUR || '7', 10); // default 7 AM (server time, UTC on EB)
 const WEEKLY_DIGEST_DAY = Number(process.env.FAYE_WEEKLY_DIGEST_DAY || 1); // 0=Sun, 1=Mon
 const WEEKLY_DIGEST_HOUR = Number(process.env.FAYE_WEEKLY_DIGEST_HOUR || 8); // 8 AM local server time
 
