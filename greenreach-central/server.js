@@ -2081,6 +2081,131 @@ app.get('/api/farm/profile', authMiddleware, async (req, res) => {
   }
 });
 
+
+// -- Recent Activity Feed --------------------------------------------------
+// Aggregates real events from DB tables into a unified activity feed.
+app.get('/api/farm/activity/:farmId', authOrAdminMiddleware, async (req, res) => {
+  const farmId = farmStore.farmIdFromReq(req);
+  const limit = Math.min(parseInt(req.query.limit) || 20, 50);
+
+  try {
+    const pool = getDatabase();
+    const events = [];
+
+    // 1. Inventory changes (added / updated)
+    try {
+      const invResult = await pool.query(
+        `SELECT product_name, quantity_available, quantity_unit, category,
+                created_at, last_updated
+         FROM farm_inventory
+         WHERE farm_id = $1
+         ORDER BY GREATEST(created_at, last_updated) DESC
+         LIMIT $2`,
+        [farmId, limit]
+      );
+      for (const row of invResult.rows) {
+        const created = new Date(row.created_at);
+        const updated = new Date(row.last_updated);
+        const isNew = Math.abs(updated - created) < 60000;
+        events.push({
+          timestamp: (isNew ? created : updated).toISOString(),
+          description: isNew
+            ? `New inventory added: ${row.product_name} (${row.quantity_available} ${row.quantity_unit || 'lb'})`
+            : `Inventory updated: ${row.product_name} -- ${row.quantity_available} ${row.quantity_unit || 'lb'}`,
+          user: 'Farm Admin',
+          status: 'active',
+          type: isNew ? 'inventory_added' : 'inventory_updated'
+        });
+      }
+    } catch (e) { logger.debug('[Activity] inventory query skipped:', e.message); }
+
+    // 2. Planting assignments
+    try {
+      const plantResult = await pool.query(
+        `SELECT crop_name, group_id, tray_id, seed_date, status, created_at, updated_at
+         FROM planting_assignments
+         WHERE farm_id = $1
+         ORDER BY GREATEST(created_at, updated_at) DESC
+         LIMIT $2`,
+        [farmId, limit]
+      );
+      for (const row of plantResult.rows) {
+        const created = new Date(row.created_at);
+        const updated = new Date(row.updated_at);
+        const isNew = Math.abs(updated - created) < 60000;
+        events.push({
+          timestamp: (isNew ? created : updated).toISOString(),
+          description: isNew
+            ? `Crop planted: ${row.crop_name} in ${row.group_id}`
+            : `Planting updated: ${row.crop_name} -- status: ${row.status}`,
+          user: 'Farm Admin',
+          status: 'active',
+          type: isNew ? 'crop_planted' : 'planting_updated'
+        });
+      }
+    } catch (e) { logger.debug('[Activity] planting query skipped:', e.message); }
+
+    // 3. Device integrations
+    try {
+      const devResult = await pool.query(
+        `SELECT device_name, device_type, integration_type, created_at
+         FROM device_integrations
+         WHERE farm_id = $1
+         ORDER BY created_at DESC
+         LIMIT $2`,
+        [farmId, limit]
+      );
+      for (const row of devResult.rows) {
+        events.push({
+          timestamp: new Date(row.created_at).toISOString(),
+          description: `Device registered: ${row.device_name || row.device_type} (${row.integration_type || 'sensor'})`,
+          user: 'System',
+          status: 'active',
+          type: 'device_registered'
+        });
+      }
+    } catch (e) { logger.debug('[Activity] devices query skipped:', e.message); }
+
+    // 4. Farm data updates (groups, rooms, config changes)
+    try {
+      const fdResult = await pool.query(
+        `SELECT data_type, updated_at
+         FROM farm_data
+         WHERE farm_id = $1 AND data_type IN ('groups', 'rooms', 'schedules', 'config', 'crop_pricing', 'dedicated_crops')
+         ORDER BY updated_at DESC
+         LIMIT $2`,
+        [farmId, limit]
+      );
+      const typeLabels = {
+        groups: 'Growth groups',
+        rooms: 'Room configuration',
+        schedules: 'Lighting schedules',
+        config: 'Farm configuration',
+        crop_pricing: 'Crop pricing',
+        dedicated_crops: 'Dedicated crops list'
+      };
+      for (const row of fdResult.rows) {
+        events.push({
+          timestamp: new Date(row.updated_at).toISOString(),
+          description: `${typeLabels[row.data_type] || row.data_type} updated`,
+          user: 'System',
+          status: 'active',
+          type: 'data_updated'
+        });
+      }
+    } catch (e) { logger.debug('[Activity] farm_data query skipped:', e.message); }
+
+    // Sort all events by timestamp descending, take top N
+    events.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    const trimmed = events.slice(0, limit);
+
+    res.json({ status: 'success', activity: trimmed });
+  } catch (error) {
+    logger.error('[Activity] Failed to load activity:', error.message);
+    res.status(500).json({ status: 'error', message: 'Failed to load activity' });
+  }
+});
+
 // ── Credential Store (SwitchBot / Kasa integration credentials) ────────────
 app.get('/api/credential-store', authMiddleware, (req, res) => {
   try {
