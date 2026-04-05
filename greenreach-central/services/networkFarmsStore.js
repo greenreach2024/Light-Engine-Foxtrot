@@ -5,6 +5,7 @@
  * Self-heals missing auth credentials from farm-api-keys.json
  */
 import { query, isDatabaseAvailable } from '../config/database.js';
+import crypto from 'crypto';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
@@ -243,14 +244,16 @@ export async function upsertNetworkFarm(farmId, farmData) {
       };
 
       await query(
-        `INSERT INTO farms (farm_id, name, contact_name, api_url, api_key, status, plan_type, metadata, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, 'network', $7::jsonb, NOW(), NOW())
+        `INSERT INTO farms (farm_id, name, contact_name, api_url, api_key, api_secret, jwt_secret, status, plan_type, metadata, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'network', $9::jsonb, NOW(), NOW())
          ON CONFLICT (farm_id) DO UPDATE SET
            name = COALESCE(NULLIF($2, ''), farms.name),
            api_url = COALESCE(NULLIF($4, ''), farms.api_url),
            api_key = COALESCE(NULLIF($5, ''), farms.api_key),
-           status = COALESCE(NULLIF($6, ''), farms.status),
-           metadata = COALESCE(farms.metadata, '{}'::jsonb) || $7::jsonb,
+           api_secret = COALESCE(farms.api_secret, EXCLUDED.api_secret),
+           jwt_secret = COALESCE(farms.jwt_secret, EXCLUDED.jwt_secret),
+           status = COALESCE(NULLIF($8, ''), farms.status),
+           metadata = COALESCE(farms.metadata, '{}'::jsonb) || $9::jsonb,
            updated_at = NOW()`,
         [
           normalizedFarm.farm_id,
@@ -258,6 +261,8 @@ export async function upsertNetworkFarm(farmId, farmData) {
           normalizedFarm.contact?.name || normalizedFarm.contact?.contactName || 'Farm Admin',
           normalizedFarm.api_url,
           normalizedFarm.api_key || 'pending',
+          crypto.randomBytes(32).toString('hex'),
+          crypto.randomBytes(32).toString('hex'),
           normalizedFarm.status || 'active',
           JSON.stringify(metadata)
         ]

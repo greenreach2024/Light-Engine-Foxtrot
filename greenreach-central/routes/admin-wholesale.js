@@ -18,7 +18,8 @@ import {
   logOrderEvent,
   createRefund,
   listRefundsForOrder,
-  listPaymentsForBuyer
+  listPaymentsForBuyer,
+  deleteAllBuyers
 } from '../services/wholesaleMemoryStore.js';
 import {
   transitionOrderStatus,
@@ -388,6 +389,21 @@ router.post('/buyers/:buyerId/reactivate', async (req, res) => {
         console.error('[Admin Wholesale] Error reactivating buyer:', error);
         res.status(500).json({ status: 'error', message: error.message });
     }
+});
+
+/**
+ * DELETE /api/admin/wholesale/buyers
+ * Delete ALL wholesale buyers (admin purge). Clears DB + in-memory store.
+ */
+router.delete('/buyers', async (req, res) => {
+  try {
+    const result = await deleteAllBuyers();
+    console.log('[AdminWholesale] Purged all buyers:', result);
+    res.json({ status: 'ok', data: result });
+  } catch (err) {
+    console.error('[AdminWholesale] Purge buyers error:', err);
+    res.status(500).json({ status: 'error', message: err.message });
+  }
 });
 
 /**

@@ -351,6 +351,31 @@ export function listAllBuyers() {
   return Array.from(buyersById.values()).map(sanitizeBuyer);
 }
 
+export async function deleteAllBuyers() {
+  const count = buyersById.size;
+  buyersById.clear();
+  buyersByEmail.clear();
+  ordersById.clear();
+  ordersByBuyerId.clear();
+  paymentsById.clear();
+  refundsById.clear();
+  tokenBlacklist.clear();
+  loginAttempts.clear();
+  orderAuditLog.length = 0;
+  passwordResetTokens.clear();
+  let dbDeleted = 0;
+  if (isDatabaseAvailable()) {
+    try {
+      const r = await query('DELETE FROM wholesale_orders');
+      const r2 = await query('DELETE FROM wholesale_buyers');
+      dbDeleted = r2.rowCount || 0;
+    } catch (err) {
+      console.error('[WholesaleStore] deleteAllBuyers DB error:', err.message);
+    }
+  }
+  return { memoryCleared: count, dbDeleted };
+}
+
 // ── Token blacklist (logout) ─────────────────────────────────────────
 
 export function blacklistToken(token) {
