@@ -160,14 +160,14 @@ router.post('/', async (req, res) => {
 
     const { rows } = await query(
       `INSERT INTO farm_inventory (
-        farm_id, product_id, product_name, sku, category, variety,
+        farm_id, product_id, product_name, sku, sku_id, category, variety,
         description, is_taxable, is_custom,
         wholesale_price, retail_price, price,
         quantity_available, quantity, unit,
         available_for_wholesale, inventory_source, status,
         created_at, updated_at
       ) VALUES (
-        $1, $2, $3, $4, $5, $6,
+        $1, $2, $3, $4, $16, $5, $6,
         $7, $8, TRUE,
         $9, $10, $14,
         $11, $15, $12,
@@ -185,6 +185,7 @@ router.post('/', async (req, res) => {
         available_for_wholesale === false ? false : true,
         wholesale_price != null ? Number(wholesale_price) : (retail_price != null ? Number(retail_price) : null),
         Number(quantity_available) || 0,
+        sku,
       ]
     );
 
