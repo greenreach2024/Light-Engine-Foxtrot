@@ -3555,23 +3555,6 @@ app.use('/api/farm-settings', farmSettingsRoutes); // Settings sync between Cent
 app.use('/api/recipes', recipesRoutes); // Read-only public recipes API
 // Public price-alerts for wholesale buyers (market data is not farm-specific)
 app.get("/api/wholesale/market/price-alerts", (req, res, next) => { req.url = "/price-alerts"; next(); }, marketIntelligenceRoutes);
-// One-time admin purge endpoint (API-key auth, no admin JWT needed)
-app.delete('/api/wholesale/admin/purge-buyers', async (req, res) => {
-  const apiKey = req.headers['x-api-key'];
-  const expected = process.env.GREENREACH_API_KEY;
-  if (!apiKey || !expected || apiKey !== expected) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
-  try {
-    const { deleteAllBuyers } = await import('./services/wholesaleMemoryStore.js');
-    const result = await deleteAllBuyers();
-    console.log('[Server] Purged all wholesale buyers:', result);
-    res.json({ status: 'ok', data: result });
-  } catch (err) {
-    console.error('[Server] Purge buyers error:', err);
-    res.status(500).json({ status: 'error', message: err.message });
-  }
-});
 app.use('/api/wholesale', wholesaleRoutes); // Core wholesale: catalog, orders, payments, network farms
 app.use('/api/square-proxy', squareOAuthProxyRoutes); // Compatibility alias for legacy admin UI callers
 app.use('/api/admin', adminRoutes); // Admin dashboard API (sub-mounts /wholesale, /recipes, /pricing, /delivery, /ai)
