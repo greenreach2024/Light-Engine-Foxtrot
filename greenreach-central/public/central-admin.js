@@ -11294,7 +11294,7 @@ async function saveCustomProduct(productId) {
 
         const res = await authenticatedFetch(url, {
             method,
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'x-farm-id': farmId },
             body: JSON.stringify(payload)
         });
         const data = res && res.ok ? await res.json() : null;
@@ -11313,6 +11313,7 @@ async function saveCustomProduct(productId) {
             try {
                 await authenticatedFetch(`${API_BASE}/api/farm/products/${savedId}/image`, {
                     method: 'POST',
+                    headers: { 'x-farm-id': farmId },
                     body: formData
                 });
             } catch (imgErr) {
@@ -11501,7 +11502,8 @@ async function deleteProduct(sku) {
 
     try {
         const res = await authenticatedFetch(`${API_BASE}/api/farm/products/${product.id}`, {
-            method: 'DELETE'
+            method: 'DELETE',
+            headers: { 'x-farm-id': currentFarmId }
         });
         const data = res && res.ok ? await res.json() : null;
         if (!data || !data.success) {

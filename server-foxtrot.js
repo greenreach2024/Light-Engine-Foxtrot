@@ -20733,6 +20733,13 @@ app.use('/api/farm/products', proxyCorsMiddleware, createProxyMiddleware({
   pathRewrite: (p) => (p.startsWith('/api/farm/products') ? p : `/api/farm/products${p}`),
   onProxyReq(proxyReq, req) {
     console.log(`[-> farm/products] ${req.method} ${req.originalUrl} -> ${_centralUrl()}${req.originalUrl}`);
+    // Re-stream JSON body consumed by express.json() so Central receives it
+    if (req.body && Object.keys(req.body).length > 0 && /POST|PUT|PATCH/.test(req.method)) {
+      const bodyData = JSON.stringify(req.body);
+      proxyReq.setHeader('Content-Type', 'application/json');
+      proxyReq.setHeader('Content-Length', Buffer.byteLength(bodyData));
+      proxyReq.write(bodyData);
+    }
   },
   onProxyRes(proxyRes, req) {
     const origin = req.headers?.origin;

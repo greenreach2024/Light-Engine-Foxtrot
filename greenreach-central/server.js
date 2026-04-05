@@ -3488,7 +3488,7 @@ app.use('/api/admin/auth', adminAuthRoutes); // Central admin authentication
 app.use('/api/farm/square', squareOAuthProxyRoutes); // Central-owned Square control plane
 app.use('/api/farm/stripe', stripeConnectControlRouter); // Central-owned Stripe control plane
 
-app.use('/api/farm/products', authMiddleware, customProductsRouter);                       // /api/farm/products/* -- Custom product CRUD (MUST precede /api/farm auth)
+app.use('/api/farm/products', authOrAdminMiddleware, customProductsRouter);                       // /api/farm/products/* -- Custom product CRUD (MUST precede /api/farm auth)
 app.use('/api/farms', authOrAdminMiddleware, farmRoutes);
 app.use('/api/farm', authOrAdminMiddleware, farmRoutes); // Singular route for profile endpoint
 app.use('/api/setup-wizard', authMiddleware, setupWizardRoutes); // First-time farm setup wizard
