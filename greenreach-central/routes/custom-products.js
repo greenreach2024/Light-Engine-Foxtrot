@@ -169,7 +169,7 @@ router.post('/', async (req, res) => {
       ) VALUES (
         $1, $2, $3, $4, $5, $6,
         $7, $8, TRUE,
-        $9, $10, COALESCE($9, $10),
+        $9::numeric, $10::numeric, COALESCE($9::numeric, $10::numeric),
         $11, $11, $12,
         $13, 'custom', 'active',
         NOW(), NOW()
