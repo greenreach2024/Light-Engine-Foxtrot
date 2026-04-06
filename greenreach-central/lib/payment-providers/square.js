@@ -4,13 +4,13 @@
  * 
  * Required Square OAuth scope: PAYMENTS_WRITE_ADDITIONAL_RECIPIENTS
  * Documentation: https://developer.squareup.com/docs/payments-api/take-payments
+ *
+ * Updated for Square SDK v43 API
  */
 
-import SquareSdk from 'square';
+import { SquareClient, SquareEnvironment as Environment } from 'square';
 import crypto from 'crypto';
 import { PaymentProvider, PaymentError, PaymentErrorCodes, PaymentProviderFactory } from './base.js';
-
-const { Client: SquareClient, Environment } = SquareSdk;
 
 export class SquarePaymentProvider extends PaymentProvider {
   constructor(config) {
@@ -21,20 +21,21 @@ export class SquarePaymentProvider extends PaymentProvider {
       throw new Error('Square access token is required');
     }
     
-    // Initialize Square SDK client
+    // Initialize Square SDK client (v43: token, not accessToken)
     this.client = new SquareClient({
-      accessToken: config.squareAccessToken,
+      token: config.squareAccessToken,
       environment: config.environment === 'production' 
         ? Environment.Production 
         : Environment.Sandbox
     });
     
-    this.paymentsApi = this.client.paymentsApi;
-    this.refundsApi = this.client.refundsApi;
-    this.customersApi = this.client.customersApi;
-    this.cardsApi = this.client.cardsApi;
+    // v43: sub-API names drop the "Api" suffix
+    this.paymentsApi = this.client.payments;
+    this.refundsApi = this.client.refunds;
+    this.customersApi = this.client.customers;
+    this.cardsApi = this.client.cards;
     this.webhookSecret = config.webhookSecret;
-    this.brokerMerchantId = config.brokerMerchantId; // GreenReach's Square merchant ID for fee collection
+    this.brokerMerchantId = config.brokerMerchantId;
   }
 
   /**
@@ -70,37 +71,31 @@ export class SquarePaymentProvider extends PaymentProvider {
       console.log(`  Location: ${farmLocationId}`);
       console.log(`  Idempotency: ${idempotencyKey}`);
 
-      // Create payment request
-      // Note: In production, source_id would come from buyer's payment card token
-      // For now, we're setting up the structure for card-not-present payments
       const paymentRequest = {
-        sourceId: metadata.sourceId || 'CARD_ON_FILE', // Card token or stored card
+        sourceId: metadata.sourceId || 'CARD_ON_FILE',
         idempotencyKey,
         amountMoney: {
           amount: BigInt(amountMoney.amount),
           currency: amountMoney.currency || 'USD'
         },
         locationId: farmLocationId,
-        // Application fee (broker fee) collected by GreenReach
         appFeeMoney: brokerFeeMoney ? {
           amount: BigInt(brokerFeeMoney.amount),
           currency: brokerFeeMoney.currency || 'USD'
         } : undefined,
-        // Reference IDs for reconciliation
         referenceId: farmSubOrderId,
         note: `GreenReach Wholesale Order - Sub-order ${farmSubOrderId}`,
-        // Additional metadata
         ...(metadata.buyerId && {
           buyerEmailAddress: metadata.buyerEmail,
           customerId: metadata.buyerId
         })
       };
 
-      // Execute payment
-      const response = await this.paymentsApi.createPayment(paymentRequest);
+      // v43: .create() not .createPayment(), response is flat (no .result wrapper)
+      const response = await this.paymentsApi.create(paymentRequest);
 
-      if (response.result && response.result.payment) {
-        const payment = response.result.payment;
+      if (response && response.payment) {
+        const payment = response.payment;
         
         console.log(`[Square] Payment created successfully: ${payment.id}`);
         console.log(`  Status: ${payment.status}`);
@@ -127,7 +122,6 @@ export class SquarePaymentProvider extends PaymentProvider {
     } catch (error) {
       console.error('[Square] Payment creation failed:', error);
       
-      // Handle Square-specific errors
       if (error.errors && error.errors.length > 0) {
         const squareError = error.errors[0];
         const errorCode = this._mapSquareErrorCode(squareError.code);
@@ -173,12 +167,12 @@ export class SquarePaymentProvider extends PaymentProvider {
         reason: reason || 'Wholesale order adjustment'
       };
 
+      // v43: response is flat (no .result wrapper)
       const response = await this.refundsApi.refundPayment(refundRequest);
 
-      if (response.result && response.result.refund) {
-        const refund = response.result.refund;
+      if (response && response.refund) {
+        const refund = response.refund;
         
-        // Calculate broker fee refund (proportional)
         const brokerFeeRefunded = refund.applicationFeeMoneyRefunded
           ? Number(refund.applicationFeeMoneyRefunded.amount)
           : 0;
@@ -229,10 +223,11 @@ export class SquarePaymentProvider extends PaymentProvider {
    */
   async getPaymentStatus(providerPaymentId) {
     try {
-      const response = await this.paymentsApi.getPayment(providerPaymentId);
+      // v43: .get() not .getPayment(), response is flat
+      const response = await this.paymentsApi.get({ paymentId: providerPaymentId });
       
-      if (response.result && response.result.payment) {
-        const payment = response.result.payment;
+      if (response && response.payment) {
+        const payment = response.payment;
         
         return {
           paymentId: payment.id,
@@ -264,7 +259,6 @@ export class SquarePaymentProvider extends PaymentProvider {
 
   /**
    * Verify Square webhook signature
-   * Prevents webhook spoofing
    */
   verifyWebhook(signature, payload, webhookSecret) {
     try {
@@ -273,7 +267,6 @@ export class SquarePaymentProvider extends PaymentProvider {
         throw new Error('Webhook secret not configured');
       }
 
-      // Square uses HMAC-SHA256 for webhook signatures
       const payloadString = typeof payload === 'string' 
         ? payload 
         : JSON.stringify(payload);
@@ -293,13 +286,10 @@ export class SquarePaymentProvider extends PaymentProvider {
 
   /**
    * Parse Square webhook event
-   * Normalizes to standard event structure
    */
   parseWebhookEvent(webhookPayload) {
     const { type, data } = webhookPayload;
     
-    // Square webhook event types
-    // payment.created, payment.updated, refund.created, refund.updated
     const eventType = type?.toLowerCase() || 'unknown';
     
     let paymentId = null;
@@ -328,23 +318,17 @@ export class SquarePaymentProvider extends PaymentProvider {
     };
   }
 
-  /**
-   * Check if Square supports broker/platform fees
-   */
   supportsBrokerFees() {
-    return true; // Square supports app_fee_money for platform fees
+    return true;
   }
 
-  /**
-   * Get Square configuration requirements
-   */
   getConfigRequirements() {
     return {
       merchantIdField: 'square_merchant_id',
       locationIdField: 'square_location_id',
       authScopes: [
         'PAYMENTS_WRITE',
-        'PAYMENTS_WRITE_ADDITIONAL_RECIPIENTS', // Required for app_fee_money
+        'PAYMENTS_WRITE_ADDITIONAL_RECIPIENTS',
         'MERCHANT_PROFILE_READ'
       ],
       webhookEvents: [
@@ -356,9 +340,6 @@ export class SquarePaymentProvider extends PaymentProvider {
     };
   }
 
-  /**
-   * Map Square payment status to standard status
-   */
   _mapSquareStatus(squareStatus) {
     const statusMap = {
       'APPROVED': 'authorized',
@@ -370,9 +351,6 @@ export class SquarePaymentProvider extends PaymentProvider {
     return statusMap[squareStatus] || 'created';
   }
 
-  /**
-   * Map Square error codes to standard error codes
-   */
   _mapSquareErrorCode(squareErrorCode) {
     const errorMap = {
       'CARD_DECLINED': PaymentErrorCodes.PAYMENT_DECLINED,
@@ -391,14 +369,15 @@ export class SquarePaymentProvider extends PaymentProvider {
    */
   async createCustomer({ email, displayName, phone, referenceId }) {
     try {
-      const response = await this.customersApi.createCustomer({
+      // v43: .create() not .createCustomer(), response is flat
+      const response = await this.customersApi.create({
         idempotencyKey: crypto.randomUUID(),
         emailAddress: email,
         givenName: displayName,
         phoneNumber: phone || undefined,
         referenceId: referenceId || undefined
       });
-      const customer = response.result.customer;
+      const customer = response.customer;
       return { success: true, customerId: customer.id };
     } catch (error) {
       console.error('[Square] Create customer failed:', error.message);
@@ -408,17 +387,16 @@ export class SquarePaymentProvider extends PaymentProvider {
 
   /**
    * Save a card on file for a Square customer
-   * @param {string} customerId - Square customer ID
-   * @param {string} sourceId - Card nonce from Square Web Payments SDK
    */
   async createCardOnFile({ customerId, sourceId }) {
     try {
-      const response = await this.cardsApi.createCard({
+      // v43: .create() not .createCard(), response is flat
+      const response = await this.cardsApi.create({
         idempotencyKey: crypto.randomUUID(),
         sourceId,
         card: { customerId }
       });
-      const card = response.result.card;
+      const card = response.card;
       return {
         success: true,
         cardId: card.id,
@@ -438,8 +416,9 @@ export class SquarePaymentProvider extends PaymentProvider {
    */
   async listCards(customerId) {
     try {
-      const response = await this.cardsApi.listCards(undefined, customerId);
-      const cards = (response.result.cards || []).map(c => ({
+      // v43: .list({ customerId }) not .listCards(undefined, customerId), response is flat
+      const response = await this.cardsApi.list({ customerId });
+      const cards = (response.cards || []).map(c => ({
         cardId: c.id,
         brand: c.cardBrand,
         last4: c.last4,
@@ -459,7 +438,8 @@ export class SquarePaymentProvider extends PaymentProvider {
    */
   async disableCard(cardId) {
     try {
-      await this.cardsApi.disableCard(cardId);
+      // v43: .disable() not .disableCard()
+      await this.cardsApi.disable({ cardId });
       return { success: true };
     } catch (error) {
       console.error('[Square] Disable card failed:', error.message);
