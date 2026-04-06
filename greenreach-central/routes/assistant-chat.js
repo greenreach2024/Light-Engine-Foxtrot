@@ -958,7 +958,8 @@ const GPT_TOOLS = [
           website: { type: 'string', description: 'Farm website URL' },
           city: { type: 'string', description: 'City' },
           province: { type: 'string', description: 'State or province' },
-          timezone: { type: 'string', description: 'IANA timezone (e.g. America/Toronto)' }
+          timezone: { type: 'string', description: 'IANA timezone (e.g. America/Toronto)' },
+          use_mode: { type: 'string', description: 'Farm operating mode. "full" = grow rooms + sensors + environment + sales. "groups_and_trays" = full CEA with tray-level tracking. "sales_only" = wholesale/retail portal only (no grow infrastructure).', enum: ['full', 'groups_and_trays', 'sales_only'] }
         }
       }
     }
@@ -1066,7 +1067,7 @@ const GPT_TOOLS = [
           phase: {
             type: 'string',
             description: 'The setup phase to get guidance for.',
-            enum: ['farm_profile', 'grow_rooms', 'room_specs', 'zones', 'groups', 'crop_assignment', 'env_targets', 'lights', 'schedules', 'devices', 'planting', 'integrations']
+            enum: ['use_mode', 'farm_profile', 'grow_rooms', 'room_specs', 'zones', 'groups', 'crop_assignment', 'env_targets', 'lights', 'schedules', 'devices', 'planting', 'integrations']
           }
         },
         required: ['phase']
@@ -1759,7 +1760,7 @@ async function buildSystemPrompt(farmId) {
     // Get basic farm info
     if (isDatabaseAvailable()) {
       const farmResult = await query(
-        'SELECT farm_id, name, farm_type, contact_name, contact_phone, email, setup_completed FROM farms WHERE farm_id = $1',
+        'SELECT farm_id, name, farm_type, contact_name, contact_phone, email, setup_completed, use_mode FROM farms WHERE farm_id = $1',
         [farmId]
       );
       if (farmResult.rows.length > 0) {
@@ -1770,6 +1771,7 @@ async function buildSystemPrompt(farmId) {
         if (farm.email) farmContext += `, Email: ${farm.email}`;
         if (farm.contact_name || farm.contact_phone || farm.email) farmContext += '\n';
         farmContext += `Setup completed: ${farm.setup_completed ? 'Yes' : 'No'}\n`;
+        farmContext += `Use mode: ${farm.use_mode || 'not set (ask the farmer)'}\n`;
       }
     }
   } catch { /* non-fatal */ }
@@ -2168,9 +2170,18 @@ INTER-AGENT COMMUNICATION TONE:
 - Occasionally add light friendly banter about F.A.Y.E. being the responsible one, but keep it warm and respectful. No rude jokes or offensive language.
 
 FARM SETUP GUIDANCE:
-- You have tools to guide new farmers through a 12-phase setup that ends with "building the farm" -- an automated equipment and layout recommendation.
+- You have tools to guide new farmers through farm setup that ends with "building the farm" -- an automated equipment and layout recommendation.
 - If CURRENT FARM STATE shows "Setup completed: No", proactively offer to walk the user through setup.
-- Setup flow (12 phases):
+- FIRST QUESTION: If "Use mode: not set", ask the farmer how they will use the platform BEFORE proceeding.
+  Three modes:
+  * "full" -- Active indoor farm: grow rooms, zones, sensors, environment management, crop recipes, harvesting, and sales.
+  * "groups_and_trays" -- Full CEA with tray-level tracking for detailed yield, lot management, and granular harvest records.
+  * "sales_only" -- Wholesale and retail sales portal ONLY. No grow rooms, no sensors, no environment management. For farms that just need a sales channel.
+  Set with: update_farm_profile({ use_mode: "full" | "groups_and_trays" | "sales_only" })
+- If mode is "sales_only": skip phases 2-11 (rooms, specs, zones, groups, crops, targets, lights, schedules, devices, planting). Go directly from farm_profile to integrations.
+- If mode is "full" or "groups_and_trays": proceed through all phases. "groups_and_trays" enables tray-level tracking across all relevant tools.
+- Setup flow:
+  (0) use_mode -- Ask how the farmer will use the platform (update_farm_profile with use_mode)
   (1) farm_profile -- Farm name + contact info (update_farm_profile)
   (2) grow_rooms -- Create grow rooms (create_room)
   (3) room_specs -- Room dimensions, ceiling height, hydro system, HVAC (update_room_specs). ASK: "What are your room dimensions?", "How high is the ceiling?", "What hydro system are you using?", "Do you have HVAC?"
@@ -3135,7 +3146,7 @@ async function executeExtendedTool(toolName, params, farmId) {
         if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
         const result = await query(
           `SELECT farm_id, name, farm_type, contact_name, contact_phone, email,
-                  plan_type, status, city, state, location, setup_completed, created_at
+                  plan_type, status, city, state, location, setup_completed, use_mode, created_at
            FROM farms WHERE farm_id = $1`,
           [farmId]
         );
@@ -3155,6 +3166,7 @@ async function executeExtendedTool(toolName, params, farmId) {
             city: f.city || '',
             state: f.state || '',
             setup_completed: f.setup_completed || false,
+            use_mode: f.use_mode || null,
             created_at: f.created_at
           }
         };
@@ -3166,7 +3178,8 @@ async function executeExtendedTool(toolName, params, farmId) {
     case 'update_farm_profile': {
       try {
         if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
-        const { name, contactName, email, phone, website, city, province, timezone } = params;
+        const { name, contactName, email, phone, website, city, province, timezone, use_mode } = params;
+        const VALID_USE_MODES = ['full', 'groups_and_trays', 'sales_only'];
         const updates = [];
         const values = [];
         let p = 1;
@@ -3177,6 +3190,7 @@ async function executeExtendedTool(toolName, params, farmId) {
         if (city) { updates.push(`city = $${p++}`); values.push(city); }
         if (province) { updates.push(`state = $${p++}`); values.push(province); }
         if (timezone) { updates.push(`timezone = $${p++}`); values.push(timezone); }
+        if (use_mode && VALID_USE_MODES.includes(use_mode)) { updates.push(`use_mode = $${p++}`); values.push(use_mode); }
         if (updates.length === 0) return { ok: false, error: 'At least one field is required' };
         updates.push('updated_at = CURRENT_TIMESTAMP');
         values.push(farmId);
@@ -3282,12 +3296,14 @@ async function executeExtendedTool(toolName, params, farmId) {
         let roomCount = 0;
         let hasContact = false;
         let setupDone = false;
+        let farmUseMode = null;
         if (isDatabaseAvailable()) {
           try {
-            const r = await query('SELECT name, contact_name, email, setup_completed FROM farms WHERE farm_id = $1', [farmId]);
+            const r = await query('SELECT name, contact_name, email, setup_completed, use_mode FROM farms WHERE farm_id = $1', [farmId]);
             if (r.rows.length > 0) {
               hasContact = !!r.rows[0].contact_name;
               setupDone = r.rows[0].setup_completed === true;
+              farmUseMode = r.rows[0].use_mode || null;
             }
           } catch { /* non-fatal */ }
         }
@@ -3300,8 +3316,9 @@ async function executeExtendedTool(toolName, params, farmId) {
         } catch { /* non-fatal */ }
         const groups = await farmStore.get(farmId, 'groups') || [];
         const tasks = [
+          { step: 'Farm Use Mode', done: !!farmUseMode, hint: 'Ask: how will you use the platform? Set with update_farm_profile({ use_mode: "full" | "groups_and_trays" | "sales_only" })' },
           { step: 'Farm Profile', done: hasContact, hint: 'Set farm name and contact info with update_farm_profile' },
-          { step: 'Grow Rooms', done: roomCount > 0, hint: 'Create at least one room with create_room' },
+          { step: 'Grow Rooms', done: farmUseMode !== 'sales_only' ? roomCount > 0 : true, hint: farmUseMode === 'sales_only' ? 'Skipped (sales-only mode)' : 'Create at least one room with create_room' },
           { step: 'Zones', done: roomCount > 0 && groups.length > 0, hint: 'Add zones to rooms with create_zone, or groups will create zones automatically' },
           { step: 'Certifications', done: !!profile.certifications, hint: 'Optional — set with update_certifications' },
           { step: 'Benchmarks', done: groups.length > 0, hint: 'Seed crop benchmarks with seed_benchmarks' },
@@ -3338,12 +3355,22 @@ async function executeExtendedTool(toolName, params, farmId) {
       try {
         const { default: setupAgentRouter } = await import('./setup-agent.js');
         // Reuse the same evaluation logic from setup-agent.js
-        const PHASES = [
-          'farm_profile', 'grow_rooms', 'room_specs', 'zones', 'groups',
+        // Fetch use_mode to determine applicable phases
+        let farmUseMode = null;
+        try {
+          const modeRes = await query('SELECT use_mode FROM farms WHERE farm_id = $1', [farmId]);
+          if (modeRes.rows.length > 0) farmUseMode = modeRes.rows[0].use_mode;
+        } catch { /* non-fatal */ }
+        const isSalesOnly = farmUseMode === 'sales_only';
+        const SKIP_FOR_SALES = new Set(['grow_rooms', 'room_specs', 'zones', 'groups', 'crop_assignment', 'env_targets', 'lights', 'schedules', 'devices', 'planting']);
+        const ALL_PHASES = [
+          'use_mode', 'farm_profile', 'grow_rooms', 'room_specs', 'zones', 'groups',
           'crop_assignment', 'env_targets', 'lights', 'schedules', 'devices',
           'planting', 'integrations'
         ];
+        const PHASES = isSalesOnly ? ALL_PHASES.filter(p => !SKIP_FOR_SALES.has(p)) : ALL_PHASES;
         const PHASE_LABELS = {
+          use_mode: 'Farm Use Mode',
           farm_profile: 'Farm Profile', grow_rooms: 'Grow Rooms', room_specs: 'Room Specifications',
           zones: 'Climate Zones', groups: 'Grow Groups', crop_assignment: 'Crop Selection',
           env_targets: 'Environment Targets', lights: 'Light Fixtures', schedules: 'Light Schedules',
@@ -3382,7 +3409,8 @@ async function executeExtendedTool(toolName, params, farmId) {
         let groupsWithPlanting = 0;
         groups.forEach(g => { if (g.planting || g.planting_id || g.active_planting || g.planted_at) groupsWithPlanting++; });
 
-        const phases = [
+        const phaseEvals = [
+          { id: 'use_mode', complete: !!farmUseMode, detail: farmUseMode ? farmUseMode.replace(/_/g, ' ') : 'Not set -- ask farmer' },
           { id: 'farm_profile', complete: !!(profile.name || profile.farm_name) && !!(profile.contact?.name || profile.contact_name), detail: (profile.name || profile.farm_name) || 'Not configured' },
           { id: 'grow_rooms', complete: rooms.length > 0, detail: `${rooms.length} room${rooms.length !== 1 ? 's' : ''}` },
           { id: 'room_specs', complete: rooms.length > 0 && roomsWithSpecs === rooms.length, detail: `${roomsWithSpecs}/${rooms.length} rooms with specs` },
@@ -3395,21 +3423,22 @@ async function executeExtendedTool(toolName, params, farmId) {
           { id: 'devices', complete: devices.length > 0, detail: `${devices.length} device${devices.length !== 1 ? 's' : ''}` },
           { id: 'planting', complete: groupsWithPlanting > 0, detail: `${groupsWithPlanting} active planting${groupsWithPlanting !== 1 ? 's' : ''}` },
           { id: 'integrations', complete: configuredIntegrations.length > 0, detail: `${configuredIntegrations.length} integration${configuredIntegrations.length !== 1 ? 's' : ''}` }
-        ].map(p => ({ ...p, label: PHASE_LABELS[p.id] }));
+        ].filter(p => PHASES.includes(p.id)).map(p => ({ ...p, label: PHASE_LABELS[p.id] }));
 
-        const completedCount = phases.filter(p => p.complete).length;
-        const percentage = Math.round((completedCount / phases.length) * 100);
-        const nextPhase = phases.find(p => !p.complete);
+        const completedCount = phaseEvals.filter(p => p.complete).length;
+        const percentage = Math.round((completedCount / phaseEvals.length) * 100);
+        const nextPhase = phaseEvals.find(p => !p.complete);
 
         return {
           ok: true,
           percentage,
           completed: completedCount,
-          total: phases.length,
-          phases,
+          total: phaseEvals.length,
+          use_mode: farmUseMode,
+          phases: phaseEvals,
           next_phase: nextPhase ? nextPhase.label : null,
           next_phase_id: nextPhase ? nextPhase.id : null,
-          all_complete: completedCount === phases.length
+          all_complete: completedCount === phaseEvals.length
         };
       } catch (err) {
         return { ok: false, error: err.message };
@@ -3420,6 +3449,19 @@ async function executeExtendedTool(toolName, params, farmId) {
       try {
         const phase = params.phase;
         const GUIDANCE = {
+          use_mode: {
+            title: 'Farm Use Mode',
+            steps: [
+              'Ask the farmer: "How will you use the Light Engine platform?"',
+              'Three modes: (1) FULL -- grow rooms, sensors, environment management, harvesting, and sales.',
+              '(2) GROUPS AND TRAYS -- full CEA with tray-level tracking for detailed yield and lot management.',
+              '(3) SALES ONLY -- wholesale and retail sales portal only. No grow rooms, sensors, or environment management.',
+              'Set with: update_farm_profile({ use_mode: "full" | "groups_and_trays" | "sales_only" })',
+              'Sales-only mode skips all grow infrastructure phases (rooms, zones, devices, etc.).'
+            ],
+            tools: ['update_farm_profile'],
+            tip: 'This is the first question to ask. Sales-only mode streamlines setup to just profile + integrations. Full and groups_and_trays modes proceed through all 12 phases.'
+          },
           farm_profile: {
             title: 'Farm Profile Setup',
             steps: [

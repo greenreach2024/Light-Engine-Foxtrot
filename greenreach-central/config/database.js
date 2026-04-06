@@ -265,6 +265,7 @@ async function runMigrations(client) {
       ALTER TABLE farms ADD COLUMN IF NOT EXISTS stripe_access_token JSONB;
       ALTER TABLE farms ADD COLUMN IF NOT EXISTS stripe_refresh_token JSONB;
       ALTER TABLE farms ADD COLUMN IF NOT EXISTS stripe_token_expiry TIMESTAMP;
+      ALTER TABLE farms ADD COLUMN IF NOT EXISTS use_mode VARCHAR(50) DEFAULT NULL;
 
       ALTER TABLE farms ALTER COLUMN contact_name DROP NOT NULL;
       ALTER TABLE farms ALTER COLUMN email DROP NOT NULL;
