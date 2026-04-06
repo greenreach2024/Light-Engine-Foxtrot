@@ -370,11 +370,14 @@ export class SquarePaymentProvider extends PaymentProvider {
   async createCustomer({ email, displayName, phone, referenceId }) {
     try {
       // v43: .create() not .createCustomer(), response is flat
+      // Square requires E.164 phone format; skip if not roughly valid
+      const digitsOnly = phone ? phone.replace(/[^\d+]/g, '') : '';
+      const sanitizedPhone = /^\+?\d{10,15}$/.test(digitsOnly) ? digitsOnly : undefined;
       const response = await this.customersApi.create({
         idempotencyKey: crypto.randomUUID(),
         emailAddress: email,
         givenName: displayName,
-        phoneNumber: phone || undefined,
+        phoneNumber: sanitizedPhone,
         referenceId: referenceId || undefined
       });
       const customer = response.customer;
