@@ -2133,7 +2133,7 @@ router.put('/buyers/me', requireBuyerPortalAuth, async (req, res, next) => {
       keyContact: trimField(keyContact),
       backupContact: trimField(backupContact),
       backupPhone: trimField(backupPhone),
-      buyerType: trimField(buyerType),
+      buyerType: trimField(buyerType) || undefined,
       location
     });
 
