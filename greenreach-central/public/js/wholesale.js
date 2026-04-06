@@ -35,7 +35,7 @@
   const STORAGE_BUYER = 'greenreach_wholesale_buyer';
   const STORAGE_CART = 'greenreach_wholesale_cart';
 
-  const app = {
+  const app = window.app = {
     catalog: [],
     cart: [],
     orders: [],

@@ -35,7 +35,7 @@
   const STORAGE_BUYER = 'greenreach_wholesale_buyer';
   const STORAGE_CART = 'greenreach_wholesale_cart';
 
-  const app = {
+  const app = window.app = {
     catalog: [],
     cart: [],
     orders: [],
@@ -1042,9 +1042,7 @@
         .map(
           (sku) => `
           <div class="sku-card">
-            ${sku.thumbnail_url
-              ? `<div class="sku-thumbnail"><img src="${escapeAttr(sku.thumbnail_url)}" alt="${escapeAttr(sku.product_name)}" loading="lazy" onerror="this.parentElement.outerHTML='<div class=\'sku-thumbnail-placeholder\'>&#9751;</div>'" /></div>`
-              : '<div class="sku-thumbnail-placeholder">&#9751;</div>'}
+            <div class="sku-thumbnail"><img src="${sku.thumbnail_url ? escapeAttr(sku.thumbnail_url) : '/images/default-product.svg'}" alt="${escapeAttr(sku.product_name)}" loading="lazy" onerror="this.onerror=null;this.src=&quot;/images/default-product.svg&quot;" /></div>
             <div class="sku-header">
               <div class="sku-name">${escapeHtml(sku.product_name)}</div>
               <div class="sku-badges">
@@ -2105,7 +2103,7 @@
         // Call market intelligence API for real-time price alerts
         const headers = {};
         if (this.token) headers['Authorization'] = `Bearer ${this.token}`;
-        const response = await fetch('/api/market-intelligence/price-alerts?threshold=7', { headers });
+        const response = await fetch('/api/wholesale/market/price-alerts?threshold=7', { headers });
         if (!response.ok) {
           // Silently handle auth/permission errors - price alerts are optional
           priceContent.innerHTML = '<div class="loading-state">All monitored prices stable (no significant changes detected)</div>';
