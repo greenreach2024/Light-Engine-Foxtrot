@@ -405,8 +405,8 @@ export class SquarePaymentProvider extends PaymentProvider {
         cardId: card.id,
         brand: card.cardBrand,
         last4: card.last4,
-        expMonth: card.expMonth,
-        expYear: card.expYear
+        expMonth: Number(card.expMonth),
+        expYear: Number(card.expYear)
       };
     } catch (error) {
       console.error('[Square] Create card on file failed:', error.message);
@@ -425,8 +425,8 @@ export class SquarePaymentProvider extends PaymentProvider {
         cardId: c.id,
         brand: c.cardBrand,
         last4: c.last4,
-        expMonth: c.expMonth,
-        expYear: c.expYear,
+        expMonth: Number(c.expMonth),
+        expYear: Number(c.expYear),
         enabled: c.enabled
       }));
       return { success: true, cards };
