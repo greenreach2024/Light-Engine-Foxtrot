@@ -243,7 +243,9 @@ if (DEPLOYMENT_MODE === 'cloud' || process.env.NODE_ENV === 'production') {
     const host = req.headers.host || '';
     if (host.startsWith('www.')) {
       const bare = host.replace(/^www\./, '');
-      return res.redirect(301, `https://${bare}${req.url}`);
+      // Use 308 for non-GET so POST/PUT body is preserved across redirect
+      const code = req.method === 'GET' || req.method === 'HEAD' ? 301 : 308;
+      return res.redirect(code, `https://${bare}${req.url}`);
     }
     next();
   });
