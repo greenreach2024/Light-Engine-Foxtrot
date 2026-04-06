@@ -197,6 +197,7 @@ const TRUST_TIERS = {
   confirm: new Set([
     'update_crop_price', 'create_planting_assignment', 'update_order_status',
     'add_inventory_item', 'update_manual_inventory', 'update_target_ranges', 'set_light_schedule',
+    'create_custom_product', 'update_custom_product', 'delete_custom_product',
     'update_nutrient_targets', 'register_device', 'auto_assign_devices',
     'seed_benchmarks', 'update_farm_profile', 'create_room', 'create_zone',
     'update_certifications', 'complete_setup',
@@ -698,6 +699,79 @@ const GPT_TOOLS = [
           farm_id: { type: 'string', description: 'Farm ID (optional)' }
         },
         required: ['crop_name', 'quantity_lbs']
+      }
+    }
+  },
+  // --- Custom Product Tools ---
+  {
+    type: 'function',
+    function: {
+      name: 'create_custom_product',
+      description: 'Create a custom product in the farm inventory -- for non-crop items like value-added products, merchandise, prepared foods, or any product not from the tray system. WRITE operation -- confirm details with user first. After creating, suggest uploading an image via the Custom Products page.',
+      parameters: {
+        type: 'object',
+        properties: {
+          product_name: { type: 'string', description: 'Product name (e.g. "Pesto Jar 250ml", "Farm T-Shirt", "Dried Herb Bundle")' },
+          category: { type: 'string', description: 'Category: Custom, Value-Added, Prepared, Merchandise, Flowers, Other. Default: Custom' },
+          variety: { type: 'string', description: 'Product variety or sub-type (optional)' },
+          description: { type: 'string', description: 'Product description (max 2000 chars)' },
+          wholesale_price: { type: 'number', description: 'Wholesale price in CAD per unit' },
+          retail_price: { type: 'number', description: 'Retail price in CAD per unit' },
+          quantity_available: { type: 'number', description: 'Quantity in stock. Default: 0' },
+          unit: { type: 'string', description: 'Unit of measure: unit, jar, bag, bunch, lb, oz. Default: unit' },
+          is_taxable: { type: 'boolean', description: 'Whether tax applies. Default: true' },
+          available_for_wholesale: { type: 'boolean', description: 'List on wholesale marketplace. Default: true' }
+        },
+        required: ['product_name']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'list_custom_products',
+      description: 'List all custom products for this farm. Returns product name, SKU, prices, quantity, category, and thumbnail URL.',
+      parameters: {
+        type: 'object',
+        properties: {}
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'update_custom_product',
+      description: 'Update an existing custom product -- change name, price, quantity, description, or availability. WRITE operation -- confirm with user first.',
+      parameters: {
+        type: 'object',
+        properties: {
+          product_id: { type: 'number', description: 'Product ID (from list_custom_products). Use the numeric id field.' },
+          product_name: { type: 'string', description: 'New product name' },
+          category: { type: 'string', description: 'New category' },
+          variety: { type: 'string', description: 'New variety' },
+          description: { type: 'string', description: 'New description' },
+          wholesale_price: { type: 'number', description: 'New wholesale price (CAD)' },
+          retail_price: { type: 'number', description: 'New retail price (CAD)' },
+          quantity_available: { type: 'number', description: 'New quantity in stock' },
+          unit: { type: 'string', description: 'New unit of measure' },
+          is_taxable: { type: 'boolean', description: 'Tax applicable' },
+          available_for_wholesale: { type: 'boolean', description: 'Wholesale marketplace listing' }
+        },
+        required: ['product_id']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'delete_custom_product',
+      description: 'Remove a custom product (soft-delete -- makes it inactive). WRITE operation -- confirm with user first.',
+      parameters: {
+        type: 'object',
+        properties: {
+          product_id: { type: 'number', description: 'Product ID to deactivate (from list_custom_products)' }
+        },
+        required: ['product_id']
       }
     }
   },
@@ -2285,11 +2359,24 @@ MANUAL INVENTORY MANAGEMENT:
   2. If they give weight in oz or kg, convert to lbs (1 kg = 2.205 lbs, 16 oz = 1 lb).
   3. Call update_manual_inventory with crop_name and quantity_lbs.
   4. Report the result: auto lbs (from tray sync) + manual lbs = total available.
-- To review current inventory, call get_inventory_summary — it returns both auto and manual quantities.
-- The manual_quantity_lbs column is separate from auto_quantity_lbs — they stack (total = auto + manual).
+- To review current inventory, call get_inventory_summary -- it returns both auto and manual quantities.
+- The manual_quantity_lbs column is separate from auto_quantity_lbs -- they stack (total = auto + manual).
 - Manual inventory appears in the wholesale catalog and POS immediately.
 - Inventory rows now carry lot_number, quality_score, and best_by_date from the most recent harvest.
 - auto_quantity_lbs is recalculated from groups whenever groups are synced (plants * yieldFactor * avgWeight).
+
+CUSTOM PRODUCTS:
+- Farmers can create custom (non-crop) products: value-added goods, prepared foods, merchandise, dried herbs, sauces, etc.
+- Custom products live in the same farm_inventory table but with is_custom = TRUE and inventory_source = 'custom'.
+- Tools: create_custom_product, list_custom_products, update_custom_product, delete_custom_product.
+- Creation flow:
+  1. Ask the farmer: product name, price (retail and/or wholesale), quantity, unit, category, and description.
+  2. Call create_custom_product with the details. A unique SKU is auto-generated.
+  3. The product appears in the wholesale catalog and POS immediately.
+  4. For product images: tell the farmer to upload via the Custom Products page in the admin panel. Image upload requires a browser file picker -- it cannot be done through chat. The upload endpoint is POST /api/farm/products/:id/image (2MB max, jpg/png/webp).
+- Editing: use update_custom_product with the numeric product id (from list_custom_products).
+- Deletion: use delete_custom_product -- soft-deletes (sets status to inactive).
+- When a farmer asks "add a product", "create a new item", "I sell pesto jars", or similar -- use create_custom_product (not add_inventory_item, which is for crop stock).
 
 IMAGE DIAGNOSIS:
 - When a farmer uploads an image, analyse it for: plant species, growth stage, visible issues (nutrient deficiency, pest damage, disease, environmental stress), severity, and recommended corrective action.
@@ -2305,7 +2392,7 @@ RULES:
 - For complex planning questions, a thorough structured answer is better than a short one. Use rich formatting.
 - When you call a tool, summarize the result naturally — don't dump raw JSON.
 - Use the tools proactively — if a user asks you to do something and you have a tool for it, use the tool. Do not ask the user for information the tools can provide.
-- For WRITE operations (update_farm_profile, create_room, create_zone, update_certifications, complete_setup, update_crop_price, create_planting_assignment, mark_harvest_complete, update_order_status, add_inventory_item, update_manual_inventory, dismiss_alert, auto_assign_devices, register_device, seed_benchmarks, update_nutrient_targets, update_target_ranges, set_light_schedule, update_group_crop, create_procurement_order, update_room_specs, apply_crop_environment): you MUST describe the proposed change and ask the user to confirm BEFORE calling the tool. Do NOT call write tools until the user says "yes", "confirm", "do it", or similar.
+- For WRITE operations (update_farm_profile, create_room, create_zone, update_certifications, complete_setup, update_crop_price, create_planting_assignment, mark_harvest_complete, update_order_status, add_inventory_item, update_manual_inventory, create_custom_product, update_custom_product, delete_custom_product, dismiss_alert, auto_assign_devices, register_device, seed_benchmarks, update_nutrient_targets, update_target_ranges, set_light_schedule, update_group_crop, create_procurement_order, update_room_specs, apply_crop_environment): you MUST describe the proposed change and ask the user to confirm BEFORE calling the tool. Do NOT call write tools until the user says "yes", "confirm", "do it", or similar.
 - PROCUREMENT SAFETY: create_procurement_order requires reading back the full order summary (items, quantities, cost) and getting explicit approval. Never place orders without confirmed quantities. Never source from outside the procurement catalog.
 - After any WRITE operation succeeds, verify by calling the corresponding read tool and report the confirmed result.
 - If you can't help, say so briefly and suggest what you CAN do.
@@ -4814,6 +4901,169 @@ async function executeExtendedTool(toolName, params, farmId) {
         };
       }
       return { ok: true, ...status };
+    }
+
+    // ── Custom Product Management ──────────────────────────────────────
+    case 'create_custom_product': {
+      try {
+        if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+        const productName = (params.product_name || '').trim();
+        if (!productName) return { ok: false, error: 'product_name is required' };
+        if (productName.length > 255) return { ok: false, error: 'product_name must be 255 chars or fewer' };
+
+        const farmShort = (farmId || 'FARM').replace(/^FARM-/, '').substring(0, 8);
+        const rand = Math.random().toString(36).substring(2, 10).toUpperCase();
+        const hex = Date.now().toString(16).toUpperCase();
+        const sku = `CUSTOM-${farmShort}-${rand}-${hex}`;
+        const productId = sku;
+
+        const category = params.category || 'Custom';
+        const variety = params.variety || null;
+        const description = params.description ? String(params.description).slice(0, 2000) : null;
+        const wholesalePrice = params.wholesale_price != null ? Number(params.wholesale_price) : null;
+        const retailPrice = params.retail_price != null ? Number(params.retail_price) : null;
+        const quantityAvailable = Number(params.quantity_available) || 0;
+        const unit = params.unit || 'unit';
+        const isTaxable = params.is_taxable !== false;
+        const availForWholesale = params.available_for_wholesale !== false;
+        const price = wholesalePrice != null ? wholesalePrice : (retailPrice != null ? retailPrice : null);
+
+        const result = await query(
+          `INSERT INTO farm_inventory (
+            farm_id, product_id, product_name, sku, sku_id, sku_name, category, variety,
+            description, is_taxable, is_custom,
+            wholesale_price, retail_price, price,
+            quantity_available, quantity, unit,
+            available_for_wholesale, inventory_source, status,
+            created_at, updated_at
+          ) VALUES (
+            $1, $2, $3, $4, $5, $6, $7, $8,
+            $9, $10, TRUE,
+            $11, $12, $13,
+            $14, $15, $16,
+            $17, 'custom', 'active',
+            NOW(), NOW()
+          ) RETURNING id, product_name, sku, category, wholesale_price, retail_price, quantity_available, unit`,
+          [farmId, productId, productName, sku, sku, productName, category, variety,
+           description, isTaxable,
+           wholesalePrice, retailPrice, price,
+           quantityAvailable, quantityAvailable, unit,
+           availForWholesale]
+        );
+
+        const created = result.rows[0];
+        return {
+          ok: true,
+          message: `Custom product "${productName}" created (SKU: ${sku})`,
+          product: created,
+          tip: 'To add a product image, use the Custom Products page in the admin panel -- image upload is available there.'
+        };
+      } catch (err) {
+        if (err.code === '23505') return { ok: false, error: 'A product with this SKU already exists. Try again.' };
+        return { ok: false, error: err.message };
+      }
+    }
+
+    case 'list_custom_products': {
+      try {
+        if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+        const result = await query(
+          `SELECT id, product_name, sku, category, variety, description,
+                  thumbnail_url, wholesale_price, retail_price,
+                  quantity_available, unit, available_for_wholesale, status,
+                  created_at, updated_at
+           FROM farm_inventory
+           WHERE farm_id = $1 AND is_custom = TRUE AND status != 'inactive'
+           ORDER BY product_name`,
+          [farmId]
+        );
+        return {
+          ok: true,
+          products: result.rows,
+          count: result.rows.length,
+          message: result.rows.length === 0
+            ? 'No custom products yet. Use create_custom_product to add one.'
+            : `${result.rows.length} custom product${result.rows.length !== 1 ? 's' : ''} found.`
+        };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+
+    case 'update_custom_product': {
+      try {
+        if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+        const productDbId = params.product_id;
+        if (!productDbId) return { ok: false, error: 'product_id is required (numeric id from list_custom_products)' };
+
+        // Verify product exists and is custom
+        const check = await query(
+          'SELECT id FROM farm_inventory WHERE farm_id = $1 AND id = $2 AND is_custom = TRUE AND status != $3',
+          [farmId, productDbId, 'inactive']
+        );
+        if (check.rows.length === 0) return { ok: false, error: 'Custom product not found' };
+
+        const setClauses = [];
+        const vals = [farmId, productDbId];
+        let idx = 3;
+
+        if (params.product_name !== undefined) {
+          const pn = String(params.product_name).trim();
+          if (!pn) return { ok: false, error: 'product_name cannot be empty' };
+          if (pn.length > 255) return { ok: false, error: 'product_name must be 255 chars or fewer' };
+          setClauses.push(`product_name = $${idx++}`); vals.push(pn);
+        }
+        if (params.category !== undefined) { setClauses.push(`category = $${idx++}`); vals.push(params.category); }
+        if (params.variety !== undefined) { setClauses.push(`variety = $${idx++}`); vals.push(params.variety); }
+        if (params.description !== undefined) { setClauses.push(`description = $${idx++}`); vals.push(String(params.description).slice(0, 2000)); }
+        if (params.wholesale_price !== undefined) { setClauses.push(`wholesale_price = $${idx++}`); vals.push(params.wholesale_price != null ? Number(params.wholesale_price) : null); }
+        if (params.retail_price !== undefined) { setClauses.push(`retail_price = $${idx++}`); vals.push(params.retail_price != null ? Number(params.retail_price) : null); }
+        if (params.quantity_available !== undefined) {
+          setClauses.push(`quantity_available = $${idx}`, `quantity = $${idx++}`);
+          vals.push(Number(params.quantity_available) || 0);
+        }
+        if (params.unit !== undefined) { setClauses.push(`unit = $${idx++}`); vals.push(params.unit); }
+        if (params.is_taxable !== undefined) { setClauses.push(`is_taxable = $${idx++}`); vals.push(params.is_taxable === false ? false : true); }
+        if (params.available_for_wholesale !== undefined) { setClauses.push(`available_for_wholesale = $${idx++}`); vals.push(params.available_for_wholesale === false ? false : true); }
+
+        if (setClauses.length === 0) return { ok: false, error: 'No fields to update' };
+        setClauses.push('updated_at = NOW()');
+        setClauses.push('price = COALESCE(wholesale_price, retail_price)');
+
+        const result = await query(
+          `UPDATE farm_inventory SET ${setClauses.join(', ')}
+           WHERE farm_id = $1 AND id = $2 AND is_custom = TRUE
+           RETURNING id, product_name, sku, category, wholesale_price, retail_price, quantity_available, unit`,
+          vals
+        );
+
+        return {
+          ok: true,
+          message: `Custom product updated (id: ${productDbId})`,
+          product: result.rows[0]
+        };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+
+    case 'delete_custom_product': {
+      try {
+        if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+        const productDbId = params.product_id;
+        if (!productDbId) return { ok: false, error: 'product_id is required' };
+
+        const result = await query(
+          `UPDATE farm_inventory SET status = 'inactive', updated_at = NOW()
+           WHERE farm_id = $1 AND id = $2 AND is_custom = TRUE AND status != 'inactive'`,
+          [farmId, productDbId]
+        );
+
+        if (result.rowCount === 0) return { ok: false, error: 'Custom product not found or already inactive' };
+        return { ok: true, message: `Custom product deactivated (id: ${productDbId}). It will no longer appear in the catalog.` };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
     }
 
     default:
