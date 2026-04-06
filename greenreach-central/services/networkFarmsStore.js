@@ -100,10 +100,17 @@ async function seedFromDatabase() {
     );
     for (const row of result.rows) {
       const meta = typeof row.metadata === 'string' ? JSON.parse(row.metadata) : (row.metadata || {});
+      // Self-heal: if name column was overwritten with farm_id, recover from metadata
+      let farmName = row.name || row.farm_id;
+      if (farmName === row.farm_id && meta.name && meta.name !== row.farm_id) {
+        farmName = meta.name;
+        query('UPDATE farms SET name = $1 WHERE farm_id = $2 AND name = $2', [farmName, row.farm_id]).catch(() => {});
+        console.log(`[NetworkFarmsStore] Self-healed farm name for ${row.farm_id}: ${farmName}`);
+      }
       // Prefer the dedicated api_url column, then fall back to metadata
       const apiUrl = row.api_url || meta.api_url || meta.url || meta.edge_url || null;
       networkFarms.set(row.farm_id, normalizeNetworkFarm(row.farm_id, {
-        farm_name: row.name || row.farm_id,
+        farm_name: farmName,
         base_url: apiUrl,
         status: row.status,
         auth_farm_id: meta.auth_farm_id || null,
@@ -222,6 +229,14 @@ export async function upsertNetworkFarm(farmId, farmData) {
   }
 
   const existingFarm = networkFarms.get(farmId) || {};
+
+  // Preserve existing real name when incoming name is just the farm_id
+  const existingRealName = existingFarm.farm_name || existingFarm.name;
+  if (existingRealName && existingRealName !== farmId) {
+    if (!farmData.name || farmData.name === farmId) farmData = { ...farmData, name: existingRealName };
+    if (!farmData.farm_name || farmData.farm_name === farmId) farmData = { ...farmData, farm_name: existingRealName };
+  }
+
   const normalizedFarm = normalizeNetworkFarm(farmId, {
     ...existingFarm,
     ...farmData,
@@ -247,7 +262,7 @@ export async function upsertNetworkFarm(farmId, farmData) {
         `INSERT INTO farms (farm_id, name, contact_name, api_url, api_key, api_secret, jwt_secret, status, plan_type, metadata, created_at, updated_at)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'cloud', $9::jsonb, NOW(), NOW())
          ON CONFLICT (farm_id) DO UPDATE SET
-           name = COALESCE(NULLIF($2, ''), farms.name),
+           name = COALESCE(NULLIF(NULLIF($2, ''), $1), farms.name),
            api_url = COALESCE(NULLIF($4, ''), farms.api_url),
            api_key = COALESCE(NULLIF($5, ''), farms.api_key),
            api_secret = COALESCE(farms.api_secret, EXCLUDED.api_secret),

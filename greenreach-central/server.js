@@ -1469,7 +1469,7 @@ async function syncFarmData(options = {}) {
         };
         await dbQuery(
           `UPDATE farms SET
-            name = COALESCE(NULLIF($1, ''), name),
+            name = COALESCE(NULLIF(NULLIF($1, ''), $4), name),
             email = COALESCE(NULLIF($2, ''), email),
             metadata = COALESCE(metadata, '{}'::jsonb) || $3::jsonb,
             updated_at = NOW()
@@ -1487,7 +1487,7 @@ async function syncFarmData(options = {}) {
     if (updated > 0 && farmId && edgeUrl) {
       try {
         await upsertNetworkFarm(farmId, {
-          name: farmData.name || farmId,
+          name: farmData.name || undefined,
           api_url: edgeUrl,
           url: edgeUrl,
           status: 'active',
