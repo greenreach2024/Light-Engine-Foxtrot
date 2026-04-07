@@ -84,7 +84,7 @@ Agents MUST NOT:
 | **Private IP** | `10.87.0.2` (VPC-only, no public endpoint) |
 | **User** | `postgres` |
 | **Database** | `greenreach_central` |
-| **SSL** | Disabled (VPC-internal, not needed) |
+| **SSL** | ALLOW_UNENCRYPTED_AND_ENCRYPTED (VPC-internal, no public endpoint) |
 | **Password** | Secret Manager: `ALLOYDB_PASSWORD` |
 
 ### Deployment Commands
@@ -163,6 +163,21 @@ The following EB environments are DEPRECATED and will be terminated:
 **DO NOT use `eb deploy`, `eb setenv`, `eb printenv`, or any EB CLI commands.**
 **The `eb` CLI, `.ebextensions/`, `.platform/`, and `.ebignore` files are legacy artifacts.**
 
+
+## Deployment Log
+
+| Date | Service | Revision | Commit | Notes |
+|------|---------|----------|--------|-------|
+| 2026-04-07 | greenreach-central | 00009-qsp | 72752e99 | GCP migration complete, AlloyDB connected, 168 tables |
+| 2026-04-07 | light-engine | 00005-74n | 72752e99 | GCP migration complete, sensor data flowing |
+
+### Known Non-Critical Issues (post-migration)
+
+- Missing tables: `accounting_ledger_entries`, `loss_events` -- need additional migrations for FAYE Intelligence and SupplyDemand features
+- Email transport not configured -- SMTP_PASS is placeholder in Secret Manager
+- Column mismatches in AI Pusher (`timestamp`) and SupplyDemand (`crop`) -- schema drift from EB-era code
+- These do not affect core platform functionality (health endpoints, sensor data, admin UI, auth)
+
 ---
 
 ## Google Cloud Storage (GCS)
@@ -212,7 +227,7 @@ Cloud Scheduler jobs keep services warm and trigger critical background operatio
 | Job | Schedule | Target | Purpose |
 |-----|----------|--------|---------|
 | `sensor-sync-keepalive` | Every 5 min | `GET /api/health` (LE) | Keep LE warm for setInterval loops |
-| `central-keepalive` | Every 5 min | `GET /api/health` (Central) | Keep Central warm for sync intervals |
+| `central-keepalive` | Every 5 min | `GET /health` (Central) | Keep Central warm for sync intervals |
 | `sensor-sync-cron` | Every 2 min | `POST /api/cron/sensor-sync` (LE) | Explicit sensor data pull trigger |
 
 Service account: `scheduler-invoker@project-5d00790f-13a9-4637-a40.iam.gserviceaccount.com` (has `roles/run.invoker` on both services).
