@@ -205,7 +205,7 @@ const WS_PORT = process.env.WS_PORT || 3001;
 if (process.env.NODE_ENV === 'production' || process.env.DEPLOYMENT_MODE === 'cloud') {
   const required = [
     { keys: ['JWT_SECRET'], label: 'JWT_SECRET' },
-    { keys: ['DATABASE_URL', 'RDS_HOSTNAME'], label: 'DATABASE_URL or RDS_HOSTNAME' },
+    { keys: ['DATABASE_URL', 'RDS_HOSTNAME', 'DB_HOST'], label: 'DATABASE_URL or RDS_HOSTNAME or DB_HOST' },
     { keys: ['GREENREACH_API_KEY'], label: 'GREENREACH_API_KEY' }
   ];
   const missing = required
@@ -327,7 +327,7 @@ const corsOptions = {
     if (!origin) return callback(null, true);
     const requestHost = origin.replace(/^https?:\/\//, '').replace(/:\d+$/, '');
     const serverHost = (process.env.SERVER_HOST || '').replace(/:\d+$/, '');
-    if (requestHost === serverHost || origin.includes('elasticbeanstalk.com')) {
+    if (requestHost === serverHost || origin.includes('.run.app')) {
       return callback(null, true);
     }
     const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [
@@ -372,7 +372,7 @@ app.use((req, res, next) => {
   const host = origin.replace(/^https?:\/\//, '').replace(/:\d+$/, '');
   const serverHost = (process.env.SERVER_HOST || '').replace(/:\d+$/, '');
   const allowed = host === serverHost ||
-    origin.includes('elasticbeanstalk.com') ||
+    origin.includes('.run.app') ||
     host.endsWith('.greenreachgreens.com') ||
     host === 'greenreachgreens.com' || host === 'www.greenreachgreens.com' ||
     host === 'localhost';

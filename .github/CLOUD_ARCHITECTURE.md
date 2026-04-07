@@ -1,7 +1,7 @@
 # Cloud Architecture Reference
 
-**Version**: 1.4.0
-**Date**: March 30, 2026
+**Version**: 2.0.0
+**Date**: April 7, 2026
 **Authority**: This document is the canonical source of truth for system architecture. All agents MUST read this before modifying any infrastructure, deployment, data flow, or sensor-related code.
 
 ---
@@ -10,76 +10,212 @@
 
 There is NO physical farm device. No Raspberry Pi. No edge hardware. No on-premise server.
 
-The "farm" runs entirely on AWS Elastic Beanstalk. The Light Engine (LE) IS the farm. The terms "edge" and "cloud" are MERGED into a single cloud deployment. Any code references to "edge mode," "edge device," or "hardware" are legacy artifacts from when a physical device was planned but never deployed.
+The "farm" runs entirely on Google Cloud Run. The Light Engine (LE) IS the farm. The terms "edge" and "cloud" are MERGED into a single cloud deployment. Any code references to "edge mode," "edge device," or "hardware" are legacy artifacts from when a physical device was planned but never deployed.
 
-**If you are an AI agent reading this: DO NOT assume a physical device exists. DO NOT reference a "farm Pi," "edge device," or "local hardware." The LE-EB instance IS the farm.**
+**If you are an AI agent reading this: DO NOT assume a physical device exists. DO NOT reference a "farm Pi," "edge device," or "local hardware." The LE Cloud Run service IS the farm.**
 
 ---
 
-## Elastic Beanstalk Environments
+## PLATFORM HAS MIGRATED FROM AWS TO GOOGLE CLOUD (April 2026)
+
+**AWS Elastic Beanstalk is DEPRECATED. All production workloads now run on Google Cloud Run.**
+
+Agents MUST NOT:
+- Reference EB environments (`light-engine-foxtrot-prod-v3`, `greenreach-central-prod-v4`)
+- Use `eb deploy`, `eb setenv`, `eb printenv`, or any `eb` CLI command
+- Use `aws elasticbeanstalk` CLI commands
+- Reference EB CNAMEs or `.elasticbeanstalk.com` URLs
+- Attempt to deploy to or configure AWS infrastructure
+- Use `scp` or `ssh` to EB instances
+- Reference RDS database endpoints (migrated to AlloyDB)
+
+**The ONLY supported deployment target is Google Cloud Run.** See "Cloud Run Services" section below.
+
+---
+
+## Cloud Run Services (Production -- April 2026)
+
+### GCP Project
+
+| Property | Value |
+|----------|-------|
+| **Project ID** | `project-5d00790f-13a9-4637-a40` |
+| **Project Number** | `1029387937866` |
+| **Region** | `us-east1` |
+| **Artifact Registry** | `us-east1-docker.pkg.dev/project-5d00790f-13a9-4637-a40/greenreach` |
 
 ### Light Engine (The Farm)
 
 | Property | Value |
 |----------|-------|
-| **Application** | `light-engine-foxtrot` |
-| **Active Environment** | `light-engine-foxtrot-prod-v3` |
-| **CNAME (SWAPPED)** | `light-engine-foxtrot-prod-v2.eba-ukiyyqf9.us-east-1.elasticbeanstalk.com` |
-| **Platform** | Node.js 20 on 64bit Amazon Linux 2023 |
-| **Region** | us-east-1 |
-| **Entry Point** | `node server-foxtrot.js` (via Procfile) |
+| **Service** | `light-engine` |
+| **URL** | `https://light-engine-1029387937866.us-east1.run.app` |
+| **Service Account** | `light-engine-sa@project-5d00790f-13a9-4637-a40.iam.gserviceaccount.com` |
+| **Image** | `us-east1-docker.pkg.dev/project-5d00790f-13a9-4637-a40/greenreach/light-engine:latest` |
+| **Entry Point** | `node server-foxtrot.js` |
+| **CPU / Memory** | 1 vCPU / 1Gi |
+| **Min / Max Instances** | 1 / 3 |
+| **Execution Environment** | Gen2 (Direct VPC egress) |
+| **VPC** | `greenreach-vpc` / `greenreach-subnet` |
 | **Deploy From** | Repo root: `/Volumes/CodeVault/Projects/Light-Engine-Foxtrot/` |
-| **Deploy Command** | `eb deploy light-engine-foxtrot-prod-v3` |
-
-**CRITICAL: CNAME Swap Alert**
-The v3 environment answers on the v2 CNAME due to a previous `eb swap`. This means:
-- URL contains "v2" but the actual environment is v3
-- All references to the LE URL will say "v2" in the hostname
-- This is correct and expected. DO NOT "fix" this.
-
-### Light Engine v2 (DEAD - DO NOT USE)
-
-| Property | Value |
-|----------|-------|
-| **Environment** | `light-engine-foxtrot-prod-v2` |
-| **CNAME** | `light-engine-foxtrot-prod-v3.us-east-1.elasticbeanstalk.com` |
-| **Status** | Grey / Terminated / CloudFormation DELETE_FAILED |
-| **DNS** | DOES NOT RESOLVE |
-
-**NEVER deploy to v2. NEVER reference v2 as a target. It is dead.**
 
 ### GreenReach Central (The Hub)
 
 | Property | Value |
 |----------|-------|
-| **Application** | `greenreach-central` |
-| **Active Environment** | `greenreach-central-prod-v4` |
-| **CNAME** | Standard EB CNAME in us-east-1 |
-| **Custom Domain** | `greenreachgreens.com` (via Route53/CloudFront) |
-| **Platform** | Node.js 20 on 64bit Amazon Linux 2023 |
-| **Entry Point** | `npm start` (via Procfile) -> `greenreach-central/server.js` |
+| **Service** | `greenreach-central` |
+| **URL** | `https://greenreach-central-1029387937866.us-east1.run.app` |
+| **Custom Domain** | `greenreachgreens.com` (pending DNS migration) |
+| **Service Account** | `greenreach-central-sa@project-5d00790f-13a9-4637-a40.iam.gserviceaccount.com` |
+| **Image** | `us-east1-docker.pkg.dev/project-5d00790f-13a9-4637-a40/greenreach/greenreach-central:latest` |
+| **Entry Point** | `node server.js` |
+| **CPU / Memory** | 1 vCPU / 512Mi |
+| **Min / Max Instances** | 1 / 5 |
+| **Execution Environment** | Gen2 (Direct VPC egress) |
+| **VPC** | `greenreach-vpc` / `greenreach-subnet` |
 | **Deploy From** | `greenreach-central/` subdirectory |
-| **Deploy Command** | `cd greenreach-central && eb deploy greenreach-central-prod-v4` |
 
-### CRITICAL: Environment Variable Updates
+### Database: AlloyDB (PostgreSQL-compatible)
 
-**NEVER use `aws elasticbeanstalk update-environment` or `eb setenv` without an immediate `eb deploy` afterward.**
+| Property | Value |
+|----------|-------|
+| **Cluster** | `greenreach-db` |
+| **Instance** | `greenreach-db-primary` |
+| **Private IP** | `10.87.0.2` (VPC-only, no public endpoint) |
+| **User** | `postgres` |
+| **Database** | `greenreach_central` |
+| **SSL** | Disabled (VPC-internal, not needed) |
+| **Password** | Secret Manager: `ALLOYDB_PASSWORD` |
 
-Env var changes via the AWS API or `eb setenv` trigger a **configuration-only restart**. This restarts the Node.js process but does NOT re-run `.platform/hooks/prebuild/01_npm_install.sh`. Since `.ebignore` excludes `node_modules/`, a config restart leaves the app with no installed packages, causing an immediate crash (`ERR_MODULE_NOT_FOUND`).
+### Deployment Commands
 
-**Safe pattern for env var changes:**
 ```bash
-# Option 1: Deploy with env vars bundled (preferred)
-cd greenreach-central && eb deploy greenreach-central-prod-v4 --staged
+# Build and push (ALWAYS use --platform linux/amd64 on Apple Silicon)
+export PATH="/Applications/Docker.app/Contents/Resources/bin:$PATH"
 
-# Option 2: If you must set env vars separately, always follow with a deploy
-eb setenv KEY=value -e greenreach-central-prod-v4
-eb deploy greenreach-central-prod-v4 --staged   # REQUIRED -- triggers npm install
+# Central
+docker buildx build --platform linux/amd64 \
+  -t us-east1-docker.pkg.dev/project-5d00790f-13a9-4637-a40/greenreach/greenreach-central:latest \
+  --push ./greenreach-central/
+
+# LE
+docker buildx build --platform linux/amd64 \
+  -t us-east1-docker.pkg.dev/project-5d00790f-13a9-4637-a40/greenreach/light-engine:latest \
+  --push .
+
+# Deploy (updates service to latest image)
+gcloud run services update greenreach-central --region=us-east1 --image=us-east1-docker.pkg.dev/project-5d00790f-13a9-4637-a40/greenreach/greenreach-central:latest
+gcloud run services update light-engine --region=us-east1 --image=us-east1-docker.pkg.dev/project-5d00790f-13a9-4637-a40/greenreach/light-engine:latest
 ```
 
-This same rule applies to `light-engine-foxtrot-prod-v3`. Both environments rely on prebuild hooks for `npm install`.
+### Environment Variables
 
-**Incident reference**: Mar 30, 2026 -- a config-only env var update crashed Central for ~20 minutes.
+Env vars are set via `--set-env-vars` / `--update-env-vars` on Cloud Run. Secrets use `--set-secrets` referencing Google Secret Manager.
+
+**Updating env vars on Cloud Run is SAFE** (unlike EB). Cloud Run creates a new revision with the updated config and routes traffic to it. No npm install hooks to skip.
+
+```bash
+# Safe env var update
+gcloud run services update greenreach-central --region=us-east1 --update-env-vars="KEY=value"
+
+# Safe secret update (after updating value in Secret Manager)
+echo -n "new-value" | gcloud secrets versions add SECRET_NAME --data-file=-
+# Then force new revision to pick up latest secret version:
+gcloud run services update greenreach-central --region=us-east1
+```
+
+### Secrets Management (Google Secret Manager)
+
+All secrets are stored in Google Secret Manager and mounted as env vars via `--set-secrets`. Key secrets:
+
+| Secret | Used By | Status |
+|--------|---------|--------|
+| JWT_SECRET | Both | Active |
+| ALLOYDB_PASSWORD | Both (as DB_PASSWORD) | Active |
+| SQUARE_ACCESS_TOKEN | Both | Active |
+| GREENREACH_API_KEY | Both | Active |
+| TOKEN_ENCRYPTION_KEY | LE | Active |
+| SWITCHBOT_TOKEN, SWITCHBOT_SECRET | LE | Placeholder (needs real values) |
+| SMTP_PASS | Central | Placeholder (needs real values) |
+| STRIPE_* (3 keys) | Central | Placeholder (needs real values) |
+| AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY | Central (SES email) | Placeholder (needs real values) |
+
+### Networking
+
+Both services use **Direct VPC egress** (Gen2 execution environment) on `greenreach-vpc` / `greenreach-subnet`. This allows direct TCP connections to AlloyDB at `10.87.0.2:5432` without a VPC connector.
+
+No VPC connector is used (the `greenreach-connector` was deleted due to persistent health check failures).
+
+### Docker Build Notes
+
+- **ALWAYS** use `--platform linux/amd64` (Apple Silicon builds ARM64 by default, Cloud Run requires amd64)
+- Docker binary path: `/Applications/Docker.app/Contents/Resources/bin/docker`
+- Central `.dockerignore`: DO NOT exclude `reports/` (server.js imports `governance-review.js`)
+- LE `.dockerignore`: Excludes most of `greenreach-central/` but whitelists `services/notification-store.js` and `config/database.js` (imported by server-foxtrot.js)
+
+### DEPRECATED: Elastic Beanstalk (DO NOT USE)
+
+The following EB environments are DEPRECATED and will be terminated:
+- `light-engine-foxtrot-prod-v3` (was the LE farm)
+- `greenreach-central-prod-v4` (was the Central hub)
+
+**DO NOT deploy to, configure, or reference these environments.**
+**DO NOT use `eb deploy`, `eb setenv`, `eb printenv`, or any EB CLI commands.**
+**The `eb` CLI, `.ebextensions/`, `.platform/`, and `.ebignore` files are legacy artifacts.**
+
+---
+
+## Google Cloud Storage (GCS)
+
+| Property | Value |
+|----------|-------|
+| **Bucket** | `greenreach-storage` |
+| **Location** | `us-east1` |
+| **Access** | Uniform bucket-level, public access prevented |
+| **Purpose** | Persistent file storage for Cloud Run (replaces local filesystem writes) |
+
+Both service accounts (`light-engine-sa`, `greenreach-central-sa`) have `roles/storage.objectAdmin`.
+
+### GCS FUSE Volume Mount
+
+Both Cloud Run services mount the GCS bucket as a local filesystem via Cloud Storage FUSE:
+- **Mount path**: `/app/data`
+- **Volume name**: `gcs-data`
+
+This allows NeDB datastores, JSON config files, and other local file writes to persist transparently across container restarts and scaling events.
+
+### GCS Storage Helper Modules
+
+- **Central**: `greenreach-central/services/gcs-storage.js` -- provides `uploadFile()`, `readFile()`, `writeFile()`, `readJSON()`, `writeJSON()`, `deleteFile()`, `getSignedUrl()`. Files stored under `central/` prefix in bucket.
+- **LE**: `services/gcs-storage.js` -- same API, files stored under `le/` prefix.
+- Auto-detects Cloud Run via `K_SERVICE` env var. Falls back to local filesystem in development.
+- Env vars: `USE_GCS=true`, `GCS_BUCKET=greenreach-storage` (set on both Cloud Run services).
+
+### Files Migrated to GCS
+
+| File | Route | Migration |
+|------|-------|-----------|
+| Product images | `custom-products.js` | `uploadFile()` to GCS instead of `fs.writeFileSync` |
+| `crop-pricing.json` | `admin-pricing.js` | `gcsReadJSON()`/`gcsWriteJSON()` |
+| `crop-registry.json` | `admin-pricing.js` | `gcsReadJSON()`/`gcsWriteJSON()` |
+| `lighting-recipes.json` | `admin-pricing.js` | `gcsReadJSON()` |
+| Agent audit log | `farm-ops-agent.js` | Dual-write: local + GCS async |
+| Sync monitor snapshot | `syncMonitor.js` | GCS on Cloud Run, local in dev |
+| System alerts | `assistant-chat.js` | DB primary (AlloyDB), removed local file write |
+
+---
+
+## Cloud Scheduler
+
+Cloud Scheduler jobs keep services warm and trigger critical background operations.
+
+| Job | Schedule | Target | Purpose |
+|-----|----------|--------|---------|
+| `sensor-sync-keepalive` | Every 5 min | `GET /api/health` (LE) | Keep LE warm for setInterval loops |
+| `central-keepalive` | Every 5 min | `GET /api/health` (Central) | Keep Central warm for sync intervals |
+| `sensor-sync-cron` | Every 2 min | `POST /api/cron/sensor-sync` (LE) | Explicit sensor data pull trigger |
+
+Service account: `scheduler-invoker@project-5d00790f-13a9-4637-a40.iam.gserviceaccount.com` (has `roles/run.invoker` on both services).
 
 ---
 
@@ -87,11 +223,12 @@ This same rule applies to `light-engine-foxtrot-prod-v3`. Both environments rely
 
 ```
 +---------------------------------------------------+
-|              GreenReach Central (EB)               |
-|              greenreach-central-prod-v4            |
+|          GreenReach Central (Cloud Run)            |
+|          greenreach-central service                |
+|          us-east1                                   |
 |                                                     |
 |  greenreach-central/server.js                       |
-|  PostgreSQL (farm_data table)                       |
+|  AlloyDB (farm_data table) via VPC 10.87.0.2       |
 |  Dashboard (farm-summary.html)                      |
 |  Routes: /api/sync/telemetry, /env, /api/farm/*    |
 +--------------------+------------------------------+
@@ -100,9 +237,9 @@ This same rule applies to `light-engine-foxtrot-prod-v3`. Both environments rely
                      | (every 30s via sync-service)
                      |
 +--------------------+------------------------------+
-|           Light Engine Foxtrot (EB)                |
-|           light-engine-foxtrot-prod-v3             |
-|           (CNAME: ...prod-v2.eba-ukiyyqf9...)      |
+|           Light Engine (Cloud Run)                 |
+|           light-engine service                     |
+|           us-east1                                  |
 |                                                     |
 |  server-foxtrot.js                                  |
 |  +-----------------------------------------------+ |
@@ -149,7 +286,7 @@ The monorepo contains two independently deployed applications:
 - **Config**: `config/edge-config.json`
 - **Automation**: `automation/` (env-store.js, index.js, rules, plugins)
 - **Sync**: `lib/sync-service.js` (pushes telemetry to Central)
-- **Deployed via**: `eb deploy` from repo root
+- **Deployed via**: Docker build + push to Artifact Registry, then `gcloud run services update`
 
 ### 2. GreenReach Central (greenreach-central/)
 - **Server**: `greenreach-central/server.js`
@@ -157,7 +294,7 @@ The monorepo contains two independently deployed applications:
 - **Routes**: `greenreach-central/routes/` (sync.js, auth.js, etc.)
 - **Dashboard**: `greenreach-central/public/views/farm-summary.html`
 - **Central Admin UI**: `greenreach-central/public/central-admin.js` (farm detail, devices table)
-- **Deployed via**: `eb deploy` from `greenreach-central/`
+- **Deployed via**: Docker build + push to Artifact Registry, then `gcloud run services update`
 
 ### Research Ownership Boundary (Authoritative)
 
@@ -275,9 +412,11 @@ Cleared keys include: farm_id, farmId, farm_name, farmName, token, auth_token, f
 
 | Domain | Points To | Status |
 |--------|-----------|--------|
-| `greenreachgreens.com` | Central (CloudFront/ALB) | ACTIVE |
-| `foxtrot.greenreachgreens.com` | Was supposed to point to LE-EB | BROKEN (does not resolve) |
-| LE-EB direct | `light-engine-foxtrot-prod-v2.eba-ukiyyqf9.us-east-1.elasticbeanstalk.com` | ACTIVE (v3 on v2 CNAME) |
+| `greenreachgreens.com` | Central Cloud Run (pending DNS migration from CloudFront) | MIGRATION PENDING |
+| Central Cloud Run | `https://greenreach-central-1029387937866.us-east1.run.app` | ACTIVE |
+| LE Cloud Run | `https://light-engine-1029387937866.us-east1.run.app` | ACTIVE |
+
+**DNS migration TODO**: Map `greenreachgreens.com` to Central Cloud Run via `gcloud run domain-mappings create`.
 
 ---
 
@@ -297,11 +436,11 @@ The codebase contains references to "edge mode," "cloud mode," and mode detectio
 
 - `config/edge-config.json` has `"mode": "edge"` -- this is a LEGACY setting
 - The dashboard (farm-summary.html) has cloud mode detection logic -- this runs on Central, not the farm
-- `lib/edge-config.js` reads edge-config.json -- this runs on the LE-EB instance
-- **There is no actual edge device.** The LE-EB cloud instance runs in "edge mode" because it IS the farm, just hosted in the cloud instead of on physical hardware
-- The sync-service runs ON the LE-EB instance and pushes data to Central -- this is the "edge to cloud sync" path, except both are cloud instances
+- `lib/edge-config.js` reads edge-config.json -- this runs on the LE Cloud Run instance
+- **There is no actual edge device.** The LE Cloud Run instance runs in "edge mode" because it IS the farm, just hosted in the cloud instead of on physical hardware
+- The sync-service runs ON the LE Cloud Run instance and pushes data to Central -- this is the "edge to cloud sync" path, except both are cloud instances
 
-**DO NOT try to "fix" the edge/cloud mode distinction. It works correctly as-is. The LE-EB instance behaving as an "edge" device in the cloud is the intended architecture.**
+**DO NOT try to "fix" the edge/cloud mode distinction. It works correctly as-is. The LE Cloud Run instance behaving as an "edge" device in the cloud is the intended architecture.**
 
 ---
 
@@ -313,7 +452,7 @@ The codebase contains references to "edge mode," "cloud mode," and mode detectio
 
 ```
 +---------------------------+       +---------------------------+
-| Light Engine (LE-EB)      |       | GreenReach Central        |
+| Light Engine (Cloud Run)      |       | GreenReach Central        |
 |                           |       |                           |
 | Harvest Event             |       | POST /api/sync/           |
 |   -> experiment record    | ----> |   experiment-records      |
@@ -331,7 +470,7 @@ The codebase contains references to "edge mode," "cloud mode," and mode detectio
 
 ```
 +---------------------------+       +---------------------------+
-| GreenReach Central        |       | Light Engine (LE-EB)      |
+| GreenReach Central        |       | Light Engine (Cloud Run)      |
 |                           |       |                           |
 | analyzeAndPushToAllFarms()|       | POST /api/health/         |
 |   crop_benchmarks         | ----> |   ai-recommendations      |
@@ -388,7 +527,7 @@ The Research Platform is a gated tier (`research` in feature-flags.js) that adds
 
 ```
 +-----------------------------------+       +-----------------------------------+
-| Light Engine (LE-EB)              |       | GreenReach Central                |
+| Light Engine (Cloud Run)              |       | GreenReach Central                |
 |                                   |       |                                   |
 | SwitchBot sensors (30s poll)      |       | POST /api/research/datasets/      |
 |   -> env.json snapshot            | ----> |   :id/observations                |

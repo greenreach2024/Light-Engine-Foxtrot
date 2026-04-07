@@ -3371,16 +3371,28 @@ export const ADMIN_TOOL_CATALOG = {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
       });
 
-      // AWS SES
-      await check('aws_ses', async () => {
+      // Email service (SMTP or SES)
+      await check('email_service', async () => {
+        const smtpHost = process.env.SMTP_HOST;
         const region = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION;
-        if (!region) throw new Error('AWS_REGION not configured');
-        // Light check: verify the SES endpoint resolves
-        const r = await fetch(`https://email.${region}.amazonaws.com`, {
-          method: 'GET', signal: AbortSignal.timeout(5000)
-        });
-        // SES returns 403 without auth, but that proves reachability
-        if (r.status >= 500) throw new Error(`HTTP ${r.status}`);
+        if (smtpHost) {
+          // Cloud Run: verify SMTP host resolves
+          const net = await import('net');
+          const port = parseInt(process.env.SMTP_PORT) || 587;
+          await new Promise((resolve, reject) => {
+            const sock = net.default.createConnection({ host: smtpHost, port, timeout: 5000 }, () => { sock.destroy(); resolve(); });
+            sock.on('error', reject);
+            sock.on('timeout', () => { sock.destroy(); reject(new Error('SMTP connection timeout')); });
+          });
+        } else if (region) {
+          // Legacy AWS: verify SES endpoint resolves
+          const r = await fetch(`https://email.${region}.amazonaws.com`, {
+            method: 'GET', signal: AbortSignal.timeout(5000)
+          });
+          if (r.status >= 500) throw new Error(`HTTP ${r.status}`);
+        } else {
+          throw new Error('No email service configured (SMTP_HOST or AWS_REGION)');
+        }
       });
 
       // SwitchBot
@@ -3962,15 +3974,23 @@ export const ADMIN_TOOL_CATALOG = {
           results.git_state = { error: e.message };
         }
 
-        // EB environment status (if AWS CLI available)
+        // Cloud Run service status (if gcloud CLI available)
         try {
-          const ebStatus = execSync(
-            'aws elasticbeanstalk describe-environments --environment-names light-engine-foxtrot-prod-v3 --region us-east-1 --query "Environments[0].{Status:Status,Health:Health,HealthStatus:HealthStatus,VersionLabel:VersionLabel}" --output json',
+          const projectId = process.env.GCP_PROJECT || process.env.GOOGLE_CLOUD_PROJECT;
+          const region = process.env.GCP_REGION || 'us-east1';
+          if (!projectId) throw new Error('GCP_PROJECT not configured');
+          const crStatus = execSync(
+            `gcloud run services describe light-engine --project=${projectId} --region=${region} --format=json 2>/dev/null | head -c 4096`,
             { encoding: 'utf8', timeout: 10000 }
           );
-          results.eb_environment = JSON.parse(ebStatus);
+          const parsed = JSON.parse(crStatus);
+          results.cloud_run_le = {
+            status: parsed.status?.conditions?.find(c => c.type === 'Ready')?.status || 'Unknown',
+            url: parsed.status?.url || 'N/A',
+            revision: parsed.status?.latestReadyRevisionName || 'N/A'
+          };
         } catch (e) {
-          results.eb_environment = { error: e.message };
+          results.cloud_run_le = { error: e.message };
         }
 
         return { ok: true, ...results, checked_at: new Date().toISOString() };
@@ -4187,7 +4207,7 @@ export const ADMIN_TOOL_CATALOG = {
   },
 
   'check_certificate_expiry': {
-    description: 'Check TLS certificate expiration status for all platform endpoints: greenreachgreens.com (Central), LE EB endpoint, and any configured custom domains. Returns days until expiry, issuer, and renewal urgency. Use when investigating TLS errors, connection security, or during security audits.',
+    description: 'Check TLS certificate expiration status for all platform endpoints: greenreachgreens.com (Central) and any configured Cloud Run service endpoints. Returns days until expiry, issuer, and renewal urgency. Use when investigating TLS errors, connection security, or during security audits.',
     category: 'read',
     required: [],
     optional: [],
@@ -4197,8 +4217,7 @@ export const ADMIN_TOOL_CATALOG = {
         const results = {};
 
         const endpoints = [
-          { name: 'central_greenreachgreens', host: 'greenreachgreens.com', port: 443 },
-          { name: 'central_eb', host: 'greenreach-central.us-east-1.elasticbeanstalk.com', port: 443 }
+          { name: 'central_greenreachgreens', host: 'greenreachgreens.com', port: 443 }
         ];
 
         // Also check LE endpoint

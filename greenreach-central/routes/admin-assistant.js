@@ -11,8 +11,7 @@
  * GET  /memory        — Get admin memory
  * POST /memory        — Save admin memory
  *
- * Primary LLM: Claude Sonnet 4 (Anthropic)
- * Fallback:    GPT-4o (OpenAI)
+ * LLM: Gemini 2.5 Flash (via Vertex AI)
  */
 
 import { Router } from 'express';
@@ -28,6 +27,7 @@ import { listAllOrders, listAllBuyers } from '../services/wholesaleMemoryStore.j
 import { buildLearningContext, learnFromConversation, buildAutonomyContext, getAllDomainOwnership, getTopInsights, buildInterAgentContext, getConversationRecap } from '../services/faye-learning.js';
 import { buildPolicyContext, checkIntegrityGate, checkSecurityGate } from '../services/faye-policy.js';
 import { ENFORCEMENT_PROMPT_BLOCK, enforceResponseShape, sendEnforcedResponse } from '../middleware/agent-enforcement.js';
+import { getGeminiClient, GEMINI_FLASH, estimateGeminiCost, anthropicToolsToOpenAI as convertToolsToOpenAI, isGeminiConfigured } from '../lib/gemini-client.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -44,33 +44,18 @@ try {
   console.warn('[F.A.Y.E.] Failed to load admin-ai-rules.json:', err.message);
 }
 
-// ── LLM Clients (lazy-init) ───────────────────────────────────────
-let anthropicClient = null;
-let openaiClient = null;
+// ── LLM Client (Gemini via Vertex AI) ─────────────────────────────
+let geminiClient = null;
+async function ensureGemini() {
+  if (geminiClient) return geminiClient;
+  geminiClient = await getGeminiClient();
+  return geminiClient;
+}
 
-const CLAUDE_MODEL = 'claude-sonnet-4-20250514';
-const OPENAI_MODEL = 'gpt-4o';
+const MODEL = GEMINI_FLASH;
 const MAX_TOOL_LOOPS = 10;
 const MAX_TOKENS = 2048;
 const MAX_LLM_MESSAGES = 20; // Limit messages sent to LLM to control token usage/cost
-
-async function getAnthropicClient() {
-  if (anthropicClient) return anthropicClient;
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return null;
-  const { default: Anthropic } = await import('@anthropic-ai/sdk');
-  anthropicClient = new Anthropic({ apiKey });
-  return anthropicClient;
-}
-
-async function getOpenAIClient() {
-  if (openaiClient) return openaiClient;
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) return null;
-  const OpenAI = (await import('openai')).default;
-  openaiClient = new OpenAI({ apiKey });
-  return openaiClient;
-}
 
 // ── Conversation Memory (in-memory + DB) ──────────────────────────
 const conversations = new Map();
@@ -173,8 +158,7 @@ async function setAdminMemory(adminId, key, value) {
 
 // ── Conversation Summarization ────────────────────────────────────
 async function summarizeConversation(messages, adminId) {
-  const client = await getAnthropicClient();
-  if (!client || messages.length < 6) return null;
+  if (!isGeminiConfigured() || messages.length < 6) return null;
   try {
     const text = messages
       .filter(m => m.role === 'user' || m.role === 'assistant')
@@ -182,14 +166,18 @@ async function summarizeConversation(messages, adminId) {
       .map(m => `${m.role}: ${String(m.content || '').slice(0, 300)}`)
       .join('\n');
 
-    const resp = await client.messages.create({
-      model: CLAUDE_MODEL,
-      max_tokens: 400,
-      system: 'Summarize this admin operations conversation into a concise note (max 200 words). Extract: topics, decisions, action items, key metrics. Bullet points.',
-      messages: [{ role: 'user', content: text }]
+    const client = await ensureGemini();
+    const resp = await client.chat.completions.create({
+      model: MODEL,
+      messages: [
+        { role: 'system', content: 'Summarize this admin operations conversation into a concise note (max 200 words). Extract: topics, decisions, action items, key metrics. Bullet points.' },
+        { role: 'user', content: text }
+      ],
+      temperature: 0.3,
+      max_tokens: 400
     });
 
-    const summary = resp.content[0]?.text;
+    const summary = resp.choices[0]?.message?.content;
     if (summary && isDatabaseAvailable()) {
       await query(
         `INSERT INTO admin_assistant_summaries (admin_id, summary, message_count, created_at)
@@ -582,90 +570,89 @@ async function attemptAdminAutoRecovery(toolName, params, errorMsg) {
   return { recovered: false, strategy: 'no_recovery_available', hint: `Tool "${toolName}" failed: ${errorMsg}` };
 }
 
-function estimateClaudeCost(inputTokens, outputTokens) {
-  // Claude Sonnet 4 pricing: $3/M input, $15/M output
-  return (inputTokens / 1_000_000) * 3 + (outputTokens / 1_000_000) * 15;
-}
+// Cost estimation now handled by estimateGeminiCost from gemini-client.js
 
-async function chatWithClaude(systemPrompt, messages, tools, convId, adminId) {
-  const client = await getAnthropicClient();
-  if (!client) throw new Error('ANTHROPIC_API_KEY not configured');
+async function chatWithGemini(systemPrompt, anthropicMessages, anthropicTools, convId, adminId) {
+  const client = await ensureGemini();
 
+  // Convert tools from Anthropic format to OpenAI format for Gemini
+  const openaiTools = convertToolsToOpenAI(anthropicTools);
   const toolCallResults = [];
-  let totalInputTokens = 0;
-  let totalOutputTokens = 0;
   let loopCount = 0;
   let hasPendingAction = false;
 
-  // Initial call
-  let response = await client.messages.create({
-    model: CLAUDE_MODEL,
-    max_tokens: MAX_TOKENS,
-    system: systemPrompt,
+  // Convert Anthropic-format messages to OpenAI format
+  const messages = [
+    { role: 'system', content: systemPrompt },
+    ...anthropicMessages.map(m => ({
+      role: m.role,
+      content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content)
+    }))
+  ];
+
+  let completion = await client.chat.completions.create({
+    model: MODEL,
     messages,
-    tools,
-    temperature: 0.7
+    tools: openaiTools,
+    tool_choice: 'auto',
+    temperature: 0.7,
+    max_tokens: MAX_TOKENS
   });
 
-  totalInputTokens += response.usage?.input_tokens || 0;
-  totalOutputTokens += response.usage?.output_tokens || 0;
+  let assistantMessage = completion.choices[0].message;
+  let totalPromptTokens = completion.usage?.prompt_tokens || 0;
+  let totalCompletionTokens = completion.usage?.completion_tokens || 0;
 
   // Tool-calling loop
-  while (response.stop_reason === 'tool_use' && loopCount < MAX_TOOL_LOOPS) {
+  while (assistantMessage.tool_calls?.length > 0 && loopCount < MAX_TOOL_LOOPS) {
     loopCount++;
+    messages.push(assistantMessage);
 
-    // Extract tool_use blocks from response
-    const toolUseBlocks = response.content.filter(b => b.type === 'tool_use');
-    const toolResults = [];
-
-    for (const block of toolUseBlocks) {
-      const { id, name, input } = block;
+    for (const toolCall of assistantMessage.tool_calls) {
+      const fnName = toolCall.function.name;
+      let fnArgs = {};
+      try { fnArgs = JSON.parse(toolCall.function.arguments || '{}'); } catch { /* empty */ }
 
       // If a pending action is already queued, skip further tool calls
       if (hasPendingAction) {
-        toolResults.push({
-          type: 'tool_result',
-          tool_use_id: id,
-          content: JSON.stringify({ ok: false, error: 'Skipped — a prior action is awaiting confirmation.' })
+        messages.push({
+          role: 'tool', tool_call_id: toolCall.id,
+          content: JSON.stringify({ ok: false, error: 'Skipped -- a prior action is awaiting confirmation.' })
         });
         continue;
       }
 
-      console.log(`[F.A.Y.E.] Tool call #${loopCount}: ${name}(${JSON.stringify(input)})`);
+      console.log(`[F.A.Y.E.] Tool call #${loopCount}: ${fnName}(${JSON.stringify(fnArgs)})`);
 
-      const tier = getTrustTier(name);
+      const tier = getTrustTier(fnName);
       let result;
 
       if (tier !== 'auto') {
-        // Store as pending action — requires admin confirmation
         pendingActions.set(convId, {
-          tool: name, params: input || {}, tier,
-          description: ADMIN_TOOL_CATALOG[name]?.description || name,
+          tool: fnName, params: fnArgs, tier,
+          description: ADMIN_TOOL_CATALOG[fnName]?.description || fnName,
           created_at: Date.now()
         });
         result = {
           ok: false, status: 'pending_confirmation', tier,
-          message: `Action "${name}" requires ${tier === 'admin' ? 'explicit admin' : ''} confirmation before execution. Describe the action to the admin and ask them to confirm.`
+          message: `Action "${fnName}" requires ${tier === 'admin' ? 'explicit admin' : ''} confirmation before execution. Describe the action to the admin and ask them to confirm.`
         };
         hasPendingAction = true;
       } else {
         try {
-          // Policy gate checks — block writes when integrity/security is degraded
-          const secGate = checkSecurityGate(name);
+          const secGate = checkSecurityGate(fnName);
           if (!secGate.allowed) {
             result = { ok: false, error: `Security pause active: ${secGate.reason}. Only read operations permitted.` };
           } else {
-            const intGate = checkIntegrityGate(name);
+            const intGate = checkIntegrityGate(fnName);
             if (!intGate.allowed) {
-              result = { ok: false, error: `Data integrity degraded: ${intGate.reason}. Action blocked — advisory mode only.` };
+              result = { ok: false, error: `Data integrity degraded: ${intGate.reason}. Action blocked -- advisory mode only.` };
             } else {
-              // Inject admin context into write-tool params
-              const enrichedInput = ADMIN_TOOL_CATALOG[name]?.category === 'write'
-                ? { ...input, admin_id: adminId || input?.admin_id } : input;
-              result = await executeAdminTool(name, enrichedInput || {});
-              // Log write tool executions
-              if (ADMIN_TOOL_CATALOG[name]?.category === 'write') {
-                logDecision(name, input, result).catch(() => {});
+              const enrichedArgs = ADMIN_TOOL_CATALOG[fnName]?.category === 'write'
+                ? { ...fnArgs, admin_id: adminId || fnArgs.admin_id } : fnArgs;
+              result = await executeAdminTool(fnName, enrichedArgs || {});
+              if (ADMIN_TOOL_CATALOG[fnName]?.category === 'write') {
+                logDecision(fnName, fnArgs, result).catch(() => {});
               }
             }
           }
@@ -676,160 +663,10 @@ async function chatWithClaude(systemPrompt, messages, tools, convId, adminId) {
 
       // Self-solving: attempt auto-recovery on failure
       if (result?.ok === false && result?.error) {
-        const recovery = await attemptAdminAutoRecovery(name, input, result.error);
-        if (recovery.recovered) {
-          result = recovery.result;
-          console.log(`[F.A.Y.E. Self-Solve] Auto-recovered ${name}: ${recovery.strategy}`);
-        } else if (recovery.hint) {
-          result._self_solve_hint = recovery.hint;
-        }
-      }
-
-      toolCallResults.push({ tool: name, params: input, success: result?.ok !== false, tier });
-      toolResults.push({
-        type: 'tool_result',
-        tool_use_id: id,
-        content: JSON.stringify(result)
-      });
-    }
-
-    // Append assistant response + tool results to messages
-    messages.push({ role: 'assistant', content: response.content });
-    messages.push({ role: 'user', content: toolResults });
-
-    // If a pending action was stored, let the LLM produce its confirmation message then stop
-    if (hasPendingAction && loopCount >= 2) break;
-
-    // Follow-up call (lower temperature for deterministic tool follow-ups)
-    response = await client.messages.create({
-      model: CLAUDE_MODEL,
-      max_tokens: MAX_TOKENS,
-      system: systemPrompt,
-      messages,
-      tools,
-      temperature: 0.4
-    });
-
-    totalInputTokens += response.usage?.input_tokens || 0;
-    totalOutputTokens += response.usage?.output_tokens || 0;
-  }
-
-  // Extract final text
-  const textBlocks = response.content.filter(b => b.type === 'text');
-  const replyText = textBlocks.map(b => b.text).join('\n') || 'Request processed.';
-
-  return {
-    reply: replyText,
-    toolCalls: toolCallResults,
-    usage: {
-      input_tokens: totalInputTokens,
-      output_tokens: totalOutputTokens,
-      total_tokens: totalInputTokens + totalOutputTokens,
-      estimated_cost: estimateClaudeCost(totalInputTokens, totalOutputTokens)
-    },
-    model: CLAUDE_MODEL,
-    provider: 'anthropic',
-    loop_count: loopCount,
-    pending_action: hasPendingAction ? pendingActions.get(convId) : null
-  };
-}
-
-// ── OpenAI Fallback ───────────────────────────────────────────────
-
-function anthropicToolsToOpenAI(tools) {
-  return tools.map(t => ({
-    type: 'function',
-    function: {
-      name: t.name,
-      description: t.description,
-      parameters: t.input_schema
-    }
-  }));
-}
-
-async function chatWithOpenAI(systemPrompt, userMessages, tools, convId, adminId) {
-  const client = await getOpenAIClient();
-  if (!client) throw new Error('OPENAI_API_KEY not configured');
-
-  const openaiTools = anthropicToolsToOpenAI(tools);
-  const toolCallResults = [];
-  let loopCount = 0;
-  let hasPendingAction = false;
-
-  const messages = [
-    { role: 'system', content: systemPrompt },
-    ...userMessages.map(m => ({
-      role: m.role,
-      content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content)
-    }))
-  ];
-
-  let completion = await client.chat.completions.create({
-    model: OPENAI_MODEL,
-    messages,
-    tools: openaiTools,
-    tool_choice: 'auto',
-    temperature: 0.7,
-    max_tokens: MAX_TOKENS
-  });
-
-  let assistantMessage = completion.choices[0].message;
-
-  while (assistantMessage.tool_calls?.length > 0 && loopCount < MAX_TOOL_LOOPS) {
-    loopCount++;
-    messages.push(assistantMessage);
-
-    for (const toolCall of assistantMessage.tool_calls) {
-      const fnName = toolCall.function.name;
-      let fnArgs = {};
-      try { fnArgs = JSON.parse(toolCall.function.arguments || '{}'); } catch { /* empty */ }
-
-      console.log(`[F.A.Y.E. OpenAI fallback] Tool call #${loopCount}: ${fnName}`);
-
-      const tier = getTrustTier(fnName);
-      let result;
-
-      if (tier !== 'auto') {
-        // Same trust-tier gate as Claude path
-        if (convId) {
-          pendingActions.set(convId, {
-            tool: fnName, params: fnArgs, tier,
-            description: ADMIN_TOOL_CATALOG[fnName]?.description || fnName,
-            created_at: Date.now()
-          });
-        }
-        result = {
-          ok: false, status: 'pending_confirmation', tier,
-          message: `Action "${fnName}" requires ${tier === 'admin' ? 'explicit admin ' : ''}confirmation before execution.`
-        };
-        hasPendingAction = true;
-      } else {
-        // Policy gate checks — block writes when integrity/security is degraded
-        const secGate = checkSecurityGate(fnName);
-        if (!secGate.allowed) {
-          result = { ok: false, error: `Security pause active: ${secGate.reason}. Only read operations permitted.` };
-        } else {
-          const intGate = checkIntegrityGate(fnName);
-          if (!intGate.allowed) {
-            result = { ok: false, error: `Data integrity degraded: ${intGate.reason}. Action blocked — advisory mode only.` };
-          } else {
-            // Inject admin context into write-tool params
-            const enrichedArgs = ADMIN_TOOL_CATALOG[fnName]?.category === 'write'
-              ? { ...fnArgs, admin_id: adminId || fnArgs.admin_id } : fnArgs;
-            try { result = await executeAdminTool(fnName, enrichedArgs); } catch (err) { result = { ok: false, error: err.message }; }
-            if (ADMIN_TOOL_CATALOG[fnName]?.category === 'write') {
-              logDecision(fnName, fnArgs, result).catch(() => {});
-            }
-          }
-        }
-      }
-
-      // Self-solving: attempt auto-recovery on failure
-      if (result?.ok === false && result?.error) {
         const recovery = await attemptAdminAutoRecovery(fnName, fnArgs, result.error);
         if (recovery.recovered) {
           result = recovery.result;
-          console.log(`[F.A.Y.E. OpenAI Self-Solve] Auto-recovered ${fnName}: ${recovery.strategy}`);
+          console.log(`[F.A.Y.E. Self-Solve] Auto-recovered ${fnName}: ${recovery.strategy}`);
         } else if (recovery.hint) {
           result._self_solve_hint = recovery.hint;
         }
@@ -837,32 +674,35 @@ async function chatWithOpenAI(systemPrompt, userMessages, tools, convId, adminId
 
       toolCallResults.push({ tool: fnName, params: fnArgs, success: result?.ok !== false, tier });
       messages.push({ role: 'tool', tool_call_id: toolCall.id, content: JSON.stringify(result) });
-
-      if (hasPendingAction) break; // Stop processing further tools after a pending action
     }
 
+    if (hasPendingAction && loopCount >= 2) break;
+
     completion = await client.chat.completions.create({
-      model: OPENAI_MODEL, messages, tools: openaiTools, tool_choice: 'auto',
+      model: MODEL, messages, tools: openaiTools, tool_choice: 'auto',
       temperature: 0.4, max_tokens: MAX_TOKENS
     });
+
     assistantMessage = completion.choices[0].message;
+    totalPromptTokens += completion.usage?.prompt_tokens || 0;
+    totalCompletionTokens += completion.usage?.completion_tokens || 0;
   }
 
   const replyText = assistantMessage.content || 'Request processed.';
-  const usage = completion.usage || {};
+
   return {
     reply: replyText,
     toolCalls: toolCallResults,
     usage: {
-      input_tokens: usage.prompt_tokens || 0,
-      output_tokens: usage.completion_tokens || 0,
-      total_tokens: usage.total_tokens || 0,
-      estimated_cost: estimateChatCost(OPENAI_MODEL, usage.prompt_tokens || 0, usage.completion_tokens || 0)
+      input_tokens: totalPromptTokens,
+      output_tokens: totalCompletionTokens,
+      total_tokens: totalPromptTokens + totalCompletionTokens,
+      estimated_cost: estimateGeminiCost(MODEL, totalPromptTokens, totalCompletionTokens)
     },
-    model: OPENAI_MODEL,
-    provider: 'openai',
+    model: MODEL,
+    provider: 'gemini',
     loop_count: loopCount,
-    pending_action: hasPendingAction && convId ? pendingActions.get(convId) : null
+    pending_action: hasPendingAction ? pendingActions.get(convId) : null
   };
 }
 
@@ -931,7 +771,7 @@ router.post('/chat', async (req, res) => {
 
       let result;
       try {
-        result = await chatWithClaude(systemPrompt, summaryMessages, tools, convId, adminId);
+        result = await chatWithGemini(systemPrompt, summaryMessages, tools, convId, adminId);
       } catch {
         result = { reply: actionResult.ok !== false ? `Action "${pending.tool}" completed successfully.` : `Action "${pending.tool}" failed: ${actionResult.error}`,
           toolCalls: [{ tool: pending.tool, params: pending.params, success: actionResult.ok !== false }],
@@ -974,15 +814,10 @@ router.post('/chat', async (req, res) => {
 
     let result;
     try {
-      result = await chatWithClaude(systemPrompt, llmMessages, tools, convId, adminId);
-    } catch (claudeErr) {
-      console.warn('[F.A.Y.E.] Claude unavailable, falling back to OpenAI:', claudeErr.message);
-      try {
-        result = await chatWithOpenAI(systemPrompt, llmMessages, tools, convId, adminId);
-      } catch (openaiErr) {
-        console.error('[F.A.Y.E.] Both LLMs unavailable:', openaiErr.message);
-        return res.status(503).json({ ok: false, error: 'AI service unavailable — neither Claude nor GPT-4o responded.' });
-      }
+      result = await chatWithGemini(systemPrompt, llmMessages, tools, convId, adminId);
+    } catch (err) {
+      console.error('[F.A.Y.E.] Gemini call failed:', err.message);
+      return res.status(503).json({ ok: false, error: 'AI service unavailable. Please try again.' });
     }
 
     // Track cost
@@ -1025,7 +860,7 @@ router.post('/chat', async (req, res) => {
     console.error('[F.A.Y.E.] Chat error:', err.message);
     trackAiUsage({
       farm_id: 'greenreach-central', endpoint: 'admin-assistant',
-      model: CLAUDE_MODEL, status: 'error', error_message: err.message, user_id: adminId
+      model: MODEL, status: 'error', error_message: err.message, user_id: adminId
     });
     return res.status(500).json({ ok: false, error: 'Internal error processing your message.' });
   }
@@ -1079,106 +914,26 @@ router.post('/chat/stream', async (req, res) => {
       { role: 'user', content: sanitized }
     ];
 
-    // Use Claude with streaming via standard tool loop, then stream the final reply
+    // Use Gemini with tool loop, then stream the final reply
     let result;
     try {
-      const client = await getAnthropicClient();
-      if (!client) throw new Error('ANTHROPIC_API_KEY not configured');
+      result = await chatWithGemini(systemPrompt, llmMessages, tools, convId, adminId);
 
-      // Tool-calling phase (non-streamed for reliability)
-      let response = await client.messages.create({
-        model: CLAUDE_MODEL, max_tokens: MAX_TOKENS, system: systemPrompt,
-        messages: llmMessages, tools, temperature: 0.7
-      });
-
-      const toolCallResults = [];
-      let totalInput = response.usage?.input_tokens || 0;
-      let totalOutput = response.usage?.output_tokens || 0;
-      let loopCount = 0;
-
-      while (response.stop_reason === 'tool_use' && loopCount < MAX_TOOL_LOOPS) {
-        loopCount++;
-        const toolUseBlocks = response.content.filter(b => b.type === 'tool_use');
-        const toolResults = [];
-
-        for (const block of toolUseBlocks) {
-          sendEvent('tool_start', { tool: block.name, step: loopCount });
-
-          const tier = getTrustTier(block.name);
-          let toolResult;
-          if (tier !== 'auto') {
-            pendingActions.set(convId, {
-              tool: block.name, params: block.input || {}, tier,
-              description: ADMIN_TOOL_CATALOG[block.name]?.description || block.name,
-              created_at: Date.now()
-            });
-            toolResult = { ok: false, status: 'pending_confirmation', tier,
-              message: `Action "${block.name}" requires confirmation.` };
-            sendEvent('pending_action', { tool: block.name, tier });
-          } else {
-            try {
-              // Policy gate checks — block writes when integrity/security is degraded
-              const secGate = checkSecurityGate(block.name);
-              if (!secGate.allowed) {
-                toolResult = { ok: false, error: `Security pause active: ${secGate.reason}. Only read operations permitted.` };
-              } else {
-                const intGate = checkIntegrityGate(block.name);
-                if (!intGate.allowed) {
-                  toolResult = { ok: false, error: `Data integrity degraded: ${intGate.reason}. Action blocked — advisory mode only.` };
-                } else {
-                  const enrichedInput = ADMIN_TOOL_CATALOG[block.name]?.category === 'write'
-                    ? { ...block.input, admin_id: adminId || block.input?.admin_id } : block.input;
-                  toolResult = await executeAdminTool(block.name, enrichedInput || {});
-                }
-              }
-            }
-            catch (err) { toolResult = { ok: false, error: err.message }; }
-            if (ADMIN_TOOL_CATALOG[block.name]?.category === 'write') {
-              logDecision(block.name, block.input, toolResult).catch(() => {});
-            }
-          }
-
-          toolCallResults.push({ tool: block.name, params: block.input, success: toolResult?.ok !== false, tier });
-          toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: JSON.stringify(toolResult).slice(0, 8000) });
-          sendEvent('tool_done', { tool: block.name, success: toolResult?.ok !== false });
-        }
-
-        llmMessages.push({ role: 'assistant', content: response.content });
-        llmMessages.push({ role: 'user', content: toolResults });
-
-        response = await client.messages.create({
-          model: CLAUDE_MODEL, max_tokens: MAX_TOKENS, system: systemPrompt,
-          messages: llmMessages, tools, temperature: 0.4
-        });
-        totalInput += response.usage?.input_tokens || 0;
-        totalOutput += response.usage?.output_tokens || 0;
-      }
-
-      // Stream the final text reply in chunks
-      const textBlocks = response.content.filter(b => b.type === 'text');
-      const fullReply = textBlocks.map(b => b.text).join('\n') || 'Request processed.';
-      const chunkSize = 12;
-      for (let i = 0; i < fullReply.length; i += chunkSize) {
-        sendEvent('token', { text: fullReply.slice(i, i + chunkSize) });
-      }
-
-      result = {
-        reply: fullReply, toolCalls: toolCallResults,
-        usage: { input_tokens: totalInput, output_tokens: totalOutput, total_tokens: totalInput + totalOutput,
-          estimated_cost: estimateClaudeCost(totalInput, totalOutput) },
-        model: CLAUDE_MODEL, provider: 'anthropic'
-      };
-
-    } catch (claudeErr) {
-      console.warn('[F.A.Y.E. Stream] Claude unavailable, using OpenAI fallback:', claudeErr.message);
-      sendEvent('fallback', { provider: 'openai', reason: claudeErr.message });
-      result = await chatWithOpenAI(systemPrompt, llmMessages, tools, convId, adminId);
-
-      // Stream the OpenAI reply in chunks
+      // Stream the reply in chunks for SSE feel
       const chunkSize = 12;
       for (let i = 0; i < result.reply.length; i += chunkSize) {
         sendEvent('token', { text: result.reply.slice(i, i + chunkSize) });
       }
+
+      // Send tool progress events retroactively
+      for (const tc of result.toolCalls || []) {
+        sendEvent('tool_done', { tool: tc.tool, success: tc.success });
+      }
+    } catch (err) {
+      console.error('[F.A.Y.E. Stream] Gemini call failed:', err.message);
+      sendEvent('error', { message: 'AI service unavailable.' });
+      res.end();
+      return;
     }
 
     // Track cost
@@ -1266,26 +1021,27 @@ router.get('/briefing', async (req, res) => {
       agent_engagement: agentEngagementResult
     };
 
-    // Have Claude synthesize into a briefing
+    // Have Gemini synthesize into a briefing
     let briefingText;
     try {
-      const client = await getAnthropicClient();
-      if (!client) throw new Error('No Claude');
-
-      const resp = await client.messages.create({
-        model: CLAUDE_MODEL,
-        max_tokens: 1500,
-        system: `You are F.A.Y.E. (Farm Autonomy & Yield Engine). Generate a concise operations briefing for ${adminName}. Use the data below. Structure: 1) Status Summary (1-2 sentences), 2) Action Items (numbered, prioritized), 3) Key Metrics. Flag any anomalies. Be direct and professional.`,
-        messages: [{ role: 'user', content: `Today's operational data:\n${JSON.stringify(briefingData, null, 2)}` }]
+      const client = await ensureGemini();
+      const resp = await client.chat.completions.create({
+        model: MODEL,
+        messages: [
+          { role: 'system', content: `You are F.A.Y.E. (Farm Autonomy & Yield Engine). Generate a concise operations briefing for ${adminName}. Use the data below. Structure: 1) Status Summary (1-2 sentences), 2) Action Items (numbered, prioritized), 3) Key Metrics. Flag any anomalies. Be direct and professional.` },
+          { role: 'user', content: `Today's operational data:\n${JSON.stringify(briefingData, null, 2)}` }
+        ],
+        temperature: 0.5,
+        max_tokens: 1500
       });
 
-      briefingText = resp.content[0]?.text || 'Briefing data available but synthesis failed.';
+      briefingText = resp.choices[0]?.message?.content || 'Briefing data available but synthesis failed.';
 
       trackAiUsage({
-        farm_id: 'greenreach-central', endpoint: 'admin-briefing', model: CLAUDE_MODEL,
-        prompt_tokens: resp.usage?.input_tokens, completion_tokens: resp.usage?.output_tokens,
-        total_tokens: (resp.usage?.input_tokens || 0) + (resp.usage?.output_tokens || 0),
-        estimated_cost: estimateClaudeCost(resp.usage?.input_tokens || 0, resp.usage?.output_tokens || 0),
+        farm_id: 'greenreach-central', endpoint: 'admin-briefing', model: MODEL,
+        prompt_tokens: resp.usage?.prompt_tokens, completion_tokens: resp.usage?.completion_tokens,
+        total_tokens: resp.usage?.total_tokens || 0,
+        estimated_cost: estimateGeminiCost(MODEL, resp.usage?.prompt_tokens || 0, resp.usage?.completion_tokens || 0),
         status: 'success', user_id: adminId
       });
     } catch {
@@ -1475,19 +1231,13 @@ router.get('/state', async (_req, res) => {
 // ── GET /status — Service Health ──────────────────────────────────
 
 router.get('/status', async (_req, res) => {
-  let claudeAvailable = false;
-  let openaiAvailable = false;
-
-  try { claudeAvailable = !!(await getAnthropicClient()); } catch { /* */ }
-  try { openaiAvailable = !!(await getOpenAIClient()); } catch { /* */ }
-
+  const available = isGeminiConfigured();
   return res.json({
     ok: true,
     service: 'F.A.Y.E.',
     version: RULES.identity.version || '1.0.0',
     llm: {
-      primary: { provider: 'anthropic', model: CLAUDE_MODEL, available: claudeAvailable },
-      fallback: { provider: 'openai', model: OPENAI_MODEL, available: openaiAvailable }
+      primary: { provider: 'gemini', model: MODEL, available }
     },
     database: isDatabaseAvailable(),
     tool_count: Object.keys(ADMIN_TOOL_CATALOG).length,

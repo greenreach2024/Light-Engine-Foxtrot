@@ -84,7 +84,7 @@ import express from 'express';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
-import OpenAI from 'openai';
+import { getGeminiClient, GEMINI_FLASH, isGeminiConfigured } from '../lib/gemini-client.js';
 import PDFDocument from 'pdfkit';
 import axios from 'axios';
 import * as cheerio from 'cheerio';
@@ -100,15 +100,17 @@ if (IS_PRODUCTION_GW && !process.env.JWT_SECRET) {
 const JWT_SECRET = process.env.JWT_SECRET || (IS_PRODUCTION_GW ? null : 'grant-dev-' + Date.now());
 const RETENTION_MONTHS = 6; // 6 months from last sign-in, not from creation
 
-// Initialize OpenAI for AI drafting (grant-specific key takes priority)
-let openai = null;
-const grantAiKey = process.env.GRANT_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
-if (grantAiKey) {
-  openai = new OpenAI({ apiKey: grantAiKey });
-  logger.info('[Grant Wizard] OpenAI initialized for AI drafting' +
-    (process.env.GRANT_OPENAI_API_KEY ? ' (dedicated key)' : ' (shared key)'));
+// Initialize Gemini for AI drafting
+const MODEL = GEMINI_FLASH;
+let _geminiClient = null;
+async function ensureGemini() {
+  if (!_geminiClient) _geminiClient = await getGeminiClient();
+  return _geminiClient;
+}
+if (isGeminiConfigured()) {
+  logger.info('[Grant Wizard] Gemini configured for AI drafting');
 } else {
-  logger.warn('[Grant Wizard] No OpenAI API key set - AI drafting disabled');
+  logger.warn('[Grant Wizard] Gemini not configured - AI drafting disabled');
 }
 
 // ============================================================
@@ -1173,8 +1175,8 @@ router.post('/scrape-website', optionalAuth, async (req, res) => {
     ];
     intelligence.keywords = grantKeywords.filter(kw => allText.includes(kw));
 
-    // Use AI to generate a positioning summary if OpenAI is available
-    if (openai && (intelligence.companyDescription || intelligence.mission || intelligence.achievements.length > 0)) {
+    // Use AI to generate a positioning summary if Gemini is available
+    if (isGeminiConfigured() && (intelligence.companyDescription || intelligence.mission || intelligence.achievements.length > 0)) {
       try {
         const contextParts = [];
         if (intelligence.companyDescription) contextParts.push(`Description: ${intelligence.companyDescription}`);
@@ -1184,8 +1186,8 @@ router.post('/scrape-website', optionalAuth, async (req, res) => {
         if (intelligence.products.length) contextParts.push(`Products/Services: ${intelligence.products.slice(0, 5).join(', ')}`);
         if (intelligence.newsHighlights.length) contextParts.push(`Recent news: ${intelligence.newsHighlights.slice(0, 3).join('; ')}`);
 
-        const aiRes = await openai.chat.completions.create({
-          model: 'gpt-4',
+        const aiRes = await (await ensureGemini()).chat.completions.create({
+          model: MODEL,
           messages: [
             {
               role: 'system',
@@ -1212,11 +1214,11 @@ router.post('/scrape-website', optionalAuth, async (req, res) => {
         trackAiUsage({
           farm_id: null,
           endpoint: 'grant-wizard-positioning',
-          model: 'gpt-4',
+          model: MODEL,
           prompt_tokens: aiRes.usage?.prompt_tokens,
           completion_tokens: aiRes.usage?.completion_tokens,
           total_tokens: aiRes.usage?.total_tokens,
-          estimated_cost: estimateChatCost('gpt-4', aiRes.usage?.prompt_tokens || 0, aiRes.usage?.completion_tokens || 0),
+          estimated_cost: estimateChatCost(MODEL, aiRes.usage?.prompt_tokens || 0, aiRes.usage?.completion_tokens || 0),
           status: 'success',
           user_id: req.grantUserId || null
         });
@@ -1692,10 +1694,10 @@ router.post('/applications/:id/create-linked', authenticateGrantUser, async (req
 // direct matches + complementary/strategic funding opportunities
 // ============================================================
 router.post('/applications/:id/ai-recommend', authenticateGrantUser, async (req, res) => {
-  if (!openai) {
+  if (!isGeminiConfigured()) {
     return res.status(503).json({
       success: false,
-      error: 'AI recommendation service not available (OpenAI API key not configured)'
+      error: 'AI recommendation service not available (Gemini not configured)'
     });
   }
 
@@ -1802,8 +1804,8 @@ Rules:
 - Where applicable, cite credible industry statistics in rationale (e.g., energy savings, water reduction, yield data with named sources)
 - Return ONLY valid JSON, no markdown formatting`;
 
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4",
+    const completion = await (await ensureGemini()).chat.completions.create({
+      model: MODEL,
       messages: [
         {
           role: "system",
@@ -1821,11 +1823,11 @@ Rules:
     trackAiUsage({
       farm_id: null,
       endpoint: 'grant-wizard-matching',
-      model: 'gpt-4',
+      model: MODEL,
       prompt_tokens: completion.usage?.prompt_tokens,
       completion_tokens: completion.usage?.completion_tokens,
       total_tokens: completion.usage?.total_tokens,
-      estimated_cost: estimateChatCost('gpt-4', completion.usage?.prompt_tokens || 0, completion.usage?.completion_tokens || 0),
+      estimated_cost: estimateChatCost(MODEL, completion.usage?.prompt_tokens || 0, completion.usage?.completion_tokens || 0),
       status: 'success',
       user_id: req.grantUserId || null
     });
@@ -2767,10 +2769,10 @@ router.post('/unsubscribe/:token', async (req, res) => {
 // POST /applications/:id/ai-draft - Generate AI draft for narrative question
 // ============================================================
 router.post('/applications/:id/ai-draft', authenticateGrantUser, async (req, res) => {
-  if (!openai) {
+  if (!isGeminiConfigured()) {
     return res.status(503).json({
       success: false,
-      error: 'AI drafting service not available (OpenAI API key not configured)'
+      error: 'AI drafting service not available (Gemini not configured)'
     });
   }
 
@@ -2841,8 +2843,8 @@ router.post('/applications/:id/ai-draft', authenticateGrantUser, async (req, res
     prompt += `Provide a polished 2-4 paragraph response. Return ONLY the draft text, no meta-commentary.`;
 
     // Call GPT-4
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4",
+    const completion = await (await ensureGemini()).chat.completions.create({
+      model: MODEL,
       messages: [
         {
           role: "system",
@@ -2874,11 +2876,11 @@ router.post('/applications/:id/ai-draft', authenticateGrantUser, async (req, res
     trackAiUsage({
       farm_id: null,
       endpoint: 'grant-wizard-drafting',
-      model: 'gpt-4',
+      model: MODEL,
       prompt_tokens: completion.usage?.prompt_tokens,
       completion_tokens: completion.usage?.completion_tokens,
       total_tokens: completion.usage?.total_tokens,
-      estimated_cost: estimateChatCost('gpt-4', completion.usage?.prompt_tokens || 0, completion.usage?.completion_tokens || 0),
+      estimated_cost: estimateChatCost(MODEL, completion.usage?.prompt_tokens || 0, completion.usage?.completion_tokens || 0),
       status: 'success',
       user_id: req.grantUserId || null
     });

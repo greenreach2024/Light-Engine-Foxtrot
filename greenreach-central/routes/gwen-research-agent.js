@@ -11,8 +11,7 @@
  * GET  /state         -- Current research state snapshot
  * GET  /workspace     -- Dynamic workspace data (charts, tables, displays)
  *
- * Primary LLM: Claude Sonnet 4 (Anthropic)
- * Fallback:    GPT-4o-mini (OpenAI)
+ * LLM: Gemini 2.5 Pro (via Vertex AI)
  */
 
 import { Router } from 'express';
@@ -22,15 +21,19 @@ import { trackAiUsage, estimateChatCost } from '../lib/ai-usage-tracker.js';
 import { executeTool } from './farm-ops-agent.js';
 import leamBridge from '../lib/leam-bridge.js';
 import { ENFORCEMENT_PROMPT_BLOCK, sendEnforcedResponse } from '../middleware/agent-enforcement.js';
+import { getGeminiClient, GEMINI_PRO, estimateGeminiCost, isGeminiConfigured } from '../lib/gemini-client.js';
 
 const router = Router();
 
-// -- LLM Clients (lazy-init) -------------------------------------------
-let anthropicClient = null;
-let openaiClient = null;
+// -- LLM Client (Gemini via Vertex AI) ---------------------------------
+let geminiClient = null;
+async function ensureGemini() {
+  if (geminiClient) return geminiClient;
+  geminiClient = await getGeminiClient();
+  return geminiClient;
+}
 
-const CLAUDE_MODEL = 'claude-sonnet-4-20250514';
-const OPENAI_MODEL = 'gpt-4o-mini';
+const MODEL = GEMINI_PRO; // GWEN uses Pro for advanced research tasks
 const MAX_TOOL_LOOPS = 12;
 const MAX_TOKENS = 4096;
 const MAX_LLM_MESSAGES = 30;
@@ -117,23 +120,7 @@ async function recordBlockedExecutionAttempt(params, ctx, reason) {
   }
 }
 
-async function getAnthropicClient() {
-  if (anthropicClient) return anthropicClient;
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return null;
-  const { default: Anthropic } = await import('@anthropic-ai/sdk');
-  anthropicClient = new Anthropic({ apiKey });
-  return anthropicClient;
-}
-
-async function getOpenAIClient() {
-  if (openaiClient) return openaiClient;
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) return null;
-  const OpenAI = (await import('openai')).default;
-  openaiClient = new OpenAI({ apiKey });
-  return openaiClient;
-}
+// Lazy-init clients removed -- using shared Gemini client from gemini-client.js
 
 // -- Conversation Memory (in-memory + DB) --------------------------------
 const conversations = new Map();
@@ -5868,79 +5855,8 @@ function checkRateLimit(userId) {
 
 // -- LLM Chat -- Claude with tool loop ----------------------------------
 
-async function chatWithClaude(client, messages, ctx) {
-  const tools = buildToolDefinitions();
-  let currentMessages = messages.slice(-MAX_LLM_MESSAGES);
-  const allToolCalls = [];
-
-  // Build system prompt with persistent memory context
-  let systemPrompt = GWEN_SYSTEM_PROMPT;
-  if (ctx.memoryContext) {
-    systemPrompt += `\n\n## Your Persistent Memory\n\n${ctx.memoryContext}`;
-  }
-
-  for (let i = 0; i < MAX_TOOL_LOOPS; i++) {
-    const response = await client.messages.create({
-      model: CLAUDE_MODEL,
-      max_tokens: MAX_TOKENS,
-      system: systemPrompt,
-      tools,
-      messages: currentMessages,
-    });
-
-    // Track cost
-    const cost = estimateChatCost(response.usage?.input_tokens || 0, response.usage?.output_tokens || 0, CLAUDE_MODEL);
-    await trackAiUsage(ctx.farmId, 'gwen_chat', 'anthropic', cost, {
-      model: CLAUDE_MODEL,
-      input_tokens: response.usage?.input_tokens,
-      output_tokens: response.usage?.output_tokens,
-      tool_loop: i,
-    }).catch(() => {});
-
-    if (response.stop_reason === 'end_turn' || !response.content.some(b => b.type === 'tool_use')) {
-      const textBlocks = response.content.filter(b => b.type === 'text');
-      return {
-        reply: textBlocks.map(b => b.text).join('\n') || 'I have completed the requested operation.',
-        tool_calls: allToolCalls,
-        messages: currentMessages,
-        model: CLAUDE_MODEL,
-      };
-    }
-
-    // Process tool calls
-    const toolResults = [];
-    for (const block of response.content) {
-      if (block.type === 'tool_use') {
-        const tool = GWEN_TOOL_CATALOG[block.name];
-        let result;
-        if (tool) {
-          try {
-            result = await tool.execute(block.input || {}, ctx);
-          } catch (err) {
-            result = { ok: false, error: err.message };
-          }
-        } else {
-          result = { ok: false, error: `Unknown tool: ${block.name}` };
-        }
-        allToolCalls.push({ tool: block.name, input: block.input, result_ok: result?.ok });
-        toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: JSON.stringify(result).slice(0, 8000) });
-      }
-    }
-
-    currentMessages = [...currentMessages, { role: 'assistant', content: response.content }, { role: 'user', content: toolResults }];
-  }
-
-  return {
-    reply: 'I reached the maximum number of tool iterations. Here is what I have so far based on the tools I used.',
-    tool_calls: allToolCalls,
-    messages: currentMessages,
-    model: CLAUDE_MODEL,
-  };
-}
-
-// -- LLM Chat -- OpenAI fallback ----------------------------------------
-
-async function chatWithOpenAI(client, messages, ctx) {
+async function chatWithGemini(messages, ctx) {
+  const client = await ensureGemini();
   const tools = buildOpenAIToolDefinitions();
   let systemPrompt = GWEN_SYSTEM_PROMPT;
   if (ctx.memoryContext) {
@@ -5951,27 +5867,27 @@ async function chatWithOpenAI(client, messages, ctx) {
 
   for (let i = 0; i < MAX_TOOL_LOOPS; i++) {
     const response = await client.chat.completions.create({
-      model: OPENAI_MODEL,
+      model: MODEL,
       max_tokens: MAX_TOKENS,
       messages: currentMessages,
       tools,
     });
 
     const choice = response.choices[0];
-    const cost = estimateChatCost(response.usage?.prompt_tokens || 0, response.usage?.completion_tokens || 0, OPENAI_MODEL);
-    await trackAiUsage(ctx.farmId, 'gwen_chat', 'openai', cost, {
-      model: OPENAI_MODEL,
+    const cost = estimateGeminiCost(MODEL, response.usage?.prompt_tokens || 0, response.usage?.completion_tokens || 0);
+    await trackAiUsage(ctx.farmId, 'gwen_chat', 'gemini', cost, {
+      model: MODEL,
       prompt_tokens: response.usage?.prompt_tokens,
       completion_tokens: response.usage?.completion_tokens,
       tool_loop: i,
     }).catch(() => {});
 
-    if (choice.finish_reason !== 'tool_calls' || !choice.message.tool_calls?.length) {
+    if (!choice.message.tool_calls?.length) {
       return {
-        reply: choice.message.content || 'Operation complete.',
+        reply: choice.message.content || 'I have completed the requested operation.',
         tool_calls: allToolCalls,
         messages: currentMessages,
-        model: OPENAI_MODEL,
+        model: MODEL,
       };
     }
 
@@ -5990,7 +5906,7 @@ async function chatWithOpenAI(client, messages, ctx) {
       } else {
         result = { ok: false, error: `Unknown tool: ${toolName}` };
       }
-      allToolCalls.push({ tool: toolName, result_ok: result?.ok });
+      allToolCalls.push({ tool: toolName, input: tc.function.arguments, result_ok: result?.ok });
       toolResults.push({ role: 'tool', tool_call_id: tc.id, content: JSON.stringify(result).slice(0, 8000) });
     }
 
@@ -5998,10 +5914,10 @@ async function chatWithOpenAI(client, messages, ctx) {
   }
 
   return {
-    reply: 'Maximum tool iterations reached.',
+    reply: 'I reached the maximum number of tool iterations. Here is what I have so far based on the tools I used.',
     tool_calls: allToolCalls,
     messages: currentMessages,
-    model: OPENAI_MODEL,
+    model: MODEL,
   };
 }
 
@@ -6048,28 +5964,12 @@ router.post('/chat', async (req, res) => {
     const history = existing ? existing.messages : [];
     history.push({ role: 'user', content: message.trim().slice(0, 10000) });
 
-    // Try Claude first, fall back to OpenAI
+    // Call Gemini
     let result;
-    const claude = await getAnthropicClient();
-    if (claude) {
-      try {
-        result = await chatWithClaude(claude, history, ctx);
-      } catch (err) {
-        console.error('[GWEN] Claude error, trying OpenAI fallback:', err.message);
-        const openai = await getOpenAIClient();
-        if (openai) {
-          result = await chatWithOpenAI(openai, history, ctx);
-        } else {
-          throw err;
-        }
-      }
-    } else {
-      const openai = await getOpenAIClient();
-      if (!openai) {
-        return res.status(503).json({ ok: false, error: 'No LLM provider configured (need ANTHROPIC_API_KEY or OPENAI_API_KEY)' });
-      }
-      result = await chatWithOpenAI(openai, history, ctx);
+    if (!isGeminiConfigured()) {
+      return res.status(503).json({ ok: false, error: 'No LLM provider configured (Gemini credentials required)' });
     }
+    result = await chatWithGemini(history, ctx);
 
     // Save conversation
     const updatedHistory = [...history, { role: 'assistant', content: result.reply }];
@@ -6099,16 +5999,14 @@ router.post('/chat', async (req, res) => {
 
 // GET /status -- Agent health check
 router.get('/status', async (req, res) => {
-  const claude = await getAnthropicClient().catch(() => null);
-  const openai = await getOpenAIClient().catch(() => null);
+  const available = isGeminiConfigured();
   const dbOk = isDatabaseAvailable();
 
   res.json({
-    ok: !!(claude || openai) && dbOk,
+    ok: available && dbOk,
     agent: 'G.W.E.N.',
     full_name: 'Grants, Workplans, Evidence & Navigation',
-    primary_llm: claude ? CLAUDE_MODEL : null,
-    fallback_llm: openai ? OPENAI_MODEL : null,
+    llm: { provider: 'gemini', model: MODEL, available },
     database: dbOk,
     tool_count: Object.keys(GWEN_TOOL_CATALOG).length,
     active_conversations: conversations.size,

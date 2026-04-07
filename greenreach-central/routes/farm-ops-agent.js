@@ -36,6 +36,7 @@ import { createRequire } from 'module';
 import farmStore from '../lib/farm-data-store.js';
 import { query as dbQuery, isDatabaseAvailable } from '../config/database.js';
 import leamBridge from '../lib/leam-bridge.js';
+import { readJSON as gcsReadJSON, writeJSON as gcsWriteJSON } from '../services/gcs-storage.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -52,6 +53,7 @@ const router = express.Router();
 // ============================================================================
 
 function readJSON(filename, fallback = null) {
+  // Synchronous local fallback for startup; runtime writes go through GCS
   try {
     const filePath = path.join(DATA_DIR, filename);
     if (!fs.existsSync(filePath)) return fallback;
@@ -61,11 +63,28 @@ function readJSON(filename, fallback = null) {
   }
 }
 
+async function readJSONAsync(filename, fallback = null) {
+  try {
+    return await gcsReadJSON(`data/${filename}`, fallback);
+  } catch {
+    return fallback;
+  }
+}
+
+async function writeJSONAsync(filename, data) {
+  await gcsWriteJSON(`data/${filename}`, data);
+}
+
 function writeJSON(filename, data) {
+  // Synchronous local write as fallback; prefer writeJSONAsync for new code
   const filePath = path.join(DATA_DIR, filename);
   const tmpPath = filePath + '.tmp';
   fs.writeFileSync(tmpPath, JSON.stringify(data, null, 2));
   fs.renameSync(tmpPath, filePath);
+  // Also persist to GCS asynchronously (fire-and-forget for backward compat)
+  gcsWriteJSON(`data/${filename}`, data).catch(err => {
+    console.warn(`[farm-ops-agent] GCS write failed for ${filename}:`, err.message);
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -3130,7 +3149,7 @@ const IDEMPOTENCY_TTL_MS = 30 * 60 * 1000; // 30 minutes
 const undoHistory = [];
 const MAX_UNDO_HISTORY = 50;
 
-// Audit log (in-memory, persisted to file on each write)
+// Audit log (in-memory, persisted to GCS on each write)
 const AUDIT_LOG_PATH = path.join(DATA_DIR, 'agent-audit-log.json');
 
 function loadAuditLog() {
@@ -3147,7 +3166,13 @@ function appendAuditEntry(entry) {
   log.push(entry);
   // Keep last 1000 entries
   const trimmed = log.slice(-1000);
-  fs.writeFileSync(AUDIT_LOG_PATH, JSON.stringify(trimmed, null, 2));
+  // Write locally and persist to GCS
+  try {
+    fs.writeFileSync(AUDIT_LOG_PATH, JSON.stringify(trimmed, null, 2));
+  } catch {}
+  gcsWriteJSON('data/agent-audit-log.json', trimmed).catch(err => {
+    console.warn('[farm-ops-agent] GCS audit log write failed:', err.message);
+  });
   return trimmed;
 }
 

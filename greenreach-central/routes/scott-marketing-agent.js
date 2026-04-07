@@ -9,8 +9,7 @@
  * GET  /status        -- Agent health check
  * GET  /state         -- Current marketing state snapshot
  *
- * Primary LLM: Claude Sonnet 4 (Anthropic)
- * Fallback:    GPT-4o-mini (OpenAI)
+ * LLM: Gemini 2.5 Flash (via Vertex AI)
  */
 
 import { Router } from 'express';
@@ -36,36 +35,22 @@ import { evaluateAutoApprove, tryAutoApprove, loadAllRules } from '../services/m
 import { publishToPlatform, getPlatformStatus, getPlatformAccountInfo } from '../services/marketing-platforms.js';
 import { listSkills } from '../services/marketing-skills.js';
 import { getSetting, getSettings, setSetting, deleteSetting, checkPlatformCredentials } from '../services/marketing-settings.js';
+import { getGeminiClient, GEMINI_FLASH, estimateGeminiCost, anthropicToolsToOpenAI as convertToolsToOpenAI, isGeminiConfigured } from '../lib/gemini-client.js';
 
 const router = Router();
 
-// -- LLM Clients (lazy-init) -------------------------------------------
-let anthropicClient = null;
-let openaiClient = null;
+// -- LLM Client (Gemini via Vertex AI) ---------------------------------
+let geminiClient = null;
+async function ensureGemini() {
+  if (geminiClient) return geminiClient;
+  geminiClient = await getGeminiClient();
+  return geminiClient;
+}
 
-const CLAUDE_MODEL = 'claude-sonnet-4-20250514';
-const OPENAI_MODEL = 'gpt-4o-mini';
+const MODEL = GEMINI_FLASH;
 const MAX_TOOL_LOOPS = 10;
 const MAX_TOKENS = 2048;
 const MAX_LLM_MESSAGES = 20;
-
-async function getAnthropicClient() {
-  if (anthropicClient) return anthropicClient;
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return null;
-  const { default: Anthropic } = await import('@anthropic-ai/sdk');
-  anthropicClient = new Anthropic({ apiKey });
-  return anthropicClient;
-}
-
-async function getOpenAIClient() {
-  if (openaiClient) return openaiClient;
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) return null;
-  const OpenAI = (await import('openai')).default;
-  openaiClient = new OpenAI({ apiKey });
-  return openaiClient;
-}
 
 // -- Conversation Memory (in-memory + DB) --------------------------------
 const conversations = new Map();
@@ -701,26 +686,12 @@ const SCOTT_TOOL_CATALOG = {
         : `Task: ${params.task}`;
 
       try {
-        const client = await getAnthropicClient();
-        if (client) {
-          const resp = await client.messages.create({
-            model: CLAUDE_MODEL,
-            max_tokens: MAX_TOKENS,
-            system: skillPrompt,
-            messages: [{ role: 'user', content: taskPrompt }],
-            temperature: 0.6,
-          });
-          const text = resp.content.filter(b => b.type === 'text').map(b => b.text).join('\n');
-          return { ok: true, skill: params.skill_name, result: text, model: CLAUDE_MODEL, tokens: resp.usage?.output_tokens || 0 };
-        }
-        // Fallback to OpenAI
-        const oaiClient = await getOpenAIClient();
-        if (!oaiClient) return { ok: false, error: 'No LLM provider available' };
-        const comp = await oaiClient.chat.completions.create({
-          model: OPENAI_MODEL, max_tokens: MAX_TOKENS, temperature: 0.6,
+        const client = await ensureGemini();
+        const comp = await client.chat.completions.create({
+          model: MODEL, max_tokens: MAX_TOKENS, temperature: 0.6,
           messages: [{ role: 'system', content: skillPrompt }, { role: 'user', content: taskPrompt }],
         });
-        return { ok: true, skill: params.skill_name, result: comp.choices[0].message.content, model: OPENAI_MODEL, tokens: comp.usage?.completion_tokens || 0 };
+        return { ok: true, skill: params.skill_name, result: comp.choices[0].message.content, model: MODEL, tokens: comp.usage?.completion_tokens || 0 };
       } catch (err) {
         return { ok: false, error: `Skill execution failed: ${err.message}` };
       }
@@ -1571,115 +1542,24 @@ GreenReach has 13 marketing pages on greenreachgreens.com with GA4 tracking (G-G
 - Customer-facing content stays on brand voice -- the crazy uncle stays backstage`;
 }
 
-// -- Claude Tool-Calling Loop --------------------------------------------
+// -- Gemini Tool-Calling Loop -------------------------------------------
 
-function estimateClaudeCost(inputTokens, outputTokens) {
-  return (inputTokens / 1_000_000) * 3 + (outputTokens / 1_000_000) * 15;
-}
-
-async function chatWithClaude(systemPrompt, messages, tools, convId) {
-  const client = await getAnthropicClient();
-  if (!client) throw new Error('ANTHROPIC_API_KEY not configured');
-
-  let totalInputTokens = 0;
-  let totalOutputTokens = 0;
-  let loopCount = 0;
-  const toolCallResults = [];
-
-  let response = await client.messages.create({
-    model: CLAUDE_MODEL,
-    max_tokens: MAX_TOKENS,
-    system: systemPrompt,
-    messages,
-    tools,
-    temperature: 0.7,
-  });
-
-  totalInputTokens += response.usage?.input_tokens || 0;
-  totalOutputTokens += response.usage?.output_tokens || 0;
-
-  while (response.stop_reason === 'tool_use' && loopCount < MAX_TOOL_LOOPS) {
-    loopCount++;
-
-    const toolUseBlocks = response.content.filter(b => b.type === 'tool_use');
-    const toolResults = [];
-
-    for (const block of toolUseBlocks) {
-      const { id, name, input } = block;
-      console.log(`[Scott] Tool call #${loopCount}: ${name}(${JSON.stringify(input)})`);
-
-      let result;
-      try {
-        result = await executeScottTool(name, input || {});
-      } catch (err) {
-        result = { ok: false, error: err.message };
-      }
-
-      toolCallResults.push({ tool: name, params: input, success: result?.ok !== false });
-      toolResults.push({ type: 'tool_result', tool_use_id: id, content: JSON.stringify(result) });
-    }
-
-    messages.push({ role: 'assistant', content: response.content });
-    messages.push({ role: 'user', content: toolResults });
-
-    response = await client.messages.create({
-      model: CLAUDE_MODEL,
-      max_tokens: MAX_TOKENS,
-      system: systemPrompt,
-      messages,
-      tools,
-      temperature: 0.4,
-    });
-
-    totalInputTokens += response.usage?.input_tokens || 0;
-    totalOutputTokens += response.usage?.output_tokens || 0;
-  }
-
-  const textBlocks = response.content.filter(b => b.type === 'text');
-  const replyText = textBlocks.map(b => b.text).join('\n') || 'Done.';
-
-  return {
-    reply: replyText,
-    toolCalls: toolCallResults,
-    usage: {
-      input_tokens: totalInputTokens,
-      output_tokens: totalOutputTokens,
-      total_tokens: totalInputTokens + totalOutputTokens,
-      estimated_cost: estimateClaudeCost(totalInputTokens, totalOutputTokens),
-    },
-    model: CLAUDE_MODEL,
-    provider: 'anthropic',
-    loop_count: loopCount,
-  };
-}
-
-// -- OpenAI Fallback -----------------------------------------------------
-
-function anthropicToolsToOpenAI(tools) {
-  return tools.map(t => ({
-    type: 'function',
-    function: { name: t.name, description: t.description, parameters: t.input_schema },
-  }));
-}
-
-async function chatWithOpenAI(systemPrompt, userMessages, tools) {
-  const client = await getOpenAIClient();
-  if (!client) throw new Error('OPENAI_API_KEY not configured');
-
-  const openaiTools = anthropicToolsToOpenAI(tools);
+async function chatWithGemini(systemPrompt, anthropicMessages, anthropicTools) {
+  const client = await ensureGemini();
+  const openaiTools = convertToolsToOpenAI(anthropicTools);
   const toolCallResults = [];
   let loopCount = 0;
 
   const messages = [
     { role: 'system', content: systemPrompt },
-    ...userMessages.map(m => ({
+    ...anthropicMessages.map(m => ({
       role: m.role,
       content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
     })),
   ];
 
   let completion = await client.chat.completions.create({
-    model: OPENAI_MODEL,
+    model: MODEL,
     messages,
     tools: openaiTools,
     tool_choice: 'auto',
@@ -1688,6 +1568,8 @@ async function chatWithOpenAI(systemPrompt, userMessages, tools) {
   });
 
   let assistantMessage = completion.choices[0].message;
+  let totalPrompt = completion.usage?.prompt_tokens || 0;
+  let totalCompletion = completion.usage?.completion_tokens || 0;
 
   while (assistantMessage.tool_calls?.length > 0 && loopCount < MAX_TOOL_LOOPS) {
     loopCount++;
@@ -1698,7 +1580,7 @@ async function chatWithOpenAI(systemPrompt, userMessages, tools) {
       let fnArgs = {};
       try { fnArgs = JSON.parse(toolCall.function.arguments || '{}'); } catch { /* empty */ }
 
-      console.log(`[Scott OpenAI fallback] Tool call #${loopCount}: ${fnName}`);
+      console.log(`[Scott] Tool call #${loopCount}: ${fnName}(${JSON.stringify(fnArgs)})`);
 
       let result;
       try { result = await executeScottTool(fnName, fnArgs); } catch (err) { result = { ok: false, error: err.message }; }
@@ -1708,25 +1590,26 @@ async function chatWithOpenAI(systemPrompt, userMessages, tools) {
     }
 
     completion = await client.chat.completions.create({
-      model: OPENAI_MODEL, messages, tools: openaiTools, tool_choice: 'auto',
+      model: MODEL, messages, tools: openaiTools, tool_choice: 'auto',
       temperature: 0.4, max_tokens: MAX_TOKENS,
     });
     assistantMessage = completion.choices[0].message;
+    totalPrompt += completion.usage?.prompt_tokens || 0;
+    totalCompletion += completion.usage?.completion_tokens || 0;
   }
 
   const replyText = assistantMessage.content || 'Done.';
-  const usage = completion.usage || {};
   return {
     reply: replyText,
     toolCalls: toolCallResults,
     usage: {
-      input_tokens: usage.prompt_tokens || 0,
-      output_tokens: usage.completion_tokens || 0,
-      total_tokens: usage.total_tokens || 0,
-      estimated_cost: estimateChatCost(OPENAI_MODEL, usage.prompt_tokens || 0, usage.completion_tokens || 0),
+      input_tokens: totalPrompt,
+      output_tokens: totalCompletion,
+      total_tokens: totalPrompt + totalCompletion,
+      estimated_cost: estimateGeminiCost(MODEL, totalPrompt, totalCompletion),
     },
-    model: OPENAI_MODEL,
-    provider: 'openai',
+    model: MODEL,
+    provider: 'gemini',
     loop_count: loopCount,
   };
 }
@@ -1783,15 +1666,10 @@ router.post('/chat', async (req, res) => {
 
     let result;
     try {
-      result = await chatWithClaude(systemPrompt, llmMessages, tools, convId);
-    } catch (claudeErr) {
-      console.warn('[Scott] Claude unavailable, falling back to OpenAI:', claudeErr.message);
-      try {
-        result = await chatWithOpenAI(systemPrompt, llmMessages, tools);
-      } catch (openaiErr) {
-        console.error('[Scott] Both LLMs unavailable:', openaiErr.message);
-        return res.status(503).json({ ok: false, error: 'AI service unavailable.' });
-      }
+      result = await chatWithGemini(systemPrompt, llmMessages, tools);
+    } catch (err) {
+      console.error('[Scott] Gemini call failed:', err.message);
+      return res.status(503).json({ ok: false, error: 'AI service unavailable.' });
     }
 
     // Track cost
@@ -1827,7 +1705,7 @@ router.post('/chat', async (req, res) => {
     console.error('[Scott] Chat error:', err.message);
     trackAiUsage({
       farm_id: 'greenreach-central', endpoint: 'scott-marketing-agent',
-      model: CLAUDE_MODEL, status: 'error', error_message: err.message, user_id: adminId,
+      model: MODEL, status: 'error', error_message: err.message, user_id: adminId,
     });
     return res.status(500).json({ ok: false, error: 'Internal error processing your message.' });
   }
@@ -1841,8 +1719,7 @@ router.get('/status', (req, res) => {
     name: 'Social Content Optimization, Trends & Targeting',
     status: 'online',
     tools: Object.keys(SCOTT_TOOL_CATALOG).length,
-    llm_primary: CLAUDE_MODEL,
-    llm_fallback: OPENAI_MODEL,
+    llm: { provider: 'gemini', model: MODEL, available: isGeminiConfigured() },
     senior_agent: 'faye',
   });
 });

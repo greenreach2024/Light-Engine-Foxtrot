@@ -18,7 +18,8 @@
     if (localStorage.getItem('suppressConsole') === 'true') return true;
     
     // Check if deployed on PRODUCTION demo domain (not localhost)
-    if (window.location.hostname.includes('elasticbeanstalk.com') && 
+    if ((window.location.hostname.includes('elasticbeanstalk.com') || 
+         window.location.hostname.includes('.run.app')) && 
         window.location.hostname.includes('demo')) return true;
     
     return false;

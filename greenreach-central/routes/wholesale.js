@@ -2196,6 +2196,8 @@ router.post('/buyers/me/card', requireBuyerPortalAuth, async (req, res, next) =>
     return res.json({
       status: 'ok',
       data: {
+        squareCustomerId: result.squareCustomerId,
+        squareCardId: result.squareCardId,
         brand: result.brand,
         last4: result.last4,
         expMonth: result.expMonth,

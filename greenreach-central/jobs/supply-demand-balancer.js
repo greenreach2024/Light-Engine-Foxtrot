@@ -15,13 +15,11 @@
  *  - Risk alerts for network-level flooding or shortages
  */
 
-import pg from 'pg';
-const { Pool } = pg;
+import { query as dbQuery } from '../config/database.js';
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
-});
+const pool = {
+  query: (...args) => dbQuery(...args)
+};
 
 /**
  * Detect harvest schedule conflicts — ticket 4.2

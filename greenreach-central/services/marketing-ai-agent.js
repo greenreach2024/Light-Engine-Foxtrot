@@ -1,11 +1,12 @@
 /**
  * Marketing AI Agent — GreenReach Central
  * AI-powered social media content generation engine.
- * Supports Claude (primary) with OpenAI fallback.
+ * Uses Gemini via Vertex AI.
  * Adapted from Real-Estate-Ready-MVP social/agent.ts.
  */
 
 import { getSetting } from './marketing-settings.js';
+import { getGeminiClient, GEMINI_FLASH, estimateGeminiCost, isGeminiConfigured } from '../lib/gemini-client.js';
 import { query } from '../config/database.js';
 
 // ── Brand Identity & Marketing Plan Context ───────────────────────
@@ -203,48 +204,10 @@ function buildPrompt(platform, sourceType, context, customInstructions) {
   return parts.join('\n');
 }
 
-// ── Generate with Claude (Anthropic) ───────────────────────────────
-async function generateWithClaude(platform, sourceType, context, customInstructions) {
-  const apiKey = await getSetting('anthropic_api_key');
-  if (!apiKey) throw new Error('Anthropic API key not configured');
-
-  // Dynamic import to avoid crash if SDK not installed
-  const { default: Anthropic } = await import('@anthropic-ai/sdk');
-  const client = new Anthropic({ apiKey });
-
-  const model = 'claude-sonnet-4-20250514';
-  const userPrompt = buildPrompt(platform, sourceType, context, customInstructions);
-
-  const response = await client.messages.create({
-    model,
-    max_tokens: 1024,
-    system: SYSTEM_PROMPT,
-    messages: [{ role: 'user', content: userPrompt }],
-  });
-
-  const content = response.content[0]?.text || '';
-  const promptTokens = response.usage?.input_tokens || 0;
-  const outputTokens = response.usage?.output_tokens || 0;
-
-  return {
-    content: content.trim(),
-    model,
-    promptTokens,
-    outputTokens,
-    cost: estimateCost(model, promptTokens, outputTokens),
-    provider: 'anthropic',
-  };
-}
-
-// ── Generate with OpenAI (fallback) ────────────────────────────────
-async function generateWithOpenAI(platform, sourceType, context, customInstructions) {
-  const apiKey = await getSetting('openai_api_key');
-  if (!apiKey) throw new Error('OpenAI API key not configured');
-
-  const { default: OpenAI } = await import('openai');
-  const client = new OpenAI({ apiKey });
-
-  const model = 'gpt-4o-mini';
+// ── Generate with Gemini (Vertex AI) ──────────────────────────────
+async function generateWithGemini(platform, sourceType, context, customInstructions) {
+  const client = await getGeminiClient();
+  const model = GEMINI_FLASH;
   const userPrompt = buildPrompt(platform, sourceType, context, customInstructions);
 
   const response = await client.chat.completions.create({
@@ -256,17 +219,17 @@ async function generateWithOpenAI(platform, sourceType, context, customInstructi
     ],
   });
 
-  const content = response.choices[0]?.message?.content || '';
+  const genContent = response.choices[0]?.message?.content || '';
   const promptTokens = response.usage?.prompt_tokens || 0;
   const outputTokens = response.usage?.completion_tokens || 0;
 
   return {
-    content: content.trim(),
+    content: genContent.trim(),
     model,
     promptTokens,
     outputTokens,
-    cost: estimateCost(model, promptTokens, outputTokens),
-    provider: 'openai',
+    cost: estimateGeminiCost(model, promptTokens, outputTokens),
+    provider: 'gemini',
   };
 }
 
@@ -462,19 +425,9 @@ export async function generateSocialPost({
   // Build context from GreenReach data if not provided
   const context = sourceContext || await buildSourceContext(sourceType, sourceId);
 
-  // Try Claude first, fall back to OpenAI
+  // Generate with Gemini
   let result;
-  try {
-    const anthropicKey = await getSetting('anthropic_api_key');
-    if (anthropicKey) {
-      result = await generateWithClaude(platform, sourceType, context, customInstructions);
-    } else {
-      throw new Error('No Anthropic key — falling back to OpenAI');
-    }
-  } catch (claudeErr) {
-    console.warn('[marketing-agent] Claude generation failed, trying OpenAI:', claudeErr.message);
-    result = await generateWithOpenAI(platform, sourceType, context, customInstructions);
-  }
+  result = await generateWithGemini(platform, sourceType, context, customInstructions);
 
   // Run compliance check
   const violations = checkCompliance(result.content);

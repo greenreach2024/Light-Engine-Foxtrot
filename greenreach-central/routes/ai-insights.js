@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import OpenAI from 'openai';
+import { getGeminiClient, GEMINI_FLASH, estimateGeminiCost, isGeminiConfigured } from '../lib/gemini-client.js';
 import { query } from '../config/database.js';
 import { trackAiUsage, estimateChatCost } from '../lib/ai-usage-tracker.js';
 import fs from 'fs/promises';
@@ -9,18 +9,16 @@ import { fileURLToPath } from 'url';
 const router = Router();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// Initialize OpenAI client (if API key is available)
-let openai = null;
-try {
-  if (process.env.OPENAI_API_KEY) {
-    openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY
-    });
-  } else {
-    console.warn('[AI Insights] OPENAI_API_KEY not set - AI insights will not be available');
-  }
-} catch (error) {
-  console.error('[AI Insights] Failed to initialize OpenAI client:', error.message);
+// Initialize Gemini client
+let gemini = null;
+async function ensureGemini() {
+  if (gemini) return gemini;
+  gemini = await getGeminiClient();
+  return gemini;
+}
+
+if (!isGeminiConfigured()) {
+  console.warn('[AI Insights] No Gemini credentials - AI insights will not be available');
 }
 
 /**
@@ -247,7 +245,7 @@ router.get('/:farmId', async (req, res) => {
     let tokensUsed = null;
     let source = 'rule-based-fallback';
 
-    if (openai) {
+    if (isGeminiConfigured()) {
       const prompt = buildAIPrompt({
         farm,
         currentConditions,
@@ -257,8 +255,9 @@ router.get('/:farmId', async (req, res) => {
         historicalTrends
       });
 
-      const completion = await openai.chat.completions.create({
-        model: "gpt-4",
+      const client = await ensureGemini();
+      const completion = await client.chat.completions.create({
+        model: GEMINI_FLASH,
         messages: [
           {
             role: "system",
@@ -276,7 +275,7 @@ router.get('/:farmId', async (req, res) => {
       aiResponse = completion.choices?.[0]?.message?.content || '';
       insights = parseAIResponse(aiResponse, currentConditions, recipeTargets);
       tokensUsed = completion.usage?.total_tokens || null;
-      source = 'openai';
+      source = 'gemini';
 
       trackAiUsage({
         farm_id: farmId,

@@ -9,23 +9,22 @@
  * Downstream consumers (demand-forecast, AI Pusher) read from this table.
  */
 
-import OpenAI from 'openai';
+import { getGeminiClient, GEMINI_FLASH, estimateGeminiCost, isGeminiConfigured } from '../lib/gemini-client.js';
 import { getDatabase, isDatabaseAvailable } from '../config/database.js';
 import { trackAiUsage, estimateChatCost } from '../lib/ai-usage-tracker.js';
 import logger from '../utils/logger.js';
 
-const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
+const MODEL = GEMINI_FLASH;
 
-let openai = null;
-try {
-  if (process.env.OPENAI_API_KEY) {
-    openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-    logger.info('[MarketAnalyst] OpenAI initialized');
-  } else {
-    logger.warn('[MarketAnalyst] OPENAI_API_KEY not set — AI analysis disabled');
-  }
-} catch (err) {
-  logger.error('[MarketAnalyst] Failed to initialize OpenAI:', err.message);
+let gemini = null;
+async function ensureGemini() {
+  if (gemini) return gemini;
+  gemini = await getGeminiClient();
+  return gemini;
+}
+
+if (!isGeminiConfigured()) {
+  logger.warn('[MarketAnalyst] No Gemini credentials — AI analysis disabled');
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -130,8 +129,9 @@ Respond ONLY with one JSON object per line (JSONL), no markdown fences, no extra
 
   let completion;
   try {
-    completion = await openai.chat.completions.create({
-      model: OPENAI_MODEL,
+    const client = await ensureGemini();
+    completion = await client.chat.completions.create({
+      model: MODEL,
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt },
@@ -140,7 +140,7 @@ Respond ONLY with one JSON object per line (JSONL), no markdown fences, no extra
       max_tokens: 2000,
     });
   } catch (err) {
-    logger.error('[MarketAnalyst] OpenAI call failed:', err.message);
+    logger.error('[MarketAnalyst] Gemini call failed:', err.message);
     return { status: 'error', reason: err.message };
   }
 
@@ -152,11 +152,11 @@ Respond ONLY with one JSON object per line (JSONL), no markdown fences, no extra
   trackAiUsage({
     farm_id: 'system',
     endpoint: 'market-analysis-agent',
-    model: OPENAI_MODEL,
+    model: MODEL,
     prompt_tokens: promptTokens,
     completion_tokens: completionTokens,
     total_tokens: promptTokens + completionTokens,
-    estimated_cost: estimateChatCost(OPENAI_MODEL, promptTokens, completionTokens),
+    estimated_cost: estimateChatCost(MODEL, promptTokens, completionTokens),
     status: 'success',
   });
 
@@ -175,7 +175,7 @@ Respond ONLY with one JSON object per line (JSONL), no markdown fences, no extra
   // Upsert into DB
   let stored = 0;
   const costPerCrop = analyses.length > 0
-    ? estimateChatCost(OPENAI_MODEL, promptTokens, completionTokens) / analyses.length
+    ? estimateChatCost(MODEL, promptTokens, completionTokens) / analyses.length
     : 0;
 
   for (const a of analyses) {
@@ -205,7 +205,7 @@ Respond ONLY with one JSON object per line (JSONL), no markdown fences, no extra
         a.action || 'monitor',
         a.reasoning || '',
         parseInt(trend?.observation_count) || 0,
-        OPENAI_MODEL,
+        MODEL,
         Math.round(promptTokens / Math.max(analyses.length, 1)),
         Math.round(completionTokens / Math.max(analyses.length, 1)),
         costPerCrop,

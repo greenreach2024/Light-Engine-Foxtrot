@@ -9,6 +9,7 @@
 
 import express from 'express';
 import { getAIPusherRuntimeStatus } from '../services/ai-recommendations-pusher.js';
+import { isGeminiConfigured } from '../lib/gemini-client.js';
 
 const router = express.Router();
 
@@ -34,7 +35,7 @@ export function logAiActivity(event) {
  */
 router.get('/monitoring', async (req, res) => {
   try {
-    const hasOpenAIKey = !!process.env.OPENAI_API_KEY;
+    const hasGemini = isGeminiConfigured();
     const pusher = getAIPusherRuntimeStatus();
     
     // Count farms with URLs (those that receive recommendations)
@@ -76,16 +77,16 @@ router.get('/monitoring', async (req, res) => {
     const estimatedCost = apiCalls30d * 0.03;
     
     const pusherStatus = pusher?.last_run_status || 'idle';
-    const pusherEnabled = Boolean(pusher?.enabled && hasOpenAIKey);
-    const disabledReason = hasOpenAIKey
+    const pusherEnabled = Boolean(pusher?.enabled && hasGemini);
+    const disabledReason = hasGemini
       ? (pusher?.last_error || null)
-      : 'OPENAI_API_KEY missing';
+      : 'Gemini credentials missing';
 
     res.json({
       success: true,
-      pusher_status: pusherEnabled ? 'active' : (hasOpenAIKey ? pusherStatus : 'disabled'),
-      openai_configured: hasOpenAIKey,
-      model: pusher?.model || process.env.OPENAI_MODEL || 'gpt-4o-mini',
+      pusher_status: pusherEnabled ? 'active' : (hasGemini ? pusherStatus : 'disabled'),
+      gemini_configured: hasGemini,
+      model: pusher?.model || 'google/gemini-2.5-flash',
       push_interval: `${pusher?.push_interval_minutes || 30} minutes`,
       disabled_reason: disabledReason,
       runtime_status: pusherStatus,
@@ -101,9 +102,9 @@ router.get('/monitoring', async (req, res) => {
       last_run: pusher?.last_run_completed_at || aiActivityLog.find(a => a.type === 'recommendation')?.timestamp || null,
       next_run: pusher?.next_run_at || null,
       activity: aiActivityLog.slice(0, 50), // Last 50 events
-      message: hasOpenAIKey
+      message: hasGemini
         ? null
-        : 'AI recommendations are disabled by configuration. Core dashboard and manual workflows remain available.'
+        : 'AI recommendations are disabled -- Gemini not configured. Core dashboard and manual workflows remain available.'
     });
   } catch (error) {
     console.error('[Admin AI Monitoring] Error:', error);

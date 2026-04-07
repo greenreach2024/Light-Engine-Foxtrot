@@ -12,6 +12,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { query } from '../config/database.js';
 import { farmStore } from '../lib/farm-data-store.js';
+import { readJSON as gcsReadJSON, writeJSON as gcsWriteJSON } from '../services/gcs-storage.js';
 
 const router = express.Router();
 
@@ -938,7 +939,7 @@ router.post('/batch-update', async (req, res) => {
     // ── 1. Persist to crop-pricing.json ──────────────────────────────────
     let pricingFile = { version: '2026-03-08-v1', crops: [] };
     try {
-      pricingFile = JSON.parse(fs.readFileSync(PRICING_FILE, 'utf8'));
+      pricingFile = await gcsReadJSON('data/crop-pricing.json', pricingFile);
     } catch (e) { /* start fresh */ }
 
     const priceMap = {};
@@ -989,13 +990,13 @@ router.post('/batch-update', async (req, res) => {
     pricingFile.pricingSource = 'greenreach-central';
     pricingFile.version = timestamp.slice(0, 10).replace(/-/g, '') + '-batch';
 
-    fs.writeFileSync(PRICING_FILE, JSON.stringify(pricingFile, null, 2), 'utf8');
+    await gcsWriteJSON('data/crop-pricing.json', pricingFile);
     console.log(`[Pricing Assistant] Persisted ${results.length} price updates to crop-pricing.json`);
 
     // ── 2. Update crop-registry.json ─────────────────────────────────────
     let registryUpdated = 0;
     try {
-      const registry = JSON.parse(fs.readFileSync(REGISTRY_FILE, 'utf8'));
+      const registry = await gcsReadJSON('data/crop-registry.json', { crops: {} });
       for (const u of updates) {
         const crop = registry.crops?.[u.crop];
         if (!crop) continue;
@@ -1012,7 +1013,7 @@ router.post('/batch-update', async (req, res) => {
         registryUpdated++;
       }
       registry.version = timestamp.slice(0, 10) + '-batch';
-      fs.writeFileSync(REGISTRY_FILE, JSON.stringify(registry, null, 2, { encoding: 'utf8' }), 'utf8');
+      await gcsWriteJSON('data/crop-registry.json', registry);
       console.log(`[Pricing Assistant] Updated ${registryUpdated} entries in crop-registry.json`);
     } catch (e) {
       console.warn('[Pricing Assistant] crop-registry.json update skipped:', e.message);
@@ -1119,24 +1120,13 @@ router.post('/batch-update', async (req, res) => {
  * Get current prices merged from crop-pricing.json, crop-registry.json, and lighting-recipes.json.
  * Returns all crops — recipe-derived crops are included so the scanner can manage them.
  */
-router.get('/current-prices', (req, res) => {
+router.get('/current-prices', async (req, res) => {
   try {
-    let pricingFile = { crops: [] };
-    try {
-      pricingFile = JSON.parse(fs.readFileSync(PRICING_FILE, 'utf8'));
-    } catch (e) { /* empty */ }
-
-    let registry = { crops: {} };
-    try {
-      registry = JSON.parse(fs.readFileSync(REGISTRY_FILE, 'utf8'));
-    } catch (e) { /* empty */ }
+    const pricingFile = await gcsReadJSON('data/crop-pricing.json', { crops: [] });
+    const registry = await gcsReadJSON('data/crop-registry.json', { crops: {} });
 
     // Load lighting-recipes.json for the full crop universe
-    let recipes = { crops: {} };
-    const recipesPath = path.join(path.dirname(REGISTRY_FILE), 'lighting-recipes.json');
-    try {
-      recipes = JSON.parse(fs.readFileSync(recipesPath, 'utf8'));
-    } catch (e) { /* empty */ }
+    const recipes = await gcsReadJSON('data/lighting-recipes.json', { crops: {} });
 
     // Merge pricing.json and registry into a unified list
     const merged = {};

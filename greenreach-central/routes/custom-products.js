@@ -5,6 +5,7 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import crypto from 'crypto';
+import { uploadFile, USE_GCS, getSignedUrl } from '../services/gcs-storage.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -332,18 +333,13 @@ router.post('/:productId/image', upload.single('image'), async (req, res) => {
       return res.status(400).json({ success: false, error: 'Allowed formats: jpg, jpeg, png, webp' });
     }
 
-    // Create farm-specific directory
-    const farmDir = path.join(PRODUCT_IMAGES_DIR, farmId);
-    if (!fs.existsSync(farmDir)) {
-      fs.mkdirSync(farmDir, { recursive: true });
-    }
-
-    // Write file
+    // Write file to GCS (Cloud Run) or local filesystem (dev)
     const filename = `${sku}${ext}`;
-    const filepath = path.join(farmDir, filename);
-    fs.writeFileSync(filepath, req.file.buffer);
+    const relativePath = `product-images/${farmId}/${filename}`;
+    await uploadFile(relativePath, req.file.buffer, req.file.mimetype);
 
     // Update thumbnail_url in DB
+    // On GCS, we store the relative path; the serving layer handles signed URLs or proxying
     const thumbnailUrl = `/product-images/${farmId}/${filename}`;
     await query(
       `UPDATE farm_inventory SET thumbnail_url = $3, updated_at = NOW()

@@ -8,9 +8,7 @@ import { query } from '../config/database.js';
 
 // Map setting keys to environment variable fallbacks
 const ENV_FALLBACK = {
-  // AI provider
-  anthropic_api_key:          'ANTHROPIC_API_KEY',
-  openai_api_key:             'OPENAI_API_KEY',
+  // AI provider (Gemini via Vertex AI -- uses ADC, no env key needed)
   // Twitter / X
   twitter_api_key:            'TWITTER_API_KEY',
   twitter_api_secret:         'TWITTER_API_SECRET',

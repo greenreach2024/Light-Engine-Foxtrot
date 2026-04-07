@@ -1,0 +1,102 @@
+# LE .dockerignore - keep image small, mirror .ebignore logic
+.git
+.github
+.vscode
+.elasticbeanstalk
+**/.elasticbeanstalk
+node_modules
+venv
+.venv
+__pycache__
+*.pyc
+
+# Archives and backups
+archive/
+backups/
+data.aws-backup/
+lib.aws-backup/
+server.aws-backup/
+tmp/
+
+# Test and dev files
+test/
+tests/
+aws-testing/
+*.test.js
+playwright.config.mjs
+
+# Docs
+docs/
+examples/
+*.md
+
+# Large media
+*.mov
+*.mp4
+*.avi
+*.har
+public/videos/
+public/images/plant-farm/
+
+# Build artifacts
+*.zip
+*.bundle.js
+logs/
+*.log
+npm-debug.log*
+
+# Environment files (secrets passed via Cloud Run env vars)
+.env
+.env.*
+*.pem
+*.key
+*.crt
+
+# Scripts not needed in container
+*.sh
+!scripts/simple-anomaly-detector.py
+
+# Central code is NOT deployed with LE (separate service)
+# But LE serves greenreach-central/public/ as static files,
+# so we include that dir and exclude the rest.
+greenreach-central/node_modules/
+greenreach-central/routes/
+greenreach-central/services/
+!greenreach-central/services/notification-store.js
+greenreach-central/lib/
+greenreach-central/middleware/
+greenreach-central/config/
+!greenreach-central/config/database.js
+greenreach-central/data/
+greenreach-central/docs/
+greenreach-central/scripts/
+greenreach-central/backups/
+greenreach-central/tests/
+greenreach-central/migrations/
+greenreach-central/reports/
+greenreach-central/logs/
+greenreach-central/server.js
+greenreach-central/server.js.*
+greenreach-central/Dockerfile
+greenreach-central/.dockerignore
+greenreach-central/.env*
+greenreach-central/package*.json
+greenreach-central/*.md
+greenreach-central/*.txt
+greenreach-central/*.mjs
+greenreach-central/*.bak
+greenreach-central/public/videos/
+
+# Other unneeded dirs
+light-engine-access-manager/
+greenreach-central-app/
+external/
+config/sync-queue.json
+data/sync-monitor-snapshot.json
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Dockerfile itself
+Dockerfile

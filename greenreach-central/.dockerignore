@@ -1,0 +1,43 @@
+# Central .dockerignore - keep image small
+.git
+.github
+.vscode
+.elasticbeanstalk
+node_modules
+venv
+__pycache__
+
+# Test and dev
+tests/
+*.test.js
+*.md
+!README.md
+!faye-security-workbook.md
+
+# Docs and scripts
+docs/
+scripts/
+# reports/ - needed by server.js import
+backups/
+migrations/
+
+# Large media
+public/videos/
+
+# Logs
+logs/
+*.log
+
+# Secrets (passed via Cloud Run env vars / Secret Manager)
+.env
+.env.*
+*.pem
+*.key
+*.crt
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Dockerfile itself
+Dockerfile

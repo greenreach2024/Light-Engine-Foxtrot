@@ -4,7 +4,7 @@
  * Periodically analyzes all farms using GPT-4 and pushes recommendations to farm servers
  */
 
-import OpenAI from 'openai';
+import { getGeminiClient, GEMINI_FLASH, estimateGeminiCost, isGeminiConfigured } from '../lib/gemini-client.js';
 import { query, isDatabaseAvailable } from '../config/database.js';
 import { trackAiUsage, estimateChatCost } from '../lib/ai-usage-tracker.js';
 import fetch from 'node-fetch';
@@ -18,13 +18,13 @@ import { getLatestAnalyses } from '../services/market-analysis-agent.js';
 import { getMarketDataAsync } from '../routes/market-intelligence.js';
 import { getDatabase } from '../config/database.js';
 
-const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
+const MODEL = GEMINI_FLASH;
 const PUSH_INTERVAL_MS = 30 * 60 * 1000;
 
 const runtimeStatus = {
-  configured: !!process.env.OPENAI_API_KEY,
+  configured: isGeminiConfigured(),
   enabled: false,
-  model: OPENAI_MODEL,
+  model: MODEL,
   push_interval_minutes: PUSH_INTERVAL_MS / 60000,
   started_at: null,
   last_run_started_at: null,
@@ -73,16 +73,17 @@ export function getAIPusherRuntimeStatus() {
   return snapshotRuntimeStatus();
 }
 
-let openai = null;
-try {
-  if (process.env.OPENAI_API_KEY) {
-    openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-    console.log('[AI Pusher] OpenAI initialized');
-  } else {
-    console.warn('[AI Pusher] OPENAI_API_KEY not set - service disabled');
-  }
-} catch (error) {
-  console.error('[AI Pusher] Failed to initialize OpenAI:', error.message);
+let gemini = null;
+async function ensureGemini() {
+  if (gemini) return gemini;
+  gemini = await getGeminiClient();
+  return gemini;
+}
+
+if (isGeminiConfigured()) {
+  console.log('[AI Pusher] Gemini configured');
+} else {
+  console.warn('[AI Pusher] No Gemini credentials - service disabled');
 }
 
 // API key for authenticating with farm servers
@@ -250,9 +251,10 @@ async function analyzeFarm(farm) {
     prompt += `2. [RECOMMENDATION TEXT]\n`;
     prompt += `Focus on: Temperature/humidity optimization, equipment adjustments, crop health.\n`;
 
-    // 3. Call AI model (uses OPENAI_MODEL env var, defaults to gpt-4o-mini)
-    const completion = await openai.chat.completions.create({
-      model: OPENAI_MODEL,
+    // 3. Call AI model (uses MODEL env var, defaults to gpt-4o-mini)
+    const client = await ensureGemini();
+    const completion = await client.chat.completions.create({
+      model: MODEL,
       messages: [
         {
           role: "system",
@@ -272,11 +274,11 @@ async function analyzeFarm(farm) {
     trackAiUsage({
       farm_id: farm.farm_id,
       endpoint: 'recommendations-pusher',
-      model: OPENAI_MODEL,
+      model: MODEL,
       prompt_tokens: completion.usage?.prompt_tokens,
       completion_tokens: completion.usage?.completion_tokens,
       total_tokens: completion.usage?.total_tokens,
-      estimated_cost: estimateChatCost(OPENAI_MODEL, completion.usage?.prompt_tokens || 0, completion.usage?.completion_tokens || 0),
+      estimated_cost: estimateChatCost(MODEL, completion.usage?.prompt_tokens || 0, completion.usage?.completion_tokens || 0),
       status: 'success'
     });
     
@@ -370,14 +372,14 @@ async function pushToFarm(farm, recommendations, networkIntelligence) {
 export async function analyzeAndPushToAllFarms() {
   markRunStart();
 
-  if (!openai) {
-    console.log('[AI Pusher] Service disabled (no OpenAI API key)');
+  if (!isGeminiConfigured()) {
+    console.log('[AI Pusher] Service disabled (no Gemini credentials)');
     const result = {
       analyzed: 0,
       pushed: 0,
       total: 0,
       disabled: true,
-      reason: 'OPENAI_API_KEY missing'
+      reason: 'Gemini credentials missing'
     };
     markRunComplete('disabled', result, result.reason);
     return result;
@@ -583,11 +585,11 @@ export async function analyzeAndPushToAllFarms() {
  * Start periodic analysis (every 30 minutes)
  */
 export function startAIPusher() {
-  if (!openai) {
+  if (!isGeminiConfigured()) {
     console.log('[AI Pusher] Service disabled');
     runtimeStatus.enabled = false;
     runtimeStatus.last_run_status = 'disabled';
-    runtimeStatus.last_error = 'OPENAI_API_KEY missing';
+    runtimeStatus.last_error = 'Gemini credentials missing';
     runtimeStatus.next_run_at = null;
     return null;
   }

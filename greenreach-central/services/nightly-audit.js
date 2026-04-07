@@ -493,25 +493,40 @@ async function checkLightEngine() {
 async function checkAIServices() {
   const name = 'ai_services';
   try {
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) return { name, status: 'fail', message: 'OPENAI_API_KEY not set' };
-    if (apiKey.length < 20) return { name, status: 'fail', message: 'OPENAI_API_KEY appears invalid (too short)' };
+    // Check Gemini / Vertex AI availability
+    const gcpProject = process.env.GCP_PROJECT;
+    const geminiKey = process.env.GEMINI_API_KEY;
+    if (!gcpProject && !geminiKey) return { name, status: 'fail', message: 'Gemini not configured (no GCP_PROJECT or GEMINI_API_KEY)' };
 
     // Lightweight model list check (no tokens consumed)
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 8000);
     try {
-      const res = await fetch('https://api.openai.com/v1/models', {
-        signal: controller.signal,
-        headers: { 'Authorization': `Bearer ${apiKey}` }
-      });
+      let res;
+      if (gcpProject) {
+        // Vertex AI: use ADC token to list models
+        const { GoogleAuth } = await import('google-auth-library');
+        const auth = new GoogleAuth({ scopes: ['https://www.googleapis.com/auth/cloud-platform'] });
+        const token = await auth.getAccessToken();
+        const region = process.env.GCP_REGION || 'us-east1';
+        res = await fetch(
+          `https://${region}-aiplatform.googleapis.com/v1/projects/${gcpProject}/locations/${region}/publishers/google/models`, {
+          signal: controller.signal,
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+      } else {
+        // Gemini Developer API
+        res = await fetch(`https://generativelanguage.googleapis.com/v1/models?key=${geminiKey}`, {
+          signal: controller.signal
+        });
+      }
       clearTimeout(timeout);
-      if (res.ok) return { name, status: 'pass', message: 'OpenAI API key valid and reachable' };
-      if (res.status === 401) return { name, status: 'fail', message: 'OpenAI API key rejected (401)' };
-      return { name, status: 'warn', message: `OpenAI API returned ${res.status}` };
+      if (res.ok) return { name, status: 'pass', message: 'Gemini API reachable and configured' };
+      if (res.status === 401 || res.status === 403) return { name, status: 'fail', message: 'Gemini credentials rejected (' + res.status + ')' };
+      return { name, status: 'warn', message: `Gemini API returned ${res.status}` };
     } catch (err) {
       clearTimeout(timeout);
-      return { name, status: 'warn', message: `OpenAI API unreachable: ${err.message}` };
+      return { name, status: 'warn', message: `Gemini API unreachable: ${err.message}` };
     }
   } catch (err) {
     return { name, status: 'fail', message: err.message };

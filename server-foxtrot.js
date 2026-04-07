@@ -715,28 +715,25 @@ app.use((req, res, next) => {
   const isProduction = process.env.NODE_ENV === 'production';
   
   // Allowed origins for production
+  // Cloud Run service URLs from environment + custom domain
   const ALLOWED_ORIGINS = [
-    'http://light-engine-demo-1765326376.s3-website-us-east-1.amazonaws.com',
-    'http://light-engine-foxtrot-prod.eba-ukiyyqf9.us-east-1.elasticbeanstalk.com',
-    'http://light-engine-foxtrot-prod-v2.eba-ukiyyqf9.us-east-1.elasticbeanstalk.com',
-    'http://light-engine-foxtrot-prod-v3.eba-ukiyyqf9.us-east-1.elasticbeanstalk.com',
-    'https://light-engine-demo-1765326376.s3-website-us-east-1.amazonaws.com',
-    'https://light-engine-foxtrot-prod.eba-ukiyyqf9.us-east-1.elasticbeanstalk.com',
-    'https://light-engine-foxtrot-prod-v2.eba-ukiyyqf9.us-east-1.elasticbeanstalk.com',
-    'https://light-engine-foxtrot-prod-v3.eba-ukiyyqf9.us-east-1.elasticbeanstalk.com',
+    process.env.LE_SERVICE_URL,
+    process.env.CENTRAL_URL || process.env.GREENREACH_CENTRAL_URL,
     'http://greenreachgreens.com',
     'https://greenreachgreens.com',
     'http://www.greenreachgreens.com',
     'https://www.greenreachgreens.com',
     'http://localhost:8091',
     'http://127.0.0.1:8091',
-  ];
+    'http://localhost:8080',
+    'http://127.0.0.1:8080',
+  ].filter(Boolean);
 
   // Allow any *.greenreachgreens.com subdomain (farm subdomains)
   const isSubdomain = (() => {
     try {
       const host = new URL(origin || '').hostname;
-      return host.endsWith('.greenreachgreens.com');
+      return host.endsWith('.greenreachgreens.com') || host.endsWith('.run.app');
     } catch { return false; }
   })();
   
@@ -5176,28 +5173,25 @@ function applyCorsHeaders(req, res, methods = 'GET,POST,PATCH,DELETE,OPTIONS') {
   const isProduction = process.env.NODE_ENV === 'production';
   
   // Allowed origins for production
+  // Cloud Run service URLs from environment + custom domain
   const ALLOWED_ORIGINS = [
-    'http://light-engine-demo-1765326376.s3-website-us-east-1.amazonaws.com',
-    'http://light-engine-foxtrot-prod.eba-ukiyyqf9.us-east-1.elasticbeanstalk.com',
-    'http://light-engine-foxtrot-prod-v2.eba-ukiyyqf9.us-east-1.elasticbeanstalk.com',
-    'http://light-engine-foxtrot-prod-v3.eba-ukiyyqf9.us-east-1.elasticbeanstalk.com',
-    'https://light-engine-demo-1765326376.s3-website-us-east-1.amazonaws.com',
-    'https://light-engine-foxtrot-prod.eba-ukiyyqf9.us-east-1.elasticbeanstalk.com',
-    'https://light-engine-foxtrot-prod-v2.eba-ukiyyqf9.us-east-1.elasticbeanstalk.com',
-    'https://light-engine-foxtrot-prod-v3.eba-ukiyyqf9.us-east-1.elasticbeanstalk.com',
+    process.env.LE_SERVICE_URL,
+    process.env.CENTRAL_URL || process.env.GREENREACH_CENTRAL_URL,
     'http://greenreachgreens.com',
     'https://greenreachgreens.com',
     'http://www.greenreachgreens.com',
     'https://www.greenreachgreens.com',
     'http://localhost:8091',
     'http://127.0.0.1:8091',
-  ];
+    'http://localhost:8080',
+    'http://127.0.0.1:8080',
+  ].filter(Boolean);
 
   // Allow any *.greenreachgreens.com subdomain (farm subdomains)
   const isSubdomain = (() => {
     try {
       const host = new URL(origin || '').hostname;
-      return host.endsWith('.greenreachgreens.com');
+      return host.endsWith('.greenreachgreens.com') || host.endsWith('.run.app');
     } catch { return false; }
   })();
   
@@ -8720,6 +8714,26 @@ app.get('/api/health', asyncHandler(async (req, res) => {
   health.responseTimeMs = Date.now() - started;
   const sc = health.checks.memory.status === 'unhealthy' ? 503 : 200;
   res.status(sc).json(health);
+}));
+
+// ── Cloud Scheduler cron endpoints ──────────────────────────────────────
+// These are invoked by Cloud Scheduler to trigger operations that would
+// otherwise rely on setInterval (which can be lost if the container restarts).
+app.post('/api/cron/sensor-sync', asyncHandler(async (req, res) => {
+  // Verify request is from Cloud Scheduler or internal
+  const userAgent = req.headers['user-agent'] || '';
+  if (!userAgent.includes('Google-Cloud-Scheduler') && !req.headers['x-cloudscheduler']) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+  try {
+    if (typeof syncSensorData === 'function') {
+      await syncSensorData();
+    }
+    res.json({ ok: true, triggered: 'sensor-sync', timestamp: new Date().toISOString() });
+  } catch (err) {
+    console.error('[cron/sensor-sync] Error:', err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
 }));
 
 // =====================================================

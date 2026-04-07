@@ -12,7 +12,7 @@
  */
 
 import { Router } from 'express';
-import OpenAI from 'openai';
+import { getGeminiClient, GEMINI_FLASH, estimateGeminiCost, isGeminiConfigured } from '../lib/gemini-client.js';
 import { query, isDatabaseAvailable, getDatabase } from '../config/database.js';
 import { trackAiUsage, estimateChatCost } from '../lib/ai-usage-tracker.js';
 import { TOOL_CATALOG, executeTool } from './farm-ops-agent.js';
@@ -76,52 +76,23 @@ try {
 
 const router = Router();
 
-// ── OpenAI Client ──────────────────────────────────────────────────────
-let openai = null;
-try {
-  if (process.env.OPENAI_API_KEY) {
-    openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-  } else {
-    console.warn('[Assistant Chat] OPENAI_API_KEY not set — assistant chat disabled');
-  }
-} catch (err) {
-  console.error('[Assistant Chat] Failed to init OpenAI:', err.message);
+// ── Gemini Client (Vertex AI) ──────────────────────────────────────────
+let gemini = null;
+async function ensureGemini() {
+  if (gemini) return gemini;
+  gemini = await getGeminiClient();
+  return gemini;
 }
 
-const MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
-
-// ── Anthropic Client (LLM Fallback) ───────────────────────────────────
-let anthropicClient = null;
-const FALLBACK_MODEL = process.env.ANTHROPIC_FALLBACK_MODEL || 'claude-sonnet-4-20250514';
-
-async function getAnthropicClient() {
-  if (anthropicClient) return anthropicClient;
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return null;
-  try {
-    const { default: Anthropic } = await import('@anthropic-ai/sdk');
-    anthropicClient = new Anthropic({ apiKey });
-    return anthropicClient;
-  } catch (err) {
-    console.error('[E.V.I.E.] Failed to init Anthropic client:', err.message);
-    return null;
-  }
+if (!isGeminiConfigured()) {
+  console.warn('[Assistant Chat] No Gemini credentials — assistant chat disabled');
 }
 
-function openaiToolsToAnthropic(tools) {
-  return tools.filter(t => t && t.function).map(t => ({
-    name: t.function.name,
-    description: t.function.description || '',
-    input_schema: t.function.parameters || { type: 'object', properties: {} }
-  }));
-}
+const MODEL = GEMINI_FLASH;
 
-function estimateAnthropicCost(inputTokens, outputTokens) {
-  const isHaiku = FALLBACK_MODEL.includes('haiku');
-  const inputRate = isHaiku ? 0.80 : 3;
-  const outputRate = isHaiku ? 4 : 15;
-  return (inputTokens / 1_000_000) * inputRate + (outputTokens / 1_000_000) * outputRate;
-}
+// ── Anthropic fallback removed — all LLM calls use Gemini via Vertex AI ──
+// Legacy FALLBACK_MODEL reference kept for log compatibility
+const FALLBACK_MODEL = MODEL;
 
 // ── Conversation Memory (in-memory cache + DB persistence) ─────────
 const conversations = new Map();
@@ -217,7 +188,7 @@ function getTrustTier(toolName) {
 
 // ── Conversation Summarization ────────────────────────────────────────
 async function summarizeConversation(messages, farmId) {
-  if (!openai || messages.length < 6) return null;
+  if (!isGeminiConfigured() || messages.length < 6) return null;
   try {
     const conversationText = messages
       .filter(m => m.role === 'user' || m.role === 'assistant')
@@ -225,7 +196,7 @@ async function summarizeConversation(messages, farmId) {
       .map(m => `${m.role}: ${(m.content || '').slice(0, 300)}`)
       .join('\n');
 
-    const summary = await openai.chat.completions.create({
+    const summary = await (await ensureGemini()).chat.completions.create({
       model: MODEL,
       messages: [
         { role: 'system', content: 'Summarize this farming conversation into a concise structured note (max 200 words). Extract: topics discussed, decisions made, action items, and any farming insights learned about the user or their farm. Format as bullet points.' },
@@ -5126,15 +5097,6 @@ async function attemptAutoRecovery(toolName, params, errorMsg, farmId) {
  */
 async function logSystemAlert(alertData) {
   try {
-    const alertsPath = path.join(DATA_DIR, 'system-alerts.json');
-    let alerts = [];
-    try {
-      if (fs.existsSync(alertsPath)) {
-        alerts = JSON.parse(fs.readFileSync(alertsPath, 'utf8'));
-        if (!Array.isArray(alerts)) alerts = alerts.alerts || [];
-      }
-    } catch { alerts = []; }
-
     const alert = {
       id: crypto.randomUUID(),
       alert_type: alertData.alert_type || 'system_error',
@@ -5153,15 +5115,7 @@ async function logSystemAlert(alertData) {
       created_at: new Date().toISOString()
     };
 
-    alerts.push(alert);
-    // Keep last 200 alerts
-    if (alerts.length > 200) alerts = alerts.slice(-200);
-
-    const tmpPath = alertsPath + '.tmp';
-    fs.writeFileSync(tmpPath, JSON.stringify(alerts, null, 2));
-    fs.renameSync(tmpPath, alertsPath);
-
-    // Also persist to DB if available
+    // Primary: persist to DB (Cloud Run stateless -- no local filesystem)
     if (isDatabaseAvailable()) {
       try {
         await query(
@@ -5180,114 +5134,7 @@ async function logSystemAlert(alertData) {
   }
 }
 
-// ── Anthropic Fallback Chat Function ──────────────────────────────────
-
-async function chatWithAnthropicFallback(systemPrompt, history, userMessage, farmId, convId) {
-  const client = await getAnthropicClient();
-  if (!client) throw new Error('ANTHROPIC_API_KEY not configured');
-
-  const anthropicTools = openaiToolsToAnthropic(GPT_TOOLS);
-  const toolCallResults = [];
-  let totalInputTokens = 0;
-  let totalOutputTokens = 0;
-  let loopCount = 0;
-
-  // Convert history to Anthropic message format (user/assistant only)
-  const messages = history
-    .filter(m => m.role === 'user' || m.role === 'assistant')
-    .map(m => ({ role: m.role, content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content) }));
-  messages.push({ role: 'user', content: userMessage });
-
-  let response = await client.messages.create({
-    model: FALLBACK_MODEL,
-    max_tokens: 1500,
-    system: systemPrompt,
-    messages,
-    tools: anthropicTools,
-    temperature: 0.7
-  });
-
-  totalInputTokens += response.usage?.input_tokens || 0;
-  totalOutputTokens += response.usage?.output_tokens || 0;
-
-  // Tool-calling loop
-  while (response.stop_reason === 'tool_use' && loopCount < 10) {
-    loopCount++;
-    const toolUseBlocks = response.content.filter(b => b.type === 'tool_use');
-    const toolResults = [];
-
-    for (const block of toolUseBlocks) {
-      const { id, name, input } = block;
-      console.log(`[E.V.I.E. Anthropic fallback] Tool call #${loopCount}: ${name}`);
-
-      let toolResult;
-      try {
-        const isWriteTool = TOOL_CATALOG[name]?.category === 'write' || TRUST_TIERS.confirm.has(name) || TRUST_TIERS.admin.has(name);
-        const tier = getTrustTier(name);
-
-        if (isWriteTool && tier === 'auto') {
-          toolResult = await executeExtendedTool(name, input || {}, farmId);
-        } else if (isWriteTool && tier === 'quick_confirm') {
-          toolResult = await executeExtendedTool(name, { ...input, confirm: true }, farmId);
-        } else if (isWriteTool && (tier === 'confirm' || tier === 'admin')) {
-          pendingActions.set(convId, { tool: name, params: input || {}, farmId, created: Date.now() });
-          toolResult = {
-            status: 'pending_confirmation',
-            message: 'This action requires user confirmation before execution.',
-            tool: name, params: input
-          };
-        } else {
-          toolResult = await executeExtendedTool(name, input || {}, farmId);
-        }
-      } catch (err) {
-        toolResult = { ok: false, error: err.message };
-      }
-
-      // Self-solving: attempt auto-recovery on failure
-      if (toolResult && toolResult.ok === false && toolResult.error) {
-        const recovery = await attemptAutoRecovery(name, input || {}, toolResult.error, farmId);
-        if (recovery.recovered) {
-          toolResult = recovery.result;
-          logger.info(`[E.V.I.E. Fallback Self-Solve] Auto-recovered ${name}: ${recovery.strategy}`);
-        }
-      }
-
-      toolCallResults.push({ tool: name, params: input, success: toolResult?.ok !== false });
-      toolResults.push({ type: 'tool_result', tool_use_id: id, content: JSON.stringify(toolResult).slice(0, 8000) });
-    }
-
-    messages.push({ role: 'assistant', content: response.content });
-    messages.push({ role: 'user', content: toolResults });
-
-    response = await client.messages.create({
-      model: FALLBACK_MODEL,
-      max_tokens: 1500,
-      system: systemPrompt,
-      messages,
-      tools: anthropicTools,
-      temperature: 0.4
-    });
-
-    totalInputTokens += response.usage?.input_tokens || 0;
-    totalOutputTokens += response.usage?.output_tokens || 0;
-  }
-
-  const textBlocks = response.content.filter(b => b.type === 'text');
-  const replyText = textBlocks.map(b => b.text).join('\n') || 'Request processed.';
-
-  return {
-    reply: replyText,
-    toolCalls: toolCallResults,
-    model: FALLBACK_MODEL,
-    provider: 'anthropic',
-    usage: {
-      input_tokens: totalInputTokens,
-      output_tokens: totalOutputTokens,
-      total_tokens: totalInputTokens + totalOutputTokens,
-      estimated_cost: estimateAnthropicCost(totalInputTokens, totalOutputTokens)
-    }
-  };
-}
+// ── Anthropic fallback function removed — single Gemini provider ──
 
 // ── Main Chat Endpoint ────────────────────────────────────────────────
 
@@ -5314,7 +5161,7 @@ function checkRateLimit(farmId) {
 }
 
 router.post('/chat', async (req, res) => {
-  if (!openai && !process.env.ANTHROPIC_API_KEY) {
+  if (!isGeminiConfigured()) {
     return res.status(503).json({
       ok: false,
       error: 'AI assistant not available — no LLM provider configured'
@@ -5364,7 +5211,7 @@ router.post('/chat', async (req, res) => {
       toolCallResults.push({ tool: pending.tool, params: pending.params, success: result?.ok !== false });
 
       const systemPrompt = await buildSystemPrompt(farmId);
-      const summaryCompletion = await openai.chat.completions.create({
+      const summaryCompletion = await (await ensureGemini()).chat.completions.create({
         model: MODEL,
         messages: [
           { role: 'system', content: systemPrompt },
@@ -5421,7 +5268,7 @@ router.post('/chat', async (req, res) => {
     ];
 
     // Call GPT with function calling
-    let completion = await openai.chat.completions.create({
+    let completion = await (await ensureGemini()).chat.completions.create({
       model: MODEL,
       messages,
       tools: GPT_TOOLS,
@@ -5525,7 +5372,7 @@ router.post('/chat', async (req, res) => {
       }
 
       // Call GPT again with tool results (lower temperature for deterministic tool selection)
-      completion = await openai.chat.completions.create({
+      completion = await (await ensureGemini()).chat.completions.create({
         model: MODEL,
         messages,
         tools: GPT_TOOLS,
@@ -5581,48 +5428,7 @@ router.post('/chat', async (req, res) => {
     }, { hadToolData: toolCallResults.length > 0, agent: 'evie' });
 
   } catch (error) {
-    // Attempt Anthropic fallback before giving up
-    if (process.env.ANTHROPIC_API_KEY) {
-      try {
-        console.warn('[E.V.I.E.] OpenAI failed, attempting Anthropic fallback:', error.message);
-        const fbExisting = await getConversation(convId, farmId);
-        const fbHistory = fbExisting ? [...fbExisting.messages] : [];
-        const fbSystemPrompt = await buildSystemPrompt(farmId);
-        const fallbackResult = await chatWithAnthropicFallback(fbSystemPrompt, fbHistory, sanitizedMessage, farmId, convId);
-
-        trackAiUsage({
-          farm_id: farmId, endpoint: 'assistant-chat', model: fallbackResult.model,
-          prompt_tokens: fallbackResult.usage.input_tokens,
-          completion_tokens: fallbackResult.usage.output_tokens,
-          total_tokens: fallbackResult.usage.total_tokens,
-          estimated_cost: fallbackResult.usage.estimated_cost,
-          status: 'success'
-        });
-
-        const fbUpdatedHistory = [
-          ...fbHistory,
-          { role: 'user', content: sanitizedMessage },
-          { role: 'assistant', content: fallbackResult.reply }
-        ];
-        await upsertConversation(convId, fbUpdatedHistory, farmId);
-
-        const fbToolNames = fallbackResult.toolCalls.map(t => t.tool);
-        trackEngagement(farmId, { messages: 1, toolCalls: fbToolNames.length, toolsUsed: fbToolNames });
-
-        const fbPendingAction = pendingActions.get(convId);
-        return sendEnforcedResponse(res, {
-          ok: true,
-          reply: fallbackResult.reply,
-          conversation_id: convId,
-          tool_calls: fallbackResult.toolCalls.length > 0 ? fallbackResult.toolCalls : undefined,
-          pending_action: fbPendingAction ? { tool: fbPendingAction.tool, params: fbPendingAction.params } : undefined,
-          model: fallbackResult.model,
-          provider: 'anthropic'
-        }, { hadToolData: fallbackResult.toolCalls.length > 0, agent: 'evie' });
-      } catch (fallbackErr) {
-        console.error('[E.V.I.E.] Both LLMs failed. OpenAI:', error.message, 'Anthropic:', fallbackErr.message);
-      }
-    }
+    console.error('[E.V.I.E.] Gemini call failed:', error.message);
 
     trackAiUsage({
       farm_id: farmId,
@@ -5854,16 +5660,14 @@ router.get('/state', async (req, res) => {
  * Returns whether the assistant chat is available
  */
 router.get('/status', async (req, res) => {
-  let fallbackAvailable = false;
-  try { fallbackAvailable = !!(await getAnthropicClient()); } catch { /* */ }
+  const available = isGeminiConfigured();
   res.json({
     ok: true,
-    available: !!openai || fallbackAvailable,
+    available,
     model: MODEL,
     active_conversations: conversations.size,
     llm: {
-      primary: { provider: 'openai', model: MODEL, available: !!openai },
-      fallback: { provider: 'anthropic', model: FALLBACK_MODEL, available: fallbackAvailable }
+      primary: { provider: 'gemini', model: MODEL, available }
     },
     features: {
       streaming: true,
@@ -5887,7 +5691,7 @@ router.get('/status', async (req, res) => {
  * Returns: Server-Sent Events stream with tokens as they arrive.
  */
 router.post('/chat/stream', async (req, res) => {
-  if (!openai && !process.env.ANTHROPIC_API_KEY) {
+  if (!isGeminiConfigured()) {
     return res.status(503).json({ ok: false, error: 'AI assistant not available — no LLM provider configured' });
   }
 
@@ -5951,10 +5755,10 @@ router.post('/chat/stream', async (req, res) => {
     ];
 
     // Use the vision model if image is provided
-    const streamModel = image_url ? 'gpt-4o' : MODEL;
+    const streamModel = MODEL; // Gemini Flash handles multimodal natively
 
     // First pass: check if GPT wants to call tools (non-streaming)
-    let completion = await openai.chat.completions.create({
+    let completion = await (await ensureGemini()).chat.completions.create({
       model: streamModel,
       messages,
       tools: GPT_TOOLS,
@@ -6007,7 +5811,7 @@ router.post('/chat/stream', async (req, res) => {
         messages.push({ role: 'tool', tool_call_id: toolCall.id, content: JSON.stringify(toolResult).slice(0, 8000) });
       }
 
-      completion = await openai.chat.completions.create({
+      completion = await (await ensureGemini()).chat.completions.create({
         model: streamModel,
         messages,
         tools: GPT_TOOLS,
@@ -6032,7 +5836,7 @@ router.post('/chat/stream', async (req, res) => {
         }
       } else {
         // No content yet — do a streaming completion
-        const streamCompletion = await openai.chat.completions.create({
+        const streamCompletion = await (await ensureGemini()).chat.completions.create({
           model: streamModel,
           messages,
           temperature: 0.7,
@@ -6088,71 +5892,7 @@ router.post('/chat/stream', async (req, res) => {
       });
     }
   } catch (error) {
-    // Attempt Anthropic fallback before sending error
-    if (process.env.ANTHROPIC_API_KEY) {
-      try {
-        console.warn('[E.V.I.E. Stream] OpenAI failed, using Anthropic fallback:', error.message);
-        sendEvent('fallback', { provider: 'anthropic', reason: error.message });
-
-        const fbExisting = await getConversation(convId, farmId);
-        const fbHistory = fbExisting ? [...fbExisting.messages] : [];
-        const fbSystemPrompt = await buildSystemPrompt(farmId);
-        const fallbackResult = await chatWithAnthropicFallback(fbSystemPrompt, fbHistory, sanitizedMessage, farmId, convId);
-
-        // Emit reply as chunks for streaming feel
-        const chunkSize = 12;
-        for (let i = 0; i < fallbackResult.reply.length; i += chunkSize) {
-          sendEvent('token', { text: fallbackResult.reply.slice(i, i + chunkSize) });
-        }
-
-        const fbUpdatedHistory = [
-          ...fbHistory,
-          { role: 'user', content: sanitizedMessage },
-          { role: 'assistant', content: fallbackResult.reply }
-        ];
-        await upsertConversation(convId, fbUpdatedHistory, farmId);
-
-        const fbToolNames = fallbackResult.toolCalls.map(t => t.tool);
-        trackEngagement(farmId, { messages: 1, toolCalls: fbToolNames.length, toolsUsed: fbToolNames });
-
-        trackAiUsage({
-          farm_id: farmId, endpoint: 'assistant-chat', model: fallbackResult.model,
-          prompt_tokens: fallbackResult.usage.input_tokens,
-          completion_tokens: fallbackResult.usage.output_tokens,
-          total_tokens: fallbackResult.usage.total_tokens,
-          estimated_cost: fallbackResult.usage.estimated_cost,
-          status: 'success'
-        });
-
-        // Enforcement: check fallback reply before signaling done
-        const fbHadToolData = fallbackResult.toolCalls.length > 0;
-        const fbEnforcement = enforceResponseShape(fallbackResult.reply, { hadToolData: fbHadToolData, agent: 'evie' });
-        if (fbEnforcement.violationCount >= 3) {
-          sendEvent('enforcement', {
-            blocked: true,
-            violations: fbEnforcement.violationCount,
-            flags: fbEnforcement.violations.map(v => v.split(':')[0]),
-            replacement: 'I was not able to produce a response that meets quality standards. Please rephrase your question, or ask me to check a specific data source.'
-          });
-        }
-
-        const fbPendingAction = pendingActions.get(convId);
-        sendEvent('done', {
-          conversation_id: convId,
-          tool_calls: fallbackResult.toolCalls.length > 0 ? fallbackResult.toolCalls : undefined,
-          pending_action: fbPendingAction ? { tool: fbPendingAction.tool, params: fbPendingAction.params } : undefined,
-          model: fallbackResult.model,
-          provider: 'anthropic',
-          enforcement: fbEnforcement.violationCount > 0 ? { violations: fbEnforcement.violationCount, flags: fbEnforcement.violations.map(v => v.split(':')[0]) } : undefined
-        });
-        res.end();
-        return;
-      } catch (fallbackErr) {
-        console.error('[E.V.I.E. Stream] Both LLMs failed. OpenAI:', error.message, 'Anthropic:', fallbackErr.message);
-      }
-    }
-
-    console.error('[Stream Chat] Error:', error.message);
+    console.error('[E.V.I.E. Stream] Gemini call failed:', error.message);
     sendEvent('error', { message: 'Failed to process your message.' });
   }
 
@@ -6655,7 +6395,20 @@ router.post('/alerts/:alertId/dismiss', async (req, res) => {
     const alertId = req.params.alertId;
     const reason = req.body?.reason || 'Dismissed from EVIE';
 
-    // Update system-alerts.json
+    // Dismiss in DB (primary persistence for Cloud Run)
+    if (isDatabaseAvailable()) {
+      try {
+        const result = await query(
+          'UPDATE farm_alerts SET resolved = TRUE, resolved_at = NOW(), notes = $2 WHERE id::text = $1 OR alert_type = $1 RETURNING id',
+          [alertId, reason]
+        );
+        if (result.rows?.length > 0) {
+          return res.json({ ok: true, alert_id: alertId, dismissed: true });
+        }
+      } catch { /* fall through */ }
+    }
+
+    // Fallback: check in-memory / local for backward compat
     const alertsPath = path.join(DATA_DIR, 'system-alerts.json');
     let alerts = [];
     try {
@@ -6673,10 +6426,6 @@ router.post('/alerts/:alertId/dismiss', async (req, res) => {
     alert.dismissed = true;
     alert.dismissed_at = new Date().toISOString();
     alert.dismiss_reason = reason;
-
-    const tmpPath = alertsPath + '.tmp';
-    fs.writeFileSync(tmpPath, JSON.stringify(alerts, null, 2));
-    fs.renameSync(tmpPath, alertsPath);
 
     return res.json({ ok: true, alert_id: alertId, dismissed: true });
   } catch (err) {

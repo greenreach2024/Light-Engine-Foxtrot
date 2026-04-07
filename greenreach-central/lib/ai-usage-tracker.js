@@ -1,5 +1,5 @@
 /**
- * AI Usage Tracker — logs every OpenAI API call to the ai_usage table.
+ * AI Usage Tracker — logs every AI API call to the ai_usage table.
  * Provides per-farm cost attribution for chat completions, TTS, and vision.
  *
  * Usage:
@@ -25,7 +25,7 @@ async function ensureDb() {
  * @param {object} opts
  * @param {string} opts.farm_id          - Farm making the request (nullable for unauthenticated)
  * @param {string} opts.endpoint         - Logical endpoint: 'chat', 'tts', 'vision', 'insights', 'grant-wizard', 'recommendations-pusher'
- * @param {string} opts.model            - OpenAI model used (e.g. 'gpt-4', 'tts-1-hd')
+ * @param {string} opts.model            - AI model used (e.g. 'google/gemini-2.5-flash', 'tts-1-hd')
  * @param {number} [opts.prompt_tokens]  - Prompt/input tokens (chat completions)
  * @param {number} [opts.completion_tokens] - Completion/output tokens (chat completions)
  * @param {number} [opts.total_tokens]   - Total tokens (prompt + completion)
@@ -69,16 +69,21 @@ export async function trackAiUsage(opts) {
 
 /**
  * Estimate cost for a chat completion based on model and token counts.
- * Pricing approximate as of 2025-Q1.
+ * Pricing approximate as of 2025-Q2 (Gemini via Vertex AI).
  */
 export function estimateChatCost(model, promptTokens, completionTokens) {
+  // Per-1K-token rates (divide per-1M rates by 1000)
   const rates = {
-    'gpt-4':            { input: 0.03,    output: 0.06 },
-    'gpt-4-turbo':      { input: 0.01,    output: 0.03 },
-    'gpt-4o':           { input: 0.0025,  output: 0.01 },
-    'gpt-4o-mini':      { input: 0.00015, output: 0.0006 },
+    'google/gemini-2.5-flash':      { input: 0.0003,  output: 0.0025 },
+    'google/gemini-2.5-pro':        { input: 0.00125, output: 0.01 },
+    'google/gemini-2.5-flash-lite': { input: 0.0001,  output: 0.0004 },
+    // Legacy OpenAI rates kept for historical cost lookups
+    'gpt-4':                        { input: 0.03,    output: 0.06 },
+    'gpt-4-turbo':                  { input: 0.01,    output: 0.03 },
+    'gpt-4o':                       { input: 0.0025,  output: 0.01 },
+    'gpt-4o-mini':                  { input: 0.00015, output: 0.0006 },
   };
-  const r = rates[model] || rates['gpt-4o-mini'];
+  const r = rates[model] || rates['google/gemini-2.5-flash'];
   return (promptTokens / 1000) * r.input + (completionTokens / 1000) * r.output;
 }
 

@@ -1,10 +1,12 @@
 Production Light Engine Foxtrot system
 
-## ARCHITECTURE: THE FARM IS 100% CLOUD (REQUIRED READING)
+## ARCHITECTURE: THE FARM IS 100% CLOUD -- GOOGLE CLOUD RUN (REQUIRED READING)
 
 **There is NO physical farm device. No Raspberry Pi. No edge hardware. No on-premise server.**
 
-The farm runs entirely on AWS Elastic Beanstalk. The Light Engine EB instance IS the farm. "Edge" and "cloud" are MERGED into a single cloud deployment. Any references to "edge mode" or "hardware" in the code are legacy artifacts.
+**PLATFORM MIGRATED TO GOOGLE CLOUD RUN (April 2026). AWS Elastic Beanstalk is DEPRECATED.**
+
+The farm runs entirely on Google Cloud Run. The Light Engine Cloud Run service IS the farm. "Edge" and "cloud" are MERGED into a single cloud deployment. Any references to "edge mode" or "hardware" in the code are legacy artifacts. Any references to "EB," "Elastic Beanstalk," "eb deploy," or EB environment names are DEPRECATED and must not be used.
 
 **Read `.github/CLOUD_ARCHITECTURE.md` for the full architecture reference.**
 **Read `.github/SENSOR_DATA_PIPELINE.md` for the complete sensor data flow.**
@@ -12,16 +14,19 @@ The farm runs entirely on AWS Elastic Beanstalk. The Light Engine EB instance IS
 **Read `.github/TROUBLESHOOTING_ENV_DATA.md` before debugging any sensor data issues.**
 **Read `.github/COMPLETE_SYSTEM_MAP.md` for the full platform mapping -- every page, route, table, data flow, button, sensor, and known error. Consult this BEFORE making changes to understand cross-system impacts.**
 
+**VS Code Extension: Google Cloud Code** (`googlecloudtools.cloudcode`) is installed. Provides Cloud Run explorer, Secret Manager browser, Artifact Registry viewer, and log streaming in the sidebar. Agents use `gcloud` CLI for operations; the extension is for user-facing IDE convenience.
+
 ### Critical Facts Every Agent Must Know
 
-1. **LE-EB IS the farm.** `light-engine-foxtrot-prod-v3` runs on the v2 CNAME (CNAME swap). URL contains "v2" but environment is v3. This is correct.
-2. **v2 is DEAD.** `light-engine-foxtrot-prod-v2` is terminated. DO NOT deploy to it. DO NOT reference it as a target.
-3. **Central is the hub -- NOT the farm UI.** `greenreach-central-prod-v4` at `greenreachgreens.com`. Central handles record keeping, admin, password resets, business management, and is the multi-farm data hub. Central hosts backend APIs (including `/api/research/*`) but is NOT the primary UI host for farm features like Research Workspace or G.W.E.N.
+1. **LE Cloud Run IS the farm.** Service `light-engine` at `https://light-engine-1029387937866.us-east1.run.app`. Entry point: `server-foxtrot.js`.
+2. **Central Cloud Run is the hub -- NOT the farm UI.** Service `greenreach-central` at `https://greenreach-central-1029387937866.us-east1.run.app`. Custom domain `greenreachgreens.com` (pending DNS migration). Central handles record keeping, admin, password resets, business management, and is the multi-farm data hub. Central hosts backend APIs (including `/api/research/*`) but is NOT the primary UI host for farm features like Research Workspace or G.W.E.N.
+3. **Database is AlloyDB** (PostgreSQL-compatible) at private IP `10.87.0.2` on `greenreach-vpc`. Cluster: `greenreach-db`. Both services connect via Direct VPC egress (Gen2).
 4. **Two data directories exist.** `public/data/` (LE) and `greenreach-central/public/data/` (Central). NOT synced.
-5. **SwitchBot credentials are required for sensor data.** Set as EB env vars (`SWITCHBOT_TOKEN`, `SWITCHBOT_SECRET`) on `light-engine-foxtrot-prod-v3`. Also in `public/data/farm.json` under `integrations.switchbot`. If these are missing, sensors silently stop updating.
+5. **SwitchBot credentials are required for sensor data.** Set as Cloud Run secrets (`SWITCHBOT_TOKEN`, `SWITCHBOT_SECRET`) on `light-engine` service via Secret Manager. Also in `public/data/farm.json` under `integrations.switchbot`. If these are missing, sensors silently stop updating.
 6. **Farm ID**: `FARM-MLTP9LVH-B0B85039` ("The Notable Sprout")
-7. **NO cross-origin redirects between LE and Central.** LE has no custom domain (only the raw EB CNAME). Never redirect UI page requests from one server to the other -- it breaks iframes, CSP, and HTTPS. Both servers serve the same static UI files directly.
-8. **NEVER use the raw EB URL in code.** The `light-engine-foxtrot-prod-v2.eba-ukiyyqf9.us-east-1.elasticbeanstalk.com` hostname is for deployment only. Do not hardcode it in redirects, links, fetch calls, or any runtime code.
+7. **NO cross-origin redirects between LE and Central.** Never redirect UI page requests from one server to the other -- it breaks iframes, CSP, and HTTPS. Both servers serve the same static UI files directly.
+8. **AWS/EB is DEPRECATED.** Do not reference EB environments, use `eb deploy`, or use any `aws elasticbeanstalk` commands. All infrastructure is Google Cloud Run. See `.github/CLOUD_ARCHITECTURE.md`.
+9. **GCP Project**: `project-5d00790f-13a9-4637-a40`, region `us-east1`. Artifact Registry: `us-east1-docker.pkg.dev/project-5d00790f-13a9-4637-a40/greenreach`.
 
 ### Recent Fixes (Apr 4, 2026)
 
@@ -129,9 +134,9 @@ The farm runs entirely on AWS Elastic Beanstalk. The Light Engine EB instance IS
     - File: `greenreach-central/public/central-admin.js`
     - Fixed field name mismatch: frontend sent 'thumbnail', backend expected 'image'
 
-19. **LE Instance Pinned to 1**
-    - `eb scale 1` applied to light-engine-foxtrot-prod-v3
-    - Prevents AWS launch failures from account autoscaling block
+19. **LE Instance Pinned to 1** (HISTORICAL -- EB is now deprecated, Cloud Run manages scaling)
+    - Was: `eb scale 1` applied to light-engine-foxtrot-prod-v3
+    - Now: Cloud Run `light-engine` min-instances=1, max-instances=3
 
 20. **Research Subscriber Tier (Light Engine Research)**
     - Two subscription plans: Light Engine Cloud ($29 CAD/mo, 500 AI calls, 50MB data) and Light Engine Research (TBA pricing, $10/mo test placeholder, 2500 AI calls, 500MB data)
@@ -299,44 +304,65 @@ Agents touching dashboard, weather, or devices must preserve these behaviors:
 ### DO NOT (Architecture Rules)
 
 - DO NOT assume any physical device exists (no Pi, no edge box, no local server)
-- DO NOT deploy to `light-engine-foxtrot-prod-v2` (dead environment)
-- DO NOT "fix" the CNAME swap (v3 on v2 domain is intentional)
-- DO NOT "fix" edge mode settings (LE-EB running as "edge" in cloud is intentional)
-- DO NOT remove or modify SwitchBot credentials from EB env vars or farm.json
+- DO NOT reference or deploy to AWS Elastic Beanstalk environments (deprecated)
+- DO NOT use `eb deploy`, `eb setenv`, `eb printenv`, or any `eb` CLI command
+- DO NOT use `aws elasticbeanstalk` CLI commands
+- DO NOT reference EB CNAMEs or `.elasticbeanstalk.com` URLs
+- DO NOT "fix" edge mode settings (LE Cloud Run running as "edge" in cloud is intentional)
+- DO NOT remove or modify SwitchBot credentials from Cloud Run secrets or farm.json
 - DO NOT change the Central `/env` endpoint to proxy-first (DB-first is correct)
 - DO NOT modify `setupLiveSensorSync()`, `ensureSwitchBotConfigured()`, or `getFarmIntegrations()` without reading SENSOR_DATA_PIPELINE.md
 - DO NOT modify sync-service.js authentication without verifying both auth systems (Farm API key vs GREENREACH_API_KEY)
 - DO NOT assume `foxtrot.greenreachgreens.com` resolves (it does not)
+- DO NOT create or use VPC connectors (Direct VPC egress is the pattern)
+- DO NOT build Docker images without `--platform linux/amd64` (Apple Silicon default is ARM64, Cloud Run requires amd64)
 
-### BANNED COMMANDS (HARD BLOCK -- TWO OUTAGES CAUSED)
+### BANNED COMMANDS (HARD BLOCK)
 
-The following commands are ABSOLUTELY FORBIDDEN. They have caused TWO production outages (incidents #18 and #19). Any agent that runs these will crash the production environment.
+**AWS Elastic Beanstalk is DEPRECATED. The platform has migrated to Google Cloud Run (April 2026).**
+
+The following commands are ABSOLUTELY FORBIDDEN:
 
 ```
-# BANNED -- config-only restarts skip npm install and crash the server:
-aws elasticbeanstalk update-environment --environment-name ... --option-settings ...
-eb setenv KEY=VALUE
-aws elasticbeanstalk update-environment --environment-name ... --environment-variables ...
+# BANNED -- AWS/EB infrastructure is deprecated:
+eb deploy
+eb setenv
+eb printenv
+eb scale
+aws elasticbeanstalk update-environment
+aws elasticbeanstalk describe-environments
+# Any eb CLI command or aws elasticbeanstalk command
+
+# BANNED -- destructive operations:
+DROP TABLE / TRUNCATE / DELETE without WHERE
+gcloud run services delete (without explicit user approval)
 ```
 
-**Why they break things:** EB config-only updates trigger a platform restart that skips `.platform/hooks/prebuild/01_npm_install.sh`. The Node process starts with an empty `node_modules/` and immediately crashes with `ERR_MODULE_NOT_FOUND: Cannot find package 'express'`. Recovery requires a full `eb deploy`.
+**The ONLY safe deployment commands are:**
+```bash
+# Build and push images (ALWAYS use --platform linux/amd64 on Apple Silicon)
+docker buildx build --platform linux/amd64 -t us-east1-docker.pkg.dev/project-5d00790f-13a9-4637-a40/greenreach/greenreach-central:latest --push ./greenreach-central/
+docker buildx build --platform linux/amd64 -t us-east1-docker.pkg.dev/project-5d00790f-13a9-4637-a40/greenreach/light-engine:latest --push .
 
-**Safe alternatives:**
-- To set env vars: Add them to `.ebextensions/` config files and do a full `eb deploy`
-- To check env vars: `eb printenv` (read-only, safe)
-- To deploy code + config together: `eb deploy` (always safe -- runs full hook chain)
+# Deploy (update to latest image)
+gcloud run services update greenreach-central --region=us-east1 --image=us-east1-docker.pkg.dev/project-5d00790f-13a9-4637-a40/greenreach/greenreach-central:latest
+gcloud run services update light-engine --region=us-east1 --image=us-east1-docker.pkg.dev/project-5d00790f-13a9-4637-a40/greenreach/light-engine:latest
+
+# Update env vars (safe on Cloud Run -- creates new revision)
+gcloud run services update SERVICE_NAME --region=us-east1 --update-env-vars="KEY=value"
+
+# Update secrets (after updating in Secret Manager)
+echo -n "new-value" | gcloud secrets versions add SECRET_NAME --data-file=-
+```
 
 **Additional infrastructure rules:**
-- NEVER run `aws elasticbeanstalk` CLI commands (use `eb` CLI only)
-- NEVER modify EB environment configuration outside of `eb deploy`
 - NEVER create duplicate utility files (check `services/` first)
-- NEVER add new npm dependencies without verifying they install on EB
 - NEVER run destructive DB commands (DROP TABLE, TRUNCATE, DELETE without WHERE)
-- The ONLY safe deployment commands are:
-  - Central: `cd greenreach-central && eb deploy greenreach-central-prod-v4 --staged`
-  - LE: `cd /Volumes/CodeVault/Projects/Light-Engine-Foxtrot && eb deploy light-engine-foxtrot-prod-v3 --staged`
+- NEVER build Docker images without `--platform linux/amd64`
+- NEVER use VPC connectors (Direct VPC egress is the pattern)
+- NEVER reference EB environment names, EB CNAMEs, or `.elasticbeanstalk.com` URLs
 
-## 💾 Workspace Location (REQUIRED)
+## Workspace Location (REQUIRED)
 
 **All coding projects live on the external CodeVault drive:**
 
@@ -354,7 +380,7 @@ aws elasticbeanstalk update-environment --environment-name ... --environment-var
 - If CodeVault is not mounted, do NOT create projects on the internal drive — alert the user
 - The drive is APFS-formatted (supports Unix permissions, symlinks, case-sensitive operations)
 
-## 🎯 Agent Skills Framework (REQUIRED READING)
+## Agent Skills Framework (REQUIRED READING)
 
 **ALL agents MUST read `.github/AGENT_SKILLS_FRAMEWORK.md` before any work.**
 
@@ -373,7 +399,7 @@ This framework defines:
 5. **Zero Data Format Violations** - Use adapters, never modify source formats
 6. **Central-First Intelligence** - GreenReach Central is the mother ship, active from Phase 1
 
-## 🧠 AI Vision Rules & Skills (REQUIRED for AI/ML work)
+## AI Vision Rules & Skills (REQUIRED for AI/ML work)
 
 **ALL agents working on AI/ML features, feedback loops, network intelligence, or workflow automation MUST read `.github/AI_VISION_RULES_AND_SKILLS.md` before any work.**
 
@@ -393,39 +419,37 @@ This document codifies the `AI_VISION_REPORT.md` into enforceable rules:
 - [ ] Get Architecture Agent strategic approval
 - [ ] Run `npm run validate-schemas` before commit
 
-## 🚨 DEPLOYMENT APPROVAL GATE (MANDATORY)
+## DEPLOYMENT APPROVAL GATE (MANDATORY)
 
 **NO production deployments without explicit user approval.**
 
 Agents MUST receive **"APPROVED FOR DEPLOYMENT"** message from user before executing:
-- `scp` commands to production server
-- `ssh` commands that modify production files
-- `pm2 restart` or server restart commands
-- `eb deploy` (the ONLY permitted deploy command)
+- `docker buildx build --push` (pushes image to Artifact Registry)
+- `gcloud run services update` (deploys new revision to Cloud Run)
+- `gcloud run deploy` (creates/updates Cloud Run service)
+- `gcloud secrets versions add` (updates production secrets)
 
-**ABSOLUTELY FORBIDDEN (even with user approval):**
-- `aws elasticbeanstalk update-environment` (ANY flags -- this has caused TWO outages)
-- `eb setenv` (triggers config-only restart, crashes server)
-- `aws elasticbeanstalk update-environment --option-settings` (same failure)
-- ANY `aws elasticbeanstalk` CLI command other than read-only queries
-- ANY command that modifies EB environment configuration without a full code deploy
-
-These commands crash the server by triggering a platform restart that skips `npm install`. See incidents #18 and #19 above.
+**ABSOLUTELY FORBIDDEN:**
+- ANY `eb` CLI command (`eb deploy`, `eb setenv`, `eb printenv`, etc.)
+- ANY `aws elasticbeanstalk` CLI command
+- `gcloud run services delete` (service deletion)
+- Deploying without `--platform linux/amd64` on Apple Silicon
 
 **Deployment Workflow:**
 1. Investigate and propose solution (with line-by-line changes)
 2. Get Review Agent validation
 3. **STOP and wait for user approval**
 4. User responds: "APPROVED FOR DEPLOYMENT"
-5. Only then execute `eb deploy` (the ONLY safe deployment command)
+5. Build and push Docker image: `docker buildx build --platform linux/amd64 -t REGISTRY/IMAGE:latest --push CONTEXT`
+6. Deploy: `gcloud run services update SERVICE --region=us-east1 --image=REGISTRY/IMAGE:latest`
 
 **NEVER:**
 - Deploy and test iteratively in production
 - Make "one more quick fix" without re-approval
 - Assume user wants deployment because proposal was approved
 - Deploy to production while debugging
-- Use `aws elasticbeanstalk` CLI to change env vars, config, or settings
-- Use `eb setenv` to set environment variables (use `.ebextensions/` + `eb deploy` instead)
+- Use ANY AWS/EB commands (platform has migrated to Google Cloud Run)
+- Build Docker images without `--platform linux/amd64`
 
 **Violation = Immediate termination of agent session.**
 
@@ -450,7 +474,7 @@ These commands crash the server by triggering a platform restart that skips `npm
 
 See `.github/copilot-instructions-schema.md` for detailed guidance.
 
-## 🗺️ Data Mapping Reference (REQUIRED)
+## Data Mapping Reference (REQUIRED)
 
 **Before debugging ANY data loading, authentication, or sync issue**, agents MUST:
 
@@ -471,4 +495,4 @@ See `.github/copilot-instructions-schema.md` for detailed guidance.
 - Farm login: `login.html` → `/api/farm/auth/login` → `farm_users` JOIN `farms` → bcrypt → JWT
 - Farm data: API → farmStore → `farm_data` table → in-memory Map → JSON file → default
 - Admin auth: `/api/admin/auth/login` → `admin_users` → `admin_sessions` → JWT
-- Sync: Edge → `POST /api/sync/*` → `farm_data` UPSERT → in-memory Map → file backup
+- Sync: LE Cloud Run → `POST /api/sync/*` → `farm_data` UPSERT → in-memory Map → file backup

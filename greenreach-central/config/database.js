@@ -41,6 +41,21 @@ export async function initDatabase() {
       idleTimeoutMillis: parseInt(process.env.DB_IDLE_TIMEOUT) || 30000,
       connectionTimeoutMillis: parseInt(process.env.DB_CONNECTION_TIMEOUT) || 10000,
     };
+  } else if (process.env.CLOUD_SQL_CONNECTION_NAME) {
+    // Cloud Run + Cloud SQL Auth Proxy via Unix socket
+    // CLOUD_SQL_CONNECTION_NAME format: project:region:instance
+    const socketPath = `/cloudsql/${process.env.CLOUD_SQL_CONNECTION_NAME}`;
+    poolConfig = {
+      host: socketPath,
+      database: process.env.DB_NAME || 'greenreach_central',
+      user: process.env.DB_USER || 'postgres',
+      password: process.env.DB_PASSWORD,
+      ssl: false,
+      max: parseInt(process.env.DB_POOL_MAX) || 5,
+      idleTimeoutMillis: parseInt(process.env.DB_IDLE_TIMEOUT) || 30000,
+      connectionTimeoutMillis: parseInt(process.env.DB_CONNECTION_TIMEOUT) || 10000,
+    };
+    logger.info(`Connecting to Cloud SQL via socket: ${socketPath}`);
   } else {
     // Individual env vars (EB RDS auto-inject pattern)
     poolConfig = {

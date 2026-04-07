@@ -12,6 +12,7 @@ import logger from '../utils/logger.js';
 import { query, isDatabaseAvailable } from '../config/database.js';
 import fs from 'node:fs';
 import path from 'node:path';
+import { readJSON as gcsReadJSON, writeJSON as gcsWriteJSON, USE_GCS } from './gcs-storage.js';
 
 const STALE_AFTER_MS = 15 * 60 * 1000;
 const PRUNE_AFTER_MS = 24 * 60 * 60 * 1000;
@@ -151,6 +152,23 @@ export function createSyncMonitor(options = {}) {
 
   function loadSnapshotFromDisk() {
     if (!persistenceEnabled) return;
+    // On Cloud Run, load from GCS; locally from disk
+    if (USE_GCS) {
+      gcsReadJSON('data/sync-monitor-snapshot.json', null).then(parsed => {
+        if (parsed && hydrateFromSnapshot(parsed)) {
+          logger.info('[SyncMonitor] Restored snapshot from GCS', {
+            farms_count: state.farms.size,
+            last_success_at: state.last_success_at,
+            last_persisted_at: state.last_persisted_at
+          });
+        }
+      }).catch(err => {
+        logger.warn('[SyncMonitor] Failed to restore snapshot from GCS', {
+          error: String(err?.message || err)
+        });
+      });
+      return;
+    }
     try {
       if (!fs.existsSync(snapshotFilePath)) return;
       const raw = fs.readFileSync(snapshotFilePath, 'utf8');
@@ -174,16 +192,27 @@ export function createSyncMonitor(options = {}) {
 
   function persistSnapshot(reason = 'sample') {
     if (!persistenceEnabled) return;
+    const payload = snapshot();
+    payload.persisted_at = isoNow();
+    payload.persist_reason = reason;
+    payload.last_success_at = state.last_success_at;
+    payload.last_failure_at = state.last_failure_at;
+
+    // Persist to GCS on Cloud Run, filesystem locally
+    if (USE_GCS) {
+      gcsWriteJSON('data/sync-monitor-snapshot.json', payload).then(() => {
+        state.last_persisted_at = payload.persisted_at;
+      }).catch(err => {
+        logger.warn('[SyncMonitor] Failed to persist snapshot to GCS', {
+          reason,
+          error: String(err?.message || err)
+        });
+      });
+      return;
+    }
     try {
       const dir = path.dirname(snapshotFilePath);
       fs.mkdirSync(dir, { recursive: true });
-
-      const payload = snapshot();
-      payload.persisted_at = isoNow();
-      payload.persist_reason = reason;
-      payload.last_success_at = state.last_success_at;
-      payload.last_failure_at = state.last_failure_at;
-
       const tempPath = `${snapshotFilePath}.tmp`;
       fs.writeFileSync(tempPath, JSON.stringify(payload, null, 2), 'utf8');
       fs.renameSync(tempPath, snapshotFilePath);

@@ -1,0 +1,63 @@
+# .gcloudignore for Light Engine (LE service)
+# Mirrors .ebignore — excludes heavy dirs but keeps greenreach-central route code
+.gcloudignore
+.git
+.github
+.vscode
+node_modules/
+*.log
+npm-debug.log*
+.env.local
+.env.development
+.DS_Store
+Thumbs.db
+*.md
+!README.md
+test/
+tests/
+*.test.js
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.db
+*.sqlite
+*.map
+*.mov
+*.mp4
+*.avi
+*.har
+backups/
+archive/
+aws-infrastructure/
+aws-lambda/
+aws-testing/
+light-engine-access-manager/
+
+# greenreach-central — include route/config code, exclude heavy dirs
+greenreach-central/node_modules/
+greenreach-central/public/
+greenreach-central/data/
+greenreach-central/docs/
+greenreach-central/scripts/
+greenreach-central/backups/
+greenreach-central/tests/
+greenreach-central/migrations/
+greenreach-central/reports/
+greenreach-central/server.js
+greenreach-central/server.js.*
+greenreach-central/package*.json
+greenreach-central/*.md
+greenreach-central/*.txt
+greenreach-central/*.mjs
+greenreach-central/*.bak
+greenreach-central/Dockerfile
+greenreach-central/.gcloudignore
+
+# Large public assets
+public/videos/
+
+# Scripts and tools not needed in production
+*.sh
+*.py
+!scripts/simple-anomaly-detector.py

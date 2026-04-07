@@ -4192,6 +4192,7 @@ async function loadFarmSummary(farmId, farm) {
                 deploymentType = 'Edge (Local Network)';
             } else if (apiUrl.includes('elasticbeanstalk.com') || 
                        apiUrl.includes('amazonaws.com') || 
+                       apiUrl.includes('.run.app') || 
                        apiUrl.includes('azure') || 
                        apiUrl.includes('greenreach')) {
                 deploymentType = 'Cloud';

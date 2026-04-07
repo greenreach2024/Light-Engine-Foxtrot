@@ -10,13 +10,11 @@
  *   farms report outcomes → Central analyzes → publishes findings
  */
 
-import pg from 'pg';
-const { Pool } = pg;
+import { query as dbQuery, getDatabase } from '../config/database.js';
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
-});
+const pool = {
+  query: (...args) => dbQuery(...args)
+};
 
 /**
  * Ensure the experiments table exists.
