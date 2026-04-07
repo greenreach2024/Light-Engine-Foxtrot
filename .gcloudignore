@@ -1,6 +1,10 @@
 # .gcloudignore for Light Engine (LE service)
 # Mirrors .ebignore — excludes heavy dirs but keeps greenreach-central route code
 .gcloudignore
+.elasticbeanstalk/
+**/.elasticbeanstalk/
+.ebextensions/
+**/.ebextensions/
 .git
 .github
 .vscode

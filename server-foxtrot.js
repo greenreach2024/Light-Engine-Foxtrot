@@ -58,6 +58,11 @@ console.log('  PORT:', process.env.PORT);
 // --- Feature flag: ALLOW_MOCKS (default OFF) ---
 const ALLOW_MOCKS = String(process.env.ALLOW_MOCKS || 'false').toLowerCase() === 'true';
 
+// --- Sensor sync tracking (module-scope for /api/sync/status) ---
+let sensorSyncInFlight = false;
+let lastSensorSyncAt = null;
+let sensorSyncCount = 0;
+
 // --- Demo Mode imports ---
 import { 
   initializeDemoMode, 
@@ -7258,17 +7263,31 @@ app.get('/sync-monitor', (req, res) => {
   res.sendFile(path.join(__dirname, 'sync-monitor.html'));
 });
 
-// Get sync status
+// Get sync status (Cloud Run mode: reports cron-based sensor sync, not WebSocket)
 app.get('/api/sync/status', asyncHandler(async (req, res) => {
   try {
-    const syncService = getSyncService();
-    const status = syncService.getStatus();
-    
+    // On Cloud Run, sync is handled by Cloud Scheduler hitting /api/cron/sensor-sync
+    // every 2 minutes. The WebSocket-based sync service is not used.
+    const envPath = path.join(__dirname, 'public', 'data', 'env.json');
+    let lastEnvUpdate = null;
+    try {
+      if (fs.existsSync(envPath)) {
+        const stat = fs.statSync(envPath);
+        lastEnvUpdate = stat.mtime.toISOString();
+      }
+    } catch {}
+
     res.json({
-      ...status,
+      connected: true,
+      mode: 'cloud-run-cron',
       farmId: process.env.FARM_ID,
-      recentErrors: [], // TODO: Implement error tracking
-      queue: status.queueSize > 0 ? syncService.state.queue : []
+      cronSchedule: 'every 2 minutes',
+      lastSensorSync: lastSensorSyncAt,
+      sensorSyncCount: sensorSyncCount,
+      lastEnvUpdate,
+      syncInFlight: sensorSyncInFlight,
+      recentErrors: [],
+      queueSize: 0
     });
   } catch (error) {
     console.error('[sync] Status error:', error);
@@ -7276,32 +7295,26 @@ app.get('/api/sync/status', asyncHandler(async (req, res) => {
   }
 }));
 
-// Trigger manual sync
+// Trigger manual sync (Cloud Run: calls syncSensorData directly)
 app.post('/api/sync/trigger', asyncHandler(async (req, res) => {
   const { type = 'all' } = req.body;
   
   try {
-    const syncService = getSyncService();
-    await syncService.manualSync(type);
-    
-    res.json({ success: true, type });
+    if (typeof syncSensorData === 'function') {
+      await syncSensorData();
+      res.json({ success: true, type, mode: 'cloud-run-cron' });
+    } else {
+      res.status(503).json({ error: 'Sensor sync not initialized yet' });
+    }
   } catch (error) {
     console.error('[sync] Trigger error:', error);
     res.status(500).json({ error: 'Failed to trigger sync' });
   }
 }));
 
-// Process sync queue manually
+// Process sync queue (no-op on Cloud Run, cron handles scheduling)
 app.post('/api/sync/process-queue', asyncHandler(async (req, res) => {
-  try {
-    const syncService = getSyncService();
-    syncService.processQueue();
-    
-    res.json({ success: true });
-  } catch (error) {
-    console.error('[sync] Process queue error:', error);
-    res.status(500).json({ error: 'Failed to process queue' });
-  }
+  res.json({ success: true, mode: 'cloud-run-cron', message: 'Cloud Scheduler handles sync queue' });
 }));
 
 // WebSocket endpoint for real-time sync status
@@ -30635,7 +30648,6 @@ function setupLiveSensorSync() {
   const SYNC_INTERVAL = 30000; // 30 seconds
   const HISTORY_SAMPLE_INTERVAL_MS = Number(process.env.SENSOR_HISTORY_INTERVAL_MS || 300000);
   const SWITCHBOT_SENSOR_STATUS_BATCH = Math.max(1, Number.parseInt(process.env.SWITCHBOT_SENSOR_STATUS_BATCH || '3', 10));
-  let sensorSyncInFlight = false;
   let switchBotQueue = [];
   let switchBotQueueIndex = 0;
   let switchBotQueueRefreshed = 0;
@@ -31332,6 +31344,8 @@ function setupLiveSensorSync() {
       console.warn('[sensor-sync] Error syncing sensor data:', error?.message || error);
     } finally {
       sensorSyncInFlight = false;
+      lastSensorSyncAt = new Date().toISOString();
+      sensorSyncCount++;
     }
   }
 
