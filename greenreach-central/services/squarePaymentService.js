@@ -52,6 +52,7 @@ export async function processSquarePayments(params) {
   }
 
   const sourceId = paymentSource?.source_id || paymentSource?.sourceId || null;
+  const customerId = paymentSource?.customer_id || null;
   if (!sourceId) {
     const failedResults = farmSubOrders.map((subOrder) => ({
       farmId: subOrder.farm_id,
@@ -121,6 +122,7 @@ export async function processSquarePayments(params) {
         idempotencyKey: makeIdempotencyKey({ masterOrderId, farmId, amountCents }),
         metadata: {
           sourceId,
+          customerId,
           buyerEmail: subOrder.buyer_email,
           buyerId: subOrder.buyer_id,
         },

@@ -85,10 +85,8 @@ export class SquarePaymentProvider extends PaymentProvider {
         } : undefined,
         referenceId: farmSubOrderId,
         note: `GreenReach Wholesale Order - Sub-order ${farmSubOrderId}`,
-        ...(metadata.buyerId && {
-          buyerEmailAddress: metadata.buyerEmail,
-          customerId: metadata.buyerId
-        })
+        ...(metadata.customerId && { customerId: metadata.customerId }),
+        ...(metadata.buyerEmail && { buyerEmailAddress: metadata.buyerEmail })
       };
 
       // v43: .create() not .createPayment(), response is flat (no .result wrapper)

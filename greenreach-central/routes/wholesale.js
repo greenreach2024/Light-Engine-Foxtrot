@@ -2695,6 +2695,7 @@ router.post('/checkout/execute', checkoutLimiter, requireWholesaleDbForCriticalP
     if (!delivery_date) throw new ValidationError('delivery_date is required');
     const normalizedPaymentProvider = String(payment_provider || 'manual').toLowerCase();
       const squareSourceId = requestBody?.payment_source?.source_id || requestBody?.payment_source?.sourceId || null;
+      const squareCustomerId = req.wholesaleBuyer?.squareCustomerId || null;
     if (normalizedPaymentProvider === 'square' && !squareSourceId) {
       return res.status(400).json({
         status: 'error',
@@ -2842,7 +2843,7 @@ router.post('/checkout/execute', checkoutLimiter, requireWholesaleDbForCriticalP
               ...sub,
                 buyer_email: normalizedBuyerAccount.email
             })),
-            paymentSource: { source_id: squareSourceId },
+            paymentSource: { source_id: squareSourceId, customer_id: squareCustomerId },
             commissionRate
           });
           

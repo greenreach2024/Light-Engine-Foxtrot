@@ -509,8 +509,7 @@
       });
 
       if (view === 'checkout') {
-        this.initializeSquare();
-        setTimeout(() => this.initializeSquare(), 500);
+        this.updateCheckoutCardDisplay();
         this.previewAllocation();
         if (this.selectedFulfillment === 'delivery') this.refreshDeliveryQuote();
       }
@@ -1436,10 +1435,14 @@
       this.showLoading('Processing your order...');
 
       try {
-        // Tokenize the card via Square SDK (skipped if Square not loaded)
+        // Use saved card on file or tokenize new card
         let paymentProvider = 'manual';
         let paymentSource = { type: 'manual' };
-        if (this.squarePayments && this.squareCard) {
+        const _savedCardEl = document.getElementById('checkout-saved-card');
+        if (this.currentBuyer?.squareCardId && _savedCardEl && _savedCardEl.style.display !== 'none') {
+          paymentSource = { source_id: this.currentBuyer.squareCardId };
+          paymentProvider = 'square';
+        } else if (this.squarePayments && this.squareCard) {
           const token = await this.createPaymentToken();
           paymentSource = { source_id: token };
           paymentProvider = 'square';
@@ -2498,6 +2501,50 @@
 
       const msgs = (result.errors || []).map(e => e.message).join('; ');
       throw new Error(msgs || 'Card tokenization failed');
+    },
+
+    /**
+     * Show saved card or new-card form in the checkout payment section.
+     */
+    async updateCheckoutCardDisplay() {
+      const savedEl = document.getElementById('checkout-saved-card');
+      const newEl = document.getElementById('checkout-new-card');
+      if (!savedEl || !newEl) return;
+
+      if (this.currentBuyer?.squareCardId) {
+        try {
+          const { response, json } = await this.apiFetch('/api/wholesale/buyers/me/card');
+          if (response.ok && json?.status === 'ok' && (json.data.cards || []).length > 0) {
+            const c = json.data.cards[0];
+            document.getElementById('checkout-card-brand').textContent = c.brand || 'Card';
+            document.getElementById('checkout-card-last4').textContent = c.last4 || '****';
+            document.getElementById('checkout-card-exp').textContent = (c.expMonth || '??') + '/' + (c.expYear || '????');
+            savedEl.style.display = '';
+            newEl.style.display = 'none';
+            return;
+          }
+        } catch (e) {
+          console.error('Checkout card display error:', e);
+        }
+      }
+
+      // No card on file -- show the card input form
+      savedEl.style.display = 'none';
+      newEl.style.display = '';
+      this.initializeSquare();
+      setTimeout(() => this.initializeSquare(), 500);
+    },
+
+    /**
+     * Switch from saved-card display to fresh card form at checkout.
+     */
+    useNewCardAtCheckout() {
+      const savedEl = document.getElementById('checkout-saved-card');
+      const newEl = document.getElementById('checkout-new-card');
+      if (savedEl) savedEl.style.display = 'none';
+      if (newEl) newEl.style.display = '';
+      this.initializeSquare();
+      setTimeout(() => this.initializeSquare(), 500);
     },
 
     // === PRODUCT REQUESTS ===

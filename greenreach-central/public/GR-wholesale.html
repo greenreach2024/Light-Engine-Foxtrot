@@ -2217,10 +2217,22 @@
               <strong>Payment Authorization:</strong> Your card will be authorized for the full amount, 
               but <strong>not charged</strong> until farms confirm and you pick up your order.
             </p>
-            <div id="card-element" class="square-card-element">
-              <!-- Square Web Payments card attached here -->
+            <div id="checkout-saved-card" style="display: none; padding: 1rem; border: 1px solid var(--border-color, #ddd); border-radius: 8px; background: var(--surface-alt, #f9f9f9);">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                  <span style="font-weight: 600;">Card on File:</span>
+                  <span id="checkout-card-brand">--</span> ending in <span id="checkout-card-last4">****</span>
+                  <span style="margin-left: 0.5rem; color: var(--text-secondary);">Exp <span id="checkout-card-exp">--/--</span></span>
+                </div>
+                <button type="button" class="btn btn-link" style="font-size: 0.85rem;" onclick="WholesaleApp.useNewCardAtCheckout()">Use Different Card</button>
+              </div>
             </div>
-            <div id="card-errors" class="card-errors" role="alert"></div>
+            <div id="checkout-new-card">
+              <div id="card-element" class="square-card-element">
+                <!-- Square Web Payments card attached here -->
+              </div>
+              <div id="card-errors" class="card-errors" role="alert"></div>
+            </div>
           </div>
         </div>
 
@@ -2632,6 +2644,6 @@
   <!-- Square Web Payments SDK -->
   <script src="https://web.squarecdn.com/v1/square.js"></script>
   
-  <script src="/js/wholesale.js?v=2026-03-31-square-recovery-fix" defer></script>
+  <script src="/js/wholesale.js?v=2026-04-06-card-on-file" defer></script>
 </body>
 </html>
