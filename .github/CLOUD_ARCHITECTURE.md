@@ -53,8 +53,8 @@ Agents MUST NOT:
 | **Service Account** | `light-engine-sa@project-5d00790f-13a9-4637-a40.iam.gserviceaccount.com` |
 | **Image** | `us-east1-docker.pkg.dev/project-5d00790f-13a9-4637-a40/greenreach/light-engine:latest` |
 | **Entry Point** | `node server-foxtrot.js` |
-| **CPU / Memory** | 1 vCPU / 1Gi |
-| **Min / Max Instances** | 1 / 3 |
+| **CPU / Memory** | 1 vCPU / 1Gi (CPU always-allocated -- sensor timers) |
+| **Min / Max Instances** | 1 / 2 |
 | **Execution Environment** | Gen2 (Direct VPC egress) |
 | **VPC** | `greenreach-vpc` / `greenreach-subnet` |
 | **Deploy From** | Repo root: `/Volumes/CodeVault/Projects/Light-Engine-Foxtrot/` |
@@ -69,7 +69,7 @@ Agents MUST NOT:
 | **Service Account** | `greenreach-central-sa@project-5d00790f-13a9-4637-a40.iam.gserviceaccount.com` |
 | **Image** | `us-east1-docker.pkg.dev/project-5d00790f-13a9-4637-a40/greenreach/greenreach-central:latest` |
 | **Entry Point** | `node server.js` |
-| **CPU / Memory** | 1 vCPU / 512Mi |
+| **CPU / Memory** | 1 vCPU / 768Mi |
 | **Min / Max Instances** | 1 / 5 |
 | **Execution Environment** | Gen2 (Direct VPC egress) |
 | **VPC** | `greenreach-vpc` / `greenreach-subnet` |
@@ -170,6 +170,8 @@ The following EB environments are DEPRECATED and will be terminated:
 |------|---------|----------|--------|-------|
 | 2026-04-07 | greenreach-central | 00009-qsp | 72752e99 | GCP migration complete, AlloyDB connected, 168 tables |
 | 2026-04-07 | light-engine | 00005-74n | 72752e99 | GCP migration complete, sensor data flowing |
+| 2026-04-07 | greenreach-central | 00010-2rq | config | Optimized: memory 768Mi, concurrency 50, health probes |
+| 2026-04-07 | light-engine | 00006-ghr | config | Optimized: CPU always-on, concurrency 25, max 2, health probes |
 
 ### Known Non-Critical Issues (post-migration)
 
