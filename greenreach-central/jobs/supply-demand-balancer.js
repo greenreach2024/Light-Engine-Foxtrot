@@ -139,14 +139,15 @@ export async function analyzeSupplyDemand(forecastDays = 30) {
     // 1. Demand: aggregate recent wholesale orders by crop
     const demandResult = await pool.query(`
       SELECT
-        crop,
-        SUM(COALESCE((details->>'cases')::int, 1)) AS total_cases_ordered,
-        COUNT(*) AS order_count,
-        AVG(COALESCE((details->>'cases')::int, 1)) AS avg_cases_per_order
-      FROM wholesale_orders
-      WHERE created_at > NOW() - INTERVAL '60 days'
-        AND status NOT IN ('cancelled', 'rejected')
-      GROUP BY crop
+        items.value->>'crop' AS crop,
+        SUM(COALESCE((items.value->>'cases')::int, (items.value->>'quantity')::int, 1)) AS total_cases_ordered,
+        COUNT(DISTINCT wo.id) AS order_count,
+        AVG(COALESCE((items.value->>'cases')::int, (items.value->>'quantity')::int, 1)) AS avg_cases_per_order
+      FROM wholesale_orders wo,
+           jsonb_array_elements(wo.order_data->'items') AS items
+      WHERE wo.created_at > NOW() - INTERVAL '60 days'
+        AND wo.status NOT IN ('cancelled', 'rejected')
+      GROUP BY items.value->>'crop'
       ORDER BY total_cases_ordered DESC
     `);
 
