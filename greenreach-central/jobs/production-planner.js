@@ -23,15 +23,16 @@ async function gatherDemandForecast(forecastWeeks = 4) {
   try {
     // Get recent order history (last 8 weeks as baseline)
     const { rows } = await query(`
-      SELECT item_crop AS crop,
-             SUM(item_quantity) AS total_qty,
-             COUNT(DISTINCT id) AS order_count,
-             MIN(created_at) AS first_order,
-             MAX(created_at) AS last_order
-      FROM wholesale_orders
-      WHERE created_at > NOW() - INTERVAL '8 weeks'
-        AND status NOT IN ('cancelled', 'refunded')
-      GROUP BY item_crop
+      SELECT items.value->>'crop' AS crop,
+             SUM((items.value->>'quantity')::int) AS total_qty,
+             COUNT(DISTINCT wo.id) AS order_count,
+             MIN(wo.created_at) AS first_order,
+             MAX(wo.created_at) AS last_order
+      FROM wholesale_orders wo,
+           jsonb_array_elements(wo.order_data->'items') AS items
+      WHERE wo.created_at > NOW() - INTERVAL '8 weeks'
+        AND wo.status NOT IN ('cancelled', 'refunded')
+      GROUP BY items.value->>'crop'
       ORDER BY total_qty DESC
     `);
 
@@ -63,7 +64,7 @@ async function gatherDemandForecast(forecastWeeks = 4) {
  */
 async function getNetworkSupply() {
   try {
-    const { rows: farms } = await query('SELECT farm_id, farm_name, url FROM farms WHERE active = true');
+    const { rows: farms } = await query(`SELECT farm_id, name AS farm_name, api_url FROM farms WHERE status = 'active'`);
     const supply = [];
 
     for (const farm of farms) {
@@ -113,11 +114,11 @@ async function getNetworkSupply() {
 async function getFarmCapacities() {
   try {
     const { rows } = await query(`
-      SELECT farm_id, farm_name,
+      SELECT farm_id, name AS farm_name,
              (SELECT COUNT(DISTINCT crop) FROM experiment_records WHERE farm_id = f.farm_id) AS crop_diversity,
              (SELECT COUNT(*) FROM experiment_records WHERE farm_id = f.farm_id AND recorded_at > NOW() - INTERVAL '30 days') AS recent_records
       FROM farms f
-      WHERE active = true
+      WHERE status = 'active'
     `);
 
     return rows.map(r => ({
@@ -322,7 +323,7 @@ async function generateAndDistributePlan(options = {}) {
   }
 
   // Get farm URLs
-  const { rows: farms } = await query('SELECT farm_id, url FROM farms WHERE active = true');
+  const { rows: farms } = await query(`SELECT farm_id, api_url AS url FROM farms WHERE status = 'active'`);
   const farmUrlMap = {};
   for (const f of farms) farmUrlMap[f.farm_id] = f;
 

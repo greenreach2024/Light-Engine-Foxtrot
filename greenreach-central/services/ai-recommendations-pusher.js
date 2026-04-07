@@ -210,7 +210,7 @@ async function analyzeFarm(farm) {
     const telemetryResult = await query(
       `SELECT data FROM farm_data 
        WHERE farm_id = $1 AND data_type = 'telemetry' 
-       ORDER BY timestamp DESC LIMIT 1`,
+       ORDER BY updated_at DESC LIMIT 1`,
       [farm.farm_id]
     );
     

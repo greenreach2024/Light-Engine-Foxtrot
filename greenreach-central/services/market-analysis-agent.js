@@ -81,9 +81,9 @@ export async function runMarketAnalysis() {
     logger.warn('[MarketAnalyst] Database not available — skipping');
     return { status: 'skipped', reason: 'no_database' };
   }
-  if (!openai) {
-    logger.warn('[MarketAnalyst] OpenAI not configured — skipping');
-    return { status: 'skipped', reason: 'no_openai' };
+  if (!isGeminiConfigured()) {
+    logger.warn('[MarketAnalyst] Gemini not configured — skipping');
+    return { status: 'skipped', reason: 'no_gemini' };
   }
 
   const pool = getDatabase();

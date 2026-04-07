@@ -194,9 +194,9 @@ async function checkAccountingBalance() {
   if (!isDatabaseAvailable()) return;
   try {
     const result = await query(`
-      SELECT SUM(CASE WHEN le.entry_type = 'debit' THEN le.amount ELSE 0 END) AS total_debits,
-             SUM(CASE WHEN le.entry_type = 'credit' THEN le.amount ELSE 0 END) AS total_credits
-      FROM accounting_ledger_entries le
+      SELECT SUM(le.debit) AS total_debits,
+             SUM(le.credit) AS total_credits
+      FROM accounting_entries le
       WHERE le.created_at > NOW() - INTERVAL '24 hours'
     `);
 
