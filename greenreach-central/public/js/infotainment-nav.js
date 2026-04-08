@@ -473,6 +473,46 @@
     return null;
   }
 
+  // ---- Patch action cards so they go through infotainment nav ----
+  // farm-admin.js action card handler calls renderEmbeddedView directly for
+  // iframe-view cards, which bypasses layerContent activation. Intercept here.
+  function patchActionCards() {
+    var cards = document.querySelectorAll('.action-card[data-section]');
+    for (var i = 0; i < cards.length; i++) {
+      (function (card) {
+        card.addEventListener('click', function (e) {
+          e.preventDefault(); e.stopImmediatePropagation();
+          var section = card.dataset.section;
+          var url = card.dataset.url;
+
+          if (section === 'dashboard') {
+            navigateHome();
+            return;
+          }
+
+          if (section === 'iframe-view' && url) {
+            var found = findItemByUrl(url);
+            if (found) {
+              navigateToItem(found.catKey, found.item.id);
+              return;
+            }
+            // Fallback: render directly and activate the content layer
+            if (typeof window.renderEmbeddedView === 'function') {
+              window.renderEmbeddedView(url, card.querySelector('.action-title')?.textContent?.trim() || 'Embedded View');
+            }
+            setActiveLayer(2);
+            return;
+          }
+
+          var foundSection = findItemBySection(section);
+          if (foundSection) {
+            navigateToItem(foundSection.catKey, foundSection.item.id);
+          }
+        }, true);
+      })(cards[i]);
+    }
+  }
+
   // ---- Public API (for EVIE, search-routing, external callers) ----
   window.InfoNav = {
     home: navigateHome,
@@ -523,6 +563,9 @@
 
     // Patch legacy nav items for backward compat
     patchLegacyNavItems();
+
+    // Patch action cards so iframe-view cards use infotainment nav
+    patchActionCards();
 
     // Initial route
     if (!handleInitialHash()) {
