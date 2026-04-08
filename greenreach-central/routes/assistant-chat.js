@@ -163,17 +163,14 @@ const TRUST_TIERS = {
   // AUTO: Execute immediately, notify after
   auto: new Set(['dismiss_alert', 'save_user_memory', 'escalate_to_faye', 'reply_to_faye', 'get_faye_directives', 'read_skill_file', 'get_gwen_messages', 'reply_to_gwen']),
   // QUICK-CONFIRM: Execute with brief undo window
-  quick_confirm: new Set(['mark_harvest_complete']),
+  quick_confirm: new Set(['mark_harvest_complete', 'update_farm_profile', 'update_group_crop', 'create_room', 'create_zone', 'update_certifications', 'complete_setup', 'update_crop_price', 'add_inventory_item', 'update_manual_inventory', 'record_harvest', 'update_room_specs', 'apply_crop_environment', 'recommend_farm_layout']),
   // CONFIRM: Ask before executing (default for write tools)
   confirm: new Set([
-    'update_crop_price', 'create_planting_assignment', 'update_order_status',
-    'add_inventory_item', 'update_manual_inventory', 'update_target_ranges', 'set_light_schedule',
+    'create_planting_assignment', 'update_order_status',
+    'update_target_ranges', 'set_light_schedule',
     'create_custom_product', 'update_custom_product', 'delete_custom_product',
     'update_nutrient_targets', 'register_device', 'auto_assign_devices',
-    'seed_benchmarks', 'update_farm_profile', 'create_room', 'create_zone',
-    'update_certifications', 'complete_setup',
-    'update_group_crop', 'create_procurement_order',
-    'record_harvest'
+    'seed_benchmarks', 'create_procurement_order'
   ]),
   // ADMIN: Require explicit typed confirmation
   admin: new Set([])
@@ -1047,7 +1044,7 @@ const GPT_TOOLS = [
       parameters: {
         type: 'object',
         properties: {
-          room_id: { type: 'string', description: 'Room ID to add the zone to (get from list_rooms)' },
+          room_id: { type: 'string', description: 'Room ID or room name (get from list_rooms or create_room result)' },
           name: { type: 'string', description: 'Zone name (e.g. Zone 1, Leafy Greens Section)' },
           capacity: { type: 'number', description: 'Number of grow positions in this zone' }
         },
@@ -1131,7 +1128,7 @@ const GPT_TOOLS = [
       parameters: {
         type: 'object',
         properties: {
-          room_id: { type: 'string', description: 'Room ID (get from list_rooms)' },
+          room_id: { type: 'string', description: 'Room ID or room name (get from list_rooms or create_room result)' },
           length_m: { type: 'number', description: 'Room length in meters' },
           width_m: { type: 'number', description: 'Room width in meters' },
           area_m2: { type: 'number', description: 'Room floor area in square meters (alternative to length x width)' },
@@ -1182,7 +1179,7 @@ const GPT_TOOLS = [
       parameters: {
         type: 'object',
         properties: {
-          room_id: { type: 'string', description: 'Room ID to generate layout for (uses stored room specs)' },
+          room_id: { type: 'string', description: 'Room ID or room name (uses stored room specs)' },
           crops: { type: 'array', items: { type: 'string' }, description: 'Crop names to optimize the layout for' },
           plant_count: { type: 'number', description: 'Estimated total plant count (optional -- auto-calculated from room size and hydro system)' }
         },
@@ -2270,12 +2267,16 @@ SETUP ORCHESTRATOR (ADVANCED):
 
 AUTONOMOUS ACTION TIERS:
 - You operate with a trust tier system for write operations:
-  • AUTO tier (execute immediately, notify after): dismiss_alert (info-level), save_user_memory — no confirmation needed.
-  • QUICK-CONFIRM tier (execute with brief notice): update_crop_price (within ±10% of current), mark_harvest_complete (matching existing planting data) — tell the user what you did, offer undo.
-  • CONFIRM tier (ask before executing, current default): create_planting_assignment, create_planting_plan (with execute=true), complete_setup, big price changes, register_device, update_nutrient_targets, update_target_ranges, set_light_schedule, update_room_specs, apply_crop_environment, recommend_farm_layout — describe the change, wait for "yes"/"confirm".
-  • ADMIN tier (require explicit typed confirmation): bulk operations, delete operations — require the user to type the action name.
-- For AUTO tier tools, execute them silently and mention in your response what you did. Do NOT ask "shall I save this?".
-- For QUICK-CONFIRM tier tools, execute and say "Done — [description]. Say 'undo' within 30 seconds to revert."
+  • AUTO tier (execute immediately, silently): dismiss_alert, save_user_memory, read-only tools. No confirmation.
+  • QUICK-CONFIRM tier (execute immediately, report after): update_farm_profile, update_group_crop, update_crop_price, mark_harvest_complete, create_room, create_zone, update_certifications, complete_setup, add_inventory_item, update_manual_inventory, record_harvest. Execute FIRST, then tell the user what you did and offer undo.
+  • CONFIRM tier (ask before executing): create_planting_assignment, register_device, update_nutrient_targets, update_target_ranges, set_light_schedule, auto_assign_devices, create_procurement_order — describe the change, wait for confirmation.
+  • ADMIN tier (require explicit typed confirmation): bulk deletes — require the user to type the action name.
+
+CRITICAL DIRECTIVE — ACT ON COMMANDS:
+- When the user gives a direct command ("update the farm to...", "set X to Y", "change the mode to..."), that IS both the request AND the authorization. Execute it via QUICK-CONFIRM immediately. Do NOT reply with "Would you like me to...?" or "Shall I update...?" — the user already told you what to do.
+- Only ask for clarification if the command is AMBIGUOUS (missing required parameters), never if you have all needed info.
+- For AUTO tier tools, execute silently and mention in your response what you did. Do NOT ask "shall I save this?".
+- For QUICK-CONFIRM tier tools, execute FIRST, then say "Done — [description]. Say 'undo' to revert."
 
 REPORT GENERATION:
 - When the farmer asks "how did we do this week", "weekly report", "monthly summary", or similar, use generate_report to synthesize a cross-domain narrative.
@@ -3568,7 +3569,7 @@ async function executeExtendedTool(toolName, params, farmId) {
         const { room_id, name, capacity } = params;
         if (!room_id || !name) return { ok: false, error: 'room_id and name are required' };
         const rooms = await farmStore.get(farmId, 'rooms') || [];
-        const room = rooms.find(r => r.room_id === room_id);
+        const room = rooms.find(r => r.room_id === room_id) || rooms.find(r => r.name?.toLowerCase() === room_id?.toLowerCase());
         if (!room) return { ok: false, error: `Room ${room_id} not found. Use list_rooms to see available rooms.` };
         if (!room.zones) room.zones = [];
         const newZone = { id: `zone-${room.zones.length + 1}`, name, capacity: capacity || null };
@@ -3924,7 +3925,7 @@ async function executeExtendedTool(toolName, params, farmId) {
         const { room_id, length_m, width_m, area_m2, ceiling_height_m, hydro_system, hvac_type } = params;
         if (!room_id) return { ok: false, error: 'room_id is required' };
         const rooms = await farmStore.get(farmId, 'rooms') || [];
-        const room = rooms.find(r => r.room_id === room_id);
+        const room = rooms.find(r => r.room_id === room_id) || rooms.find(r => r.name?.toLowerCase() === room_id?.toLowerCase());
         if (!room) return { ok: false, error: `Room ${room_id} not found. Use list_rooms to see available rooms.` };
         const changes = {};
         if (length_m != null) { room.length_m = parseFloat(length_m); changes.length_m = room.length_m; }
@@ -3999,7 +4000,7 @@ async function executeExtendedTool(toolName, params, farmId) {
         const { room_id, crops, plant_count } = params;
         if (!room_id) return { ok: false, error: 'room_id is required' };
         const rooms = await farmStore.get(farmId, 'rooms') || [];
-        const room = rooms.find(r => r.room_id === room_id);
+        const room = rooms.find(r => r.room_id === room_id) || rooms.find(r => r.name?.toLowerCase() === room_id?.toLowerCase());
         if (!room) return { ok: false, error: `Room ${room_id} not found. Use list_rooms to see available rooms.` };
         if (!room.area_m2 && !(room.length_m && room.width_m)) {
           return { ok: false, error: `Room "${room.name}" has no dimensions. Use update_room_specs to add length/width first.` };
@@ -5444,7 +5445,7 @@ router.post('/chat', async (req, res) => {
   const toolCallResults = [];
 
   // ── Handle pending action confirmations ──
-  const isConfirm = /^(__confirm_action__|confirm|do it|go ahead|proceed|approved)$/i.test(sanitizedMessage);
+  const isConfirm = /^(__confirm_action__|confirm|do it|go ahead|proceed|approved|yes|yep|yeah|sure|ok|absolutely|execute)$/i.test(sanitizedMessage);
   const isCancel = /^(__cancel_action__|cancel|no|nah|never mind|abort|don't|stop)$/i.test(sanitizedMessage);
 
   if (pendingActions.has(convId) && (isConfirm || isCancel)) {
@@ -6047,7 +6048,14 @@ router.post('/chat/stream', async (req, res) => {
 
           if (isWriteTool && tier === 'auto') {
             toolResult = await executeExtendedTool(fnName, fnArgs, farmId);
-          } else if (isWriteTool && tier !== 'auto') {
+          } else if (isWriteTool && tier === 'quick_confirm') {
+            fnArgs.confirm = true;
+            toolResult = await executeExtendedTool(fnName, fnArgs, farmId);
+            if (toolResult && toolResult.ok !== false) {
+              toolResult._quick_confirmed = true;
+              toolResult._notice = `Executed ${fnName}. Say "undo" within 30 seconds to revert.`;
+            }
+          } else if (isWriteTool && (tier === 'confirm' || tier === 'admin')) {
             pendingActions.set(convId, { tool: fnName, params: fnArgs, farmId, created: Date.now() });
             toolResult = { status: 'pending_confirmation', message: 'Requires user confirmation.', tool: fnName, params: fnArgs };
           } else {
