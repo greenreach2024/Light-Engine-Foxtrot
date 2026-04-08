@@ -570,16 +570,16 @@
   <!-- Password Change Section -->
   <div style="margin-top: 32px; padding-top: 24px; border-top: 1px solid #e2e8f0;">
     <h3 style="margin: 0 0 8px 0; font-size: 16px; font-weight: 600;">Change Password</h3>
-    <p class="tiny" style="margin:0 0 16px;color:#475569">Update your password for added security. Use a strong password with at least 8 characters.</p>
+    <p class="tiny" style="margin:0 0 16px;color:#475569">Update your password for added security. Use a strong password with at least 12 characters.</p>
     <form id="passwordChangeForm" class="grid cols-2" style="gap:12px;align-items:end;max-width:640px">
       <label class="tiny" style="grid-column:1 / -1">Current Password
         <input id="currentPassword" type="password" placeholder="Enter current password" autocomplete="current-password" required>
       </label>
       <label class="tiny">New Password
-        <input id="newPassword" type="password" placeholder="At least 8 characters" autocomplete="new-password" required minlength="8">
+        <input id="newPassword" type="password" placeholder="At least 12 characters" autocomplete="new-password" required minlength="12">
       </label>
       <label class="tiny">Confirm New Password
-        <input id="confirmPassword" type="password" placeholder="Re-enter new password" autocomplete="new-password" required minlength="8">
+        <input id="confirmPassword" type="password" placeholder="Re-enter new password" autocomplete="new-password" required minlength="12">
       </label>
       <div class="row row--gap-sm" style="grid-column:1 / -1">
         <button id="passwordChangeSave" type="submit" class="primary">Change Password</button>
@@ -2238,8 +2238,8 @@
           }
           
           // Validate password length
-          if (newPassword.length < 8) {
-            passwordChangeStatus.textContent = 'Password must be at least 8 characters';
+          if (newPassword.length < 12) {
+            passwordChangeStatus.textContent = 'Password must be at least 12 characters';
             passwordChangeStatus.style.color = '#ef4444';
             return;
           }
