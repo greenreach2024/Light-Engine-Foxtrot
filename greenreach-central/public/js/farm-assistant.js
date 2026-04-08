@@ -148,7 +148,9 @@ class FarmAssistant {
    */
   checkProactiveGreeting() {
     const greeted = localStorage.getItem('evie_greeted');
-    if (greeted) return;  // Already shown
+    const fromWizard = sessionStorage.getItem('wizard_just_completed');
+    if (greeted && !fromWizard) return;  // Already shown and not fresh from wizard
+    if (fromWizard) sessionStorage.removeItem('wizard_just_completed');
 
     setTimeout(async () => {
       try {
@@ -175,8 +177,16 @@ class FarmAssistant {
           this.addMessage(
             `<strong>Your farm is fully set up.</strong> Grow rooms, inventory, payments, and store are all configured. Ask me anything about your crops, environment, or operations.`
           );
+        } else if (fromWizard) {
+          const nextItems = incomplete.slice(0, 4).map(t => `${t.icon || '-'} ${t.label}`).join('<br>');
+          this.addMessage(
+            `<strong>Setup wizard complete -- I will take it from here.</strong><br>
+            You've finished the basics. There are <strong>${incomplete.length} remaining steps</strong> to get your farm fully operational.
+            <br><br><strong>Here is what to tackle next:</strong><br>${nextItems}
+            <br><br>I will walk you through each one. Type <em>"next step"</em> or click any task above to get started.`
+          );
         } else {
-          const nextItems = incomplete.slice(0, 3).map(t => `${t.icon || '○'} ${t.label}`).join('<br>');
+          const nextItems = incomplete.slice(0, 3).map(t => `${t.icon || '-'} ${t.label}`).join('<br>');
           this.addMessage(
             `<strong>Welcome to GreenReach Central.</strong><br>
             You've completed <strong>${done} of ${total}</strong> setup tasks.

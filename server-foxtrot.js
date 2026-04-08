@@ -2210,7 +2210,7 @@ app.use((req, res, next) => {
 });
 
 // Global input sanitization middleware
-app.use(express.json({ limit: "1mb" }));
+app.use(express.json({ limit: "5mb" }));
 app.use(sanitizeRequestBody);
 console.log('[Security] Global input sanitization enabled');
 
@@ -6956,7 +6956,7 @@ app.post('/api/setup/save-rooms', asyncHandler(async (req, res) => {
 app.post('/api/setup/complete', asyncHandler(async (req, res) => {
   const { 
     network, registrationCode, farmId, hardware, certifications, rooms,
-    farmName, ownerName, contactEmail, contactPhone, store
+    farmName, ownerName, contactEmail, contactPhone, store, website, logoBase64
   } = req.body;
   
   try {
@@ -6992,7 +6992,8 @@ app.post('/api/setup/complete', asyncHandler(async (req, res) => {
       farmData.contactName = ownerName || farmData.contactName;
       farmData.email = contactEmail || farmData.email;
       farmData.phone = contactPhone || farmData.phone;
-      farmData.website = store?.website || farmData.website;
+      farmData.website = website || store?.website || farmData.website;
+      if (logoBase64) farmData.logoBase64 = logoBase64;
       
       // Preserve other fields like location, timezone, etc.
       farmData.updatedAt = new Date().toISOString();
@@ -7045,6 +7046,8 @@ app.post('/api/setup/complete', asyncHandler(async (req, res) => {
             ownerName,
             contactEmail,
             contactPhone,
+            website: website || '',
+            logoBase64: logoBase64 || null,
             certifications: certifications || {},
             rooms: rooms || [],
             store: store || {},

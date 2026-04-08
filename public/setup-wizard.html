@@ -5,7 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Light Engine Setup</title>
     <script>
-        window.location.replace('/LE-dashboard.html');
+        // Auth check — ensure user has a valid token
+        const token = sessionStorage.getItem('token') || localStorage.getItem('token');
+        if (!token || token === 'local-access') {
+            window.location.replace('/farm-admin-login.html');
+        }
     </script>
     <style>
         * {
@@ -278,6 +282,9 @@
                 <div class="progress-dot active" id="dot-0"></div>
                 <div class="progress-dot" id="dot-1"></div>
                 <div class="progress-dot" id="dot-2"></div>
+                <div class="progress-dot" id="dot-3"></div>
+                <div class="progress-dot" id="dot-4"></div>
+                <div class="progress-dot" id="dot-5"></div>
             </div>
         </div>
 
@@ -292,8 +299,31 @@
             </div>
         </div>
 
-        <!-- Step 2: Farm Profile -->
+        <!-- Step 2: Set Your Password -->
         <div class="step" id="step-1">
+            <div class="step-content">
+                <h2 class="step-title">Set Your Password</h2>
+                <p class="step-description">
+                    Your account was created with a temporary password. Please set a secure password you'll remember.
+                </p>
+
+                <div class="form-group">
+                    <label class="form-label required">New Password</label>
+                    <input type="password" class="form-input" id="new-password" placeholder="At least 12 characters" required minlength="12">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label required">Confirm Password</label>
+                    <input type="password" class="form-input" id="confirm-password" placeholder="Re-enter your password" required>
+                </div>
+
+                <div id="password-error" class="alert alert-error" style="display: none;"></div>
+                <div id="password-success" class="alert alert-success" style="display: none;">Password updated successfully!</div>
+            </div>
+        </div>
+
+        <!-- Step 3: Farm Profile -->
+        <div class="step" id="step-2">
             <div class="step-content">
                 <h2 class="step-title">Farm Profile</h2>
                 <p class="step-description">
@@ -319,11 +349,28 @@
                     <label class="form-label">Phone Number</label>
                     <input type="tel" class="form-input" id="contact-phone" placeholder="e.g., (555) 123-4567">
                 </div>
+
+                <div class="form-group">
+                    <label class="form-label">Website</label>
+                    <input type="url" class="form-input" id="farm-website" placeholder="e.g., https://greenvalleyfarms.com">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Farm Logo</label>
+                    <div style="display: flex; align-items: center; gap: 1rem;">
+                        <img id="logo-preview" style="width: 64px; height: 64px; border-radius: 8px; object-fit: cover; display: none; border: 1px solid var(--border);" alt="Logo preview">
+                        <div style="flex: 1;">
+                            <input type="file" id="farm-logo-file" accept="image/png,image/jpeg,image/webp,image/svg+xml" style="display: none;">
+                            <button type="button" class="btn" onclick="document.getElementById('farm-logo-file').click()" style="margin-bottom: 0.5rem;">Choose File</button>
+                            <p style="font-size: 0.8rem; color: var(--text-muted);">PNG, JPG, WebP, or SVG. Max 2 MB.</p>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 
-        <!-- Step 3: Grow Rooms -->
-        <div class="step" id="step-2">
+        <!-- Step 4: Grow Rooms -->
+        <div class="step" id="step-3">
             <div class="step-content">
                 <h2 class="step-title">Grow Rooms & Light Controllers</h2>
                 <p class="step-description">
@@ -331,13 +378,27 @@
                 </p>
 
                 <!-- Device Discovery Section -->
-                <div class="card" style="margin-bottom: 2rem; background: rgba(16, 185, 129, 0.05); border: 2px solid rgba(16, 185, 129, 0.2);">
+                <div class="card" id="device-discovery-section" style="margin-bottom: 2rem; background: rgba(16, 185, 129, 0.05); border: 2px solid rgba(16, 185, 129, 0.2);">
                     <h3 style="color: var(--accent-green); margin-bottom: 1rem;">🔍 Auto-Discover Light Controllers</h3>
                     <p style="color: var(--text-muted); margin-bottom: 1rem;">
                         Scan your network to find GROW3 and DMX light controllers automatically - no manual IP entry needed!
                     </p>
                     <div id="device-scanner-container"></div>
                     <div id="device-results" style="margin-top: 1rem;"></div>
+                </div>
+
+                <!-- Cloud info panel (shown instead of auto-discover for cloud users) -->
+                <div class="card" id="cloud-info-panel" style="display: none; margin-bottom: 2rem; background: rgba(59, 130, 246, 0.05); border: 2px solid rgba(59, 130, 246, 0.2);">
+                    <h3 style="color: #60a5fa; margin-bottom: 1rem;">☁️ Light Engine Cloud</h3>
+                    <p style="color: var(--text-muted); margin-bottom: 1rem;">
+                        Light controller management requires Light Engine Edge hardware. Your Cloud plan includes environment monitoring, inventory, POS, and online sales.
+                    </p>
+                    <p style="color: var(--text-muted); margin-bottom: 1rem; font-size: 0.9rem;">
+                        You can still add grow rooms below for inventory tracking, planting schedules, and crop management.
+                    </p>
+                    <a href="/purchase.html?upgrade=edge" style="display: inline-block; padding: 8px 16px; background: #8b5cf6; color: white; border-radius: 6px; text-decoration: none; font-size: 0.9rem; font-weight: 500;">
+                        Upgrade to Edge →
+                    </a>
                 </div>
 
                 <div id="rooms-container"></div>
@@ -348,8 +409,8 @@
             </div>
         </div>
 
-        <!-- Step 4: Activity Hub Setup -->
-        <div class="step" id="step-3">
+        <!-- Step 5: Activity Hub Setup -->
+        <div class="step" id="step-4">
             <div class="step-content">
                 <h2 class="step-title">📱 Activity Hub</h2>
                 <p class="step-description">
@@ -392,8 +453,8 @@
             </div>
         </div>
 
-        <!-- Step 5: Complete -->
-        <div class="step" id="step-4">
+        <!-- Step 6: Complete -->
+        <div class="step" id="step-5">
             <div class="step-content">
                 <h2 class="step-title">Setup Complete</h2>
                 <p class="step-description">
@@ -417,36 +478,77 @@
         </div>
     </div>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="device-scanner.js"></script>
     <script>
         let currentStep = 0;
-        const totalSteps = 5;
+        const totalSteps = 6;
         let roomCounter = 0;
         let deviceScanner = null;
         let discoveredDevices = [];
+        let passwordChanged = false;
 
-        // Extract farmId from JWT token
-        function getFarmIdFromToken() {
-            const token = localStorage.getItem('token');
-            if (!token) return null;
+        // Extract data from JWT token
+        function getDataFromToken() {
+            const token = sessionStorage.getItem('token') || localStorage.getItem('token');
+            if (!token) return {};
             
             try {
                 const payload = JSON.parse(atob(token.split('.')[1]));
-                return payload.farmId;
+                return {
+                    farmId: payload.farm_id || payload.farmId,
+                    email: payload.email,
+                    name: payload.name
+                };
             } catch (e) {
                 console.error('Failed to decode token:', e);
-                return null;
+                return {};
             }
         }
 
+        const tokenData = getDataFromToken();
         const farmData = {
-            farmId: getFarmIdFromToken() || localStorage.getItem('farmId'),
-            farmName: '',
-            contactName: '',
-            contactEmail: '',
+            farmId: tokenData.farmId || localStorage.getItem('farmId') || localStorage.getItem('farm_id'),
+            farmName: localStorage.getItem('farm_name') || '',
+            contactName: tokenData.name || '',
+            contactEmail: tokenData.email || localStorage.getItem('email') || '',
             contactPhone: '',
+            website: '',
+            logoBase64: null,
             rooms: []
         };
+        
+        // Pre-populate farm profile fields when DOM is ready
+        setTimeout(() => {
+            const farmNameEl = document.getElementById('farm-name');
+            const contactNameEl = document.getElementById('contact-name');
+            const contactEmailEl = document.getElementById('contact-email');
+            if (farmData.farmName && farmNameEl) farmNameEl.value = farmData.farmName;
+            if (farmData.contactName && contactNameEl) contactNameEl.value = farmData.contactName;
+            if (farmData.contactEmail && contactEmailEl) contactEmailEl.value = farmData.contactEmail;
+
+            // Logo file preview handler
+            const logoInput = document.getElementById('farm-logo-file');
+            if (logoInput) {
+                logoInput.addEventListener('change', function(e) {
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    if (file.size > 2 * 1024 * 1024) {
+                        alert('Logo file must be under 2 MB.');
+                        e.target.value = '';
+                        return;
+                    }
+                    const reader = new FileReader();
+                    reader.onload = function(ev) {
+                        farmData.logoBase64 = ev.target.result;
+                        const preview = document.getElementById('logo-preview');
+                        preview.src = ev.target.result;
+                        preview.style.display = 'block';
+                    };
+                    reader.readAsDataURL(file);
+                });
+            }
+        }, 100);
 
         function updateUI() {
             // Hide all steps
@@ -479,19 +581,22 @@
         async function nextStep() {
             // Validate current step
             if (currentStep === 1) {
-                if (!validateFarmProfile()) return;
+                // Password change step
+                if (!await validateAndChangePassword()) return;
             } else if (currentStep === 2) {
+                if (!validateFarmProfile()) return;
+            } else if (currentStep === 3) {
                 if (!validateRooms()) return;
             }
 
-            // Save and complete on last data collection step
-            if (currentStep === 2) {
+            // Save and complete on last data collection step (rooms)
+            if (currentStep === 3) {
                 await saveSetup();
             }
 
             if (currentStep < totalSteps - 1) {
                 currentStep++;
-                if (currentStep === 2 && farmData.rooms.length === 0) {
+                if (currentStep === 3 && farmData.rooms.length === 0) {
                     addRoom(); // Add default room
                 }
                 updateUI();
@@ -519,6 +624,7 @@
             farmData.contactName = contactName;
             farmData.contactEmail = contactEmail;
             farmData.contactPhone = document.getElementById('contact-phone').value.trim();
+            farmData.website = document.getElementById('farm-website').value.trim();
 
             return true;
         }
@@ -621,17 +727,17 @@
 
         async function saveSetup() {
             try {
-                const token = localStorage.getItem('token');
+                const token = sessionStorage.getItem('token') || localStorage.getItem('token');
                 if (!token) {
                     alert('Authentication token not found. Please log in again.');
                     window.location.href = '/farm-admin-login.html';
-                    return;
+                    throw new Error('Authentication required');
                 }
 
                 if (!farmData.farmId) {
                     alert('Farm ID not found. Please log in again.');
                     window.location.href = '/farm-admin-login.html';
-                    return;
+                    throw new Error('Farm ID required');
                 }
 
                 console.log('Saving setup for farm:', farmData.farmId);
@@ -648,6 +754,8 @@
                         ownerName: farmData.contactName,
                         contactEmail: farmData.contactEmail,
                         contactPhone: farmData.contactPhone,
+                        website: farmData.website,
+                        logoBase64: farmData.logoBase64,
                         rooms: farmData.rooms
                     })
                 });
@@ -670,7 +778,62 @@
         }
 
         function goToDashboard() {
-            window.location.href = '/farm-admin.html';
+            // Clear EVIE greeting flag so she triggers the proactive onboarding checklist
+            localStorage.removeItem('evie_greeted');
+            // Signal that wizard just finished — EVIE can use this for context
+            sessionStorage.setItem('wizard_just_completed', 'true');
+            window.location.href = '/LE-farm-admin.html';
+        }
+
+        async function validateAndChangePassword() {
+            const newPass = document.getElementById('new-password').value;
+            const confirmPass = document.getElementById('confirm-password').value;
+            const errorEl = document.getElementById('password-error');
+            const successEl = document.getElementById('password-success');
+            
+            errorEl.style.display = 'none';
+            successEl.style.display = 'none';
+
+            if (!newPass || newPass.length < 12) {
+                errorEl.textContent = 'Password must be at least 12 characters long.';
+                errorEl.style.display = 'block';
+                return false;
+            }
+            if (newPass !== confirmPass) {
+                errorEl.textContent = 'Passwords do not match.';
+                errorEl.style.display = 'block';
+                return false;
+            }
+
+            // If already changed this session, skip API call
+            if (passwordChanged) return true;
+
+            try {
+                const token = sessionStorage.getItem('token') || localStorage.getItem('token');
+                const response = await fetch('/api/setup-wizard/change-password', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ newPassword: newPass })
+                });
+                
+                const data = await response.json();
+                if (!data.success) {
+                    errorEl.textContent = data.error || 'Failed to update password.';
+                    errorEl.style.display = 'block';
+                    return false;
+                }
+
+                passwordChanged = true;
+                successEl.style.display = 'block';
+                return true;
+            } catch (err) {
+                errorEl.textContent = 'Network error. Please try again.';
+                errorEl.style.display = 'block';
+                return false;
+            }
         }
 
         // Activity Hub functions
@@ -681,14 +844,38 @@
             // Display URL
             document.getElementById('activity-hub-url').textContent = hubUrl;
             
-            // Generate QR code using Google Charts API
+            // Generate QR code using qrcodejs (client-side)
             const qrContainer = document.getElementById('activity-hub-qr');
-            const qrSize = 200;
-            const qrUrl = `https://chart.googleapis.com/chart?cht=qr&chs=${qrSize}x${qrSize}&chl=${encodeURIComponent(hubUrl)}&choe=UTF-8`;
+            qrContainer.innerHTML = '';
             
-            qrContainer.innerHTML = `
-                <img src="${qrUrl}" alt="Activity Hub QR Code" style="border: 2px solid var(--border); border-radius: 8px; padding: 10px; background: white;" />
-            `;
+            try {
+                new QRCode(qrContainer, {
+                    text: hubUrl,
+                    width: 200,
+                    height: 200,
+                    colorDark: '#000000',
+                    colorLight: '#ffffff',
+                    correctLevel: QRCode.CorrectLevel.M
+                });
+                // Style the generated elements
+                const img = qrContainer.querySelector('img');
+                const canvas = qrContainer.querySelector('canvas');
+                if (img) {
+                    img.style.border = '2px solid var(--border)';
+                    img.style.borderRadius = '8px';
+                    img.style.padding = '10px';
+                    img.style.background = 'white';
+                }
+                if (canvas) {
+                    canvas.style.border = '2px solid var(--border)';
+                    canvas.style.borderRadius = '8px';
+                    canvas.style.padding = '10px';
+                    canvas.style.background = 'white';
+                }
+            } catch (e) {
+                console.error('QR code generation failed:', e);
+                qrContainer.innerHTML = `<p style="color: var(--text-muted);">QR code unavailable. Use the manual URL below.</p>`;
+            }
         }
 
         function copyHubUrl() {
@@ -715,6 +902,31 @@
 
         // Initialize
         updateUI();
+
+        // Detect plan type and gate cloud/edge features
+        (async function detectPlanType() {
+            try {
+                const token = sessionStorage.getItem('token') || localStorage.getItem('token');
+                const headers = {};
+                if (token) headers['Authorization'] = `Bearer ${token}`;
+                const resp = await fetch('/api/setup/status', { headers });
+                if (resp.ok) {
+                    const data = await resp.json();
+                    const planType = data.farm?.planType || localStorage.getItem('plan_type') || 'cloud';
+                    localStorage.setItem('plan_type', planType);
+
+                    if (planType === 'cloud') {
+                        // Hide auto-discover, show cloud info
+                        const discoverSection = document.getElementById('device-discovery-section');
+                        const cloudPanel = document.getElementById('cloud-info-panel');
+                        if (discoverSection) discoverSection.style.display = 'none';
+                        if (cloudPanel) cloudPanel.style.display = 'block';
+                    }
+                }
+            } catch (e) {
+                console.warn('[Setup Wizard] Could not detect plan type:', e);
+            }
+        })();
         
         // Initialize device scanner
         function initDeviceScanner() {
@@ -782,12 +994,12 @@
             mutations.forEach((mutation) => {
                 if (mutation.target.classList.contains('active')) {
                     const stepId = mutation.target.id;
-                    if (stepId === 'step-2') {
+                    if (stepId === 'step-3') {
                         // Initialize device scanner when room setup step loads
                         if (!deviceScanner) {
                             initDeviceScanner();
                         }
-                    } else if (stepId === 'step-3') {
+                    } else if (stepId === 'step-4') {
                         generateActivityHubQR();
                     }
                 }

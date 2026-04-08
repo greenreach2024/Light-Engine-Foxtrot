@@ -360,7 +360,7 @@ router.get('/status', authenticateToken, async (req, res) => {
 router.post('/complete', authenticateToken, async (req, res) => {
   try {
     const farmId = req.farmId;
-    const { farmName, contact, location, rooms, certifications, credentials, endpoints, affiliation_type, institution, department, orcid } = req.body;
+    const { farmName, contact, location, rooms, certifications, credentials, endpoints, affiliation_type, institution, department, orcid, website, logoBase64 } = req.body;
 
     // Accept both nested contact object AND flat fields from wizard
     // Wizard sends: ownerName, contactEmail, contactPhone (flat)
@@ -381,6 +381,8 @@ router.post('/complete', authenticateToken, async (req, res) => {
       certifications: certifications || {},
       credentials: credentials || {},
       endpoints: endpoints || {},
+      website: website || '',
+      logoBase64: logoBase64 || null,
       status: 'active',
       setup_completed: true,
       setup_completed_at: new Date().toISOString()
@@ -407,8 +409,9 @@ router.post('/complete', authenticateToken, async (req, res) => {
     const pool = req.db;
     if (pool) {
       try {
-        // Add contact_phone column if it doesn't exist yet
+        // Ensure optional columns exist
         await pool.query('ALTER TABLE farms ADD COLUMN IF NOT EXISTS contact_phone VARCHAR(50)').catch(() => {});
+        await pool.query('ALTER TABLE farms ADD COLUMN IF NOT EXISTS website VARCHAR(512)').catch(() => {});
 
         await pool.query(
           `UPDATE farms SET 
@@ -417,9 +420,10 @@ router.post('/complete', authenticateToken, async (req, res) => {
             name = COALESCE($2, name),
             contact_name = COALESCE($3, contact_name),
             email = COALESCE($4, email),
-            contact_phone = COALESCE($5, contact_phone)
+            contact_phone = COALESCE($5, contact_phone),
+            website = COALESCE($6, website)
           WHERE farm_id = $1`,
-          [farmId, farmName || null, normalizedContact.name || null, normalizedContact.email || null, normalizedContact.phone || null]
+          [farmId, farmName || null, normalizedContact.name || null, normalizedContact.email || null, normalizedContact.phone || null, website || null]
         );
         // Also clear must_change_password for all users of this farm
         await pool.query(
