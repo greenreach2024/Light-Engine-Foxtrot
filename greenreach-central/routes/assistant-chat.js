@@ -789,7 +789,8 @@ const GPT_TOOLS = [
           harvest_interval: { type: 'string', description: 'Target harvest cadence: "weekly", "biweekly", "monthly". When set, staggers seed dates so harvests land on a regular cycle. Default: none.'},
           focus: { type: 'string', description: 'Planning focus: balanced, high-margin, quick-turn, succession, diversification' },
           exclude: { type: 'string', description: 'Comma-separated crop names to exclude' },
-          farm_id: { type: 'string', description: 'Farm ID (optional)' }
+          farm_id: { type: 'string', description: 'Farm ID (optional)' },
+          execute: { type: 'boolean', description: 'If true, immediately save the plan to groups and planting assignments. Use after the farmer confirms the proposed plan. Default false (preview only).' }
         },
         required: ['target_date']
       }
@@ -2055,7 +2056,9 @@ PLANTING SCHEDULE WORKFLOW:
   3. Call get_capacity to see available space.
   4. Use create_planting_plan with the farmer’s target date and preferences to generate an optimised batch schedule.
   5. Present the plan as a clear table (crop, zone, seed date, harvest date, reasoning) and ask the farmer to confirm.
-  6. After confirmation, execute using create_planting_assignment for each line item, passing the exact seed_date from the plan.
+  6. After confirmation, call create_planting_plan AGAIN with the same parameters PLUS execute=true. This saves the plan directly to all groups and the planting assignments database in one step. Do NOT call create_planting_assignment individually for each zone.
+  7. After execution, tell the farmer the plan has been saved and suggest they check the Planting Scheduler or Dashboard to see the updated groups.
+- DIRECT EXECUTION: When the farmer says "update the schedule", "implement it", "save it", "apply it", or "do it" without asking to see a preview first, call create_planting_plan with execute=true immediately (this is the confirmation). Do NOT show the plan as text and wait — save it directly.
 - CROP MIX / PERCENTAGE ALLOCATION: When the farmer specifies exact crops and percentages (e.g. "20% red oak, 5% basil, you choose the rest"), pass them in the crop_mix parameter as "Red Oak:20%, Basil:5%, ai_choice:remainder". The tool fuzzy-matches crop names against the registry and allocates zones proportionally. Use "ai_choice" for the portion you should fill based on market/scoring data. This is the primary way to handle requests like "create a schedule with 20% of this, 10% of that".
 - HARVEST INTERVAL: When the farmer asks for "weekly harvests" or "regular weekly harvests", set harvest_interval to "weekly". This staggers seed dates within each crop allocated zones so harvests land on a rolling weekly (or biweekly/monthly) cycle instead of all at once.
 - CRITICAL DATE RULE: Always use the current year from "Today's date" above. If the farmer says "April 1", use the CURRENT YEAR (e.g. 2026-04-01), NOT 2024. All dates must be current or future.
@@ -2269,7 +2272,7 @@ AUTONOMOUS ACTION TIERS:
 - You operate with a trust tier system for write operations:
   • AUTO tier (execute immediately, notify after): dismiss_alert (info-level), save_user_memory — no confirmation needed.
   • QUICK-CONFIRM tier (execute with brief notice): update_crop_price (within ±10% of current), mark_harvest_complete (matching existing planting data) — tell the user what you did, offer undo.
-  • CONFIRM tier (ask before executing, current default): create_planting_assignment, complete_setup, big price changes, register_device, update_nutrient_targets, update_target_ranges, set_light_schedule, update_room_specs, apply_crop_environment, recommend_farm_layout — describe the change, wait for "yes"/"confirm".
+  • CONFIRM tier (ask before executing, current default): create_planting_assignment, create_planting_plan (with execute=true), complete_setup, big price changes, register_device, update_nutrient_targets, update_target_ranges, set_light_schedule, update_room_specs, apply_crop_environment, recommend_farm_layout — describe the change, wait for "yes"/"confirm".
   • ADMIN tier (require explicit typed confirmation): bulk operations, delete operations — require the user to type the action name.
 - For AUTO tier tools, execute them silently and mention in your response what you did. Do NOT ask "shall I save this?".
 - For QUICK-CONFIRM tier tools, execute and say "Done — [description]. Say 'undo' within 30 seconds to revert."
@@ -2367,7 +2370,7 @@ RULES:
 - For complex planning questions, a thorough structured answer is better than a short one. Use rich formatting.
 - When you call a tool, summarize the result naturally — don't dump raw JSON.
 - Use the tools proactively — if a user asks you to do something and you have a tool for it, use the tool. Do not ask the user for information the tools can provide.
-- For WRITE operations (update_farm_profile, create_room, create_zone, update_certifications, complete_setup, update_crop_price, create_planting_assignment, mark_harvest_complete, update_order_status, add_inventory_item, update_manual_inventory, create_custom_product, update_custom_product, delete_custom_product, dismiss_alert, auto_assign_devices, register_device, seed_benchmarks, update_nutrient_targets, update_target_ranges, set_light_schedule, update_group_crop, create_procurement_order, update_room_specs, apply_crop_environment): you MUST describe the proposed change and ask the user to confirm BEFORE calling the tool. Do NOT call write tools until the user says "yes", "confirm", "do it", or similar.
+- For WRITE operations (update_farm_profile, create_room, create_zone, update_certifications, complete_setup, update_crop_price, create_planting_assignment, create_planting_plan (with execute=true), mark_harvest_complete, update_order_status, add_inventory_item, update_manual_inventory, create_custom_product, update_custom_product, delete_custom_product, dismiss_alert, auto_assign_devices, register_device, seed_benchmarks, update_nutrient_targets, update_target_ranges, set_light_schedule, update_group_crop, create_procurement_order, update_room_specs, apply_crop_environment): you MUST describe the proposed change and ask the user to confirm BEFORE calling the tool. Do NOT call write tools until the user says "yes", "confirm", "do it", or similar.
 - PROCUREMENT SAFETY: create_procurement_order requires reading back the full order summary (items, quantities, cost) and getting explicit approval. Never place orders without confirmed quantities. Never source from outside the procurement catalog.
 - After any WRITE operation succeeds, verify by calling the corresponding read tool and report the confirmed result.
 - If you can't help, say so briefly and suggest what you CAN do.
@@ -3198,6 +3201,66 @@ async function executeExtendedTool(toolName, params, farmId) {
         }
 
         const plan = [];
+        // --- Execute helper: save plan to groups + DB when execute=true ---
+        async function executePlanToGroups(planEntries, resultObj) {
+          if (!params.execute || planEntries.length === 0) return;
+          const groupsData = await farmStore.get(theFarmId, 'groups') || [];
+          const allGroups = Array.isArray(groupsData) ? groupsData : (groupsData.groups || []);
+          let groupsUpdated = 0;
+          let dbInserted = 0;
+
+          for (const entry of planEntries) {
+            // Update group in groups.json
+            const group = allGroups.find(g =>
+              (g.id || g.group_id) === entry.zone ||
+              (g.name || '').toLowerCase() === (entry.zone_name || '').toLowerCase()
+            );
+            if (group) {
+              const cropKey = Object.keys(crops).find(k => k.toLowerCase() === (entry.crop || '').toLowerCase());
+              const cropEntry = cropKey ? crops[cropKey] : null;
+              group.crop = entry.crop;
+              group.recipe = entry.crop;
+              group.plan = cropEntry?.planId || ('crop-' + entry.crop.toLowerCase().replace(/\s+/g, '-'));
+              group.planId = group.plan;
+              if (!group.planConfig) group.planConfig = {};
+              if (!group.planConfig.anchor) group.planConfig.anchor = {};
+              group.planConfig.anchor.seedDate = entry.seed_date;
+              group.planConfig.anchor.mode = 'seed';
+              group.seedDate = entry.seed_date;
+              group.status = 'seeded';
+              group.lastModified = new Date().toISOString();
+              groupsUpdated++;
+            }
+
+            // Insert into planting_assignments DB
+            if (isDatabaseAvailable()) {
+              try {
+                const cropKey2 = Object.keys(crops).find(k => k.toLowerCase() === (entry.crop || '').toLowerCase());
+                const cropEntry2 = cropKey2 ? crops[cropKey2] : null;
+                const cropId = cropEntry2?.planId || ('crop-' + entry.crop.toLowerCase().replace(/\s+/g, '-'));
+                await query(
+                  `INSERT INTO planting_assignments (farm_id, group_id, crop_id, crop_name, seed_date, harvest_date, status, notes, updated_at)
+                   VALUES ($1, $2, $3, $4, $5, $6, 'active', $7, NOW())
+                   ON CONFLICT (farm_id, group_id) DO UPDATE SET crop_name=$4, crop_id=$3, seed_date=$5, harvest_date=$6, status='active', notes=$7, updated_at=NOW()`,
+                  [theFarmId, entry.zone, cropId, entry.crop, entry.seed_date, entry.harvest_date, 'Auto-planned: ' + (entry.reasons || '')]
+                );
+                dbInserted++;
+              } catch (dbErr) {
+                // Non-fatal -- groups.json via farmStore is the primary data store
+              }
+            }
+          }
+
+          // Save updated groups
+          await farmStore.set(theFarmId, 'groups', Array.isArray(groupsData) ? allGroups : { ...groupsData, groups: allGroups });
+
+          resultObj.executed = true;
+          resultObj.groups_updated = groupsUpdated;
+          resultObj.db_assignments_saved = dbInserted;
+          resultObj.note = 'Plan executed: ' + groupsUpdated + ' groups updated with crop assignments. View the updated schedule on the Dashboard or Planting Scheduler page.';
+          resultObj.navigate_to = '/views/planting-scheduler.html';
+        }
+
 
         if (cropMixEntries.length > 0) {
           // --- CROP MIX MODE: allocate zones by percentage ---
@@ -3310,6 +3373,7 @@ async function executeExtendedTool(toolName, params, farmId) {
             generatedAt: new Date().toISOString()
           };
           if (mixWarnings.length) result.warnings = mixWarnings;
+          await executePlanToGroups(plan, result);
           return result;
 
         } else {
@@ -3359,7 +3423,7 @@ async function executeExtendedTool(toolName, params, farmId) {
             });
           }
 
-          return {
+          const autoResult = {
             ok: true,
             target_date: targetDate,
             focus,
@@ -3373,6 +3437,8 @@ async function executeExtendedTool(toolName, params, farmId) {
             note: 'This is a proposed plan. Confirm to execute each assignment.',
             generatedAt: new Date().toISOString()
           };
+          await executePlanToGroups(plan, autoResult);
+          return autoResult;
         }
       } catch (err) {
         return { ok: false, error: err.message };
