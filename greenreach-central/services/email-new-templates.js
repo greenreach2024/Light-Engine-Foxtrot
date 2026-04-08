@@ -3,6 +3,9 @@
 // Buyer Welcome Email -- sent when a new buyer joins wholesale
 // =====================================================================
 
+// Business address for CAN-SPAM / CASL compliance (included in all email footers)
+const BUSINESS_ADDRESS = 'GreenReach Greens -- Ottawa, ON, Canada';
+
 /**
  * California benchmark constants for environmental comparison.
  * Source: USDA Economic Research Service, average transport distances.
@@ -97,10 +100,11 @@ export async function sendBuyerWelcomeEmail(sendEmail, { email, businessName, co
     + '        <tr>\n'
     + '          <td style="background:#f8fafc;padding:24px 40px;border-top:1px solid #e2e8f0;text-align:center;">\n'
     + '            <p style="color:#94a3b8;font-size:12px;margin:0 0 4px;">GreenReach -- The foundation for smarter farms</p>\n'
-    + '            <p style="color:#94a3b8;font-size:12px;margin:0;">\n'
+    + '            <p style="color:#94a3b8;font-size:12px;margin:0 0 4px;">\n'
     + '              <a href="https://greenreachgreens.com" style="color:#64748b;text-decoration:none;">greenreachgreens.com</a> &nbsp;|&nbsp;\n'
     + '              <a href="mailto:info@greenreachgreens.com" style="color:#64748b;text-decoration:none;">info@greenreachgreens.com</a>\n'
     + '            </p>\n'
+    + '            <p style="color:#94a3b8;font-size:11px;margin:0;">' + BUSINESS_ADDRESS + '</p>\n'
     + '          </td>\n'
     + '        </tr>\n'
     + '      </table>\n'
@@ -122,7 +126,7 @@ export async function sendBuyerWelcomeEmail(sendEmail, { email, businessName, co
     + '3. Checkout securely via Square\n'
     + '4. Receive produce harvested the same day\n\n'
     + 'Portal login: ' + portalUrl + '\n\n'
-    + '-- GreenReach -- The foundation for smarter farms\ngreenreachgreens.com | info@greenreachgreens.com';
+    + '-- GreenReach -- The foundation for smarter farms\ngreenreachgreens.com | info@greenreachgreens.com\n' + BUSINESS_ADDRESS;
 
   return sendEmail({ to: email, subject, html, text });
 }
@@ -329,9 +333,10 @@ export async function sendBuyerMonthlyStatement(sendEmail, {
     + '        <tr><td style="background:#f8fafc;padding:24px 40px;margin-top:24px;border-top:1px solid #e2e8f0;text-align:center;">\n'
     + '          <p style="color:#64748b;font-size:12px;margin:0 0 4px;"><a href="' + portalUrl + '" style="color:#3b82f6;text-decoration:none;font-weight:500;">View in Wholesale Portal</a></p>\n'
     + '          <p style="color:#94a3b8;font-size:12px;margin:0 0 4px;">GreenReach -- The foundation for smarter farms</p>\n'
-    + '          <p style="color:#94a3b8;font-size:12px;margin:0;">\n'
+    + '          <p style="color:#94a3b8;font-size:12px;margin:0 0 4px;">\n'
     + '            <a href="https://greenreachgreens.com" style="color:#64748b;text-decoration:none;">greenreachgreens.com</a> &nbsp;|&nbsp;\n'
     + '            <a href="mailto:info@greenreachgreens.com" style="color:#64748b;text-decoration:none;">info@greenreachgreens.com</a></p>\n'
+    + '          <p style="color:#94a3b8;font-size:11px;margin:0;">' + BUSINESS_ADDRESS + '</p>\n'
     + '        </td></tr>\n'
 
     + '      </table>\n'
@@ -374,7 +379,7 @@ export async function sendBuyerMonthlyStatement(sendEmail, {
     + 'This statement includes lot-code-level traceability for all items.\n'
     + 'Each line item is traceable to the supplying farm, harvest date, and lot number.\n'
     + 'For food safety inquiries: info@greenreachgreens.com\n\n'
-    + '-- GreenReach -- The foundation for smarter farms\ngreenreachgreens.com | info@greenreachgreens.com';
+    + '-- GreenReach -- The foundation for smarter farms\ngreenreachgreens.com | info@greenreachgreens.com\n' + BUSINESS_ADDRESS;
 
   return sendEmail({ to: email, subject, html, text });
 }
@@ -554,9 +559,10 @@ export async function sendProducerMonthlyStatement(sendEmail, {
     + '        <tr><td style="background:#f8fafc;padding:24px 40px;margin-top:24px;border-top:1px solid #e2e8f0;text-align:center;">\n'
     + '          <p style="color:#64748b;font-size:12px;margin:0 0 4px;"><a href="' + dashboardUrl + '" style="color:#3b82f6;text-decoration:none;font-weight:500;">View in Farm Dashboard</a></p>\n'
     + '          <p style="color:#94a3b8;font-size:12px;margin:0 0 4px;">GreenReach -- The foundation for smarter farms</p>\n'
-    + '          <p style="color:#94a3b8;font-size:12px;margin:0;">\n'
+    + '          <p style="color:#94a3b8;font-size:12px;margin:0 0 4px;">\n'
     + '            <a href="https://greenreachgreens.com" style="color:#64748b;text-decoration:none;">greenreachgreens.com</a> &nbsp;|&nbsp;\n'
     + '            <a href="mailto:info@greenreachgreens.com" style="color:#64748b;text-decoration:none;">info@greenreachgreens.com</a></p>\n'
+    + '          <p style="color:#94a3b8;font-size:11px;margin:0;">' + BUSINESS_ADDRESS + '</p>\n'
     + '        </td></tr>\n'
 
     + '      </table>\n'
@@ -589,7 +595,7 @@ export async function sendProducerMonthlyStatement(sendEmail, {
     + 'TRACEABILITY DISCLOSURE (GAP Standard)\n----------------------------------------------\n'
     + 'This statement includes lot-code-level traceability for all items.\n'
     + 'For food safety inquiries: info@greenreachgreens.com\n\n'
-    + '-- GreenReach -- The foundation for smarter farms\ngreenreachgreens.com | info@greenreachgreens.com';
+    + '-- GreenReach -- The foundation for smarter farms\ngreenreachgreens.com | info@greenreachgreens.com\n' + BUSINESS_ADDRESS;
 
   return sendEmail({ to: email, subject, html, text });
 }

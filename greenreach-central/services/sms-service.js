@@ -1,19 +1,49 @@
 /**
  * SMS Service -- GreenReach Central
- * Uses AWS SNS to send transactional SMS.
+ * Uses email-to-SMS via Google Workspace SMTP (carrier gateways).
  * Hardcoded recipient allowlist enforced at service level.
+ *
+ * Carrier gateways convert an email to an SMS delivered to the phone.
+ * Each approved recipient must have a carrier gateway mapping.
  */
 
-// Approved recipients -- only these numbers can receive SMS from F.A.Y.E.
+import nodemailer from 'nodemailer';
+
+// Approved recipients -- only these numbers can receive SMS.
 // Adding numbers here requires a code change + deploy (intentional safety gate).
-const APPROVED_RECIPIENTS = new Set([
-  '+16138881031'
+// Map phone (E.164) -> carrier email gateway address.
+const APPROVED_RECIPIENTS = new Map([
+  ['+16138881031', '6138881031@txt.bell.ca']
 ]);
 
 const FROM_LABEL = 'GreenReach';
 
-let snsClient = null;
-let snsReady = false;
+// SMTP config (reuses same Google Workspace credentials as email service)
+const SMTP_HOST = process.env.SMTP_HOST || '';
+const SMTP_PORT = parseInt(process.env.SMTP_PORT || '587');
+const SMTP_USER = process.env.SMTP_USER || '';
+const SMTP_PASS = process.env.SMTP_PASS || '';
+const SMTP_ENABLED = !!(SMTP_HOST && SMTP_USER && SMTP_PASS);
+
+let _smtpTransport = null;
+
+function getSmtpTransport() {
+  if (_smtpTransport) return _smtpTransport;
+  if (!SMTP_ENABLED) return null;
+  try {
+    _smtpTransport = nodemailer.createTransport({
+      host: SMTP_HOST,
+      port: SMTP_PORT,
+      secure: SMTP_PORT === 465,
+      auth: { user: SMTP_USER, pass: SMTP_PASS }
+    });
+    console.log('[sms] SMTP transport ready for email-to-SMS');
+    return _smtpTransport;
+  } catch (err) {
+    console.error('[sms] Failed to create SMTP transport:', err.message);
+    return null;
+  }
+}
 
 // Normalise phone to E.164 format
 function normalisePhone(phone) {
@@ -24,34 +54,9 @@ function normalisePhone(phone) {
   return null;
 }
 
-// Lazy-init SNS client
-async function getSNS() {
-  if (snsClient !== null) return snsReady ? snsClient : null;
-  try {
-    const { SNSClient } = await import('@aws-sdk/client-sns');
-    snsClient = new SNSClient({
-      region: process.env.AWS_REGION || 'us-east-1',
-      ...(process.env.AWS_ACCESS_KEY_ID ? {
-        credentials: {
-          accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-          secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
-        }
-      } : {})
-    });
-    snsReady = true;
-    console.log('[sms] AWS SNS client initialised');
-    return snsClient;
-  } catch (err) {
-    snsClient = false;
-    snsReady = false;
-    console.warn('[sms] AWS SNS not available -- SMS will be logged only:', err.message);
-    return null;
-  }
-}
-
 class SmsService {
   /**
-   * Send an SMS message.
+   * Send an SMS message via email-to-SMS gateway.
    * Enforces hardcoded recipient allowlist -- rejects any number not in APPROVED_RECIPIENTS.
    * Returns { success, messageId }.
    */
@@ -62,38 +67,35 @@ class SmsService {
       return { success: false, error: 'Invalid phone number format' };
     }
 
-    if (!APPROVED_RECIPIENTS.has(normalised)) {
+    const gateway = APPROVED_RECIPIENTS.get(normalised);
+    if (!gateway) {
       console.error(`[sms] BLOCKED -- recipient not in allowlist: ${normalised}`);
       return { success: false, error: 'Recipient not in approved allowlist' };
     }
 
     // Enforce message length (SMS limit: 160 chars for single segment)
-    const trimmed = (message || '').substring(0, 1600); // Allow up to 10 segments max
+    const trimmed = (message || '').substring(0, 160);
     console.log(`[sms] -> ${normalised} | ${trimmed.substring(0, 80)}...`);
 
-    const client = await getSNS();
-    if (client) {
+    const transport = getSmtpTransport();
+    if (transport) {
       try {
-        const { PublishCommand } = await import('@aws-sdk/client-sns');
-        const cmd = new PublishCommand({
-          PhoneNumber: normalised,
-          Message: trimmed,
-          MessageAttributes: {
-            'AWS.SNS.SMS.SenderID': { DataType: 'String', StringValue: FROM_LABEL },
-            'AWS.SNS.SMS.SMSType': { DataType: 'String', StringValue: 'Transactional' }
-          }
+        const result = await transport.sendMail({
+          from: `${FROM_LABEL} <${SMTP_USER}>`,
+          to: gateway,
+          subject: '',
+          text: trimmed
         });
-        const result = await client.send(cmd);
-        const messageId = result.MessageId || `sns-${Date.now()}`;
-        console.log(`[sms] Sent via SNS: ${messageId}`);
+        const messageId = result.messageId || `sms-${Date.now()}`;
+        console.log(`[sms] Sent via email-to-SMS gateway: ${messageId} -> ${gateway}`);
         return { success: true, messageId };
-      } catch (snsErr) {
-        console.error('[sms] SNS send failed:', snsErr.message);
+      } catch (smtpErr) {
+        console.error('[sms] Email-to-SMS send failed:', smtpErr.message);
         // Fall through to stub
       }
     }
 
-    // Stub fallback (dev / SNS unavailable)
+    // Stub fallback (dev / SMTP unavailable)
     console.log(`[sms] STUB -- would send to ${normalised}: ${trimmed}`);
     return { success: true, messageId: `stub-${Date.now()}`, stub: true };
   }
@@ -110,7 +112,7 @@ class SmsService {
    * Get list of approved recipients (for status checks).
    */
   getApprovedRecipients() {
-    return Array.from(APPROVED_RECIPIENTS);
+    return Array.from(APPROVED_RECIPIENTS.keys());
   }
 }
 

@@ -290,16 +290,17 @@ export function assembleInvoice({ order, subOrders, farmProfiles, buyerProfile }
     // Build line items with weight breakdowns
     const items = (sub.line_items || sub.items || []).map(item => {
       const unit = item.unit || 'unit';
-      const wb = weightBreakdown(item.unit_price, unit);
+      const resolvedUnitPrice = item.unit_price != null ? item.unit_price : (item.price_per_unit != null ? item.price_per_unit : (item.price || 0));
+      const wb = weightBreakdown(resolvedUnitPrice, unit);
       return {
         sku_id: item.sku_id,
         sku_name: item.sku_name || item.product_name || item.sku_id,
         qty: item.qty || item.quantity || 0,
         unit,
-        unit_price: item.unit_price != null ? item.unit_price : item.price,
+        unit_price: resolvedUnitPrice,
         list_price: item.list_price,
         discount_rate: item.discount_rate || 0,
-        line_total: item.line_total || (item.qty * item.unit_price),
+        line_total: item.line_total || ((item.qty || item.quantity || 0) * resolvedUnitPrice),
         weight_breakdown: wb,
         traceability: {
           lot_id: item.lot_id || item.traceability?.lot_id || null,
@@ -323,11 +324,11 @@ export function assembleInvoice({ order, subOrders, farmProfiles, buyerProfile }
       env_score: envScore,
       items,
       subtotal: sub.subtotal || 0,
-      broker_fee_amount: sub.broker_fee_amount || 0,
+      broker_fee_amount: sub.broker_fee_amount || sub.broker_fee || Math.round((sub.subtotal || 0) * 0.12 * 100) / 100,
       tax_rate: sub.tax_rate || 0,
       tax_label: sub.tax_label || 'TAX',
       tax_amount: sub.tax_amount || 0,
-      total: sub.total || 0,
+      total: sub.total || ((sub.subtotal || 0) + (sub.broker_fee_amount || sub.broker_fee || Math.round((sub.subtotal || 0) * 0.12 * 100) / 100) + (sub.tax_amount || 0)),
       tax_registration_number: profile.tax_registration_number || profile.gst_number || profile.hst_number || null
     };
   });
@@ -357,12 +358,17 @@ export function assembleInvoice({ order, subOrders, farmProfiles, buyerProfile }
     };
   }
 
-  // Totals from order or summed
-  const totals = order.totals || {
-    subtotal: farmSections.reduce((s, f) => s + f.subtotal, 0),
-    broker_fee_total: farmSections.reduce((s, f) => s + f.broker_fee_amount, 0),
-    tax_total: farmSections.reduce((s, f) => s + f.tax_amount, 0),
-    total: farmSections.reduce((s, f) => s + f.total, 0)
+  // Totals from order.totals, order root fields, or summed from farm sections
+  const summedSubtotal = farmSections.reduce((s, f) => s + f.subtotal, 0);
+  const summedBroker = farmSections.reduce((s, f) => s + f.broker_fee_amount, 0);
+  const summedTax = farmSections.reduce((s, f) => s + f.tax_amount, 0);
+  const summedTotal = farmSections.reduce((s, f) => s + f.total, 0);
+  const rawTotals = order.totals || {};
+  const totals = {
+    subtotal: rawTotals.subtotal || order.subtotal || summedSubtotal,
+    broker_fee_total: rawTotals.broker_fee_total || order.broker_fee_total || summedBroker,
+    tax_total: rawTotals.tax_total || order.tax_total || summedTax,
+    total: rawTotals.total || rawTotals.grand_total || order.grand_total || summedTotal
   };
 
   // Discount info from order
@@ -407,6 +413,25 @@ export function assembleInvoice({ order, subOrders, farmProfiles, buyerProfile }
     status: order.status || 'confirmed',
     delivery
   };
+}
+
+/**
+ * Map order status codes to human-readable labels for the invoice.
+ */
+const STATUS_LABELS = {
+  confirmed: 'Confirmed',
+  pending: 'Pending Acceptance',
+  pending_payment: 'Pending Acceptance',
+  payment_failed: 'Payment Failed',
+  processing: 'Processing',
+  shipped: 'Shipped',
+  delivered: 'Delivered',
+  cancelled: 'Cancelled',
+  completed: 'Completed'
+};
+
+function humanStatus(status) {
+  return STATUS_LABELS[status] || status;
 }
 
 // ── HTML Invoice Renderer ───────────────────────────────────────────────
@@ -651,7 +676,7 @@ export function renderInvoiceHTML(invoice) {
       <strong>${esc(invoice.invoice_id)}</strong>
       Order: ${esc(invoice.master_order_id)}<br/>
       Date: ${new Date(invoice.order_date).toLocaleDateString('en-CA')}<br/>
-      Status: ${esc(invoice.status)}
+      Status: ${esc(humanStatus(invoice.status))}
     </div>
   </div>
 

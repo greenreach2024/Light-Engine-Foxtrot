@@ -104,13 +104,23 @@ export async function createBuyer({ businessName, contactName, email, password, 
 export async function authenticateBuyer({ email, password }) {
   const normalizedEmail = String(email || '').trim().toLowerCase();
   let buyer = buyersByEmail.get(normalizedEmail);
-  // Fall back to DB if not in memory
-  if (!buyer && isDatabaseAvailable()) {
-    const result = await query('SELECT * FROM wholesale_buyers WHERE LOWER(email) = $1 LIMIT 1', [normalizedEmail]);
-    if (result.rows.length > 0) {
-      buyer = hydrateRowIntoMaps(result.rows[0]);
+
+  // Always re-read password hash from DB to avoid stale in-memory hashes
+  // (Cloud Run multi-instance: another instance may have updated the password)
+  if (isDatabaseAvailable()) {
+    try {
+      const result = await query('SELECT * FROM wholesale_buyers WHERE LOWER(email) = $1 LIMIT 1', [normalizedEmail]);
+      if (result.rows.length > 0) {
+        buyer = hydrateRowIntoMaps(result.rows[0], { force: true });
+      } else if (!buyer) {
+        return null;
+      }
+    } catch (dbErr) {
+      console.warn('[Auth] DB lookup failed, using in-memory cache:', dbErr.message);
+      // Fall through to in-memory buyer if DB query fails
     }
   }
+
   if (!buyer) return null;
   const ok = await bcrypt.compare(String(password || ''), buyer.passwordHash);
   if (!ok) return null;
@@ -261,7 +271,7 @@ export async function hydrateBuyerById(buyerId) {
 }
 
 /** Internal: convert a DB row into a buyer object and store in both Maps. */
-function hydrateRowIntoMaps(row) {
+function hydrateRowIntoMaps(row, { force = false } = {}) {
   const buyer = {
     id: row.id,
     businessName: row.business_name,
@@ -280,7 +290,7 @@ function hydrateRowIntoMaps(row) {
     createdAt: row.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString()
   };
   const key = buyer.email.trim().toLowerCase();
-  if (!buyersByEmail.has(key)) {
+  if (force || !buyersByEmail.has(key)) {
     buyersByEmail.set(key, buyer);
     buyersById.set(buyer.id, buyer);
   }
@@ -791,11 +801,11 @@ export function getBuyerByEmail(email) {
 
 export async function updateBuyerPassword(buyerId, newPassword) {
   let buyer = buyersById.get(buyerId);
-  // Fall back to DB if not in memory
-  if (!buyer && isDatabaseAvailable()) {
+  // Always re-read from DB to get latest state
+  if (isDatabaseAvailable()) {
     const result = await query('SELECT * FROM wholesale_buyers WHERE id = $1 LIMIT 1', [buyerId]);
     if (result.rows.length > 0) {
-      buyer = hydrateRowIntoMaps(result.rows[0]);
+      buyer = hydrateRowIntoMaps(result.rows[0], { force: true });
     }
   }
   if (!buyer) return null;

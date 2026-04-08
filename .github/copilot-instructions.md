@@ -30,6 +30,20 @@ The farm runs entirely on Google Cloud Run. The Light Engine Cloud Run service I
 
 ### Recent Fixes (Apr 4, 2026)
 
+25. **Email/SMS Notification Infrastructure -- Full Google Migration (No AWS)**
+    - All notification services now use Google Workspace SMTP exclusively. AWS SES and AWS SNS have been fully removed.
+    - Email: Google Workspace SMTP (`smtp.gmail.com`). Sender: `info@greenreachgreens.com`. No AWS fallback.
+    - SMS: Email-to-SMS via carrier gateways through same Google Workspace SMTP. Allowlist: `+16138881031` -> `6138881031@txt.bell.ca`.
+    - Updated `email-service.js`: Removed SES client/fallback. SMTP-only transport.
+    - Updated `email.js`: Removed SES import/client/fallback. SMTP-only transport.
+    - Updated `sms-service.js`: Replaced AWS SNS with email-to-SMS via nodemailer + carrier gateway.
+    - Updated `alert-notifier.js`: Comment updated (no more SES/SNS references).
+    - Added CAN-SPAM/CASL-compliant business address (`GreenReach Greens -- Ottawa, ON, Canada`) to ALL email template footers (8 templates across 3 files).
+    - Alert notifier (`alert-notifier.js`): Rate-limited email+SMS for critical/high alerts. Requires `ADMIN_ALERT_EMAIL` and `ADMIN_ALERT_PHONE` env vars.
+    - Updated `CLOUD_ARCHITECTURE.md` and `CRITICAL_CONFIGURATION.md` to reflect no-AWS notification stack.
+    - **ACTION REQUIRED**: Generate Google App Password for `info@greenreachgreens.com` and store as `SMTP_PASS` in Secret Manager. Set `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `FROM_EMAIL`, `ADMIN_ALERT_EMAIL` env vars on Central Cloud Run.
+    - Files changed: `email-service.js`, `email.js`, `email-new-templates.js`, `sms-service.js`, `alert-notifier.js`, `CLOUD_ARCHITECTURE.md`, `CRITICAL_CONFIGURATION.md`
+
 24. **Re-Audit Correction Plan (25 findings, all remediated)**
     - RE-AUDIT-REPORT.md: Full platform + AI agent audit. 2 P0, 4 P1, 11 P2, 8 P3.
     - **S1 (P0)**: `greenreach-central/routes/wholesale-fulfillment.js` -- removed duplicate `isDatabaseAvailable` ESM import (line 25). Module was failing to load; all fulfillment endpoints were dead.

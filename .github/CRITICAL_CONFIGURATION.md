@@ -46,6 +46,57 @@ cd /Volumes/CodeVault/Projects/Light-Engine-Foxtrot/greenreach-central
 
 ---
 
+## Notification Configuration (Email / SMS / Alerts)
+
+### Email (Google Workspace SMTP)
+
+Primary email address: `info@greenreachgreens.com` (Google Workspace account).
+
+| Variable | Value | Where Set |
+|----------|-------|-----------|
+| `SMTP_HOST` | `smtp.gmail.com` | Cloud Run env var |
+| `SMTP_PORT` | `587` | Cloud Run env var |
+| `SMTP_USER` | `info@greenreachgreens.com` | Cloud Run env var |
+| `SMTP_PASS` | Google App Password | Secret Manager |
+| `FROM_EMAIL` | `info@greenreachgreens.com` | Cloud Run env var |
+| `ADMIN_ALERT_EMAIL` | `info@greenreachgreens.com` | Cloud Run env var |
+
+**To generate the Google App Password:**
+1. Log in to `info@greenreachgreens.com` at https://myaccount.google.com
+2. Go to Security > 2-Step Verification > App Passwords
+3. Generate a new app password for "Mail" on "Other (Cloud Run)"
+4. Store in Secret Manager as `SMTP_PASS`
+
+**To set email env vars on Cloud Run:**
+```bash
+gcloud run services update greenreach-central --region=us-east1 \
+  --update-env-vars="SMTP_HOST=smtp.gmail.com,SMTP_PORT=587,SMTP_USER=info@greenreachgreens.com,FROM_EMAIL=info@greenreachgreens.com,ADMIN_ALERT_EMAIL=info@greenreachgreens.com"
+```
+
+**To update SMTP_PASS secret:**
+```bash
+echo -n "APP_PASSWORD_HERE" | gcloud secrets versions add SMTP_PASS --data-file=-
+gcloud run services update greenreach-central --region=us-east1
+```
+
+### SMS (Email-to-SMS Gateway)
+
+SMS is used for critical/high alert notifications only. Delivered via carrier email-to-SMS gateways through the same Google Workspace SMTP. Recipient allowlist with carrier mapping is hardcoded in `greenreach-central/services/sms-service.js` (requires code change + deploy to modify).
+
+| Variable | Value | Notes |
+|----------|-------|-------|
+| `ADMIN_ALERT_PHONE` | (not set) | Admin phone for alert SMS |
+
+**Current approved SMS recipients:** `+16138881031` -> `6138881031@txt.bell.ca`
+
+**To add a new SMS recipient:** Edit the `APPROVED_RECIPIENTS` Map in `sms-service.js` with the phone number and carrier gateway address, then deploy.
+
+### Alert Notifier
+
+Rate-limited (1 per alert_type per 15 min). Dispatches email + SMS for `critical` and `high` severity alerts. Uses `ADMIN_ALERT_EMAIL` and `ADMIN_ALERT_PHONE` env vars.
+
+---
+
 ## Configuration Files
 
 ### `config/edge-config.json` (LE-side)

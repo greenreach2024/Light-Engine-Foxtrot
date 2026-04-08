@@ -1,49 +1,35 @@
 /**
- * Email Service — AWS SES via SDK
+ * Email Service — GreenReach Central (Legacy)
  * 
- * Sends transactional emails (welcome, credentials, receipts) using
- * the AWS SES API. Falls back gracefully — email failures never block
- * the purchase pipeline.
- * 
- * Required: @aws-sdk/client-ses installed, AWS credentials available
- * (via environment, IAM role, or shared credentials file).
- * 
- * Env vars (optional overrides):
- *   SES_FROM_EMAIL   — Sender address (default: info@greenreachgreens.com)
- *   SES_REGION       — AWS region for SES (default: us-east-1)
- *   SES_ENABLED      — Set to 'false' to disable (default: true)
- */
+ * Sends transactional emails (welcome, credentials, receipts).
+ * Primary transport: Google Workspace SMTP (smtp.gmail.com).
 
-import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses';
+ * Email failures never block the purchase pipeline.
+ * 
+ * Google SMTP env vars:
+ *   SMTP_HOST          — smtp.gmail.com
+ *   SMTP_PORT          — 587 (STARTTLS) or 465 (implicit TLS)
+ *   SMTP_USER          — info@greenreachgreens.com
+ *   SMTP_PASS          — Google App Password (Secret Manager)
+ *
+ */
 
 import nodemailer from 'nodemailer';
 
-// SMTP fallback config (WorkMail) — used when SES sandbox blocks recipients
+// SMTP config (Google Workspace) — primary email transport
 const SMTP_HOST = process.env.SMTP_HOST || '';
-const SMTP_PORT = parseInt(process.env.SMTP_PORT || '465');
+const SMTP_PORT = parseInt(process.env.SMTP_PORT || '587');
 const SMTP_USER = process.env.SMTP_USER || '';
 const SMTP_PASS = process.env.SMTP_PASS || '';
 const SMTP_ENABLED = !!(SMTP_HOST && SMTP_USER && SMTP_PASS);
 
+// Business address for CAN-SPAM / CASL compliance (included in all email footers)
+const BUSINESS_ADDRESS = 'GreenReach Greens -- Ottawa, ON, Canada';
+
 
 import { sendBuyerWelcomeEmail as _sendBuyerWelcomeEmail, sendBuyerMonthlyStatement as _sendBuyerMonthlyStatement, sendProducerMonthlyStatement as _sendProducerMonthlyStatement } from './email-new-templates.js';
 
-const SES_FROM =  process.env.SES_FROM_EMAIL || 'info@greenreachgreens.com';
-const SES_REGION = process.env.SES_REGION || 'us-east-1';
-const SES_ENABLED = process.env.SES_ENABLED !== 'false';
-
-let _sesClient = null;
-
-function getSesClient() {
-  if (_sesClient) return _sesClient;
-  try {
-    _sesClient = new SESClient({ region: SES_REGION });
-    return _sesClient;
-  } catch (err) {
-    console.error('[Email] Failed to create SES client:', err.message);
-    return null;
-  }
-}
+const FROM_ADDRESS = process.env.FROM_EMAIL || 'info@greenreachgreens.com';
 
 let _smtpTransport = null;
 function getSmtpTransport() {
@@ -56,7 +42,7 @@ function getSmtpTransport() {
       secure: SMTP_PORT === 465,
       auth: { user: SMTP_USER, pass: SMTP_PASS }
     });
-    console.log('[Email] SMTP transport ready (WorkMail fallback)');
+    console.log('[Email] SMTP transport ready (Google Workspace)');
     return _smtpTransport;
   } catch (err) {
     console.error('[Email] Failed to create SMTP transport:', err.message);
@@ -67,8 +53,8 @@ function getSmtpTransport() {
 async function sendViaSmtp({ to, subject, html, text }) {
   const transport = getSmtpTransport();
   if (!transport) return { sent: false, error: 'SMTP not configured' };
-  // WorkMail requires From address to match the authenticated sender (SMTP_USER)
-  const smtpFrom = SMTP_USER || SES_FROM;
+  // Google Workspace: From address should match the authenticated sender (SMTP_USER)
+  const smtpFrom = SMTP_USER || FROM_ADDRESS;
   try {
     const result = await transport.sendMail({
       from: `GreenReach <${smtpFrom}>`,
@@ -86,50 +72,16 @@ async function sendViaSmtp({ to, subject, html, text }) {
 }
 
 /**
- * Send a raw email via SES.
+ * Send an email via Google Workspace SMTP.
  * Returns { sent: true } on success, { sent: false, error } on failure.
- * Never throws — all errors are caught and returned.
+ * Never throws -- all errors are caught and returned.
  */
 async function sendEmail({ to, subject, html, text }) {
-  if (!SES_ENABLED && !SMTP_ENABLED) {
-    console.log(`[Email] Disabled -- skipping email to ${to}`);
-    return { sent: false, error: 'Email sending is disabled' };
+  if (!SMTP_ENABLED) {
+    console.log(`[Email] SMTP not configured -- skipping email to ${to}`);
+    return { sent: false, error: 'SMTP not configured (set SMTP_HOST/SMTP_USER/SMTP_PASS)' };
   }
 
-  // Try SES first
-  if (SES_ENABLED) {
-    const client = getSesClient();
-    if (client) {
-      try {
-        const params = {
-          Source: `GreenReach <${SES_FROM}>`,
-          Destination: { ToAddresses: [to] },
-          Message: {
-            Subject: { Data: subject, Charset: 'UTF-8' },
-            Body: {},
-          },
-        };
-        if (html) params.Message.Body.Html = { Data: html, Charset: 'UTF-8' };
-        if (text) params.Message.Body.Text = { Data: text, Charset: 'UTF-8' };
-
-        const command = new SendEmailCommand(params);
-        const result = await client.send(command);
-        console.log(`[Email] SES sent to ${to}: ${subject} (MessageId: ${result.MessageId})`);
-        return { sent: true, messageId: result.MessageId, via: 'ses' };
-      } catch (err) {
-        const isSandbox = err.message && (err.message.includes('not verified') || err.message.includes('MessageRejected'));
-        if (isSandbox && SMTP_ENABLED) {
-          console.log(`[Email] SES sandbox blocked ${to}, falling back to SMTP`);
-        } else {
-          console.error(`[Email] SES failed to ${to}:`, err.message);
-          if (!SMTP_ENABLED) return { sent: false, error: err.message };
-          console.log(`[Email] Falling back to SMTP for ${to}`);
-        }
-      }
-    }
-  }
-
-  // SMTP fallback (WorkMail)
   return sendViaSmtp({ to, subject, html, text });
 }
 
@@ -257,9 +209,12 @@ export async function sendWelcomeEmail({ email, farmId, farmName, contactName, t
             <p style="color:#94a3b8;font-size:12px;margin:0 0 4px;">
               GreenReach — The foundation for smarter farms
             </p>
-            <p style="color:#94a3b8;font-size:12px;margin:0;">
+            <p style="color:#94a3b8;font-size:12px;margin:0 0 4px;">
               <a href="https://greenreachgreens.com" style="color:#64748b;text-decoration:none;">greenreachgreens.com</a> &nbsp;|&nbsp;
               <a href="mailto:info@greenreachgreens.com" style="color:#64748b;text-decoration:none;">info@greenreachgreens.com</a>
+            </p>
+            <p style="color:#94a3b8;font-size:11px;margin:0;">
+              ${BUSINESS_ADDRESS}
             </p>
           </td>
         </tr>
@@ -295,7 +250,8 @@ IMPORTANT: Save this email — you'll need these credentials to log in from othe
 
 —
 GreenReach — The foundation for smarter farms
-greenreachgreens.com | info@greenreachgreens.com`;
+greenreachgreens.com | info@greenreachgreens.com
+${BUSINESS_ADDRESS}`;
 
   return sendEmail({ to: email, subject, html, text });
 }
@@ -390,9 +346,10 @@ export async function sendInviteEmail({ email, farmId, farmName, firstName, role
         <tr>
           <td style="background:#f8fafc;padding:24px 40px;border-top:1px solid #e2e8f0;text-align:center;">
             <p style="color:#94a3b8;font-size:12px;margin:0 0 4px;">GreenReach -- The foundation for smarter farms</p>
-            <p style="color:#94a3b8;font-size:12px;margin:0;">
+            <p style="color:#94a3b8;font-size:12px;margin:0 0 4px;">
               <a href="https://greenreachgreens.com" style="color:#64748b;text-decoration:none;">greenreachgreens.com</a>
             </p>
+            <p style="color:#94a3b8;font-size:11px;margin:0;">${BUSINESS_ADDRESS}</p>
           </td>
         </tr>
       </table>
@@ -425,7 +382,8 @@ IMPORTANT: Save this email and change your password after first login.
 
 --
 GreenReach -- The foundation for smarter farms
-greenreachgreens.com`;
+greenreachgreens.com
+${BUSINESS_ADDRESS}`;
 
   return sendEmail({ to: email, subject, html, text });
 }

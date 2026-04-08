@@ -136,9 +136,8 @@ All secrets are stored in Google Secret Manager and mounted as env vars via `--s
 | GREENREACH_API_KEY | Both | Active |
 | TOKEN_ENCRYPTION_KEY | LE | Active |
 | SWITCHBOT_TOKEN, SWITCHBOT_SECRET | LE | Placeholder (needs real values) |
-| SMTP_PASS | Central | Placeholder (needs real values) |
+| SMTP_PASS | Central | Active (Google App Password for info@greenreachgreens.com) |
 | STRIPE_* (3 keys) | Central | Placeholder (needs real values) |
-| AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY | Central (SES email) | Placeholder (needs real values) |
 
 ### Networking
 
@@ -176,9 +175,90 @@ The following EB environments are DEPRECATED and will be terminated:
 ### Known Non-Critical Issues (post-migration)
 
 - Missing tables: `accounting_ledger_entries`, `loss_events` -- need additional migrations for FAYE Intelligence and SupplyDemand features
-- Email transport not configured -- SMTP_PASS is placeholder in Secret Manager
 - Column mismatches in AI Pusher (`timestamp`) and SupplyDemand (`crop`) -- schema drift from EB-era code
 - These do not affect core platform functionality (health endpoints, sensor data, admin UI, auth)
+
+---
+
+## Notification Infrastructure
+
+### Email (Google Workspace SMTP)
+
+Email is the primary notification channel. Uses Google Workspace SMTP through `info@greenreachgreens.com` (a Google address).
+
+| Property | Value |
+|----------|-------|
+| **Transport** | Google Workspace SMTP (`smtp.gmail.com:587`) |
+| **Sender Address** | `info@greenreachgreens.com` |
+| **Authentication** | Google App Password (Secret Manager: `SMTP_PASS`) |
+| **CAN-SPAM Compliance** | Business address included in all email footers |
+
+**Email Service Files:**
+
+| File | Purpose |
+|------|---------|
+| `greenreach-central/services/email-service.js` | Primary email service: Google Workspace SMTP -> stub. Order confirmations, research invites. |
+| `greenreach-central/services/email.js` | Legacy email service: welcome emails, team invites, wrapper exports for new templates. |
+| `greenreach-central/services/email-new-templates.js` | Rich HTML templates: buyer welcome, buyer/producer monthly statements (GAP traceability, ESG scoring). |
+
+**Required env vars / secrets for email:**
+
+| Variable | Secret Manager? | Value |
+|----------|----------------|-------|
+| `SMTP_HOST` | No (env var) | `smtp.gmail.com` |
+| `SMTP_PORT` | No (env var) | `587` |
+| `SMTP_USER` | No (env var) | `info@greenreachgreens.com` |
+| `SMTP_PASS` | Yes | Google App Password (generate at myaccount.google.com/apppasswords) |
+| `FROM_EMAIL` | No (env var) | `info@greenreachgreens.com` |
+| `ADMIN_ALERT_EMAIL` | No (env var) | `info@greenreachgreens.com` |
+
+**Email template types:**
+- Welcome email (new farm subscriber with credentials)
+- Team invite email (new team member with credentials)
+- Buyer welcome email (wholesale buyer onboarding)
+- Buyer monthly statement (GAP-traceable, ESG-scored, discount tiers)
+- Producer monthly statement (revenue, broker fee, fulfillment, ESG)
+- Order confirmation (text-only with in-app notification push)
+- Research beta invite (Light Engine Research)
+- Alert notification (severity-colored for high/critical alerts)
+
+### SMS (Email-to-SMS Gateway)
+
+SMS is used for critical/high severity alert notifications to the admin. Delivered via carrier email-to-SMS gateways through the same Google Workspace SMTP transport used for email.
+
+| Property | Value |
+|----------|-------|
+| **Provider** | Email-to-SMS via Google Workspace SMTP (carrier gateways) |
+| **Recipient Allowlist** | Hardcoded in `sms-service.js` with carrier gateway mapping (safety gate -- requires code change + deploy) |
+| **Current Approved** | `+16138881031` -> `6138881031@txt.bell.ca` |
+| **Fallback** | Console log stub (SMS not sent if SMTP unavailable) |
+
+**Required env vars for SMS:** Same as email (SMTP_HOST, SMTP_USER, SMTP_PASS). Plus:
+
+| Variable | Purpose |
+|----------|---------|
+| `ADMIN_ALERT_PHONE` | Admin phone for alert SMS notifications |
+
+**File:** `greenreach-central/services/sms-service.js`
+
+### Alert Notifier
+
+Dispatches email + SMS when high/critical severity alerts fire. Uses Google Workspace SMTP for email and email-to-SMS gateway for SMS. Rate-limited to one notification per alert type per 15 minutes. Fire-and-forget (errors logged, never thrown).
+
+**File:** `greenreach-central/services/alert-notifier.js`
+
+| Property | Value |
+|----------|-------|
+| **Trigger** | `severity` = `critical` or `high` |
+| **Rate Limit** | 1 notification per `alert_type` per 15 min |
+| **Email Recipient** | `ADMIN_ALERT_EMAIL` env var |
+| **SMS Recipient** | `ADMIN_ALERT_PHONE` env var |
+
+### In-App Notifications
+
+Fallback notification channel stored in PostgreSQL (`farm_notifications` table). Automatically pushed after order confirmations and available for any email send.
+
+**File:** `greenreach-central/services/notification-store.js`
 
 ---
 

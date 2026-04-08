@@ -2,7 +2,7 @@
  * Alert Notifier -- GreenReach Central
  * =====================================
  * Dispatches email + SMS when high/critical severity alerts fire.
- * Uses email-service (SES/SMTP) and sms-service (SNS) under the hood.
+ * Uses email-service (Google Workspace SMTP) and sms-service (email-to-SMS gateway) under the hood.
  *
  * Rate-limited per alert_type to prevent notification storms.
  * Fire-and-forget -- errors are logged but never thrown.

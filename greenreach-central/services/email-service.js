@@ -1,50 +1,30 @@
 /**
  * Email Service — GreenReach Central
- * Tries AWS SES (IAM role on EB), falls back to SMTP (WorkMail),
- * then to console log in dev.
+ * Transport: Google Workspace SMTP (smtp.gmail.com).
+ * Fallback: console log stub in dev.
+ *
+ * Google SMTP requires an App Password for info@greenreachgreens.com.
+ * Generate at: https://myaccount.google.com/apppasswords
+ * Set SMTP_HOST=smtp.gmail.com, SMTP_PORT=587, SMTP_USER=info@greenreachgreens.com,
+ * SMTP_PASS=<app-password> in Cloud Run env / Secret Manager.
  */
 
 import nodemailer from 'nodemailer';
 import notificationStore from './notification-store.js';
 
-const FROM_EMAIL = process.env.FROM_EMAIL || process.env.EMAIL_FROM || 'noreply@greenreachgreens.com';
+const FROM_EMAIL = process.env.FROM_EMAIL || process.env.EMAIL_FROM || 'info@greenreachgreens.com';
 const FROM_NAME = process.env.FROM_NAME || 'GreenReach Farms';
 
-// SMTP fallback config (WorkMail) — used when SES sandbox blocks recipients
+// Business address for CAN-SPAM / CASL compliance (included in all email footers)
+const BUSINESS_ADDRESS = 'GreenReach Greens -- Ottawa, ON, Canada';
+
+// SMTP config (Google Workspace) — primary email transport
 const SMTP_HOST = process.env.SMTP_HOST || '';
-const SMTP_PORT = parseInt(process.env.SMTP_PORT || '465');
+const SMTP_PORT = parseInt(process.env.SMTP_PORT || '587');
 const SMTP_USER = process.env.SMTP_USER || '';
 const SMTP_PASS = process.env.SMTP_PASS || '';
 const SMTP_ENABLED = !!(SMTP_HOST && SMTP_USER && SMTP_PASS);
 
-let sesClient = null;
-let sesReady = false;
-let _smtpTransport = null;
-
-// Lazy-init SES client on first use
-async function getSES() {
-  if (sesClient !== null) return sesReady ? sesClient : null;
-  try {
-    const { SESClient } = await import('@aws-sdk/client-ses');
-    sesClient = new SESClient({
-      region: process.env.AWS_REGION || 'us-east-1',
-      ...(process.env.AWS_ACCESS_KEY_ID ? {
-        credentials: {
-          accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-          secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
-        }
-      } : {})
-    });
-    sesReady = true;
-    console.log('[email] AWS SES client initialised');
-    return sesClient;
-  } catch (err) {
-    sesClient = false; // mark as failed so we don't retry
-    sesReady = false;
-    console.warn('[email] AWS SES not available — emails will be logged only:', err.message);
-    return null;
-  }
-}
 
 function getSmtpTransport() {
   if (_smtpTransport) return _smtpTransport;
@@ -56,7 +36,7 @@ function getSmtpTransport() {
       secure: SMTP_PORT === 465,
       auth: { user: SMTP_USER, pass: SMTP_PASS }
     });
-    console.log('[email] SMTP transport ready (WorkMail fallback)');
+    console.log('[email] SMTP transport ready (Google Workspace)');
     return _smtpTransport;
   } catch (err) {
     console.error('[email] Failed to create SMTP transport:', err.message);
@@ -66,51 +46,14 @@ function getSmtpTransport() {
 
 class EmailService {
   /**
-   * Send an email. Returns { success, messageId }.
-   * Tries SES first, falls back to SMTP (WorkMail), then stub in dev.
+   * Send an email via Google Workspace SMTP. Returns { success, messageId }.
    */
   async sendEmail({ to, subject, text, html, from, cc, bcc, farmId, notifCategory }) {
     const fromAddress = from || `${FROM_NAME} <${FROM_EMAIL}>`;
     console.log(`[email] -> ${to} | ${subject}`);
 
-    const client = await getSES();
-    if (client) {
-      try {
-        const { SendEmailCommand } = await import('@aws-sdk/client-ses');
 
-        const Destination = { ToAddresses: Array.isArray(to) ? to : [to] };
-        if (cc) Destination.CcAddresses = Array.isArray(cc) ? cc : [cc];
-        if (bcc) Destination.BccAddresses = Array.isArray(bcc) ? bcc : [bcc];
-
-        const cmd = new SendEmailCommand({
-          Source: fromAddress,
-          Destination,
-          Message: {
-            Subject: { Data: subject, Charset: 'UTF-8' },
-            Body: {
-              ...(text ? { Text: { Data: text, Charset: 'UTF-8' } } : {}),
-              ...(html ? { Html: { Data: html, Charset: 'UTF-8' } } : {})
-            }
-          }
-        });
-
-        const result = await client.send(cmd);
-        const messageId = result.MessageId || result.$metadata?.requestId || `ses-${Date.now()}`;
-        console.log(`[email] Sent via SES: ${messageId}`);
-        return { success: true, messageId, via: 'ses' };
-      } catch (sesErr) {
-        console.error('[email] SES send failed:', sesErr.message);
-        const isSandbox = sesErr.message && (sesErr.message.includes('not verified') || sesErr.message.includes('MessageRejected'));
-        if (isSandbox && SMTP_ENABLED) {
-          console.log(`[email] SES sandbox blocked ${to}, falling back to SMTP`);
-        } else if (SMTP_ENABLED) {
-          console.log(`[email] Falling back to SMTP for ${to}`);
-        }
-        // Fall through to SMTP or stub
-      }
-    }
-
-    // SMTP fallback (WorkMail)
+    // Google Workspace SMTP
     if (SMTP_ENABLED) {
       const transport = getSmtpTransport();
       if (transport) {
@@ -130,9 +73,9 @@ class EmailService {
       }
     }
 
-    // Stub fallback -- NO email sent (both SES and SMTP unavailable)
+    // Stub fallback -- NO email sent (SMTP unavailable)
     console.warn(`[EMAIL WARNING] NO TRANSPORT AVAILABLE -- email to ${to} was NOT sent: ${subject}`);
-    console.warn(`[EMAIL WARNING] Configure SES credentials or set SMTP_HOST/SMTP_USER/SMTP_PASS env vars`);
+    console.warn(`[EMAIL WARNING] Configure SMTP_HOST/SMTP_USER/SMTP_PASS env vars (Google Workspace App Password)`);
     if (text) console.warn(`[email] Body preview: ${text.substring(0, 200)}`);
     return { success: false, messageId: `stub-${Date.now()}`, stub: true, error: "No email transport configured" };
   }
@@ -185,7 +128,9 @@ class EmailService {
         '',
         'You can check your order status any time in the wholesale portal.',
         '',
-        '— GreenReach Farms'
+        '-- GreenReach Farms',
+        `${BUSINESS_ADDRESS}`,
+        'info@greenreachgreens.com | greenreachgreens.com'
       ].filter(Boolean).join('\n')
     });
   }

@@ -318,6 +318,7 @@
       this.updateBuyerProfile();
       this.populateCheckoutForm();
       this.loadOrders();
+      this.loadBuyerInsights();
     },
 
     updateBuyerProfile() {
@@ -480,6 +481,7 @@
       this.orders = [];
       this.renderOrders();
       this.showToast('Signed out', 'info');
+      this.loadBuyerInsights();
       this.navigateTo('catalog');
     },
 
@@ -1736,6 +1738,7 @@
 
         if (addedCount > 0) {
           this.showToast(`${addedCount} item(s) added to cart`, 'success');
+          this.loadBuyerInsights();
           this.navigateTo('catalog');
           this.toggleCart();
         } else {

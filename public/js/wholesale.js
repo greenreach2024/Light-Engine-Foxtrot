@@ -318,6 +318,7 @@
       this.updateBuyerProfile();
       this.populateCheckoutForm();
       this.loadOrders();
+      this.loadBuyerInsights();
     },
 
     updateBuyerProfile() {
@@ -480,6 +481,7 @@
       this.orders = [];
       this.renderOrders();
       this.showToast('Signed out', 'info');
+      this.loadBuyerInsights();
       this.navigateTo('catalog');
     },
 
@@ -714,6 +716,11 @@
         });
 
         if (response.ok && json?.status === 'ok') {
+          // Refresh buyer state so checkout detects the saved card
+          if (json.data?.squareCustomerId) this.currentBuyer.squareCustomerId = json.data.squareCustomerId;
+          if (json.data?.squareCardId) this.currentBuyer.squareCardId = json.data.squareCardId;
+          localStorage.setItem(STORAGE_BUYER, JSON.stringify(this.currentBuyer));
+
           this.showToast('Payment Card Saved', 'success', { prominent: true, detail: 'Your card has been securely stored by Square for future orders.', duration: 5000 });
           // Destroy the form card instance and reload
           try { this._accountSquareCard.destroy(); } catch (_) {}
@@ -740,6 +747,10 @@
         });
 
         if (response.ok && json?.status === 'ok') {
+          // Clear card from buyer state so checkout falls back to card form
+          this.currentBuyer.squareCardId = null;
+          localStorage.setItem(STORAGE_BUYER, JSON.stringify(this.currentBuyer));
+
           this.showToast('Card Removed', 'success', { prominent: true, detail: 'Your saved payment card has been removed from file.', duration: 4000 });
           this.loadCardOnFile();
         } else {
@@ -1727,6 +1738,7 @@
 
         if (addedCount > 0) {
           this.showToast(`${addedCount} item(s) added to cart`, 'success');
+          this.loadBuyerInsights();
           this.navigateTo('catalog');
           this.toggleCart();
         } else {
