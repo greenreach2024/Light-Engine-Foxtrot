@@ -736,11 +736,11 @@ router.post('/auth/login', async (req, res) => {
     if (req.db) {
       try {
         const { rows } = await req.db.query(
-            `SELECT fu.id, fu.farm_id, fu.email, fu.password_hash, fu.name, fu.role,
+            `SELECT fu.id, fu.farm_id, fu.email, fu.password_hash, COALESCE(fu.first_name || ' ' || fu.last_name, fu.email) as name, fu.role,
               f.name as farm_name, f.plan_type, f.metadata as farm_metadata, f.api_url
            FROM farm_users fu
            JOIN farms f ON fu.farm_id = f.farm_id
-           WHERE fu.farm_id = $1 AND fu.active = true
+           WHERE fu.farm_id = $1 AND fu.status = 'active'
            LIMIT 1`,
           [farmId]
         );

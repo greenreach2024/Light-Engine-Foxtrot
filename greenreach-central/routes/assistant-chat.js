@@ -779,12 +779,14 @@ const GPT_TOOLS = [
     type: 'function',
     function: {
       name: 'create_planting_plan',
-      description: 'Create an optimized planting plan for multiple crops/zones at once. Analyses current assignments, harvest forecasts, crop compatibility, and market data to generate a batch schedule. Returns the plan for review before executing. Use this instead of calling create_planting_assignment multiple times.',
+      description: 'Create an optimized planting plan for multiple crops/zones. Supports two modes: (1) crop_mix mode where the farmer specifies exact crops and percentages (e.g. "Red Oak:20%, Basil:5%, ai_choice:remainder") and the tool allocates zones proportionally; (2) auto mode (no crop_mix) where the tool scores all crops and assigns top candidates. Supports harvest_interval for weekly/biweekly succession staggering. Always use this when the farmer specifies crop percentages, specific varieties, or a target mix. Returns the plan for review before executing.',
       parameters: {
         type: 'object',
         properties: {
           target_date: { type: 'string', description: 'Target start date (YYYY-MM-DD) for the plan. Required.' },
           num_zones: { type: 'number', description: 'Number of zones/groups to fill (optional, uses available capacity)' },
+          crop_mix: { type: 'string', description: 'Crop mix with percentages. Format: "CropName:20%, CropName2:15%, ai_choice:remainder". When the farmer specifies exact crops and percentages, pass them here. Use "ai_choice" for the portion E.V.I.E. should fill automatically. Crop names are fuzzy-matched against the registry.'},
+          harvest_interval: { type: 'string', description: 'Target harvest cadence: "weekly", "biweekly", "monthly". When set, staggers seed dates so harvests land on a regular cycle. Default: none.'},
           focus: { type: 'string', description: 'Planning focus: balanced, high-margin, quick-turn, succession, diversification' },
           exclude: { type: 'string', description: 'Comma-separated crop names to exclude' },
           farm_id: { type: 'string', description: 'Farm ID (optional)' }
@@ -2054,6 +2056,8 @@ PLANTING SCHEDULE WORKFLOW:
   4. Use create_planting_plan with the farmer’s target date and preferences to generate an optimised batch schedule.
   5. Present the plan as a clear table (crop, zone, seed date, harvest date, reasoning) and ask the farmer to confirm.
   6. After confirmation, execute using create_planting_assignment for each line item, passing the exact seed_date from the plan.
+- CROP MIX / PERCENTAGE ALLOCATION: When the farmer specifies exact crops and percentages (e.g. "20% red oak, 5% basil, you choose the rest"), pass them in the crop_mix parameter as "Red Oak:20%, Basil:5%, ai_choice:remainder". The tool fuzzy-matches crop names against the registry and allocates zones proportionally. Use "ai_choice" for the portion you should fill based on market/scoring data. This is the primary way to handle requests like "create a schedule with 20% of this, 10% of that".
+- HARVEST INTERVAL: When the farmer asks for "weekly harvests" or "regular weekly harvests", set harvest_interval to "weekly". This staggers seed dates within each crop allocated zones so harvests land on a rolling weekly (or biweekly/monthly) cycle instead of all at once.
 - CRITICAL DATE RULE: Always use the current year from "Today's date" above. If the farmer says "April 1", use the CURRENT YEAR (e.g. 2026-04-01), NOT 2024. All dates must be current or future.
 - CRITICAL ZONE RULE: Only use zones listed in "Valid zones" above. Do NOT invent zones that don't exist. Pass zone name as group_id (e.g. "Zone 1") — the system auto-picks an available group.
 - When the farmer mentions a date like "April 1st" or "next Monday", convert it to YYYY-MM-DD using the current year from Today's date, and pass it as target_date / seed_date.
@@ -3124,65 +3128,252 @@ async function executeExtendedTool(toolName, params, farmId) {
 
         candidates.sort((a, b) => b.score - a.score);
 
-        // 5. Assign top candidates to available zones (avoid category bunching)
-        const plan = [];
-        const usedCategories = {};
-        let candidateIdx = 0;
+        // --- Harvest interval stagger helper ---
+        const harvestInterval = (params.harvest_interval || '').toLowerCase();
+        const staggerDaysForInterval = harvestInterval === 'weekly' ? 7 : harvestInterval === 'biweekly' ? 14 : harvestInterval === 'monthly' ? 30 : 0;
 
-        for (let i = 0; i < Math.min(numZones, availableZones.length) && candidateIdx < candidates.length; i++) {
-          const zone = availableZones[i];
-
-          // For succession focus, stagger same crop across zones
-          if (focus === 'succession' && candidates.length > 0) {
-            const crop = candidates[0];
-            const staggerDays = i * 7;
-            const staggeredSeedDate = new Date(new Date(targetDate + 'T00:00:00').getTime() + staggerDays * 86400000).toISOString().split('T')[0];
-            const staggeredHarvestDate = new Date(new Date(staggeredSeedDate + 'T00:00:00').getTime() + crop.totalDays * 86400000).toISOString().split('T')[0];
-            plan.push({
-              zone: zone.group_id, zone_source: zone.source, zone_detail: zone.currentCrop ? `${zone.currentCrop} harvests ${zone.harvestDate}` : 'empty',
-              crop: crop.crop, seed_date: staggeredSeedDate, harvest_date: staggeredHarvestDate,
-              grow_days: crop.totalDays, category: crop.category, score: crop.score, reasons: crop.reasons + '; staggered ' + staggerDays + 'd'
-            });
-            continue;
+        // --- Helper: look up crop info (fuzzy match against registry) ---
+        const cropNames = Object.keys(crops);
+        function fuzzyMatchCrop(input) {
+          const lower = input.trim().toLowerCase();
+          // Exact match first
+          const exact = cropNames.find(n => n.toLowerCase() === lower);
+          if (exact) return exact;
+          // Contains match
+          const contains = cropNames.find(n => n.toLowerCase().includes(lower) || lower.includes(n.toLowerCase()));
+          if (contains) return contains;
+          // Word overlap
+          const inputWords = lower.split(/\s+/);
+          let best = null, bestOverlap = 0;
+          for (const n of cropNames) {
+            const nWords = n.toLowerCase().split(/\s+/);
+            const overlap = inputWords.filter(w => nWords.some(nw => nw.includes(w) || w.includes(nw))).length;
+            if (overlap > bestOverlap) { best = n; bestOverlap = overlap; }
           }
-
-          // Pick next candidate, slightly penalising repeated categories for diversity
-          let picked = null;
-          for (let j = candidateIdx; j < candidates.length; j++) {
-            const c = candidates[j];
-            if ((usedCategories[c.category] || 0) >= 2 && j < candidates.length - 1) continue; // skip if 2+ of same category already picked
-            picked = c;
-            candidateIdx = j + 1;
-            break;
-          }
-          if (!picked) { picked = candidates[candidateIdx++]; }
-          if (!picked) break;
-
-          usedCategories[picked.category] = (usedCategories[picked.category] || 0) + 1;
-
-          // Use zone's harvest date as seed date if zone is freeing up
-          const seedDate = zone.source === 'freeing_up' && zone.harvestDate ? zone.harvestDate : targetDate;
-          const harvestDate = new Date(new Date(seedDate + 'T00:00:00').getTime() + picked.totalDays * 86400000).toISOString().split('T')[0];
-
-          plan.push({
-            zone: zone.group_id, zone_source: zone.source, zone_detail: zone.currentCrop ? `${zone.currentCrop} harvests ${zone.harvestDate}` : 'empty',
-            crop: picked.crop, seed_date: seedDate, harvest_date: harvestDate,
-            grow_days: picked.totalDays, category: picked.category, score: picked.score, reasons: picked.reasons
-          });
+          return best; // may be null if no overlap at all
         }
 
-        return {
-          ok: true,
-          target_date: targetDate,
-          focus,
-          plan,
-          zones_available: availableZones.length,
-          zones_planned: plan.length,
-          current_assignments: currentAssignments.length,
-          freeing_up: freeingUp.length,
-          note: 'This is a proposed plan. Confirm to execute each assignment.',
-          generatedAt: new Date().toISOString()
-        };
+        function getCropGrowDays(cropName) {
+          const info = crops[cropName];
+          if (!info) return 30;
+          const growth = info.growth || {};
+          const recipeKey = Object.keys(LIGHTING_RECIPES).find(k =>
+            k.toLowerCase() === cropName.toLowerCase() || k.toLowerCase().includes(cropName.split(' ')[0].toLowerCase())
+          );
+          const recipe = recipeKey ? LIGHTING_RECIPES[recipeKey] : null;
+          return recipe?.length || growth.daysToHarvest || 30;
+        }
+
+        // 5. Parse crop_mix if provided (percentage-based allocation)
+        const cropMixRaw = params.crop_mix || '';
+        let cropMixEntries = []; // [{name, pct, isAiChoice}]
+
+        if (cropMixRaw) {
+          const parts = cropMixRaw.split(',').map(s => s.trim()).filter(Boolean);
+          let totalExplicit = 0;
+          for (const part of parts) {
+            const colonMatch = part.match(/^(.+?)\s*:\s*([\d.]+)\s*%?$/);
+            if (colonMatch) {
+              const rawName = colonMatch[1].trim();
+              const pct = parseFloat(colonMatch[2]);
+              if (rawName.toLowerCase() === 'ai_choice' || rawName.toLowerCase() === 'remainder') {
+                cropMixEntries.push({ name: 'ai_choice', pct, isAiChoice: true });
+              } else {
+                cropMixEntries.push({ name: rawName, pct, isAiChoice: false });
+                totalExplicit += pct;
+              }
+            }
+          }
+          // If no ai_choice entry but percentages don't sum to 100, add implicit remainder
+          const hasAiChoice = cropMixEntries.some(e => e.isAiChoice);
+          if (!hasAiChoice && totalExplicit < 100) {
+            cropMixEntries.push({ name: 'ai_choice', pct: 100 - totalExplicit, isAiChoice: true });
+          }
+          // Normalize: if ai_choice has pct 0 or is labelled "remainder", calculate it
+          for (const e of cropMixEntries) {
+            if (e.isAiChoice && (e.pct <= 0 || isNaN(e.pct))) {
+              e.pct = Math.max(0, 100 - totalExplicit);
+            }
+          }
+        }
+
+        const plan = [];
+
+        if (cropMixEntries.length > 0) {
+          // --- CROP MIX MODE: allocate zones by percentage ---
+          const totalZones = Math.min(numZones, availableZones.length);
+          const allocation = []; // [{cropName, resolvedName, zones, growDays, isAiChoice, reasons}]
+          const mixWarnings = [];
+
+          // Resolve each entry and compute zone counts
+          let zonesAssigned = 0;
+          for (const entry of cropMixEntries) {
+            const zoneCount = Math.max(1, Math.round(totalZones * entry.pct / 100));
+            if (entry.isAiChoice) {
+              allocation.push({ cropName: 'ai_choice', resolvedName: null, zones: zoneCount, growDays: 0, isAiChoice: true, reasons: 'AI-selected based on scoring' });
+            } else {
+              const resolved = fuzzyMatchCrop(entry.name);
+              const growDays = resolved ? getCropGrowDays(resolved) : 30;
+              if (!resolved) {
+                mixWarnings.push(`"${entry.name}" not found in crop registry; using name as-is with default 30-day grow cycle`);
+              }
+              allocation.push({
+                cropName: entry.name,
+                resolvedName: resolved || entry.name,
+                zones: zoneCount,
+                growDays,
+                isAiChoice: false,
+                pct: entry.pct,
+                reasons: `${entry.pct}% of mix${resolved ? '' : ' (unregistered crop)'}`
+              });
+            }
+            zonesAssigned += zoneCount;
+          }
+
+          // Adjust if rounding over/under-allocated
+          const diff = totalZones - zonesAssigned;
+          if (diff !== 0) {
+            // Adjust the ai_choice bucket first, or the largest bucket
+            const adjustTarget = allocation.find(a => a.isAiChoice) || allocation.reduce((a, b) => a.zones > b.zones ? a : b, allocation[0]);
+            if (adjustTarget) adjustTarget.zones = Math.max(1, adjustTarget.zones + diff);
+          }
+
+          // Build the plan
+          let zoneIdx = 0;
+          for (const alloc of allocation) {
+            if (alloc.isAiChoice) {
+              // Fill with top-scored candidates from auto-scoring
+              const usedCats = {};
+              let cIdx = 0;
+              for (let z = 0; z < alloc.zones && zoneIdx < availableZones.length; z++) {
+                const zone = availableZones[zoneIdx++];
+                let picked = null;
+                for (let j = cIdx; j < candidates.length; j++) {
+                  const c = candidates[j];
+                  // Skip crops that are already explicitly in the mix
+                  if (allocation.some(a => !a.isAiChoice && a.resolvedName.toLowerCase() === c.crop.toLowerCase())) continue;
+                  if ((usedCats[c.category] || 0) >= 2 && j < candidates.length - 1) continue;
+                  picked = c;
+                  cIdx = j + 1;
+                  break;
+                }
+                if (!picked && cIdx < candidates.length) picked = candidates[cIdx++];
+                if (!picked) break;
+                usedCats[picked.category] = (usedCats[picked.category] || 0) + 1;
+
+                const stagger = staggerDaysForInterval > 0 ? z * staggerDaysForInterval : 0;
+                const seedDate = new Date(new Date(targetDate + 'T00:00:00').getTime() + stagger * 86400000).toISOString().split('T')[0];
+                const harvestDate = new Date(new Date(seedDate + 'T00:00:00').getTime() + picked.totalDays * 86400000).toISOString().split('T')[0];
+                plan.push({
+                  zone: zone.group_id, zone_name: zone.name || zone.group_id, zone_source: zone.source,
+                  zone_detail: zone.currentCrop ? `${zone.currentCrop} harvests ${zone.harvestDate}` : 'empty',
+                  crop: picked.crop, seed_date: seedDate, harvest_date: harvestDate,
+                  grow_days: picked.totalDays, category: picked.category, score: picked.score,
+                  allocation_pct: alloc.pct || null,
+                  reasons: `AI-selected (score ${picked.score})${picked.reasons ? '; ' + picked.reasons : ''}${stagger ? '; staggered +' + stagger + 'd' : ''}`
+                });
+              }
+            } else {
+              // Explicit crop: assign to N zones, stagger if harvest_interval set
+              for (let z = 0; z < alloc.zones && zoneIdx < availableZones.length; z++) {
+                const zone = availableZones[zoneIdx++];
+                const stagger = staggerDaysForInterval > 0 ? z * staggerDaysForInterval : 0;
+                const baseSeedDate = zone.source === 'freeing_up' && zone.harvestDate ? zone.harvestDate : targetDate;
+                const seedDate = new Date(new Date(baseSeedDate + 'T00:00:00').getTime() + stagger * 86400000).toISOString().split('T')[0];
+                const harvestDate = new Date(new Date(seedDate + 'T00:00:00').getTime() + alloc.growDays * 86400000).toISOString().split('T')[0];
+                const info = crops[alloc.resolvedName];
+                plan.push({
+                  zone: zone.group_id, zone_name: zone.name || zone.group_id, zone_source: zone.source,
+                  zone_detail: zone.currentCrop ? `${zone.currentCrop} harvests ${zone.harvestDate}` : 'empty',
+                  crop: alloc.resolvedName, seed_date: seedDate, harvest_date: harvestDate,
+                  grow_days: alloc.growDays, category: info?.category || 'uncategorized',
+                  allocation_pct: alloc.pct,
+                  reasons: alloc.reasons + (stagger ? '; staggered +' + stagger + 'd' : '')
+                });
+              }
+            }
+          }
+
+          const result = {
+            ok: true,
+            target_date: targetDate,
+            focus,
+            mode: 'crop_mix',
+            crop_mix_parsed: allocation.map(a => ({ crop: a.isAiChoice ? 'AI Choice' : a.resolvedName, requested: a.cropName, pct: a.pct, zones_allocated: a.zones })),
+            plan,
+            zones_available: availableZones.length,
+            zones_planned: plan.length,
+            current_assignments: currentAssignments.length,
+            freeing_up: freeingUp.length,
+            harvest_interval: harvestInterval || 'none',
+            note: 'This is a proposed plan. Confirm to execute each assignment.',
+            generatedAt: new Date().toISOString()
+          };
+          if (mixWarnings.length) result.warnings = mixWarnings;
+          return result;
+
+        } else {
+          // --- AUTO MODE (original logic) ---
+          const usedCategories = {};
+          let candidateIdx = 0;
+
+          for (let i = 0; i < Math.min(numZones, availableZones.length) && candidateIdx < candidates.length; i++) {
+            const zone = availableZones[i];
+
+            // For succession focus, stagger same crop across zones
+            if (focus === 'succession' && candidates.length > 0) {
+              const crop = candidates[0];
+              const staggerDays = i * 7;
+              const staggeredSeedDate = new Date(new Date(targetDate + 'T00:00:00').getTime() + staggerDays * 86400000).toISOString().split('T')[0];
+              const staggeredHarvestDate = new Date(new Date(staggeredSeedDate + 'T00:00:00').getTime() + crop.totalDays * 86400000).toISOString().split('T')[0];
+              plan.push({
+                zone: zone.group_id, zone_source: zone.source, zone_detail: zone.currentCrop ? `${zone.currentCrop} harvests ${zone.harvestDate}` : 'empty',
+                crop: crop.crop, seed_date: staggeredSeedDate, harvest_date: staggeredHarvestDate,
+                grow_days: crop.totalDays, category: crop.category, score: crop.score, reasons: crop.reasons + '; staggered ' + staggerDays + 'd'
+              });
+              continue;
+            }
+
+            // Pick next candidate, slightly penalising repeated categories for diversity
+            let picked = null;
+            for (let j = candidateIdx; j < candidates.length; j++) {
+              const c = candidates[j];
+              if ((usedCategories[c.category] || 0) >= 2 && j < candidates.length - 1) continue; // skip if 2+ of same category already picked
+              picked = c;
+              candidateIdx = j + 1;
+              break;
+            }
+            if (!picked) { picked = candidates[candidateIdx++]; }
+            if (!picked) break;
+
+            usedCategories[picked.category] = (usedCategories[picked.category] || 0) + 1;
+
+            // Use zone's harvest date as seed date if zone is freeing up
+            const seedDate = zone.source === 'freeing_up' && zone.harvestDate ? zone.harvestDate : targetDate;
+            const harvestDate = new Date(new Date(seedDate + 'T00:00:00').getTime() + picked.totalDays * 86400000).toISOString().split('T')[0];
+
+            plan.push({
+              zone: zone.group_id, zone_source: zone.source, zone_detail: zone.currentCrop ? `${zone.currentCrop} harvests ${zone.harvestDate}` : 'empty',
+              crop: picked.crop, seed_date: seedDate, harvest_date: harvestDate,
+              grow_days: picked.totalDays, category: picked.category, score: picked.score, reasons: picked.reasons
+            });
+          }
+
+          return {
+            ok: true,
+            target_date: targetDate,
+            focus,
+            mode: 'auto',
+            plan,
+            zones_available: availableZones.length,
+            zones_planned: plan.length,
+            current_assignments: currentAssignments.length,
+            freeing_up: freeingUp.length,
+            harvest_interval: harvestInterval || 'none',
+            note: 'This is a proposed plan. Confirm to execute each assignment.',
+            generatedAt: new Date().toISOString()
+          };
+        }
       } catch (err) {
         return { ok: false, error: err.message };
       }

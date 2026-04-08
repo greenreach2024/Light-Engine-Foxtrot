@@ -1,5 +1,9 @@
 # .gcloudignore for greenreach-central (Central service)
 .gcloudignore
+.elasticbeanstalk/
+.ebextensions/
+.platform/
+public/videos/
 .git
 .github
 .vscode
@@ -8,6 +12,10 @@ node_modules/
 npm-debug.log*
 .env.local
 .env.development
+.env
+.env.*
+!.env.example
+!.env.cloud.example
 .DS_Store
 Thumbs.db
 *.md
@@ -30,7 +38,6 @@ backups/
 data/
 docs/
 scripts/
-reports/
 *.bak
 *.mjs
 *.txt
