@@ -42,6 +42,8 @@ router.get('/farms', async (req, res) => {
       location: {
         city: 'Kingston',
         province: 'ON',
+        latitude: 44.2312,
+        longitude: -76.4860,
         country: 'Canada'
       },
       certifications: ['GAP', 'food_safety'],

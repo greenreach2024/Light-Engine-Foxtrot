@@ -1122,7 +1122,10 @@
           <div class="sku-card">
             <div class="sku-thumbnail"><img src="${sku.thumbnail_url ? escapeAttr(sku.thumbnail_url) : '/product-images/crops/' + encodeURIComponent(sku.product_name.toLowerCase().replace(/\s+/g, '-')) + '.webp'}" alt="${escapeAttr(sku.product_name)}" loading="lazy" onerror="this.onerror=null;this.src=&quot;/images/default-product.svg&quot;" /></div>
             <div class="sku-header">
-              <div class="sku-name">${escapeHtml(sku.product_name)}</div>
+              <div class="sku-name-row">
+                <span class="sku-name">${escapeHtml(sku.product_name)}</span>
+                ${this.getSkuGrowingBadges(sku)}
+              </div>
               <div class="sku-badges">
                 ${sku.is_custom ? '<span class="sku-badge sku-badge-custom">Custom</span>' : ''}
                 ${sku.organic ? '<span class="sku-badge">Organic</span>' : ''}
@@ -2208,6 +2211,28 @@
       return `<span class="farm-cert-badge food-safety-cert" title="Food Safety Certified: ${cert}">️ Food Safety</span>`;
     },
 
+    getSkuGrowingBadges(sku) {
+      const farms = sku.farms || [];
+      const allPractices = new Set(
+        farms.flatMap(f => {
+          const dir = this.farmDirectory[f.farm_id] || {};
+          return [...(f.practices || []), ...(dir.practices || [])];
+        })
+      );
+      if (!allPractices.size) return '';
+      let badges = '';
+      if (allPractices.has('hydroponic')) {
+        badges += `<span class="growing-badge growing-badge-hydroponic" title="Grown hydroponically">Hydroponic</span>`;
+      }
+      if (allPractices.has('pesticide_free')) {
+        badges += `<span class="growing-badge growing-badge-no-pesticides" title="No pesticides used">No Pesticides</span>`;
+      }
+      if (allPractices.has('herbicide_free')) {
+        badges += `<span class="growing-badge growing-badge-no-herbicides" title="No herbicides used">No Herbicides</span>`;
+      }
+      return badges ? `<span class="growing-badges">${badges}</span>` : '';
+    },
+
     /**
      * Load buyer insights dashboard
      */
@@ -2229,7 +2254,30 @@
         // Use previously loaded orders or fetch them
         const orders = this.orders || [];
         if (orders.length === 0) {
-          demandContent.innerHTML = '<div class="loading-state">Place your first order to see demand trends</div>';
+          // No orders yet -- show catalog availability as trending
+          const catalog = this.catalog || [];
+          if (catalog.length === 0) {
+            demandContent.innerHTML = '<div class="loading-state">Catalog loading...</div>';
+            return;
+          }
+          const top = [...catalog]
+            .filter(s => s.total_qty_available > 0)
+            .sort((a, b) => b.total_qty_available - a.total_qty_available)
+            .slice(0, 5);
+          if (top.length === 0) {
+            demandContent.innerHTML = '<div class="loading-state">No products currently in stock</div>';
+            return;
+          }
+          demandContent.innerHTML = top.map((sku, i) => `
+            <div class="demand-item">
+              <div class="demand-rank">${i + 1}</div>
+              <div class="demand-info">
+                <div class="demand-name">${sku.product_name}</div>
+                <div class="demand-stats">${sku.total_qty_available} ${sku.unit || 'units'} available from ${(sku.farms || []).length} farm${(sku.farms || []).length !== 1 ? 's' : ''}</div>
+              </div>
+              <div class="demand-trend trending-stable">In Stock</div>
+            </div>
+          `).join('');
           return;
         }
 
@@ -2289,7 +2337,7 @@
         // Call market intelligence API for real-time price alerts
         const headers = {};
         if (this.token) headers['Authorization'] = `Bearer ${this.token}`;
-        const response = await fetch('/api/wholesale/market/price-alerts?threshold=7', { headers });
+        const response = await fetch('/api/market-intelligence/price-alerts?threshold=7', { headers });
         if (!response.ok) {
           // Silently handle auth/permission errors - price alerts are optional
           priceContent.innerHTML = '<div class="loading-state">All monitored prices stable (no significant changes detected)</div>';
@@ -2350,8 +2398,9 @@
                 </div>
               ` : ''}
               <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid var(--border);">
-                  <strong>Retailer Coverage:</strong> ${escapeHtml((alert.retailers || []).join(', '))} (${Number(alert.dataPoints || 0)} observations)<br/>
+                  ${alert.retailers && alert.retailers.length > 0 ? `<strong>Retailer Coverage:</strong> ${escapeHtml(alert.retailers.join(', '))} (${Number(alert.dataPoints || 0)} observations)<br/>` : ''}
                   <strong>Last Updated:</strong> ${escapeHtml(updatedDisplay)} • <strong>Confidence:</strong> ${escapeHtml(alert.confidence)} • <strong>AI Freshness:</strong> ${escapeHtml(freshnessLabel)}
+                  ${alert.source === 'gemini_ai' ? ' • <strong>Source:</strong> AI Market Analysis (Gemini)' : ''}
                   ${alert.aiOutlook ? `<br/><strong>AI Outlook:</strong> ${escapeHtml(alert.aiOutlook)}` : ''}
                   ${alert.aiAction ? ` • <strong>Action:</strong> ${escapeHtml(alert.aiAction)}` : ''}
                   ${alert.articles && alert.articles.length > 0 ? `<br/><strong>News References:</strong> ${alert.articles.map(a => `<a href="${safeUrl(a.url)}" target="_blank" rel="noopener noreferrer" style="color: var(--primary);">${escapeHtml(a.title)} (${escapeHtml(a.source)})</a>`).join(', ')}` : ''}
@@ -2379,23 +2428,59 @@
       const impactScore = document.getElementById('impact-score');
       
       if (!this.currentBuyer) {
-        impactContent.innerHTML = '<div class="loading-state">Sign in to see environmental impact</div>';
-        if (impactScore) impactScore.textContent = '--';
+        // Show general network info even without auth
+        const farmCount = (this.networkFarms || []).length || 1;
+        impactContent.innerHTML = `
+          <div class="impact-metric">
+            <span class="impact-label">GreenReach Network</span>
+            <span class="impact-value">${farmCount} local farm${farmCount !== 1 ? 's' : ''}</span>
+          </div>
+          <div class="impact-metric">
+            <span class="impact-label">Growing Method</span>
+            <span class="impact-value">Hydroponic, Year-Round</span>
+          </div>
+          <div class="impact-metric">
+            <span class="impact-label">Region</span>
+            <span class="impact-value">Kingston, ON</span>
+          </div>
+          <div class="impact-comparison">
+            <div class="comparison-text">Sign in to see personalized distance and carbon savings calculations based on your location.</div>
+          </div>
+        `;
+        if (impactScore) impactScore.textContent = 'A';
         return;
       }
 
-      const buyerLoc = this.getBuyerLatLng();
+      let buyerLoc = this.getBuyerLatLng();
+      if (!buyerLoc && this.currentBuyer?.location) {
+        // Coordinates missing from profile -- attempt geocoding from address
+        try {
+          buyerLoc = await this.geocodeCoordinates(this.currentBuyer.location);
+          if (buyerLoc) {
+            // Cache for future use
+            this.currentBuyer.location.latitude = buyerLoc.latitude;
+            this.currentBuyer.location.longitude = buyerLoc.longitude;
+          }
+        } catch (err) {
+          console.warn('[Environmental Impact] Geocoding failed:', err.message);
+        }
+      }
       if (!buyerLoc) {
-        // Show farms without distance calculation
         impactContent.innerHTML = `
-          <div class="loading-state" style="padding: 1rem;">
-            <p style="margin-bottom: 1rem; color: var(--text-secondary);">
-              Location coordinates not set. Update your account settings to enable distance calculations.
-            </p>
-            <p style="font-size: 0.9rem; color: var(--text-primary);">
-              <strong>Sourcing from GreenReach Network:</strong><br/>
-              ${this.networkFarms.length} local farms available
-            </p>
+          <div class="impact-metric">
+            <span class="impact-label">GreenReach Network</span>
+            <span class="impact-value">${(this.networkFarms || []).length || 1} local farm${((this.networkFarms || []).length || 1) !== 1 ? 's' : ''}</span>
+          </div>
+          <div class="impact-metric">
+            <span class="impact-label">Growing Method</span>
+            <span class="impact-value">Hydroponic, Year-Round</span>
+          </div>
+          <div class="impact-metric">
+            <span class="impact-label">Region</span>
+            <span class="impact-value">Kingston, ON</span>
+          </div>
+          <div class="impact-comparison">
+            <div class="comparison-text">Add your city and postal code in Account Settings to enable distance and carbon savings calculations.</div>
           </div>
         `;
         if (impactScore) impactScore.textContent = 'A';

@@ -461,7 +461,7 @@
 
     .sku-thumbnail {
       width: 100%;
-      height: 140px;
+      aspect-ratio: 1 / 1;
       overflow: hidden;
       border-radius: 6px;
       margin-bottom: 0.75rem;
@@ -518,9 +518,54 @@
       flex-wrap: wrap;
     }
 
+    .growing-badges {
+      display: inline-flex;
+      gap: 0.3rem;
+      align-items: center;
+      margin-left: 0.25rem;
+      flex-wrap: wrap;
+    }
+
+    .growing-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.2rem;
+      padding: 0.15rem 0.45rem;
+      border-radius: 10px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      white-space: nowrap;
+      line-height: 1.4;
+    }
+
+    .growing-badge-hydroponic {
+      background: #dbeafe;
+      color: #1e40af;
+      border: 1px solid #93c5fd;
+    }
+
+    .growing-badge-no-pesticides {
+      background: #d1fae5;
+      color: #065f46;
+      border: 1px solid #6ee7b7;
+    }
+
+    .growing-badge-no-herbicides {
+      background: #fef9c3;
+      color: #713f12;
+      border: 1px solid #fde047;
+    }
+
+    .sku-name-row {
+      display: flex;
+      align-items: baseline;
+      flex-wrap: wrap;
+      gap: 0.25rem;
+    }
+
     .sku-thumbnail-placeholder {
       width: 100%;
-      height: 140px;
+      aspect-ratio: 1 / 1;
       display: flex;
       align-items: center;
       justify-content: center;

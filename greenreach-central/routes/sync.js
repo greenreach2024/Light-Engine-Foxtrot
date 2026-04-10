@@ -1053,6 +1053,11 @@ router.post('/farm-registration', authenticateFarm, async (req, res) => {
         status: farmData.status
       };
       
+      // LE farms using crop recipes default to hydroponic/pesticide-free/herbicide-free practices
+      const incomingPractices = Array.isArray(farmData.practices) && farmData.practices.length > 0
+        ? farmData.practices
+        : ['hydroponic', 'pesticide_free', 'herbicide_free'];
+
       // Check if farm exists
       const existingFarm = await query(
         'SELECT farm_id, email, api_url, metadata FROM farms WHERE farm_id = $1',
@@ -1075,6 +1080,10 @@ router.post('/farm-registration', authenticateFarm, async (req, res) => {
         values.push(JSON.stringify(mergedMetadata));
         
         updates.push(`updated_at = NOW()`);
+
+        // Always sync practices from farm registration so portal badges stay current
+        updates.push(`practices = $${paramCount++}`);
+        values.push(JSON.stringify(incomingPractices));
         
         if (!currentFarm.email && farmData.contact?.email) {
           updates.push(`email = $${paramCount++}`);
@@ -1105,8 +1114,8 @@ router.post('/farm-registration', authenticateFarm, async (req, res) => {
         await query(
           `INSERT INTO farms (
             farm_id, name, email, contact_name, plan_type, api_url, jwt_secret, api_key, api_secret, status, metadata, registration_code,
-            last_heartbeat, created_at, updated_at
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW(), NOW(), NOW())`,
+            practices, last_heartbeat, created_at, updated_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW(), NOW(), NOW())`,
           [
             farmId,
             farmData.name,
@@ -1119,7 +1128,8 @@ router.post('/farm-registration', authenticateFarm, async (req, res) => {
             apiSecret,
             'active',
             JSON.stringify(metadata),
-            registrationCode
+            registrationCode,
+            JSON.stringify(incomingPractices)
           ]
         );
         
@@ -1130,13 +1140,21 @@ router.post('/farm-registration', authenticateFarm, async (req, res) => {
     // Also register in wholesale network store so aggregator can reach this farm
     if (farmData.api_url) {
       try {
+        // LE farms using crop recipes default to hydroponic/pesticide-free/herbicide-free practices
+        const practices = Array.isArray(farmData.practices) && farmData.practices.length > 0
+          ? farmData.practices
+          : ['hydroponic', 'pesticide_free', 'herbicide_free'];
         await upsertNetworkFarm(farmId, {
           name: farmData.name,
           api_url: farmData.api_url,
           url: farmData.api_url,
           status: 'active',
           contact: farmData.contact || {},
-          location: { region: farmData.region, city: farmData.location }
+          location: { region: farmData.region, city: farmData.location },
+          certifications: Array.isArray(farmData.certifications) ? farmData.certifications : [],
+          practices,
+          attributes: Array.isArray(farmData.attributes) ? farmData.attributes : [],
+          fulfillment_standards: farmData.fulfillment_standards || {}
         });
         logger.info(`[Sync] Farm ${farmId} registered in wholesale network (${farmData.api_url})`);
       } catch (netErr) {

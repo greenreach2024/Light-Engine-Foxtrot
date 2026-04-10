@@ -4190,6 +4190,18 @@ router.post('/network/bootstrap', async (req, res) => {
 router.get('/network/farms', async (req, res, next) => {
   try {
     const farms = await listNetworkFarms();
+    // Enrich farms with coordinates when missing (for Environmental Impact calculations)
+    for (const farm of farms) {
+      const loc = farm.location || {};
+      if (loc.latitude == null || loc.longitude == null) {
+        const city = String(loc.city || '').toLowerCase().trim();
+        if (city.startsWith('kingston')) {
+          loc.latitude = 44.2312;
+          loc.longitude = -76.4860;
+        }
+        farm.location = loc;
+      }
+    }
     return res.json({ status: 'ok', data: { farms, lastSync: req.app?.locals?.wholesaleNetworkLastSync || null } });
   } catch (error) {
     return next(error);

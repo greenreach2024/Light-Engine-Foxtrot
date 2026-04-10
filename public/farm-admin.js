@@ -3320,7 +3320,7 @@ async function loadCropValueData() {
                         const retailPricePerLb = dbPrice > 0 ? dbPrice : (cpPrice > 0 ? cpPrice : (params.retailPricePerLb || 0));
                         const yieldFactor = params.yieldFactor || 1;
                         const pricePerOz = retailPricePerLb / 16;
-                        const value = weightLbs * retailPricePerLb * yieldFactor;
+                        const value = weightLbs * retailPricePerLb;
                         const estPlants = Math.round(weightLbs / LBS_PER_PLANT);
 
                         const isManual = item.inventory_source === 'manual';
@@ -4893,8 +4893,25 @@ async function loadAccountingData() {
             }
         } catch (e) { console.log('[Financial] Wholesale events not available:', e.message); }
 
-        // Merge local orders + wholesale events
-        const allOrders = [...(ordersData.orders || []), ...wholesaleEvents];
+        // Merge local orders + wholesale events, deduplicating by master_order_id
+        // Both /api/farm-sales/orders and /api/wholesale/order-events query the
+        // same wholesale_orders table. Prefer the order-events copy because it
+        // carries the correct channel tag.
+        const seenIds = new Set();
+        const deduped = [];
+        // Add wholesale events first (they have explicit channel: 'wholesale')
+        wholesaleEvents.forEach(ev => {
+            const key = ev.master_order_id || ev.order_id || ev.id;
+            if (key) seenIds.add(String(key));
+            deduped.push(ev);
+        });
+        // Then add farm-sales orders only if not already seen
+        (ordersData.orders || []).forEach(order => {
+            const key = order.master_order_id || order.id;
+            if (key && seenIds.has(String(key))) return; // duplicate
+            deduped.push(order);
+        });
+        const allOrders = deduped;
 
         // Filter orders by date range
         const filteredOrders = allOrders.filter(o => {
@@ -5129,7 +5146,7 @@ async function loadRevenueBreakdown(orders) {
         } else if (order.channel === 'subscription') {
             category = 'Subscriptions';
         } else {
-            category = 'POS (Retail)'; // default
+            category = 'Wholesale (B2B)'; // default — match loadAccountingData channel fallback
         }
         
         breakdown[category].count++;

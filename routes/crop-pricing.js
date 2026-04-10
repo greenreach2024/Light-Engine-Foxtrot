@@ -2,6 +2,8 @@
  * Crop Pricing API
  * GET /api/crop-pricing - Get current farm crop pricing
  * PUT /api/crop-pricing - Update crop pricing (admin only)
+ *
+ * Persistence: GCS on Cloud Run, local fs fallback for development.
  */
 
 import express from 'express';
@@ -9,12 +11,14 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createRequire } from 'module';
+import { readJSON, writeJSON } from '../services/gcs-storage.js';
 
 const router = express.Router();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const PRICING_FILE = path.resolve(__dirname, '../public/data/crop-pricing.json');
+const PRICING_REL = 'public/data/crop-pricing.json';
 const RECIPES_FILE = path.resolve(__dirname, '../public/data/lighting-recipes.json');
 const GROUPS_FILE = path.resolve(__dirname, '../public/data/groups.json');
 
@@ -37,13 +41,13 @@ function planIdToCropName(planId) {
  * Returns current crop pricing configuration merged with all crops from lighting recipes.
  * Each crop includes an `isGrowing` flag based on current groups.json.
  */
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   try {
-    // Load existing pricing data
-    let pricingData = { crops: [] };
-    try {
-      pricingData = JSON.parse(fs.readFileSync(PRICING_FILE, 'utf8'));
-    } catch (e) { /* no pricing file yet */ }
+    // Load existing pricing data (GCS first, local fallback)
+    let pricingData = await readJSON(PRICING_REL, null);
+    if (!pricingData) {
+      try { pricingData = JSON.parse(fs.readFileSync(PRICING_FILE, 'utf8')); } catch { pricingData = { crops: [] }; }
+    }
     
     // Build a map of existing prices by crop name
     const priceMap = {};
@@ -114,7 +118,7 @@ router.get('/', (req, res) => {
  * Update crop pricing configuration
  * Body: { crops: [...] }
  */
-router.put('/', (req, res) => {
+router.put('/', async (req, res) => {
   try {
     const { crops } = req.body;
     
@@ -125,17 +129,21 @@ router.put('/', (req, res) => {
       });
     }
     
-    // Load existing data
-    const data = JSON.parse(fs.readFileSync(PRICING_FILE, 'utf8'));
+    // Load existing data (GCS first, local fallback)
+    let data = await readJSON(PRICING_REL, null);
+    if (!data) {
+      try { data = JSON.parse(fs.readFileSync(PRICING_FILE, 'utf8')); } catch { data = { crops: [] }; }
+    }
     
     // Update crops
     data.crops = crops;
     data.lastUpdated = new Date().toISOString();
     
-    // Save to file
-    fs.writeFileSync(PRICING_FILE, JSON.stringify(data, null, 2), 'utf8');
+    // Persist to GCS (and write local copy for immediate reads)
+    await writeJSON(PRICING_REL, data);
+    try { fs.writeFileSync(PRICING_FILE, JSON.stringify(data, null, 2), 'utf8'); } catch { /* local write optional */ }
     
-    console.log(`[crop-pricing] Updated ${crops.length} crop prices`);
+    console.log(`[crop-pricing] Updated ${crops.length} crop prices (GCS + local)`);
     
     res.json({
       ok: true,
@@ -155,11 +163,14 @@ router.put('/', (req, res) => {
  * GET /api/crop-pricing/:cropName
  * Get pricing for a specific crop
  */
-router.get('/:cropName', (req, res) => {
+router.get('/:cropName', async (req, res) => {
   try {
     const cropName = decodeURIComponent(req.params.cropName);
-    const data = JSON.parse(fs.readFileSync(PRICING_FILE, 'utf8'));
-    const cropPricing = data.crops.find(c => c.crop === cropName);
+    let data = await readJSON(PRICING_REL, null);
+    if (!data) {
+      try { data = JSON.parse(fs.readFileSync(PRICING_FILE, 'utf8')); } catch { data = { crops: [] }; }
+    }
+    const cropPricing = (data.crops || []).find(c => c.crop === cropName);
     
     if (!cropPricing) {
       return res.status(404).json({
@@ -181,5 +192,19 @@ router.get('/:cropName', (req, res) => {
     });
   }
 });
+
+// On startup, hydrate local file from GCS so subsequent reads are fast
+(async () => {
+  try {
+    const gcsData = await readJSON(PRICING_REL, null);
+    if (gcsData && gcsData.crops && gcsData.crops.length > 0) {
+      fs.mkdirSync(path.dirname(PRICING_FILE), { recursive: true });
+      fs.writeFileSync(PRICING_FILE, JSON.stringify(gcsData, null, 2), 'utf8');
+      console.log(`[crop-pricing] Hydrated local pricing file from GCS (${gcsData.crops.length} crops)`);
+    }
+  } catch (err) {
+    console.warn('[crop-pricing] GCS hydration skipped:', err.message);
+  }
+})();
 
 export default router;

@@ -25041,6 +25041,24 @@ app.use(express.static(PUBLIC_DIR, {
 // The docs/ folder contains the AWS demo version with fetch interceptors that break local development
 // app.use('/docs', express.static(path.join(__dirname, 'docs')));
 
+// Farm settings — stored in GCS-backed ./data/ (not ./public/data/) so they survive container restarts
+app.get('/data/farm-settings.json', (req, res) => {
+  const filePath = path.join(__dirname, 'data', 'farm-settings.json');
+  if (!fs.existsSync(filePath)) return res.json({});
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.type('application/json');
+  fs.createReadStream(filePath).pipe(res);
+});
+
+app.post('/data/farm-settings.json', (req, res) => {
+  const filePath = path.join(__dirname, 'data', 'farm-settings.json');
+  const payload = JSON.stringify(req.body, null, 2);
+  writeJsonQueued(filePath, payload)
+    .then(() => res.json({ ok: true }))
+    .catch(e => res.status(500).json({ ok: false, error: e.message }));
+});
+
 // Allow direct access to JSON data files in /public/data with CORS headers
 app.use('/data', (req, res, next) => {
   // Only handle GET/OPTIONS for static JSON fetches; let POST fall through to /data/:name
