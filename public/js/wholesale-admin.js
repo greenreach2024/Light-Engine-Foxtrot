@@ -1152,11 +1152,111 @@
     },
 
     filterPayments() {
-      this.showToast('Filtering not yet implemented', 'info');
+      const statusFilter = document.getElementById("payment-status-filter")?.value || "all";
+      const fromDate = document.getElementById("payment-date-from")?.value;
+      const toDate = document.getElementById("payment-date-to")?.value;
+
+      let filtered = [...this.payments];
+
+      if (statusFilter !== "all") {
+        filtered = filtered.filter(p => (p.status || "").toLowerCase() === statusFilter);
+      }
+      if (fromDate) {
+        const from = new Date(fromDate);
+        filtered = filtered.filter(p => new Date(p.created_at) >= from);
+      }
+      if (toDate) {
+        const to = new Date(toDate + "T23:59:59");
+        filtered = filtered.filter(p => new Date(p.created_at) <= to);
+      }
+
+      this.renderFilteredPayments(filtered);
+    },
+
+    renderFilteredPayments(payments) {
+      const tbody = document.getElementById("payments-table");
+
+      if (payments.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No payments match the selected filters</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = payments.map(p => `
+        <tr>
+          <td>${p.payment_id.substring(0, 12)}...</td>
+          <td>${p.farm_id || ""}</td>
+          <td>$${p.amount.toFixed(2)}</td>
+          <td>$${p.broker_fee_amount.toFixed(2)}</td>
+          <td><span class="badge ${p.status}">${p.status}</span></td>
+          <td>${new Date(p.created_at).toLocaleString()}</td>
+          <td>
+            <button class="btn btn-secondary btn-sm" data-action="payment-details" data-paymentid="${p.payment_id}">Details</button>
+          </td>
+        </tr>
+      `).join("");
     },
 
     filterOrders() {
-      this.showToast('Filtering not yet implemented', 'info');
+      const statusFilter = document.getElementById("order-status-filter")?.value || "all";
+      const fromDate = document.getElementById("order-date-from")?.value;
+      const toDate = document.getElementById("order-date-to")?.value;
+
+      let filtered = [...this.orders];
+
+      if (statusFilter !== "all") {
+        filtered = filtered.filter(o => (o.status || "").toLowerCase() === statusFilter);
+      }
+      if (fromDate) {
+        const from = new Date(fromDate);
+        filtered = filtered.filter(o => new Date(o.created_at) >= from);
+      }
+      if (toDate) {
+        const to = new Date(toDate + "T23:59:59");
+        filtered = filtered.filter(o => new Date(o.created_at) <= to);
+      }
+
+      this.renderFilteredOrders(filtered);
+    },
+
+    renderFilteredOrders(orders) {
+      const container = document.getElementById("orders-list");
+      if (orders.length === 0) {
+        container.innerHTML = '<div class="empty-state">No orders match the selected filters</div>';
+        return;
+      }
+
+      container.innerHTML = `
+        <table>
+          <thead>
+            <tr>
+              <th>Order ID</th>
+              <th>Buyer</th>
+              <th>Created</th>
+              <th>Total</th>
+              <th>Broker Fee</th>
+              <th>Status</th>
+              <th>Payment</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${orders.map(order => `
+              <tr>
+                <td>${order.master_order_id.substring(0, 12)}...</td>
+                <td>${order.buyer_account?.businessName || order.buyer_id}</td>
+                <td>${new Date(order.created_at).toLocaleString()}</td>
+                <td>$${(order.grand_total || 0).toFixed(2)}</td>
+                <td>$${(order.broker_fee_total || 0).toFixed(2)}</td>
+                <td><span class="badge ${order.status}">${order.status}</span></td>
+                <td><span class="badge ${order.payment_status || 'pending'}">${order.payment_status || 'pending'}</span></td>
+                <td>
+                  <button class="btn btn-sm" onclick="admin.openPaymentModal('${order.master_order_id}')">Manage Payment</button>
+                </td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      `;
     },
 
     async openPaymentModal(orderId) {
@@ -1856,7 +1956,7 @@
           const ordJson = await ordRes.json();
           const orders = ordJson.data?.orders || ordJson.orders || [];
           orderCount = orders.length;
-          revenue = orders.reduce((s, o) => s + (parseFloat(o.total) || 0), 0);
+          revenue = orders.reduce((s, o) => s + (parseFloat(o.grand_total || o.total) || 0), 0);
         } catch (_) {}
         const ordTotalEl = document.getElementById('buyers-orders-total');
         const revEl = document.getElementById('buyers-revenue');
@@ -1944,10 +2044,10 @@
                 <td style="font-family: monospace; font-size: 0.8rem;">${this.esc((o.id || o.master_order_id || '').slice(0, 16))}...</td>
                 <td>${o.created_at ? new Date(o.created_at).toLocaleDateString() : '—'}</td>
                 <td>${this.esc(o.status || '—')}</td>
-                <td>$${(parseFloat(o.total) || 0).toFixed(2)}</td>
+                <td>$${(parseFloat(o.grand_total || o.total) || 0).toFixed(2)}</td>
                 <td>
                   <button class="btn btn-secondary" style="font-size:0.7rem; padding:0.2rem 0.4rem;" onclick="admin.viewOrderAudit('${o.id || o.master_order_id}')">Audit</button>
-                  <button class="btn btn-secondary" style="font-size:0.7rem; padding:0.2rem 0.4rem;" onclick="admin.issueRefund('${o.id || o.master_order_id}', ${parseFloat(o.total) || 0})">Refund</button>
+                  <button class="btn btn-secondary" style="font-size:0.7rem; padding:0.2rem 0.4rem;" onclick="admin.issueRefund('${o.id || o.master_order_id}', ${parseFloat(o.grand_total || o.total) || 0})">Refund</button>
                 </td>
               </tr>`).join('')}
             </tbody>
