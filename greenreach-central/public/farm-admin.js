@@ -2342,20 +2342,30 @@ const marketCategoryFallbacks = {
  * Open AI Pricing Assistant modal
  */
 function openAIPricingAssistant() {
-    document.getElementById('aiPricingModal').style.display = 'flex';
-    
-    // Check if we have recent recommendations
-    const lastCheck = localStorage.getItem(AI_LAST_CHECK_KEY);
-    if (lastCheck) {
-        const daysSinceCheck = Math.floor((Date.now() - parseInt(lastCheck)) / (1000 * 60 * 60 * 24));
-        if (daysSinceCheck < 30) {
-            // Show cached recommendations
-            displayCachedRecommendations();
+    try {
+        const modal = document.getElementById('aiPricingModal');
+        if (!modal) {
+            showToast('AI Pricing modal not found in page', 'error');
             return;
         }
+        modal.style.display = 'flex';
+        modal.style.zIndex = '10001';
+
+        // Check if we have recent recommendations
+        const lastCheck = localStorage.getItem(AI_LAST_CHECK_KEY);
+        if (lastCheck) {
+            const daysSinceCheck = Math.floor((Date.now() - parseInt(lastCheck)) / (1000 * 60 * 60 * 24));
+            if (daysSinceCheck < 30) {
+                // Show cached recommendations
+                displayCachedRecommendations();
+                return;
+            }
+        }
+        // No cached data — auto-run analysis
+        runAIPricingAnalysis();
+    } catch (err) {
+        showToast('AI Pricing Assistant error: ' + (err.message || err), 'error');
     }
-    // No cached data — auto-run analysis
-    runAIPricingAnalysis();
 }
 
 /**
@@ -2371,9 +2381,15 @@ function closeAIPricingAssistant() {
  * Run AI pricing analysis — fetches live market data + AI analysis from backend
  */
 async function runAIPricingAnalysis() {
+  try {
     const statusDiv = document.getElementById('ai-analysis-status');
     const statusText = document.getElementById('ai-status-text');
     const recommendationsDiv = document.getElementById('ai-recommendations');
+    
+    if (!statusDiv || !statusText || !recommendationsDiv) {
+        showToast('AI analysis UI elements missing in page', 'error');
+        return;
+    }
     
     statusDiv.style.display = 'block';
     recommendationsDiv.style.display = 'none';
@@ -2463,6 +2479,11 @@ async function runAIPricingAnalysis() {
     // Display recommendations
     statusDiv.style.display = 'none';
     displayRecommendations(recommendations);
+  } catch (err) {
+    showToast('AI pricing analysis failed: ' + (err.message || err), 'error');
+    const statusDiv = document.getElementById('ai-analysis-status');
+    if (statusDiv) statusDiv.style.display = 'none';
+  }
 }
 
 /**
