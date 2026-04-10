@@ -2748,7 +2748,10 @@ router.get('/orders/:orderId/invoice', requireBuyerPortalAuth, async (req, res) 
         : (Array.isArray(existing.practices) ? existing.practices : []),
       certifications: Array.isArray(patch.certifications)
         ? patch.certifications
-        : (Array.isArray(existing.certifications) ? existing.certifications : [])
+        : (Array.isArray(existing.certifications) ? existing.certifications : []),
+      fulfillment_standards: (patch.fulfillment_standards && typeof patch.fulfillment_standards === 'object')
+        ? patch.fulfillment_standards
+        : (existing.fulfillment_standards || {})
     };
   };
 
@@ -2767,7 +2770,8 @@ router.get('/orders/:orderId/invoice', requireBuyerPortalAuth, async (req, res) 
       contact: farm.contact || {},
       location: farmLocation,
       practices: farm.practices || [],
-      certifications: farm.certifications || []
+      certifications: farm.certifications || [],
+      fulfillment_standards: farm.fulfillment_standards || {}
     });
   }
 

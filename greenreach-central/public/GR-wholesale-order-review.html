@@ -340,7 +340,7 @@
         
         if (data.ok) {
           alert('Order approved! Farms will prepare your items for pickup.');
-          window.location.href = '/farm-admin.html?view=wholesale-orders';
+          window.location.href = '/LE-farm-admin.html?view=wholesale-orders';
         } else {
           alert('Failed to approve order: ' + data.message);
         }
@@ -370,7 +370,7 @@
         
         if (data.ok) {
           alert('Order cancelled. Your payment authorization has been released.');
-          window.location.href = '/farm-admin.html?view=wholesale-orders';
+          window.location.href = '/LE-farm-admin.html?view=wholesale-orders';
         } else {
           alert('Failed to cancel order: ' + data.message);
         }
@@ -383,7 +383,7 @@
     document.addEventListener('DOMContentLoaded', () => {
       if (!orderId) {
         alert('No order ID provided');
-        window.location.href = '/farm-admin.html';
+        window.location.href = '/LE-farm-admin.html';
         return;
       }
       loadOrderReview();

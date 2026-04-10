@@ -7019,9 +7019,10 @@ app.post('/api/setup/complete', asyncHandler(async (req, res) => {
              email = $3, 
              contact_phone = $4,
              status = $5, 
+             certifications = $6,
              updated_at = NOW() 
-         WHERE farm_id = $6`,
-        [farmName || 'Unnamed Farm', ownerName, contactEmail, contactPhone, 'active', farmId]
+         WHERE farm_id = $7`,
+        [farmName || 'Unnamed Farm', ownerName, contactEmail, contactPhone, 'active', JSON.stringify(certifications || { certifications: [], practices: [], attributes: [] }), farmId]
       );
       console.log('[setup-wizard] Updated farm profile for:', farmId);
 
@@ -7174,6 +7175,39 @@ app.post('/api/setup/complete', asyncHandler(async (req, res) => {
   }
 }));
 
+// Save certifications & practices (called from Settings > Certifications & Practices edit modal)
+app.post('/api/setup/certifications', asyncHandler(async (req, res) => {
+  try {
+    const { certifications = [], practices = [], attributes = [] } = req.body;
+    const certData = { certifications, practices, attributes };
+
+    // Resolve farmId from auth context
+    const farmId = req.session?.farmId || req.user?.farmId || req.headers['x-farm-id'] || process.env.FARM_ID;
+
+    if (dbPool && farmId) {
+      await dbPool.query(
+        'UPDATE farms SET certifications = $1, updated_at = NOW() WHERE farm_id = $2',
+        [JSON.stringify(certData), farmId]
+      );
+      console.log('[setup] Saved certifications to DB for farm:', farmId, certData);
+    } else if (db) {
+      // NeDB fallback
+      const existing = await db.findOne({ key: 'setup_config' }) || {};
+      await db.update(
+        { key: 'setup_config' },
+        { $set: { certifications: certData } },
+        { upsert: true }
+      );
+      console.log('[setup] Saved certifications to NeDB');
+    }
+
+    res.json({ success: true, certifications: certData });
+  } catch (error) {
+    console.error('[setup] Error saving certifications:', error);
+    res.status(500).json({ success: false, error: 'Failed to save certifications' });
+  }
+}));
+
 // Get setup status endpoint
 app.get('/api/setup/status', asyncHandler(async (req, res) => {
   try {
@@ -7181,7 +7215,7 @@ app.get('/api/setup/status', asyncHandler(async (req, res) => {
     if (dbPool) {
       // For Cloud plan: check farm status and if rooms exist
       // Get farmId from query or authenticated session
-      const farmId = req.query.farmId || req.session?.farmId || req.user?.farmId || req.headers['x-farm-id'];
+      const farmId = req.query.farmId || req.session?.farmId || req.user?.farmId || req.headers['x-farm-id'] || process.env.FARM_ID;
       
       if (!farmId) {
         // No farmId available, check if any setup config exists
@@ -7193,7 +7227,7 @@ app.get('/api/setup/status', asyncHandler(async (req, res) => {
       
       // Check if farm exists and is active
       const farmResult = await dbPool.query(
-        'SELECT status FROM farms WHERE farm_id = $1',
+        'SELECT status, certifications FROM farms WHERE farm_id = $1',
         [farmId]
       );
       
@@ -7210,11 +7244,22 @@ app.get('/api/setup/status', asyncHandler(async (req, res) => {
       // Setup is complete if farm is active OR has rooms
       const completed = isActive || hasRooms;
       
+      // Parse certifications from JSONB column
+      let certifications = { certifications: [], practices: [], attributes: [] };
+      if (farm?.certifications) {
+        try {
+          certifications = typeof farm.certifications === 'string'
+            ? JSON.parse(farm.certifications)
+            : farm.certifications;
+        } catch (_) { /* use default */ }
+      }
+      
       res.json({
         completed,
         farmId,
         hasRooms,
         isActive,
+        certifications,
         message: completed ? 'Setup completed' : 'Setup not completed'
       });
     } else {
