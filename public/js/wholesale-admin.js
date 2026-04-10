@@ -77,6 +77,7 @@
 
         if (target.closest('#orders-apply-filters-btn')) return this.filterOrders();
         if (target.closest('#run-reconciliation-btn')) return this.runReconciliation();
+        if (target.closest('#reset-rejected-btn')) return this.resetRejectedOrders();
         if (target.closest('#buyers-refresh-btn')) return this.loadBuyers();
 
         if (target.closest('#network-refresh-btn')) return this.loadNetwork();
@@ -986,6 +987,27 @@
       } catch (error) {
         console.error('Reconciliation error:', error);
         this.showToast('Network error during reconciliation', 'error');
+      }
+    },
+
+    async resetRejectedOrders() {
+      if (!confirm('Reset all rejected orders to confirmed? This cannot be undone.')) return;
+      try {
+        this.showToast('Resetting rejected orders...', 'info');
+        const response = await fetch('/api/admin/wholesale/orders/reset-rejected', {
+          method: 'POST',
+          headers: this.getAuthHeaders()
+        });
+        const data = await response.json().catch(() => ({}));
+        if (response.ok && data.status === 'ok') {
+          this.showToast(`Reset ${data.data?.updated || 0} rejected orders to confirmed`, 'success');
+          this.loadOrders();
+        } else {
+          this.showToast(`Reset failed: ${data.message || `HTTP ${response.status}`}`, 'error');
+        }
+      } catch (error) {
+        console.error('Reset rejected error:', error);
+        this.showToast('Network error during reset', 'error');
       }
     },
 
