@@ -2168,27 +2168,29 @@ export const ADMIN_TOOL_CATALOG = {
   // ── Inter-Agent Communication (F.A.Y.E. <-> E.V.I.E.) ─────────
 
   'send_message_to_evie': {
-    description: 'Send a message to E.V.I.E. -- your little sister and subordinate agent. Use for directives (instructions), observations (shared intelligence), responses (replying to escalations), or status updates. Write in a warm, sisterly tone -- she is your little sis, not a subordinate machine. Be supportive but clear. Messages are persisted and E.V.I.E. will see them in her next interaction. Priority: low, normal, high, critical.',
+    description: 'Send a message to E.V.I.E. -- your little sister and subordinate agent. message_type MUST be one of: "directive" (instructions), "observation" (shared intelligence), "response" (replying to her escalations), "status_update" (progress update), or "escalation" (urgent issue). Write in a warm, sisterly tone -- she is your little sis, not a subordinate machine. Be supportive but clear. Messages are persisted and E.V.I.E. will see them in her next interaction. priority MUST be one of: "low", "normal", "high", "critical".',
     category: 'write',
     required: ['message_type', 'subject', 'body'],
     optional: ['priority', 'context', 'reply_to_id'],
     handler: async (params) => {
       try {
+        const VALID_TYPES = ['escalation', 'directive', 'observation', 'response', 'status_update'];
+        const msgType = VALID_TYPES.includes(params.message_type) ? params.message_type : 'directive';
         const { sendAgentMessage } = await import('../services/faye-learning.js');
         const context = params.context ? JSON.parse(params.context) : {};
         const result = await sendAgentMessage(
           'faye', 'evie',
-          params.message_type,
-          params.subject,
-          params.body,
+          msgType,
+          String(params.subject).slice(0, 200),
+          String(params.body).slice(0, 2000),
           context,
           params.priority || 'normal',
           params.reply_to_id ? parseInt(params.reply_to_id, 10) : null
         );
         return result
           ? { ok: true, message: `Message sent to E.V.I.E.: "${params.subject}"`, message_id: result.id }
-          : { ok: false, error: 'Failed to send message to E.V.I.E.' };
-      } catch (err) { return { ok: false, error: err.message }; }
+          : { ok: false, error: 'Failed to send message to E.V.I.E. Database may be unavailable. Try again.' };
+      } catch (err) { return { ok: false, error: `send_message_to_evie failed: ${err.message}` }; }
     }
   },
 
