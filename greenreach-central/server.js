@@ -33,7 +33,8 @@ import farmRoutes from './routes/farms.js';
 import authRoutes from './routes/auth.js';
 import monitoringRoutes from './routes/monitoring.js';
 import inventoryRoutes from './routes/inventory.js';
-import { recalculateAutoInventoryFromGroups } from './routes/inventory.js';
+// recalculateAutoInventoryFromGroups removed — replaced with DELETE-only cleanup
+// to prevent UPSERT phantom rows and activity log spam
 import inventoryMgmtRoutes from './routes/inventory-mgmt.js';
 import ordersRoutes from './routes/orders.js';
 import alertsRoutes from './routes/alerts.js';
@@ -1389,15 +1390,35 @@ async function syncFarmData(options = {}) {
         const groups = resolve('groups.json', 'groups.json', r => Array.isArray(r) ? r : (r.groups || []));
         if (groups) { await upsertFarmData('groups', groups); logger.info(`[${syncLabel}] DB: ${groups.length} groups for ${farmId}`); }
 
-        // Reconcile auto-inventory with current groups: removes stale
-        // auto entries for crops no longer assigned to any growth group.
+        // Delete-only cleanup: remove auto-inventory rows for crops no longer
+        // in growth groups. Does NOT call recalculateAutoInventoryFromGroups()
+        // because its UPSERT step creates phantom rows and activity log spam.
         try {
-          const autoResult = await recalculateAutoInventoryFromGroups(farmId);
-          if (autoResult.cleaned > 0) {
-            logger.info(`[${syncLabel}] Auto-inventory: cleaned ${autoResult.cleaned} stale entries for ${farmId}`);
+          const grps = Array.isArray(groups) ? groups : [];
+          const activeCrops = [...new Set(
+            grps.filter(g => g?.active !== false && (g?.crop || g?.recipe || g?.plan))
+              .map(g => g.crop || g.recipe || g.plan)
+              .filter(Boolean)
+          )];
+          const { query: invQuery } = await import('./config/database.js');
+          let delResult;
+          if (activeCrops.length === 0) {
+            delResult = await invQuery(
+              `DELETE FROM farm_inventory WHERE farm_id = $1 AND inventory_source = 'auto' AND COALESCE(is_custom, FALSE) = FALSE`,
+              [farmId]
+            );
+          } else {
+            delResult = await invQuery(
+              `DELETE FROM farm_inventory WHERE farm_id = $1 AND inventory_source = 'auto' AND COALESCE(is_custom, FALSE) = FALSE AND product_name != ALL($2)`,
+              [farmId, activeCrops]
+            );
+          }
+          const cleaned = delResult?.rowCount || 0;
+          if (cleaned > 0) {
+            logger.info(`[${syncLabel}] Auto-inventory: cleaned ${cleaned} stale entries for ${farmId}`);
           }
         } catch (autoErr) {
-          logger.warn(`[${syncLabel}] Auto-inventory reconciliation failed:`, autoErr.message);
+          logger.warn(`[${syncLabel}] Auto-inventory cleanup failed:`, autoErr.message);
         }
 
         const rooms = resolve('rooms.json', 'rooms.json', r => Array.isArray(r) ? r : (r.rooms || [r]));

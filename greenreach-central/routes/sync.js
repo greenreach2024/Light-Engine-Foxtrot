@@ -15,7 +15,7 @@ import logger from '../utils/logger.js';
 import { evaluateAndGenerateAlerts, autoResolveAlerts } from '../services/alert-manager.js';
 import { query, isDatabaseAvailable } from '../config/database.js';
 import { upsertNetworkFarm } from '../services/networkFarmsStore.js';
-import { recalculateAutoInventoryFromGroups } from './inventory.js';
+// recalculateAutoInventoryFromGroups import removed — replaced with inline DELETE-only cleanup
 
 const router = express.Router();
 const __filename = fileURLToPath(import.meta.url);
@@ -454,10 +454,31 @@ router.post('/groups', authenticateFarm, async (req, res) => {
       timestamp: new Date().toISOString()
     });
     
-    // Fire-and-forget: recalculate auto inventory after groups change
-    recalculateAutoInventoryFromGroups(farmId).catch(err =>
-      logger.error(`[Sync] Background inventory recalc failed for farm ${farmId}:`, err)
-    );
+    // Fire-and-forget: delete stale auto-inventory for crops no longer in groups
+    // (avoids UPSERT that creates phantom rows + activity log spam)
+    (async () => {
+      try {
+        const grps = Array.isArray(groups) ? groups : [];
+        const activeCrops = [...new Set(
+          grps.filter(g => g?.active !== false && (g?.crop || g?.recipe || g?.plan))
+            .map(g => g.crop || g.recipe || g.plan)
+            .filter(Boolean)
+        )];
+        if (activeCrops.length === 0) {
+          await query(
+            `DELETE FROM farm_inventory WHERE farm_id = $1 AND inventory_source = 'auto' AND COALESCE(is_custom, FALSE) = FALSE`,
+            [farmId]
+          );
+        } else {
+          await query(
+            `DELETE FROM farm_inventory WHERE farm_id = $1 AND inventory_source = 'auto' AND COALESCE(is_custom, FALSE) = FALSE AND product_name != ALL($2)`,
+            [farmId, activeCrops]
+          );
+        }
+      } catch (err) {
+        logger.error(`[Sync] Auto-inventory cleanup failed for farm ${farmId}:`, err);
+      }
+    })();
 
   } catch (error) {
     logger.error('[Sync] Error syncing groups:', error);

@@ -30,7 +30,6 @@ import jwt from 'jsonwebtoken';
 import { randomBytes } from 'crypto';
 import { query, isDatabaseAvailable } from '../config/database.js';
 import { authMiddleware } from '../middleware/auth.js';
-import { recalculateAutoInventoryFromGroups } from "./inventory.js";
 
 const router = Router();
 async function ensureDeliveryTables() {
@@ -447,10 +446,34 @@ router.get('/farm-sales/inventory', authMiddleware, async (req, res) => {
     const farmId = req.farmId;
     let inventory = [];
 
-      // Clean stale auto-inventory entries before querying
-      if (farmId) {
-        try { await recalculateAutoInventoryFromGroups(farmId); }
-        catch (e) { console.warn("[FarmSales] Auto-recalculate:", e.message); }
+      // Delete-only cleanup: remove auto-inventory rows for crops no longer
+      // in growth groups (avoids UPSERT that creates phantom rows and activity spam)
+      if (farmId && isDatabaseAvailable()) {
+        try {
+          const gRes = await query(
+            'SELECT data FROM farm_data WHERE farm_id = $1 AND data_type = $2',
+            [farmId, 'groups']
+          );
+          const grps = gRes.rows.length > 0
+            ? (Array.isArray(gRes.rows[0].data) ? gRes.rows[0].data : (gRes.rows[0].data?.groups || []))
+            : [];
+          const activeCrops = [...new Set(
+            grps.filter(g => g?.active !== false && (g?.crop || g?.recipe || g?.plan))
+              .map(g => g.crop || g.recipe || g.plan)
+              .filter(Boolean)
+          )];
+          if (activeCrops.length === 0) {
+            await query(
+              `DELETE FROM farm_inventory WHERE farm_id = $1 AND inventory_source = 'auto' AND COALESCE(is_custom, FALSE) = FALSE`,
+              [farmId]
+            );
+          } else {
+            await query(
+              `DELETE FROM farm_inventory WHERE farm_id = $1 AND inventory_source = 'auto' AND COALESCE(is_custom, FALSE) = FALSE AND product_name != ALL($2)`,
+              [farmId, activeCrops]
+            );
+          }
+        } catch (e) { console.warn('[FarmSales] Auto-cleanup:', e.message); }
       }
 
     // Try DB

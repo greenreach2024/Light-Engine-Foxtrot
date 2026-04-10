@@ -682,11 +682,35 @@ router.get('/:farmId', async (req, res) => {
   try {
     const { farmId } = req.params;
 
-    // Clean stale auto-inventory entries before returning data
+    // Delete-only cleanup: remove auto-inventory rows for crops no longer
+    // in growth groups. Does NOT upsert (which would create phantom rows and
+    // spam the activity log before immediately deleting them).
     try {
-      await recalculateAutoInventoryFromGroups(farmId);
+      const gRes = await query(
+        'SELECT data FROM farm_data WHERE farm_id = $1 AND data_type = $2',
+        [farmId, 'groups']
+      );
+      const grps = gRes.rows.length > 0
+        ? (Array.isArray(gRes.rows[0].data) ? gRes.rows[0].data : (gRes.rows[0].data?.groups || []))
+        : [];
+      const activeCrops = [...new Set(
+        grps.filter(g => g?.active !== false && (g?.crop || g?.recipe || g?.plan))
+          .map(g => g.crop || g.recipe || g.plan)
+          .filter(Boolean)
+      )];
+      if (activeCrops.length === 0) {
+        await query(
+          `DELETE FROM farm_inventory WHERE farm_id = $1 AND inventory_source = 'auto' AND COALESCE(is_custom, FALSE) = FALSE`,
+          [farmId]
+        );
+      } else {
+        await query(
+          `DELETE FROM farm_inventory WHERE farm_id = $1 AND inventory_source = 'auto' AND COALESCE(is_custom, FALSE) = FALSE AND product_name != ALL($2)`,
+          [farmId, activeCrops]
+        );
+      }
     } catch (err) {
-      console.warn("[Inventory] Auto-recalculate during load:", err.message);
+      console.warn("[Inventory] Auto-cleanup during load:", err.message);
     }
 
     const result = await query(
