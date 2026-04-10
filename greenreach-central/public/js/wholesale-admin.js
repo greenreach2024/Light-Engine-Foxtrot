@@ -582,7 +582,7 @@
         document.getElementById('stat-gmv').textContent = `$${totalGMV.toFixed(2)}`;
         document.getElementById('stat-fees').textContent = `$${totalFees.toFixed(2)}`;
         document.getElementById('stat-farms').textContent = activeFarms.toString();
-        document.getElementById('stat-orders').textContent = activeOrders.toString();
+        document.getElementById('stat-orders').textContent = this.orders.length.toString();
         
         // Add pending verification count if element exists
         const pendingEl = document.getElementById('stat-pending-verification');
@@ -623,7 +623,7 @@
             <div class="chart-bar">
               <div class="chart-value">$${gmv.toFixed(0)}</div>
               <div class="chart-bar-fill" style="height: ${height}px;"></div>
-              <div class="chart-label">${farm_id.substring(0, 12)}...</div>
+              <div class="chart-label">${(() => { const f = this.farms.find(fm => fm.farm_id === farm_id); return f ? (f.farm_name || f.name || farm_id).substring(0, 16) : (farm_id || 'Unknown').substring(0, 12); })()}</div>
             </div>
           `;
         })
@@ -663,7 +663,7 @@
                 <tr>
                   <td>${order.master_order_id ? order.master_order_id.substring(0, 12) + '...' : 'N/A'}</td>
                   <td>${order.buyer_account?.businessName || order.buyer_id}</td>
-                  <td>${order.farm_sub_orders ? order.farm_sub_orders.map(s => s.farm_id).join(', ') : 'N/A'}</td>
+                  <td>${order.farm_sub_orders ? order.farm_sub_orders.map(s => { const f = this.farms.find(fm => fm.farm_id === s.farm_id); return f ? (f.farm_name || f.name || s.farm_id) : s.farm_id; }).join(', ') : 'N/A'}</td>
                   <td>$${(order.grand_total || 0).toFixed(2)}</td>
                   <td><span class="badge ${order.status || 'pending'}">${order.status || 'pending'}</span></td>
                   <td><span class="badge ${(order.farm_sub_orders || []).map(s => s.status).filter(Boolean)[0] || order.status || 'pending'}">${(order.farm_sub_orders || []).map(s => s.status).filter(Boolean)[0] || order.status || 'pending'}</span></td>

@@ -154,7 +154,7 @@ router.post('/:farmId/heartbeat', async (req, res, next) => {
       // Upsert farm (include api_url if provided)
       await query(
         `INSERT INTO farms (farm_id, name, contact_name, status, last_heartbeat, jwt_secret, api_key, api_secret, plan_type, api_url, metadata, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
+         VALUES ($1, COALESCE($2, $1), $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
          ON CONFLICT (farm_id) 
          DO UPDATE SET 
            status = $4,
@@ -165,10 +165,10 @@ router.post('/:farmId/heartbeat', async (req, res, next) => {
            plan_type = COALESCE(EXCLUDED.plan_type, farms.plan_type, 'light-engine'),
            api_url = COALESCE(EXCLUDED.api_url, farms.api_url),
            metadata = EXCLUDED.metadata,
-           name = COALESCE(EXCLUDED.name, farms.name),
+           name = COALESCE(NULLIF(EXCLUDED.name, $1), farms.name, EXCLUDED.name),
            contact_name = COALESCE(EXCLUDED.contact_name, farms.contact_name),
            updated_at = NOW()`,
-        [farmId, metadata?.name || farmId, contactName, 'active', now, jwtSecret, apiKey, apiSecret, planType, heartbeatApiUrl, JSON.stringify(metadata || {})]
+        [farmId, metadata?.name || metadata?.farm_name || null, contactName, 'active', now, jwtSecret, apiKey, apiSecret, planType, heartbeatApiUrl, JSON.stringify(metadata || {})]
       );
       
       // Store heartbeat with compatibility fields used by security and monitoring tools
