@@ -645,6 +645,7 @@
         <button class="view-tab" onclick="switchView('harvest', event)">By Harvest Time</button>
         <button class="view-tab" onclick="switchView('manual', event)">Manual Entry</button>
         <button class="view-tab" onclick="switchView('custom', event)">Custom Products</button>
+        <button class="view-tab" onclick="switchView('saladmix', event)">Salad Mixes</button>
       </div>
       <div id="locationView" class="inventory-view active">
         <!-- Dynamic location tree -->
@@ -734,6 +735,34 @@
               <th>Image</th><th>Product</th><th>Category</th><th>Qty</th><th>Retail</th><th>Wholesale</th><th>Taxable</th><th>Actions</th>
             </tr></thead>
             <tbody id="customTbody"><tr><td colspan="8" style="text-align:center;color:#64748b;padding:2rem;">Loading custom products...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+      <div id="saladmixView" class="inventory-view">
+        <div class="manual-inv-panel">
+          <p style="color:#94a3b8; margin-bottom:1rem;">List salad mixes for wholesale. Select a mix template defined by the admin and enter the quantity in lbs you want to list. Pricing is calculated as a weighted average of component wholesale prices.</p>
+          <form id="mixEntryForm" class="manual-entry-form" onsubmit="submitMixEntry(event)" style="display:grid;grid-template-columns:1fr 120px auto;gap:12px;align-items:end;margin-bottom:1.5rem;">
+            <div>
+              <label style="display:block;margin-bottom:4px;font-weight:600;color:#e2e8f0;">Mix Template</label>
+              <select id="mixTemplateSelect" required style="width:100%;padding:10px;border:1px solid #334155;border-radius:8px;background:#1e293b;color:#e2e8f0;">
+                <option value="">Loading mixes...</option>
+              </select>
+            </div>
+            <div>
+              <label style="display:block;margin-bottom:4px;font-weight:600;color:#e2e8f0;">Quantity (lbs)</label>
+              <input type="number" id="mixQuantityLbs" min="0.1" step="0.1" required placeholder="lbs" style="width:100%;padding:10px;border:1px solid #334155;border-radius:8px;background:#1e293b;color:#e2e8f0;">
+            </div>
+            <button type="submit" class="add-manual-btn" style="padding:10px 20px;background:#22c55e;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600;">Add Mix</button>
+          </form>
+          <table class="inventory-table" style="width:100%;border-collapse:collapse;">
+            <thead><tr style="border-bottom:1px solid #334155;">
+              <th style="text-align:left;padding:8px;">Mix Name</th>
+              <th style="text-align:left;padding:8px;">Components</th>
+              <th style="text-align:right;padding:8px;">Qty (lbs)</th>
+              <th style="text-align:right;padding:8px;">Wholesale $/lb</th>
+              <th style="text-align:center;padding:8px;">Actions</th>
+            </tr></thead>
+            <tbody id="mixInventoryTbody"><tr><td colspan="5" style="text-align:center;color:#64748b;padding:2rem;">No mix products listed yet.</td></tr></tbody>
           </table>
         </div>
       </div>
@@ -1047,9 +1076,11 @@
           };
 
           // Also enrich summary if API returned zeros
+          // Only count groups with actual crop/plan assignments (not empty draft groups)
           if (!enrichedCurrent.activeTrays) {
-            const totalTrayCount = groupsData.reduce((s, g) => s + Math.max(0, Number(g.trays || 0)), 0);
-            const totalPlantCount = groupsData.reduce((s, g) => s + Math.max(0, Number(g.plants || 0)), 0);
+            const activeGroups = groupsData.filter(g => (g.crop && g.crop !== '') || (g.plan && g.plan !== '') || (g.plants > 0));
+            const totalTrayCount = activeGroups.reduce((s, g) => s + Math.max(0, Number(g.trays || 0)), 0);
+            const totalPlantCount = activeGroups.reduce((s, g) => s + Math.max(0, Number(g.plants || 0)), 0);
             enrichedCurrent = {
               ...currentData,
               activeTrays: totalTrayCount,
@@ -1140,24 +1171,32 @@
       dbProducts = dbProducts || [];
       pricingMap = pricingMap || {};
 
-      // Calculate today's total retail value from all DB inventory (auto + manual + custom)
+      // Compute available weight, product count, and retail value from DB
+      // inventory (the single source of truth for all summary cards).
       let totalRetailValue = 0;
+      let totalAvailableLbs = 0;
+      let wholesaleProductCount = 0;
       dbProducts.forEach(p => {
-        const qty = Number(p.available_lbs ?? p.quantity_available ?? 0);
+        const qty = Math.max(0, Number(p.available_lbs ?? p.quantity_available ?? 0));
         let price = Number(p.retail_price || p.price || 0);
-        // If no price set on the inventory row, look up from crop pricing
         if (!price && p.product_name) {
           const cp = pricingMap[p.product_name.toLowerCase()];
           if (cp && cp.retailPrice) price = Number(cp.retailPrice);
         }
         totalRetailValue += qty * price;
+        totalAvailableLbs += qty;
+        if (qty > 0) wholesaleProductCount++;
       });
 
+      // Use DB-derived weight (consistent with Today's Total Value card).
+      // Fall back to tray-based generalInventoryLbs only when no DB data.
+      const effectiveLbs = wholesaleProductCount > 0 ? totalAvailableLbs : generalLbs;
+
       // Format weight: show oz for < 1 lb, lbs otherwise
-      const weightDisplay = generalLbs >= 1
-        ? `${generalLbs.toFixed(1)} lbs`
-        : generalLbs > 0
-          ? `${(generalLbs * 16).toFixed(1)} oz`
+      const weightDisplay = effectiveLbs >= 1
+        ? `${effectiveLbs.toFixed(1)} lbs`
+        : effectiveLbs > 0
+          ? `${(effectiveLbs * 16).toFixed(1)} oz`
           : '0 lbs';
 
       document.getElementById('summaryCards').innerHTML = `
@@ -1174,7 +1213,7 @@
         <div class="summary-card">
           <div class="label">Available Inventory</div>
           <div class="value">${weightDisplay}</div>
-          <div class="subvalue">${data.generalInventoryCount || 0} products for wholesale</div>
+          <div class="subvalue">${wholesaleProductCount} products for wholesale</div>
         </div>
         <div class="summary-card">
           <div class="label">Crop Varieties</div>
@@ -2218,6 +2257,109 @@
     window.deleteCustomProduct = deleteCustomProduct;
     window.triggerImageUpload = triggerImageUpload;
 
+    // ═══════════════════════════════════════════════════════════════════════
+    // SALAD MIX INVENTORY TAB
+    // ═══════════════════════════════════════════════════════════════════════
+
+    let _mixTemplates = [];
+
+    async function loadMixTemplates() {
+      try {
+        const resp = await fetchWithFarmAuth(API_BASE + '/api/admin/salad-mixes');
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const data = await resp.json();
+        _mixTemplates = (data.mixes || []).filter(m => m.status === 'active');
+        const sel = document.getElementById('mixTemplateSelect');
+        if (_mixTemplates.length === 0) {
+          sel.innerHTML = '<option value="">No mixes defined by admin</option>';
+        } else {
+          sel.innerHTML = '<option value="">-- Select a mix --</option>' +
+            _mixTemplates.map(m => {
+              const comps = (m.components || []).map(c => c.product_name + ' ' + (parseFloat(c.ratio)*100).toFixed(0) + '%').join(', ');
+              return `<option value="${m.id}">${escHtml(m.name)} (${comps})</option>`;
+            }).join('');
+        }
+      } catch (err) {
+        console.error('[MixInventory] Failed to load templates:', err.message);
+        document.getElementById('mixTemplateSelect').innerHTML = '<option value="">Failed to load mixes</option>';
+      }
+    }
+
+    async function loadMixInventory() {
+      try {
+        const farmId = resolveFarmId() || 'local-farm';
+        const resp = await fetchWithFarmAuth(`${API_BASE}/api/inventory/${encodeURIComponent(farmId)}`);
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const data = await resp.json();
+        const items = (data.inventory || []).filter(i => i.inventory_source === 'mix');
+        const tbody = document.getElementById('mixInventoryTbody');
+        if (items.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#64748b;padding:2rem;">No mix products listed yet.</td></tr>';
+          return;
+        }
+        tbody.innerHTML = items.map(item => {
+          const sd = item.source_data || {};
+          const comps = (sd.components || []).map(c => c.product_name + ' (' + (parseFloat(c.ratio)*100).toFixed(0) + '%)').join(', ');
+          return `<tr>
+            <td style="padding:8px;font-weight:600;">${escHtml(item.product_name)}</td>
+            <td style="padding:8px;color:#94a3b8;font-size:0.9em;">${comps || '-'}</td>
+            <td style="padding:8px;text-align:right;">${parseFloat(item.quantity_available || 0).toFixed(1)}</td>
+            <td style="padding:8px;text-align:right;">$${parseFloat(item.wholesale_price || 0).toFixed(2)}</td>
+            <td style="padding:8px;text-align:center;">
+              <button onclick="removeMixInventory('${escHtml(item.product_id)}')" style="background:none;border:none;color:#ef4444;cursor:pointer;">Remove</button>
+            </td>
+          </tr>`;
+        }).join('');
+      } catch (err) {
+        console.error('[MixInventory] Load error:', err.message);
+      }
+    }
+
+    async function submitMixEntry(e) {
+      e.preventDefault();
+      const templateId = document.getElementById('mixTemplateSelect').value;
+      const qtyLbs = parseFloat(document.getElementById('mixQuantityLbs').value);
+      if (!templateId || !qtyLbs || qtyLbs <= 0) {
+        alert('Select a mix template and enter a quantity in lbs.'); return;
+      }
+      try {
+        const resp = await fetchWithFarmAuth(API_BASE + '/api/inventory/mix', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mix_template_id: parseInt(templateId, 10), quantity_lbs: qtyLbs })
+        });
+        const data = await resp.json();
+        if (data.error) throw new Error(data.error);
+        document.getElementById('mixQuantityLbs').value = '';
+        await loadMixInventory();
+        await loadInventoryData(); // refresh summary cards
+      } catch (err) {
+        console.error('[MixInventory] Submit error:', err.message);
+        alert('Failed to add mix: ' + err.message);
+      }
+    }
+
+    async function removeMixInventory(productId) {
+      if (!confirm('Remove this mix from inventory?')) return;
+      try {
+        const resp = await fetchWithFarmAuth(API_BASE + '/api/inventory/manual/' + productId, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ quantity_lbs: 0 })
+        });
+        const data = await resp.json();
+        if (data.error) throw new Error(data.error);
+        await loadMixInventory();
+        await loadInventoryData();
+      } catch (err) {
+        console.error('[MixInventory] Remove error:', err.message);
+        alert('Failed to remove mix: ' + err.message);
+      }
+    }
+
+    window.submitMixEntry = submitMixEntry;
+    window.removeMixInventory = removeMixInventory;
+
     // Seed product name datalist from crop pricing API (all farm recipes)
     let _cropCategories = {};
     async function loadCropNames() {
@@ -2267,6 +2409,8 @@
     loadInventory();
     loadManualInventory();
     loadCustomProducts();
+    loadMixTemplates();
+    loadMixInventory();
 
     // ESC key handler
     document.addEventListener('keydown', (e) => {

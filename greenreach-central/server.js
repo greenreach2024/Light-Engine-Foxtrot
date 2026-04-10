@@ -1407,9 +1407,29 @@ async function syncFarmData(options = {}) {
               `DELETE FROM farm_inventory WHERE farm_id = $1 AND inventory_source = 'auto' AND COALESCE(is_custom, FALSE) = FALSE`,
               [farmId]
             );
+            // Strip auto portion from hybrid rows (no active crops = no auto data)
+            await invQuery(
+              `UPDATE farm_inventory
+                 SET auto_quantity_lbs = 0,
+                     quantity = COALESCE(manual_quantity_lbs, 0),
+                     quantity_available = GREATEST(0, COALESCE(manual_quantity_lbs, 0) - COALESCE(sold_quantity_lbs, 0)),
+                     inventory_source = 'manual'
+               WHERE farm_id = $1 AND inventory_source = 'hybrid' AND COALESCE(is_custom, FALSE) = FALSE`,
+              [farmId]
+            );
           } else {
             delResult = await invQuery(
               `DELETE FROM farm_inventory WHERE farm_id = $1 AND inventory_source = 'auto' AND COALESCE(is_custom, FALSE) = FALSE AND product_name != ALL($2)`,
+              [farmId, activeCrops]
+            );
+            // Strip auto portion from hybrid rows whose crop is no longer active
+            await invQuery(
+              `UPDATE farm_inventory
+                 SET auto_quantity_lbs = 0,
+                     quantity = COALESCE(manual_quantity_lbs, 0),
+                     quantity_available = GREATEST(0, COALESCE(manual_quantity_lbs, 0) - COALESCE(sold_quantity_lbs, 0)),
+                     inventory_source = 'manual'
+               WHERE farm_id = $1 AND inventory_source = 'hybrid' AND COALESCE(is_custom, FALSE) = FALSE AND product_name != ALL($2)`,
               [farmId, activeCrops]
             );
           }

@@ -573,10 +573,12 @@ async function runMigrations(client) {
       CREATE UNIQUE INDEX IF NOT EXISTS idx_farm_inventory_farm_product
         ON farm_inventory(farm_id, product_id);
 
-      -- Backfill auto_quantity_lbs from existing quantity for rows that haven't been set yet
+      -- Backfill auto_quantity_lbs from existing quantity for auto-source rows only
+      -- (Do NOT backfill hybrid/manual rows -- their auto portion is managed by cleanup)
       UPDATE farm_inventory
          SET auto_quantity_lbs = COALESCE(quantity, 0)
-       WHERE auto_quantity_lbs = 0 AND COALESCE(quantity, 0) > 0;
+       WHERE auto_quantity_lbs = 0 AND COALESCE(quantity, 0) > 0
+         AND inventory_source = 'auto';
     `);
     logger.info('farm_inventory compatibility migration completed');
   } catch (err) {

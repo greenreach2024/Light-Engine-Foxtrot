@@ -167,6 +167,8 @@ The following EB environments are DEPRECATED and will be terminated:
 
 | Date | Service | Revision | Commit | Notes |
 |------|---------|----------|--------|-------|
+| 2026-04-11 | greenreach-central | 00092-ssg | pending | HYBRID phantom fix: cleanup strips auto from hybrid rows, backfill migration guard, tray enrichment filter |
+| 2026-04-11 | light-engine | 00052-8k2 | pending | Synced farm-inventory.html (effectiveLbs, enrichment filter), HYBRID phantom fix |
 | 2026-04-10 | greenreach-central | 00090-9f8 | e0b85130 | Phantom inventory elimination: replace recalculateAutoInventoryFromGroups with DELETE-only cleanup (4 call sites) |
 | 2026-04-10 | light-engine | 00050-78q | e0b85130 | Synced phantom inventory elimination fix |
 | 2026-04-10 | greenreach-central | 00087-n7v | bc7853d4 | Fix crop inventory cards: POS doubling dedup, yieldFactor removal, Available Inventory from dbProducts |

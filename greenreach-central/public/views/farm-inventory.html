@@ -1076,9 +1076,11 @@
           };
 
           // Also enrich summary if API returned zeros
+          // Only count groups with actual crop/plan assignments (not empty draft groups)
           if (!enrichedCurrent.activeTrays) {
-            const totalTrayCount = groupsData.reduce((s, g) => s + Math.max(0, Number(g.trays || 0)), 0);
-            const totalPlantCount = groupsData.reduce((s, g) => s + Math.max(0, Number(g.plants || 0)), 0);
+            const activeGroups = groupsData.filter(g => (g.crop && g.crop !== '') || (g.plan && g.plan !== '') || (g.plants > 0));
+            const totalTrayCount = activeGroups.reduce((s, g) => s + Math.max(0, Number(g.trays || 0)), 0);
+            const totalPlantCount = activeGroups.reduce((s, g) => s + Math.max(0, Number(g.plants || 0)), 0);
             enrichedCurrent = {
               ...currentData,
               activeTrays: totalTrayCount,

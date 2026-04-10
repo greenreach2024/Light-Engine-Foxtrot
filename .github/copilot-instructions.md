@@ -70,6 +70,18 @@ The farm runs entirely on Google Cloud Run. The Light Engine Cloud Run service I
     - File: `greenreach-central/routes/sync.js` -- POST `/sync/groups` uses inline DELETE-only cleanup. Removed `recalculateAutoInventoryFromGroups` import.
     - Current revisions: Central `greenreach-central-00090-9f8`, LE `light-engine-00050-78q`.
 
+33. **HYBRID Phantom Inventory + Tray Enrichment Fix (deployed greenreach-central-00092-ssg, light-engine-00052-8k2)**
+    - Root cause 1: DELETE-only cleanup only targeted `inventory_source = 'auto'` rows. HYBRID rows (with both auto and manual quantities) survived cleanup, showing 15544 lbs phantom inventory ($192k value) from 4 products (Astro Arugula, Bibb Butterhead, Buttercrunch Lettuce, Salad Bowl Oakleaf).
+    - Root cause 2: `database.js` backfill migration ran on every container start, restoring `auto_quantity_lbs` from `quantity` column regardless of inventory source.
+    - Root cause 3: LE `farm-inventory.html` synthetic tray enrichment summed ALL groups' tray counts (1170 from 78 empty groups) as "active trays" when API returned 0.
+    - Root cause 4: LE `farm-inventory.html` was never synced with Central's rendering fixes (missing `effectiveLbs`, `wholesaleProductCount` from `dbProducts`).
+    - Fix: All 4 cleanup sites now also UPDATE hybrid rows -- zero `auto_quantity_lbs`, set `quantity = manual_quantity_lbs`, change `inventory_source = 'manual'` for crops no longer in groups.
+    - Fix: `database.js` backfill migration now only applies to `inventory_source = 'auto'` rows (prevents re-inflating cleaned hybrid/manual rows).
+    - Fix: Tray enrichment in `farm-inventory.html` (both LE + Central) now filters groups by `(g.crop && g.crop !== '') || (g.plan && g.plan !== '') || (g.plants > 0)` before summing trays. Empty groups no longer inflate active tray count.
+    - Fix: Synced `farm-inventory.html` from Central to LE (2435 lines, includes `effectiveLbs` and `wholesaleProductCount` rendering).
+    - Files changed: `greenreach-central/routes/inventory.js`, `greenreach-central/routes/farm-sales.js`, `greenreach-central/server.js`, `greenreach-central/routes/sync.js`, `greenreach-central/config/database.js`, `greenreach-central/public/views/farm-inventory.html`, `public/views/farm-inventory.html`
+    - Current revisions: Central `greenreach-central-00092-ssg`, LE `light-engine-00052-8k2`.
+
 ### Recent Fixes (Apr 8, 2026)
 
 26. **FAYE Diagnostic Tools Fix + New Tools (deployed greenreach-central-00048-fhx)**
