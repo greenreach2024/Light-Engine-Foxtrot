@@ -405,22 +405,22 @@ router.get('/farm-sales/orders', authMiddleware, async (req, res) => {
         const farmDbId = farmRow.rows[0]?.id;
         if (farmDbId) {
           const result = await query(
-            `SELECT * FROM wholesale_orders WHERE order_data->>'farm_id' = $1
-             OR order_data->'farmSubOrders' @> $2::jsonb
+            `SELECT * FROM wholesale_orders WHERE farm_id = $1
+             OR order_data->'farm_sub_orders' @> $2::jsonb
              ORDER BY created_at DESC LIMIT $3 OFFSET $4`,
             [farmId, JSON.stringify([{ farm_id: farmId }]), limit, (page - 1) * limit]
           );
           const orders = result.rows.map(r => ({ ...r.order_data, id: r.master_order_id || r.id, created_at: r.created_at }));
           const countRes = await query(
-            `SELECT COUNT(*) FROM wholesale_orders WHERE order_data->>'farm_id' = $1
-             OR order_data->'farmSubOrders' @> $2::jsonb`,
+            `SELECT COUNT(*) FROM wholesale_orders WHERE farm_id = $1
+             OR order_data->'farm_sub_orders' @> $2::jsonb`,
             [farmId, JSON.stringify([{ farm_id: farmId }])]
           );
           const total = parseInt(countRes.rows[0]?.count || 0);
           return res.json({
             success: true, orders,
             pagination: { page, pageSize: limit, totalItems: total, totalPages: Math.ceil(total / limit) },
-            summary: { total, pending: orders.filter(o => (o.status || '').includes('pending')).length, completed: orders.filter(o => o.status === 'delivered' || o.status === 'completed').length, revenue: orders.reduce((s, o) => s + (o.totals?.total || 0), 0) },
+            summary: { total, pending: orders.filter(o => (o.status || '').includes('pending')).length, completed: orders.filter(o => o.status === 'delivered' || o.status === 'completed').length, revenue: orders.reduce((s, o) => s + (parseFloat(o.grand_total) || o.totals?.total || 0), 0) },
           });
         }
       } catch { /* fall through to empty */ }
@@ -432,7 +432,7 @@ router.get('/farm-sales/orders', authMiddleware, async (req, res) => {
     res.json({
       success: true, orders: arr.slice((page - 1) * limit, page * limit),
       pagination: { page, pageSize: limit, totalItems: arr.length, totalPages: Math.ceil(arr.length / limit) },
-      summary: { total: arr.length, pending: arr.filter(o => (o.status || '').includes('pending')).length, completed: arr.filter(o => o.status === 'completed').length, revenue: arr.reduce((s, o) => s + (o.total || 0), 0) },
+      summary: { total: arr.length, pending: arr.filter(o => (o.status || '').includes('pending')).length, completed: arr.filter(o => o.status === 'completed').length, revenue: arr.reduce((s, o) => s + (parseFloat(o.pricing?.total || o.grand_total || o.total) || 0), 0) },
     });
   } catch (err) {
     console.error('[FarmSales] Orders error:', err.message);
@@ -784,7 +784,7 @@ router.post('/farm-sales/quickbooks/sync-invoices', authMiddleware, async (req, 
     // Fetch recent orders for this farm
     const ordersResult = await query(
       `SELECT master_order_id, buyer_email, order_data, created_at FROM wholesale_orders
-       WHERE (order_data->>'farm_id' = $1 OR order_data->'farmSubOrders' @> $2::jsonb)
+       WHERE (order_data->>'farm_id' = $1 OR order_data->'farm_sub_orders' @> $2::jsonb)
          AND created_at >= NOW() - INTERVAL '30 days'
        ORDER BY created_at DESC LIMIT 50`,
       [farmId, JSON.stringify([{ farm_id: farmId }])]
@@ -896,7 +896,7 @@ router.post('/farm-sales/quickbooks/sync/customer', authMiddleware, async (req, 
       `SELECT DISTINCT wo.buyer_email, wb.business_name, wb.contact_name, wb.phone
        FROM wholesale_orders wo
        LEFT JOIN wholesale_buyers wb ON wb.email = wo.buyer_email
-       WHERE (wo.order_data->>'farm_id' = $1 OR wo.order_data->'farmSubOrders' @> $2::jsonb)
+       WHERE (wo.order_data->>'farm_id' = $1 OR wo.order_data->'farm_sub_orders' @> $2::jsonb)
        LIMIT 100`,
       [farmId, JSON.stringify([{ farm_id: farmId }])]
     );
@@ -1199,7 +1199,7 @@ router.get('/farm-sales/reports/sales-export', authMiddleware, async (req, res) 
         let sql = `SELECT master_order_id, buyer_id, buyer_email, status, order_data, created_at
                     FROM wholesale_orders
                     WHERE (order_data->>'farm_id' = $1
-                       OR order_data->'farmSubOrders' @> $2::jsonb)`;
+                       OR order_data->'farm_sub_orders' @> $2::jsonb)`;
         const params = [farmId, JSON.stringify([{ farm_id: farmId }])];
         if (start_date) { params.push(start_date); sql += ` AND created_at >= $${params.length}::date`; }
         if (end_date)   { params.push(end_date + 'T23:59:59Z'); sql += ` AND created_at <= $${params.length}::timestamp`; }
@@ -1309,7 +1309,7 @@ router.get('/farm-sales/reports/quickbooks-daily-summary', authMiddleware, async
         const result = await query(
           `SELECT order_data, created_at FROM wholesale_orders
            WHERE (order_data->>'farm_id' = $1
-              OR order_data->'farmSubOrders' @> $2::jsonb)
+              OR order_data->'farm_sub_orders' @> $2::jsonb)
              AND created_at >= $3::date AND created_at < $4::date
            ORDER BY created_at`,
           [farmId, JSON.stringify([{ farm_id: farmId }]), date, nextDay]

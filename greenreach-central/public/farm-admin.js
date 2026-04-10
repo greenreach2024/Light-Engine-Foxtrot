@@ -4873,13 +4873,32 @@ async function loadAccountingData() {
                 break;
         }
 
-        // Fetch wholesale orders
+        // Fetch local farm-sales orders (POS, D2C, etc.)
         const ordersResponse = await fetch(`${API_BASE}/api/farm-sales/orders?limit=100`);
         const ordersData = ordersResponse.ok ? await ordersResponse.json() : { orders: [], summary: {} };
 
+        // Also fetch wholesale sub-orders pushed from Central via order-events
+        let wholesaleEvents = [];
+        try {
+            const weHeaders = buildWholesaleRequestHeaders ? buildWholesaleRequestHeaders() : {};
+            const weResp = await fetch(`${API_BASE}/api/wholesale/order-events`, { headers: weHeaders });
+            if (weResp.ok) {
+                const weData = await weResp.json();
+                wholesaleEvents = (weData.events || []).map(ev => ({
+                    ...ev,
+                    channel: 'wholesale',
+                    created_at: ev.created_at || ev.timestamp,
+                    pricing: { total: ev.total_amount || 0 }
+                }));
+            }
+        } catch (e) { console.log('[Financial] Wholesale events not available:', e.message); }
+
+        // Merge local orders + wholesale events
+        const allOrders = [...(ordersData.orders || []), ...wholesaleEvents];
+
         // Filter orders by date range
-        const filteredOrders = (ordersData.orders || []).filter(o => {
-            const orderDate = new Date(o.created_at);
+        const filteredOrders = allOrders.filter(o => {
+            const orderDate = new Date(o.timestamps?.created_at || o.created_at);
             return orderDate >= startDate;
         });
 
@@ -4889,7 +4908,7 @@ async function loadAccountingData() {
         let retailCount = 0;
 
         filteredOrders.forEach(order => {
-            const amount = parseFloat(order.totals?.total || order.total_amount || order.total || 0);
+            const amount = parseFloat(order.pricing?.total || order.grand_total || order.totals?.total || order.total_amount || order.total || 0);
             const channel = (order.channel || order.order_type || 'wholesale').toLowerCase();
             if (channel === 'retail' || channel === 'pos') {
                 retailRevenue += amount;
@@ -5115,7 +5134,7 @@ async function loadRevenueBreakdown(orders) {
         
         breakdown[category].count++;
         breakdown[category].units += order.items?.length || 1;
-        breakdown[category].total += parseFloat(order.total_amount || 0);
+        breakdown[category].total += parseFloat(order.pricing?.total || order.grand_total || order.total_amount || 0);
     });
     
     tbody.innerHTML = Object.entries(breakdown)
