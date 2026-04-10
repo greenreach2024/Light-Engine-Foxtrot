@@ -699,4 +699,51 @@ router.post('/reconcile-accounting', async (req, res) => {
   }
 });
 
+/**
+ * POST /api/admin/wholesale/orders/reset-rejected
+ * Reset all rejected orders to confirmed status.
+ * Used when orders were incorrectly rejected by automated verification.
+ */
+router.post('/orders/reset-rejected', async (req, res) => {
+  try {
+    const orders = await listAllOrders({ includeArchived: true });
+    const rejected = orders.filter(o => o.status === 'rejected');
+    let updated = 0;
+    const errors = [];
+
+    for (const order of rejected) {
+      try {
+        order.status = 'confirmed';
+        order.status_updated_at = new Date().toISOString();
+        order.admin_notes = (order.admin_notes || '') + ' | Status reset from rejected to confirmed by admin';
+        // Reset sub-order statuses too
+        for (const sub of (order.farm_sub_orders || [])) {
+          if (sub.status === 'rejected') {
+            sub.status = 'confirmed';
+            sub.status_updated_at = new Date().toISOString();
+          }
+        }
+        await saveOrder(order);
+
+        // Also update in DB if available
+        if (isDatabaseAvailable()) {
+          await query(
+            `UPDATE wholesale_orders SET status = 'confirmed', order_data = $1::jsonb, updated_at = NOW() WHERE master_order_id = $2`,
+            [JSON.stringify(order), order.master_order_id]
+          ).catch(() => {});
+        }
+        updated++;
+      } catch (err) {
+        errors.push({ order_id: order.master_order_id, error: err.message });
+      }
+    }
+
+    console.log(`[Admin Wholesale] Reset ${updated} rejected orders to confirmed`);
+    return res.json({ status: 'ok', data: { total_rejected: rejected.length, updated, errors } });
+  } catch (error) {
+    console.error('[Admin Wholesale] Reset rejected error:', error);
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
 export default router;

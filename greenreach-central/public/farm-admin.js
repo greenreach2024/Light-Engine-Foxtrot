@@ -4904,7 +4904,7 @@ async function loadAccountingData() {
         const orderCount = wholesaleCount + retailCount;
 
         // Calculate expenses from real rates
-        const WHOLESALE_COMMISSION_RATE = 0.12;
+        const WHOLESALE_COMMISSION_RATE = 0;
         const SQUARE_PERCENT = 0.029;
         const SQUARE_PER_TXN = 0.30;
         const wholesaleFees = wholesaleRevenue * WHOLESALE_COMMISSION_RATE;
@@ -4944,7 +4944,7 @@ async function loadAccountingData() {
         setText('profit-margin', totalRevenue > 0 ? `${profitMargin}% margin` : '--');
 
         setText('wholesale-fees', `$${wholesaleFees.toFixed(2)}`);
-        setText('wholesale-fee-desc', `12% commission on $${wholesaleRevenue.toFixed(2)} wholesale`);
+        setText('wholesale-fee-desc', `Commission on $${wholesaleRevenue.toFixed(2)} wholesale`);
         setText('support-fees', `$${supportFees.toFixed(2)}`);
         setText('processing-fees', `$${processingFees.toFixed(2)}`);
         setText('processing-fee-desc', orderCount > 0 ? `2.9% + $0.30 on ${orderCount} transactions` : 'Square transaction fees');

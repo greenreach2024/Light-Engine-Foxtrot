@@ -15,7 +15,7 @@ const ORDER_TRANSITIONS = {
   'delivered':        [],
   'cancelled':        [],
   'returned':         [],
-  'rejected':         [],
+  'rejected':         ['confirmed', 'cancelled'],
   'payment_failed':   ['confirmed', 'cancelled'],
   'pending_payment':  ['confirmed', 'cancelled'],
 };

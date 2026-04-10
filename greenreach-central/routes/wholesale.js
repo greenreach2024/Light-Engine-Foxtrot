@@ -3039,7 +3039,7 @@ router.post('/checkout/preview', checkoutLimiter, requireWholesaleDbForCriticalP
       throw new ValidationError('Cart is required');
     }
 
-    const commissionRate = Number(process.env.WHOLESALE_COMMISSION_RATE || 0.12);
+    const commissionRate = Number(process.env.WHOLESALE_COMMISSION_RATE || 0);
 
     const buyerLocation = getBuyerLocationFromBuyer(req.wholesaleBuyer);
 
@@ -3187,7 +3187,7 @@ router.post('/checkout/execute', checkoutLimiter, requireWholesaleDbForCriticalP
       console.warn('[Checkout] Duplicate check query failed (proceeding):', dupErr.message);
     }
 
-    const commissionRate = Number(process.env.WHOLESALE_COMMISSION_RATE || 0.12);
+    const commissionRate = Number(process.env.WHOLESALE_COMMISSION_RATE || 0);
 
     const buyerLocation = getBuyerLocationFromBuyer(req.wholesaleBuyer);
 
@@ -4620,7 +4620,7 @@ router.post('/admin/orders/:orderId/charge-greenreach', adminAuthMiddleware, exp
     }
 
     const card = cardResult.cards[0];
-    const commissionRate = Number(process.env.WHOLESALE_COMMISSION_RATE || 0.12);
+    const commissionRate = Number(process.env.WHOLESALE_COMMISSION_RATE || 0);
     const farmSubOrders = order.farm_sub_orders || [];
     if (farmSubOrders.length === 0) {
       return res.status(400).json({ status: 'error', message: 'Order has no farm sub-orders' });
@@ -4732,7 +4732,7 @@ router.post('/admin/orders/process-pending', async (req, res) => {
       return res.json({ status: 'ok', message: 'No pending_payment orders found', processed: 0 });
     }
 
-    const commissionRate = Number(process.env.WHOLESALE_COMMISSION_RATE || 0.12);
+    const commissionRate = Number(process.env.WHOLESALE_COMMISSION_RATE || 0);
     const results = [];
 
     for (const order of pendingOrders) {

@@ -2220,79 +2220,63 @@
     },
 
     /**
-     * Load demand trends (4-week rolling)
+     * Load demand trends from actual order data
      */
     async loadDemandTrends() {
       const demandContent = document.getElementById('demand-content');
-      
-      // Generate demo trend data based on current catalog
-      const trends = [
-        {
-          rank: 1,
-          productName: 'Butterhead Lettuce',
-          orders: 47,
-          trend: 'up',
-          trendPercent: 23,
-          avgWeekly: 12
-        },
-        {
-          rank: 2,
-          productName: 'Sweet Basil',
-          orders: 38,
-          trend: 'up',
-          trendPercent: 15,
-          avgWeekly: 9
-        },
-        {
-          rank: 3,
-          productName: 'Curly Kale',
-          orders: 35,
-          trend: 'stable',
-          trendPercent: 2,
-          avgWeekly: 9
-        },
-        {
-          rank: 4,
-          productName: 'Cherry Tomatoes',
-          orders: 29,
-          trend: 'down',
-          trendPercent: -8,
-          avgWeekly: 7
-        },
-        {
-          rank: 5,
-          productName: 'Arugula',
-          orders: 24,
-          trend: 'up',
-          trendPercent: 12,
-          avgWeekly: 6
+
+      try {
+        // Use previously loaded orders or fetch them
+        const orders = this.orders || [];
+        if (orders.length === 0) {
+          demandContent.innerHTML = '<div class="loading-state">Place your first order to see demand trends</div>';
+          return;
         }
-      ];
 
-      const html = trends.map(item => {
-        const trendIcon = item.trend === 'up' ? '↑' : item.trend === 'down' ? '↓' : '→';
-        const trendClass = `trending-${item.trend}`;
-        const trendText = item.trend === 'up' 
-          ? `+${item.trendPercent}%` 
-          : item.trend === 'down'
-          ? `${item.trendPercent}%`
-          : 'Stable';
+        // Aggregate product demand from order items
+        const productMap = {};
+        for (const order of orders) {
+          const items = order.items || [];
+          const subs = order.farm_sub_orders || [];
+          const allItems = [...items];
+          for (const sub of subs) {
+            allItems.push(...(sub.line_items || sub.items || []));
+          }
+          for (const item of allItems) {
+            const name = item.sku_name || item.product_name || item.sku_id || 'Unknown';
+            if (!productMap[name]) {
+              productMap[name] = { productName: name, totalQty: 0, orderCount: 0 };
+            }
+            productMap[name].totalQty += Number(item.qty || item.quantity || 0);
+            productMap[name].orderCount++;
+          }
+        }
 
-        return `
+        const sorted = Object.values(productMap).sort((a, b) => b.orderCount - a.orderCount).slice(0, 5);
+
+        if (sorted.length === 0) {
+          demandContent.innerHTML = '<div class="loading-state">No product data yet</div>';
+          return;
+        }
+
+        const html = sorted.map((item, i) => `
           <div class="demand-item">
-            <div class="demand-rank">${item.rank}</div>
+            <div class="demand-rank">${i + 1}</div>
             <div class="demand-info">
               <div class="demand-name">${item.productName}</div>
-              <div class="demand-stats">${item.orders} orders • ${item.avgWeekly} per week avg</div>
+              <div class="demand-stats">${item.orderCount} orders -- ${item.totalQty} units total</div>
             </div>
-            <div class="demand-trend ${trendClass}">
-              ${trendIcon} ${trendText}
+            <div class="demand-trend trending-stable">
+              ${item.orderCount} orders
             </div>
           </div>
-        `;
-      }).join('');
+        `).join('');
 
-      demandContent.innerHTML = html || '<div class="loading-state">No trend data available</div>';
+        demandContent.innerHTML = html;
+      } catch (err) {
+        console.error('[Wholesale] Demand trends error:', err);
+        demandContent.innerHTML = '<div class="loading-state">Unable to load demand data</div>';
+      }
     },
 
     /**

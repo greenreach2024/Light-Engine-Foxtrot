@@ -337,11 +337,11 @@ export function assembleInvoice({ order, subOrders, farmProfiles, buyerProfile }
       env_score: envScore,
       items,
       subtotal: sub.subtotal || 0,
-      broker_fee_amount: sub.broker_fee_amount || sub.broker_fee || Math.round((sub.subtotal || 0) * 0.12 * 100) / 100,
+      broker_fee_amount: 0,
       tax_rate: sub.tax_rate || 0,
       tax_label: sub.tax_label || 'TAX',
       tax_amount: sub.tax_amount || 0,
-      total: sub.total || ((sub.subtotal || 0) + (sub.broker_fee_amount || sub.broker_fee || Math.round((sub.subtotal || 0) * 0.12 * 100) / 100) + (sub.tax_amount || 0)),
+      total: sub.total || ((sub.subtotal || 0) + (sub.tax_amount || 0)),
       tax_registration_number: profile.tax_registration_number || profile.gst_number || profile.hst_number || null
     };
   });
@@ -599,7 +599,6 @@ export function renderInvoiceHTML(invoice) {
           </tbody>
           <tfoot>
             <tr><td colspan="4" class="right">Subtotal</td><td class="right">${money(farm.subtotal, currency)}</td></tr>
-            <tr><td colspan="4" class="right">Broker Fee (12%)</td><td class="right">${money(farm.broker_fee_amount, currency)}</td></tr>
             ${farm.tax_rate > 0 ? `<tr><td colspan="4" class="right">${esc(farm.tax_label)} (${(farm.tax_rate * 100).toFixed(1)}%)</td><td class="right">${money(farm.tax_amount, currency)}</td></tr>` : ''}
             <tr class="total-row"><td colspan="4" class="right"><strong>Farm Total</strong></td><td class="right"><strong>${money(farm.total, currency)}</strong></td></tr>
           </tfoot>
@@ -777,7 +776,6 @@ export function renderInvoiceHTML(invoice) {
   <div class="order-totals">
     <table>
       <tr><td>Subtotal</td><td class="right">${money(totals.subtotal, currency)}</td></tr>
-      <tr><td>Broker Fee</td><td class="right">${money(totals.broker_fee_total, currency)}</td></tr>
       ${totals.tax_total > 0 ? `<tr><td>Tax</td><td class="right">${money(totals.tax_total, currency)}</td></tr>` : ''}
       <tr class="grand-total"><td>Total</td><td class="right">${money(totals.total, currency)}</td></tr>
     </table>
