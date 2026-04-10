@@ -4904,7 +4904,7 @@ async function loadAccountingData() {
         const orderCount = wholesaleCount + retailCount;
 
         // Calculate expenses from real rates
-        const WHOLESALE_COMMISSION_RATE = 0;
+        const WHOLESALE_COMMISSION_RATE = 0.12;
         const SQUARE_PERCENT = 0.029;
         const SQUARE_PER_TXN = 0.30;
         const wholesaleFees = wholesaleRevenue * WHOLESALE_COMMISSION_RATE;

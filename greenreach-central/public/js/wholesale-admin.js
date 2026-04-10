@@ -1359,7 +1359,7 @@
         // Update summary stats (count farms with either provider connected)
         const connectedCount = statuses.filter(s => s.square.connected || s.stripe.connected).length;
         const pendingCount = statuses.filter(s => !s.square.connected && !s.stripe.connected).length;
-        const commissionRate = '0%';
+        const commissionRate = '12%';
         
         document.getElementById('square-connected-count').textContent = connectedCount;
         document.getElementById('square-pending-count').textContent = pendingCount;

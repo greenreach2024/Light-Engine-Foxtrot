@@ -1,6 +1,5 @@
 import express from 'express';
 import { farmStore } from '../lib/farm-data-store.js';
-import { listAllOrders } from '../services/wholesaleMemoryStore.js';
 
 const router = express.Router();
 const commissionRate = parseFloat(process.env.PROCUREMENT_COMMISSION_RATE) || 0.05;
@@ -376,30 +375,39 @@ router.get('/inventory', async (req, res) => {
 });
 
 /**
- * GET /commission-report -- Commission summary from wholesale orders
+ * GET /commission-report — Commission summary for reporting dashboard
  */
 router.get('/commission-report', async (req, res) => {
   try {
-    const orders = await listAllOrders();
+    const fid = farmStore.farmIdFromReq(req);
+    const ordersData = await farmStore.get(fid, 'procurement_orders') || { orders: [] };
+    const orders = ordersData.orders || [];
 
+    let totalCommission = 0;
     let totalRevenue = 0;
     for (const order of orders) {
-      totalRevenue += Number(order.grand_total || 0);
-    }
-
-    // Per-farm breakdown
-    const byFarm = {};
-    for (const order of orders) {
-      for (const sub of (order.farm_sub_orders || [])) {
-        const fid = sub.farm_id || 'unknown';
-        if (!byFarm[fid]) {
-          byFarm[fid] = { supplierName: sub.farm_name || fid, orderCount: 0, totalSales: 0, totalCommission: 0 };
-        }
-        byFarm[fid].orderCount++;
-        byFarm[fid].totalSales += Number(sub.subtotal || 0);
+      for (const so of (order.supplierOrders || [])) {
+        totalRevenue += so.subtotal || 0;
+        totalCommission += so.commission || 0;
       }
     }
-    const suppliersArr = Object.values(byFarm).map(s => ({
+
+    // Per-supplier breakdown
+    const bySupplier = {};
+    const suppData = await farmStore.get(fid, 'procurement_suppliers') || { suppliers: [] };
+    for (const order of orders) {
+      for (const so of (order.supplierOrders || [])) {
+        const sid = so.supplierId || 'unknown';
+        if (!bySupplier[sid]) {
+          const sup = (suppData.suppliers || []).find(s => s.id === sid);
+          bySupplier[sid] = { supplierName: sup?.name || so.supplierName || sid, orderCount: 0, totalSales: 0, totalCommission: 0 };
+        }
+        bySupplier[sid].orderCount++;
+        bySupplier[sid].totalSales += so.subtotal || 0;
+        bySupplier[sid].totalCommission += so.commission || 0;
+      }
+    }
+    const suppliersArr = Object.values(bySupplier).map(s => ({
       ...s,
       totalSales: Math.round(s.totalSales * 100) / 100,
       totalCommission: Math.round(s.totalCommission * 100) / 100,
@@ -409,10 +417,10 @@ router.get('/commission-report', async (req, res) => {
       ok: true,
       totalOrders: orders.length,
       totalRevenue: Math.round(totalRevenue * 100) / 100,
-      totalCommission: 0,
-      avgCommissionRate: 0,
+      totalCommission: Math.round(totalCommission * 100) / 100,
+      avgCommissionRate: totalRevenue > 0 ? Math.round((totalCommission / totalRevenue) * 10000) / 100 : 0,
       grandTotal: Math.round(totalRevenue * 100) / 100,
-      grandCommission: 0,
+      grandCommission: Math.round(totalCommission * 100) / 100,
       orderCount: orders.length,
       suppliers: suppliersArr,
     });
@@ -427,42 +435,46 @@ router.get('/commission-report', async (req, res) => {
 
 /**
  * GET /revenue
- * Get wholesale revenue summary from actual order data
+ * Get procurement revenue summary (commissions from all farm orders)
  */
 router.get('/revenue', async (req, res) => {
   try {
+    const fid = farmStore.farmIdFromReq(req);
+    const ordersData = await farmStore.get(fid, 'procurement_orders') || { orders: [] };
     const { from, to } = req.query;
 
-    let orders = await listAllOrders();
-    if (from) orders = orders.filter(o => new Date(o.created_at || o.createdAt) >= new Date(from));
-    if (to) orders = orders.filter(o => new Date(o.created_at || o.createdAt) <= new Date(to));
+    let orders = ordersData.orders || [];
+    if (from) orders = orders.filter(o => new Date(o.createdAt) >= new Date(from));
+    if (to) orders = orders.filter(o => new Date(o.createdAt) <= new Date(to));
 
     // Aggregate revenue data
     let totalRevenue = 0;
+    let totalCommission = 0;
     let totalOrders = orders.length;
     const bySupplier = {};
     const byMonth = {};
 
     for (const order of orders) {
-      totalRevenue += Number(order.grand_total || 0);
+      for (const so of (order.supplierOrders || [])) {
+        totalRevenue += so.subtotal || 0;
+        totalCommission += so.commission || 0;
 
-      // By farm (supplier)
-      for (const sub of (order.farm_sub_orders || [])) {
-        const fid = sub.farm_id || 'unknown';
-        if (!bySupplier[fid]) {
-          bySupplier[fid] = { name: sub.farm_name || fid, revenue: 0, commission: 0, orderCount: 0 };
+        // By supplier
+        if (!bySupplier[so.supplierId]) {
+          bySupplier[so.supplierId] = { name: so.supplierName, revenue: 0, commission: 0, orderCount: 0 };
         }
-        bySupplier[fid].revenue += Number(sub.subtotal || 0);
-        bySupplier[fid].orderCount++;
-      }
+        bySupplier[so.supplierId].revenue += so.subtotal || 0;
+        bySupplier[so.supplierId].commission += so.commission || 0;
+        bySupplier[so.supplierId].orderCount++;
 
-      // By month
-      const dateStr = order.created_at || order.createdAt || '';
-      const month = dateStr.substring(0, 7);
-      if (month) {
-        if (!byMonth[month]) byMonth[month] = { revenue: 0, commission: 0, orderCount: 0 };
-        byMonth[month].revenue += Number(order.grand_total || 0);
-        byMonth[month].orderCount++;
+        // By month
+        const month = (order.createdAt || '').substring(0, 7);
+        if (month) {
+          if (!byMonth[month]) byMonth[month] = { revenue: 0, commission: 0, orderCount: 0 };
+          byMonth[month].revenue += so.subtotal || 0;
+          byMonth[month].commission += so.commission || 0;
+          byMonth[month].orderCount++;
+        }
       }
     }
 
@@ -472,7 +484,7 @@ router.get('/revenue', async (req, res) => {
       summary: {
         totalOrders,
         totalRevenue: Math.round(totalRevenue * 100) / 100,
-        totalCommission: 0,
+        totalCommission: Math.round(totalCommission * 100) / 100,
         avgOrderValue: totalOrders > 0 ? Math.round((totalRevenue / totalOrders) * 100) / 100 : 0
       },
       bySupplier: Object.entries(bySupplier).map(([id, data]) => ({ supplierId: id, ...data })),

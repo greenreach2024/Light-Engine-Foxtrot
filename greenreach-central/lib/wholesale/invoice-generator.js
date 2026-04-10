@@ -337,11 +337,11 @@ export function assembleInvoice({ order, subOrders, farmProfiles, buyerProfile }
       env_score: envScore,
       items,
       subtotal: sub.subtotal || 0,
-      broker_fee_amount: 0,
+      broker_fee_amount: sub.broker_fee_amount || sub.broker_fee || Math.round((sub.subtotal || 0) * 0.12 * 100) / 100,
       tax_rate: sub.tax_rate || 0,
       tax_label: sub.tax_label || 'TAX',
       tax_amount: sub.tax_amount || 0,
-      total: sub.total || ((sub.subtotal || 0) + (sub.tax_amount || 0)),
+      total: sub.total || ((sub.subtotal || 0) + (sub.broker_fee_amount || sub.broker_fee || Math.round((sub.subtotal || 0) * 0.12 * 100) / 100) + (sub.tax_amount || 0)),
       tax_registration_number: profile.tax_registration_number || profile.gst_number || profile.hst_number || null
     };
   });
