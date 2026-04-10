@@ -1,7 +1,7 @@
 # Cloud Architecture Reference
 
-**Version**: 2.0.0
-**Date**: April 7, 2026
+**Version**: 2.1.0
+**Date**: April 8, 2026
 **Authority**: This document is the canonical source of truth for system architecture. All agents MUST read this before modifying any infrastructure, deployment, data flow, or sensor-related code.
 
 ---
@@ -167,6 +167,7 @@ The following EB environments are DEPRECATED and will be terminated:
 
 | Date | Service | Revision | Commit | Notes |
 |------|---------|----------|--------|-------|
+| 2026-04-08 | greenreach-central | 00048-fhx | latest | FAYE diagnostic tools fix (get_sync_status, search_codebase, get_page_route_map) |
 | 2026-04-07 | greenreach-central | 00009-qsp | 72752e99 | GCP migration complete, AlloyDB connected, 168 tables |
 | 2026-04-07 | light-engine | 00005-74n | 72752e99 | GCP migration complete, sensor data flowing |
 | 2026-04-07 | greenreach-central | 00010-2rq | config | Optimized: memory 768Mi, concurrency 50, health probes |
@@ -658,4 +659,69 @@ The Research Platform is a gated tier (`research` in feature-flags.js) that adds
 | loss_events | Individual loss occurrences with cause analysis | On sync |
 | network_farms | Farm metadata for network intelligence | On farm registration |
 | wholesale_orders | Order data powering demand signal analysis | On order events |
+
+---
+
+## Payment Infrastructure
+
+See `.github/PAYMENT_WORKFLOW.md` for the complete payment reference including Square integration, checkout flow, accounting, and webhook processing.
+
+### Payment Services Summary
+
+| Component | File | Purpose |
+|-----------|------|---------|
+| Square Payments | `greenreach-central/services/squarePaymentService.js` | Multi-tenant Square payments with farm-split + direct-charge fallback |
+| Square OAuth | `greenreach-central/routes/square-oauth-proxy.js` | Per-farm Square OAuth flow (12 endpoints) |
+| Webhooks | `greenreach-central/routes/payment-webhooks.js` | Square + Stripe webhook handlers with HMAC verification |
+| Accounting | `greenreach-central/services/revenue-accounting-connector.js` | Double-entry ledger (10 accounts, 4 journal entry functions) |
+| Order Store | `greenreach-central/services/wholesaleMemoryStore.js` | In-memory + DB order/buyer persistence |
+| Wholesale | `greenreach-central/routes/wholesale.js` | Marketplace checkout, pricing, admin tools |
+
+### Payment Data Flow
+
+```
+Buyer -> POST /checkout/execute -> allocateCartFromNetwork()
+  -> processSquarePayments() (farm-split) or processGreenReachDirectPayment() (fallback)
+  -> Square API -> webhook callback -> POST /api/webhooks/square
+  -> ingestPaymentRevenue() + ingestFarmPayables() -> accounting journal
+  -> Order confirmed -> fulfillment -> farm payout -> ingestFarmPayout()
+```
+
+### Key Payment Constants
+
+| Constant | Value |
+|----------|-------|
+| Broker commission | 12% (app_fee_money on Square) |
+| SKU factor | 0.65 default (range 0.50-0.75) |
+| Square processing fee | 2.6% |
+| Stripe processing fee | 2.9% |
+| Currency | CAD |
+
+### Payment Database Tables
+
+`payment_records`, `wholesale_orders`, `wholesale_buyers`, `wholesale_order_logs`, `accounting_sources`, `accounting_accounts`, `accounting_transactions`, `accounting_entries`, `accounting_classifications`, `accounting_period_closes`, `webhook_events_processed`
+
+---
+
+## AI Agent Diagnostic Tools
+
+### FAYE (admin-ops-agent.js)
+
+FAYE has diagnostic tools for platform health monitoring:
+
+| Tool | Purpose |
+|------|---------|
+| `get_sync_status` | Queries farm_data table for data freshness (uses actual `data_type` and `updated_at` columns) |
+| `search_codebase` | Cross-file grep search with regex support (max 5 files, 3 matches/file) |
+| `get_page_route_map` | Returns architecture mapping of pages to code files, routes, and data flows |
+| `check_dependencies` | Checks platform dependencies and health status |
+| `get_research_dashboard` | Research platform overview for admin |
+
+### Diagnostic Workflow
+
+FAYE follows a structured diagnostic approach:
+1. Use `get_sync_status` to check data freshness
+2. Use `search_codebase` to trace code paths
+3. Use `get_page_route_map` to understand page-to-route architecture
+4. Use `check_dependencies` for service health
 

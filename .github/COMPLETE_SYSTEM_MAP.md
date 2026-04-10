@@ -1,8 +1,8 @@
 # GreenReach Platform -- Complete System Map
 
-**Version**: 1.9.0
-**Date**: April 2, 2026
-**Last Updated**: April 2, 2026 -- v1.9.0: Activity Hub order sync fix (POST/GET /api/wholesale/order-events on LE, Central API fetch replacing broken PG fallback in activity-hub-orders.js), EVIE chat integration in Activity Hub (floating orb, chat panel, voice, tasks), calendar/tasks system (admin-calendar.js on Central), readiness report generated. KNOWN GAP: admin-calendar not mounted on LE. Previous: v1.8.0: Research Integration Layer (17 tables, research-integrations.js, GWEN 19 new tools), GWEN Core sidebar/auth/DB fixes, agent-caused Central outage recovered (config-only restart broke npm install), CLOUD_ARCHITECTURE.md updated with env var safety rules. Previous: v1.7.0: E.V.I.E. LLM fallback (Anthropic), F.A.Y.E. auto-recovery, heartbeat false-alert fix, farm settings DB persistence, custom product image upload bugfix (field name mismatch), LE pinned to 1 instance. v1.6.0: Security hardening (9 patches, C2-C5 remediated), custom product CRUD, auth fallback, UI fixes (POS, inventory edit/delete, EVIE overlap). v1.4.0: Wholesale remediation, Square connection cleanup, POS auto-login fix, FAYE/EVIE document access
+**Version**: 2.0.0
+**Date**: April 8, 2026
+**Last Updated**: April 8, 2026 -- v2.0.0: Full Cloud Run migration (replaced all AWS/EB references), added PAYMENT_WORKFLOW.md reference, added FAYE diagnostic tools (get_sync_status fix, search_codebase, get_page_route_map), updated data flows for Google Cloud. Previous: v1.9.0: Activity Hub order sync fix, EVIE chat integration, calendar/tasks system. v1.8.0: Research Integration Layer, GWEN fixes, agent-caused Central outage recovery. v1.7.0: E.V.I.E. LLM fallback (Anthropic), F.A.Y.E. auto-recovery, heartbeat false-alert fix.
 **Authority**: This document is the canonical system map for the entire GreenReach platform. All agents MUST consult this before making changes to ensure full awareness of cross-system impacts.
 **Purpose**: Prevent agent-caused regressions by providing complete visibility into every page, route, data field, button, data flow, and dependency across the platform.
 
@@ -37,26 +37,27 @@
                            |
               +------------+------------+
               |                         |
-    greenreachgreens.com        LE-EB v3 CNAME
-    (Route53/CloudFront)        (direct EB URL)
+    greenreachgreens.com        Cloud Run URL
+    (pending DNS migration)     (direct URLs)
               |                         |
               v                         v
 +---------------------------+  +---------------------------+
-| GreenReach Central (EB)   |  | Light Engine Foxtrot (EB) |
-| greenreach-central-prod-v4|  | light-engine-foxtrot-     |
-|                           |  | prod-v3                   |
-| greenreach-central/       |  |                           |
-|   server.js               |  | server-foxtrot.js         |
+| GreenReach Central        |  | Light Engine Foxtrot      |
+| (Cloud Run)               |  | (Cloud Run)               |
+| greenreach-central        |  | light-engine              |
 |                           |  |                           |
-| PostgreSQL (RDS)          |  | EnvStore (in-memory)      |
-| farmStore (in-memory)     |  | env-state.json (file)     |
-| 70+ database tables       |  | NeDB / SQLite             |
-|                           |  |                           |
-| F.A.Y.E. (admin AI)      |  | E.V.I.E. (farm AI)       |
-| Admin dashboard           |  | Farm dashboard             |
-| Wholesale marketplace     |  | Device control             |
-| Grant wizard              |  | Sensor polling             |
-| Accounting                |  | Automation engine          |
+| greenreach-central/       |  | server-foxtrot.js         |
+|   server.js               |  |                           |
+|                           |  | EnvStore (in-memory)      |
+| AlloyDB (PostgreSQL)      |  | env-state.json (file)     |
+| farmStore (in-memory)     |  | NeDB / SQLite             |
+| 168+ database tables      |  |                           |
+|                           |  | E.V.I.E. (farm AI)       |
+| F.A.Y.E. (admin AI)      |  | Farm dashboard             |
+| Admin dashboard           |  | Device control             |
+| Wholesale marketplace     |  | Sensor polling             |
+| Grant wizard              |  | Automation engine          |
+| Accounting                |  |                           |
 +------------+--------------+  +------------+--------------+
              ^                              |
              |   POST /api/sync/telemetry   |
@@ -81,20 +82,19 @@
 | Property | Light Engine (LE) | GreenReach Central |
 |----------|-------------------|-------------------|
 | Server file | server-foxtrot.js | greenreach-central/server.js |
-| EB Environment | light-engine-foxtrot-prod-v3 | greenreach-central-prod-v4 |
-| Domain | EB CNAME (v2 hostname, v3 env) | greenreachgreens.com |
+| Cloud Run service | light-engine | greenreach-central |
+| URL | `https://light-engine-1029387937866.us-east1.run.app` | `https://greenreach-central-1029387937866.us-east1.run.app` |
+| Custom domain | None | greenreachgreens.com (pending DNS) |
 | Deploy from | Repo root | greenreach-central/ subdirectory |
 | Port | 8091 | 3000 (HTTP) + 3001 (WS) |
-| Platform | Node.js 20 / Amazon Linux 2023 | Node.js 20 / Amazon Linux 2023 |
-| Region | us-east-1 | us-east-1 |
+| Region | us-east1 | us-east1 |
 | Role | The Farm (sensors, devices, automation) | The Hub (data, admin, marketplace) |
 
 ### Critical Rules
 
 - The farm is 100% cloud. No physical device, no Pi, no edge hardware.
-- LE-EB IS the farm. "Edge mode" in code is a legacy naming artifact.
-- v2 environment is DEAD (CloudFormation DELETE_FAILED). NEVER deploy to v2.
-- CNAME swap: v3 answers on v2 URL. This is correct and intentional.
+- LE Cloud Run IS the farm. "Edge mode" in code is a legacy naming artifact.
+- AWS Elastic Beanstalk is DEPRECATED (April 2026). All workloads on Google Cloud Run.
 - Two public/ directories: root public/ (LE), greenreach-central/public/ (Central). NOT synced.
 - E.V.I.E. files must exist in BOTH public directories.
 - server-foxtrot.js NEVER imports from greenreach-central/routes/ (exception: 3 AI routes).
@@ -102,98 +102,83 @@
 
 ---
 
-## 2. AWS Infrastructure
+## 2. Google Cloud Infrastructure
 
-### Elastic Beanstalk Environments
+### Cloud Run Services
 
 #### Light Engine (Active)
 
 | Property | Value |
 |----------|-------|
-| Application | light-engine-foxtrot |
-| Environment | light-engine-foxtrot-prod-v3 |
-| CNAME | light-engine-foxtrot-prod-v2.eba-ukiyyqf9.us-east-1.elasticbeanstalk.com |
-| Platform | Node.js 20 on 64bit Amazon Linux 2023 |
-| Instance | t3.small |
-| Auto Scaling | Min 1, Max 1 (pinned -- AWS account block on launch) |
-| Storage | gp3 20 GB |
-| Entry Point | node server-foxtrot.js (via Procfile) |
-| Health Check | /health (30s interval) |
-| Proxy | nginx |
+| Service | light-engine |
+| URL | `https://light-engine-1029387937866.us-east1.run.app` |
+| Service Account | `light-engine-sa@project-5d00790f-13a9-4637-a40.iam.gserviceaccount.com` |
+| Image | `us-east1-docker.pkg.dev/project-5d00790f-13a9-4637-a40/greenreach/light-engine:latest` |
+| Entry Point | node server-foxtrot.js |
+| CPU / Memory | 1 vCPU / 1Gi (CPU always-allocated) |
+| Min / Max Instances | 1 / 2 |
+| Execution Environment | Gen2 (Direct VPC egress) |
 
 #### GreenReach Central (Active)
 
 | Property | Value |
 |----------|-------|
-| Application | greenreach-central |
-| Environment | greenreach-central-prod-v4 |
-| Custom Domain | greenreachgreens.com (Route53/CloudFront) |
-| Platform | Node.js 20 on 64bit Amazon Linux 2023 |
-| Entry Point | npm start -> node server.js (via Procfile) |
-| Health Check | /health |
+| Service | greenreach-central |
+| URL | `https://greenreach-central-1029387937866.us-east1.run.app` |
+| Custom Domain | greenreachgreens.com (pending DNS migration) |
+| Service Account | `greenreach-central-sa@project-5d00790f-13a9-4637-a40.iam.gserviceaccount.com` |
+| Image | `us-east1-docker.pkg.dev/project-5d00790f-13a9-4637-a40/greenreach/greenreach-central:latest` |
+| Entry Point | node server.js |
+| CPU / Memory | 1 vCPU / 768Mi |
+| Min / Max Instances | 1 / 5 |
+| Execution Environment | Gen2 (Direct VPC egress) |
 
-#### Dead Environment (DO NOT USE)
-
-| Property | Value |
-|----------|-------|
-| Environment | light-engine-foxtrot-prod-v2 |
-| Status | TERMINATED / CloudFormation DELETE_FAILED |
-| DNS | DOES NOT RESOLVE |
-
-### AWS Services Used
+### Google Cloud Services Used
 
 | Service | Purpose |
 |---------|---------|
-| Elastic Beanstalk | Application hosting (2 environments) |
-| RDS PostgreSQL | Database (Central) |
-| Route 53 | DNS for greenreachgreens.com |
-| CloudFront | CDN/HTTPS termination |
-| ACM | TLS certificate (arn:aws:acm:us-east-1:634419072974:certificate/adfc4d01-f688-45a2-a313-24cb4601f8e1) |
-| CloudWatch | Metrics + logs (LightEngine/Foxtrot namespace, 60s publish, 7-day retention) |
-| SES | Email notifications |
-| SNS | Push notifications |
-| Secrets Manager | JWT_SECRET storage |
-| S3 | EB deployment artifacts |
-| Cost Explorer | Cloud cost accounting sync (optional) |
+| Cloud Run | Application hosting (2 services) |
+| AlloyDB | PostgreSQL-compatible database (cluster: greenreach-db, IP: 10.87.0.2) |
+| Artifact Registry | Docker image storage |
+| Secret Manager | All secrets (JWT, DB password, Square tokens, SMTP, API keys) |
+| Cloud Storage | Persistent file storage (bucket: greenreach-storage, mounted at /app/data) |
+| Cloud Scheduler | Keep-alive and cron jobs (3 jobs) |
+| VPC | Private networking (greenreach-vpc / greenreach-subnet) |
+
+### DEPRECATED: AWS (DO NOT USE)
+
+AWS Elastic Beanstalk environments are DEPRECATED (April 2026). Do not reference EB environments, use `eb` CLI commands, or deploy to AWS. See `.github/CLOUD_ARCHITECTURE.md`.
 
 ### Deployment Pipeline
 
 ```
 Developer Machine
        |
-       | git add -A && git stash
-       | eb deploy <env-name> --staged
+       | docker buildx build --platform linux/amd64 --push
        v
-AWS Elastic Beanstalk
+Artifact Registry (us-east1)
        |
-       | .platform/hooks/prebuild/
-       |   01_install_dependencies.sh
-       |   02_install_python_deps.sh
-       |
-       | .platform/hooks/predeploy/
-       |   00_preserve_runtime_data.sh
-       |   01_install_central_deps.sh
-       |
-       | .platform/hooks/postdeploy/
-       |   00_recover_runtime_data.sh
-       |   01_restart_web.sh
-       |   99_restart_app.sh
+       | gcloud run services update
        v
-Running Application
-
-Deploy Commands:
-  LE:      cd /Volumes/CodeVault/Projects/Light-Engine-Foxtrot && eb deploy light-engine-foxtrot-prod-v3 --staged
-  Central: cd greenreach-central && eb deploy greenreach-central-prod-v4 --staged
-  eb CLI:  /Users/petergilbert/Library/Python/3.9/bin/eb
+Cloud Run (new revision, traffic shifted)
 ```
 
-### .ebignore (LE Bundle Exclusions)
+Deploy Commands:
+```bash
+# Central
+docker buildx build --platform linux/amd64 \
+  -t us-east1-docker.pkg.dev/project-5d00790f-13a9-4637-a40/greenreach/greenreach-central:latest \
+  --push ./greenreach-central/
+gcloud run services update greenreach-central --region=us-east1 \
+  --image=us-east1-docker.pkg.dev/project-5d00790f-13a9-4637-a40/greenreach/greenreach-central:latest
 
-The LE bundle excludes greenreach-central/ entirely (191MB with video/images). The buildspec.yml separately installs Central dependencies. Key exclusions: node_modules/, .git/, .github/, tests/, mobile-app/, desktop-app/, docs/, *.md, .env files.
-
-### .ebignore (Central Bundle Exclusions)
-
-Central excludes: .git, .github, .vscode, node_modules, logs, *.md, public/videos/ (images are included for marketing).
+# LE
+docker buildx build --platform linux/amd64 \
+  -t us-east1-docker.pkg.dev/project-5d00790f-13a9-4637-a40/greenreach/light-engine:latest \
+  --push .
+gcloud run services update light-engine --region=us-east1 \
+  --image=us-east1-docker.pkg.dev/project-5d00790f-13a9-4637-a40/greenreach/light-engine:latest
+```
 
 ---
 
@@ -724,7 +709,7 @@ Central excludes: .git, .github, .vscode, node_modules, logs, *.md, public/video
 | Production Plan Scheduler | Weekly | Generate seeding plans |
 | Admin Session Cleanup | Every 30min | Delete expired sessions |
 | Grant Cleanup | Every 6 hours | Expire old grant applications |
-| Farm Data Sync | Every 5 min | Pull data from LE-EB |
+| Farm Data Sync | Every 5 min | Pull data from LE Cloud Run |
 | Daily Full Sync | 2 AM | Full data refresh |
 
 ---
@@ -938,7 +923,7 @@ Files that MUST exist in both `greenreach-central/public/` and root `public/`:
 | research-workspace.html | Research dashboard -- embedded in LE-farm-admin iframe |
 | research-subscription.html | Research tier overview -- embedded in LE-farm-admin iframe |
 
-**Rule**: Edit in `greenreach-central/public/` first, then copy to root `public/`. The `.ebignore` excludes `greenreach-central/public/` from LE deploy, so root `public/` is the only source for LE-EB.
+**Rule**: Edit in `greenreach-central/public/` first, then copy to root `public/`. The LE `.dockerignore` excludes `greenreach-central/public/` from the LE Docker image, so root `public/` is the only source for LE Cloud Run.
 
 ---
 
@@ -976,7 +961,7 @@ User -> GR-central-admin-login.html
 Stage 1: Physical Sensors -> SwitchBot Cloud
   4x WoIOSensor (BLE) -> Hub Mini (WiFi) -> SwitchBot Cloud API
 
-Stage 2: LE-EB Polling (every 30s)
+Stage 2: LE Cloud Run Polling (every 30s)
   setupLiveSensorSync() -> GET https://api.switch-bot.com/v1.1/devices/{id}/status
   Auth: HMAC-SHA256 (SWITCHBOT_TOKEN + SWITCHBOT_SECRET)
   Response: { temperature, humidity, battery, version }
@@ -987,7 +972,7 @@ Stage 3: EnvStore (in-memory)
   -> 50-point history per sensor
   -> Persist to data/automation/env-state.json
 
-Stage 4: LE-EB GET /env
+Stage 4: LE Cloud Run GET /env
   -> Returns zones array with current, history (12 points), setpoints
   -> CORS enabled
 
@@ -1003,7 +988,7 @@ Stage 6: Central Ingestion
 
 Stage 7: Central GET /env (DB-first)
   1. Try PostgreSQL farm_data WHERE data_type='telemetry'
-  2. Fallback: proxy to LE-EB GET /env
+  2. Fallback: proxy to LE Cloud Run GET /env
 
 Stage 8: Dashboard Display
   farm-summary.html -> fetchEnvData()
@@ -1017,7 +1002,7 @@ Stage 8: Dashboard Display
 ```
 Trigger: Every 5 minutes + daily at 2 AM + manual via POST /api/sync/pull-farm-data
 
-Source: LE-EB static data files
+Source: LE Cloud Run static data files
   -> groups.json -> groups
   -> rooms.json -> rooms
   -> farm.json -> farm_profile
@@ -1216,7 +1201,7 @@ EnvStore
 | farm_id | VARCHAR(255) UNIQUE | e.g., FARM-MLTP9LVH-B0B85039 |
 | name | VARCHAR(255) | |
 | email | VARCHAR(255) | |
-| api_url | VARCHAR(500) | LE-EB URL |
+| api_url | VARCHAR(500) | LE Cloud Run URL |
 | status | VARCHAR(50) | active, inactive |
 | last_heartbeat | TIMESTAMP | |
 | slug | VARCHAR(100) UNIQUE | SaaS subdomain |
@@ -1935,60 +1920,67 @@ On login and token expiry, all farm-scoped browser storage keys are cleared.
 #### Database
 | Variable | Default | Used By | Required |
 |----------|---------|---------|----------|
-| DATABASE_URL | (none) | Central | Yes (prod) |
-| DB_HOST | localhost | LE | No |
-| DB_PORT | 5432 | LE | No |
-| DB_NAME | (none) | LE | No |
-| DB_USER | (none) | LE | No |
-| DB_PASSWORD | (none) | LE | No |
-| DB_SSL | true | Both | No |
-| RDS_HOSTNAME, RDS_PORT, RDS_DB_NAME, RDS_USERNAME, RDS_PASSWORD | (none) | Central (EB auto) | Auto |
+| DB_HOST | 10.87.0.2 | Both | Yes (prod) |
+| DB_PORT | 5432 | Both | No |
+| DB_NAME | greenreach_central | Both | Yes |
+| DB_USER | postgres | Both | Yes |
+| DB_PASSWORD | (Secret Manager: ALLOYDB_PASSWORD) | Both | Yes |
+| DATABASE_URL | (none) | Central (legacy compat) | Auto-constructed |
 
 #### Authentication
 | Variable | Default | Used By | Required |
 |----------|---------|---------|----------|
-| JWT_SECRET | auto-generated | Both | Yes (prod) |
-| GREENREACH_API_KEY | (none) | Central | Yes |
+| JWT_SECRET | (Secret Manager) | Both | Yes (prod) |
+| GREENREACH_API_KEY | (Secret Manager) | Both | Yes |
+| TOKEN_ENCRYPTION_KEY | (Secret Manager) | LE | Yes |
 
 #### SwitchBot (CRITICAL)
 | Variable | Default | Used By | Required |
 |----------|---------|---------|----------|
-| SWITCHBOT_TOKEN | (none) | LE | YES -- sensors halt silently if missing |
-| SWITCHBOT_SECRET | (none) | LE | YES -- sensors halt silently if missing |
+| SWITCHBOT_TOKEN | (Secret Manager) | LE | YES -- sensors halt silently if missing |
+| SWITCHBOT_SECRET | (Secret Manager) | LE | YES -- sensors halt silently if missing |
 
 #### Central Connection
 | Variable | Default | Used By | Required |
 |----------|---------|---------|----------|
-| GREENREACH_CENTRAL_URL | EB CNAME fallback | LE | No |
-| FARM_EDGE_URL | (none) | Central | No |
-| FARM_ID | (none) | Both | Yes |
+| FARM_EDGE_URL | `https://light-engine-1029387937866.us-east1.run.app` | Central | No |
+| FARM_ID | FARM-MLTP9LVH-B0B85039 | Both | Yes |
 
-#### Payments
+#### Payments (See `.github/PAYMENT_WORKFLOW.md`)
 | Variable | Default | Used By | Required |
 |----------|---------|---------|----------|
-| SQUARE_APPLICATION_ID | (none) | Central | For payments |
-| SQUARE_ACCESS_TOKEN | (none) | Central | For payments |
-| SQUARE_ENVIRONMENT | (none) | Central | For payments |
+| SQUARE_APP_ID | (none) | Central | For OAuth |
+| SQUARE_APP_SECRET | (Secret Manager) | Central | For OAuth |
+| SQUARE_ACCESS_TOKEN | (Secret Manager) | Both | For payments |
+| SQUARE_ENVIRONMENT | production | Both | Yes |
+| SQUARE_LOCATION_ID | (none) | Central | For direct-charge |
+| SQUARE_WEBHOOK_SIGNATURE_KEY | (Secret Manager) | Central | For webhooks |
+| WHOLESALE_COMMISSION_RATE | 0.12 | Central | No |
+| WHOLESALE_DEFAULT_SKU_FACTOR | 0.65 | Central | No |
 
 #### AI
 | Variable | Default | Used By | Required |
 |----------|---------|---------|----------|
-| OPENAI_API_KEY | (none) | Both | For AI features |
+| OPENAI_API_KEY | (Secret Manager) | Both | For AI features |
 | OPENAI_MODEL | gpt-4o-mini | LE | No |
+| ANTHROPIC_API_KEY | (Secret Manager) | Central | EVIE fallback |
 
-#### Notifications
+#### Notifications (Google Workspace SMTP -- no AWS)
 | Variable | Default | Used By | Required |
 |----------|---------|---------|----------|
-| SENDGRID_API_KEY | (none) | Central | For email |
-| TWILIO_ACCOUNT_SID | (none) | Central | For SMS |
-| TWILIO_AUTH_TOKEN | (none) | Central | For SMS |
-| TWILIO_PHONE_NUMBER | (none) | Central | For SMS |
+| SMTP_HOST | smtp.gmail.com | Central | For email |
+| SMTP_PORT | 587 | Central | For email |
+| SMTP_USER | info@greenreachgreens.com | Central | For email |
+| SMTP_PASS | (Secret Manager) | Central | For email (Google App Password) |
+| FROM_EMAIL | info@greenreachgreens.com | Central | For email |
+| ADMIN_ALERT_EMAIL | info@greenreachgreens.com | Central | For alerts |
+| ADMIN_ALERT_PHONE | (not set) | Central | For SMS alerts |
 
-#### CloudWatch
+#### GCS Storage
 | Variable | Default | Used By | Required |
 |----------|---------|---------|----------|
-| CLOUDWATCH_ENABLED | false | LE | No |
-| AWS_REGION | us-east-1 | Both | For AWS services |
+| USE_GCS | true | Both | On Cloud Run |
+| GCS_BUCKET | greenreach-storage | Both | On Cloud Run |
 
 ---
 
@@ -1997,17 +1989,17 @@ On login and token expiry, all farm-scoped browser storage keys are cleared.
 | Service | Env Vars | Purpose | Server |
 |---------|----------|---------|--------|
 | SwitchBot Cloud API | SWITCHBOT_TOKEN, SWITCHBOT_SECRET | Sensor data polling | LE |
-| Square Payments (Wholesale) | SQUARE_APPLICATION_ID, SQUARE_ACCESS_TOKEN | Wholesale marketplace (12% commission via app_fee_money). Route: /api/square-proxy/* | Central |
-| Square Payments (Farm) | SQUARE_APPLICATION_ID, SQUARE_APPLICATION_SECRET, FARM_SQUARE_REDIRECT_URI, TOKEN_ENCRYPTION_KEY | Per-farm Square OAuth. Each farm connects their own Square account for POS/retail. Route: /api/farm/square/* on LE, proxied through Central. OAuth via standalone payment-setup.html (v1.4.0). See Section 17 | LE (via Central proxy) |
-| Stripe | Farm-configured | Farm payment setup | LE |
+| Square Payments (Wholesale) | SQUARE_ACCESS_TOKEN, SQUARE_LOCATION_ID | Wholesale marketplace (12% commission via app_fee_money). See PAYMENT_WORKFLOW.md | Central |
+| Square OAuth (Per-Farm) | SQUARE_APP_ID, SQUARE_APP_SECRET | Per-farm Square OAuth. Route: /api/farm/square/*. OAuth via standalone payment-setup.html | Central |
+| Square Webhooks | SQUARE_WEBHOOK_SIGNATURE_KEY | Payment/refund status updates. Route: /api/webhooks/square | Central |
+| Stripe Webhooks | STRIPE_WEBHOOK_SECRET | Payment status updates. Route: /api/webhooks/stripe | Central |
+| Google Workspace SMTP | SMTP_HOST, SMTP_USER, SMTP_PASS | Email delivery (info@greenreachgreens.com) | Central |
+| Email-to-SMS Gateway | (via SMTP) | Critical alert SMS via carrier gateways | Central |
 | OpenAI (GPT-4) | OPENAI_API_KEY | AI insights, recipe recommendations | Both |
-| AWS CloudWatch | CLOUDWATCH_ENABLED, AWS_REGION | Metrics/logs | LE |
-| AWS SES | AWS credentials | Email delivery | Central |
-| AWS SNS | AWS credentials | Push notifications | Central |
-| AWS Secrets Manager | JWT_SECRET_ARN | Secret storage | Both |
-| AWS Cost Explorer | AWS credentials | Cloud cost accounting | Central |
-| SendGrid | SENDGRID_API_KEY | Email (alternative) | Central |
-| Twilio | TWILIO_* | SMS notifications | Central |
+| Anthropic (Claude) | ANTHROPIC_API_KEY | EVIE fallback LLM | Central |
+| Google Cloud Storage | USE_GCS, GCS_BUCKET | Persistent file storage (greenreach-storage bucket) | Both |
+| Google Secret Manager | (auto via IAM) | Credentials storage | Both |
+| AlloyDB | DB_HOST, DB_PASSWORD | PostgreSQL-compatible database (10.87.0.2) | Both |
 | Firebase | greenreach-firebase.json | Push notifications | Both |
 | IFTTT | IFTTT_KEY, IFTTT_WEBHOOK_KEY | Webhook automations | LE |
 | TP-Link Kasa | KASA_EMAIL, KASA_PASSWORD | Smart plug control | LE |
@@ -2406,19 +2398,29 @@ The `analyzeAndPushToAllFarms()` service runs every 30 minutes, pushing a `netwo
 
 ### Deploy Quick Reference
 
-```
-# Deploy Light Engine ONLY
-cd /Volumes/CodeVault/Projects/Light-Engine-Foxtrot
-git add -A && git stash
-/Users/petergilbert/Library/Python/3.9/bin/eb deploy light-engine-foxtrot-prod-v3 --staged
+```bash
+# Build and push (ALWAYS --platform linux/amd64 on Apple Silicon)
+export PATH="/Applications/Docker.app/Contents/Resources/bin:$PATH"
 
 # Deploy Central ONLY
-cd /Volumes/CodeVault/Projects/Light-Engine-Foxtrot/greenreach-central
-/Users/petergilbert/Library/Python/3.9/bin/eb deploy greenreach-central-prod-v4 --staged
+docker buildx build --platform linux/amd64 \
+  -t us-east1-docker.pkg.dev/project-5d00790f-13a9-4637-a40/greenreach/greenreach-central:latest \
+  --push ./greenreach-central/
+gcloud run services update greenreach-central --region=us-east1 \
+  --image=us-east1-docker.pkg.dev/project-5d00790f-13a9-4637-a40/greenreach/greenreach-central:latest
+
+# Deploy LE ONLY
+docker buildx build --platform linux/amd64 \
+  -t us-east1-docker.pkg.dev/project-5d00790f-13a9-4637-a40/greenreach/light-engine:latest \
+  --push .
+gcloud run services update light-engine --region=us-east1 \
+  --image=us-east1-docker.pkg.dev/project-5d00790f-13a9-4637-a40/greenreach/light-engine:latest
 
 # Deploy BOTH (when changes span both)
 # Deploy Central first, then LE
 ```
+
+**BANNED**: ALL `eb` CLI commands. Platform migrated to Google Cloud Run (April 2026).
 
 ---
 
@@ -2995,11 +2997,11 @@ Central does NOT mount farm-square-setup.js routes directly. Instead, server.js 
 
 The callback proxy uses a custom handler (not edgeProxy) because it returns HTML, not JSON. It forwards the full query string to LE and passes through the response content-type.
 
-Central resolves the LE URL via resolveEdgeUrlForProxy(): FARM_EDGE_URL env var (currently http://light-engine-foxtrot-prod-v2.eba-ukiyyqf9.us-east-1.elasticbeanstalk.com).
+Central resolves the LE URL via resolveEdgeUrlForProxy(): FARM_EDGE_URL env var (currently `https://light-engine-1029387937866.us-east1.run.app`).
 
 ---
 
 **END OF COMPLETE SYSTEM MAP**
-**Document Version**: 1.8.0
+**Document Version**: 2.0.0
 **Generated**: March 29, 2026
 **Next Review**: Update when any new routes, pages, tables, or integrations are added

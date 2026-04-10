@@ -25,6 +25,7 @@ const SMTP_USER = process.env.SMTP_USER || '';
 const SMTP_PASS = process.env.SMTP_PASS || '';
 const SMTP_ENABLED = !!(SMTP_HOST && SMTP_USER && SMTP_PASS);
 
+let _smtpTransport = null;
 
 function getSmtpTransport() {
   if (_smtpTransport) return _smtpTransport;

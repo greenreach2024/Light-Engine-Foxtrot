@@ -316,7 +316,7 @@ async function handleLogin(e) {
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ farmId, email, password })
+            body: JSON.stringify({ farmId, password })
         });
         
         const data = await response.json();
@@ -371,11 +371,10 @@ async function handleLogin(e) {
             
             showAlert('success', 'Login successful! Redirecting...');
             
-            // Check if user needs first-time setup (password change + farm profile)
-            // mustChangePassword forces wizard; setupCompleted===false does too
-            // unless localStorage already shows setup was done (prevents re-trigger for established farms)
+            // Check if user needs first-time setup (farm profile) vs just a password change
             const localSetupDone = localStorage.getItem('setup_completed') === 'true';
-            const needsSetup = data.mustChangePassword || (data.setupCompleted === false && !localSetupDone);
+            const needsFullSetup = data.setupCompleted === false && !localSetupDone;
+            const needsPasswordChange = data.mustChangePassword && !needsFullSetup;
             
             // Store setupCompleted in localStorage to prevent future false redirects
             if (data.setupCompleted) {
@@ -383,8 +382,12 @@ async function handleLogin(e) {
             }
             
             setTimeout(() => {
-                if (needsSetup) {
+                if (needsFullSetup) {
+                    // Full wizard: password change + farm profile + rooms
                     window.location.href = '/setup-wizard.html';
+                } else if (needsPasswordChange) {
+                    // Already set up but must change password (e.g. admin reset)
+                    window.location.href = '/setup-wizard.html?passwordOnly=true';
                 } else {
                     window.location.href = getPostLoginRedirectPath();
                 }

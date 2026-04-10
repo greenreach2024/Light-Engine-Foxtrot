@@ -646,12 +646,12 @@ async function runMigrations(client) {
   await client.query(`
     CREATE TABLE IF NOT EXISTS wholesale_orders (
       id SERIAL PRIMARY KEY,
-      master_order_id VARCHAR(64) UNIQUE NOT NULL,
-      buyer_id VARCHAR(128) NOT NULL,
+      master_order_id VARCHAR(128) UNIQUE NOT NULL,
+      buyer_id VARCHAR(128),
       buyer_email VARCHAR(255),
-      status VARCHAR(50) DEFAULT 'confirmed',
+      status VARCHAR(64) DEFAULT 'confirmed',
       total_amount NUMERIC(12,2) DEFAULT 0,
-      order_data JSONB NOT NULL,
+      order_data JSONB DEFAULT '{}'::jsonb,
       created_at TIMESTAMP DEFAULT NOW(),
       updated_at TIMESTAMP DEFAULT NOW()
     );
@@ -673,6 +673,16 @@ async function runMigrations(client) {
     await client.query(`ALTER TABLE wholesale_orders ADD COLUMN IF NOT EXISTS delivery_date DATE;`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_wholesale_orders_farm ON wholesale_orders(farm_id);`);
   } catch (err) { logger.warn('wholesale_orders farm_id migration warning:', err.message); }
+
+  // Migration: relax constraints from older schema (old table had NOT NULL on buyer_id, order_data, etc.)
+  try {
+    await client.query(`ALTER TABLE wholesale_orders ALTER COLUMN buyer_id DROP NOT NULL;`);
+    await client.query(`ALTER TABLE wholesale_orders ALTER COLUMN order_data DROP NOT NULL;`);
+    await client.query(`ALTER TABLE wholesale_orders ALTER COLUMN order_data SET DEFAULT '{}'::jsonb;`);
+    await client.query(`ALTER TABLE wholesale_orders ALTER COLUMN status TYPE VARCHAR(64);`);
+    await client.query(`ALTER TABLE wholesale_orders DROP CONSTRAINT IF EXISTS valid_order_status;`);
+    await client.query(`ALTER TABLE wholesale_orders DROP CONSTRAINT IF EXISTS valid_payment_status;`);
+  } catch (err) { logger.warn('wholesale_orders constraint migration warning:', err.message); }
 
   // Backfill farm_id from order_data for existing rows
   try {
@@ -856,6 +866,44 @@ async function runMigrations(client) {
     CREATE INDEX IF NOT EXISTS idx_valuation_snapshots_date ON valuation_snapshots(snapshot_date);
   `);
   } catch (err) { logger.warn('Accounting tables create warning:', err.message); }
+
+  // Create ledger_entries VIEW for income-statement / balance-sheet reports
+  try {
+    await client.query(`
+      CREATE OR REPLACE VIEW ledger_entries AS
+      SELECT
+        e.id,
+        e.transaction_id,
+        e.account_code,
+        a.account_name,
+        a.account_class,
+        a.account_type,
+        CASE
+          WHEN e.debit > 0 THEN 'debit'
+          WHEN e.credit > 0 THEN 'credit'
+          ELSE 'zero'
+        END AS entry_type,
+        CASE
+          WHEN e.debit > 0 THEN e.debit
+          WHEN e.credit > 0 THEN e.credit
+          ELSE 0
+        END AS amount,
+        e.memo,
+        t.txn_date,
+        t.description AS txn_description,
+        t.currency,
+        t.source_id,
+        t.source_txn_id,
+        t.status AS txn_status,
+        s.source_key,
+        t.raw_payload ->> 'farmId' AS farm_id,
+        e.created_at
+      FROM accounting_entries e
+      JOIN accounting_transactions t ON t.id = e.transaction_id
+      JOIN accounting_accounts a ON a.account_code = e.account_code
+      LEFT JOIN accounting_sources s ON s.id = t.source_id;
+    `);
+  } catch (err) { logger.warn('ledger_entries view create warning:', err.message); }
 
   // Seed chart of accounts
   try {
@@ -3789,6 +3837,47 @@ async function runMigrations(client) {
     logger.info('sensor_readings table ready (migration 055)');
   } catch (err) {
     logger.warn('Migration 055 warning:', err.message);
+  }
+
+  // --- Migration 056: Add missing columns to market_price_trends ---
+  try {
+    await client.query(`ALTER TABLE market_price_trends ADD COLUMN IF NOT EXISTS avg_price_cad NUMERIC(10,2)`);
+    await client.query(`ALTER TABLE market_price_trends ADD COLUMN IF NOT EXISTS price_7d_ago NUMERIC(10,2)`);
+    await client.query(`ALTER TABLE market_price_trends ADD COLUMN IF NOT EXISTS price_30d_ago NUMERIC(10,2)`);
+    await client.query(`ALTER TABLE market_price_trends ADD COLUMN IF NOT EXISTS retailer_count INT DEFAULT 0`);
+    await client.query(`ALTER TABLE market_price_trends ADD COLUMN IF NOT EXISTS last_observation TIMESTAMPTZ`);
+    logger.info('market_price_trends columns aligned (migration 056)');
+  } catch (err) {
+    logger.warn('Migration 056 warning:', err.message);
+  }
+
+  // --- Migration 057: Create mix_templates and mix_components tables ---
+  try {
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS mix_templates (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(100) NOT NULL,
+        description TEXT,
+        status VARCHAR(20) DEFAULT 'active',
+        created_by VARCHAR(100),
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS mix_components (
+        id SERIAL PRIMARY KEY,
+        mix_template_id INT NOT NULL REFERENCES mix_templates(id) ON DELETE CASCADE,
+        product_name VARCHAR(200) NOT NULL,
+        product_id VARCHAR(100),
+        ratio DECIMAL(5,4) NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_mix_components_template ON mix_components (mix_template_id)`);
+    logger.info('mix_templates and mix_components tables ready (migration 057)');
+  } catch (err) {
+    logger.warn('Migration 057 warning:', err.message);
   }
 
 

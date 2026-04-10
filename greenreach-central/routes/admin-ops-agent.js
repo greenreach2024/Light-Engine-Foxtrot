@@ -17,6 +17,30 @@ import alertNotifier from '../services/alert-notifier.js';
 
 const router = express.Router();
 
+// ── Path resolution helper ────────────────────────────────────
+// On Cloud Run, Central deploys at /app (WORKDIR). centralDir = /app/routes.
+// Going up two dirs lands at / which is wrong. Detect Cloud Run via K_SERVICE
+// and resolve correctly: /app is both the Central root AND the "LE root" since
+// greenreach-central/ contents ARE the app.
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
+
+const __opsFilename = fileURLToPath(import.meta.url);
+const __opsDirname = path.dirname(__opsFilename);
+const CENTRAL_ROOT = path.resolve(__opsDirname, '..');  // routes/ -> /app
+const IS_CLOUD_RUN = !!process.env.K_SERVICE;
+
+/**
+ * Resolve the "LE root" for file access tools.
+ * - Cloud Run: /app (Central IS the app root; greenreach-central/ prefix maps to /app/)
+ * - Local dev: two dirs up from routes/ to reach the repo root
+ */
+function resolveLeRoot() {
+  if (IS_CLOUD_RUN) return CENTRAL_ROOT;             // /app
+  return path.resolve(__opsDirname, '..', '..');      // repo root
+}
+
 // ── External Market Data: Approved Sources ────────────────────
 // Only these domains may be contacted for market intelligence.
 // Adding a source requires a code change + deploy (intentional safety gate).
@@ -267,30 +291,30 @@ export const ADMIN_TOOL_CATALOG = {
   },
 
   'get_sync_status': {
-    description: 'Get data sync freshness for all farms — last sync time, error count, whether SLO is met.',
+    description: 'Get data sync freshness for all farms — last sync time per data type, staleness status.',
     category: 'read',
     required: [],
-    optional: [],
-    handler: async () => {
+    optional: ['farm_id'],
+    handler: async (params) => {
       try {
         if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+        const farmFilter = params.farm_id ? 'AND farm_id = $1' : '';
+        const values = params.farm_id ? [params.farm_id] : [];
         const result = await dbQuery(`
-          SELECT farm_id, sync_type, last_success_at, last_failure_at, error_count,
-                 EXTRACT(EPOCH FROM (NOW() - last_success_at)) AS seconds_since_sync
+          SELECT farm_id, data_type, updated_at,
+                 EXTRACT(EPOCH FROM (NOW() - updated_at))::int AS seconds_since_sync
           FROM farm_data
-          WHERE sync_type IS NOT NULL
-          ORDER BY last_success_at DESC NULLS LAST
-        `);
-        // Fallback: if farm_data doesn't have sync_type, use last_updated
-        if (result.rows.length === 0) {
-          const fallback = await dbQuery(`
-            SELECT farm_id, data_type, updated_at,
-                   EXTRACT(EPOCH FROM (NOW() - updated_at)) AS seconds_since_update
-            FROM farm_data ORDER BY updated_at DESC
-          `);
-          return { ok: true, syncs: fallback.rows, note: 'Using farm_data updated_at as proxy' };
-        }
-        return { ok: true, syncs: result.rows };
+          ${farmFilter}
+          ORDER BY updated_at DESC NULLS LAST
+        `, values);
+        const syncs = result.rows.map(r => ({
+          farm_id: r.farm_id,
+          sync_type: r.data_type,
+          last_sync: r.updated_at,
+          seconds_since_sync: r.seconds_since_sync,
+          status: !r.updated_at ? 'no_data' : r.seconds_since_sync < 120 ? 'fresh' : r.seconds_since_sync < 600 ? 'aging' : r.seconds_since_sync < 1800 ? 'stale' : 'critical'
+        }));
+        return { ok: true, count: syncs.length, syncs };
       } catch (err) { return { ok: false, error: err.message }; }
     }
   },
@@ -3341,7 +3365,7 @@ export const ADMIN_TOOL_CATALOG = {
   },
 
   'check_dependencies': {
-    description: 'Check connectivity to external services: database, Square API, Stripe API, AWS SES, and SwitchBot. Use this to quickly diagnose if a failure is caused by an unreachable dependency.',
+    description: 'Check connectivity to external services: database, Square API, SMTP email, and SwitchBot. Use this to quickly diagnose if a failure is caused by an unreachable dependency.',
     category: 'read',
     required: [],
     optional: [],
@@ -3746,11 +3770,8 @@ export const ADMIN_TOOL_CATALOG = {
       try {
         const fs = await import('fs');
         const pathMod = await import('path');
-        const { fileURLToPath } = await import('url');
 
-        // Resolve LE root relative to Central
-        const centralDir = pathMod.default.dirname(fileURLToPath(import.meta.url));
-        const leRoot = pathMod.default.resolve(centralDir, '..', '..');
+        const leRoot = resolveLeRoot();
 
         // Sanitize: resolve and enforce path stays within LE root
         const requested = pathMod.default.resolve(leRoot, params.file_path);
@@ -3776,7 +3797,11 @@ export const ADMIN_TOOL_CATALOG = {
           /^greenreach-central\/.github\/skills\/.+\.md$/,
           /^greenreach-central\/faye-security-workbook\.md$/,
           /^greenreach-central\/.github\/.+\.md$/,
-          /^\.github\/.+\.md$/
+          /^\.github\/.+\.md$/,
+          /^server\.js$/,                   // Central server on Cloud Run
+          /^faye-security-workbook\.md$/,   // Cloud Run (no greenreach-central/ prefix)
+          /^FAYE_VISION\.md$/,              // Cloud Run
+          /^EVIE_VISION\.md$/               // Cloud Run
         ];
         const BLOCKED_PATTERNS = [
           /\.env/i, /secret/i, /credential/i, /\.pem$/i, /\.key$/i, /password/i, /token/i
@@ -3794,10 +3819,16 @@ export const ADMIN_TOOL_CATALOG = {
         // to Central root (one dir up from routes/).
         let filePath = requested;
         if (!fs.default.existsSync(filePath) && params.file_path.startsWith('greenreach-central/')) {
-          const centralRoot = pathMod.default.resolve(centralDir, '..');
           const stripped = params.file_path.replace(/^greenreach-central\//, '');
-          const altPath = pathMod.default.resolve(centralRoot, stripped);
-          if (altPath.startsWith(centralRoot) && fs.default.existsSync(altPath)) {
+          const altPath = pathMod.default.resolve(CENTRAL_ROOT, stripped);
+          if (altPath.startsWith(CENTRAL_ROOT) && fs.default.existsSync(altPath)) {
+            filePath = altPath;
+          }
+        }
+        // Also try .github/ paths directly from leRoot (Cloud Run: leRoot = /app)
+        if (!fs.default.existsSync(filePath) && params.file_path.startsWith('.github/')) {
+          const altPath = pathMod.default.resolve(CENTRAL_ROOT, params.file_path);
+          if (altPath.startsWith(CENTRAL_ROOT) && fs.default.existsSync(altPath)) {
             filePath = altPath;
           }
         }
@@ -3846,6 +3877,268 @@ export const ADMIN_TOOL_CATALOG = {
     }
   },
 
+
+  'search_codebase': {
+    description: 'Search across all allowed source files for a pattern (like grep). Returns matching lines with file path, line number, and context. Use this to trace data flows, find route handlers, locate DB queries, or understand how a feature is wired. Much faster than reading files one by one.',
+    category: 'read',
+    required: ['pattern'],
+    optional: ['file_filter', 'max_results'],
+    handler: async (params) => {
+      try {
+        const fs = await import('fs');
+        const pathMod = await import('path');
+
+        const leRoot = resolveLeRoot();
+
+        // Same allowlist as read_le_source_file
+        const ALLOWED_PATTERNS = [
+          /^server-foxtrot\.js$/,
+          /^routes\/.+\.js$/,
+          /^public\/.+\.(js|html|css)$/,
+          /^services\/.+\.js$/,
+          /^config\/.+\.js$/,
+          /^package\.json$/,
+          /^greenreach-central\/routes\/.+\.js$/,
+          /^greenreach-central\/services\/.+\.js$/,
+          /^greenreach-central\/server\.js$/,
+          /^greenreach-central\/config\/.+\.js$/,
+          /^greenreach-central\/public\/.+\.(js|html|css)$/,
+          /^greenreach-central\/package\.json$/,
+          /^greenreach-central\/.github\/.+\.md$/,
+          /^\.github\/.+\.md$/,
+          /^server\.js$/,
+          /^faye-security-workbook\.md$/,
+          /^FAYE_VISION\.md$/,
+          /^EVIE_VISION\.md$/
+        ];
+        const BLOCKED_PATTERNS = [
+          /\.env/i, /secret/i, /credential/i, /\.pem$/i, /\.key$/i, /password/i, /token/i
+        ];
+
+        // Collect all allowed files recursively
+        function walkDir(dir, baseDir) {
+          const files = [];
+          try {
+            const entries = fs.default.readdirSync(dir, { withFileTypes: true });
+            for (const entry of entries) {
+              const full = pathMod.default.join(dir, entry.name);
+              const rel = pathMod.default.relative(baseDir, full);
+              if (entry.name === 'node_modules' || entry.name === '.git') continue;
+              if (entry.isDirectory()) {
+                files.push(...walkDir(full, baseDir));
+              } else if (
+                ALLOWED_PATTERNS.some(p => p.test(rel)) &&
+                !BLOCKED_PATTERNS.some(p => p.test(rel))
+              ) {
+                files.push({ full, rel });
+              }
+            }
+          } catch (e) { /* skip unreadable dirs */ }
+          return files;
+        }
+
+        const allFiles = walkDir(leRoot, leRoot);
+
+        // Apply optional file_filter (glob-like substring match)
+        let targetFiles = allFiles;
+        if (params.file_filter) {
+          const filter = params.file_filter.toLowerCase();
+          targetFiles = allFiles.filter(f => f.rel.toLowerCase().includes(filter));
+        }
+
+        const regex = new RegExp(params.pattern, 'gi');
+        const maxResults = Math.min(parseInt(params.max_results, 10) || 80, 200);
+        const matches = [];
+
+        for (const file of targetFiles) {
+          if (matches.length >= maxResults) break;
+          try {
+            const content = fs.default.readFileSync(file.full, 'utf8');
+            const lines = content.split('\n');
+            for (let i = 0; i < lines.length; i++) {
+              if (regex.test(lines[i])) {
+                regex.lastIndex = 0; // Reset for global regex
+                const ctxStart = Math.max(0, i - 1);
+                const ctxEnd = Math.min(lines.length - 1, i + 1);
+                matches.push({
+                  file: file.rel,
+                  line: i + 1,
+                  match: lines[i].trim().substring(0, 200),
+                  context: lines.slice(ctxStart, ctxEnd + 1).map((l, idx) => `${ctxStart + idx + 1}: ${l}`).join('\n')
+                });
+                if (matches.length >= maxResults) break;
+              }
+            }
+          } catch (e) { /* skip unreadable files */ }
+        }
+
+        return {
+          ok: true,
+          pattern: params.pattern,
+          file_filter: params.file_filter || null,
+          files_searched: targetFiles.length,
+          match_count: matches.length,
+          matches
+        };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  'get_page_route_map': {
+    description: 'Given a page name or feature keyword, return the frontend files, backend routes, API endpoints, and database tables that power it. Cross-references the COMPLETE_SYSTEM_MAP and live route registrations. Use this to understand how a UI page connects to backend data for debugging display issues.',
+    category: 'read',
+    required: ['page_or_feature'],
+    optional: [],
+    handler: async (params) => {
+      try {
+        const fs = await import('fs');
+        const pathMod = await import('path');
+
+        const leRoot = resolveLeRoot();
+        const keyword = params.page_or_feature.toLowerCase();
+
+        const result = { page_or_feature: params.page_or_feature, frontend: [], backend_routes: [], api_endpoints: [], db_tables: [], data_files: [] };
+
+        // 1. Search COMPLETE_SYSTEM_MAP for the feature
+        const mapPaths = [
+          pathMod.default.join(leRoot, '.github', 'COMPLETE_SYSTEM_MAP.md'),
+          pathMod.default.join(leRoot, 'greenreach-central', '.github', 'COMPLETE_SYSTEM_MAP.md')
+        ];
+        for (const mapPath of mapPaths) {
+          try {
+            if (!fs.default.existsSync(mapPath)) continue;
+            const mapContent = fs.default.readFileSync(mapPath, 'utf8');
+            const lines = mapContent.split('\n');
+            const relevantSections = [];
+            let inSection = false;
+            let sectionLines = [];
+            for (const line of lines) {
+              if (line.match(/^#{1,3}\s/)) {
+                if (inSection && sectionLines.length > 0) relevantSections.push(sectionLines.join('\n'));
+                inSection = line.toLowerCase().includes(keyword);
+                sectionLines = inSection ? [line] : [];
+              } else if (inSection) {
+                sectionLines.push(line);
+              }
+            }
+            if (inSection && sectionLines.length > 0) relevantSections.push(sectionLines.join('\n'));
+
+            // Also search for keyword mentions in all sections
+            const keywordRegex = new RegExp(keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+            for (let i = 0; i < lines.length; i++) {
+              if (keywordRegex.test(lines[i])) {
+                keywordRegex.lastIndex = 0;
+                const ctxStart = Math.max(0, i - 2);
+                const ctxEnd = Math.min(lines.length - 1, i + 2);
+                const ctx = lines.slice(ctxStart, ctxEnd + 1).join('\n');
+                if (!relevantSections.some(s => s.includes(ctx.substring(0, 50)))) {
+                  relevantSections.push(ctx);
+                }
+              }
+            }
+            if (relevantSections.length > 0) {
+              result.system_map_refs = relevantSections.slice(0, 10);
+            }
+          } catch (e) { /* skip */ }
+        }
+
+        // 2. Find frontend HTML/JS/CSS files matching the keyword
+        const frontendDirs = [
+          pathMod.default.join(leRoot, 'public'),
+          pathMod.default.join(leRoot, 'greenreach-central', 'public')
+        ];
+        for (const dir of frontendDirs) {
+          try {
+            const walkFront = (d) => {
+              const entries = fs.default.readdirSync(d, { withFileTypes: true });
+              for (const entry of entries) {
+                const full = pathMod.default.join(d, entry.name);
+                if (entry.isDirectory() && entry.name !== 'node_modules') {
+                  walkFront(full);
+                } else if (/\.(html|js|css)$/.test(entry.name)) {
+                  const rel = pathMod.default.relative(leRoot, full);
+                  if (entry.name.toLowerCase().includes(keyword) || rel.toLowerCase().includes(keyword)) {
+                    result.frontend.push(rel);
+                  }
+                }
+              }
+            };
+            walkFront(dir);
+          } catch (e) { /* skip */ }
+        }
+
+        // 3. Find backend route files matching the keyword
+        const routeDirs = [
+          pathMod.default.join(leRoot, 'routes'),
+          pathMod.default.join(leRoot, 'greenreach-central', 'routes')
+        ];
+        for (const dir of routeDirs) {
+          try {
+            const entries = fs.default.readdirSync(dir);
+            for (const entry of entries) {
+              if (entry.toLowerCase().includes(keyword) && entry.endsWith('.js')) {
+                result.backend_routes.push(pathMod.default.relative(leRoot, pathMod.default.join(dir, entry)));
+              }
+            }
+          } catch (e) { /* skip */ }
+        }
+
+        // 4. Search route files for API endpoints matching the keyword
+        for (const dir of routeDirs) {
+          try {
+            const entries = fs.default.readdirSync(dir);
+            for (const entry of entries) {
+              if (!entry.endsWith('.js')) continue;
+              const full = pathMod.default.join(dir, entry);
+              const content = fs.default.readFileSync(full, 'utf8');
+              const routeRegex = /router\.(get|post|put|patch|delete)\s*\(\s*['"`]([^'"`]+)['"`]/gi;
+              let match;
+              while ((match = routeRegex.exec(content)) !== null) {
+                if (match[2].toLowerCase().includes(keyword)) {
+                  result.api_endpoints.push({
+                    method: match[1].toUpperCase(),
+                    path: match[2],
+                    file: pathMod.default.relative(leRoot, full)
+                  });
+                }
+              }
+            }
+          } catch (e) { /* skip */ }
+        }
+
+        // 5. Search for DB table references matching the keyword
+        for (const dir of routeDirs) {
+          try {
+            const entries = fs.default.readdirSync(dir);
+            for (const entry of entries) {
+              if (!entry.endsWith('.js')) continue;
+              const full = pathMod.default.join(dir, entry);
+              const content = fs.default.readFileSync(full, 'utf8');
+              const tableRegex = /(?:FROM|INTO|UPDATE|JOIN|TABLE)\s+(?:IF\s+NOT\s+EXISTS\s+)?(\w+)/gi;
+              let match;
+              const tables = new Set();
+              while ((match = tableRegex.exec(content)) !== null) {
+                const table = match[1].toLowerCase();
+                if (table.includes(keyword) && !['if', 'not', 'exists', 'select', 'set', 'where', 'values'].includes(table)) {
+                  tables.add(table);
+                }
+              }
+              if (tables.size > 0) {
+                result.db_tables.push({ file: pathMod.default.relative(leRoot, full), tables: [...tables] });
+              }
+            }
+          } catch (e) { /* skip */ }
+        }
+
+        // Deduplicate frontend
+        result.frontend = [...new Set(result.frontend)].slice(0, 20);
+        result.backend_routes = [...new Set(result.backend_routes)].slice(0, 20);
+        result.api_endpoints = result.api_endpoints.slice(0, 30);
+
+        return { ok: true, ...result };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
   'get_le_config_and_permissions': {
     description: 'Inspect the Light Engine configuration, feature flags, authentication settings, and permission rules. Shows what services are enabled, auth requirements, and data sharing config.',
     category: 'read',
@@ -3904,10 +4197,8 @@ export const ADMIN_TOOL_CATALOG = {
       try {
         const { execSync } = await import('child_process');
         const pathMod = await import('path');
-        const { fileURLToPath } = await import('url');
 
-        const centralDir = pathMod.default.dirname(fileURLToPath(import.meta.url));
-        const leRoot = pathMod.default.resolve(centralDir, '..', '..');
+        const leRoot = resolveLeRoot();
 
         const limit = Math.min(parseInt(params.limit, 10) || 20, 50);
         const results = {};

@@ -758,14 +758,24 @@
         try { return window.parent && window.parent.currentFarmId; } catch (_) { return null; }
       }
 
-      function fetchWithFarmAuth(url, opts = {}) {
-        const token = sessionStorage.getItem('token') || localStorage.getItem('token') || localStorage.getItem('admin_token');
-        const farmId =
+      function resolveFarmId() {
+        return (
           sessionStorage.getItem('farm_id') ||
           sessionStorage.getItem('farmId') ||
           localStorage.getItem('farm_id') ||
           localStorage.getItem('farmId') ||
-          getParentFarmId();
+          getParentFarmId()
+        );
+      }
+
+      function fetchWithFarmAuth(url, opts = {}) {
+        const token =
+          sessionStorage.getItem('token') ||
+          sessionStorage.getItem('auth_token') ||
+          localStorage.getItem('token') ||
+          localStorage.getItem('auth_token') ||
+          localStorage.getItem('admin_token');
+        const farmId = resolveFarmId();
         const headers = Object.assign({}, opts.headers || {});
         if (token) headers['Authorization'] = `Bearer ${token}`;
         if (farmId && !headers['x-farm-id']) headers['x-farm-id'] = farmId;
@@ -1122,9 +1132,10 @@
     }
 
     function renderSummaryCards(data, cropCount, dbProducts, pricingMap) {
-      // API returns: {activeTrays, totalPlants, farmCount}
+      // API returns: {activeTrays, totalPlants, generalInventoryLbs, farmCount}
       const totalTrays = data.activeTrays || 0;
       const totalPlants = data.totalPlants || 0;
+      const generalLbs = data.generalInventoryLbs || 0;
       const crops = cropCount || 0;
       dbProducts = dbProducts || [];
       pricingMap = pricingMap || {};
@@ -1142,6 +1153,13 @@
         totalRetailValue += qty * price;
       });
 
+      // Format weight: show oz for < 1 lb, lbs otherwise
+      const weightDisplay = generalLbs >= 1
+        ? `${generalLbs.toFixed(1)} lbs`
+        : generalLbs > 0
+          ? `${(generalLbs * 16).toFixed(1)} oz`
+          : '0 lbs';
+
       document.getElementById('summaryCards').innerHTML = `
         <div class="summary-card">
           <div class="label">Active Trays</div>
@@ -1152,6 +1170,11 @@
           <div class="label">Total Plants</div>
           <div class="value">${totalPlants.toLocaleString()}</div>
           <div class="subvalue">Across all trays</div>
+        </div>
+        <div class="summary-card">
+          <div class="label">Available Inventory</div>
+          <div class="value">${weightDisplay}</div>
+          <div class="subvalue">${data.generalInventoryCount || 0} products for wholesale</div>
         </div>
         <div class="summary-card">
           <div class="label">Crop Varieties</div>

@@ -1376,8 +1376,10 @@ function renderContextualSidebar() {
                     title: 'Management',
                     items: [
                         { label: 'All Farms', view: 'farms' },
+                        { label: 'Farm Management', view: 'farm-management' },
                         { label: 'Users', view: 'users' },
-                        { label: 'Recipes', view: 'recipes' }
+                        { label: 'Recipes', view: 'recipes' },
+                        { label: 'Salad Mixes', view: 'salad-mixes' }
                     ]
                 },
                 {
@@ -4767,11 +4769,16 @@ async function loadFarmInventory(farmId, trayCount) {
                 : [];
             inventoryData = trays.map(tray => {
                 const dth = tray.days_to_harvest ?? tray.daysToHarvest ?? null;
+                const unit = tray.unit || tray.quantity_unit || '';
+                const isWeightBased = ['lb', 'lbs', 'oz', 'kg'].includes(unit.toLowerCase());
+                const qty = tray.plant_count || tray.plantCount || tray.quantity || 0;
                 return {
                     trayId: tray.tray_code || tray.trayId || tray.id || tray.productId || tray.product_id || tray.sku || '--',
                     recipe: tray.recipe_name || tray.recipe || tray.productName || tray.product_name || tray.crop || 'Unknown',
                     location: tray.location || 'Unassigned',
-                    plantCount: tray.plant_count || tray.plantCount || tray.quantity || 0,
+                    plantCount: qty,
+                    unit: isWeightBased ? unit : 'plants',
+                    quantityDisplay: isWeightBased ? `${Number(qty).toFixed(1)} ${unit}` : `${qty} plants`,
                     age: tray.age_days || tray.daysOld || 0,
                     harvestEst: dth !== null ?
                         (dth <= 0 ? 'Today' : `${Math.max(0, Math.floor(dth))}d`) :
@@ -4818,7 +4825,7 @@ function renderInventoryTable() {
             <td><code>${item.trayId}</code></td>
             <td>${item.recipe}</td>
             <td>${item.location}</td>
-            <td>${item.plantCount}</td>
+            <td>${item.quantityDisplay || item.plantCount}</td>
             <td>${item.age}</td>
             <td>${item.harvestEst}</td>
             <td><span class="badge badge-${item.status === 'ready' ? 'success' : 'info'}">${item.status}</span></td>
@@ -5630,6 +5637,16 @@ async function navigate(view, element) {
         case 'tasks':
             document.getElementById('tasks-view').style.display = 'block';
             if (typeof loadTasks === 'function') { loadTasks(); loadCalendarDashboard(); }
+            break;
+
+        case 'farm-management':
+            document.getElementById('farm-management-view').style.display = 'block';
+            if (typeof loadFarmManagement === 'function') { loadFarmManagement(); }
+            break;
+
+        case 'salad-mixes':
+            document.getElementById('salad-mixes-view').style.display = 'block';
+            await loadSaladMixes();
             break;
             
         default:
@@ -9278,6 +9295,9 @@ function openAddRecipeModal() {
 async function editRecipe(recipeId) {
     try {
         const response = await authenticatedFetch(`/api/admin/recipes/${recipeId}`);
+        if (!response) {
+            throw new Error('Authentication required. Please log in again.');
+        }
         const data = await response.json();
         
         if (!isRecipeResponseOk(data)) {
@@ -9473,6 +9493,10 @@ async function saveRecipe(event) {
             body: JSON.stringify(payload)
         });
         
+        if (!response) {
+            throw new Error('Authentication required. Please log in again.');
+        }
+        
         const data = await response.json();
         
         if (!isRecipeResponseOk(data)) {
@@ -9507,6 +9531,10 @@ async function deleteRecipe(recipeId, recipeName) {
         const response = await authenticatedFetch(`/api/admin/recipes/${recipeId}`, {
             method: 'DELETE'
         });
+        
+        if (!response) {
+            throw new Error('Authentication required. Please log in again.');
+        }
         
         const data = await response.json();
         
@@ -13332,6 +13360,178 @@ function exportFleetReport() {
     a.click();
     URL.revokeObjectURL(url);
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SALAD MIX MANAGEMENT
+// ═══════════════════════════════════════════════════════════════════════════
+
+let saladMixesData = [];
+
+async function loadSaladMixes() {
+    try {
+        const token = localStorage.getItem('adminToken');
+        const resp = await fetch('/api/admin/salad-mixes', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await resp.json();
+        if (data.success) {
+            saladMixesData = data.mixes || [];
+            renderSaladMixesTable();
+        }
+    } catch (err) {
+        console.error('[SaladMixes] Load error:', err);
+    }
+}
+
+function renderSaladMixesTable() {
+    const tbody = document.getElementById('salad-mixes-tbody');
+    if (!tbody) return;
+
+    const countEl = document.getElementById('salad-mixes-count');
+    if (countEl) countEl.textContent = saladMixesData.length;
+
+    if (saladMixesData.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--text-secondary);">No salad mixes defined yet. Click "Add New Mix" to create one.</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = saladMixesData.map(mix => {
+        const compList = (mix.components || []).map(c =>
+            `${c.product_name} (${(parseFloat(c.ratio) * 100).toFixed(0)}%)`
+        ).join(', ');
+        return `<tr>
+            <td><strong>${mix.name}</strong></td>
+            <td>${mix.description || '-'}</td>
+            <td>${compList}</td>
+            <td><span class="status-badge ${mix.status === 'active' ? 'status-active' : 'status-inactive'}">${mix.status}</span></td>
+            <td>
+                <button class="btn btn-sm" onclick="openEditMixModal(${mix.id})" title="Edit">Edit</button>
+                <button class="btn btn-sm btn-danger" onclick="deleteSaladMix(${mix.id})" title="Delete">Delete</button>
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+function openAddMixModal() {
+    document.getElementById('mix-modal-title').textContent = 'Add New Salad Mix';
+    document.getElementById('mix-modal-id').value = '';
+    document.getElementById('mix-modal-name').value = '';
+    document.getElementById('mix-modal-description').value = '';
+    document.getElementById('mix-modal-status').value = 'active';
+    const container = document.getElementById('mix-components-container');
+    container.innerHTML = '';
+    addMixComponentRow();
+    addMixComponentRow();
+    document.getElementById('mix-modal').style.display = 'flex';
+}
+
+function openEditMixModal(mixId) {
+    const mix = saladMixesData.find(m => m.id === mixId);
+    if (!mix) return;
+    document.getElementById('mix-modal-title').textContent = 'Edit Salad Mix';
+    document.getElementById('mix-modal-id').value = mix.id;
+    document.getElementById('mix-modal-name').value = mix.name;
+    document.getElementById('mix-modal-description').value = mix.description || '';
+    document.getElementById('mix-modal-status').value = mix.status || 'active';
+    const container = document.getElementById('mix-components-container');
+    container.innerHTML = '';
+    for (const c of mix.components) {
+        addMixComponentRow(c.product_name, (parseFloat(c.ratio) * 100).toFixed(0), c.product_id);
+    }
+    document.getElementById('mix-modal').style.display = 'flex';
+}
+
+function closeMixModal() {
+    document.getElementById('mix-modal').style.display = 'none';
+}
+
+function addMixComponentRow(name, pct, productId) {
+    const container = document.getElementById('mix-components-container');
+    const rows = container.querySelectorAll('.mix-comp-row');
+    if (rows.length >= 4) return; // max 4 components
+    const row = document.createElement('div');
+    row.className = 'mix-comp-row';
+    row.style.cssText = 'display:grid;grid-template-columns:1fr 80px 30px;gap:8px;margin-bottom:8px;align-items:center;';
+    row.innerHTML = `
+        <input type="text" class="mix-comp-name" placeholder="Product name (e.g. Romaine Lettuce)" value="${name || ''}" style="padding:8px;border:1px solid var(--border-color);border-radius:6px;background:var(--bg-secondary);color:var(--text-primary);">
+        <input type="number" class="mix-comp-pct" placeholder="%" min="1" max="100" value="${pct || ''}" style="padding:8px;border:1px solid var(--border-color);border-radius:6px;background:var(--bg-secondary);color:var(--text-primary);text-align:center;">
+        <button onclick="this.parentElement.remove()" style="background:none;border:none;color:var(--danger-color);cursor:pointer;font-size:18px;">X</button>
+    `;
+    if (productId) {
+        const nameInput = row.querySelector('.mix-comp-name');
+        nameInput.dataset.productId = productId;
+    }
+    container.appendChild(row);
+}
+
+async function saveSaladMix() {
+    const id = document.getElementById('mix-modal-id').value;
+    const name = document.getElementById('mix-modal-name').value.trim();
+    const description = document.getElementById('mix-modal-description').value.trim();
+    const status = document.getElementById('mix-modal-status').value;
+
+    if (!name) { alert('Mix name is required'); return; }
+
+    const rows = document.querySelectorAll('#mix-components-container .mix-comp-row');
+    const components = [];
+    for (const row of rows) {
+        const pName = row.querySelector('.mix-comp-name').value.trim();
+        const pct = parseFloat(row.querySelector('.mix-comp-pct').value);
+        const pId = row.querySelector('.mix-comp-name').dataset.productId || pName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+        if (pName && pct > 0) {
+            components.push({ product_name: pName, product_id: pId, ratio: pct / 100 });
+        }
+    }
+
+    if (components.length < 2 || components.length > 4) {
+        alert('A mix must have 2-4 components'); return;
+    }
+    const sum = components.reduce((s, c) => s + c.ratio, 0);
+    if (Math.abs(sum - 1.0) > 0.01) {
+        alert(`Ratios must sum to 100%. Current: ${(sum * 100).toFixed(1)}%`); return;
+    }
+
+    try {
+        const token = localStorage.getItem('adminToken');
+        const method = id ? 'PUT' : 'POST';
+        const url = id ? `/api/admin/salad-mixes/${id}` : '/api/admin/salad-mixes';
+        const resp = await fetch(url, {
+            method,
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ name, description, status, components })
+        });
+        const data = await resp.json();
+        if (data.success) {
+            closeMixModal();
+            await loadSaladMixes();
+        } else {
+            alert(data.error || 'Failed to save mix');
+        }
+    } catch (err) {
+        console.error('[SaladMixes] Save error:', err);
+        alert('Failed to save mix');
+    }
+}
+
+async function deleteSaladMix(mixId) {
+    if (!confirm('Delete this salad mix template?')) return;
+    try {
+        const token = localStorage.getItem('adminToken');
+        const resp = await fetch(`/api/admin/salad-mixes/${mixId}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await resp.json();
+        if (data.success) {
+            await loadSaladMixes();
+        } else {
+            alert(data.error || 'Failed to delete');
+        }
+    } catch (err) {
+        console.error('[SaladMixes] Delete error:', err);
+    }
+}
+
 console.log('  window.DEBUG.getEvents(20) - Get last 20 events');
 console.log('  window.DEBUG.showPageViews() - Show all page views');
 console.log('  window.DEBUG.showLastError() - Show last error');

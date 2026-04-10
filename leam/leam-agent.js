@@ -620,9 +620,8 @@ let reconnectAttempt = 0;
 let shuttingDown = false;
 
 function buildWsUrl() {
-  const url = new URL(CENTRAL_WS_URL);
-  if (API_KEY) url.searchParams.set('token', ''); // not JWT -- use headers
-  return url.toString();
+  // Auth is via x-api-key / x-farm-id headers, not query params
+  return CENTRAL_WS_URL;
 }
 
 function connect() {

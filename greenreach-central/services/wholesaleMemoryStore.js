@@ -589,10 +589,12 @@ async function persistPayment(payment) {
        VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8)
        ON CONFLICT (payment_id) DO UPDATE
        SET status = EXCLUDED.status,
+           provider = EXCLUDED.provider,
+           amount = EXCLUDED.amount,
            metadata = EXCLUDED.metadata`,
       [payment.payment_id, payment.order_id, payment.amount, payment.currency || 'CAD',
        payment.provider, payment.status,
-       JSON.stringify({ split: payment.split, broker_fee_amount: payment.broker_fee_amount, net_to_farms_total: payment.net_to_farms_total }),
+       JSON.stringify({ split: payment.split, broker_fee_amount: payment.broker_fee_amount, net_to_farms_total: payment.net_to_farms_total, square_details: payment.square_details, greenreach_held: payment.greenreach_held }),
        payment.created_at]
     );
   } catch (err) {

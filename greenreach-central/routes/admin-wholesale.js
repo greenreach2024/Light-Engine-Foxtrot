@@ -2,7 +2,7 @@ import express from 'express';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { query, isDatabaseAvailable } from '../config/database.js';
-import { ingestRefundReversal } from '../services/revenue-accounting-connector.js';
+import { ingestPaymentRevenue, ingestFarmPayables, ingestRefundReversal } from '../services/revenue-accounting-connector.js';
 import {
   listAllOrders,
   listOrdersForBuyer,
@@ -613,6 +613,90 @@ router.patch('/orders/:orderId', async (req, res) => {
         console.error('[Admin Wholesale] Error updating order:', error);
         res.status(500).json({ status: 'error', message: error.message });
     }
+});
+
+/**
+ * POST /api/admin/wholesale/reconcile-accounting
+ * Reconcile in-memory orders with the database and generate missing accounting entries.
+ * - Re-persists all in-memory orders to DB (fixes the persistence gap)
+ * - Generates accounting journal entries for payments that have no matching entries
+ * Protected by admin JWT from authMiddleware on the parent router.
+ */
+router.post('/reconcile-accounting', async (req, res) => {
+  try {
+    if (!isDatabaseAvailable()) {
+      return res.status(503).json({ status: 'error', message: 'Database unavailable' });
+    }
+
+    const orders = await listAllOrders({ includeArchived: false });
+    const results = { persisted: 0, accounting_created: 0, skipped: 0, errors: [] };
+
+    for (const order of orders) {
+      const orderId = order.master_order_id;
+      try {
+        // Re-persist order to DB (now that schema is fixed)
+        await saveOrder(order);
+        results.persisted++;
+
+        // Check if accounting entries already exist for this order
+        const existing = await query(
+          "SELECT id FROM accounting_transactions WHERE source_txn_id LIKE $1 LIMIT 1",
+          [`%${orderId}%`]
+        );
+        if (existing.rows.length > 0) {
+          results.skipped++;
+          continue;
+        }
+
+        // Determine payment details
+        const payment = order.payment || {};
+        const amount = Number(payment.amount || order.grand_total || 0);
+        if (amount <= 0) {
+          results.skipped++;
+          continue;
+        }
+
+        const provider = payment.provider || 'manual';
+        const brokerFee = Number(payment.broker_fee_amount || order.broker_fee_total || 0);
+        const taxAmount = Number(order.totals?.tax_total || 0);
+
+        // Ingest payment revenue
+        const revenueResult = await ingestPaymentRevenue({
+          payment_id: payment.payment_id || `reconcile-${orderId}`,
+          order_id: orderId,
+          amount,
+          provider,
+          broker_fee: brokerFee,
+          tax_amount: taxAmount,
+          source_type: 'wholesale',
+          description: `Reconciled wholesale payment — order ${orderId}`,
+        });
+
+        if (revenueResult?.ok) {
+          results.accounting_created++;
+        }
+
+        // Ingest farm payables
+        const farmSubOrders = order.farm_sub_orders || [];
+        if (farmSubOrders.length > 0) {
+          await ingestFarmPayables({
+            order_id: orderId,
+            payment_id: payment.payment_id || `reconcile-${orderId}`,
+            farm_sub_orders: farmSubOrders,
+            provider,
+          });
+        }
+      } catch (err) {
+        results.errors.push({ order_id: orderId, error: err.message });
+      }
+    }
+
+    console.log(`[Reconcile] Done: ${results.persisted} persisted, ${results.accounting_created} accounting entries created, ${results.skipped} skipped, ${results.errors.length} errors`);
+    return res.json({ status: 'ok', data: results });
+  } catch (error) {
+    console.error('[Admin Wholesale] Reconcile error:', error);
+    res.status(500).json({ status: 'error', message: error.message });
+  }
 });
 
 export default router;

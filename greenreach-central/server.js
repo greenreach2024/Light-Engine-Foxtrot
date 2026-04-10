@@ -308,8 +308,8 @@ app.use(helmet({
       fontSrc: ["'self'", "data:", "https://cdn.jsdelivr.net", "https://cash-f.squarecdn.com", "https://square-fonts-production-f.squarecdn.com", "https://d1g145x70srn7h.cloudfront.net"],
       objectSrc: ["'none'"],
       mediaSrc: ["'self'", "blob:"],
-      frameSrc: ["'self'", "https://web.squarecdn.com", "https://pci-connect.squareup.com", "https://api.squareup.com", "https://connect.stripe.com", "https://www.securesuite.net"],  // Allow Square + Stripe iframes (incl. 3DS)
-      formAction: ["'self'", "https://www.securesuite.net"],  // Allow 3DS form submissions
+      frameSrc: ["'self'", "https://web.squarecdn.com", "https://pci-connect.squareup.com", "https://api.squareup.com", "https://connect.stripe.com", "https://www.securesuite.net", "https://*.visa.com", "https://*.mastercard.com"],  // Allow Square + Stripe iframes (incl. 3DS)
+      formAction: ["'self'", "https://www.securesuite.net", "https://*.visa.com", "https://*.mastercard.com", "https://pci-connect.squareup.com"],  // Allow 3DS form submissions
       upgradeInsecureRequests: null
     },
   },

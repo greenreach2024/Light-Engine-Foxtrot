@@ -129,8 +129,18 @@ router.post('/:farmId/heartbeat', async (req, res, next) => {
     
     const planType = metadata?.plan_type || metadata?.planType || 'light-engine';
     
-    // Extract api_url if present in metadata
-    const heartbeatApiUrl = metadata?.api_url || metadata?.url || metadata?.edge_url || null;
+    // Extract api_url if present in metadata, but reject non-routable addresses
+    let heartbeatApiUrl = metadata?.api_url || metadata?.url || metadata?.edge_url || null;
+    if (heartbeatApiUrl) {
+      try {
+        const h = new URL(String(heartbeatApiUrl)).hostname;
+        const isNonRoutable = h === 'localhost' || h === '127.0.0.1' || h.startsWith('10.') || h.startsWith('192.168.') || h.startsWith('169.254.') || h.startsWith('172.');
+        if (isNonRoutable) {
+          logger.warn(`[Heartbeat] Rejecting non-routable api_url ${heartbeatApiUrl} from farm ${farmId}`);
+          heartbeatApiUrl = null;
+        }
+      } catch (_) { heartbeatApiUrl = null; }
+    }
     
     // Check database availability
     const dbAvailable = await isDatabaseAvailable();

@@ -28,6 +28,7 @@
   // Detect page context for context-aware suggestions
   var pageContext = (function () {
     var path = window.location.pathname.toLowerCase();
+    if (path.indexOf('setup-wizard') >= 0) return 'setup-wizard';
     if (path.indexOf('farm-inventory') >= 0) return 'inventory';
     if (path.indexOf('planting-scheduler') >= 0) return 'planting';
     if (path.indexOf('nutrient') >= 0) return 'nutrients';
@@ -293,7 +294,7 @@
   var statusEl = document.createElement('div');
   statusEl.className = 'evie-ambient-status';
   statusEl.id = 'evie-ambient-status';
-  statusEl.textContent = 'Monitoring your farm';
+  statusEl.textContent = pageContext === 'setup-wizard' ? 'Ready to help with setup' : 'Monitoring your farm';
 
   // Notification bell (highly visible when unread)
   var notifBell = document.createElement('div');
@@ -573,7 +574,7 @@
     setEvieState('thinking');
 
     try {
-      var body = { message: text };
+      var body = { message: text, page_context: pageContext };
       if (conversationId) body.conversation_id = conversationId;
 
       var resp = await fetch(API_BASE + '/chat', {

@@ -1,8 +1,8 @@
 # GreenReach Platform -- Complete System Map
 
-**Version**: 1.6.0
-**Date**: March 28, 2026
-**Last Updated**: March 28, 2026 -- v1.6.0: Security hardening (9 patches, C2-C5 remediated), custom product CRUD, auth fallback, UI fixes (POS, inventory edit/delete, EVIE overlap). Previous: v1.4.0: Wholesale remediation (order expiry, payment reconciliation, inventory hold-to-commit), Square connection cleanup (wizard removed, standalone payment-setup.html), POS auto-login fix (embedded iframe token sharing), FAYE/EVIE document access
+**Version**: 2.0.0
+**Date**: April 8, 2026
+**Last Updated**: April 8, 2026 -- v2.0.0: Full Cloud Run migration (replaced all AWS/EB references), added PAYMENT_WORKFLOW.md reference, added FAYE diagnostic tools (get_sync_status fix, search_codebase, get_page_route_map), updated data flows for Google Cloud. Previous: v1.9.0: Activity Hub order sync fix, EVIE chat integration, calendar/tasks system. v1.8.0: Research Integration Layer, GWEN fixes, agent-caused Central outage recovery. v1.7.0: E.V.I.E. LLM fallback (Anthropic), F.A.Y.E. auto-recovery, heartbeat false-alert fix.
 **Authority**: This document is the canonical system map for the entire GreenReach platform. All agents MUST consult this before making changes to ensure full awareness of cross-system impacts.
 **Purpose**: Prevent agent-caused regressions by providing complete visibility into every page, route, data field, button, data flow, and dependency across the platform.
 
@@ -37,26 +37,27 @@
                            |
               +------------+------------+
               |                         |
-    greenreachgreens.com        LE-EB v3 CNAME
-    (Route53/CloudFront)        (direct EB URL)
+    greenreachgreens.com        Cloud Run URL
+    (pending DNS migration)     (direct URLs)
               |                         |
               v                         v
 +---------------------------+  +---------------------------+
-| GreenReach Central (EB)   |  | Light Engine Foxtrot (EB) |
-| greenreach-central-prod-v4|  | light-engine-foxtrot-     |
-|                           |  | prod-v3                   |
-| greenreach-central/       |  |                           |
-|   server.js               |  | server-foxtrot.js         |
+| GreenReach Central        |  | Light Engine Foxtrot      |
+| (Cloud Run)               |  | (Cloud Run)               |
+| greenreach-central        |  | light-engine              |
 |                           |  |                           |
-| PostgreSQL (RDS)          |  | EnvStore (in-memory)      |
-| farmStore (in-memory)     |  | env-state.json (file)     |
-| 70+ database tables       |  | NeDB / SQLite             |
-|                           |  |                           |
-| F.A.Y.E. (admin AI)      |  | E.V.I.E. (farm AI)       |
-| Admin dashboard           |  | Farm dashboard             |
-| Wholesale marketplace     |  | Device control             |
-| Grant wizard              |  | Sensor polling             |
-| Accounting                |  | Automation engine          |
+| greenreach-central/       |  | server-foxtrot.js         |
+|   server.js               |  |                           |
+|                           |  | EnvStore (in-memory)      |
+| AlloyDB (PostgreSQL)      |  | env-state.json (file)     |
+| farmStore (in-memory)     |  | NeDB / SQLite             |
+| 168+ database tables      |  |                           |
+|                           |  | E.V.I.E. (farm AI)       |
+| F.A.Y.E. (admin AI)      |  | Farm dashboard             |
+| Admin dashboard           |  | Device control             |
+| Wholesale marketplace     |  | Sensor polling             |
+| Grant wizard              |  | Automation engine          |
+| Accounting                |  |                           |
 +------------+--------------+  +------------+--------------+
              ^                              |
              |   POST /api/sync/telemetry   |
@@ -81,20 +82,19 @@
 | Property | Light Engine (LE) | GreenReach Central |
 |----------|-------------------|-------------------|
 | Server file | server-foxtrot.js | greenreach-central/server.js |
-| EB Environment | light-engine-foxtrot-prod-v3 | greenreach-central-prod-v4 |
-| Domain | EB CNAME (v2 hostname, v3 env) | greenreachgreens.com |
+| Cloud Run service | light-engine | greenreach-central |
+| URL | `https://light-engine-1029387937866.us-east1.run.app` | `https://greenreach-central-1029387937866.us-east1.run.app` |
+| Custom domain | None | greenreachgreens.com (pending DNS) |
 | Deploy from | Repo root | greenreach-central/ subdirectory |
 | Port | 8091 | 3000 (HTTP) + 3001 (WS) |
-| Platform | Node.js 20 / Amazon Linux 2023 | Node.js 20 / Amazon Linux 2023 |
-| Region | us-east-1 | us-east-1 |
+| Region | us-east1 | us-east1 |
 | Role | The Farm (sensors, devices, automation) | The Hub (data, admin, marketplace) |
 
 ### Critical Rules
 
 - The farm is 100% cloud. No physical device, no Pi, no edge hardware.
-- LE-EB IS the farm. "Edge mode" in code is a legacy naming artifact.
-- v2 environment is DEAD (CloudFormation DELETE_FAILED). NEVER deploy to v2.
-- CNAME swap: v3 answers on v2 URL. This is correct and intentional.
+- LE Cloud Run IS the farm. "Edge mode" in code is a legacy naming artifact.
+- AWS Elastic Beanstalk is DEPRECATED (April 2026). All workloads on Google Cloud Run.
 - Two public/ directories: root public/ (LE), greenreach-central/public/ (Central). NOT synced.
 - E.V.I.E. files must exist in BOTH public directories.
 - server-foxtrot.js NEVER imports from greenreach-central/routes/ (exception: 3 AI routes).
@@ -102,98 +102,83 @@
 
 ---
 
-## 2. AWS Infrastructure
+## 2. Google Cloud Infrastructure
 
-### Elastic Beanstalk Environments
+### Cloud Run Services
 
 #### Light Engine (Active)
 
 | Property | Value |
 |----------|-------|
-| Application | light-engine-foxtrot |
-| Environment | light-engine-foxtrot-prod-v3 |
-| CNAME | light-engine-foxtrot-prod-v2.eba-ukiyyqf9.us-east-1.elasticbeanstalk.com |
-| Platform | Node.js 20 on 64bit Amazon Linux 2023 |
-| Instance | t3.small |
-| Auto Scaling | Min 1, Max 4 |
-| Storage | gp3 20 GB |
-| Entry Point | node server-foxtrot.js (via Procfile) |
-| Health Check | /health (30s interval) |
-| Proxy | nginx |
+| Service | light-engine |
+| URL | `https://light-engine-1029387937866.us-east1.run.app` |
+| Service Account | `light-engine-sa@project-5d00790f-13a9-4637-a40.iam.gserviceaccount.com` |
+| Image | `us-east1-docker.pkg.dev/project-5d00790f-13a9-4637-a40/greenreach/light-engine:latest` |
+| Entry Point | node server-foxtrot.js |
+| CPU / Memory | 1 vCPU / 1Gi (CPU always-allocated) |
+| Min / Max Instances | 1 / 2 |
+| Execution Environment | Gen2 (Direct VPC egress) |
 
 #### GreenReach Central (Active)
 
 | Property | Value |
 |----------|-------|
-| Application | greenreach-central |
-| Environment | greenreach-central-prod-v4 |
-| Custom Domain | greenreachgreens.com (Route53/CloudFront) |
-| Platform | Node.js 20 on 64bit Amazon Linux 2023 |
-| Entry Point | npm start -> node server.js (via Procfile) |
-| Health Check | /health |
+| Service | greenreach-central |
+| URL | `https://greenreach-central-1029387937866.us-east1.run.app` |
+| Custom Domain | greenreachgreens.com (pending DNS migration) |
+| Service Account | `greenreach-central-sa@project-5d00790f-13a9-4637-a40.iam.gserviceaccount.com` |
+| Image | `us-east1-docker.pkg.dev/project-5d00790f-13a9-4637-a40/greenreach/greenreach-central:latest` |
+| Entry Point | node server.js |
+| CPU / Memory | 1 vCPU / 768Mi |
+| Min / Max Instances | 1 / 5 |
+| Execution Environment | Gen2 (Direct VPC egress) |
 
-#### Dead Environment (DO NOT USE)
-
-| Property | Value |
-|----------|-------|
-| Environment | light-engine-foxtrot-prod-v2 |
-| Status | TERMINATED / CloudFormation DELETE_FAILED |
-| DNS | DOES NOT RESOLVE |
-
-### AWS Services Used
+### Google Cloud Services Used
 
 | Service | Purpose |
 |---------|---------|
-| Elastic Beanstalk | Application hosting (2 environments) |
-| RDS PostgreSQL | Database (Central) |
-| Route 53 | DNS for greenreachgreens.com |
-| CloudFront | CDN/HTTPS termination |
-| ACM | TLS certificate (arn:aws:acm:us-east-1:634419072974:certificate/adfc4d01-f688-45a2-a313-24cb4601f8e1) |
-| CloudWatch | Metrics + logs (LightEngine/Foxtrot namespace, 60s publish, 7-day retention) |
-| SES | Email notifications |
-| SNS | Push notifications |
-| Secrets Manager | JWT_SECRET storage |
-| S3 | EB deployment artifacts |
-| Cost Explorer | Cloud cost accounting sync (optional) |
+| Cloud Run | Application hosting (2 services) |
+| AlloyDB | PostgreSQL-compatible database (cluster: greenreach-db, IP: 10.87.0.2) |
+| Artifact Registry | Docker image storage |
+| Secret Manager | All secrets (JWT, DB password, Square tokens, SMTP, API keys) |
+| Cloud Storage | Persistent file storage (bucket: greenreach-storage, mounted at /app/data) |
+| Cloud Scheduler | Keep-alive and cron jobs (3 jobs) |
+| VPC | Private networking (greenreach-vpc / greenreach-subnet) |
+
+### DEPRECATED: AWS (DO NOT USE)
+
+AWS Elastic Beanstalk environments are DEPRECATED (April 2026). Do not reference EB environments, use `eb` CLI commands, or deploy to AWS. See `.github/CLOUD_ARCHITECTURE.md`.
 
 ### Deployment Pipeline
 
 ```
 Developer Machine
        |
-       | git add -A && git stash
-       | eb deploy <env-name> --staged
+       | docker buildx build --platform linux/amd64 --push
        v
-AWS Elastic Beanstalk
+Artifact Registry (us-east1)
        |
-       | .platform/hooks/prebuild/
-       |   01_install_dependencies.sh
-       |   02_install_python_deps.sh
-       |
-       | .platform/hooks/predeploy/
-       |   00_preserve_runtime_data.sh
-       |   01_install_central_deps.sh
-       |
-       | .platform/hooks/postdeploy/
-       |   00_recover_runtime_data.sh
-       |   01_restart_web.sh
-       |   99_restart_app.sh
+       | gcloud run services update
        v
-Running Application
-
-Deploy Commands:
-  LE:      cd /Volumes/CodeVault/Projects/Light-Engine-Foxtrot && eb deploy light-engine-foxtrot-prod-v3 --staged
-  Central: cd greenreach-central && eb deploy greenreach-central-prod-v4 --staged
-  eb CLI:  /Users/petergilbert/Library/Python/3.9/bin/eb
+Cloud Run (new revision, traffic shifted)
 ```
 
-### .ebignore (LE Bundle Exclusions)
+Deploy Commands:
+```bash
+# Central
+docker buildx build --platform linux/amd64 \
+  -t us-east1-docker.pkg.dev/project-5d00790f-13a9-4637-a40/greenreach/greenreach-central:latest \
+  --push ./greenreach-central/
+gcloud run services update greenreach-central --region=us-east1 \
+  --image=us-east1-docker.pkg.dev/project-5d00790f-13a9-4637-a40/greenreach/greenreach-central:latest
 
-The LE bundle excludes greenreach-central/ entirely (191MB with video/images). The buildspec.yml separately installs Central dependencies. Key exclusions: node_modules/, .git/, .github/, tests/, mobile-app/, desktop-app/, docs/, *.md, .env files.
-
-### .ebignore (Central Bundle Exclusions)
-
-Central excludes: .git, .github, .vscode, node_modules, logs, *.md, public/videos/ (images are included for marketing).
+# LE
+docker buildx build --platform linux/amd64 \
+  -t us-east1-docker.pkg.dev/project-5d00790f-13a9-4637-a40/greenreach/light-engine:latest \
+  --push .
+gcloud run services update light-engine --region=us-east1 \
+  --image=us-east1-docker.pkg.dev/project-5d00790f-13a9-4637-a40/greenreach/light-engine:latest
+```
 
 ---
 
@@ -485,6 +470,13 @@ Central excludes: .git, .github, .vscode, node_modules, logs, *.md, public/video
 | /api/farm-sales/donations | donationsRouter | Donations |
 | /api/farm-sales/ai-agent | aiAgentRouter | AI sales agent |
 
+
+#### Wholesale Order Events (Inline Handlers)
+| HTTP | Path | Description |
+|------|------|-------------|
+| POST | /api/wholesale/order-events | Receive order notifications from Central (saves sub-orders to NeDB) |
+| GET | /api/wholesale/order-events | List farm sub-orders from NeDB orderStore |
+
 #### Farm and Setup Routes
 | Prefix | Router | Description |
 |--------|--------|-------------|
@@ -603,7 +595,7 @@ Central excludes: .git, .github, .vscode, node_modules, logs, *.md, public/video
 | /api/orders | routes/orders.js | Order management |
 | /api/alerts | routes/alerts.js | Alert configuration |
 | /api/sync | routes/sync.js | Farm data sync, API key auth |
-| /api/farm-settings | routes/farm-settings.js | Settings sync to edge |
+| /api/farm-settings | routes/farm-settings.js | Settings sync to edge (DB-backed via farm_data) |
 | /api/recipes | routes/recipes.js | Public recipe API |
 | /api/wholesale | routes/wholesale.js | Wholesale marketplace |
 | /api/square-proxy | routes/square-oauth-proxy.js | Square OAuth flow |
@@ -647,6 +639,7 @@ Central excludes: .git, .github, .vscode, node_modules, logs, *.md, public/video
 | /api/assistant-chat | routes/assistant-chat.js | E.V.I.E. chat |
 | /api/admin/assistant | routes/admin-assistant.js | F.A.Y.E. admin AI |
 | /api/admin/ops-agent | routes/admin-ops-agent.js | Operations agent |
+| /api/admin/calendar | routes/admin-calendar.js | Calendar events, tasks, reminders (CRUD) |
 
 #### Inline Compatibility Routes (server.js)
 | HTTP | Path | Description |
@@ -716,7 +709,7 @@ Central excludes: .git, .github, .vscode, node_modules, logs, *.md, public/video
 | Production Plan Scheduler | Weekly | Generate seeding plans |
 | Admin Session Cleanup | Every 30min | Delete expired sessions |
 | Grant Cleanup | Every 6 hours | Expire old grant applications |
-| Farm Data Sync | Every 5 min | Pull data from LE-EB |
+| Farm Data Sync | Every 5 min | Pull data from LE Cloud Run |
 | Daily Full Sync | 2 AM | Full data refresh |
 
 ---
@@ -727,7 +720,21 @@ Central excludes: .git, .github, .vscode, node_modules, logs, *.md, public/video
 
 #### GR-central-admin.html -- F.A.Y.E. Admin Dashboard
 - **Auth**: localStorage.admin_token required
-- **Navigation**: Sidebar (Overview, Farms, Users, Analytics, AI Rules, Network)
+- **Sidebar**: Dynamically rendered by `central-admin.js` -> `renderContextualSidebar()`, context-aware (platform/farm/room level)
+- **Sidebar (platform level)**:
+  - Overview: Dashboard, LE Fleet Monitoring, Anomalies, Alerts
+  - Wholesale: Admin Dashboard, Pricing & Products, Delivery Services
+  - Procurement: Catalog Management, Supplier Management, Revenue
+  - Analytics: AI Insights, Market Intelligence, Energy, Harvest Forecast
+  - Grant Intelligence: Grant Summary, Grant Users
+  - Finance: Network Accounting
+  - Marketing: Marketing Dashboard, S.C.O.T.T.
+  - Network: Network Dashboard, Grower Network
+  - AI Governance: F.A.Y.E. Core (/faye-core.html), AI Rules, AI Reference Sites, AI Agent Monitor
+  - Management: All Farms, Users, Recipes
+  - Field Tools: Edge Setup Guide (/landing-downloads.html)
+- **Sidebar (farm level)**: Farm Overview (Summary, Rooms, Devices), Operations (Inventory, Recipes, Environmental), Performance (Energy, Alerts)
+- **NOTE**: Research/G.W.E.N. are NOT in Central sidebar. They are LE-only features.
 - **Global Search**: #globalSearch (filters farms, devices, trays)
 - **Key Buttons**: Sync Stats, Export Report, Configure Farm, View Logs, Export Farm Data, Change Password, Logout
 - **Farm Info Edit**: owner, contact, phone, email, website, address fields (toggle editable)
@@ -749,7 +756,16 @@ Central excludes: .git, .github, .vscode, node_modules, logs, *.md, public/video
 
 #### LE-farm-admin.html -- E.V.I.E. Farm Dashboard
 - **Auth**: localStorage.token or sessionStorage.token
-- **Navigation**: Farm Summary (green), Farm Admin (purple), Inventory (yellow)
+- **Sidebar** (static HTML, sections listed in order):
+  - Farm Operations: Setup/Update (/LE-dashboard.html), Activity Hub (/views/tray-inventory.html), Farm Summary (/views/farm-summary.html), Inventory (/views/farm-inventory.html), Planting Scheduler (/views/planting-scheduler.html), Tray Setup (/views/tray-setup.html), Nutrient Management (/views/nutrient-management.html), Heat Map (/views/room-heatmap.html), Crop Weight Analytics (/views/crop-weight-analytics.html)
+  - Enterprise ERP: Procurement (/views/procurement-portal.html)
+  - Sales: Farm Sales Terminal (/farm-sales-pos.html)
+  - Administration: Settings, IoT Manager, Room Mapper, Network, Sustainability, Maintenance, Traceability
+  - Support: Help & Docs, Contact Support
+  - **Research**: Research Workspace (/views/research-workspace.html), Research Overview (/research-subscription.html)
+  - Intelligence: E.V.I.E. Core (/evie-core.html)
+- **NOTE**: Research Workspace and G.W.E.N. are LE features. G.W.E.N. is embedded inside Research Workspace (not a separate sidebar link). The Research sidebar section belongs ONLY in LE-farm-admin, NOT in GR-central-admin.
+- **Linking**: All sidebar items use `data-url` to load pages in an `<iframe id="admin-iframe">`. Research Workspace loads `/views/research-workspace.html` which contains G.W.E.N. chat, study management, datasets, ELN, compliance, grants, and all research tabs.
 - **Sections**:
   - Traceability: search lot codes, view lot details
   - Inventory: seeds, packaging, nutrients, equipment, supplies (CRUD + restock)
@@ -774,7 +790,7 @@ Central excludes: .git, .github, .vscode, node_modules, logs, *.md, public/video
 |------|---------|-------------------|-------------------|
 | farm-summary.html | Farm overview, environment | Temp, humidity per zone, alerts, health score | Refresh, auto-refresh 60s, tab resume |
 | farm-inventory.html | Tray inventory with AI insights | Tray counts, growth stage, harvest dates | Search, filter, AI insights popup |
-| tray-inventory.html | Detailed tray tracking | Tray IDs, locations, dates | Search, filter, bulk actions |
+| tray-inventory.html | Activity Hub with EVIE chat | Tray tracking, order management, EVIE assistant (floating orb, chat panel, voice input, task display) | Search, filter, bulk actions, EVIE chat, voice commands |
 | tray-setup.html | Tray configuration | Format templates, dimensions | Create format, save |
 | room-mapper.html | Room/zone configuration | Room layout, device assignments | Drag-drop zones, save config |
 | room-heatmap.html | Environmental heatmap | Temperature/humidity color grid | Zone selection, time range |
@@ -907,7 +923,7 @@ Files that MUST exist in both `greenreach-central/public/` and root `public/`:
 | research-workspace.html | Research dashboard -- embedded in LE-farm-admin iframe |
 | research-subscription.html | Research tier overview -- embedded in LE-farm-admin iframe |
 
-**Rule**: Edit in `greenreach-central/public/` first, then copy to root `public/`. The `.ebignore` excludes `greenreach-central/public/` from LE deploy, so root `public/` is the only source for LE-EB.
+**Rule**: Edit in `greenreach-central/public/` first, then copy to root `public/`. The LE `.dockerignore` excludes `greenreach-central/public/` from the LE Docker image, so root `public/` is the only source for LE Cloud Run.
 
 ---
 
@@ -945,7 +961,7 @@ User -> GR-central-admin-login.html
 Stage 1: Physical Sensors -> SwitchBot Cloud
   4x WoIOSensor (BLE) -> Hub Mini (WiFi) -> SwitchBot Cloud API
 
-Stage 2: LE-EB Polling (every 30s)
+Stage 2: LE Cloud Run Polling (every 30s)
   setupLiveSensorSync() -> GET https://api.switch-bot.com/v1.1/devices/{id}/status
   Auth: HMAC-SHA256 (SWITCHBOT_TOKEN + SWITCHBOT_SECRET)
   Response: { temperature, humidity, battery, version }
@@ -956,7 +972,7 @@ Stage 3: EnvStore (in-memory)
   -> 50-point history per sensor
   -> Persist to data/automation/env-state.json
 
-Stage 4: LE-EB GET /env
+Stage 4: LE Cloud Run GET /env
   -> Returns zones array with current, history (12 points), setpoints
   -> CORS enabled
 
@@ -972,7 +988,7 @@ Stage 6: Central Ingestion
 
 Stage 7: Central GET /env (DB-first)
   1. Try PostgreSQL farm_data WHERE data_type='telemetry'
-  2. Fallback: proxy to LE-EB GET /env
+  2. Fallback: proxy to LE Cloud Run GET /env
 
 Stage 8: Dashboard Display
   farm-summary.html -> fetchEnvData()
@@ -986,7 +1002,7 @@ Stage 8: Dashboard Display
 ```
 Trigger: Every 5 minutes + daily at 2 AM + manual via POST /api/sync/pull-farm-data
 
-Source: LE-EB static data files
+Source: LE Cloud Run static data files
   -> groups.json -> groups
   -> rooms.json -> rooms
   -> farm.json -> farm_profile
@@ -1185,7 +1201,7 @@ EnvStore
 | farm_id | VARCHAR(255) UNIQUE | e.g., FARM-MLTP9LVH-B0B85039 |
 | name | VARCHAR(255) | |
 | email | VARCHAR(255) | |
-| api_url | VARCHAR(500) | LE-EB URL |
+| api_url | VARCHAR(500) | LE Cloud Run URL |
 | status | VARCHAR(50) | active, inactive |
 | last_heartbeat | TIMESTAMP | |
 | slug | VARCHAR(100) UNIQUE | SaaS subdomain |
@@ -1713,6 +1729,11 @@ EnvStore
 - Repaired Research Workspace UI workflow API paths (`/dmp`, `/deadlines/upcoming`, `/deadlines/alerts`) to match backend routes.
 - Re-synchronized `public/views/research-workspace.html` and `greenreach-central/public/views/research-workspace.html` to keep LE/Central page behavior consistent.
 
+**Architecture Clarification (Mar 30, 2026)**
+- G.W.E.N. and farm-facing Research Workspace are Light Engine features.
+- GreenReach Central is the admin/hub system and should keep research APIs + admin intelligence, not farm-facing research UI hosting.
+- Central requests to `/views/research-workspace.html` and `/gwen-core.html` should redirect to LE.
+
 ---
 
 ## 9. Authentication Architecture
@@ -1899,60 +1920,67 @@ On login and token expiry, all farm-scoped browser storage keys are cleared.
 #### Database
 | Variable | Default | Used By | Required |
 |----------|---------|---------|----------|
-| DATABASE_URL | (none) | Central | Yes (prod) |
-| DB_HOST | localhost | LE | No |
-| DB_PORT | 5432 | LE | No |
-| DB_NAME | (none) | LE | No |
-| DB_USER | (none) | LE | No |
-| DB_PASSWORD | (none) | LE | No |
-| DB_SSL | true | Both | No |
-| RDS_HOSTNAME, RDS_PORT, RDS_DB_NAME, RDS_USERNAME, RDS_PASSWORD | (none) | Central (EB auto) | Auto |
+| DB_HOST | 10.87.0.2 | Both | Yes (prod) |
+| DB_PORT | 5432 | Both | No |
+| DB_NAME | greenreach_central | Both | Yes |
+| DB_USER | postgres | Both | Yes |
+| DB_PASSWORD | (Secret Manager: ALLOYDB_PASSWORD) | Both | Yes |
+| DATABASE_URL | (none) | Central (legacy compat) | Auto-constructed |
 
 #### Authentication
 | Variable | Default | Used By | Required |
 |----------|---------|---------|----------|
-| JWT_SECRET | auto-generated | Both | Yes (prod) |
-| GREENREACH_API_KEY | (none) | Central | Yes |
+| JWT_SECRET | (Secret Manager) | Both | Yes (prod) |
+| GREENREACH_API_KEY | (Secret Manager) | Both | Yes |
+| TOKEN_ENCRYPTION_KEY | (Secret Manager) | LE | Yes |
 
 #### SwitchBot (CRITICAL)
 | Variable | Default | Used By | Required |
 |----------|---------|---------|----------|
-| SWITCHBOT_TOKEN | (none) | LE | YES -- sensors halt silently if missing |
-| SWITCHBOT_SECRET | (none) | LE | YES -- sensors halt silently if missing |
+| SWITCHBOT_TOKEN | (Secret Manager) | LE | YES -- sensors halt silently if missing |
+| SWITCHBOT_SECRET | (Secret Manager) | LE | YES -- sensors halt silently if missing |
 
 #### Central Connection
 | Variable | Default | Used By | Required |
 |----------|---------|---------|----------|
-| GREENREACH_CENTRAL_URL | EB CNAME fallback | LE | No |
-| FARM_EDGE_URL | (none) | Central | No |
-| FARM_ID | (none) | Both | Yes |
+| FARM_EDGE_URL | `https://light-engine-1029387937866.us-east1.run.app` | Central | No |
+| FARM_ID | FARM-MLTP9LVH-B0B85039 | Both | Yes |
 
-#### Payments
+#### Payments (See `.github/PAYMENT_WORKFLOW.md`)
 | Variable | Default | Used By | Required |
 |----------|---------|---------|----------|
-| SQUARE_APPLICATION_ID | (none) | Central | For payments |
-| SQUARE_ACCESS_TOKEN | (none) | Central | For payments |
-| SQUARE_ENVIRONMENT | (none) | Central | For payments |
+| SQUARE_APP_ID | (none) | Central | For OAuth |
+| SQUARE_APP_SECRET | (Secret Manager) | Central | For OAuth |
+| SQUARE_ACCESS_TOKEN | (Secret Manager) | Both | For payments |
+| SQUARE_ENVIRONMENT | production | Both | Yes |
+| SQUARE_LOCATION_ID | (none) | Central | For direct-charge |
+| SQUARE_WEBHOOK_SIGNATURE_KEY | (Secret Manager) | Central | For webhooks |
+| WHOLESALE_COMMISSION_RATE | 0.12 | Central | No |
+| WHOLESALE_DEFAULT_SKU_FACTOR | 0.65 | Central | No |
 
 #### AI
 | Variable | Default | Used By | Required |
 |----------|---------|---------|----------|
-| OPENAI_API_KEY | (none) | Both | For AI features |
+| OPENAI_API_KEY | (Secret Manager) | Both | For AI features |
 | OPENAI_MODEL | gpt-4o-mini | LE | No |
+| ANTHROPIC_API_KEY | (Secret Manager) | Central | EVIE fallback |
 
-#### Notifications
+#### Notifications (Google Workspace SMTP -- no AWS)
 | Variable | Default | Used By | Required |
 |----------|---------|---------|----------|
-| SENDGRID_API_KEY | (none) | Central | For email |
-| TWILIO_ACCOUNT_SID | (none) | Central | For SMS |
-| TWILIO_AUTH_TOKEN | (none) | Central | For SMS |
-| TWILIO_PHONE_NUMBER | (none) | Central | For SMS |
+| SMTP_HOST | smtp.gmail.com | Central | For email |
+| SMTP_PORT | 587 | Central | For email |
+| SMTP_USER | info@greenreachgreens.com | Central | For email |
+| SMTP_PASS | (Secret Manager) | Central | For email (Google App Password) |
+| FROM_EMAIL | info@greenreachgreens.com | Central | For email |
+| ADMIN_ALERT_EMAIL | info@greenreachgreens.com | Central | For alerts |
+| ADMIN_ALERT_PHONE | (not set) | Central | For SMS alerts |
 
-#### CloudWatch
+#### GCS Storage
 | Variable | Default | Used By | Required |
 |----------|---------|---------|----------|
-| CLOUDWATCH_ENABLED | false | LE | No |
-| AWS_REGION | us-east-1 | Both | For AWS services |
+| USE_GCS | true | Both | On Cloud Run |
+| GCS_BUCKET | greenreach-storage | Both | On Cloud Run |
 
 ---
 
@@ -1961,16 +1989,17 @@ On login and token expiry, all farm-scoped browser storage keys are cleared.
 | Service | Env Vars | Purpose | Server |
 |---------|----------|---------|--------|
 | SwitchBot Cloud API | SWITCHBOT_TOKEN, SWITCHBOT_SECRET | Sensor data polling | LE |
-| Square Payments | SQUARE_APPLICATION_ID, SQUARE_ACCESS_TOKEN | Wholesale payments (12% commission). OAuth connection via standalone payment-setup.html (v1.4.0 -- LE-dashboard wizard removed) | Central |
-| Stripe | Farm-configured | Farm payment setup | LE |
+| Square Payments (Wholesale) | SQUARE_ACCESS_TOKEN, SQUARE_LOCATION_ID | Wholesale marketplace (12% commission via app_fee_money). See PAYMENT_WORKFLOW.md | Central |
+| Square OAuth (Per-Farm) | SQUARE_APP_ID, SQUARE_APP_SECRET | Per-farm Square OAuth. Route: /api/farm/square/*. OAuth via standalone payment-setup.html | Central |
+| Square Webhooks | SQUARE_WEBHOOK_SIGNATURE_KEY | Payment/refund status updates. Route: /api/webhooks/square | Central |
+| Stripe Webhooks | STRIPE_WEBHOOK_SECRET | Payment status updates. Route: /api/webhooks/stripe | Central |
+| Google Workspace SMTP | SMTP_HOST, SMTP_USER, SMTP_PASS | Email delivery (info@greenreachgreens.com) | Central |
+| Email-to-SMS Gateway | (via SMTP) | Critical alert SMS via carrier gateways | Central |
 | OpenAI (GPT-4) | OPENAI_API_KEY | AI insights, recipe recommendations | Both |
-| AWS CloudWatch | CLOUDWATCH_ENABLED, AWS_REGION | Metrics/logs | LE |
-| AWS SES | AWS credentials | Email delivery | Central |
-| AWS SNS | AWS credentials | Push notifications | Central |
-| AWS Secrets Manager | JWT_SECRET_ARN | Secret storage | Both |
-| AWS Cost Explorer | AWS credentials | Cloud cost accounting | Central |
-| SendGrid | SENDGRID_API_KEY | Email (alternative) | Central |
-| Twilio | TWILIO_* | SMS notifications | Central |
+| Anthropic (Claude) | ANTHROPIC_API_KEY | EVIE fallback LLM | Central |
+| Google Cloud Storage | USE_GCS, GCS_BUCKET | Persistent file storage (greenreach-storage bucket) | Both |
+| Google Secret Manager | (auto via IAM) | Credentials storage | Both |
+| AlloyDB | DB_HOST, DB_PASSWORD | PostgreSQL-compatible database (10.87.0.2) | Both |
 | Firebase | greenreach-firebase.json | Push notifications | Both |
 | IFTTT | IFTTT_KEY, IFTTT_WEBHOOK_KEY | Webhook automations | LE |
 | TP-Link Kasa | KASA_EMAIL, KASA_PASSWORD | Smart plug control | LE |
@@ -2161,11 +2190,12 @@ When you change a file, here is what else is affected:
 - **Impact**: POS was unusable when embedded as iframe in LE-farm-admin.
 - **Fix Applied**: Token fallback chain (checks both token and farm_token) plus embedded mode auto-login that inherits the admin session.
 
-#### E-021: Square Wizard Popup Blocked -- RESOLVED v1.4.0
-- **File**: greenreach-central/public/LE-dashboard.html
-- **Problem**: LE-dashboard payment wizard opened Square OAuth popups from inside an iframe. Browsers block popups from cross-origin iframes by default.
-- **Impact**: Farm operators could not connect their Square account through the setup wizard.
-- **Fix Applied**: Payment wizard removed from LE-dashboard. Replaced with standalone payment-setup.html page that handles Square OAuth directly (same-origin returnUrl, DOM API rendering).
+#### E-021: Square Wizard Popup Blocked -- RESOLVED v1.4.0, RECURRED + RESOLVED v1.8.0
+- **File**: public/payment-setup.html (both copies)
+- **Problem (v1.4.0)**: LE-dashboard payment wizard opened Square OAuth popups from inside an iframe. Browsers block popups from cross-origin iframes by default.
+- **Fix (v1.4.0)**: Payment wizard removed from LE-dashboard. Replaced with standalone payment-setup.html page that handles Square OAuth directly (same-origin returnUrl, DOM API rendering).
+- **Problem (v1.8.0)**: window.open(authUrl) called after await fetch() in startAuthorization(). Browsers only allow programmatic popups during synchronous user-gesture handlers. The await crosses the gesture boundary, causing the popup to be blocked.
+- **Fix (v1.8.0)**: Pre-open the popup window synchronously (window.open('about:blank')) during the click event before any await, then navigate the already-opened window to the auth URL after the fetch returns. Fallback link buttons still shown if even the pre-open is blocked.
 
 
 #### E-022: AI Pricing Assistant Per-Oz/Per-Lb Mismatch -- RESOLVED v10
@@ -2176,6 +2206,38 @@ When you change a file, here is what else is affected:
 - **Price range**: $3.53/each (tomato) to $66.97/lb (French Tarragon). 16 unique price points across 108 crops.
 - **Deploy**: Central only (ai-pricing-fix-perlb-20260327).
 
+
+### 13.6 RESOLVED -- AI AGENT + DATA PERSISTENCE FIXES (v1.7.0)
+
+#### E-023: RESOLVED -- E.V.I.E. LLM Failover (No Fallback Provider)
+- **Status**: RESOLVED
+- **File**: greenreach-central/routes/assistant-chat.js
+- **Problem**: E.V.I.E. used GPT-4o-mini as sole LLM. Any OpenAI outage caused full AI assistant failure.
+- **Fix Applied**: Added Anthropic (Claude Sonnet 4) as fallback LLM. chatWithAnthropicFallback() implements full tool-calling loop. Both /chat and /chat/stream catch blocks fall back to Anthropic on OpenAI failure. /status endpoint now reports llm.primary and llm.fallback availability.
+
+#### E-024: RESOLVED -- F.A.Y.E. Auto-Recovery (Tool Execution Failures)
+- **Status**: RESOLVED
+- **File**: greenreach-central/routes/admin-assistant.js
+- **Problem**: F.A.Y.E. tool execution failures (DB timeouts, connection drops) caused immediate error without retry.
+- **Fix Applied**: attemptAdminAutoRecovery() with 3 strategies: DB retry (1s), connection retry (2s), constraint violation hinting. Wired into both chatWithClaude and chatWithOpenAI tool loops.
+
+#### E-025: RESOLVED -- Heartbeat False Alerts (Data Source Mismatch)
+- **Status**: RESOLVED
+- **File**: greenreach-central/services/faye-intelligence.js, greenreach-central/routes/sync.js
+- **Problem**: F.A.Y.E. intelligence checked farm_heartbeats table, but sync-service heartbeats only wrote to farms.last_heartbeat. farm_heartbeats was permanently stale, triggering false "farm offline" alerts. Query also returned all historical rows instead of latest per farm.
+- **Fix Applied**: (1) faye-intelligence.js now queries farms table with GREATEST(farms.last_heartbeat, MAX(farm_heartbeats.last_seen_at)), one row per farm, filters inactive farms. (2) sync.js POST /api/sync/heartbeat now also inserts into farm_heartbeats. (3) Alert text removed "or hardware issues" (cloud-only architecture).
+
+#### E-026: RESOLVED -- Farm Settings Lost on Restart (In-Memory Only)
+- **Status**: RESOLVED
+- **File**: greenreach-central/routes/farm-settings.js
+- **Problem**: farmSettingsStore was a pure in-memory Map. Certifications, notification preferences, and display preferences were lost on EB restart with no recovery mechanism.
+- **Fix Applied**: Added persistSettingsToDB() that writes to farm_data table (data_type='farm_settings') on every change. Added hydrateFarmSettings() that restores from DB on module load. 4 persist calls (certifications, ack, notify-preferences, display-preferences).
+
+#### E-027: RESOLVED -- Custom Product Image Upload Broken (Field Name Mismatch)
+- **Status**: RESOLVED
+- **File**: greenreach-central/public/central-admin.js, greenreach-central/routes/custom-products.js
+- **Problem**: Frontend sent image file with field name 'thumbnail' (formData.append('thumbnail', ...)) but backend multer expected field name 'image' (upload.single('image')). All image uploads silently failed with req.file being undefined.
+- **Fix Applied**: Changed frontend to formData.append('image', thumbnailFile) to match backend expectation.
 
 #### Pricing Formula Reference (v1.3.0)
 - **Formula**: `wholesale_price = max(floor, retail_price * sku_factor)`
@@ -2336,19 +2398,29 @@ The `analyzeAndPushToAllFarms()` service runs every 30 minutes, pushing a `netwo
 
 ### Deploy Quick Reference
 
-```
-# Deploy Light Engine ONLY
-cd /Volumes/CodeVault/Projects/Light-Engine-Foxtrot
-git add -A && git stash
-/Users/petergilbert/Library/Python/3.9/bin/eb deploy light-engine-foxtrot-prod-v3 --staged
+```bash
+# Build and push (ALWAYS --platform linux/amd64 on Apple Silicon)
+export PATH="/Applications/Docker.app/Contents/Resources/bin:$PATH"
 
 # Deploy Central ONLY
-cd /Volumes/CodeVault/Projects/Light-Engine-Foxtrot/greenreach-central
-/Users/petergilbert/Library/Python/3.9/bin/eb deploy greenreach-central-prod-v4 --staged
+docker buildx build --platform linux/amd64 \
+  -t us-east1-docker.pkg.dev/project-5d00790f-13a9-4637-a40/greenreach/greenreach-central:latest \
+  --push ./greenreach-central/
+gcloud run services update greenreach-central --region=us-east1 \
+  --image=us-east1-docker.pkg.dev/project-5d00790f-13a9-4637-a40/greenreach/greenreach-central:latest
+
+# Deploy LE ONLY
+docker buildx build --platform linux/amd64 \
+  -t us-east1-docker.pkg.dev/project-5d00790f-13a9-4637-a40/greenreach/light-engine:latest \
+  --push .
+gcloud run services update light-engine --region=us-east1 \
+  --image=us-east1-docker.pkg.dev/project-5d00790f-13a9-4637-a40/greenreach/light-engine:latest
 
 # Deploy BOTH (when changes span both)
 # Deploy Central first, then LE
 ```
+
+**BANNED**: ALL `eb` CLI commands. Platform migrated to Google Cloud Run (April 2026).
 
 ---
 
@@ -2764,7 +2836,172 @@ The inventory pipeline errors E-010 through E-015 were all RESOLVED in v1.2.0. T
 
 ---
 
+## 17. Square Payment Connection -- Multi-Tenant Architecture
+
+### 17.1 Overview
+
+Two completely separate Square integrations exist. They use different credentials, different scopes, different storage backends, and serve different business purposes.
+
+| System | Route Prefix | Server | Purpose |
+|--------|-------------|--------|---------|
+| Farm-Individual Square | /api/farm/square/* | LE (proxied via Central) | Each farm processes their own customer payments (POS retail, online store, subscriptions) |
+| Wholesale Marketplace Square | /api/square-proxy/* | Central | GreenReach collects 12% broker commission via app_fee_money on wholesale orders |
+
+This section documents the **Farm-Individual Square** system only. Wholesale is documented in the wholesale pipeline section.
+
+### 17.2 Files
+
+| File | Location | Purpose |
+|------|----------|---------|
+| routes/farm-square-setup.js | LE root | Backend: 7 endpoints (authorize, callback, status, refresh, settings, disconnect, test-payment) |
+| public/payment-setup.html | Both public/ dirs | Frontend: standalone Square OAuth connection page |
+| greenreach-central/server.js (lines ~3250-3277) | Central | Proxy: forwards all /api/farm/square/* requests to LE via edgeProxy() |
+| greenreach-central/routes/square-oauth-proxy.js | Central | Wholesale-only (NOT used by farm-individual flow) |
+
+### 17.3 Environment Variables (LE)
+
+| Variable | Purpose | Required |
+|----------|---------|----------|
+| SQUARE_APPLICATION_ID | Square app client ID (sq0idp-...) | Yes |
+| SQUARE_APPLICATION_SECRET | Square app secret (sq0csp-...) | Yes |
+| SQUARE_ENVIRONMENT | "production" or "sandbox" | Yes (defaults to "production") |
+| FARM_SQUARE_REDIRECT_URI | OAuth callback URL. Must be: https://greenreachgreens.com/api/farm/square/callback | Yes |
+| TOKEN_ENCRYPTION_KEY | 64-char hex key for AES-256-GCM token encryption | Yes in production |
+| SQUARE_LOCATION_ID | Default Square location (used by wholesale, not farm-individual) | No |
+| SQUARE_ACCESS_TOKEN | GreenReach's own Square token (wholesale only, not farm-individual) | No |
+
+### 17.4 OAuth Connection Flow
+
+```
+Step 1: User opens payment-setup.html
+        (served from LE or Central -- both copies exist)
+        Page reads farmId from URL query param or localStorage
+
+Step 2: User clicks "Connect to Square"
+        -> window.open('about:blank', '_blank')  [pre-opens window SYNCHRONOUSLY in click handler]
+        -> POST /api/farm/square/authorize { farmId, farmName }
+           (if served from Central, proxied to LE via edgeProxy)
+
+Step 3: LE /authorize handler (farm-square-setup.js)
+        -> Validates farmId + farmName present
+        -> Builds redirect_uri from FARM_SQUARE_REDIRECT_URI env var
+           (fallback: req.protocol + '://' + req.get('host') + '/api/farm/square/callback')
+        -> Creates signed state token (HMAC-SHA256, 10-min expiry)
+           State payload: { farm_id, farm_name, redirect_uri, timestamp, nonce }
+        -> Stores state in oauthStates Map + saves to disk
+        -> Returns { authorizationUrl, state, expiresIn: 600 }
+
+Step 4: Browser navigates pre-opened window to Square OAuth URL
+        https://connect.squareup.com/oauth2/authorize?
+          client_id=<SQUARE_APPLICATION_ID>
+          &scope=PAYMENTS_WRITE MERCHANT_PROFILE_READ ORDERS_WRITE ORDERS_READ
+          &session=false
+          &state=<signed_state_token>
+          &redirect_uri=https://greenreachgreens.com/api/farm/square/callback
+
+Step 5: User logs into Square and authorizes the app
+
+Step 6: Square redirects to callback URL with ?code=<auth_code>&state=<state_token>
+        -> Hits Central (greenreachgreens.com)
+        -> Central proxy (server.js line ~3252) forwards to LE via edgeProxy
+           (custom handler passes query string, returns HTML content-type)
+
+Step 7: LE /callback handler (farm-square-setup.js)
+        -> Validates state token (HMAC signature + 10-min expiry)
+        -> Extracts farm_id + redirect_uri from state payload
+        -> POST https://connect.squareup.com/oauth2/token
+           { client_id, client_secret, code, grant_type, redirect_uri }
+        -> Receives access_token, refresh_token, expires_at, merchant_id
+        -> Fetches merchant locations via Square SDK
+        -> Encrypts access_token + refresh_token (AES-256-GCM)
+        -> Stores in farmSquareAccounts Map[farmId] + saves to disk
+        -> Returns HTML page with success message
+
+Step 8: Callback HTML signals opener
+        -> Writes to localStorage: key="square_connected_signal"
+        -> Calls window.opener.postMessage(signalData, "*")
+        -> Auto-closes after 3 seconds
+
+Step 9: payment-setup.html detects connection
+        -> Storage event listener catches square_connected_signal
+        -> OR: polling (every 5s, max 72 attempts) hits GET /status
+        -> Shows success: merchant name + location
+```
+
+### 17.5 Multi-Tenant Isolation
+
+**Token storage is keyed by farmId.** Each farm's encrypted tokens are stored separately in a single Map (in-memory) and a single JSON file (on disk).
+
+```
+farmSquareAccounts Map:
+  "FARM-MLTP9LVH-B0B85039" -> { merchantId, locationId, accessToken: {encrypted}, ... }
+  "FARM-XXXXXXXX-YYYYYYYY" -> { merchantId, locationId, accessToken: {encrypted}, ... }
+```
+
+**Isolation guarantees:**
+- GET /status requires farmId in query param or x-farm-id header -- returns only that farm's status
+- POST /authorize stores state token with farm_id embedded -- callback extracts it
+- POST /refresh, /disconnect, /settings all resolve farmId from header or body
+- No endpoint returns a list of all connected farms (no enumeration vector)
+- Tokens are encrypted at rest -- raw tokens never written to disk
+
+**Global encryption key:** All farms share a single TOKEN_ENCRYPTION_KEY (AES-256-GCM). Each token gets a unique random IV (16 bytes) and auth tag, so identical plaintext tokens produce different ciphertext. The key itself must be protected as a platform secret.
+
+### 17.6 Token Persistence
+
+| Location | Format | Purpose |
+|----------|--------|---------|
+| In-memory Map | farmSquareAccounts (farmId -> account) | Fast runtime lookups |
+| /var/app/data/greenreach/farm-square-tokens.json | JSON (encrypted values) | Survives LE restarts |
+| /var/app/data/greenreach/farm-square-oauth-states.json | JSON (pending auths) | Survives restarts during active OAuth flows |
+
+On startup, farm-square-setup.js calls loadTokensFromDisk() and loadOauthStatesFromDisk() to rehydrate. Legacy fallback checks ./data/ directory and migrates if found.
+
+### 17.7 Popup Blocker Fix History
+
+| Date | Commit | Problem | Fix |
+|------|--------|---------|-----|
+| Mar 26, 2026 | 5dc98559 | Wizard flow broken | Route buttons to guided setup |
+| Mar 26, 2026 | 99e9f764 | postMessage unreliable | Poll status instead |
+| Mar 26, 2026 | 5562e0cc | localStorage signal for iframe compat | Added localStorage-based signaling |
+| Mar 27, 2026 | 0676ee54 | Iframe popups blocked by browsers | Removed iframe wizard, standalone payment-setup.html |
+| Mar 29, 2026 | (current) | window.open() after await loses click context | Pre-open window synchronously before fetch, navigate after |
+
+Root cause pattern: browsers only allow window.open() during synchronous user-gesture handlers. Any await or setTimeout between the click and the open causes the popup to be blocked.
+
+### 17.8 Square Developer Dashboard Requirements
+
+The Square Developer Dashboard (developer.squareup.com) must have these settings for the OAuth flow to work:
+
+- **Application ID**: Must match SQUARE_APPLICATION_ID env var on LE
+- **Application Secret**: Must match SQUARE_APPLICATION_SECRET env var on LE
+- **OAuth Redirect URL**: Must be exactly `https://greenreachgreens.com/api/farm/square/callback`
+- **OAuth Scopes**: PAYMENTS_WRITE, MERCHANT_PROFILE_READ, ORDERS_WRITE, ORDERS_READ
+- **Production access**: Must be approved and active
+
+If the redirect URL in the Dashboard does not exactly match FARM_SQUARE_REDIRECT_URI, Square will reject the callback and the flow silently fails.
+
+### 17.9 Central Proxy Configuration
+
+Central does NOT mount farm-square-setup.js routes directly. Instead, server.js defines inline proxy routes (lines ~3250-3277) that forward to LE via edgeProxy():
+
+| Central Route | Method | LE Target | Notes |
+|---------------|--------|-----------|-------|
+| /api/farm/square/status | GET | edgeProxy | JSON passthrough |
+| /api/farm/square/authorize | POST | edgeProxy | JSON passthrough |
+| /api/farm/square/callback | GET | Custom proxy | HTML content-type, query string forwarded |
+| /api/farm/square/refresh | POST | edgeProxy | JSON passthrough |
+| /api/farm/square/settings | POST | edgeProxy | JSON passthrough |
+| /api/farm/square/disconnect | POST | edgeProxy | JSON passthrough |
+| /api/farm/square/test-payment | POST | edgeProxy | JSON passthrough |
+
+The callback proxy uses a custom handler (not edgeProxy) because it returns HTML, not JSON. It forwards the full query string to LE and passes through the response content-type.
+
+Central resolves the LE URL via resolveEdgeUrlForProxy(): FARM_EDGE_URL env var (currently `https://light-engine-1029387937866.us-east1.run.app`).
+
+---
+
 **END OF COMPLETE SYSTEM MAP**
-**Document Version**: 1.6.0
-**Generated**: March 28, 2026
+**Document Version**: 2.0.0
+**Generated**: March 29, 2026
 **Next Review**: Update when any new routes, pages, tables, or integrations are added

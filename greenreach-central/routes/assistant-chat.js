@@ -5426,7 +5426,7 @@ router.post('/chat', async (req, res) => {
     });
   }
 
-  const { message, conversation_id, farm_id } = req.body;
+  const { message, conversation_id, farm_id, page_context } = req.body;
   if (!message || typeof message !== 'string' || message.trim().length === 0) {
     return res.status(400).json({ ok: false, error: 'Message is required' });
   }
@@ -5518,6 +5518,13 @@ router.post('/chat', async (req, res) => {
       systemPrompt = sysMsg?.content || await buildSystemPrompt(farmId);
     }
 
+
+    // Inject page context for setup-wizard awareness
+    if (page_context === 'setup-wizard') {
+      systemPrompt += '\n\nCURRENT PAGE CONTEXT: The farmer is on the Setup Wizard page right now. They are going through first-time farm setup. Be especially helpful and proactive about guiding them through each step. Use get_onboarding_status and get_setup_progress to check what is done and what remains. Offer to walk them through setup conversationally.';
+    } else if (page_context) {
+      systemPrompt += '\nCurrent page: ' + page_context;
+    }
     // Assemble messages
     const messages = [
       { role: 'system', content: systemPrompt },
@@ -5953,7 +5960,7 @@ router.post('/chat/stream', async (req, res) => {
     return res.status(503).json({ ok: false, error: 'AI assistant not available — no LLM provider configured' });
   }
 
-  const { message, conversation_id, farm_id, image_url } = req.body;
+  const { message, conversation_id, farm_id, image_url, page_context: streamPageContext } = req.body;
   if (!message || typeof message !== 'string' || message.trim().length === 0) {
     return res.status(400).json({ ok: false, error: 'Message is required' });
   }
@@ -5995,6 +6002,13 @@ router.post('/chat/stream', async (req, res) => {
     } else {
       const sysMsg = history.find(m => m.role === 'system');
       systemPrompt = sysMsg?.content || await buildSystemPrompt(farmId);
+    }
+
+    // Inject page context for setup-wizard awareness (streaming)
+    if (streamPageContext === 'setup-wizard') {
+      systemPrompt += '\n\nCURRENT PAGE CONTEXT: The farmer is on the Setup Wizard page right now. They are going through first-time farm setup. Be especially helpful and proactive about guiding them through each step. Use get_onboarding_status and get_setup_progress to check what is done and what remains. Offer to walk them through setup conversationally.';
+    } else if (streamPageContext) {
+      systemPrompt += '\nCurrent page: ' + streamPageContext;
     }
 
     // Build user message content (text + optional image)

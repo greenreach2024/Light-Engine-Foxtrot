@@ -1161,7 +1161,7 @@ router.get('/reports/income-statement', async (req, res) => {
   }
 
   try {
-    const farmId = req.query.farm_id || req.farmId || null;
+    const farmId = req.query.farm_id || null;
     const from = req.query.from || new Date(new Date().getFullYear(), 0, 1).toISOString();
     const to = req.query.to || new Date().toISOString();
 
@@ -1206,13 +1206,13 @@ router.get('/reports/income-statement', async (req, res) => {
       };
 
       const type = (row.account_type || '').toLowerCase();
-      if (type === 'revenue' || type === 'income' || type === 'sales') {
+      if (type === 'revenue' || type === 'income' || type === 'sales' || type === 'operating_income') {
         revenue.push(entry);
         totalRevenue += Math.abs(net);
       } else if (type === 'cogs' || type === 'cost_of_goods_sold') {
         cogs.push(entry);
         totalCOGS += Math.abs(net);
-      } else if (type === 'expense' || type === 'operating_expense') {
+      } else if (type === 'expense' || type === 'operating_expense' || type === 'research_development') {
         expenses.push(entry);
         totalExpenses += Math.abs(net);
       }
@@ -1249,7 +1249,7 @@ router.get('/reports/balance-sheet', async (req, res) => {
   }
 
   try {
-    const farmId = req.query.farm_id || req.farmId || null;
+    const farmId = req.query.farm_id || null;
     const asOf = req.query.as_of || new Date().toISOString();
 
     let baseSql = `
@@ -1291,11 +1291,11 @@ router.get('/reports/balance-sheet', async (req, res) => {
       };
 
       const type = (row.account_type || '').toLowerCase();
-      if (type === 'asset' || type === 'cash' || type === 'receivable' || type === 'accounts_receivable') {
+      if (type === 'asset' || type === 'cash' || type === 'receivable' || type === 'accounts_receivable' || type === 'current_asset') {
         entry.balance = Number(row.total_debits) - Number(row.total_credits);
         assets.push(entry);
         totalAssets += entry.balance;
-      } else if (type === 'liability' || type === 'payable' || type === 'accounts_payable') {
+      } else if (type === 'liability' || type === 'payable' || type === 'accounts_payable' || type === 'current_liability') {
         entry.balance = Number(row.total_credits) - Number(row.total_debits);
         liabilities.push(entry);
         totalLiabilities += entry.balance;

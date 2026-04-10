@@ -73,6 +73,48 @@ async function logOrderAction(orderId, farmId, action, details = {}, performedBy
 }
 
 /**
+ * Propagate a sub-order status change to Central so it persists in AlloyDB.
+ * Uses POST /api/wholesale/order-statuses (bulk endpoint) which updates the
+ * sub-order inside order_data.farm_sub_orders — not just the master status.
+ * Non-blocking: failures are logged but do not break the local accept flow.
+ */
+async function propagateStatusToCentral(masterOrderId, subOrderId, farmId, action) {
+  const centralUrl = getCentralUrl();
+  const apiKey = process.env.GREENREACH_API_KEY || process.env.WHOLESALE_FARM_API_KEY || '';
+  // Map LE action to a status Central understands
+  const statusMap = { accept: 'farm_accepted', modify: 'farm_modified', decline: 'farm_declined' };
+  const targetStatus = statusMap[action] || 'processing';
+  try {
+    const resp = await fetch(`${centralUrl}/api/wholesale/order-statuses`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Farm-ID': farmId,
+        'X-API-Key': apiKey
+      },
+      body: JSON.stringify({
+        updates: [{
+          order_id: masterOrderId,
+          sub_order_id: subOrderId,
+          status: targetStatus,
+          farm_id: farmId,
+          timestamp: new Date().toISOString()
+        }]
+      }),
+      signal: AbortSignal.timeout(8000)
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (resp.ok) {
+      console.log(`[Activity Hub] Propagated ${action} (${targetStatus}) to Central for order ${masterOrderId}, sub ${subOrderId}`);
+    } else {
+      console.warn(`[Activity Hub] Central order-statuses returned ${resp.status}:`, data.error || data.message || '');
+    }
+  } catch (err) {
+    console.error(`[Activity Hub] Central propagation failed (non-fatal):`, err.message);
+  }
+}
+
+/**
  * Helper: find a sub-order by its ID (checks sub_order_id, _id, and id fields)
  */
 async function findSubOrder(orderId) {
@@ -140,12 +182,19 @@ router.get('/all', async (req, res) => {
                 updated_at: od.created_at || new Date().toISOString()
               };
               hydratedSubs.push(subOrder);
-              orderStore.saveSubOrder(subOrder).catch(err =>
-                console.warn(`[Activity Hub] NeDB backfill failed for ${subOrderId}:`, err.message)
-              );
             }
           }
+          // Persist hydrated sub-orders to NeDB before returning.
+          // Awaiting ensures local state is durable for subsequent accept/decline.
           if (hydratedSubs.length > 0) {
+            const saveResults = await Promise.allSettled(
+              hydratedSubs.map(s => orderStore.saveSubOrder(s))
+            );
+            const failed = saveResults.filter(r => r.status === 'rejected');
+            if (failed.length > 0) {
+              console.error(`[Activity Hub] NeDB backfill: ${failed.length}/${hydratedSubs.length} saves failed`);
+              for (const f of failed) console.warn('[Activity Hub] Backfill error:', f.reason?.message || f.reason);
+            }
             console.log(`[Activity Hub] Hydrated ${hydratedSubs.length} sub-orders from Central API for farm ${farmId}`);
             orders = hydratedSubs;
           }
@@ -340,10 +389,15 @@ router.post('/:orderId/accept', async (req, res) => {
     }
 
     const subOrderKey = subOrder.sub_order_id || String(subOrder.id);
-    await orderStore.updateSubOrderStatus(subOrderKey, 'farm_accepted', {
+    const numUpdated = await orderStore.updateSubOrderStatus(subOrderKey, 'farm_accepted', {
       verified_at: new Date().toISOString(),
       response_action: 'accept'
     });
+
+    if (numUpdated === 0) {
+      console.error(`[Activity Hub] NeDB update matched 0 docs for sub_order_id=${subOrderKey}`);
+      return res.status(500).json({ error: 'Failed to persist order acceptance - no matching record' });
+    }
 
     const updatedSubOrder = await findSubOrder(orderId);
 
@@ -367,6 +421,21 @@ router.post('/:orderId/accept', async (req, res) => {
       if (allVerified) {
         await orderStore.updateOrderStatus(String(masterOrderId), 'farms_verified');
         console.log(`[Activity Hub] All farms verified order ${masterOrderId}`);
+      }
+    }
+
+    // Propagate status to Central (non-blocking)
+    if (masterOrderId) {
+      propagateStatusToCentral(String(masterOrderId), subOrderKey, farmId, 'accept')
+        .catch(err => console.warn('[Activity Hub] Propagation error:', err.message));
+    }
+
+    // Send buyer verification + receipt email (non-blocking)
+    if (masterOrderId) {
+      const mainOrder = await orderStore.getOrder(String(masterOrderId));
+      if (mainOrder && mainOrder.buyer_email) {
+        notificationService.notifyBuyerOrderAccepted(mainOrder, updatedSubOrder || subOrder)
+          .catch(err => console.warn('[Activity Hub] Buyer acceptance receipt error:', err.message));
       }
     }
 
@@ -437,7 +506,7 @@ router.post('/:orderId/modify', async (req, res) => {
     const newSubTotal = updatedItems.reduce((sum, item) => sum + (item.line_total || 0), 0);
 
     const subOrderKey = subOrder.sub_order_id || String(subOrder.id);
-    await orderStore.updateSubOrderStatus(subOrderKey, 'farm_modified', {
+    const numUpdated = await orderStore.updateSubOrderStatus(subOrderKey, 'farm_modified', {
       verified_at: new Date().toISOString(),
       response_action: 'modify',
       modification_reason: reason || 'Quantity adjustment',
@@ -445,6 +514,11 @@ router.post('/:orderId/modify', async (req, res) => {
       items: updatedItems,
       sub_total: newSubTotal
     });
+
+    if (numUpdated === 0) {
+      console.error(`[Activity Hub] NeDB update matched 0 docs for sub_order_id=${subOrderKey} (modify)`);
+      return res.status(500).json({ error: 'Failed to persist order modification - no matching record' });
+    }
 
     await logOrderAction(
       orderId, farmId, 'modify',
@@ -468,6 +542,9 @@ router.post('/:orderId/modify', async (req, res) => {
         };
         await notificationService.notifyBuyerModifications(orderForNotification, [{ ...subOrder, items: updatedItems, sub_total: newSubTotal }]);
       }
+      // Propagate modification to Central (non-blocking)
+      propagateStatusToCentral(String(masterOrderId), subOrderKey, farmId, 'modify')
+        .catch(err => console.warn('[Activity Hub] Modify propagation error:', err.message));
     }
 
     console.log(`[Activity Hub] Farm ${farmId} modified order ${orderId}`);
@@ -523,11 +600,16 @@ router.post('/:orderId/decline', async (req, res) => {
     }
 
     const subOrderKey = subOrder.sub_order_id || String(subOrder.id);
-    await orderStore.updateSubOrderStatus(subOrderKey, 'farm_declined', {
+    const numUpdated = await orderStore.updateSubOrderStatus(subOrderKey, 'farm_declined', {
       declined_at: new Date().toISOString(),
       decline_reason: reason,
       response_action: 'decline'
     });
+
+    if (numUpdated === 0) {
+      console.error(`[Activity Hub] NeDB update matched 0 docs for sub_order_id=${subOrderKey} (decline)`);
+      return res.status(500).json({ error: 'Failed to persist order decline - no matching record' });
+    }
 
     await logOrderAction(
       orderId, farmId, 'decline',
@@ -556,6 +638,9 @@ router.post('/:orderId/decline', async (req, res) => {
           })
           .catch(err => console.error('[Activity Hub] Alternative search failed:', err));
       }
+      // Propagate decline to Central (non-blocking)
+      propagateStatusToCentral(String(masterOrderId), subOrderKey, farmId, 'decline')
+        .catch(err => console.warn('[Activity Hub] Decline propagation error:', err.message));
     }
 
     console.log(`[Activity Hub] Farm ${farmId} declined order ${orderId}: ${reason}`);

@@ -435,6 +435,8 @@
           if (data.ok) {
             self.showToast('Order accepted', 'success');
             self.updateCardStatus(subOrderId, 'farm_accepted');
+            // Re-fetch from server after short delay to confirm persistence
+            setTimeout(function() { self.loadOrders(); }, 1500);
           } else { throw new Error(data.error || 'Failed to accept order'); }
         }).catch(function(err) {
           console.error('Accept error:', err);

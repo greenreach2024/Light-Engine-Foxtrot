@@ -25,12 +25,12 @@ function requireEnvVar(name) {
 
 // PostgreSQL connection configuration
 const createDbClient = () => new Client({
-  host: process.env.RDS_HOSTNAME || requireEnvVar('RDS_HOSTNAME'),
-  port: parseInt(process.env.RDS_PORT || '5432'),
-  database: process.env.RDS_DB_NAME || 'lightengine',
-  user: process.env.RDS_USERNAME || 'lightengine',
-  password: process.env.RDS_PASSWORD || requireEnvVar('RDS_PASSWORD'),
-  ssl: { rejectUnauthorized: false }
+  host: process.env.DB_HOST || process.env.RDS_HOSTNAME || requireEnvVar('DB_HOST'),
+  port: parseInt(process.env.DB_PORT || process.env.RDS_PORT || '5432'),
+  database: process.env.DB_NAME || process.env.RDS_DB_NAME || 'greenreach_central',
+  user: process.env.DB_USER || process.env.RDS_USERNAME,
+  password: process.env.DB_PASSWORD || process.env.RDS_PASSWORD,
+  ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false
 });
 
 /**
@@ -227,25 +227,27 @@ router.post('/login', async (req, res) => {
     
     await client.connect();
     
-    // Query user from database
+    // Query user from farm_users table (authoritative for all farm user management)
     const result = await client.query(
-      `SELECT user_id, email, name, password_hash, role, is_active 
-       FROM users 
-       WHERE email = $1 AND farm_id = $2`,
+      `SELECT id, email, password_hash, role, status,
+              COALESCE(first_name || ' ' || last_name, first_name, email) as name,
+              COALESCE(must_change_password, false) as must_change_password
+       FROM farm_users 
+       WHERE lower(email) = lower($1) AND farm_id = $2 AND status = 'active'`,
       [email, farm_id]
     );
 
 
     if (result.rows.length === 0) {
-      console.log(`[Auth] ❌ User not found: ${email}`);
+      console.log(`[Auth] User not found: ${email}`);
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
     const user = result.rows[0];
 
     // Check if account is active
-    if (!user.is_active) {
-      console.log(`[Auth] ❌ Account not active: ${email}`);
+    if (user.status !== 'active') {
+      console.log(`[Auth] Account not active: ${email}`);
       return res.status(401).json({ error: 'Account is not active' });
     }
 
@@ -253,11 +255,11 @@ router.post('/login', async (req, res) => {
     const isValidPassword = await bcrypt.compare(password, user.password_hash);
     
     if (!isValidPassword) {
-      console.log(`[Auth] ❌ Invalid password for: ${email}`);
+      console.log(`[Auth] Invalid password for: ${email}`);
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    console.log(`[Auth] ✅ Login successful: ${email} (${user.role})`);
+    console.log(`[Auth] Login successful: ${email} (${user.role})`);
 
     // Query farm details for response
     const farmResult = await client.query(
@@ -272,7 +274,7 @@ router.post('/login', async (req, res) => {
     // Generate JWT token for successful login
     const token = generateFarmToken({
       farm_id,
-      user_id: user.user_id,
+      user_id: user.id,
       role: user.role || FARM_ROLES.ADMIN,
       name: user.name,
       email: user.email

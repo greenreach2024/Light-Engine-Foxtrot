@@ -7,12 +7,12 @@
 
     <key>ProgramArguments</key>
     <array>
-        <string>/Volumes/CodeVault/Projects/Light-Engine-Foxtrot/leam/GreenReach-LEAM</string>
-        <string>/Volumes/CodeVault/Projects/Light-Engine-Foxtrot/leam/leam-agent.js</string>
+        <string>/opt/homebrew/bin/node</string>
+        <string>/Users/petergilbert/Light-Engine-Foxtrot/leam/leam-agent.js</string>
     </array>
 
     <key>WorkingDirectory</key>
-    <string>/Volumes/CodeVault/Projects/Light-Engine-Foxtrot/leam</string>
+    <string>/Users/petergilbert/Light-Engine-Foxtrot/leam</string>
 
     <key>EnvironmentVariables</key>
     <dict>

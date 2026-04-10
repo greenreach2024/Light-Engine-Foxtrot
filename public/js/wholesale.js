@@ -54,7 +54,25 @@
 
     normalizeBuyer(buyer) {
       if (!buyer) return null;
-      const location = buyer.location || buyer.location_json || {};
+      let location = buyer.location || buyer.location_json || {};
+      if (typeof location === 'string') {
+        try {
+          location = JSON.parse(location);
+        } catch {
+          location = {};
+        }
+      }
+      if (!location || typeof location !== 'object') location = {};
+
+      const coords = this.extractCoordinates(location);
+      if (coords) {
+        location = {
+          ...location,
+          latitude: coords.latitude,
+          longitude: coords.longitude
+        };
+      }
+
       return {
         id: buyer.id,
         businessName: buyer.businessName || buyer.business_name,
@@ -208,6 +226,14 @@
       document.getElementById('register-form')?.addEventListener('submit', (event) => {
         event.preventDefault();
         this.handleRegister();
+      });
+
+      document.getElementById('register-postal')?.addEventListener('blur', () => {
+        this.populateRegistrationCoordinates().catch(() => {});
+      });
+
+      document.getElementById('register-province')?.addEventListener('change', () => {
+        this.populateRegistrationCoordinates().catch(() => {});
       });
 
       document.getElementById('account-form')?.addEventListener('submit', (event) => {
@@ -392,8 +418,30 @@
       const province = document.getElementById('register-province')?.value?.trim() || '';
       const latitudeRaw = document.getElementById('register-lat')?.value;
       const longitudeRaw = document.getElementById('register-lng')?.value;
-      const lat = latitudeRaw !== undefined && latitudeRaw !== '' ? Number(latitudeRaw) : null;
-      const lng = longitudeRaw !== undefined && longitudeRaw !== '' ? Number(longitudeRaw) : null;
+      let lat = latitudeRaw !== undefined && latitudeRaw !== '' ? Number(latitudeRaw) : null;
+      let lng = longitudeRaw !== undefined && longitudeRaw !== '' ? Number(longitudeRaw) : null;
+
+      const registrationLocation = {
+        postalCode,
+        province,
+        state: province,
+        country: 'Canada'
+      };
+
+      let coords = this.extractCoordinates({ latitude: lat, longitude: lng });
+      if (!coords) {
+        coords = await this.populateRegistrationCoordinates();
+      }
+      if (!coords) {
+        coords = await this.geocodeCoordinates(registrationLocation);
+      }
+      if (coords) {
+        lat = coords.latitude;
+        lng = coords.longitude;
+      }
+
+      registrationLocation.latitude = Number.isFinite(lat) ? lat : null;
+      registrationLocation.longitude = Number.isFinite(lng) ? lng : null;
 
       try {
         const response = await fetch('/api/wholesale/buyers/register', {
@@ -405,12 +453,7 @@
             email,
             password,
             buyerType,
-            location: {
-              postalCode,
-              province,
-              latitude: lat,
-              longitude: lng
-            }
+            location: registrationLocation
           })
         });
 
@@ -554,6 +597,24 @@
     async saveAccountSettings() {
       if (!this.currentBuyer) return this.showAuthModal('sign-in');
 
+      const accountAddress = document.getElementById('account-address').value;
+      const accountCity = document.getElementById('account-city').value;
+      const accountProvince = document.getElementById('account-province').value;
+      const accountPostalCode = document.getElementById('account-postal').value;
+      const locationPayload = {
+        address1: accountAddress,
+        city: accountCity,
+        state: accountProvince,
+        province: accountProvince,
+        postalCode: accountPostalCode,
+        country: 'Canada'
+      };
+
+      let coords = this.getBuyerLatLng();
+      if (!coords) {
+        coords = await this.geocodeCoordinates(locationPayload);
+      }
+
       const payload = {
         businessName: document.getElementById('account-business-name').value,
         contactName: document.getElementById('account-contact-name').value,
@@ -562,12 +623,19 @@
         keyContact: document.getElementById('account-key-contact').value,
         backupContact: document.getElementById('account-backup-contact').value,
         backupPhone: document.getElementById('account-backup-phone').value,
-        address: document.getElementById('account-address').value,
-        city: document.getElementById('account-city').value,
-        province: document.getElementById('account-province').value,
-        postalCode: document.getElementById('account-postal').value,
+        address: accountAddress,
+        city: accountCity,
+        province: accountProvince,
+        postalCode: accountPostalCode,
         buyerType: document.getElementById('account-buyer-type').value,
-        country: 'Canada'
+        country: 'Canada',
+        latitude: coords?.latitude ?? null,
+        longitude: coords?.longitude ?? null,
+        location: {
+          ...locationPayload,
+          latitude: coords?.latitude ?? null,
+          longitude: coords?.longitude ?? null
+        }
       };
 
       try {
@@ -1052,7 +1120,7 @@
         .map(
           (sku) => `
           <div class="sku-card">
-            <div class="sku-thumbnail"><img src="${sku.thumbnail_url ? escapeAttr(sku.thumbnail_url) : '/images/default-product.svg'}" alt="${escapeAttr(sku.product_name)}" loading="lazy" onerror="this.onerror=null;this.src=&quot;/images/default-product.svg&quot;" /></div>
+            <div class="sku-thumbnail"><img src="${sku.thumbnail_url ? escapeAttr(sku.thumbnail_url) : '/product-images/crops/' + encodeURIComponent(sku.product_name.toLowerCase().replace(/\s+/g, '-')) + '.webp'}" alt="${escapeAttr(sku.product_name)}" loading="lazy" onerror="this.onerror=null;this.src=&quot;/images/default-product.svg&quot;" /></div>
             <div class="sku-header">
               <div class="sku-name">${escapeHtml(sku.product_name)}</div>
               <div class="sku-badges">
@@ -1443,6 +1511,8 @@
       }
 
       this._placingOrder = true;
+      const placeBtn = document.getElementById('place-order-btn');
+      if (placeBtn) placeBtn.disabled = true;
       this.showLoading('Processing your order...');
 
       try {
@@ -1508,6 +1578,8 @@
         this.showToast('Network error placing order', 'error');
       } finally {
         this._placingOrder = false;
+        const placeBtn = document.getElementById('place-order-btn');
+        if (placeBtn) placeBtn.disabled = false;
       }
     },
 
@@ -1876,13 +1948,128 @@
       return { mode: 'auto_network' };
     },
 
+    extractCoordinates(rawLocation) {
+      if (!rawLocation) return null;
+
+      let location = rawLocation;
+      if (typeof location === 'string') {
+        try {
+          location = JSON.parse(location);
+        } catch {
+          return null;
+        }
+      }
+
+      if (!location || typeof location !== 'object') return null;
+
+      const latitude = Number(
+        location.latitude
+          ?? location.lat
+          ?? location.location?.latitude
+          ?? location.location?.lat
+      );
+      const longitude = Number(
+        location.longitude
+          ?? location.lng
+          ?? location.lon
+          ?? location.location?.longitude
+          ?? location.location?.lng
+          ?? location.location?.lon
+      );
+
+      if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+      return { latitude, longitude };
+    },
+
+    normalizePostalCode(postalCode) {
+      const normalized = String(postalCode || '')
+        .toUpperCase()
+        .replace(/\s+/g, '')
+        .replace(/[^A-Z0-9]/g, '');
+      if (normalized.length !== 6) return '';
+      return `${normalized.slice(0, 3)} ${normalized.slice(3)}`;
+    },
+
+    buildGeocodeQueries(location = {}) {
+      const address = String(location.address1 || location.address || location.street || '').trim();
+      const city = String(location.city || '').trim();
+      const state = String(location.state || location.province || '').trim();
+      const postalCode = this.normalizePostalCode(location.postalCode || location.zip || '');
+      const country = String(location.country || 'Canada').trim() || 'Canada';
+
+      const queries = [];
+      const addQuery = (parts) => {
+        const query = parts.filter(Boolean).join(', ');
+        if (query && !queries.includes(query)) queries.push(query);
+      };
+
+      addQuery([address, city, state, postalCode, country]);
+      addQuery([city, state, postalCode, country]);
+      addQuery([postalCode, state, country]);
+      addQuery([postalCode, country]);
+
+      return queries;
+    },
+
+    async geocodeCoordinates(location = {}) {
+      const queries = this.buildGeocodeQueries(location);
+      if (!queries.length) return null;
+
+      for (const query of queries) {
+        try {
+          const country = String(location.country || 'Canada').trim().toLowerCase();
+          const countryCodes = (!country || country === 'canada') ? '&countrycodes=ca' : '';
+          const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1${countryCodes}&q=${encodeURIComponent(query)}`;
+          const response = await fetch(url, {
+            headers: {
+              'Accept': 'application/json'
+            }
+          });
+          if (!response.ok) continue;
+
+          const results = await response.json();
+          if (!Array.isArray(results) || results.length === 0) continue;
+
+          const latitude = Number(results[0].lat);
+          const longitude = Number(results[0].lon);
+          if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+            return { latitude, longitude };
+          }
+        } catch {
+          // Best-effort geocoding; continue trying fallback queries.
+        }
+      }
+
+      return null;
+    },
+
+    async populateRegistrationCoordinates() {
+      const latField = document.getElementById('register-lat');
+      const lngField = document.getElementById('register-lng');
+      if (!latField || !lngField) return null;
+
+      const postalCode = document.getElementById('register-postal')?.value?.trim() || '';
+      const province = document.getElementById('register-province')?.value?.trim() || '';
+      if (!postalCode && !province) return null;
+
+      const coords = await this.geocodeCoordinates({
+        postalCode,
+        province,
+        state: province,
+        country: 'Canada'
+      });
+
+      if (coords) {
+        latField.value = coords.latitude.toFixed(6);
+        lngField.value = coords.longitude.toFixed(6);
+      }
+
+      return coords;
+    },
+
     getBuyerLatLng() {
       const loc = this.currentBuyer?.location || null;
-      if (!loc) return null;
-      const latitude = Number(loc.latitude);
-      const longitude = Number(loc.longitude);
-      if (Number.isFinite(latitude) && Number.isFinite(longitude)) return { latitude, longitude };
-      return null;
+      return this.extractCoordinates(loc);
     },
 
     async loadNetworkFarms() {
@@ -2140,6 +2327,25 @@
         const html = alerts.map(alert => {
           const alertClass = `anomaly-${alert.type}`;
           const changeColor = alert.type === 'increase' ? 'color: var(--warning)' : 'color: var(--info)';
+          const movementDrivers = Array.isArray(alert.movementDrivers) ? alert.movementDrivers : [];
+          const freshnessLabel = alert.analysisFreshness === 'fresh'
+            ? 'Fresh (<72h)'
+            : alert.analysisFreshness === 'aging'
+              ? 'Aging (3-7d)'
+              : alert.analysisFreshness === 'stale'
+                ? 'Stale (>7d)'
+                : 'Unknown';
+
+          const driverHtml = movementDrivers.map(driver => {
+            const impact = driver && driver.impact && driver.impact !== 'neutral'
+              ? ` <span style="opacity:0.8;">(${escapeHtml(driver.impact)})</span>`
+              : '';
+            return `<div style="margin-top: 0.2rem;"><strong>${escapeHtml(driver?.label || 'Driver')}:</strong> ${escapeHtml(driver?.evidence || 'No evidence available')}${impact}</div>`;
+          }).join('');
+
+          const updatedDisplay = alert.lastUpdated
+            ? new Date(alert.lastUpdated).toLocaleString()
+            : 'Unknown';
           
           return `
             <div class="price-alert ${alertClass}">
@@ -2153,9 +2359,17 @@
               <div class="price-alert-summary">
                   ${escapeHtml(alert.summary)}
               </div>
+              ${driverHtml ? `
+                <div style="font-size: 0.78rem; color: var(--text-secondary); margin-top: 0.5rem; padding: 0.45rem 0.55rem; background: rgba(0, 0, 0, 0.03); border-radius: 6px;">
+                  <strong>AI Driver Analysis:</strong>
+                  ${driverHtml}
+                </div>
+              ` : ''}
               <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid var(--border);">
-                  <strong>Data Sources:</strong> ${escapeHtml((alert.retailers || []).join(', '))} (${Number(alert.dataPoints || 0)} retailers monitored)<br/>
-                  <strong>Last Updated:</strong> ${escapeHtml(alert.lastUpdated)} • <strong>Confidence:</strong> ${escapeHtml(alert.confidence)}
+                  <strong>Retailer Coverage:</strong> ${escapeHtml((alert.retailers || []).join(', '))} (${Number(alert.dataPoints || 0)} observations)<br/>
+                  <strong>Last Updated:</strong> ${escapeHtml(updatedDisplay)} • <strong>Confidence:</strong> ${escapeHtml(alert.confidence)} • <strong>AI Freshness:</strong> ${escapeHtml(freshnessLabel)}
+                  ${alert.aiOutlook ? `<br/><strong>AI Outlook:</strong> ${escapeHtml(alert.aiOutlook)}` : ''}
+                  ${alert.aiAction ? ` • <strong>Action:</strong> ${escapeHtml(alert.aiAction)}` : ''}
                   ${alert.articles && alert.articles.length > 0 ? `<br/><strong>News References:</strong> ${alert.articles.map(a => `<a href="${safeUrl(a.url)}" target="_blank" rel="noopener noreferrer" style="color: var(--primary);">${escapeHtml(a.title)} (${escapeHtml(a.source)})</a>`).join(', ')}` : ''}
               </div>
             </div>
@@ -2186,13 +2400,8 @@
         return;
       }
 
-      // Check if buyer has valid location coordinates
-      const hasValidLocation = this.currentBuyer.location?.latitude && 
-                               this.currentBuyer.location?.longitude &&
-                               !isNaN(this.currentBuyer.location.latitude) &&
-                               !isNaN(this.currentBuyer.location.longitude);
-
-      if (!hasValidLocation) {
+      const buyerLoc = this.getBuyerLatLng();
+      if (!buyerLoc) {
         // Show farms without distance calculation
         impactContent.innerHTML = `
           <div class="loading-state" style="padding: 1rem;">
@@ -2211,41 +2420,52 @@
 
       // Get farms with coordinates
       let farmsInCatalog = [];
+
+      const mapFarmRecord = (farm) => {
+        if (!farm || typeof farm !== 'object') return null;
+        const location = farm.location || farm.farm_location || {};
+        const coords = this.extractCoordinates(location) || this.extractCoordinates(farm);
+        if (!coords) return null;
+
+        return {
+          farm_id: farm.farm_id || farm.farmId || farm.id || '',
+          farm_name: farm.farm_name || farm.name || farm.farmId || 'Farm',
+          city: location.city || location.town || location.municipality || '',
+          state: location.state || location.province || location.region || '',
+          latitude: coords.latitude,
+          longitude: coords.longitude
+        };
+      };
       
       // Try demo farm data first if in demo mode
       if (this.demoMode && this.demoData?.farms) {
         farmsInCatalog = this.demoData.farms
-          .filter(f => f.latitude && f.longitude)
-          .map(f => ({
-            farm_id: f.farm_id,
-            farm_name: f.name,
-            city: f.location || '',
-            state: '',
-            latitude: f.latitude,
-            longitude: f.longitude
-          }));
+          .map(mapFarmRecord)
+          .filter(Boolean);
+      }
+
+      if (farmsInCatalog.length === 0 && Array.isArray(this.networkFarms) && this.networkFarms.length > 0) {
+        farmsInCatalog = this.networkFarms
+          .map(mapFarmRecord)
+          .filter(Boolean);
       }
       
-      // If no demo farms, try admin API
+      // If no farms loaded yet, fetch buyer-safe wholesale network farms
       if (farmsInCatalog.length === 0) {
         try {
-          const response = await fetch('/api/admin/farms?status=active');
+          const headers = {};
+          if (this.token) headers['Authorization'] = `Bearer ${this.token}`;
+          const response = await fetch('/api/wholesale/network/farms', { headers });
           const data = await response.json();
           
-          if (data.farms && data.farms.length > 0) {
-            farmsInCatalog = data.farms
-              .filter(f => f.location && f.location.lat && f.location.lng)
-              .map(f => ({
-                farm_id: f.farmId,
-                farm_name: f.name,
-                city: f.address?.city || '',
-                state: f.address?.state || '',
-                latitude: f.location.lat,
-                longitude: f.location.lng
-              }));
+          const farms = data?.data?.farms || [];
+          if (response.ok && Array.isArray(farms) && farms.length > 0) {
+            farmsInCatalog = farms
+              .map(mapFarmRecord)
+              .filter(Boolean);
           }
         } catch (error) {
-          console.warn('Failed to load farms from admin API:', error);
+          console.warn('Failed to load farms from wholesale network API:', error);
         }
       }
       
@@ -2264,15 +2484,15 @@
       }
 
       // Calculate distances from buyer to each farm
-      const buyerLat = this.currentBuyer.location.latitude;
-      const buyerLng = this.currentBuyer.location.longitude;
+      const buyerLat = buyerLoc.latitude;
+      const buyerLng = buyerLoc.longitude;
 
       const farmDistances = farmsInCatalog.map(farm => {
         const distance = this.calculateDistance(
           buyerLat,
           buyerLng,
-          farm.latitude || 44.2312,
-          farm.longitude || -76.4860
+          farm.latitude,
+          farm.longitude
         );
         
         return {

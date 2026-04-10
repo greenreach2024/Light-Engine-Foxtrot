@@ -8,8 +8,10 @@ const router = express.Router();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Path to recipes directory (match public recipes API)
-const RECIPES_DIR = path.join(__dirname, '../data/recipes-v2');
+// In Cloud Run, /app/data is a GCS FUSE mount that shadows the local data/ dir.
+const RECIPES_DIR = process.env.DEPLOYMENT_MODE === 'cloud'
+    ? '/opt/recipes-v2'
+    : path.join(__dirname, '../data/recipes-v2');
 
 // Load crop descriptions from lighting-recipes.json
 const RECIPES_JSON_PATH = path.join(__dirname, '../public/data/lighting-recipes.json');
@@ -278,6 +280,169 @@ router.get('/categories/list', async (req, res) => {
             error: 'Failed to load categories',
             message: error.message
         });
+    }
+});
+
+// CSV header row matching the existing recipe file format
+const CSV_HEADERS = [
+    'Day', 'Stage', 'DLI Target (mol/m\u00b2/d)', 'Temp Target (\u00b0C)',
+    'Blue (%)', 'Green (%)', 'Red (%)', 'Far-Red (%)',
+    'PPFD Target (\u00b5mol/m\u00b2/s)', 'VPD Target (kPa)',
+    'Max Humidity (%)', 'EC Target (dS/m)', 'pH Target', 'Veg', 'Fruit'
+];
+
+// Map client field names to CSV header positions
+const FIELD_TO_CSV = {
+    day: 0, stage: 1, dli_target: 2, temperature: 3,
+    blue: 4, green: 5, red: 6, far_red: 7,
+    ppfd: 8, vpd_target: 9, max_humidity: 10,
+    ec: 11, ph: 12, veg: 13, fruit: 14
+};
+
+function scheduleToCsv(name, schedule) {
+    const lines = ['Table 1', CSV_HEADERS.join(',')];
+    for (const row of schedule) {
+        const values = CSV_HEADERS.map((_, i) => {
+            const field = Object.keys(FIELD_TO_CSV).find(k => FIELD_TO_CSV[k] === i);
+            if (!field) return '';
+            const val = row[field];
+            return val !== undefined && val !== null ? String(val) : '';
+        });
+        lines.push(values.join(','));
+    }
+    return lines.join('\n') + '\n';
+}
+
+function sanitizeFilename(name) {
+    return name.replace(/[<>:"/\\|?*\x00-\x1f]/g, '').trim();
+}
+
+/**
+ * POST /api/admin/recipes
+ * Create a new recipe
+ */
+router.post('/', async (req, res) => {
+    try {
+        const { name, category, description, data } = req.body;
+        if (!name || !data?.schedule || !Array.isArray(data.schedule) || data.schedule.length === 0) {
+            return res.status(400).json({ success: false, error: 'Name and schedule data are required' });
+        }
+
+        const safeName = sanitizeFilename(name);
+        if (!safeName) {
+            return res.status(400).json({ success: false, error: 'Invalid recipe name' });
+        }
+
+        const filename = `${safeName}-Table 1.csv`;
+        const filePath = path.join(RECIPES_DIR, filename);
+
+        // Check if recipe already exists
+        try {
+            await fs.access(filePath);
+            return res.status(409).json({ success: false, error: 'A recipe with this name already exists' });
+        } catch {
+            // File doesn't exist - good
+        }
+
+        const csv = scheduleToCsv(safeName, data.schedule);
+        await fs.writeFile(filePath, csv, 'utf-8');
+
+        res.json({
+            success: true,
+            recipe: {
+                id: `${safeName}-Table 1`,
+                name: safeName,
+                category: category || 'Vegetables',
+                file: filename,
+                total_days: data.schedule.length
+            }
+        });
+    } catch (error) {
+        console.error('[Recipes] Error creating recipe:', error);
+        res.status(500).json({ success: false, error: 'Failed to create recipe', message: error.message });
+    }
+});
+
+/**
+ * PUT /api/admin/recipes/:id
+ * Update an existing recipe
+ */
+router.put('/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { name, category, description, data } = req.body;
+        if (!data?.schedule || !Array.isArray(data.schedule) || data.schedule.length === 0) {
+            return res.status(400).json({ success: false, error: 'Schedule data is required' });
+        }
+
+        // Find existing file
+        let filename = `${id}.csv`;
+        if (!id.includes('-Table')) {
+            filename = `${id}-Table 1.csv`;
+        }
+
+        const filePath = path.join(RECIPES_DIR, filename);
+        try {
+            await fs.access(filePath);
+        } catch {
+            return res.status(404).json({ success: false, error: 'Recipe not found' });
+        }
+
+        const recipeName = (name || id).replace(/-Table 1$/, '');
+        const csv = scheduleToCsv(recipeName, data.schedule);
+        await fs.writeFile(filePath, csv, 'utf-8');
+
+        // If name changed, rename the file
+        if (name) {
+            const safeName = sanitizeFilename(name);
+            const newFilename = `${safeName}-Table 1.csv`;
+            if (newFilename !== filename) {
+                const newPath = path.join(RECIPES_DIR, newFilename);
+                await fs.rename(filePath, newPath);
+            }
+        }
+
+        res.json({
+            success: true,
+            recipe: {
+                id: id,
+                name: recipeName,
+                category: category || 'Vegetables',
+                file: filename,
+                total_days: data.schedule.length
+            }
+        });
+    } catch (error) {
+        console.error('[Recipes] Error updating recipe:', error);
+        res.status(500).json({ success: false, error: 'Failed to update recipe', message: error.message });
+    }
+});
+
+/**
+ * DELETE /api/admin/recipes/:id
+ * Delete a recipe
+ */
+router.delete('/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        let filename = `${id}.csv`;
+        if (!id.includes('-Table')) {
+            filename = `${id}-Table 1.csv`;
+        }
+
+        const filePath = path.join(RECIPES_DIR, filename);
+        try {
+            await fs.access(filePath);
+        } catch {
+            return res.status(404).json({ success: false, error: 'Recipe not found' });
+        }
+
+        await fs.unlink(filePath);
+
+        res.json({ success: true, message: 'Recipe deleted' });
+    } catch (error) {
+        console.error('[Recipes] Error deleting recipe:', error);
+        res.status(500).json({ success: false, error: 'Failed to delete recipe', message: error.message });
     }
 });
 

@@ -13,7 +13,9 @@ const router = express.Router();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const RECIPES_DIR = path.join(__dirname, '../data/recipes-v2');
+const RECIPES_DIR = process.env.DEPLOYMENT_MODE === 'cloud'
+    ? '/opt/recipes-v2'
+    : path.join(__dirname, '../data/recipes-v2');
 const CROP_PRICING_PATH = path.join(__dirname, '../public/data/crop-pricing.json');
 
 // ============================================================================

@@ -146,6 +146,422 @@ const MARKET_DATA_SOURCES = {
   }
 };
 
+const NATIONAL_RETAILER_INDEX = new Map([
+  ['whole foods', 'Whole Foods'],
+  ['trader joes', 'Trader Joes'],
+  ['trader joe s', 'Trader Joes'],
+  ['sobeys', 'Sobeys'],
+  ['metro', 'Metro'],
+  ['loblaws', 'Loblaws'],
+  ['kroger', 'Kroger'],
+  ['safeway', 'Safeway'],
+  ['farm boy', 'Farm Boy'],
+  ['sprouts', 'Sprouts'],
+  ['target', 'Target'],
+  ['walmart', 'Walmart'],
+  ['freshco', 'FreshCo'],
+  ['t t', 'T&T'],
+]);
+
+const PRODUCT_WEIGHT_HINTS_OZ = {
+  basil: 1,
+  'genovese basil': 1,
+  kale: 8,
+  spinach: 10,
+  arugula: 5,
+  lettuce: 16,
+  'lettuce romaine': 16,
+  'romaine lettuce': 16,
+  'lettuce iceberg': 16,
+  tomatoes: 16,
+  'cherry tomatoes': 10,
+  microgreens: 4,
+  cilantro: 1,
+  mint: 0.75,
+  'bok choy': 16,
+  watercress: 3,
+};
+
+const DRIVER_SIGNAL_DEFINITIONS = [
+  {
+    key: 'globalEvents',
+    label: 'Global Events',
+    keywords: ['tariff', 'export', 'import', 'currency', 'fx', 'trade', 'policy', 'duty', 'sanction', 'global'],
+    neutralEvidence: 'No explicit global trade or macro-policy signal in the latest AI reasoning.',
+  },
+  {
+    key: 'weather',
+    label: 'Weather',
+    keywords: ['weather', 'frost', 'freeze', 'storm', 'drought', 'flood', 'heat', 'wildfire', 'cold snap', 'rainfall'],
+    neutralEvidence: 'No explicit weather disruption signal in the latest AI reasoning.',
+  },
+  {
+    key: 'oilFuel',
+    label: 'Oil & Fuel',
+    keywords: ['oil', 'fuel', 'diesel', 'gas', 'energy', 'freight', 'shipping cost', 'transport cost'],
+    neutralEvidence: 'No explicit oil/fuel cost signal in the latest AI reasoning.',
+  },
+  {
+    key: 'fertilizerInputs',
+    label: 'Fertilizer Inputs',
+    keywords: ['fertilizer', 'fertiliser', 'potash', 'nitrogen', 'ammonia', 'input cost'],
+    neutralEvidence: 'No explicit fertilizer input-cost signal in the latest AI reasoning.',
+  },
+  {
+    key: 'conflictWar',
+    label: 'Conflict & War Logistics',
+    keywords: ['war', 'conflict', 'geopolitical', 'port disruption', 'route disruption', 'red sea', 'black sea', 'blockade'],
+    neutralEvidence: 'No explicit conflict-related logistics signal in the latest AI reasoning.',
+  },
+];
+
+const IMPACT_UP_KEYWORDS = [
+  'increase',
+  'increased',
+  'higher',
+  'rise',
+  'rising',
+  'upward',
+  'shortage',
+  'tight supply',
+  'constraint',
+  'disruption',
+  'spike',
+  'elevated',
+  'expensive',
+  'premium',
+  'surge',
+];
+
+const IMPACT_DOWN_KEYWORDS = [
+  'decrease',
+  'decreased',
+  'lower',
+  'decline',
+  'declined',
+  'fall',
+  'falling',
+  'downward',
+  'surplus',
+  'oversupply',
+  'eased',
+  'softened',
+  'discount',
+  'improved supply',
+  'recovery',
+];
+
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+const CONFIDENCE_RANK = {
+  low: 1,
+  medium: 2,
+  high: 3,
+};
+
+function normalizeToken(value) {
+  return String(value ?? '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function toFiniteNumber(value, fallback = 0) {
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function getNationalRetailers(retailers = []) {
+  const matched = new Map();
+  for (const retailer of retailers) {
+    const normalized = normalizeToken(retailer);
+    const canonical = NATIONAL_RETAILER_INDEX.get(normalized);
+    if (canonical) matched.set(canonical, true);
+  }
+  return Array.from(matched.keys());
+}
+
+function inferAverageWeightOz(product, data) {
+  const explicitWeight = toFiniteNumber(data?.avgWeightOz, NaN);
+  if (Number.isFinite(explicitWeight) && explicitWeight > 0) return explicitWeight;
+
+  const staticWeight = toFiniteNumber(MARKET_DATA_SOURCES[product]?.avgWeightOz, NaN);
+  if (Number.isFinite(staticWeight) && staticWeight > 0) return staticWeight;
+
+  const normalizedProduct = normalizeToken(product);
+  if (PRODUCT_WEIGHT_HINTS_OZ[normalizedProduct]) return PRODUCT_WEIGHT_HINTS_OZ[normalizedProduct];
+
+  for (const [hint, weight] of Object.entries(PRODUCT_WEIGHT_HINTS_OZ)) {
+    if (normalizedProduct.includes(hint) || hint.includes(normalizedProduct)) {
+      return weight;
+    }
+  }
+
+  return 1;
+}
+
+function splitIntoSentences(text) {
+  return String(text || '')
+    .replace(/\s+/g, ' ')
+    .split(/[.!?]\s+/)
+    .map((segment) => segment.trim())
+    .filter(Boolean);
+}
+
+function findEvidenceSentence(sentences, keywords = []) {
+  const loweredKeywords = keywords.map((keyword) => keyword.toLowerCase());
+  for (const sentence of sentences) {
+    const lowerSentence = sentence.toLowerCase();
+    if (loweredKeywords.some((keyword) => lowerSentence.includes(keyword))) {
+      return sentence;
+    }
+  }
+  return '';
+}
+
+function classifyImpactDirection(text, trendPercent = 0) {
+  const lowerText = String(text || '').toLowerCase();
+  const upwardSignal = IMPACT_UP_KEYWORDS.some((keyword) => lowerText.includes(keyword));
+  const downwardSignal = IMPACT_DOWN_KEYWORDS.some((keyword) => lowerText.includes(keyword));
+
+  if (upwardSignal && !downwardSignal) return 'upward';
+  if (downwardSignal && !upwardSignal) return 'downward';
+  if (upwardSignal && downwardSignal) return 'mixed';
+
+  if (Math.abs(trendPercent) >= 10) {
+    return trendPercent > 0 ? 'upward' : 'downward';
+  }
+
+  return 'neutral';
+}
+
+function buildSeasonalityDriver(trendPercent, now = new Date()) {
+  const month = now.getUTCMonth();
+  const monthLabel = MONTH_NAMES[month] || 'Current';
+  const isWinter = month === 11 || month <= 1;
+  const isSummer = month >= 5 && month <= 7;
+
+  if (isWinter && trendPercent > 3) {
+    return {
+      key: 'seasonality',
+      label: 'Seasonality',
+      impact: 'upward',
+      evidence: `${monthLabel} is a winter month; colder-season transport and field-supply constraints align with the observed +${Math.abs(trendPercent).toFixed(1)}% move.`,
+      hasEvidence: true,
+    };
+  }
+
+  if (isSummer && trendPercent < -3) {
+    return {
+      key: 'seasonality',
+      label: 'Seasonality',
+      impact: 'downward',
+      evidence: `${monthLabel} is peak growing season in many regions; broader supply aligns with the observed ${trendPercent.toFixed(1)}% move.`,
+      hasEvidence: true,
+    };
+  }
+
+  return {
+    key: 'seasonality',
+    label: 'Seasonality',
+    impact: 'neutral',
+    evidence: `${monthLabel} seasonality is currently not the dominant signal versus measured retailer price movement.`,
+    hasEvidence: true,
+  };
+}
+
+function computeAnalysisFreshness(analysisDate) {
+  if (!analysisDate) return 'missing';
+
+  const parsedDate = new Date(analysisDate);
+  if (Number.isNaN(parsedDate.getTime())) return 'missing';
+
+  const ageHours = (Date.now() - parsedDate.getTime()) / 3600000;
+  if (ageHours <= 72) return 'fresh';
+  if (ageHours <= 168) return 'aging';
+  return 'stale';
+}
+
+function normalizeConfidenceLabel(value) {
+  const normalized = String(value || '').toLowerCase();
+  return normalized in CONFIDENCE_RANK ? normalized : null;
+}
+
+function confidenceFromObservations(observationCount) {
+  if (observationCount >= 25) return 'high';
+  if (observationCount >= 8) return 'medium';
+  return 'low';
+}
+
+function combineConfidence(observationCount, aiConfidence, analysisFreshness) {
+  const observationConfidence = confidenceFromObservations(observationCount);
+  const normalizedAiConfidence = normalizeConfidenceLabel(aiConfidence);
+
+  let rank = CONFIDENCE_RANK[observationConfidence];
+  if (normalizedAiConfidence) {
+    rank = Math.min(rank, CONFIDENCE_RANK[normalizedAiConfidence]);
+  }
+
+  if (analysisFreshness === 'stale' || analysisFreshness === 'missing') {
+    rank = Math.max(1, rank - 1);
+  }
+
+  if (rank >= 3) return 'high';
+  if (rank === 2) return 'medium';
+  return 'low';
+}
+
+function buildMovementDrivers({ trendPercent, aiReasoning, articles = [] }) {
+  const articleSignals = articles
+    .map((article) => `${article?.title || ''}. ${article?.summary || ''}`.trim())
+    .filter(Boolean)
+    .join(' ');
+
+  const sentences = splitIntoSentences(`${aiReasoning || ''}. ${articleSignals}`);
+  const drivers = [buildSeasonalityDriver(trendPercent)];
+
+  for (const definition of DRIVER_SIGNAL_DEFINITIONS) {
+    const evidence = findEvidenceSentence(sentences, definition.keywords);
+    if (evidence) {
+      drivers.push({
+        key: definition.key,
+        label: definition.label,
+        impact: classifyImpactDirection(evidence, trendPercent),
+        evidence,
+        hasEvidence: true,
+      });
+    } else {
+      drivers.push({
+        key: definition.key,
+        label: definition.label,
+        impact: 'neutral',
+        evidence: definition.neutralEvidence,
+        hasEvidence: false,
+      });
+    }
+  }
+
+  return drivers;
+}
+
+function buildMovementSummary({
+  product,
+  trendPercent,
+  currentPricePerOzCAD,
+  previousPricePerOzCAD,
+  observationCount,
+  nationalRetailers,
+  movementDrivers,
+  analysisFreshness,
+}) {
+  const trendDirection = trendPercent >= 0 ? 'up' : 'down';
+  const primarySignals = movementDrivers.filter((driver) => driver.hasEvidence).slice(0, 2);
+
+  const signalText = primarySignals.length > 0
+    ? primarySignals.map((driver) => `${driver.label}: ${driver.evidence}`).join(' ')
+    : 'No explicit macro-event keyword signal was found in the latest AI reasoning; movement currently follows observed supply-demand data.';
+
+  const retailerCoverage = nationalRetailers.length > 0
+    ? `${nationalRetailers.length} national retailers`
+    : 'available retailers (national tags unavailable)';
+
+  const freshnessNote = (analysisFreshness === 'stale' || analysisFreshness === 'missing')
+    ? ' AI narrative freshness is reduced, so confidence is intentionally conservative.'
+    : '';
+
+  return `${product} is ${trendDirection} ${Math.abs(trendPercent).toFixed(1)}% (${previousPricePerOzCAD.toFixed(2)} to ${currentPricePerOzCAD.toFixed(2)} CAD/oz). Coverage includes ${observationCount} observations across ${retailerCoverage}. ${signalText}${freshnessNote}`.trim();
+}
+
+function buildPricingRecommendationsFromSignals(marketData, aiAnalyses, fxRate) {
+  const aiMap = new Map((aiAnalyses || []).map((analysis) => [analysis.product, analysis]));
+  const recommendations = [];
+
+  for (const [product, data] of Object.entries(marketData || {})) {
+    const avgWeightOz = inferAverageWeightOz(product, data);
+    const avgPriceCAD = toFiniteNumber(data.avgPriceCAD, 0);
+    const previousPriceCAD = toFiniteNumber(data.previousPrice, avgPriceCAD);
+
+    const currentPricePerOzCAD = avgWeightOz > 0 ? avgPriceCAD / avgWeightOz : avgPriceCAD;
+    const previousPricePerOzCAD = avgWeightOz > 0 ? previousPriceCAD / avgWeightOz : previousPriceCAD;
+
+    let trendPercent = toFiniteNumber(data.trendPercent, NaN);
+    if (!Number.isFinite(trendPercent)) {
+      const referencePrice = previousPriceCAD > 0 ? previousPriceCAD : avgPriceCAD;
+      trendPercent = referencePrice > 0
+        ? ((avgPriceCAD - referencePrice) / referencePrice) * 100
+        : 0;
+    }
+
+    const trend = data.trend || (trendPercent > 5 ? 'increasing' : trendPercent < -5 ? 'decreasing' : 'stable');
+
+    const priceRangeCAD = Array.isArray(data.priceRange) && data.priceRange.length >= 2
+      ? data.priceRange.map((price) => toFiniteNumber(price, avgPriceCAD))
+      : [avgPriceCAD * 0.9, avgPriceCAD * 1.1];
+
+    const priceRangePerOz = priceRangeCAD.map((price) => (avgWeightOz > 0 ? price / avgWeightOz : price));
+
+    const retailers = Array.isArray(data.retailers) ? data.retailers : [];
+    const nationalRetailers = getNationalRetailers(retailers);
+    const articles = Array.isArray(data.articles) ? data.articles : [];
+
+    const ai = aiMap.get(product) || null;
+    const aiReasoning = typeof ai?.reasoning === 'string' ? ai.reasoning.trim() : '';
+    const observationCount = Math.max(0, Math.round(toFiniteNumber(data.observationCount, 0)));
+    const analysisFreshness = computeAnalysisFreshness(ai?.analysis_date);
+
+    const movementDrivers = buildMovementDrivers({
+      trendPercent,
+      aiReasoning,
+      articles,
+    });
+
+    const confidence = combineConfidence(observationCount, ai?.confidence, analysisFreshness);
+    const summary = buildMovementSummary({
+      product,
+      trendPercent,
+      currentPricePerOzCAD,
+      previousPricePerOzCAD,
+      observationCount,
+      nationalRetailers,
+      movementDrivers,
+      analysisFreshness,
+    });
+
+    recommendations.push({
+      product,
+      avgPriceCAD,
+      previousPriceCAD,
+      pricePerOzCAD: currentPricePerOzCAD,
+      previousPricePerOzCAD,
+      priceRange: priceRangePerOz,
+      trend,
+      trendPercent,
+      change: `${trendPercent >= 0 ? '+' : ''}${trendPercent.toFixed(1)}%`,
+      retailers,
+      nationalRetailers,
+      nationalRetailerCount: nationalRetailers.length,
+      observationCount,
+      lastUpdated: data.lastUpdated,
+      dataSource: data.dataSource || 'static',
+      articles,
+      aiOutlook: ai?.outlook || null,
+      aiConfidence: ai?.confidence || null,
+      aiForecastPrice: ai?.price_forecast ? parseFloat(ai.price_forecast) : null,
+      aiAction: ai?.action || null,
+      aiReasoning: aiReasoning || null,
+      aiAnalysisDate: ai?.analysis_date || null,
+      analysisFreshness,
+      movementDrivers,
+      summary,
+      confidence,
+      fxRate,
+    });
+  }
+
+  recommendations.sort((a, b) => Math.abs(b.trendPercent) - Math.abs(a.trendPercent));
+  return recommendations;
+}
+
 /**
  * GET /api/market-intelligence/price-alerts
  * Get current price anomaly alerts with market context
@@ -154,58 +570,57 @@ const MARKET_DATA_SOURCES = {
 router.get('/price-alerts', async (req, res) => {
   try {
     const { threshold = 7 } = req.query;
+    const parsedThreshold = Number.parseFloat(threshold);
+    const thresholdValue = Number.isFinite(parsedThreshold) ? Math.max(0, parsedThreshold) : 7;
+
     const pool = req.app?.locals?.dbPool;
-    const marketData = pool ? await getMarketDataAsync(pool) : MARKET_DATA_SOURCES;
+    const [marketData, aiAnalyses] = await Promise.all([
+      pool ? getMarketDataAsync(pool) : Promise.resolve(MARKET_DATA_SOURCES),
+      pool ? getLatestAnalyses(pool) : Promise.resolve([]),
+    ]);
 
-    const alerts = [];
-    for (const [product, data] of Object.entries(marketData)) {
-      const trendPct = data.trendPercent ?? 0;
-      const absChange = Math.abs(trendPct);
-      if (absChange < threshold) continue;
+    const fxRate = getLastFxRate();
+    const recommendations = buildPricingRecommendationsFromSignals(marketData, aiAnalyses, fxRate);
 
-      const type = data.trend === 'increasing' ? 'increase' : 'decrease';
-      const changeSign = trendPct >= 0 ? '+' : '';
-      const avgWeight = data.avgWeightOz || 1;
+    const nationallyMonitored = recommendations.filter((entry) => entry.nationalRetailerCount > 0);
+    const monitoredPool = nationallyMonitored.length > 0 ? nationallyMonitored : recommendations;
 
-      let summary = '';
-      if (data.articles && data.articles.length > 0) {
-        summary = data.articles.map(a => a.summary).join(' ');
-        summary += ` [Sources: ${data.articles.map(a => `${a.source} (${a.date})`).join(', ')}]`;
-      } else {
-        summary = type === 'increase'
-          ? `${product} prices have increased ${absChange}% recently. Supply constraints and seasonal factors are contributing to higher prices across ${(data.retailers || []).length} retailers.`
-          : `${product} prices have declined ${absChange}% due to increased supply. Competitive pricing from local suppliers is putting downward pressure. Monitored across ${(data.retailers || []).length} retailers.`;
-      }
-
-      alerts.push({
-        product,
-        change: `${changeSign}${trendPct}%`,
-        type,
-        currentPrice: (data.avgPriceCAD || 0) / avgWeight,
-        previousPrice: (data.previousPrice || data.avgPriceCAD || 0) / avgWeight,
+    const alerts = monitoredPool
+      .filter((entry) => Math.abs(entry.trendPercent) >= thresholdValue)
+      .map((entry) => ({
+        product: entry.product,
+        change: entry.change,
+        type: entry.trendPercent > 0 ? 'increase' : entry.trendPercent < 0 ? 'decrease' : 'stable',
+        currentPrice: entry.pricePerOzCAD,
+        previousPrice: entry.previousPricePerOzCAD,
         priceUnit: 'CAD per oz',
-        summary,
-        retailers: data.retailers || [],
-        dataPoints: data.observationCount || (data.retailers || []).length,
-        lastUpdated: data.lastUpdated,
-        confidence: (data.observationCount || 0) > 10 ? 'high' : 'medium',
-        articles: data.articles || [],
-        priceRange: data.priceRange
-          ? { low: data.priceRange[0] / avgWeight, high: data.priceRange[1] / avgWeight }
-          : { low: 0, high: 0 },
-        dataSource: data.dataSource || 'static'
-      });
-    }
-
-    alerts.sort((a, b) => Math.abs(parseFloat(b.change)) - Math.abs(parseFloat(a.change)));
+        summary: entry.summary,
+        movementDrivers: entry.movementDrivers,
+        retailers: entry.nationalRetailers.length > 0 ? entry.nationalRetailers : entry.retailers,
+        dataPoints: entry.observationCount || (entry.retailers || []).length,
+        lastUpdated: entry.lastUpdated,
+        confidence: entry.confidence,
+        aiOutlook: entry.aiOutlook,
+        aiAction: entry.aiAction,
+        aiConfidence: entry.aiConfidence,
+        analysisFreshness: entry.analysisFreshness,
+        articles: entry.articles || [],
+        priceRange: {
+          low: toFiniteNumber(entry.priceRange?.[0], 0),
+          high: toFiniteNumber(entry.priceRange?.[1], 0),
+        },
+        dataSource: entry.dataSource || 'static',
+      }))
+      .sort((a, b) => Math.abs(parseFloat(b.change)) - Math.abs(parseFloat(a.change)));
 
     return res.json({
       ok: true,
       alerts,
       timestamp: new Date().toISOString(),
-      threshold: parseInt(threshold),
-      totalProductsMonitored: Object.keys(marketData).length,
-      alertsGenerated: alerts.length
+      threshold: thresholdValue,
+      totalProductsMonitored: monitoredPool.length,
+      alertsGenerated: alerts.length,
+      monitorScope: nationallyMonitored.length > 0 ? 'national_retailers' : 'all_retailers',
     });
   } catch (error) {
     logger.error('[Market Intelligence] Price alerts error:', error);
@@ -305,41 +720,7 @@ router.get('/pricing-recommendations', async (req, res) => {
     ]);
 
     const fxRate = getLastFxRate();
-
-    // Index AI analyses by product
-    const aiMap = new Map(aiAnalyses.map(a => [a.product, a]));
-
-    const recommendations = [];
-    for (const [product, data] of Object.entries(marketData)) {
-      const ai = aiMap.get(product) || null;
-      const avgWeight = data.avgWeightOz || MARKET_DATA_SOURCES[product]?.avgWeightOz || 1;
-      const avgPriceCAD = data.avgPriceCAD || 0;
-      const pricePerOzCAD = avgPriceCAD / avgWeight;
-      const priceRange = data.priceRange || [avgPriceCAD * 0.85, avgPriceCAD * 1.15];
-
-      recommendations.push({
-        product,
-        // Live price data
-        avgPriceCAD,
-        pricePerOzCAD,
-        priceRange: priceRange.map(p => p / avgWeight),
-        trend: data.trend || 'stable',
-        trendPercent: data.trendPercent ?? 0,
-        retailers: data.retailers || [],
-        observationCount: data.observationCount || 0,
-        lastUpdated: data.lastUpdated,
-        dataSource: data.dataSource || 'static',
-        // AI analysis
-        aiOutlook: ai?.outlook || null,
-        aiConfidence: ai?.confidence || null,
-        aiForecastPrice: ai?.price_forecast ? parseFloat(ai.price_forecast) : null,
-        aiAction: ai?.action || null,
-        aiReasoning: ai?.reasoning || null,
-        aiAnalysisDate: ai?.analysis_date || null,
-        // FX
-        fxRate,
-      });
-    }
+    const recommendations = buildPricingRecommendationsFromSignals(marketData, aiAnalyses, fxRate);
 
     return res.json({
       ok: true,

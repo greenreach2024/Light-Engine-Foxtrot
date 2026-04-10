@@ -17,7 +17,11 @@
 
     // Get authentication headers for admin API calls
     getAuthHeaders() {
-      const token = localStorage.getItem('admin_token');
+      const token =
+        localStorage.getItem('admin_token') ||
+        localStorage.getItem('auth_token') ||
+        sessionStorage.getItem('token') ||
+        localStorage.getItem('token');
       const headers = {
         'Content-Type': 'application/json'
       };
@@ -564,13 +568,15 @@
         const activeFarms = this.farms.filter((f) => f.status === 'active').length;
         
         // Order statistics
-        const pendingOrders = this.orders.filter(o => 
-          o.verification_status === 'pending_farm_verification'
-        ).length;
+        const pendingOrders = this.orders.filter(o => {
+          const s = (o.status || '').toLowerCase();
+          return ['pending', 'pending_verification', 'pending_farm_verification', 'new'].includes(s);
+        }).length;
         
-        const activeOrders = this.orders.filter(o => 
-          ['pending_farm_verification', 'farm_verified', 'pending_buyer_review'].includes(o.verification_status)
-        ).length;
+        const activeOrders = this.orders.filter(o => {
+          const s = (o.status || '').toLowerCase();
+          return !['cancelled', 'canceled', 'rejected', 'expired', 'delivered'].includes(s);
+        }).length;
 
         document.getElementById('stat-gmv').textContent = `$${totalGMV.toFixed(2)}`;
         document.getElementById('stat-fees').textContent = `$${totalFees.toFixed(2)}`;
@@ -658,8 +664,8 @@
                   <td>${order.buyer_account?.businessName || order.buyer_id}</td>
                   <td>${order.farm_sub_orders ? order.farm_sub_orders.map(s => s.farm_id).join(', ') : 'N/A'}</td>
                   <td>$${(order.grand_total || 0).toFixed(2)}</td>
-                  <td><span class="badge ${order.order_status || 'pending'}">${order.order_status || 'pending'}</span></td>
-                  <td><span class="badge ${order.verification_status || 'pending'}">${order.verification_status || 'pending_farm_verification'}</span></td>
+                  <td><span class="badge ${order.status || 'pending'}">${order.status || 'pending'}</span></td>
+                  <td><span class="badge ${(order.farm_sub_orders || []).map(s => s.status).filter(Boolean)[0] || order.status || 'pending'}">${(order.farm_sub_orders || []).map(s => s.status).filter(Boolean)[0] || order.status || 'pending'}</span></td>
                   <td>${new Date(order.created_at).toLocaleString()}</td>
                 </tr>
               `
@@ -928,6 +934,33 @@
         .join('');
     },
 
+    normalizeReconciliationData(payload) {
+      const source = payload && payload.data ? payload.data : {};
+      const mismatches = Array.isArray(source.mismatches) ? source.mismatches : [];
+      const legacyErrors = Array.isArray(source.errors) ? source.errors : [];
+      const errors = legacyErrors.length
+        ? legacyErrors
+        : mismatches.map((entry) => ({
+            payment_id: entry.payment_id || entry.order_id || 'unknown',
+            error: entry.error || entry.issue || 'mismatch'
+          }));
+
+      const matched = Number(source.matched || 0);
+      const unmatched = Number(source.unmatched || 0);
+      const updatedCount = source.updated_count != null ? Number(source.updated_count) : matched;
+      const failedCount = source.failed_count != null ? Number(source.failed_count) : unmatched + errors.length;
+
+      return {
+        reconciledAt: source.reconciled_at || source.reconciledAt || null,
+        totalPayments: Number(source.total_payments || source.totalPayments || 0),
+        matched,
+        unmatched,
+        updatedCount,
+        failedCount,
+        errors
+      };
+    },
+
     async reconcilePayments() {
       try {
         this.showToast('Running reconciliation...', 'info');
@@ -937,13 +970,18 @@
           headers: this.getAuthHeaders()
         });
 
-        const data = await response.json();
+        const data = await response.json().catch(() => ({}));
 
-        if (data.status === 'ok') {
-          this.showToast(`Reconciliation complete: ${data.data.updated_count} payments updated`, 'success');
+        if (response.ok && data.status === 'ok') {
+          const summary = this.normalizeReconciliationData(data);
+          const issueCount = summary.unmatched + summary.errors.length;
+          this.showToast(
+            `Reconciliation complete: ${summary.totalPayments} checked, ${issueCount} issues detected`,
+            issueCount > 0 ? 'info' : 'success'
+          );
           this.loadPayments();
         } else {
-          this.showToast(`Reconciliation failed: ${data.message}`, 'error');
+          this.showToast(`Reconciliation failed: ${data.message || `HTTP ${response.status}`}`, 'error');
         }
       } catch (error) {
         console.error('Reconciliation error:', error);
@@ -961,22 +999,28 @@
           headers: this.getAuthHeaders()
         });
 
-        const data = await response.json();
+        const data = await response.json().catch(() => ({}));
 
-        if (data.status === 'ok') {
+        if (response.ok && data.status === 'ok') {
+          const summary = this.normalizeReconciliationData(data);
+          const completedAt = summary.reconciledAt ? new Date(summary.reconciledAt) : new Date();
           log.innerHTML = `
               <div style="padding: 1rem; background: var(--bg); border-radius: 6px;">
                 <h4 style="color: var(--success); margin-bottom: 0.5rem;">Reconciliation Complete</h4>
-                <p>Total Payments: ${data.data.total_payments}</p>
-                <p>Updated: ${data.data.updated_count}</p>
-                <p>Failed: ${data.data.failed_count}</p>
-                <p>Completed at: ${new Date().toLocaleString()}</p>
-                ${data.data.errors.length > 0
+                <p>Total Payments: ${summary.totalPayments}</p>
+                <p>Matched: ${summary.matched}</p>
+                <p>Unmatched: ${summary.unmatched}</p>
+                <p>Updated: ${summary.updatedCount}</p>
+                <p>Failed: ${summary.failedCount}</p>
+                <p>Completed at: ${completedAt.toLocaleString()}</p>
+                ${summary.errors.length > 0
                   ? `
                   <details style="margin-top: 1rem;">
-                    <summary>Errors (${data.data.errors.length})</summary>
+                    <summary>Errors (${summary.errors.length})</summary>
                     <ul style="margin-top: 0.5rem;">
-                      ${data.data.errors.map((e) => `<li>${e.payment_id}: ${e.error}</li>`).join('')}
+                      ${summary.errors
+                        .map((e) => `<li>${this.escHtml(e.payment_id || e.order_id || 'unknown')}: ${this.escHtml(e.error || e.issue || 'unknown')}</li>`)
+                        .join('')}
                     </ul>
                   </details>
                 `
@@ -985,7 +1029,7 @@
             `;
           this.loadPayments();
         } else {
-          log.innerHTML = `<div class="empty-state" style="color: var(--error);">Reconciliation failed: ${data.message}</div>`;
+          log.innerHTML = `<div class="empty-state" style="color: var(--error);">Reconciliation failed: ${this.escHtml(data.message || `HTTP ${response.status}`)}</div>`;
         }
       } catch (error) {
         console.error('Reconciliation error:', error);

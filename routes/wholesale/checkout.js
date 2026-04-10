@@ -172,6 +172,20 @@ router.post('/preview', async (req, res) => {
  * }
  */
 router.post('/execute', async (req, res) => {
+  // SAFETY: When Central is available, checkout is proxied there (wholesale.js in Central).
+  // This local handler must NOT run as a fallback — it would create a SECOND Square charge
+  // with a different order ID and idempotency key, causing duplicate billing.
+  // Only allow this path if explicitly running without Central (dev/standalone mode).
+  const centralUrl = process.env.CENTRAL_API_URL || process.env.GREENREACH_CENTRAL_URL || '';
+  if (centralUrl) {
+    console.error('[Checkout] BLOCKED: Local checkout handler reached while Central is configured. This would cause duplicate charges.');
+    return res.status(503).json({
+      ok: false,
+      error: 'checkout_routing_error',
+      message: 'Checkout is temporarily unavailable. Please try again.'
+    });
+  }
+
   const checkoutStartTime = Date.now();
   let masterOrderId = null;
   let reservations = [];

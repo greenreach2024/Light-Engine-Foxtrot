@@ -1,47 +1,93 @@
 # Critical Configuration Reference
 
-**Version**: 1.1.0
-**Date**: March 23, 2026
+**Version**: 2.0.0
+**Date**: April 8, 2026
 **Authority**: Canonical reference for all credentials, API keys, environment variables, and configuration files. Agents MUST NOT modify any value listed here without explicit user approval.
 
 ---
 
-## EB Environment Variables
+## PLATFORM MIGRATED TO GOOGLE CLOUD RUN (April 2026)
 
-### Light Engine (`light-engine-foxtrot-prod-v3`)
+**AWS Elastic Beanstalk is DEPRECATED. All environment variables are now managed via Cloud Run env vars and Google Secret Manager.**
 
-| Variable | Purpose | Notes |
-|----------|---------|-------|
-| `SWITCHBOT_TOKEN` | SwitchBot Cloud API authentication | Required for sensor data. If missing, sensors silently stop updating. |
-| `SWITCHBOT_SECRET` | SwitchBot Cloud API HMAC signing | Required for sensor data. Paired with token. |
-| `NODE_ENV` | Node environment | Should be `production` |
+See `.github/CLOUD_ARCHITECTURE.md` for the full infrastructure reference.
 
-**To view current EB env vars:**
+---
+
+## Cloud Run Environment Variables
+
+### Light Engine (`light-engine` service)
+
+| Variable | Purpose | Source | Notes |
+|----------|---------|--------|-------|
+| `SWITCHBOT_TOKEN` | SwitchBot Cloud API authentication | Secret Manager | Required for sensor data. If missing, sensors silently stop updating. |
+| `SWITCHBOT_SECRET` | SwitchBot Cloud API HMAC signing | Secret Manager | Required for sensor data. Paired with token. |
+| `JWT_SECRET` | JWT signing key | Secret Manager | Required for LE startup validation |
+| `TOKEN_ENCRYPTION_KEY` | Token encryption | Secret Manager | Required for LE startup validation |
+| `GREENREACH_API_KEY` | Server-to-server auth | Secret Manager | Used for Central proxy requests |
+| `DB_HOST` | AlloyDB private IP | Env var | `10.87.0.2` |
+| `DB_PASSWORD` | AlloyDB password | Secret Manager (`ALLOYDB_PASSWORD`) | |
+| `DB_USER` | Database user | Env var | `postgres` |
+| `DB_NAME` | Database name | Env var | `greenreach_central` |
+| `USE_GCS` | Enable GCS storage | Env var | `true` |
+| `GCS_BUCKET` | GCS bucket name | Env var | `greenreach-storage` |
+| `NODE_ENV` | Node environment | Env var | `production` |
+| `SQUARE_ACCESS_TOKEN` | Square API token | Secret Manager | For payment processing |
+| `SQUARE_ENVIRONMENT` | Square API environment | Env var | `production` |
+
+**To view current env vars:**
 ```bash
-cd /Volumes/CodeVault/Projects/Light-Engine-Foxtrot
-/Users/petergilbert/Library/Python/3.9/bin/eb printenv light-engine-foxtrot-prod-v3
+gcloud run services describe light-engine --region=us-east1 --format="yaml(spec.template.spec.containers[0].env)"
 ```
 
-**To set EB env vars:**
+**To update env vars:**
 ```bash
-/Users/petergilbert/Library/Python/3.9/bin/eb setenv KEY=value -e light-engine-foxtrot-prod-v3
+gcloud run services update light-engine --region=us-east1 --update-env-vars="KEY=value"
 ```
-Note: `eb setenv` triggers an environment restart. Variables persist across deploys.
 
-### GreenReach Central (`greenreach-central-prod-v4`)
+**To update secrets:**
+```bash
+echo -n "new-value" | gcloud secrets versions add SECRET_NAME --data-file=-
+gcloud run services update light-engine --region=us-east1  # Force new revision
+```
 
-| Variable | Purpose | Notes |
-|----------|---------|-------|
-| `GREENREACH_API_KEY` | Central's authMiddleware for server-to-server calls | Used when Central proxies to LE-EB |
-| `FARM_ID` | Identifies the farm | `FARM-MLTP9LVH-B0B85039` |
-| `FARM_EDGE_URL` | LE-EB direct URL for proxy fallback | `http://light-engine-foxtrot-prod-v2.eba-ukiyyqf9.us-east-1.elasticbeanstalk.com` |
-| `DATABASE_URL` | PostgreSQL connection string | Managed by EB/RDS |
-| `NODE_ENV` | Node environment | Should be `production` |
+### GreenReach Central (`greenreach-central` service)
+
+| Variable | Purpose | Source | Notes |
+|----------|---------|--------|-------|
+| `GREENREACH_API_KEY` | authMiddleware for server-to-server calls | Secret Manager | Used when Central proxies to LE |
+| `FARM_ID` | Identifies the farm | Env var | `FARM-MLTP9LVH-B0B85039` |
+| `FARM_EDGE_URL` | LE Cloud Run URL for proxy fallback | Env var | `https://light-engine-1029387937866.us-east1.run.app` |
+| `DB_HOST` | AlloyDB private IP | Env var | `10.87.0.2` |
+| `DB_PASSWORD` | AlloyDB password | Secret Manager (`ALLOYDB_PASSWORD`) | |
+| `DB_USER` | Database user | Env var | `postgres` |
+| `DB_NAME` | Database name | Env var | `greenreach_central` |
+| `JWT_SECRET` | JWT signing key | Secret Manager | |
+| `USE_GCS` | Enable GCS storage | Env var | `true` |
+| `GCS_BUCKET` | GCS bucket name | Env var | `greenreach-storage` |
+| `NODE_ENV` | Node environment | Env var | `production` |
+| `SQUARE_ACCESS_TOKEN` | GreenReach master Square token | Secret Manager | For direct-charge fallback |
+| `SQUARE_APP_ID` | Square OAuth application ID | Env var | For per-farm OAuth flow |
+| `SQUARE_APP_SECRET` | Square OAuth application secret | Secret Manager | |
+| `SQUARE_ENVIRONMENT` | Square API environment | Env var | `production` |
+| `SQUARE_LOCATION_ID` | GreenReach Square location | Env var | For direct-charge fallback |
+| `SQUARE_WEBHOOK_SIGNATURE_KEY` | Webhook HMAC verification | Secret Manager | |
+| `WHOLESALE_COMMISSION_RATE` | Broker commission rate | Env var | `0.12` (12%) |
+| `WHOLESALE_DEFAULT_SKU_FACTOR` | Wholesale pricing factor | Env var | `0.65` (range 0.50-0.75) |
+| `SMTP_HOST` | Email SMTP server | Env var | `smtp.gmail.com` |
+| `SMTP_PORT` | Email SMTP port | Env var | `587` |
+| `SMTP_USER` | Email sender address | Env var | `info@greenreachgreens.com` |
+| `SMTP_PASS` | Email app password | Secret Manager | Google App Password |
+| `FROM_EMAIL` | Email from address | Env var | `info@greenreachgreens.com` |
+| `ADMIN_ALERT_EMAIL` | Admin alert recipient | Env var | `info@greenreachgreens.com` |
+| `ADMIN_ALERT_PHONE` | Admin alert SMS | Env var | (not set) |
+| `ANTHROPIC_API_KEY` | EVIE fallback LLM | Secret Manager | Claude Sonnet 4 |
+| `OPENAI_API_KEY` | Primary LLM provider | Secret Manager | |
 
 **To view/set Central env vars:**
 ```bash
-cd /Volumes/CodeVault/Projects/Light-Engine-Foxtrot/greenreach-central
-/Users/petergilbert/Library/Python/3.9/bin/eb printenv greenreach-central-prod-v4
+gcloud run services describe greenreach-central --region=us-east1 --format="yaml(spec.template.spec.containers[0].env)"
+gcloud run services update greenreach-central --region=us-east1 --update-env-vars="KEY=value"
 ```
 
 ---
@@ -121,7 +167,7 @@ Rate-limited (1 per alert_type per 15 min). Dispatches email + SMS for `critical
 - `hardwareModel`: "AWS Cloud" -- NOT a physical device
 - `apiKey`: Farm-to-Central sync authentication key
 - `centralApiUrl`: Where sync-service sends telemetry
-- `mode`: "edge" is a legacy label; the LE-EB runs as the farm in the cloud
+- `mode`: "edge" is a legacy label; the LE Cloud Run runs as the farm in the cloud
 
 ### `public/data/farm.json` (LE-side)
 
@@ -160,10 +206,13 @@ Separate copy of farm profile for Central. NOT automatically synced with `public
 | Key | Location | Used By | Validates Against |
 |-----|----------|---------|-------------------|
 | Farm API Key | `config/edge-config.json` apiKey | sync-service.js (LE -> Central) | Central DB `farms` table + `farm-api-keys.json` |
-| GREENREACH_API_KEY | Central EB env var | Central authMiddleware | Compared directly in middleware |
-| SWITCHBOT_TOKEN | LE EB env var + farm.json | `switchBotApiRequest()` | SwitchBot Cloud API |
-| SWITCHBOT_SECRET | LE EB env var + farm.json | `switchBotApiRequest()` | SwitchBot Cloud API |
+| GREENREACH_API_KEY | Cloud Run Secret Manager | Central authMiddleware | Compared directly in middleware |
+| SWITCHBOT_TOKEN | Cloud Run Secret Manager + farm.json | `switchBotApiRequest()` | SwitchBot Cloud API |
+| SWITCHBOT_SECRET | Cloud Run Secret Manager + farm.json | `switchBotApiRequest()` | SwitchBot Cloud API |
 | JWT Bearer Token | Browser localStorage | Dashboard fetch calls | Central JWT verification |
+| SQUARE_ACCESS_TOKEN | Cloud Run Secret Manager | squarePaymentService.js | Square Payments API |
+| SQUARE_APP_SECRET | Cloud Run Secret Manager | square-oauth-proxy.js | Square OAuth API |
+| SQUARE_WEBHOOK_SIGNATURE_KEY | Cloud Run Secret Manager | payment-webhooks.js | Square webhook verification |
 
 ### Browser Storage Contract (Farm UI)
 
@@ -241,7 +290,7 @@ This contract is implemented in:
 | Sen 4 | WoIOSensor | D0C841064453 | Zone 2 |
 | Hub Mini 7E | Hub Mini (W0702000) | D3F85167A57E | WiFi bridge |
 
-Hub Mini is the WiFi bridge. Sensors communicate to Hub via BLE, Hub uploads to SwitchBot Cloud via WiFi. LE-EB polls SwitchBot Cloud API -- there is no direct BLE connection from LE-EB to sensors.
+Hub Mini is the WiFi bridge. Sensors communicate to Hub via BLE, Hub uploads to SwitchBot Cloud via WiFi. LE Cloud Run polls SwitchBot Cloud API -- there is no direct BLE connection from LE to sensors.
 
 ---
 
@@ -251,19 +300,35 @@ Hub Mini is the WiFi bridge. Sensors communicate to Hub via BLE, Hub uploads to 
 |------|-------------------|
 | `server-foxtrot.js` functions: `setupLiveSensorSync()`, `ensureSwitchBotConfigured()`, `getFarmIntegrations()`, `switchBotApiRequest()` | These are the sensor data SOURCE. Breaking them stops all environmental data. |
 | `automation/env-store.js` | In-memory data store for all sensor readings. Corruption here means bad data everywhere downstream. |
-| `lib/sync-service.js` | Pushes data from LE-EB to Central. Breaking this disconnects the farm from Central. |
+| `lib/sync-service.js` | Pushes data from LE to Central. Breaking this disconnects the farm from Central. |
 | `greenreach-central/routes/sync.js` | Receives telemetry at Central. Breaking auth here rejects all farm data. |
 | `greenreach-central/server.js` `/env` route | Serves data to the dashboard. Breaking this makes the dashboard show stale/no data. |
 | `config/edge-config.json` | Contains farm identity and sync credentials. Wrong values = auth failures. |
 | `public/data/farm.json` | Contains SwitchBot credentials (backup). Removing integrations section breaks credential fallback. |
+| `greenreach-central/services/squarePaymentService.js` | Handles all payment processing. Breaking this stops checkout and refunds. |
+| `greenreach-central/services/revenue-accounting-connector.js` | Double-entry accounting ledger. Breaking this corrupts financial records. |
+| `greenreach-central/routes/payment-webhooks.js` | Webhook handlers for payment status updates. Breaking verification = rejected webhooks. |
 
 ---
 
-## EB CLI Path
+## Deployment Commands (Cloud Run)
 
-The `eb` CLI is installed via pip for the local user:
-```
-/Users/petergilbert/Library/Python/3.9/bin/eb
+```bash
+# View env vars
+gcloud run services describe SERVICE_NAME --region=us-east1 --format="yaml(spec.template.spec.containers[0].env)"
+
+# Update env vars (safe -- creates new revision)
+gcloud run services update SERVICE_NAME --region=us-east1 --update-env-vars="KEY=value"
+
+# Update secrets
+echo -n "new-value" | gcloud secrets versions add SECRET_NAME --data-file=-
+gcloud run services update SERVICE_NAME --region=us-east1  # Force new revision
+
+# Build and push (ALWAYS --platform linux/amd64 on Apple Silicon)
+docker buildx build --platform linux/amd64 -t us-east1-docker.pkg.dev/project-5d00790f-13a9-4637-a40/greenreach/SERVICE:latest --push CONTEXT
+
+# Deploy
+gcloud run services update SERVICE_NAME --region=us-east1 --image=us-east1-docker.pkg.dev/project-5d00790f-13a9-4637-a40/greenreach/SERVICE:latest
 ```
 
-This path must be used explicitly -- it is NOT on the system PATH.
+**BANNED**: ALL `eb` CLI commands, all `aws elasticbeanstalk` commands. Platform migrated to Cloud Run (April 2026).

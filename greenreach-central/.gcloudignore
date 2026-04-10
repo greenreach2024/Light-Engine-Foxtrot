@@ -35,7 +35,8 @@ __pycache__/
 *.avi
 *.har
 backups/
-data/
+data/*
+!data/recipes-v2/
 docs/
 scripts/
 *.bak

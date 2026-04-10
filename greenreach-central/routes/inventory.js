@@ -269,6 +269,8 @@ async function loadManualInventoryItems(farmId) {
          auto_quantity_lbs,
          quantity_available,
          manual_quantity_lbs,
+         unit,
+         quantity_unit,
          GREATEST(
            0,
            LEAST(
@@ -337,12 +339,15 @@ router.get('/current', async (req, res) => {
       const qty = coerceNumber(Number(item.manual_available_lbs ?? item.manual_quantity_lbs ?? 0));
       const updated = item.last_updated || item.updated_at || item.created_at || null;
       const ts = updated ? new Date(updated) : null;
+      const unit = item.unit || item.quantity_unit || 'lb';
 
       return {
         trayId: item.product_id || item.sku || `manual-${index + 1}`,
         crop: item.product_name || item.sku_name || item.sku || 'Manual Inventory',
         trayCount: 0,
         plantCount: qty,
+        quantity: qty,
+        unit,
         seedingDate: ts && !Number.isNaN(ts.getTime()) ? ts.toISOString() : null,
         location: 'General Inventory',
         source: 'general-inventory-manual'
@@ -362,17 +367,18 @@ router.get('/current', async (req, res) => {
       return acc;
     }, { trays: 0, plants: 0 });
 
-    const generalInventoryPlants = generalInventory.reduce(
-      (sum, item) => sum + (coerceNumber(item.plantCount) || 0),
+    const generalInventoryLbs = generalInventory.reduce(
+      (sum, item) => sum + (coerceNumber(item.quantity || item.plantCount) || 0),
       0
     );
 
-    const totalPlants = groupTotals.plants + generalInventoryPlants;
+    const totalPlants = groupTotals.plants;
 
     const payload = {
       activeTrays: groupTotals.trays,
       totalPlants,
-      generalInventoryPlants,
+      generalInventoryLbs,
+      generalInventoryPlants: generalInventoryLbs,
       generalInventoryCount: generalInventory.length,
       farmCount: dataAvailable ? 1 : 0,
       byFarm: dataAvailable ? [
@@ -580,6 +586,29 @@ router.post('/deduct', async (req, res) => {
       const { product_id, quantity_lbs, reason, order_id } = item;
       if (!product_id || !quantity_lbs || quantity_lbs <= 0) continue;
 
+      // Check if this is a mix product — cascade deduction to components
+      const { rows: [mixRow] } = await query(
+        `SELECT source_data, inventory_source FROM farm_inventory
+         WHERE farm_id = $1 AND product_id = $2`, [farmId, product_id]
+      );
+      if (mixRow && mixRow.inventory_source === 'mix' && mixRow.source_data?.components) {
+        // Deduct proportional amounts from each component
+        for (const comp of mixRow.source_data.components) {
+          if (!comp.product_id) continue;
+          const compLbs = quantity_lbs * comp.ratio;
+          await query(
+            `UPDATE farm_inventory SET
+              sold_quantity_lbs = COALESCE(sold_quantity_lbs, 0) + $3,
+              quantity_available = COALESCE(auto_quantity_lbs, 0)
+                + COALESCE(manual_quantity_lbs, 0)
+                - (COALESCE(sold_quantity_lbs, 0) + $3),
+              last_updated = NOW()
+            WHERE farm_id = $1 AND product_id = $2`,
+            [farmId, comp.product_id, compLbs]
+          );
+        }
+      }
+
       const result = await query(
         `UPDATE farm_inventory SET
           sold_quantity_lbs = COALESCE(sold_quantity_lbs, 0) + $3,
@@ -685,6 +714,114 @@ router.get('/:farmId', async (req, res) => {
   } catch (error) {
     console.error('[Inventory] Error:', error);
     res.status(500).json({ error: 'Failed to fetch inventory' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SALAD MIX INVENTORY — growers list pre-defined mixes from templates
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * POST /api/inventory/mix
+ * Add a salad mix to farm inventory. Grower picks a template and sets lbs.
+ * Body: { mix_template_id, quantity_lbs }
+ * Pricing = weighted average of component wholesale prices from this farm's inventory.
+ */
+router.post('/mix', async (req, res) => {
+  try {
+    const farmId = await resolveFarmId(req);
+    if (!farmId) return res.status(401).json({ error: 'Farm ID required' });
+
+    const { mix_template_id, quantity_lbs } = req.body;
+    if (!mix_template_id || !quantity_lbs || Number(quantity_lbs) <= 0) {
+      return res.status(400).json({ error: 'mix_template_id and quantity_lbs (> 0) are required' });
+    }
+
+    // Load template + components
+    const { rows: [template] } = await query(
+      `SELECT id, name, description FROM mix_templates WHERE id = $1 AND status = 'active'`,
+      [mix_template_id]
+    );
+    if (!template) return res.status(404).json({ error: 'Mix template not found or inactive' });
+
+    const { rows: components } = await query(
+      `SELECT product_name, product_id, ratio FROM mix_components
+       WHERE mix_template_id = $1 ORDER BY product_name`, [mix_template_id]
+    );
+    if (components.length < 2) {
+      return res.status(400).json({ error: 'Mix template must have at least 2 components' });
+    }
+
+    // Calculate weighted average wholesale price from farm's current inventory
+    let weightedPrice = 0;
+    let weightedRetail = 0;
+    for (const comp of components) {
+      if (comp.product_id) {
+        const { rows: [inv] } = await query(
+          `SELECT wholesale_price, retail_price FROM farm_inventory
+           WHERE farm_id = $1 AND product_id = $2`, [farmId, comp.product_id]
+        );
+        if (inv) {
+          weightedPrice += (parseFloat(inv.wholesale_price) || 0) * parseFloat(comp.ratio);
+          weightedRetail += (parseFloat(inv.retail_price) || 0) * parseFloat(comp.ratio);
+        }
+      }
+    }
+
+    const manualQty = Math.max(0, Number(quantity_lbs));
+    const productId = `mix-${template.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+    const sourceData = JSON.stringify({
+      mix_template_id: template.id,
+      mix_name: template.name,
+      components: components.map(c => ({
+        product_name: c.product_name,
+        product_id: c.product_id,
+        ratio: parseFloat(c.ratio)
+      }))
+    });
+
+    const result = await query(
+      `INSERT INTO farm_inventory (
+        farm_id, product_id, product_name, sku_id, sku_name, sku, quantity, unit, price,
+        available_for_wholesale, manual_quantity_lbs, auto_quantity_lbs, quantity_available,
+        quantity_unit, wholesale_price, retail_price, inventory_source,
+        category, variety, source_data, last_updated
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,'lb',$8,true,$9,0,$10,'lb',$11,$12,'mix','Salad Mix',$13,$14::jsonb,NOW())
+      ON CONFLICT (farm_id, product_id) DO UPDATE SET
+        product_name = EXCLUDED.product_name,
+        manual_quantity_lbs = EXCLUDED.manual_quantity_lbs,
+        quantity_available = EXCLUDED.manual_quantity_lbs - COALESCE(farm_inventory.sold_quantity_lbs, 0),
+        wholesale_price = EXCLUDED.wholesale_price,
+        retail_price = EXCLUDED.retail_price,
+        price = EXCLUDED.price,
+        inventory_source = 'mix',
+        source_data = EXCLUDED.source_data,
+        available_for_wholesale = true,
+        last_updated = NOW()
+      RETURNING *`,
+      [
+        farmId,
+        productId,
+        template.name,
+        productId,
+        template.name,
+        productId,
+        manualQty,
+        weightedRetail || weightedPrice,
+        manualQty,
+        manualQty,
+        weightedPrice,
+        weightedRetail,
+        template.name,
+        sourceData
+      ]
+    );
+
+    console.log(`[Mix Inventory] Saved: ${farmId}: ${template.name} = ${manualQty} lb @ $${weightedPrice.toFixed(2)}/lb wholesale`);
+    res.json({ success: true, product: result.rows[0] });
+  } catch (error) {
+    console.error('[Mix Inventory] Error:', error.message);
+    res.status(500).json({ error: 'Failed to save mix inventory', detail: error.message });
   }
 });
 

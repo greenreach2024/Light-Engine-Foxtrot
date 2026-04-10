@@ -334,8 +334,8 @@ app.use(helmet({
       fontSrc: ["'self'", "data:", "https://cdn.jsdelivr.net", "https://cash-f.squarecdn.com", "https://square-fonts-production-f.squarecdn.com", "https://d1g145x70srn7h.cloudfront.net"],
       objectSrc: ["'none'"],
       mediaSrc: ["'self'", "blob:"],
-      frameSrc: ["'self'", "https://web.squarecdn.com", "https://pci-connect.squareup.com", "https://api.squareup.com"], // Allow same-origin iframes + Square 3DS
-      formAction: ["'self'", "https://www.securesuite.net"],  // Allow 3DS form submissions
+      frameSrc: ["'self'", "https://web.squarecdn.com", "https://pci-connect.squareup.com", "https://api.squareup.com", "https://*.visa.com", "https://*.mastercard.com"], // Allow same-origin iframes + Square 3DS
+      formAction: ["'self'", "https://www.securesuite.net", "https://*.visa.com", "https://*.mastercard.com", "https://pci-connect.squareup.com"],  // Allow 3DS form submissions
       upgradeInsecureRequests: null, // Disable upgrade-insecure-requests for HTTP-only deployments
     },
   },
@@ -8272,7 +8272,10 @@ app.post('/api/wholesale/order-events', express.json(), async (req, res) => {
         order_data: data
       };
 
-      await orderStore.saveSubOrder(subOrder);
+      await Promise.race([
+        orderStore.saveSubOrder(subOrder),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('NeDB write timeout (15s) - GCS FUSE may be stalled')), 15000))
+      ]);
       console.log('[Activity Hub] Saved sub-order to NeDB:', subOrderId);
 
       res.json({ ok: true, sub_order_id: subOrderId });
@@ -8296,7 +8299,10 @@ app.get('/api/wholesale/order-events', async (req, res) => {
     const farmId = String(req.headers['x-farm-id'] || req.query.farm_id || 'LOCAL-FARM').trim() || 'LOCAL-FARM';
 
     // Get all sub-orders for this farm (no status filter = all orders)
-    const subOrders = await orderStore.listFarmSubOrders(farmId);
+    const subOrders = await Promise.race([
+      orderStore.listFarmSubOrders(farmId),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('NeDB read timeout (15s) - GCS FUSE may be stalled')), 15000))
+    ]);
 
     const events = subOrders.map(sub => {
       const data = sub.order_data || {};
@@ -8373,15 +8379,57 @@ app.get('/api/wholesale/order-statuses', async (req, res) => {
 
 /**
  * POST /api/wholesale/order-statuses
- * Updates order status in NeDB from farm admin actions.
+ * Proxies to Central for AlloyDB persistence, buyer notifications, and state-machine validation.
+ * Falls back to local NeDB if Central is unreachable.
  */
 app.post('/api/wholesale/order-statuses', express.json(), async (req, res) => {
   try {
+    const centralUrl = getCentralApiTarget();
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 12000);
+    try {
+      const headers = { 'Content-Type': 'application/json' };
+      if (req.headers['x-farm-id']) headers['X-Farm-ID'] = req.headers['x-farm-id'];
+      if (req.headers['x-api-key']) headers['X-API-Key'] = req.headers['x-api-key'];
+      if (req.headers['authorization']) headers['Authorization'] = req.headers['authorization'];
+      const apiKey = process.env.GREENREACH_API_KEY;
+      if (apiKey && !headers['X-API-Key']) {
+        headers['X-API-Key'] = apiKey;
+        if (!headers['X-Farm-ID']) headers['X-Farm-ID'] = process.env.FARM_ID || 'FARM-MLTP9LVH-B0B85039';
+      }
+      const centralResp = await fetch(`${centralUrl}/api/wholesale/fulfillment/order-statuses`, {
+        method: 'POST', headers, body: JSON.stringify(req.body), signal: controller.signal
+      });
+      clearTimeout(timer);
+      const data = await centralResp.json().catch(() => ({}));
+      if (centralResp.ok && (data.success !== false && data.ok !== false)) {
+        // Also update local NeDB for Activity Hub consistency
+        const updates = normalizeWholesaleStatusUpdates(req.body);
+        for (const update of updates) {
+          const orderId = String(update.order_id || '');
+          const status = String(update.status || '').trim();
+          if (orderId && status) {
+            await orderStore.updateSubOrderStatus(orderId, status, {
+              ...(update.farm_id ? { farm_id: update.farm_id } : {}),
+              ...(update.timestamp ? { status_updated_at: update.timestamp } : {}),
+            }).catch(() => {});
+          }
+        }
+        console.log(`[wholesale] order-statuses proxied to Central: ${data.updated || 0} updated`);
+        return res.status(centralResp.status).json(data);
+      }
+      clearTimeout(timer);
+      console.warn(`[wholesale] Central order-statuses returned ${centralResp.status}, falling back to local`);
+    } catch (proxyErr) {
+      clearTimeout(timer);
+      console.warn('[wholesale] Central order-statuses unreachable, falling back to local:', proxyErr.message);
+    }
+
+    // Fallback: local NeDB only
     const updates = normalizeWholesaleStatusUpdates(req.body);
     if (!updates.length) {
       return res.status(400).json({ ok: false, error: 'No valid status updates provided' });
     }
-
     const results = [];
     for (const update of updates) {
       const orderId = String(update.order_id || '');
@@ -8390,25 +8438,13 @@ app.post('/api/wholesale/order-statuses', express.json(), async (req, res) => {
         results.push({ order_id: orderId, status, updated: false, reason: 'missing order_id or status' });
         continue;
       }
-
       const updatedCount = await orderStore.updateSubOrderStatus(orderId, status, {
         ...(update.farm_id ? { farm_id: update.farm_id } : {}),
         ...(update.timestamp ? { status_updated_at: update.timestamp } : {}),
       });
-
-      results.push({
-        order_id: orderId,
-        status,
-        updated: Number(updatedCount) > 0,
-      });
+      results.push({ order_id: orderId, status, updated: Number(updatedCount) > 0 });
     }
-
-    res.json({
-      ok: true,
-      success: true,
-      results,
-      updated: results.filter((entry) => entry.updated).length,
-    });
+    res.json({ ok: true, success: true, results, updated: results.filter((e) => e.updated).length });
   } catch (error) {
     console.error('[wholesale] order-statuses POST error:', error.message);
     res.status(500).json({ error: error.message });
@@ -13452,7 +13488,7 @@ app.use("/api/admin/pricing", adminPricingRouter);
 // Keeps sync/webhooks/admin/fulfillment/reservations local for inter-service use
 const WHOLESALE_PROXY_PATHS = [
   '/buyers', '/catalog', '/checkout', '/orders',
-  '/delivery', '/network/farms', '/inventory'
+  '/delivery', '/network/farms', '/inventory', '/payment'
 ];
 
 const wholesaleCentralProxy = createProxyMiddleware({
@@ -13493,12 +13529,16 @@ const wholesaleCentralProxy = createProxyMiddleware({
   }
 });
 
-// Inventory reservation sub-paths must stay local on LE (wholesaleSyncRouter handles them)
-const WHOLESALE_INVENTORY_LOCAL = ['/inventory/reserve', '/inventory/release', '/inventory/confirm'];
+// Paths that must stay local on LE (handled by wholesaleOrdersRouter / wholesaleSyncRouter)
+const WHOLESALE_LOCAL_PATHS = [
+  '/inventory/reserve', '/inventory/release', '/inventory/confirm',
+  '/orders/farm-verify', '/orders/create', '/orders/buyer-review',
+  '/orders/confirm-pickup', '/orders/pending-verification'
+];
 
 app.use('/api/wholesale', (req, res, next) => {
   const subPath = req.path;
-  if (WHOLESALE_INVENTORY_LOCAL.some(p => subPath.startsWith(p))) return next();
+  if (WHOLESALE_LOCAL_PATHS.some(p => subPath.startsWith(p))) return next();
   const shouldProxy = WHOLESALE_PROXY_PATHS.some(p => subPath.startsWith(p));
   if (!shouldProxy) return next();
   console.log('[wholesale proxy] Forwarding ' + req.method + ' ' + req.originalUrl + ' to Central');
@@ -18740,10 +18780,12 @@ app.get('/api/admin/harvest/forecast', adminAuthMiddleware, asyncHandler(async (
 
 app.post('/api/farm/auth/login', authRateLimiter, asyncHandler(async (req, res) => {
   console.log('[farm-auth] POST /api/farm/auth/login called');
-  const { farmId, email, password } = req.body;
+  const { farmId, email, password: rawPassword } = req.body;
+  const password = typeof rawPassword === 'string' ? rawPassword.trim() : rawPassword;
   
   // EDGE MODE: Local authentication without database (NeDB mode) - check FIRST
-  if (edgeConfig.isEdgeMode() || getDatabaseMode() === 'nedb') {
+  // Skip edge mode when a PostgreSQL pool is available (cloud deployment)
+  if (!req.app.locals?.db && (edgeConfig.isEdgeMode() || getDatabaseMode() === 'nedb')) {
     console.log('[farm-auth] Edge/NeDB mode - using local authentication');
     
     // Edge mode: farmId + password required, email optional
@@ -18859,7 +18901,8 @@ app.post('/api/farm/auth/login', authRateLimiter, asyncHandler(async (req, res) 
   }
   
   // EDGE MODE: Local authentication without database (NeDB mode)
-  if (edgeConfig.isEdgeMode() || getDatabaseMode() === 'nedb') {
+  // Skip edge mode when a PostgreSQL pool is available (cloud deployment)
+  if (!req.app.locals?.db && (edgeConfig.isEdgeMode() || getDatabaseMode() === 'nedb')) {
     console.log('[farm-auth] Edge/NeDB mode - using local authentication');
     
     // Email is optional in edge mode - only farm_id and password required
@@ -18962,23 +19005,29 @@ app.post('/api/farm/auth/login', authRateLimiter, asyncHandler(async (req, res) 
       });
     }
 
-    // Query by email if provided, otherwise get first admin user for farm
+    // Query farm_users table (authoritative for all farm user management)
     let userResult;
     if (email && email.trim()) {
       userResult = await pool.query(
-        `SELECT user_id, email, password_hash, role, is_active, email_verified, last_login
-         FROM users
-         WHERE farm_id = $1 AND lower(email) = lower($2)
+        `SELECT id, email, password_hash, role, status, last_login,
+                COALESCE(must_change_password, false) as must_change_password,
+                COALESCE(first_name || ' ' || last_name, first_name, email) as name
+         FROM farm_users
+         WHERE farm_id = $1 AND lower(email) = lower($2) AND status = 'active'
          LIMIT 1`,
         [farmId, email]
       );
     } else {
+      // No email — match any active user for this farm by password (admin first)
       userResult = await pool.query(
-        `SELECT user_id, email, password_hash, role, is_active, email_verified, last_login
-         FROM users
-         WHERE farm_id = $1 AND role = 'admin'
-         ORDER BY user_id ASC
-         LIMIT 1`,
+        `SELECT id, email, password_hash, role, status, last_login,
+                COALESCE(must_change_password, false) as must_change_password,
+                COALESCE(first_name || ' ' || last_name, first_name, email) as name
+         FROM farm_users
+         WHERE farm_id = $1 AND status = 'active'
+         ORDER BY
+           CASE role WHEN 'admin' THEN 1 WHEN 'manager' THEN 2 WHEN 'operator' THEN 3 ELSE 4 END,
+           created_at ASC`,
         [farmId]
       );
     }
@@ -18990,9 +19039,24 @@ app.post('/api/farm/auth/login', authRateLimiter, asyncHandler(async (req, res) 
       });
     }
 
-    const user = userResult.rows[0];
+    // If no email provided, try each user's password hash
+    let user;
+    if (email && email.trim()) {
+      user = userResult.rows[0];
+    } else {
+      for (const candidate of userResult.rows) {
+        const ok = await bcrypt.compare(password, candidate.password_hash);
+        if (ok) { user = candidate; break; }
+      }
+      if (!user) {
+        return res.status(401).json({
+          status: 'error',
+          message: 'Invalid farm ID or password'
+        });
+      }
+    }
 
-    if (user.is_active === false) {
+    if (user.status !== 'active') {
       return res.status(403).json({
         status: 'error',
         message: 'Account is disabled. Contact support.'
@@ -19021,7 +19085,7 @@ app.post('/api/farm/auth/login', authRateLimiter, asyncHandler(async (req, res) 
         farmId: farm.farm_id,
         email: user.email,
         role: user.role || 'admin',
-        userId: user.user_id,
+        userId: user.id,
         planType: farm.plan_type || 'cloud'
       },
       jwtSecret,
@@ -19048,7 +19112,7 @@ app.post('/api/farm/auth/login', authRateLimiter, asyncHandler(async (req, res) 
 
     global.farmAdminSessions.set(sessionToken, session);
 
-    await pool.query('UPDATE users SET last_login = NOW() WHERE user_id = $1', [user.user_id]);
+    await pool.query('UPDATE farm_users SET last_login = NOW() WHERE id = $1', [user.id]);
 
     const subscription = {
       plan: 'Professional',
@@ -19058,6 +19122,7 @@ app.post('/api/farm/auth/login', authRateLimiter, asyncHandler(async (req, res) 
     };
 
     const firstLogin = !user.last_login;
+    const mustChangePassword = user.must_change_password === true;
 
     console.log(`[farm-auth] Login successful for ${user.email} at ${farm.farm_id}`);
 
@@ -19068,11 +19133,13 @@ app.post('/api/farm/auth/login', authRateLimiter, asyncHandler(async (req, res) 
       farmId: farm.farm_id,
       farmName: farm.name,
       email: user.email,
+      name: user.name || user.email,
       role: user.role || 'admin',
       planType: farm.plan_type || 'cloud',
       subscription,
       expiresAt: sessionExpiry.toISOString(),
-      firstLogin: Boolean(firstLogin)
+      firstLogin: Boolean(firstLogin),
+      mustChangePassword
     });
   } catch (err) {
     console.error('[farm-auth] Login error:', err?.message || err, err?.stack || '');
@@ -19224,11 +19291,11 @@ app.post('/api/farm/auth/change-password', asyncHandler(async (req, res) => {
   }
 
   try {
-    // Get user
+    // Get user from farm_users (authoritative table)
     const userResult = await pool.query(
-      `SELECT user_id, email, password_hash, farm_id 
-       FROM users 
-       WHERE farm_id = $1 AND LOWER(email) = LOWER($2)`,
+      `SELECT id, email, password_hash, farm_id 
+       FROM farm_users 
+       WHERE farm_id = $1 AND LOWER(email) = LOWER($2) AND status = 'active'`,
       [farmId, email]
     );
 
@@ -19253,10 +19320,10 @@ app.post('/api/farm/auth/change-password', asyncHandler(async (req, res) => {
     // Hash new password
     const newPasswordHash = await bcrypt.hash(newPassword, 10);
 
-    // Update password
+    // Update password and clear must_change_password flag
     await pool.query(
-      'UPDATE users SET password_hash = $1, updated_at = NOW() WHERE user_id = $2',
-      [newPasswordHash, user.user_id]
+      'UPDATE farm_users SET password_hash = $1, must_change_password = false, updated_at = NOW() WHERE id = $2',
+      [newPasswordHash, user.id]
     );
 
     console.log(`[farm-auth] Password changed successfully for ${email} in farm ${farmId}`);
@@ -31618,17 +31685,16 @@ async function syncOrdersFromCentral() {
     if (centralOrders.length === 0) return;
 
     // Check each Central order against local NeDB store
+    // Fetch local sub-orders once to avoid repeated DB queries inside the loop
+    const existingLocal = await orderStore.listFarmSubOrders(farmId);
     let synced = 0;
     for (const order of centralOrders) {
-      const orderId = order.master_order_id || order.id;
+      const orderId = String(order.master_order_id || order.id || '');
       if (!orderId) continue;
 
-      // Check if we already have this order locally
-      const existing = await orderStore.listFarmSubOrders(farmId);
-      const alreadyHave = existing.some(s =>
-        s.master_order_id === orderId ||
-        s.wholesale_order_id === orderId ||
-        String(s.master_order_id) === String(orderId)
+      const alreadyHave = existingLocal.some(s =>
+        String(s.master_order_id) === orderId ||
+        String(s.wholesale_order_id) === orderId
       );
 
       if (!alreadyHave) {
@@ -31636,7 +31702,7 @@ async function syncOrdersFromCentral() {
         const subOrderId = 'SO-' + orderId + '-' + farmId;
         const orderData = order.order_data || {};
         const subOrders = Array.isArray(orderData.farm_sub_orders) ? orderData.farm_sub_orders : [];
-        const farmSub = subOrders.find(s => s.farm_id === farmId) || subOrders[0] || {};
+        const farmSub = subOrders.find(s => String(s.farm_id) === String(farmId)) || subOrders[0] || {};
         const items = (farmSub.items || []).map(it => ({
           sku_id: it.sku_id || '',
           product_name: it.product_name || it.sku_id || 'Unknown',
@@ -31646,13 +31712,22 @@ async function syncOrdersFromCentral() {
           line_total: (Number(it.price_per_unit || it.unit_price) || 0) * (Number(it.quantity) || 0)
         }));
 
+        // Skip orders with no usable item data (Central row had no order_data)
+        if (items.length === 0 && !farmSub.farm_name) {
+          console.warn(`[order-sync] Skipping order ${orderId}: no item data in Central response`);
+          continue;
+        }
+
+        // Use sub-order status from Central rather than hardcoding pending_verification
+        const centralStatus = farmSub.status || order.status || 'pending_verification';
+
         const subOrder = {
           sub_order_id: subOrderId,
           wholesale_order_id: orderId,
           master_order_id: orderId,
           farm_id: farmId,
           farm_name: farmSub.farm_name || farmId,
-          status: 'pending_verification',
+          status: centralStatus,
           items,
           sub_total: farmSub.sub_total || items.reduce((s, i) => s + (i.line_total || 0), 0),
           buyer_name: orderData.buyer_name || order.buyer_email || '',
@@ -31667,7 +31742,7 @@ async function syncOrdersFromCentral() {
 
         await orderStore.saveSubOrder(subOrder);
         synced++;
-        console.log(`[order-sync] Recovered missed order from Central: ${subOrderId}`);
+        console.log(`[order-sync] Recovered missed order from Central: ${subOrderId} (status: ${centralStatus})`);
       }
     }
 

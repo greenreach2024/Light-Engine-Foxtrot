@@ -1,7 +1,7 @@
 # Sensor Data Pipeline: End-to-End Reference
 
-**Version**: 1.0.0
-**Date**: March 19, 2026
+**Version**: 2.0.0
+**Date**: April 8, 2026
 **Authority**: Canonical reference for how environmental sensor data flows from physical sensors to the user's dashboard. All agents MUST read this before modifying any code that touches environmental data.
 
 ---
@@ -10,12 +10,12 @@
 
 ```
 Physical Sensors (BLE) -> SwitchBot Hub Mini (WiFi) -> SwitchBot Cloud API
-    -> LE-EB setupLiveSensorSync() [polls every 30s]
+    -> LE Cloud Run setupLiveSensorSync() [polls every 30s]
     -> preEnvStore (in-memory) + env.json (file persistence)
-    -> GET /env on LE-EB (serves snapshot)
+    -> GET /env on LE Cloud Run (serves snapshot)
     -> sync-service.js [reads /env, POSTs every 30s]
     -> Central POST /api/sync/telemetry
-    -> PostgreSQL farm_data table (key: telemetry)
+    -> AlloyDB farm_data table (key: telemetry)
     -> Central GET /env [reads from DB]
     -> Dashboard farm-summary.html [fetches /env every 60s]
 ```
@@ -49,7 +49,7 @@ Each stage is documented below with exact file locations, function names, and fa
 
 ---
 
-## Stage 2: SwitchBot Cloud API Polling (LE-EB)
+## Stage 2: SwitchBot Cloud API Polling (LE Cloud Run)
 
 **File**: `server-foxtrot.js`
 **Function**: `setupLiveSensorSync()` (line ~29252)
@@ -58,7 +58,7 @@ Each stage is documented below with exact file locations, function names, and fa
 
 ### How It Works
 
-1. `setupLiveSensorSync()` is called during server startup
+1. `setupLiveSensorSync()` is called during server startup on the LE Cloud Run instance
 2. It calls `ensureSwitchBotConfigured()` (line ~8418) to check credentials exist
 3. If no credentials found, **the entire sensor sync silently skips** (no error, no warning)
 4. If credentials exist, it polls each sensor's status via SwitchBot API v1.1
@@ -71,12 +71,12 @@ Each stage is documented below with exact file locations, function names, and fa
 
 ```
 1. Read public/data/farm.json -> integrations.switchbot.token / .secret
-2. Fall back to process.env.SWITCHBOT_TOKEN / SWITCHBOT_SECRET
+2. Fall back to process.env.SWITCHBOT_TOKEN / SWITCHBOT_SECRET (Cloud Run Secret Manager)
 3. If neither found -> return empty -> ensureSwitchBotConfigured() returns false -> NO POLLING
 ```
 
 **Current Production Config:**
-- `SWITCHBOT_TOKEN` and `SWITCHBOT_SECRET` are set as EB environment variables on `light-engine-foxtrot-prod-v3`
+- `SWITCHBOT_TOKEN` and `SWITCHBOT_SECRET` are stored in Google Secret Manager and mounted as env vars on the `light-engine` Cloud Run service
 - `public/data/farm.json` also contains `integrations.switchbot` as belt-and-suspenders backup
 
 ### API Authentication
@@ -98,7 +98,7 @@ SwitchBot API v1.1 requires HMAC-SHA256 authentication:
 
 ### Failure Modes
 
-- **Missing credentials**: Polling silently skipped. This was the root cause of the March 6-19, 2026 outage. env.json contained stale values from the last deploy, and the system recycled those stale values with fresh timestamps, making stale data appear current.
+- **Missing credentials**: Polling silently skipped. This was the root cause of the March 6-19, 2026 outage (on the legacy EB deployment). env.json contained stale values from the last deploy, and the system recycled those stale values with fresh timestamps, making stale data appear current. On Cloud Run, credentials are managed via Secret Manager.
 - **API rate limit**: Requests return 429, retried on next cycle
 - **Invalid credentials**: API returns 401, logged as error
 - **Network timeout**: Request fails, retried on next 30s cycle
@@ -155,7 +155,7 @@ SwitchBot API v1.1 requires HMAC-SHA256 authentication:
 
 ---
 
-## Stage 4: LE-EB GET /env Endpoint
+## Stage 4: LE Cloud Run GET /env Endpoint
 
 **File**: `server-foxtrot.js`
 **Route**: `GET /env` (line ~5193)
@@ -180,15 +180,15 @@ SwitchBot API v1.1 requires HMAC-SHA256 authentication:
 
 ---
 
-## Stage 5: Sync Service (LE-EB to Central)
+## Stage 5: Sync Service (LE Cloud Run to Central)
 
 **File**: `lib/sync-service.js`
-**Runs on**: LE-EB instance (same server as the farm)
+**Runs on**: LE Cloud Run instance (same server as the farm)
 **Interval**: Every 30 seconds
 
 ### How It Works
 
-1. Reads the LE-EB's own `/env` endpoint (localhost)
+1. Reads the LE Cloud Run's own `/env` endpoint (localhost)
 2. POSTs the data to Central's `POST /api/sync/telemetry`
 3. Uses Farm API key from `config/edge-config.json` for authentication
 4. Headers: `X-Farm-ID` + `X-API-Key`
@@ -221,7 +221,7 @@ SwitchBot API v1.1 requires HMAC-SHA256 authentication:
 
 ### Database Storage
 
-- **Table**: `farm_data`
+- **Table**: `farm_data` (AlloyDB)
 - **Key**: `telemetry`
 - **Farm ID**: Column value matches `FARM-MLTP9LVH-B0B85039`
 - **Data**: JSON blob with zone temperatures, humidity, timestamps
@@ -235,20 +235,20 @@ SwitchBot API v1.1 requires HMAC-SHA256 authentication:
 
 ### How It Works (Current - Post March 19, 2026 Fix)
 
-1. **First**: Try `farmStore.get(farmId, 'telemetry')` from PostgreSQL/in-memory
+1. **First**: Try `farmStore.get(farmId, 'telemetry')` from AlloyDB/in-memory
 2. **If found**: Return DB data with `envSource: "sync-service"`
-3. **If empty**: Fall back to proxying request to LE-EB via `FARM_EDGE_URL`
+3. **If empty**: Fall back to proxying request to LE Cloud Run via `FARM_EDGE_URL`
 4. **Proxy uses**: `FARM_EDGE_URL` env var + `leProxyHeaders()` (X-Farm-ID + X-API-Key)
 
 ### Why DB-First Matters
 
-The sync-service pushes data every 30s. The DB always has the freshest data from the LE-EB. Proxying to LE-EB adds latency and an extra network hop. DB-first is both faster and more reliable.
+The sync-service pushes data every 30s. The DB always has the freshest data from LE Cloud Run. Proxying to LE adds latency and an extra network hop. DB-first is both faster and more reliable.
 
 ### Central Environment Variables (for this endpoint)
 
 | Variable | Value | Purpose |
 |----------|-------|---------|
-| `FARM_EDGE_URL` | `http://light-engine-foxtrot-prod-v2.eba-ukiyyqf9.us-east-1.elasticbeanstalk.com` | LE-EB direct URL (v2 CNAME = v3 env) |
+| `FARM_EDGE_URL` | `https://light-engine-1029387937866.us-east1.run.app` | LE Cloud Run URL |
 | `FARM_ID` | `FARM-MLTP9LVH-B0B85039` | Farm identifier |
 | `GREENREACH_API_KEY` | (set on EB) | For proxy auth headers |
 
@@ -309,13 +309,13 @@ badges when telemetry is healthy but `status` is omitted.
 ### Scenario: All Sensor Data Stale (No Updates)
 
 **Check in order:**
-1. Are SwitchBot credentials configured? (EB env vars + farm.json)
-2. Is `setupLiveSensorSync()` running? (Check LE-EB logs)
+1. Are SwitchBot credentials configured? (Cloud Run secrets + farm.json)
+2. Is `setupLiveSensorSync()` running? (Check LE Cloud Run logs)
 3. Is SwitchBot API returning data? (curl test with auth headers)
-4. Is sync-service running? (Check LE-EB logs for POST attempts)
-5. Is Central receiving telemetry? (Check Central DB: `farm_data` where key='telemetry')
+4. Is sync-service running? (Check LE Cloud Run logs for POST attempts)
+5. Is Central receiving telemetry? (Check AlloyDB: `farm_data` where key='telemetry')
 
-### Scenario: Central Shows Stale but LE-EB Has Fresh Data
+### Scenario: Central Shows Stale but LE Cloud Run Has Fresh Data
 
 **Check in order:**
 1. Is sync-service posting to correct Central URL?
@@ -360,3 +360,15 @@ back to `device.status || 'offline'` instead of derived status.
 | Edge Config | `config/edge-config.json` | `farmId`, `apiKey`, `centralApiUrl` |
 | IoT Devices | `public/data/iot-devices.json` | Device registry (sensors, hub) |
 | Env State | `data/automation/env-state.json` | EnvStore persistence file |
+
+---
+
+## Cloud Run Specifics
+
+On Cloud Run, the sensor pipeline has these differences from the legacy EB deployment:
+
+- **Credentials**: Stored in Google Secret Manager, mounted as env vars (not EB env vars)
+- **Persistence**: env-state.json persists to GCS FUSE mount (`/app/data`) across container restarts
+- **Keepalive**: Cloud Scheduler `sensor-sync-keepalive` pings LE every 5 min to prevent cold starts
+- **Cron trigger**: Cloud Scheduler `sensor-sync-cron` POSTs to `/api/cron/sensor-sync` every 2 min as a redundant sync trigger
+- **Scaling**: Min 1 instance with CPU always-allocated ensures sensor polling timers survive

@@ -240,6 +240,17 @@ function resolveFarmPhone(profile = {}) {
   ]);
 }
 
+function resolveFarmEmail(profile = {}) {
+  const contact = profile.contact || {};
+  return firstDefinedValue([
+    profile.email,
+    profile.contact_email,
+    contact.email,
+    contact.contact_email,
+    contact.primary_email
+  ]);
+}
+
 /**
  * Assemble full invoice data object.
  *
@@ -275,6 +286,7 @@ export function assembleInvoice({ order, subOrders, farmProfiles, buyerProfile }
     const safety = extractSafetyFlags(practices, certifications);
     const farmAddress = buildFarmAddress(profile);
     const farmPhone = resolveFarmPhone(profile);
+    const farmEmail = resolveFarmEmail(profile);
 
     // Farm coordinates
     const farmLat = parseFloat(profile.location?.lat || profile.location?.latitude);
@@ -314,10 +326,11 @@ export function assembleInvoice({ order, subOrders, farmProfiles, buyerProfile }
     return {
       farm_id: farmId,
       farm_name: sub.farm_name || profile.name || farmId,
-      city: profile.city || '',
-      state: profile.state || '',
+      city: profile.city || profile.location?.city || profile.location?.town || '',
+      state: profile.state || profile.province || profile.location?.state || profile.location?.province || profile.location?.region || '',
       address: farmAddress,
       phone: farmPhone,
+      email: farmEmail,
       practices: practices.map(p => PRACTICE_LABELS[p] || p),
       certifications: certifications.map(c => CERT_LABELS[c] || c),
       safety,
@@ -378,20 +391,66 @@ export function assembleInvoice({ order, subOrders, farmProfiles, buyerProfile }
         trailing_spend: order.buyer_discount?.trailing_spend || 0 }
     : null;
 
-  const delivery = order.delivery
-    || order.cart?.delivery
-    || (order.delivery_address
-      ? {
-          address: [
-            order.delivery_address.street,
-            order.delivery_address.city,
-            order.delivery_address.province || order.delivery_address.state,
-            order.delivery_address.postalCode || order.delivery_address.zip
-          ].filter(Boolean).join(', '),
-          zip: order.delivery_address.postalCode || order.delivery_address.zip || '',
-          delivery_date: order.delivery_date || ''
-        }
-      : null);
+  const fulfillmentMethod = String(
+    order.fulfillment_method
+    || order.fulfillmentMethod
+    || order.cart?.fulfillment_method
+    || order.cart?.fulfillmentMethod
+    || order.delivery?.method
+    || ''
+  ).toLowerCase() === 'pickup' ? 'pickup' : 'delivery';
+
+  const deliveryAddress = order.delivery_address || order.cart?.delivery_address || {};
+  const deliveryAddressText = firstDefinedValue([
+    order.delivery?.address,
+    [
+      deliveryAddress.street || deliveryAddress.address1,
+      deliveryAddress.city,
+      deliveryAddress.province || deliveryAddress.state,
+      deliveryAddress.postalCode || deliveryAddress.postal_code || deliveryAddress.zip
+    ].filter(Boolean).join(', ')
+  ]);
+  const deliveryZip = firstDefinedValue([
+    order.delivery?.zip,
+    deliveryAddress.postalCode,
+    deliveryAddress.postal_code,
+    deliveryAddress.zip
+  ]);
+  const deliveryDate = firstDefinedValue([
+    order.delivery_date,
+    order.deliveryDate,
+    order.delivery?.delivery_date,
+    order.delivery?.date
+  ]);
+  const pickupSchedule = firstDefinedValue([
+    order.pickup_schedule,
+    order.pickupSchedule,
+    order.cart?.pickup_schedule,
+    order.cart?.pickupSchedule
+  ]);
+  const deliverySchedule = firstDefinedValue([
+    order.delivery_schedule,
+    order.deliverySchedule,
+    order.cart?.delivery_schedule,
+    order.cart?.deliverySchedule
+  ]);
+  const preferredWindow = firstDefinedValue([
+    order.preferred_delivery_window,
+    order.preferredDeliveryWindow,
+    order.time_slot,
+    order.cart?.preferred_delivery_window,
+    order.cart?.time_slot
+  ]);
+
+  const delivery = {
+    method: fulfillmentMethod,
+    address: deliveryAddressText,
+    zip: deliveryZip,
+    delivery_date: deliveryDate,
+    preferred_window: preferredWindow,
+    pickup_schedule: pickupSchedule,
+    delivery_schedule: deliverySchedule
+  };
 
   return {
     invoice_id: `INV-${masterOrderId}`,
@@ -520,6 +579,7 @@ export function renderInvoiceHTML(invoice) {
           ${farm.city || farm.state ? `<div class="farm-location">${esc(farm.city)}${farm.city && farm.state ? ', ' : ''}${esc(farm.state)}</div>` : ''}
           ${farm.address ? `<div class="farm-trace"><strong>Address:</strong> ${esc(farm.address)}</div>` : '<div class="farm-trace missing">Address: Missing in farm profile</div>'}
           ${farm.phone ? `<div class="farm-trace"><strong>Phone:</strong> ${esc(farm.phone)}</div>` : '<div class="farm-trace missing">Phone: Missing in farm profile</div>'}
+            ${farm.email ? `<div class="farm-trace"><strong>Email:</strong> ${esc(farm.email)}</div>` : ''}
           ${farm.tax_registration_number ? `<div class="farm-trace"><strong>GST/HST Reg:</strong> ${esc(farm.tax_registration_number)}</div>` : ''}
           ${badgesHTML}
           ${farmEnvHTML}
@@ -591,12 +651,25 @@ export function renderInvoiceHTML(invoice) {
   // Delivery info
   let deliveryHTML = '';
   if (delivery) {
-    deliveryHTML = `
+    const method = String(delivery.method || 'delivery').toLowerCase();
+    if (method === 'pickup') {
+      const pickupWindow = delivery.pickup_schedule || delivery.preferred_window || '';
+      deliveryHTML = `
+      <div class="delivery-info">
+        <strong>Pickup:</strong> At Farm
+        ${delivery.delivery_date ? ` &middot; Date: ${esc(delivery.delivery_date)}` : ''}
+        ${pickupWindow ? ` &middot; Window: ${esc(pickupWindow)}` : ''}
+      </div>`;
+    } else {
+      const deliveryWindow = delivery.delivery_schedule || delivery.preferred_window || '';
+      deliveryHTML = `
       <div class="delivery-info">
         <strong>Delivery:</strong> ${esc(delivery.address || '')}
         ${delivery.delivery_date ? ` &middot; Date: ${esc(delivery.delivery_date)}` : ''}
+        ${deliveryWindow ? ` &middot; Window: ${esc(deliveryWindow)}` : ''}
         ${delivery.zip ? ` &middot; ZIP: ${esc(delivery.zip)}` : ''}
       </div>`;
+    }
   }
 
   return `<!DOCTYPE html>

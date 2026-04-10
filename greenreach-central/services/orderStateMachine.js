@@ -6,8 +6,9 @@
 
 // ── Order status transitions (buyer/admin facing) ────────────────────
 const ORDER_TRANSITIONS = {
-  'new':              ['pending', 'confirmed', 'cancelled', 'rejected'],
-  'pending':          ['confirmed', 'processing', 'cancelled', 'rejected'],
+  'new':              ['pending', 'pending_verification', 'confirmed', 'cancelled', 'rejected'],
+  'pending':          ['pending_verification', 'confirmed', 'processing', 'cancelled', 'rejected'],
+  'pending_verification': ['confirmed', 'cancelled', 'rejected', 'expired'],
   'confirmed':        ['processing', 'shipped', 'cancelled'],
   'processing':       ['shipped', 'cancelled'],
   'shipped':          ['delivered', 'returned'],

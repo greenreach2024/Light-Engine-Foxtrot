@@ -17,8 +17,12 @@ function getSubOrderAmountCents(subOrder) {
   return 0;
 }
 
-function makeIdempotencyKey({ masterOrderId, farmId, amountCents }) {
-  const raw = `${masterOrderId}:${farmId}:${amountCents}`;
+function makeIdempotencyKey({ masterOrderId, farmId, amountCents, cartFingerprint }) {
+  // When a cart fingerprint is available, use it instead of the random order ID.
+  // This ensures that retry submissions produce the same idempotency key,
+  // so Square rejects duplicate charges even when the order ID differs.
+  const stableId = cartFingerprint || masterOrderId;
+  const raw = `${stableId}:${farmId}:${amountCents}`;
   return crypto.createHash('sha256').update(raw).digest('hex');
 }
 
@@ -41,7 +45,7 @@ function summarizeResults(paymentResults) {
 }
 
 export async function processSquarePayments(params) {
-  const { masterOrderId, farmSubOrders = [], paymentSource = {}, commissionRate = 0 } = params || {};
+  const { masterOrderId, farmSubOrders = [], paymentSource = {}, commissionRate = 0, cartFingerprint = null } = params || {};
 
   if (!masterOrderId) {
     return summarizeResults([{ success: false, farmId: null, error: 'master_order_id_required', amountMoney: { amount: 0, currency: 'CAD' }, brokerFeeMoney: { amount: 0, currency: 'CAD' }, status: 'FAILED' }]);
@@ -119,7 +123,7 @@ export async function processSquarePayments(params) {
         farmLocationId: creds.location_id,
         amountMoney: { amount: amountCents, currency: 'CAD' },
         brokerFeeMoney: { amount: brokerFeeCents, currency: 'CAD' },
-        idempotencyKey: makeIdempotencyKey({ masterOrderId, farmId, amountCents }),
+        idempotencyKey: makeIdempotencyKey({ masterOrderId, farmId, amountCents, cartFingerprint }),
         metadata: {
           sourceId,
           customerId,
@@ -203,6 +207,140 @@ export async function refundPayment({ paymentId, farmId, amountCents, reason, or
   } catch (error) {
     console.error(`[Refund] Failed for payment ${paymentId} farm ${farmId}:`, error.message);
     return { success: false, error: error.message || 'refund_failed' };
+  }
+}
+
+/**
+ * Charge the buyer via GreenReach's own Square account when farms lack Square.
+ * GreenReach receives the FULL amount (no app_fee_money split). The broker fee
+ * and farm payables are tracked via the accounting ledger only.
+ *
+ * @param {object} params
+ * @param {string} params.masterOrderId - Master order ID
+ * @param {Array}  params.farmSubOrders - Array of farm sub-order objects
+ * @param {object} params.paymentSource - { source_id, customer_id }
+ * @param {number} params.commissionRate - Broker commission rate (e.g. 0.12)
+ * @returns {Promise<object>} Same shape as processSquarePayments result
+ */
+export async function processGreenReachDirectPayment(params) {
+  const { masterOrderId, farmSubOrders = [], paymentSource = {}, commissionRate = 0, cartFingerprint = null } = params || {};
+
+  if (!masterOrderId) {
+    return summarizeResults([{ success: false, farmId: null, error: 'master_order_id_required', amountMoney: { amount: 0, currency: 'CAD' }, brokerFeeMoney: { amount: 0, currency: 'CAD' }, status: 'FAILED' }]);
+  }
+
+  const sourceId = paymentSource?.source_id || paymentSource?.sourceId || null;
+  const customerId = paymentSource?.customer_id || null;
+  if (!sourceId) {
+    const failedResults = farmSubOrders.map((subOrder) => ({
+      farmId: subOrder.farm_id,
+      success: false,
+      error: 'valid_square_source_id_required',
+      amountMoney: { amount: getSubOrderAmountCents(subOrder), currency: 'CAD' },
+      brokerFeeMoney: { amount: 0, currency: 'CAD' },
+      status: 'FAILED',
+    }));
+    return summarizeResults(failedResults);
+  }
+
+  const accessToken = process.env.SQUARE_ACCESS_TOKEN;
+  const locationId = process.env.SQUARE_LOCATION_ID;
+  const squareEnvironment = process.env.SQUARE_ENVIRONMENT;
+
+  if (!accessToken || !locationId || !squareEnvironment) {
+    const failedResults = farmSubOrders.map((subOrder) => ({
+      farmId: subOrder.farm_id,
+      success: false,
+      error: 'greenreach_square_credentials_not_configured',
+      amountMoney: { amount: getSubOrderAmountCents(subOrder), currency: 'CAD' },
+      brokerFeeMoney: { amount: 0, currency: 'CAD' },
+      status: 'FAILED',
+    }));
+    return summarizeResults(failedResults);
+  }
+
+  // Aggregate all farm sub-orders into a single charge to GreenReach's Square
+  let totalAmountCents = 0;
+  let totalBrokerFeeCents = 0;
+  for (const subOrder of farmSubOrders) {
+    const amountCents = getSubOrderAmountCents(subOrder);
+    totalAmountCents += amountCents;
+    totalBrokerFeeCents += Math.max(0, Math.round(amountCents * Number(commissionRate || 0)));
+  }
+
+  if (totalAmountCents <= 0) {
+    return summarizeResults([{
+      farmId: 'greenreach-direct',
+      success: false,
+      error: 'invalid_total_amount',
+      amountMoney: { amount: 0, currency: 'CAD' },
+      brokerFeeMoney: { amount: 0, currency: 'CAD' },
+      status: 'FAILED',
+    }]);
+  }
+
+  try {
+    const provider = PaymentProviderFactory.create('square', {
+      squareAccessToken: accessToken,
+      environment: squareEnvironment,
+    });
+
+    const stableId = cartFingerprint || masterOrderId;
+    const idempotencyKey = crypto.createHash('sha256')
+      .update(`gr-direct:${stableId}:${totalAmountCents}`)
+      .digest('hex')
+      .substring(0, 45);
+
+    // Charge the full amount to GreenReach's location (no app_fee_money)
+    const providerResponse = await provider.createPayment({
+      farmSubOrderId: masterOrderId,
+      farmMerchantId: null,
+      farmLocationId: locationId,
+      amountMoney: { amount: totalAmountCents, currency: 'CAD' },
+      brokerFeeMoney: { amount: 0, currency: 'CAD' }, // No split — GreenReach receives the full amount
+      idempotencyKey,
+      metadata: {
+        sourceId,
+        customerId,
+        buyerEmail: farmSubOrders[0]?.buyer_email,
+        buyerId: farmSubOrders[0]?.buyer_id,
+      },
+    });
+
+    // Return per-farm results so accounting can process each sub-order
+    const paymentResults = farmSubOrders.map((subOrder) => {
+      const amountCents = getSubOrderAmountCents(subOrder);
+      const brokerFeeCents = Math.max(0, Math.round(amountCents * Number(commissionRate || 0)));
+      return {
+        farmId: subOrder.farm_id,
+        success: true,
+        paymentId: providerResponse.paymentId,
+        amountMoney: { amount: amountCents, currency: 'CAD' },
+        brokerFeeMoney: { amount: brokerFeeCents, currency: 'CAD' },
+        status: providerResponse.status || 'COMPLETED',
+        provider: 'square',
+        greenreach_held: true,
+      };
+    });
+
+    console.log(`[GreenReach Direct] Payment ${providerResponse.paymentId} for order ${masterOrderId}: $${(totalAmountCents / 100).toFixed(2)} CAD`);
+    return {
+      ...summarizeResults(paymentResults),
+      greenreach_held: true,
+      greenreach_payment_id: providerResponse.paymentId,
+    };
+
+  } catch (error) {
+    console.error(`[GreenReach Direct] Payment failed for order ${masterOrderId}:`, error.message);
+    const failedResults = farmSubOrders.map((subOrder) => ({
+      farmId: subOrder.farm_id,
+      success: false,
+      error: error.message || 'greenreach_direct_payment_failed',
+      amountMoney: { amount: getSubOrderAmountCents(subOrder), currency: 'CAD' },
+      brokerFeeMoney: { amount: Math.max(0, Math.round(getSubOrderAmountCents(subOrder) * Number(commissionRate || 0))), currency: 'CAD' },
+      status: 'FAILED',
+    }));
+    return summarizeResults(failedResults);
   }
 }
 

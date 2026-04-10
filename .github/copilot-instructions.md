@@ -11,6 +11,7 @@ The farm runs entirely on Google Cloud Run. The Light Engine Cloud Run service I
 **Read `.github/CLOUD_ARCHITECTURE.md` for the full architecture reference.**
 **Read `.github/SENSOR_DATA_PIPELINE.md` for the complete sensor data flow.**
 **Read `.github/CRITICAL_CONFIGURATION.md` for all credentials, env vars, and config files.**
+**Read `.github/PAYMENT_WORKFLOW.md` for the complete payment, checkout, Square integration, and accounting reference.**
 **Read `.github/TROUBLESHOOTING_ENV_DATA.md` before debugging any sensor data issues.**
 **Read `.github/COMPLETE_SYSTEM_MAP.md` for the full platform mapping -- every page, route, table, data flow, button, sensor, and known error. Consult this BEFORE making changes to understand cross-system impacts.**
 
@@ -27,6 +28,24 @@ The farm runs entirely on Google Cloud Run. The Light Engine Cloud Run service I
 7. **NO cross-origin redirects between LE and Central.** Never redirect UI page requests from one server to the other -- it breaks iframes, CSP, and HTTPS. Both servers serve the same static UI files directly.
 8. **AWS/EB is DEPRECATED.** Do not reference EB environments, use `eb deploy`, or use any `aws elasticbeanstalk` commands. All infrastructure is Google Cloud Run. See `.github/CLOUD_ARCHITECTURE.md`.
 9. **GCP Project**: `project-5d00790f-13a9-4637-a40`, region `us-east1`. Artifact Registry: `us-east1-docker.pkg.dev/project-5d00790f-13a9-4637-a40/greenreach`.
+
+### Recent Fixes (Apr 8, 2026)
+
+26. **FAYE Diagnostic Tools Fix + New Tools (deployed greenreach-central-00048-fhx)**
+    - File: `greenreach-central/routes/admin-ops-agent.js`
+    - Fixed `get_sync_status` tool: was querying non-existent columns (`sync_type`, `last_success_at`, `last_failure_at`, `error_count`). Now uses actual `data_type` and `updated_at` columns from `farm_data` table.
+    - Added `search_codebase` tool: cross-file grep search with regex support (max 5 files, 3 matches/file). Enables FAYE to trace code paths during diagnostics.
+    - Added `get_page_route_map` tool: returns architecture mapping of all pages to their code files, API routes, and data flows. Enables FAYE to understand page-to-route dependencies.
+    - Fixed `check_dependencies` description: removed misleading Stripe reference.
+    - Updated FAYE system prompt with diagnostic workflow: get_sync_status -> search_codebase -> get_page_route_map -> check_dependencies.
+
+27. **Documentation Overhaul (April 8, 2026)**
+    - Created `PAYMENT_WORKFLOW.md`: Complete reference for Square integration, checkout flow, pricing model, double-entry accounting, webhook processing, order state machine, and database schemas.
+    - Updated `CRITICAL_CONFIGURATION.md` to v2.0.0: Replaced all AWS/EB references with Cloud Run env vars and Secret Manager. Added Square, SMTP, AlloyDB, and Anthropic credentials.
+    - Updated `CLOUD_ARCHITECTURE.md` to v2.1.0: Added Payment Infrastructure section, FAYE diagnostic tools section, updated deployment log.
+    - Updated `COMPLETE_SYSTEM_MAP.md` to v2.0.0: Replaced Section 2 (AWS Infrastructure) with Google Cloud, updated env vars, external services, deploy commands, all LE-EB references.
+    - Updated `SENSOR_DATA_PIPELINE.md` to v2.0.0: Replaced all LE-EB references with Cloud Run, added Cloud Run specifics section (GCS FUSE, Cloud Scheduler keepalive, Secret Manager).
+    - Files changed: PAYMENT_WORKFLOW.md (new), CRITICAL_CONFIGURATION.md, CLOUD_ARCHITECTURE.md, COMPLETE_SYSTEM_MAP.md, SENSOR_DATA_PIPELINE.md, copilot-instructions.md
 
 ### Recent Fixes (Apr 4, 2026)
 

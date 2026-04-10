@@ -293,7 +293,7 @@ router.get('/:farmId', async (req, res) => {
 
     const transparency = buildRecommendationTransparency({
       source,
-      degradedMode: !openai
+      degradedMode: !isGeminiConfigured()
     });
 
     res.json({
@@ -309,9 +309,9 @@ router.get('/:farmId', async (req, res) => {
       raw_ai_response: aiResponse,
       tokens_used: tokensUsed,
       source,
-      degraded_mode: !openai,
+      degraded_mode: !isGeminiConfigured(),
       transparency,
-      message: openai ? 'AI insights generated with OpenAI' : 'OpenAI API key not configured; returned rule-based fallback insights'
+      message: isGeminiConfigured() ? 'AI insights generated with Gemini' : 'Gemini API key not configured; returned rule-based fallback insights'
     });
 
   } catch (error) {

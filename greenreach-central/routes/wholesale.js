@@ -53,7 +53,7 @@ import {
 } from '../services/wholesaleNetworkAggregator.js';
 import { listNetworkFarms, removeNetworkFarm, upsertNetworkFarm } from '../services/networkFarmsStore.js';
 import { getBatchFarmSquareCredentials } from '../services/squareCredentials.js';
-import { processSquarePayments, refundPayment, saveCardOnFile, getCardOnFile, removeCardOnFile } from '../services/squarePaymentService.js';
+import { processSquarePayments, processGreenReachDirectPayment, refundPayment, saveCardOnFile, getCardOnFile, removeCardOnFile } from '../services/squarePaymentService.js';
 import { ingestPaymentRevenue, ingestFarmPayables, ingestFarmPayout } from '../services/revenue-accounting-connector.js';
 import emailService from '../services/email-service.js';
 import notificationStore from '../services/notification-store.js';
@@ -503,11 +503,13 @@ function applyFormulaPricingToCatalogSkus(skus, pricingContext, discountProfile)
   for (const sku of list) {
     const isCustomSku = Boolean(sku?.is_custom)
       || String(sku?.inventory_source || '').toLowerCase() === 'custom'
+      || String(sku?.inventory_source || '').toLowerCase() === 'mix'
       || (Array.isArray(sku?.quality_flags) && sku.quality_flags.includes('custom_product'))
       || (Array.isArray(sku?.farms) && sku.farms.some((farm) => {
         if (!farm || typeof farm !== 'object') return false;
         if (farm.is_custom === true) return true;
         if (String(farm.inventory_source || '').toLowerCase() === 'custom') return true;
+        if (String(farm.inventory_source || '').toLowerCase() === 'mix') return true;
         return Array.isArray(farm.quality_flags) && farm.quality_flags.includes('custom_product');
       }));
 
@@ -620,6 +622,101 @@ function extractCoordinates(rawLocation) {
 
   if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
   return { latitude, longitude };
+}
+
+const buyerGeocodeCache = new Map();
+const BUYER_GEOCODE_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+
+function normalizePostalCode(rawPostalCode) {
+  const compact = String(rawPostalCode || '')
+    .toUpperCase()
+    .replace(/\s+/g, '')
+    .replace(/[^A-Z0-9]/g, '');
+  if (compact.length !== 6) return '';
+  return `${compact.slice(0, 3)} ${compact.slice(3)}`;
+}
+
+function buildBuyerGeocodeQueries(rawLocation) {
+  if (!rawLocation || typeof rawLocation !== 'object') return [];
+
+  const address1 = trimField(rawLocation.address1 ?? rawLocation.address ?? rawLocation.street ?? rawLocation.street1 ?? '') || '';
+  const city = trimField(rawLocation.city ?? rawLocation.town ?? rawLocation.municipality ?? '') || '';
+  const state = trimField(rawLocation.state ?? rawLocation.province ?? rawLocation.region ?? '') || '';
+  const postalCode = normalizePostalCode(rawLocation.postalCode ?? rawLocation.zip ?? '');
+  const country = trimField(rawLocation.country ?? 'Canada') || 'Canada';
+
+  const queries = [];
+  const pushQuery = (parts) => {
+    const queryText = parts
+      .map((part) => String(part || '').trim())
+      .filter(Boolean)
+      .join(', ');
+    if (queryText && !queries.includes(queryText)) queries.push(queryText);
+  };
+
+  pushQuery([address1, city, state, postalCode, country]);
+  pushQuery([city, state, postalCode, country]);
+  pushQuery([postalCode, state, country]);
+  pushQuery([postalCode, country]);
+
+  return queries;
+}
+
+async function geocodeBuyerLocation(rawLocation) {
+  const directCoords = extractCoordinates(rawLocation);
+  if (directCoords) return directCoords;
+
+  const location = (rawLocation && typeof rawLocation === 'object') ? rawLocation : {};
+  const queries = buildBuyerGeocodeQueries(location);
+  if (!queries.length) return null;
+
+  const country = String(location.country || 'Canada').trim().toLowerCase();
+  const countryCodes = (!country || country === 'canada') ? 'ca' : '';
+
+  for (const queryText of queries) {
+    const cacheKey = `${countryCodes || 'all'}:${queryText.toLowerCase()}`;
+    const cached = buyerGeocodeCache.get(cacheKey);
+    if (cached && (Date.now() - cached.ts) < BUYER_GEOCODE_CACHE_TTL_MS) {
+      return { ...cached.coords };
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 4500);
+    try {
+      const params = new URLSearchParams({
+        format: 'jsonv2',
+        limit: '1',
+        q: queryText
+      });
+      if (countryCodes) params.set('countrycodes', countryCodes);
+
+      const response = await fetch(`https://nominatim.openstreetmap.org/search?${params.toString()}`, {
+        headers: {
+          Accept: 'application/json',
+          'User-Agent': 'GreenReachWholesale/1.0 (support@greenreachgreens.com)'
+        },
+        signal: controller.signal
+      });
+
+      if (!response.ok) continue;
+      const results = await response.json();
+      if (!Array.isArray(results) || results.length === 0) continue;
+
+      const latitude = toFiniteNumber(results[0].lat);
+      const longitude = toFiniteNumber(results[0].lon);
+      if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) continue;
+
+      const coords = { latitude, longitude };
+      buyerGeocodeCache.set(cacheKey, { coords, ts: Date.now() });
+      return coords;
+    } catch {
+      // Best-effort geocoding; continue with fallback queries.
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
+  return null;
 }
 
 function haversineDistanceKm(aLat, aLng, bLat, bLng) {
@@ -1422,6 +1519,59 @@ router.get('/catalog', async (req, res, next) => {
         }
       }
 
+      // ------------------------------------------------------------------
+      // Merge mix products from DB into catalog (same pattern as custom).
+      // ------------------------------------------------------------------
+      if (isDatabaseAvailable()) {
+        try {
+          const existingSkus2 = new Set(items.map(it => it.sku_id));
+          const mixResult = await query(
+            `SELECT i.product_id, i.product_name, i.sku, i.sku_name,
+                    i.quantity_available, i.manual_quantity_lbs,
+                    i.wholesale_price, i.retail_price, i.unit, i.quantity_unit,
+                    i.category, i.farm_id, i.inventory_source, i.source_data,
+                    f.name AS farm_name, f.metadata AS farm_metadata
+             FROM farm_inventory i
+             JOIN farms f ON f.farm_id = i.farm_id
+             WHERE f.status IN ('active','online')
+               AND LOWER(i.inventory_source) = 'mix'
+               AND COALESCE(i.quantity_available, i.manual_quantity_lbs, 0) > 0
+             ORDER BY i.product_name`
+          );
+          for (const row of (mixResult.rows || [])) {
+            const skuId = row.sku || row.product_id || row.product_name;
+            if (existingSkus2.has(skuId)) continue;
+            const qty = Number(row.quantity_available ?? row.manual_quantity_lbs ?? 0);
+            items.push({
+              sku_id: skuId,
+              product_name: row.product_name || row.sku_name || skuId,
+              category: row.category || 'Salad Mix',
+              unit: row.quantity_unit || row.unit || 'lb',
+              price_per_unit: Number(row.wholesale_price ?? row.retail_price ?? 0),
+              wholesale_price: Number(row.wholesale_price ?? 0),
+              retail_price: Number(row.retail_price ?? 0),
+              inventory_source: 'mix',
+              is_custom: false,
+              total_qty_available: qty,
+              qty_available: qty,
+              farms: [{
+                farm_id: row.farm_id,
+                farm_name: row.farm_name,
+                quantity_available: qty,
+                qty_available: qty,
+                price_per_unit: Number(row.wholesale_price ?? row.retail_price ?? 0),
+                inventory_source: 'mix',
+                is_custom: false,
+                quality_flags: [],
+                location: row.farm_metadata?.location || row.farm_metadata || null
+              }]
+            });
+          }
+        } catch (dbErr) {
+          console.warn('[Wholesale Catalog] Mix product merge failed:', dbErr.message);
+        }
+      }
+
       if (farmId) {
         items = items
           .map((it) => ({ ...it, farms: (it.farms || []).filter((f) => f.farm_id === farmId) }))
@@ -1942,13 +2092,31 @@ router.post('/buyers/register', registerLimiter, requireWholesaleDbForCriticalPa
       throw new ValidationError('Password must be at least 8 characters');
     }
 
+    const registrationLocation = {
+      address1: trimField(location?.address1) || trimField(location?.address) || trimField(location?.street) || null,
+      city: trimField(location?.city) || null,
+      state: trimField(location?.state) || trimField(location?.province) || null,
+      postalCode: normalizePostalCode(location?.postalCode || location?.zip)
+        || trimField(location?.postalCode)
+        || trimField(location?.zip)
+        || null,
+      country: trimField(location?.country) || 'Canada',
+      latitude: null,
+      longitude: null
+    };
+
+    const providedCoords = extractCoordinates(location || null);
+    const resolvedCoords = providedCoords || await geocodeBuyerLocation(registrationLocation);
+    registrationLocation.latitude = resolvedCoords?.latitude ?? null;
+    registrationLocation.longitude = resolvedCoords?.longitude ?? null;
+
     const buyer = await createBuyer({
       businessName: sanitizeText(businessName),
       contactName: sanitizeText(contactName),
       email,
       password,
       buyerType: sanitizeText(buyerType),
-      location
+      location: registrationLocation
     });
     const token = issueBuyerToken(buyer.id);
 
@@ -2113,17 +2281,80 @@ router.get('/buyers/me', requireBuyerPortalAuth, (req, res) => {
 
 router.put('/buyers/me', requireBuyerPortalAuth, async (req, res, next) => {
   try {
-    const { businessName, contactName, email, phone, buyerType, address, city, province, postalCode, country, keyContact, backupContact, backupPhone } = req.body || {};
+    const {
+      businessName,
+      contactName,
+      email,
+      phone,
+      buyerType,
+      address,
+      city,
+      province,
+      postalCode,
+      country,
+      latitude,
+      longitude,
+      location: locationPatch,
+      keyContact,
+      backupContact,
+      backupPhone
+    } = req.body || {};
+
+    const patchLocation = (locationPatch && typeof locationPatch === 'object') ? locationPatch : {};
 
     const location = {
-      address1: trimField(address) || req.wholesaleBuyer.location?.address1 || null,
-      city: trimField(city) || req.wholesaleBuyer.location?.city || null,
-      state: trimField(province) || req.wholesaleBuyer.location?.state || null,
-      postalCode: trimField(postalCode) || req.wholesaleBuyer.location?.postalCode || null,
-      country: trimField(country) || req.wholesaleBuyer.location?.country || null,
-      latitude: req.wholesaleBuyer.location?.latitude || null,
-      longitude: req.wholesaleBuyer.location?.longitude || null
+      address1: trimField(address)
+        || trimField(patchLocation.address1)
+        || trimField(patchLocation.address)
+        || trimField(patchLocation.street)
+        || req.wholesaleBuyer.location?.address1
+        || req.wholesaleBuyer.location?.address
+        || req.wholesaleBuyer.location?.street
+        || null,
+      city: trimField(city)
+        || trimField(patchLocation.city)
+        || req.wholesaleBuyer.location?.city
+        || null,
+      state: trimField(province)
+        || trimField(patchLocation.state)
+        || trimField(patchLocation.province)
+        || req.wholesaleBuyer.location?.state
+        || req.wholesaleBuyer.location?.province
+        || null,
+      postalCode: normalizePostalCode(
+        trimField(postalCode)
+        || trimField(patchLocation.postalCode)
+        || trimField(patchLocation.zip)
+        || req.wholesaleBuyer.location?.postalCode
+        || req.wholesaleBuyer.location?.zip
+        || ''
+      )
+        || trimField(postalCode)
+        || trimField(patchLocation.postalCode)
+        || trimField(patchLocation.zip)
+        || req.wholesaleBuyer.location?.postalCode
+        || req.wholesaleBuyer.location?.zip
+        || null,
+      country: trimField(country)
+        || trimField(patchLocation.country)
+        || req.wholesaleBuyer.location?.country
+        || 'Canada',
+      latitude: null,
+      longitude: null
     };
+
+    const providedCoords = extractCoordinates({
+      latitude: latitude ?? patchLocation.latitude,
+      longitude: longitude ?? patchLocation.longitude,
+      lat: patchLocation.lat,
+      lng: patchLocation.lng,
+      lon: patchLocation.lon,
+      location: patchLocation.location
+    });
+    const existingCoords = extractCoordinates(req.wholesaleBuyer.location);
+    const resolvedCoords = providedCoords || existingCoords || await geocodeBuyerLocation(location);
+    location.latitude = resolvedCoords?.latitude ?? null;
+    location.longitude = resolvedCoords?.longitude ?? null;
 
     const updated = await updateBuyer(req.wholesaleBuyer.id, {
       businessName: trimField(businessName),
@@ -2418,21 +2649,232 @@ router.get('/orders/:orderId/invoice', requireBuyerPortalAuth, async (req, res) 
     return res.status(404).json({ status: 'error', message: 'Order not found' });
   }
 
-  // Build farm profiles map from network farms for traceability
-  const networkFarms = await listNetworkFarms();
+  const firstText = (...values) => {
+    for (const value of values) {
+      if (value == null) continue;
+      const normalized = String(value).trim();
+      if (normalized) return normalized;
+    }
+    return '';
+  };
+
+  const parseObject = (value) => {
+    if (!value) return {};
+    if (typeof value === 'object' && !Array.isArray(value)) return value;
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (!trimmed) return {};
+      if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+        try {
+          const parsed = JSON.parse(trimmed);
+          if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+            return parsed;
+          }
+        } catch {
+          // Keep fallback below when value is non-JSON text.
+        }
+      }
+      return { address: trimmed };
+    }
+    return {};
+  };
+
   const farmProfiles = {};
+  const mergeFarmProfile = (farmId, patch = {}) => {
+    const existing = farmProfiles[farmId] || {
+      name: farmId,
+      city: '',
+      state: '',
+      phone: '',
+      email: '',
+      address: '',
+      contact: {},
+      location: {},
+      practices: [],
+      certifications: []
+    };
+
+    const mergedContact = {
+      ...parseObject(existing.contact),
+      ...parseObject(patch.contact)
+    };
+    const mergedLocation = {
+      ...parseObject(existing.location),
+      ...parseObject(patch.location)
+    };
+
+    farmProfiles[farmId] = {
+      ...existing,
+      ...patch,
+      name: firstText(patch.name, existing.name, farmId),
+      city: firstText(patch.city, existing.city, mergedLocation.city, mergedLocation.town),
+      state: firstText(
+        patch.state,
+        existing.state,
+        mergedLocation.state,
+        mergedLocation.province,
+        mergedLocation.region
+      ),
+      phone: firstText(
+        patch.phone,
+        existing.phone,
+        mergedContact.phone,
+        mergedContact.phone_number,
+        mergedContact.primary_phone,
+        mergedContact.mobile,
+        mergedContact.tel
+      ),
+      email: firstText(
+        patch.email,
+        existing.email,
+        mergedContact.email,
+        mergedContact.contact_email,
+        mergedContact.primary_email
+      ),
+      address: firstText(
+        patch.address,
+        existing.address,
+        mergedLocation.address,
+        mergedLocation.address1,
+        mergedLocation.street,
+        mergedLocation.street1,
+        mergedContact.address,
+        mergedContact.address1
+      ),
+      contact: mergedContact,
+      location: mergedLocation,
+      practices: Array.isArray(patch.practices)
+        ? patch.practices
+        : (Array.isArray(existing.practices) ? existing.practices : []),
+      certifications: Array.isArray(patch.certifications)
+        ? patch.certifications
+        : (Array.isArray(existing.certifications) ? existing.certifications : [])
+    };
+  };
+
+  // Build farm profiles map from network farms for traceability.
+  // Invoice contact fields are enriched below from farms table + farm_profile.
+  const networkFarms = await listNetworkFarms();
   for (const farm of networkFarms) {
-    const farmLocation = farm.location || {};
-    farmProfiles[farm.farm_id] = {
+    const farmLocation = parseObject(farm.location);
+    mergeFarmProfile(farm.farm_id, {
       name: farm.name || farm.farm_name || farm.farm_id,
       city: farm.city || farmLocation.city || '',
       state: farm.state || farmLocation.state || farmLocation.province || '',
       phone: farm.phone || farm.contact?.phone || farm.contact?.phone_number || '',
+      email: farm.email || farm.contact?.email || '',
+      address: farm.address || farmLocation.address || farmLocation.address1 || farmLocation.street || '',
       contact: farm.contact || {},
       location: farmLocation,
       practices: farm.practices || [],
       certifications: farm.certifications || []
-    };
+    });
+  }
+
+  const orderFarmIds = Array.from(new Set(
+    (order.farm_sub_orders || [])
+      .map((subOrder) => String(subOrder?.farm_id || '').trim())
+      .filter(Boolean)
+  ));
+
+  for (const farmId of orderFarmIds) {
+    mergeFarmProfile(farmId, {});
+  }
+
+  // DB fallback: fill contact/location from canonical farms row when network metadata is sparse.
+  if (orderFarmIds.length > 0 && await isDatabaseAvailable()) {
+    try {
+      const placeholders = orderFarmIds.map((_, idx) => `$${idx + 1}`).join(', ');
+      const farmResult = await query(
+        `SELECT farm_id, name, contact_name, email, contact_phone, location, metadata
+         FROM farms
+         WHERE farm_id IN (${placeholders})`,
+        orderFarmIds
+      );
+
+      for (const row of farmResult.rows) {
+        const metadata = parseObject(row.metadata);
+        const metadataContact = parseObject(metadata.contact);
+        const metadataLocation = parseObject(metadata.location);
+        const dbLocation = parseObject(row.location);
+
+        mergeFarmProfile(row.farm_id, {
+          name: row.name,
+          city: firstText(dbLocation.city, metadataLocation.city),
+          state: firstText(dbLocation.state, dbLocation.province, metadataLocation.state, metadataLocation.province),
+          phone: firstText(row.contact_phone, metadataContact.phone, metadataContact.phone_number),
+          email: firstText(row.email, metadataContact.email),
+          address: firstText(
+            dbLocation.address,
+            dbLocation.address1,
+            dbLocation.street,
+            dbLocation.street1,
+            metadataLocation.address,
+            metadataLocation.address1,
+            metadataLocation.street,
+            metadataContact.address,
+            metadataContact.address1
+          ),
+          contact: {
+            ...metadataContact,
+            ...(row.contact_name ? { name: row.contact_name, contactName: row.contact_name } : {}),
+            ...(row.email ? { email: row.email } : {}),
+            ...(row.contact_phone ? { phone: row.contact_phone, phone_number: row.contact_phone } : {})
+          },
+          location: {
+            ...metadataLocation,
+            ...dbLocation
+          }
+        });
+      }
+    } catch (farmDbErr) {
+      console.warn('[Invoice] Farm profile DB enrichment failed:', farmDbErr.message);
+    }
+  }
+
+  // farm_profile fallback: setup wizard stores contact/location here even when farms.metadata is empty.
+  for (const farmId of orderFarmIds) {
+    try {
+      const storedProfile = await farmStore.get(farmId, 'farm_profile');
+      if (!storedProfile || typeof storedProfile !== 'object') continue;
+
+      const storedContact = parseObject(storedProfile.contact);
+      const storedLocation = {
+        ...parseObject(storedProfile.location),
+        ...parseObject(storedProfile.address)
+      };
+
+      mergeFarmProfile(farmId, {
+        name: firstText(storedProfile.name, storedProfile.farmName),
+        city: firstText(storedLocation.city, storedProfile.city),
+        state: firstText(storedLocation.state, storedLocation.province, storedProfile.state, storedProfile.province),
+        phone: firstText(
+          storedProfile.phone,
+          storedProfile.contact_phone,
+          storedContact.phone,
+          storedContact.phone_number,
+          storedContact.primary_phone
+        ),
+        email: firstText(
+          storedProfile.email,
+          storedProfile.contact_email,
+          storedContact.email
+        ),
+        address: firstText(
+          storedProfile.address,
+          storedLocation.address,
+          storedLocation.address1,
+          storedLocation.street,
+          storedLocation.street1,
+          storedContact.address,
+          storedContact.address1
+        ),
+        contact: storedContact,
+        location: storedLocation
+      });
+    } catch (profileErr) {
+      console.warn(`[Invoice] Farm profile enrichment failed for ${farmId}:`, profileErr.message);
+    }
   }
 
   // Build buyer profile with location for environmental scoring
@@ -2710,6 +3152,41 @@ router.post('/checkout/execute', checkoutLimiter, requireWholesaleDbForCriticalP
     }
     if (!Array.isArray(cart) || cart.length === 0) throw new ValidationError('cart is required');
 
+    // ── Duplicate checkout guard ──────────────────────────────────────────
+    // Hash the buyer + sorted cart + delivery date to detect resubmissions.
+    // If an order with the same fingerprint was placed in the last 5 minutes,
+    // return the existing order instead of charging the buyer again.
+    const cartFingerprint = crypto.createHash('sha256').update(
+      JSON.stringify({
+        buyer: req.wholesaleBuyer.id,
+        cart: [...cart].sort((a, b) => (a.sku_id || '').localeCompare(b.sku_id || '')),
+        delivery_date,
+        payment_provider: normalizedPaymentProvider
+      })
+    ).digest('hex');
+
+    try {
+      const dupCheck = await query(
+        `SELECT master_order_id, status, order_data, created_at
+         FROM wholesale_orders
+         WHERE buyer_id = $1
+           AND created_at > NOW() - INTERVAL '5 minutes'
+           AND order_data->>'cart_fingerprint' = $2
+           AND status NOT IN ('cancelled', 'payment_failed')
+         ORDER BY created_at DESC
+         LIMIT 1`,
+        [req.wholesaleBuyer.id, cartFingerprint]
+      );
+      if (dupCheck.rows.length > 0) {
+        const existingOrder = dupCheck.rows[0].order_data || {};
+        console.warn(`[Checkout] Duplicate blocked: buyer ${req.wholesaleBuyer.id} resubmitted same cart within 5min. Returning existing order ${dupCheck.rows[0].master_order_id}`);
+        return res.json({ status: 'ok', data: existingOrder, meta: { payment_id: existingOrder.payment?.payment_id, duplicate_prevented: true } });
+      }
+    } catch (dupErr) {
+      // Non-fatal: if the DB check fails, proceed but log
+      console.warn('[Checkout] Duplicate check query failed (proceeding):', dupErr.message);
+    }
+
     const commissionRate = Number(process.env.WHOLESALE_COMMISSION_RATE || 0.12);
 
     const buyerLocation = getBuyerLocationFromBuyer(req.wholesaleBuyer);
@@ -2792,6 +3269,9 @@ router.post('/checkout/execute', checkoutLimiter, requireWholesaleDbForCriticalP
         totals: orderTotals
       }, { persist: false, register: false });
 
+      // Stamp fingerprint so the dedup guard can find this order on retry
+      order.cart_fingerprint = cartFingerprint;
+
         const deliveryScheduleList = Array.from(new Set(
           enrichedFarmSubOrders
             .map((subOrder) => String(subOrder.delivery_schedule || '').trim())
@@ -2846,7 +3326,8 @@ router.post('/checkout/execute', checkoutLimiter, requireWholesaleDbForCriticalP
                 buyer_email: normalizedBuyerAccount.email
             })),
             paymentSource: { source_id: squareSourceId, customer_id: squareCustomerId },
-            commissionRate
+            commissionRate,
+            cartFingerprint
           });
           
           if (paymentResult.success) {
@@ -2885,16 +3366,46 @@ router.post('/checkout/execute', checkoutLimiter, requireWholesaleDbForCriticalP
             }
           }
         } else {
-          console.log('[Checkout] Not all farms have Square connected - using manual payment');
-          payment.status = 'pending';
-          payment.provider = 'manual';
-          
+          // Not all farms have Square — charge buyer via GreenReach's own Square account
+          console.log('[Checkout] Not all farms have Square connected - processing via GreenReach direct payment');
+
           // Log which farms are missing Square
           for (const farmId of farmIds) {
             const creds = squareCredentials.get(farmId);
             if (!creds?.success) {
               console.log(`[Checkout] Farm ${farmId} Square not connected: ${creds?.error || 'unknown'}`);
             }
+          }
+
+          const directResult = await processGreenReachDirectPayment({
+            masterOrderId: order.master_order_id,
+            farmSubOrders: result.allocation.farm_sub_orders.map(sub => ({
+              ...sub,
+              buyer_email: normalizedBuyerAccount.email
+            })),
+            paymentSource: { source_id: squareSourceId, customer_id: squareCustomerId },
+            commissionRate,
+            cartFingerprint
+          });
+
+          if (directResult.success) {
+            payment.status = 'completed';
+            payment.provider = 'square';
+            payment.greenreach_held = true;
+            payment.square_details = {
+              total_amount: directResult.totalAmount,
+              total_broker_fee: directResult.totalBrokerFee,
+              greenreach_payment_id: directResult.greenreach_payment_id,
+              payments: directResult.paymentResults
+            };
+            paymentSuccess = true;
+            console.log('[Checkout] GreenReach direct payment successful:', directResult.greenreach_payment_id);
+          } else {
+            payment.status = 'failed';
+            payment.provider = 'square';
+            payment.greenreach_held = true;
+            payment.notes = `GreenReach direct payment failed: ${directResult.paymentResults.filter(r => !r.success).map(r => `Farm ${r.farmId}: ${r.error}`).join('; ')}`;
+            console.error('[Checkout] GreenReach direct payment failed:', directResult);
           }
         }
       } catch (error) {
@@ -2989,10 +3500,12 @@ router.post('/checkout/execute', checkoutLimiter, requireWholesaleDbForCriticalP
       for (const sub of order.farm_sub_orders || []) {
         const farm = byId.get(String(sub.farm_id));
         let farmUrl = farm?.api_url || farm?.url;
-        // If farm registry points back to Central, route reservation calls to the configured LE endpoint.
+        // If farm URL is stale (localhost, private IP, or Central), route to the configured LE endpoint.
         try {
           const host = new URL(String(farmUrl || '')).hostname;
-          if (host && host.includes('greenreachgreens.com') && process.env.FARM_EDGE_URL) {
+          const isStale = host === 'localhost' || host === '127.0.0.1' || host.startsWith('10.') || host.startsWith('192.168.') || host.startsWith('169.254.') || host.startsWith('172.');
+          const isCentral = host && (host.includes('greenreachgreens.com') || host.includes('greenreach-central'));
+          if ((isStale || isCentral) && process.env.FARM_EDGE_URL) {
             farmUrl = process.env.FARM_EDGE_URL;
           }
         } catch (_) { /* non-fatal URL parse */ }
@@ -3041,7 +3554,8 @@ router.post('/checkout/execute', checkoutLimiter, requireWholesaleDbForCriticalP
           // Auto-refund: payment was captured but inventory reservation failed
           console.error(`[Checkout] CRITICAL: Payment captured for ${order.master_order_id} but reservation failed. Initiating auto-refund.`);
           const refundResults = [];
-          for (const pr of (payment.paymentResults || payment.payments || [])) {
+          const paymentResultsList = payment.square_details?.payments || payment.paymentResults || payment.payments || [];
+          for (const pr of paymentResultsList) {
             if (pr.success && pr.paymentId) {
               const refundResult = await refundPayment({
                 paymentId: pr.paymentId,
@@ -3147,7 +3661,10 @@ router.post('/checkout/execute', checkoutLimiter, requireWholesaleDbForCriticalP
           console.log('[Accounting] Farm payables ingested for order', order.master_order_id);
         }).catch(err => console.error('[Accounting] Farm payable ingest FAILED:', err.message, err.stack?.split('\n')[1] || ''));
 
-        if (payment.square_details?.payments) {
+        if (payment.square_details?.payments && !payment.greenreach_held) {
+          // Only record farm payouts when Square paid farms directly (app_fee_money split).
+          // When greenreach_held=true, GreenReach collected the full amount and owes the farm —
+          // payout entries are recorded later when GreenReach actually settles with the farm.
           for (const pr of payment.square_details.payments) {
             if (!pr.success) continue;
             const farmSub = result.allocation.farm_sub_orders.find(s => s.farm_id === pr.farmId);
@@ -3160,6 +3677,8 @@ router.post('/checkout/execute', checkoutLimiter, requireWholesaleDbForCriticalP
               provider: 'square',
             }).catch(err => console.warn(`[Accounting] Farm payout ingest error (${pr.farmId}):`, err.message));
           }
+        } else if (payment.greenreach_held) {
+          console.log(`[Accounting] GreenReach-held payment — farm payout deferred for order ${order.master_order_id}`);
         }
       } else {
         console.warn(`[Accounting] Skipped revenue/payable ingestion — payment status: ${payment.status}`);
@@ -3191,7 +3710,9 @@ router.post('/checkout/execute', checkoutLimiter, requireWholesaleDbForCriticalP
             let farmUrl = farm?.api_url || farm?.url;
             try {
               const host = new URL(String(farmUrl || '')).hostname;
-              if (host && host.includes('greenreachgreens.com') && process.env.FARM_EDGE_URL) {
+              const isStale = host === 'localhost' || host === '127.0.0.1' || host.startsWith('10.') || host.startsWith('192.168.') || host.startsWith('169.254.') || host.startsWith('172.');
+              const isCentral = host && (host.includes('greenreachgreens.com') || host.includes('greenreach-central'));
+              if ((isStale || isCentral) && process.env.FARM_EDGE_URL) {
                 farmUrl = process.env.FARM_EDGE_URL;
               }
             } catch (_) { /* non-fatal URL parse */ }
@@ -3209,6 +3730,7 @@ router.post('/checkout/execute', checkoutLimiter, requireWholesaleDbForCriticalP
                 delivery_date: order.delivery_date,
                 created_at: order.created_at,
                 payment_status: payment.status,
+                payment_held_by: payment.greenreach_held ? 'greenreach' : null,
                   buyer_name: normalizedBuyerAccount?.businessName || normalizedBuyerAccount?.name || normalizedBuyerAccount?.email || 'Wholesale Buyer',
                   buyer_contact_name: normalizedBuyerAccount?.contactName || normalizedBuyerAccount?.contact_name || '',
                   buyer_email: normalizedBuyerAccount?.email || '',
@@ -4060,4 +4582,359 @@ router.get('/farm-performance/dashboard', async (req, res) => {
     });
   }
 });
+
+/**
+ * POST /admin/orders/:orderId/charge-greenreach
+ * Process a stuck pending_payment order by charging the buyer via GreenReach's
+ * own Square account. Creates accounting entries (revenue + farm payables).
+ * Requires: the order's buyer must have a card on file (squareCustomerId).
+ */
+router.post('/admin/orders/:orderId/charge-greenreach', adminAuthMiddleware, express.json(), async (req, res) => {
+  try {
+    const { orderId } = req.params;
+
+    const order = await getOrderById(orderId, { includeArchived: true });
+    if (!order) {
+      return res.status(404).json({ status: 'error', message: 'Order not found' });
+    }
+
+    if (order.payment?.status === 'completed') {
+      return res.status(409).json({ status: 'error', message: 'Order already paid' });
+    }
+
+    // Get buyer's stored card for the charge
+    const buyerId = order.buyer_id || order.buyerAccount?.id;
+    if (!buyerId) {
+      return res.status(400).json({ status: 'error', message: 'No buyer_id on order' });
+    }
+
+    const buyer = getBuyerById(buyerId);
+    const sqCustId = buyer?.squareCustomerId || order.buyerAccount?.squareCustomerId;
+    if (!sqCustId) {
+      return res.status(400).json({ status: 'error', message: 'Buyer has no Square customer ID. Cannot charge.' });
+    }
+
+    const cardResult = await getCardOnFile(sqCustId);
+    if (!cardResult?.success || !cardResult?.cards?.length) {
+      return res.status(400).json({ status: 'error', message: 'Buyer has no card on file. Cannot charge.' });
+    }
+
+    const card = cardResult.cards[0];
+    const commissionRate = Number(process.env.WHOLESALE_COMMISSION_RATE || 0.12);
+    const farmSubOrders = order.farm_sub_orders || [];
+    if (farmSubOrders.length === 0) {
+      return res.status(400).json({ status: 'error', message: 'Order has no farm sub-orders' });
+    }
+
+    const directResult = await processGreenReachDirectPayment({
+      masterOrderId: order.master_order_id,
+      farmSubOrders: farmSubOrders.map(sub => ({
+        ...sub,
+        buyer_email: order.buyerAccount?.email || order.buyer_email || ''
+      })),
+      paymentSource: { source_id: card.cardId, customer_id: sqCustId },
+      commissionRate
+    });
+
+    if (!directResult.success) {
+      return res.status(502).json({
+        status: 'error',
+        message: 'GreenReach direct payment failed',
+        detail: directResult.paymentResults?.filter(r => !r.success).map(r => `${r.farmId}: ${r.error}`)
+      });
+    }
+
+    // Update payment on the order
+    const payment = order.payment || {};
+    payment.status = 'completed';
+    payment.provider = 'square';
+    payment.greenreach_held = true;
+    payment.square_details = {
+      total_amount: directResult.totalAmount,
+      total_broker_fee: directResult.totalBrokerFee,
+      greenreach_payment_id: directResult.greenreach_payment_id,
+      payments: directResult.paymentResults
+    };
+    payment.charged_at = new Date().toISOString();
+    payment.charged_by = 'admin';
+    order.payment = payment;
+    order.status = 'confirmed';
+
+    finalizePayment(payment);
+    await saveOrder(order).catch(() => {});
+
+    // Accounting: revenue + farm payables (no farm payout — GreenReach holds funds)
+    const orderTotals = order.totals || {};
+    ingestPaymentRevenue({
+      payment_id: payment.payment_id,
+      order_id: order.master_order_id,
+      amount: payment.amount,
+      provider: 'square',
+      broker_fee: payment.broker_fee_amount || 0,
+      tax_amount: orderTotals.tax_total || 0,
+      source_type: 'wholesale',
+    }).catch(err => console.error('[Admin Charge] Revenue ingest FAILED:', err.message));
+
+    ingestFarmPayables({
+      order_id: order.master_order_id,
+      payment_id: payment.payment_id,
+      farm_sub_orders: farmSubOrders,
+      provider: 'square',
+    }).catch(err => console.error('[Admin Charge] Farm payable ingest FAILED:', err.message));
+
+    logOrderEvent(orderId, 'greenreach_direct_charge', {
+      greenreach_payment_id: directResult.greenreach_payment_id,
+      amount: directResult.totalAmount,
+      broker_fee: directResult.totalBrokerFee,
+      charged_by: 'admin'
+    });
+
+    console.log(`[Admin] GreenReach direct charge for order ${orderId}: payment ${directResult.greenreach_payment_id}`);
+
+    return res.json({
+      status: 'ok',
+      data: {
+        order_id: orderId,
+        payment_id: directResult.greenreach_payment_id,
+        amount_cents: directResult.totalAmount,
+        broker_fee_cents: directResult.totalBrokerFee,
+        greenreach_held: true,
+        charged_at: payment.charged_at
+      }
+    });
+  } catch (error) {
+    console.error('[Admin] GreenReach direct charge error:', error);
+    return res.status(500).json({ status: 'error', message: error.message || 'Failed to process charge' });
+  }
+});
+
+/**
+ * POST /admin/orders/process-pending
+ * Batch-process all stuck pending_payment orders by charging buyers via
+ * GreenReach's own Square account. Protected by GREENREACH_API_KEY header
+ * for CLI invocation (no admin JWT session needed).
+ */
+router.post('/admin/orders/process-pending', async (req, res) => {
+  const apiKey = req.headers['x-api-key'] || req.headers['x-greenreach-api-key'];
+  const expectedKey = process.env.GREENREACH_API_KEY;
+  if (!apiKey || !expectedKey || apiKey !== expectedKey) {
+    return res.status(401).json({ status: 'error', message: 'Unauthorized' });
+  }
+
+  try {
+    const allOrders = await listAllOrders({ page: 1, limit: 50000 });
+    const pendingOrders = (allOrders || []).filter(o =>
+      o.status === 'pending_payment' &&
+      (o.payment?.status === 'pending' || o.payment?.provider === 'manual')
+    );
+
+    if (pendingOrders.length === 0) {
+      return res.json({ status: 'ok', message: 'No pending_payment orders found', processed: 0 });
+    }
+
+    const commissionRate = Number(process.env.WHOLESALE_COMMISSION_RATE || 0.12);
+    const results = [];
+
+    for (const order of pendingOrders) {
+      const orderId = order.master_order_id;
+      try {
+        if (order.payment?.status === 'completed') {
+          results.push({ order_id: orderId, status: 'already_paid', skipped: true });
+          continue;
+        }
+
+        const buyerId = order.buyer_id || order.buyerAccount?.id;
+        if (!buyerId) {
+          results.push({ order_id: orderId, status: 'no_buyer_id', skipped: true });
+          continue;
+        }
+
+        // Look up buyer to get their squareCustomerId
+        const buyer = getBuyerById(buyerId);
+        const sqCustId = buyer?.squareCustomerId || order.buyerAccount?.squareCustomerId;
+        if (!sqCustId) {
+          results.push({ order_id: orderId, status: 'no_square_customer', buyer_id: buyerId, skipped: true });
+          continue;
+        }
+
+        const cardResult = await getCardOnFile(sqCustId);
+        if (!cardResult?.success || !cardResult?.cards?.length) {
+          results.push({ order_id: orderId, status: 'no_card_on_file', buyer_id: buyerId, skipped: true });
+          continue;
+        }
+
+        // Use the first enabled card
+        const card = cardResult.cards[0];
+
+        const farmSubOrders = order.farm_sub_orders || [];
+        if (farmSubOrders.length === 0) {
+          results.push({ order_id: orderId, status: 'no_sub_orders', skipped: true });
+          continue;
+        }
+
+        const directResult = await processGreenReachDirectPayment({
+          masterOrderId: orderId,
+          farmSubOrders: farmSubOrders.map(sub => ({
+            ...sub,
+            buyer_email: order.buyerAccount?.email || order.buyer_email || ''
+          })),
+          paymentSource: { source_id: card.cardId, customer_id: sqCustId },
+          commissionRate
+        });
+
+        if (!directResult.success) {
+          results.push({ order_id: orderId, status: 'charge_failed', error: directResult.paymentResults?.filter(r => !r.success).map(r => r.error).join('; ') });
+          continue;
+        }
+
+        // Update the order
+        const payment = order.payment || {};
+        payment.status = 'completed';
+        payment.provider = 'square';
+        payment.greenreach_held = true;
+        payment.square_details = {
+          total_amount: directResult.totalAmount,
+          total_broker_fee: directResult.totalBrokerFee,
+          greenreach_payment_id: directResult.greenreach_payment_id,
+          payments: directResult.paymentResults
+        };
+        payment.charged_at = new Date().toISOString();
+        payment.charged_by = 'batch-process';
+        order.payment = payment;
+        order.status = 'confirmed';
+
+        finalizePayment(payment);
+        await saveOrder(order).catch(() => {});
+
+        const orderTotals = order.totals || {};
+        ingestPaymentRevenue({
+          payment_id: payment.payment_id,
+          order_id: orderId,
+          amount: payment.amount,
+          provider: 'square',
+          broker_fee: payment.broker_fee_amount || 0,
+          tax_amount: orderTotals.tax_total || 0,
+          source_type: 'wholesale',
+        }).catch(err => console.error(`[BatchProcess] Revenue ingest FAILED for ${orderId}:`, err.message));
+
+        ingestFarmPayables({
+          order_id: orderId,
+          payment_id: payment.payment_id,
+          farm_sub_orders: farmSubOrders,
+          provider: 'square',
+        }).catch(err => console.error(`[BatchProcess] Farm payable ingest FAILED for ${orderId}:`, err.message));
+
+        logOrderEvent(orderId, 'greenreach_direct_charge', {
+          greenreach_payment_id: directResult.greenreach_payment_id,
+          amount: directResult.totalAmount,
+          broker_fee: directResult.totalBrokerFee,
+          charged_by: 'batch-process'
+        });
+
+        console.log(`[BatchProcess] Charged order ${orderId}: payment ${directResult.greenreach_payment_id}`);
+        results.push({
+          order_id: orderId,
+          status: 'charged',
+          payment_id: directResult.greenreach_payment_id,
+          amount_cents: directResult.totalAmount,
+          broker_fee_cents: directResult.totalBrokerFee
+        });
+
+      } catch (err) {
+        console.error(`[BatchProcess] Error processing order ${orderId}:`, err.message);
+        results.push({ order_id: orderId, status: 'error', error: err.message });
+      }
+    }
+
+    return res.json({ status: 'ok', processed: results.length, results });
+  } catch (error) {
+    console.error('[BatchProcess] Error:', error);
+    return res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
+/**
+ * POST /admin/orders/reconcile-accounting
+ * Sync all in-memory orders to DB and generate missing accounting entries.
+ * Protected by GREENREACH_API_KEY for CLI invocation.
+ */
+router.post('/admin/orders/reconcile-accounting', async (req, res) => {
+  const apiKey = req.headers['x-api-key'] || req.headers['x-greenreach-api-key'];
+  const expectedKey = process.env.GREENREACH_API_KEY;
+  if (!apiKey || !expectedKey || apiKey !== expectedKey) {
+    return res.status(401).json({ status: 'error', message: 'Unauthorized' });
+  }
+
+  try {
+    const allOrders = await listAllOrders({ page: 1, limit: 50000 });
+    const results = { total: allOrders.length, persisted: 0, revenue_created: 0, payables_created: 0, skipped: 0, errors: [] };
+
+    for (const order of allOrders) {
+      const orderId = order.master_order_id;
+      try {
+        // Re-persist order to DB
+        await saveOrder(order);
+        results.persisted++;
+
+        // Check if accounting entries already exist for this order
+        const existing = await query(
+          "SELECT id FROM accounting_transactions WHERE source_txn_id LIKE $1 LIMIT 1",
+          [`%${orderId}%`]
+        );
+        if (existing.rows.length > 0) {
+          results.skipped++;
+          continue;
+        }
+
+        const payment = order.payment || {};
+        const amount = Number(payment.amount || order.grand_total || 0);
+        if (amount <= 0) {
+          results.skipped++;
+          continue;
+        }
+
+        const provider = payment.provider || 'manual';
+        const brokerFee = Number(payment.broker_fee_amount || order.broker_fee_total || 0);
+        const taxAmount = Number(order.totals?.tax_total || 0);
+
+        // Ingest revenue
+        const revResult = await ingestPaymentRevenue({
+          payment_id: payment.payment_id || `reconcile-${orderId}`,
+          order_id: orderId,
+          amount,
+          provider,
+          broker_fee: brokerFee,
+          tax_amount: taxAmount,
+          source_type: 'wholesale',
+          description: `Wholesale payment — order ${orderId}`,
+        });
+        if (revResult?.ok && !revResult?.deduped) results.revenue_created++;
+
+        // Ingest farm payables
+        const farmSubOrders = order.farm_sub_orders || [];
+        if (farmSubOrders.length > 0) {
+          const payResult = await ingestFarmPayables({
+            order_id: orderId,
+            payment_id: payment.payment_id || `reconcile-${orderId}`,
+            farm_sub_orders: farmSubOrders,
+            provider,
+          });
+          if (payResult?.ok) {
+            const newPayables = (payResult.results || []).filter(r => r.ok && !r.deduped).length;
+            results.payables_created += newPayables;
+          }
+        }
+      } catch (err) {
+        results.errors.push({ order_id: orderId, error: err.message });
+      }
+    }
+
+    console.log(`[Reconcile] ${results.persisted} orders persisted, ${results.revenue_created} revenue entries, ${results.payables_created} farm payables, ${results.skipped} skipped, ${results.errors.length} errors`);
+    return res.json({ status: 'ok', data: results });
+  } catch (error) {
+    console.error('[Reconcile] Error:', error);
+    return res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
 export default router;

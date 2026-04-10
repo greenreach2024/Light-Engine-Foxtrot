@@ -90,25 +90,72 @@ router.post('/change-password', authenticateToken, async (req, res) => {
 
     const { newPassword } = req.body;
     const userId = req.userId;
+    const farmId = req.farmId;
+    const userEmail = req.userEmail;
 
     // Validate password
-    if (!newPassword || newPassword.length < 12) {
+    if (!newPassword || newPassword.length < 8) {
       return res.status(400).json({ 
         success: false, 
-        error: 'Password must be at least 12 characters long' 
+        error: 'Password must be at least 8 characters long' 
       });
     }
 
     // Hash new password
     const password_hash = await bcrypt.hash(newPassword, 10);
 
-    // Update user password and mark email as verified
-    await pool.query(
-      'UPDATE users SET password_hash = $1, email_verified = true WHERE id = $2',
-      [password_hash, userId]
-    );
+    // Update password in farm_users (authoritative auth table) and clear must_change_password
+    let updated = false;
+    if (farmId && userEmail) {
+      const result = await pool.query(
+        'UPDATE farm_users SET password_hash = $1, must_change_password = false, updated_at = NOW() WHERE farm_id = $2 AND LOWER(email) = LOWER($3)',
+        [password_hash, farmId, userEmail]
+      );
+      updated = result.rowCount > 0;
+    }
 
-    console.log('[Setup Wizard] Password changed for user:', userId);
+    // Fallback: try by user ID in farm_users
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!updated && userId && uuidRegex.test(userId)) {
+      const result = await pool.query(
+        'UPDATE farm_users SET password_hash = $1, must_change_password = false, updated_at = NOW() WHERE id = $2',
+        [password_hash, userId]
+      );
+      updated = result.rowCount > 0;
+    }
+
+    // Fallback: if farm exists but no farm_users row, create one
+    if (!updated && farmId) {
+      try {
+        const farmCheck = await pool.query('SELECT farm_id FROM farms WHERE farm_id = $1', [farmId]);
+        if (farmCheck.rows.length > 0) {
+          const fallbackEmail = userEmail || `admin@${farmId.toLowerCase()}.local`;
+          await pool.query(
+            `INSERT INTO farm_users (farm_id, email, password_hash, role, must_change_password, status, created_at, updated_at)
+             VALUES ($1, $2, $3, 'admin', false, 'active', NOW(), NOW())
+             ON CONFLICT (farm_id, email) DO UPDATE SET password_hash = $3, must_change_password = false, updated_at = NOW()`,
+            [farmId, fallbackEmail, password_hash]
+          );
+          updated = true;
+        }
+      } catch (e) {
+        console.warn('[Setup Wizard] Fallback farm_users upsert failed:', e.message);
+      }
+    }
+
+    // Legacy fallback: also update users table if it exists
+    if (userId && uuidRegex.test(userId)) {
+      try {
+        await pool.query(
+          'UPDATE users SET password_hash = $1, email_verified = true WHERE id = $2',
+          [password_hash, userId]
+        );
+      } catch (_) {
+        // users table may not exist
+      }
+    }
+
+    console.log('[Setup Wizard] Password changed for user:', userId, 'farm:', farmId, 'updated_farm_users:', updated);
 
     res.json({
       success: true,

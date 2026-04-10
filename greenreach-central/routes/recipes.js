@@ -7,8 +7,11 @@ const router = express.Router();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Path to recipes directory (relative to routes/ folder)
-const RECIPES_DIR = path.join(__dirname, '../data/recipes-v2');
+// In Cloud Run, /app/data is a GCS FUSE mount that shadows the local data/ dir.
+// Dockerfile copies recipes-v2 to /opt/recipes-v2 to avoid this.
+const RECIPES_DIR = process.env.DEPLOYMENT_MODE === 'cloud'
+    ? '/opt/recipes-v2'
+    : path.join(__dirname, '../data/recipes-v2');
 
 /**
  * Parse a recipe CSV file and return structured data

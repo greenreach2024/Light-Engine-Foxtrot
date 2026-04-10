@@ -1635,7 +1635,7 @@
                                             <th>Tray ID</th>
                                             <th>Recipe</th>
                                             <th>Location</th>
-                                            <th>Plant Count</th>
+                                            <th>Quantity</th>
                                             <th>Age (days)</th>
                                             <th>Harvest Est.</th>
                                             <th>Status</th>
@@ -3826,6 +3826,74 @@
                 </div>
             </div>
 
+            <!-- Salad Mixes Management View -->
+            <div id="salad-mixes-view" class="view" style="display: none;">
+                <div class="header">
+                    <h1>Salad Mix Templates</h1>
+                    <div class="header-actions">
+                        <button class="btn btn-primary" onclick="openAddMixModal()">+ Add New Mix</button>
+                    </div>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:24px;">
+                    <div class="kpi-card"><div class="kpi-label">Total Mixes</div><div class="kpi-value" id="salad-mixes-count">0</div></div>
+                    <div class="kpi-card"><div class="kpi-label">Min Components</div><div class="kpi-value">2</div></div>
+                    <div class="kpi-card"><div class="kpi-label">Max Components</div><div class="kpi-value">4</div></div>
+                </div>
+                <div class="card">
+                    <div class="card-header">
+                        <h3>Mix Templates</h3>
+                    </div>
+                    <div class="card-body">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Mix Name</th>
+                                    <th>Description</th>
+                                    <th>Components (Ratio)</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="salad-mixes-tbody">
+                                <tr><td colspan="5" style="text-align:center;padding:40px;color:var(--text-secondary);">Loading mixes...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Salad Mix Add/Edit Modal -->
+            <div id="mix-modal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
+                <div style="background:var(--bg-primary);border-radius:12px;padding:24px;max-width:560px;width:90%;max-height:80vh;overflow-y:auto;">
+                    <h2 id="mix-modal-title" style="margin:0 0 16px;">Add New Salad Mix</h2>
+                    <input type="hidden" id="mix-modal-id">
+                    <div style="margin-bottom:12px;">
+                        <label style="display:block;margin-bottom:4px;font-weight:600;">Mix Name</label>
+                        <input type="text" id="mix-modal-name" placeholder="e.g. Spring Mix" style="width:100%;padding:8px;border:1px solid var(--border-color);border-radius:6px;background:var(--bg-secondary);color:var(--text-primary);">
+                    </div>
+                    <div style="margin-bottom:12px;">
+                        <label style="display:block;margin-bottom:4px;font-weight:600;">Description (optional)</label>
+                        <input type="text" id="mix-modal-description" placeholder="Brief description" style="width:100%;padding:8px;border:1px solid var(--border-color);border-radius:6px;background:var(--bg-secondary);color:var(--text-primary);">
+                    </div>
+                    <div style="margin-bottom:12px;">
+                        <label style="display:block;margin-bottom:4px;font-weight:600;">Status</label>
+                        <select id="mix-modal-status" style="padding:8px;border:1px solid var(--border-color);border-radius:6px;background:var(--bg-secondary);color:var(--text-primary);">
+                            <option value="active">Active</option>
+                            <option value="inactive">Inactive</option>
+                        </select>
+                    </div>
+                    <div style="margin-bottom:12px;">
+                        <label style="display:block;margin-bottom:4px;font-weight:600;">Components (2-4 greens, ratios must total 100%)</label>
+                        <div id="mix-components-container"></div>
+                        <button class="btn btn-sm" onclick="addMixComponentRow()" style="margin-top:4px;">+ Add Component</button>
+                    </div>
+                    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">
+                        <button class="btn" onclick="closeMixModal()">Cancel</button>
+                        <button class="btn btn-primary" onclick="saveSaladMix()">Save Mix</button>
+                    </div>
+                </div>
+            </div>
+
             <!-- Calendar View -->
             <div id="calendar-view" class="view" style="display: none;">
                 <div class="header">
@@ -4012,6 +4080,126 @@
                             </thead>
                             <tbody id="users-tbody">
                                 <tr><td colspan="6" style="text-align: center; padding: 40px; color: var(--text-secondary);">Loading users...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Farm Management View (LE Users & Credentials) -->
+            <div id="farm-management-view" class="view" style="display: none;">
+                <div class="breadcrumb">
+                    <a href="#" onclick="event.preventDefault(); navigate('overview', this)">Overview</a>
+                    <span>/</span>
+                    <span>Farm Management</span>
+                </div>
+
+                <div class="header">
+                    <h1>Farm &amp; LE User Management</h1>
+                    <div class="header-actions">
+                        <button class="btn" onclick="loadFarmManagement()" style="background: var(--accent-blue); color: white;">Refresh</button>
+                    </div>
+                </div>
+
+                <!-- KPIs -->
+                <div class="kpi-grid">
+                    <div class="kpi-card">
+                        <div class="kpi-label">Total Farms</div>
+                        <div class="kpi-value" id="farm-mgmt-total">0</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Status</div>
+                        <div class="kpi-value" id="farm-mgmt-active">--</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Total LE Users</div>
+                        <div class="kpi-value" id="farm-mgmt-users">0</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Admin Users</div>
+                        <div class="kpi-value" id="farm-mgmt-admins">--</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Suspended</div>
+                        <div class="kpi-value" id="farm-mgmt-suspended">0</div>
+                    </div>
+                </div>
+
+                <!-- Farms Table -->
+                <div class="card" style="margin-bottom: 24px;">
+                    <div class="card-header">
+                        <div class="card-title">Registered Farms</div>
+                        <div class="filter-bar">
+                            <input type="text" id="farm-search" placeholder="Search farms..." onkeyup="filterFarmManagement()" style="padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-primary); width: 200px;">
+                            <select id="farm-status-filter" onchange="filterFarmManagement()">
+                                <option value="">All Statuses</option>
+                                <option value="active">Active</option>
+                                <option value="suspended">Suspended</option>
+                            </select>
+                            <select id="farm-tier-filter" onchange="filterFarmManagement()">
+                                <option value="">All Tiers</option>
+                                <option value="starter">Starter</option>
+                                <option value="professional">Professional</option>
+                                <option value="enterprise">Enterprise</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="card-body" style="padding: 0;">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Farm ID</th>
+                                    <th>Name</th>
+                                    <th>Email</th>
+                                    <th>Status</th>
+                                    <th>Tier</th>
+                                    <th>Users</th>
+                                    <th>Created</th>
+                                    <th>Last Login</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="farm-management-tbody">
+                                <tr><td colspan="9" style="text-align: center; padding: 40px; color: var(--text-secondary);">Loading farms...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- LE Users Table -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Light Engine Users</div>
+                        <div class="filter-bar">
+                            <input type="text" id="user-mgmt-search" placeholder="Search users..." onkeyup="filterUserManagement()" style="padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-primary); width: 200px;">
+                            <select id="user-role-filter" onchange="filterUserManagement()">
+                                <option value="">All Roles</option>
+                                <option value="admin">Admin</option>
+                                <option value="operator">Operator</option>
+                                <option value="viewer">Viewer</option>
+                            </select>
+                            <select id="user-farm-filter" onchange="filterUserManagement()">
+                                <option value="">All Farms</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="card-body" style="padding: 0;">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>User ID</th>
+                                    <th>Email</th>
+                                    <th>Name</th>
+                                    <th>Farm</th>
+                                    <th>Role</th>
+                                    <th>Status</th>
+                                    <th>Last Login</th>
+                                    <th>Created</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="user-management-tbody">
+                                <tr><td colspan="9" style="text-align: center; padding: 40px; color: var(--text-secondary);">Loading users...</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -6298,6 +6486,9 @@ API URL: ${apiUrl}
             return fetch(url, { ...options, headers });
         }
 
+        let _allManagedFarmsOriginal = [];
+        let _allManagedUsersOriginal = [];
+
         /**
          * Load farm management dashboard
          */
@@ -6307,11 +6498,13 @@ API URL: ${apiUrl}
                 const farmsResponse = await adminFetch(`${FARM_API_URL}/api/admin/farms`);
                 const farmsData = await farmsResponse.json();
                 allManagedFarms = farmsData.farms || [];
+                _allManagedFarmsOriginal = [...allManagedFarms];
                 
                 // Load farm users (not admin employees)
                 const usersResponse = await adminFetch(`${FARM_API_URL}/api/admin/farms/users`);
                 const usersData = await usersResponse.json();
                 allManagedUsers = usersData.users || [];
+                _allManagedUsersOriginal = [...allManagedUsers];
                 
                 // Update KPIs
                 updateFarmManagementKPIs();
@@ -6424,7 +6617,7 @@ API URL: ${apiUrl}
             const statusFilter = document.getElementById('farm-status-filter').value;
             const tierFilter = document.getElementById('farm-tier-filter').value;
             
-            const filtered = allManagedFarms.filter(farm => {
+            const filtered = _allManagedFarmsOriginal.filter(farm => {
                 const matchesSearch = !searchTerm || 
                     farm.farm_id.toLowerCase().includes(searchTerm) ||
                     farm.name.toLowerCase().includes(searchTerm) ||
@@ -6437,18 +6630,17 @@ API URL: ${apiUrl}
             
             allManagedFarms = filtered;
             renderFarmManagementTable();
-            allManagedFarms = farmsData.farms || []; // Restore original
         }
 
         /**
          * Filter user management table
          */
         function filterUserManagement() {
-            const searchTerm = document.getElementById('user-search').value.toLowerCase();
+            const searchTerm = document.getElementById('user-mgmt-search').value.toLowerCase();
             const roleFilter = document.getElementById('user-role-filter').value;
             const farmFilter = document.getElementById('user-farm-filter').value;
             
-            const filtered = allManagedUsers.filter(user => {
+            const filtered = _allManagedUsersOriginal.filter(user => {
                 const matchesSearch = !searchTerm || 
                     user.email.toLowerCase().includes(searchTerm) ||
                     (user.first_name && user.first_name.toLowerCase().includes(searchTerm)) ||
@@ -6461,7 +6653,6 @@ API URL: ${apiUrl}
             
             allManagedUsers = filtered;
             renderUserManagementTable();
-            allManagedUsers = usersData.users || []; // Restore original
         }
 
         /**

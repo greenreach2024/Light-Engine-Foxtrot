@@ -92,10 +92,10 @@ router.post('/change-password', authenticateToken, async (req, res) => {
     const userId = req.userId;
 
     // Validate password
-    if (!newPassword || newPassword.length < 12) {
+    if (!newPassword || newPassword.length < 8) {
       return res.status(400).json({ 
         success: false, 
-        error: 'Password must be at least 12 characters long' 
+        error: 'Password must be at least 8 characters long' 
       });
     }
 

@@ -11,6 +11,7 @@
             window.location.replace('/farm-admin-login.html');
         }
     </script>
+    <link rel="stylesheet" href="/styles/evie-core.css">
     <style>
         * {
             margin: 0;
@@ -309,7 +310,7 @@
 
                 <div class="form-group">
                     <label class="form-label required">New Password</label>
-                    <input type="password" class="form-input" id="new-password" placeholder="At least 12 characters" required minlength="12">
+                    <input type="password" class="form-input" id="new-password" placeholder="At least 8 characters" required minlength="8">
                 </div>
 
                 <div class="form-group">
@@ -319,6 +320,7 @@
 
                 <div id="password-error" class="alert alert-error" style="display: none;"></div>
                 <div id="password-success" class="alert alert-success" style="display: none;">Password updated successfully!</div>
+                <button type="button" class="btn btn-primary" id="password-only-submit" style="display:none; margin-top:1.5rem;" onclick="nextStep()">Update Password</button>
             </div>
         </div>
 
@@ -488,6 +490,13 @@
         let discoveredDevices = [];
         let passwordChanged = false;
 
+        // Detect passwordOnly mode (admin password reset for already-setup farms)
+        const _wizParams = new URLSearchParams(window.location.search);
+        const passwordOnlyMode = _wizParams.get('passwordOnly') === 'true';
+        if (passwordOnlyMode) {
+            currentStep = 1; // Jump straight to password step
+        }
+
         // Extract data from JWT token
         function getDataFromToken() {
             const token = sessionStorage.getItem('token') || localStorage.getItem('token');
@@ -557,6 +566,19 @@
             // Show current step
             document.getElementById(`step-${currentStep}`).classList.add('active');
 
+            // In passwordOnly mode, hide progress bar and nav, update header
+            if (passwordOnlyMode) {
+                const progressBar = document.querySelector('.progress-bar');
+                const navBtns = document.querySelector('.footer-nav');
+                const subtitle = document.querySelector('.wizard-subtitle');
+                const pwBtn = document.getElementById('password-only-submit');
+                if (progressBar) progressBar.style.display = 'none';
+                if (navBtns) navBtns.style.display = 'none';
+                if (subtitle) subtitle.textContent = 'Please set a new password to continue';
+                if (pwBtn) pwBtn.style.display = 'block';
+                return;
+            }
+
             // Update progress dots
             for (let i = 0; i < totalSteps; i++) {
                 const dot = document.getElementById(`dot-${i}`);
@@ -583,6 +605,11 @@
             if (currentStep === 1) {
                 // Password change step
                 if (!await validateAndChangePassword()) return;
+                // In passwordOnly mode, go straight to dashboard after password change
+                if (passwordOnlyMode) {
+                    goToDashboard();
+                    return;
+                }
             } else if (currentStep === 2) {
                 if (!validateFarmProfile()) return;
             } else if (currentStep === 3) {
@@ -794,8 +821,8 @@
             errorEl.style.display = 'none';
             successEl.style.display = 'none';
 
-            if (!newPass || newPass.length < 12) {
-                errorEl.textContent = 'Password must be at least 12 characters long.';
+            if (!newPass || newPass.length < 8) {
+                errorEl.textContent = 'Password must be at least 8 characters long.';
                 errorEl.style.display = 'block';
                 return false;
             }
@@ -1010,5 +1037,6 @@
             observer.observe(step, { attributes: true, attributeFilter: ['class'] });
         });
     </script>
+    <script src="/js/evie-presence.js"></script>
 </body>
 </html>

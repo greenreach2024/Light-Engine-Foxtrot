@@ -60,7 +60,8 @@ const generateFarmToken = (payload) => {
  */
 router.post('/login', async (req, res) => {
   try {
-    const { farm_id: raw_farm_id, email, password } = req.body;
+    const { farm_id: raw_farm_id, email, password: rawPassword } = req.body;
+    const password = typeof rawPassword === 'string' ? rawPassword.trim() : rawPassword;
     // Sanitize farm_id: strip trailing commas, semicolons, periods, and whitespace
     const farm_id = typeof raw_farm_id === 'string' ? raw_farm_id.replace(/[,;.\s]+$/, '').trim() : raw_farm_id;
     const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';

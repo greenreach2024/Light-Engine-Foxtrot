@@ -1345,7 +1345,8 @@ function renderContextualSidebar() {
                 {
                     title: 'Marketing',
                     items: [
-                        { label: 'Marketing AI', view: 'marketing-ai' }
+                        { label: 'Marketing Dashboard', view: 'marketing-ai' },
+                        { label: 'S.C.O.T.T.', view: 'scott-core' }
                     ]
                 },
                 {
@@ -1358,18 +1359,27 @@ function renderContextualSidebar() {
                 {
                     title: 'AI Governance',
                     items: [
-                        { label: 'F.A.Y.E. Core', view: 'faye-core', external: '/faye-core.html' },
+                        { label: 'F.A.Y.E. Core', view: 'faye-core', iframe: '/faye-core.html' },
                         { label: 'AI Rules', view: 'ai-rules' },
                         { label: 'AI Reference Sites', view: 'ai-reference' },
                         { label: 'AI Agent Monitor', view: 'ai-monitoring' }
                     ]
                 },
                 {
+                    title: 'Admin Tools',
+                    items: [
+                        { label: 'Calendar', view: 'calendar' },
+                        { label: 'Tasks', view: 'tasks' }
+                    ]
+                },
+                {
                     title: 'Management',
                     items: [
                         { label: 'All Farms', view: 'farms' },
+                        { label: 'Farm Management', view: 'farm-management' },
                         { label: 'Users', view: 'users' },
-                        { label: 'Recipes', view: 'recipes' }
+                        { label: 'Recipes', view: 'recipes' },
+                        { label: 'Salad Mixes', view: 'salad-mixes' }
                     ]
                 },
                 {
@@ -1475,7 +1485,13 @@ function renderContextualSidebar() {
         <div class="nav-section">
             <div class="nav-section-title">${section.title}</div>
             ${section.items.map(item => {
-                if (item.external) {
+                if (item.iframe) {
+                    return `
+                        <div class="nav-item" onclick="navigateIframe('${item.view}', '${item.iframe}', this)" style="cursor: pointer;">
+                            <span>${item.label}</span>
+                        </div>
+                    `;
+                } else if (item.external) {
                     return `
                         <a href="${item.external}" class="nav-item" style="text-decoration: none; color: inherit; display: block;">
                             <span>${item.label}</span>
@@ -4192,7 +4208,6 @@ async function loadFarmSummary(farmId, farm) {
                 deploymentType = 'Edge (Local Network)';
             } else if (apiUrl.includes('elasticbeanstalk.com') || 
                        apiUrl.includes('amazonaws.com') || 
-                       apiUrl.includes('.run.app') || 
                        apiUrl.includes('azure') || 
                        apiUrl.includes('greenreach')) {
                 deploymentType = 'Cloud';
@@ -4754,11 +4769,16 @@ async function loadFarmInventory(farmId, trayCount) {
                 : [];
             inventoryData = trays.map(tray => {
                 const dth = tray.days_to_harvest ?? tray.daysToHarvest ?? null;
+                const unit = tray.unit || tray.quantity_unit || '';
+                const isWeightBased = ['lb', 'lbs', 'oz', 'kg'].includes(unit.toLowerCase());
+                const qty = tray.plant_count || tray.plantCount || tray.quantity || 0;
                 return {
                     trayId: tray.tray_code || tray.trayId || tray.id || tray.productId || tray.product_id || tray.sku || '--',
                     recipe: tray.recipe_name || tray.recipe || tray.productName || tray.product_name || tray.crop || 'Unknown',
                     location: tray.location || 'Unassigned',
-                    plantCount: tray.plant_count || tray.plantCount || tray.quantity || 0,
+                    plantCount: qty,
+                    unit: isWeightBased ? unit : 'plants',
+                    quantityDisplay: isWeightBased ? `${Number(qty).toFixed(1)} ${unit}` : `${qty} plants`,
                     age: tray.age_days || tray.daysOld || 0,
                     harvestEst: dth !== null ?
                         (dth <= 0 ? 'Today' : `${Math.max(0, Math.floor(dth))}d`) :
@@ -4805,7 +4825,7 @@ function renderInventoryTable() {
             <td><code>${item.trayId}</code></td>
             <td>${item.recipe}</td>
             <td>${item.location}</td>
-            <td>${item.plantCount}</td>
+            <td>${item.quantityDisplay || item.plantCount}</td>
             <td>${item.age}</td>
             <td>${item.harvestEst}</td>
             <td><span class="badge badge-${item.status === 'ready' ? 'success' : 'info'}">${item.status}</span></td>
@@ -5590,6 +5610,11 @@ async function navigate(view, element) {
             await loadMarketingDashboard();
             break;
 
+        case 'scott-core':
+            document.getElementById('scott-core-view').style.display = 'block';
+            await initScottChat();
+            break;
+
         case 'market-intelligence':
             document.getElementById('market-intelligence-view').style.display = 'block';
             await loadMarketIntelligenceView();
@@ -5599,11 +5624,73 @@ async function navigate(view, element) {
             document.getElementById('accounting-view').style.display = 'block';
             await loadCentralAccounting();
             break;
+
+        case 'faye-core':
+            loadIframeView('/faye-core.html');
+            break;
+
+        case 'calendar':
+            document.getElementById('calendar-view').style.display = 'block';
+            if (typeof loadCalendarEvents === 'function') { loadCalendarEvents(); loadCalendarDashboard(); }
+            break;
+
+        case 'tasks':
+            document.getElementById('tasks-view').style.display = 'block';
+            if (typeof loadTasks === 'function') { loadTasks(); loadCalendarDashboard(); }
+            break;
+
+        case 'farm-management':
+            document.getElementById('farm-management-view').style.display = 'block';
+            if (typeof loadFarmManagement === 'function') { loadFarmManagement(); }
+            break;
+
+        case 'salad-mixes':
+            document.getElementById('salad-mixes-view').style.display = 'block';
+            await loadSaladMixes();
+            break;
             
         default:
             console.log(`Navigate to: ${view} (not implemented)`);
             document.getElementById('overview-view').style.display = 'block';
     }
+}
+
+/**
+ * Load a page into the central admin iframe panel
+ */
+function loadIframeView(url) {
+    document.querySelectorAll('.view').forEach(v => { v.style.display = 'none'; });
+    const container = document.getElementById('iframe-view');
+    const iframe = document.getElementById('central-admin-iframe');
+    if (!container || !iframe) return;
+    try {
+        const parsed = new URL(url, window.location.origin);
+        parsed.searchParams.set('embedded', '1');
+        iframe.src = parsed.pathname + parsed.search;
+    } catch {
+        iframe.src = url;
+    }
+    container.style.display = 'block';
+    iframe.onload = () => {
+        try {
+            const doc = iframe.contentDocument || iframe.contentWindow?.document;
+            if (!doc) return;
+            // Hide topbar nav inside iframe -- the parent sidebar provides navigation
+            const topbar = doc.querySelector('.faye-topbar, .evie-topbar, .page-topbar, header.topbar');
+            if (topbar) topbar.style.display = 'none';
+            // Hide any "back to admin" links
+            doc.querySelectorAll('a[href*="GR-central-admin"], a[href*="LE-farm-admin"]').forEach(a => { a.style.display = 'none'; });
+        } catch { /* cross-origin or security restriction -- ignore */ }
+    };
+}
+
+/**
+ * Navigate to an iframe view from sidebar nav click
+ */
+function navigateIframe(view, url, element) {
+    document.querySelectorAll('.nav-item').forEach(item => { item.classList.remove('active'); });
+    if (element) element.classList.add('active');
+    loadIframeView(url);
 }
 
 /**
@@ -7448,105 +7535,262 @@ async function loadAnomaliesView() {
 async function loadAlertsView(options = {}) {
     const { farmId = null, severity = null, status = null } = options;
     console.log('[Alerts] Loading alerts...', { farmId, severity, status });
-    const tbody = document.getElementById('alerts-tbody');
-    if (!tbody) {
-        console.warn('[Alerts] Table body not found');
+    const container = document.getElementById('alerts-grouped-container');
+    if (!container) {
+        console.warn('[Alerts] Grouped container not found');
         return;
     }
-    
+
     try {
+        // Populate farm filter dropdown (once)
+        populateAlertFarmFilter();
+
         // Fetch live alert data from API
         const params = new URLSearchParams();
         if (farmId) params.append('farm_id', farmId);
         if (severity) params.append('severity', severity);
         if (status) params.append('status', status);
+        params.append('limit', '200');
         const query = params.toString();
         const response = await authenticatedFetch(`${API_BASE}/api/admin/alerts${query ? `?${query}` : ''}`);
-        
+
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
-        
+
         const data = await response.json();
         console.log('[Alerts] Received data:', data);
-        
+
         if (!data.success) {
             throw new Error(data.error || 'Failed to load alerts');
         }
-        
+
         const alerts = data.alerts || [];
         const summary = data.summary || {};
-        
-        // Update KPIs based on actual data
+
+        // Update KPIs
         document.getElementById('alerts-active').textContent = summary.active || 0;
         document.getElementById('alerts-critical').textContent = summary.critical || 0;
         document.getElementById('alerts-warnings').textContent = summary.warning || 0;
         document.getElementById('alerts-resolved').textContent = summary.resolved || 0;
-        
+
         if (alerts.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 24px; color: var(--text-muted);">No active alerts</td></tr>';
+            container.innerHTML = '<p style="padding:24px;text-align:center;color:var(--text-muted);">No alerts match your filters.</p>';
             return;
         }
-        
-        // Render alerts table
-        const html = alerts.map(alert => `
-            <tr>
-                <td>${new Date(alert.timestamp).toLocaleString()}</td>
-                <td>${alert.farm_name || alert.farm_id}</td>
-                <td><span class="status-badge status-${alert.severity}">${alert.severity}</span></td>
-                <td>${alert.category || alert.type}</td>
-                <td>
-                    <div style="margin-bottom: 4px;">${alert.message}</div>
-                    ${alert.value ? `<small style="color: var(--text-muted);">Value: ${alert.value} | Threshold: ${alert.threshold}</small>` : ''}
-                </td>
-                <td><span class="status-badge status-${alert.status === 'active' ? 'warning' : (alert.status === 'resolved' ? 'success' : 'info')}">${alert.status}</span></td>
-                <td>${alert.acknowledged_by || '--'}</td>
-                <td>
-                    ${alert.status === 'active' ? 
-                        `<button class="btn-small" onclick="acknowledgeAlert('${alert.id}')">Acknowledge</button>` : 
-                        alert.status === 'acknowledged' ?
-                        `<button class="btn-small" onclick="resolveAlert('${alert.id}')">Resolve</button>` :
-                        '--'
-                    }
-                    ${alert.context ? 
-                        `<button class="btn-small" style="margin-left: 4px;" onclick="traceAlert('${alert.id}', ${JSON.stringify(alert.context).replace(/"/g, '&quot;')})">Trace</button>` : 
-                        ''
-                    }
-                </td>
-            </tr>
-        `).join('');
-        
-        tbody.innerHTML = html;
-        
+
+        const groupByFarm = document.getElementById('alerts-group-by-farm')?.checked;
+
+        if (groupByFarm) {
+            renderAlertsGrouped(container, alerts);
+        } else {
+            renderAlertsFlat(container, alerts);
+        }
+
     } catch (error) {
         console.error('[Alerts] Error loading data:', error);
-        tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 24px; color: var(--accent-red);">Error loading alerts: ' + error.message + '</td></tr>';
-        
-        // Set error state for KPIs
+        container.innerHTML = '<p style="padding:24px;text-align:center;color:var(--accent-red);">Error loading alerts: ' + error.message + '</p>';
         document.getElementById('alerts-active').textContent = '--';
         document.getElementById('alerts-critical').textContent = '--';
         document.getElementById('alerts-warnings').textContent = '--';
         document.getElementById('alerts-resolved').textContent = '--';
-        
         showToast('Failed to load alert data', 'error');
+    }
+}
+
+/**
+ * Populate the farm filter dropdown from the alerts/farms endpoint
+ */
+let _alertFarmsLoaded = false;
+async function populateAlertFarmFilter() {
+    if (_alertFarmsLoaded) return;
+    const select = document.getElementById('filter-alert-farm');
+    if (!select) return;
+    try {
+        const resp = await authenticatedFetch(`${API_BASE}/api/admin/alerts/farms`);
+        const data = await resp.json();
+        if (data.success && data.farms) {
+            data.farms.forEach(f => {
+                const opt = document.createElement('option');
+                opt.value = f.farm_id;
+                opt.textContent = f.farm_name || f.farm_id;
+                select.appendChild(opt);
+            });
+            _alertFarmsLoaded = true;
+        }
+    } catch (e) {
+        console.warn('[Alerts] Could not load farm list for filter');
+    }
+}
+
+/**
+ * Render alerts grouped by farm in collapsible accordion sections
+ */
+function renderAlertsGrouped(container, alerts) {
+    // Group by farm
+    const groups = {};
+    const platformAlerts = [];
+    alerts.forEach(a => {
+        const key = a.farm_id || null;
+        if (key) {
+            if (!groups[key]) groups[key] = { name: a.farm_name || a.farm_id || key, alerts: [] };
+            groups[key].alerts.push(a);
+        } else {
+            platformAlerts.push(a);
+        }
+    });
+
+    let html = '';
+
+    // Farm groups
+    Object.keys(groups).sort().forEach(farmId => {
+        const group = groups[farmId];
+        const activeCount = group.alerts.filter(a => a.status === 'active').length;
+        const critCount = group.alerts.filter(a => a.severity === 'critical' || a.severity === 'high').length;
+        const sectionId = 'alert-farm-' + farmId.replace(/[^a-zA-Z0-9]/g, '_');
+
+        html += '<div class="alert-farm-group" data-farm-id="' + farmId + '">';
+        html += '<div class="alert-farm-header" onclick="toggleAlertFarmGroup(\'' + sectionId + '\')">';
+        html += '  <div class="alert-farm-header-left">';
+        html += '    <span class="alert-farm-chevron" id="chevron-' + sectionId + '">&#9654;</span>';
+        html += '    <strong>' + (group.name) + '</strong>';
+        html += '    <span class="alert-farm-count">' + group.alerts.length + ' alert' + (group.alerts.length !== 1 ? 's' : '') + '</span>';
+        if (activeCount > 0) html += '    <span class="alert-farm-active">' + activeCount + ' active</span>';
+        if (critCount > 0) html += '    <span class="alert-farm-critical">' + critCount + ' critical</span>';
+        html += '  </div>';
+        html += '  <div class="alert-farm-header-actions">';
+        html += '    <button class="btn-small" onclick="event.stopPropagation(); bulkResolveFarm(\'' + farmId + '\')">Resolve All</button>';
+        html += '  </div>';
+        html += '</div>';
+        html += '<div class="alert-farm-body" id="' + sectionId + '" style="display:none;">';
+        html += buildAlertTable(group.alerts);
+        html += '</div>';
+        html += '</div>';
+    });
+
+    // Platform/admin alerts (no farm_id)
+    if (platformAlerts.length > 0) {
+        const sectionId = 'alert-farm-platform';
+        html += '<div class="alert-farm-group">';
+        html += '<div class="alert-farm-header" onclick="toggleAlertFarmGroup(\'' + sectionId + '\')">';
+        html += '  <div class="alert-farm-header-left">';
+        html += '    <span class="alert-farm-chevron" id="chevron-' + sectionId + '">&#9654;</span>';
+        html += '    <strong>Platform / F.A.Y.E.</strong>';
+        html += '    <span class="alert-farm-count">' + platformAlerts.length + ' alert' + (platformAlerts.length !== 1 ? 's' : '') + '</span>';
+        html += '  </div>';
+        html += '</div>';
+        html += '<div class="alert-farm-body" id="' + sectionId + '" style="display:none;">';
+        html += buildAlertTable(platformAlerts);
+        html += '</div>';
+        html += '</div>';
+    }
+
+    container.innerHTML = html;
+}
+
+/**
+ * Render flat (non-grouped) alert table
+ */
+function renderAlertsFlat(container, alerts) {
+    container.innerHTML = '<div class="table-container">' + buildAlertTable(alerts) + '</div>';
+}
+
+/**
+ * Build an alert table from an array of alerts
+ */
+function buildAlertTable(alerts) {
+    let html = '<table class="alert-table"><thead><tr>';
+    html += '<th>Time</th><th>Source</th><th>Severity</th><th>Type</th><th>Message</th><th>Status</th><th>Actions</th>';
+    html += '</tr></thead><tbody>';
+
+    alerts.forEach(function (alert) {
+        const sourceLabel = alert.source_table === 'admin' ? 'F.A.Y.E.' : 'E.V.I.E.';
+        const sourceColor = alert.source_table === 'admin' ? 'var(--accent-blue)' : 'var(--accent-green, #22c55e)';
+        const hasDetail = alert.detail || alert.tool || alert.recovery_strategy;
+        const detailId = 'alert-detail-' + alert.source_table + '-' + alert.id;
+
+        let detailParts = [];
+        if (alert.detail) detailParts.push('<strong>Detail:</strong> ' + alert.detail);
+        if (alert.tool) detailParts.push('<strong>Source/Tool:</strong> ' + alert.tool);
+        if (alert.recovery_attempted) {
+            detailParts.push('<strong>Recovery attempted:</strong> ' + (alert.recovery_strategy || 'yes'));
+        }
+        if (alert.acknowledged_at) {
+            detailParts.push('<strong>Acknowledged:</strong> ' + new Date(alert.acknowledged_at).toLocaleString() + ' by ' + (alert.acknowledged_by || 'system'));
+        }
+        if (alert.resolved_at) {
+            detailParts.push('<strong>Resolved:</strong> ' + new Date(alert.resolved_at).toLocaleString());
+        }
+
+        html += '<tr class="alert-row" style="cursor:' + (hasDetail ? 'pointer' : 'default') + ';" onclick="' + (hasDetail ? "toggleAlertDetail('" + detailId + "')" : '') + '">';
+        html += '<td>' + new Date(alert.timestamp).toLocaleString() + '</td>';
+        html += '<td><small style="color:' + sourceColor + ';">' + sourceLabel + '</small></td>';
+        html += '<td><span class="status-badge status-' + (alert.severity === 'high' ? 'critical' : alert.severity) + '">' + alert.severity + '</span></td>';
+        html += '<td>' + (alert.category || alert.type || '--') + '</td>';
+        html += '<td><div style="margin-bottom:2px;">' + (alert.message || '--') + '</div>';
+        if (hasDetail) html += '<small style="color:var(--text-muted);text-decoration:underline;">Click to expand</small>';
+        html += '</td>';
+        html += '<td><span class="status-badge status-' + (alert.status === 'active' ? 'warning' : alert.status === 'resolved' ? 'success' : 'info') + '">' + alert.status + '</span></td>';
+        html += '<td>';
+        if (alert.status === 'active') {
+            html += '<button class="btn-small" onclick="event.stopPropagation(); acknowledgeAlert(\'' + alert.id + '\', \'' + alert.source_table + '\')">Ack</button>';
+        } else if (alert.status === 'acknowledged') {
+            html += '<button class="btn-small" onclick="event.stopPropagation(); resolveAlert(\'' + alert.id + '\', \'' + alert.source_table + '\')">Resolve</button>';
+        } else {
+            html += '--';
+        }
+        html += '</td></tr>';
+
+        if (hasDetail) {
+            html += '<tr id="' + detailId + '" class="alert-detail-row" style="display:none;">';
+            html += '<td colspan="7" style="padding:12px 20px;background:var(--bg-secondary, rgba(0,0,0,0.15));border-left:3px solid ' + sourceColor + ';">';
+            html += detailParts.join('<br style="margin-bottom:6px;">');
+            html += '</td></tr>';
+        }
+    });
+
+    html += '</tbody></table>';
+    return html;
+}
+
+/**
+ * Toggle a farm group accordion
+ */
+function toggleAlertFarmGroup(sectionId) {
+    const body = document.getElementById(sectionId);
+    const chevron = document.getElementById('chevron-' + sectionId);
+    if (!body) return;
+    const isOpen = body.style.display !== 'none';
+    body.style.display = isOpen ? 'none' : '';
+    if (chevron) chevron.innerHTML = isOpen ? '&#9654;' : '&#9660;';
+}
+
+/**
+ * Toggle expandable detail row for an alert
+ */
+function toggleAlertDetail(detailId) {
+    const row = document.getElementById(detailId);
+    if (row) {
+        row.style.display = row.style.display === 'none' ? 'table-row' : 'none';
     }
 }
 
 function filterAlerts() {
     const severity = document.getElementById('filter-alert-severity')?.value || null;
     const status = document.getElementById('filter-alert-status')?.value || null;
-    const farmId = currentFarmId || null;
+    const farmId = document.getElementById('filter-alert-farm')?.value || null;
     loadAlertsView({ farmId, severity, status });
 }
 
 /**
  * Acknowledge an alert
  */
-async function acknowledgeAlert(alertId) {
+async function acknowledgeAlert(alertId, sourceTable) {
     try {
         const response = await authenticatedFetch(`${API_BASE}/api/admin/alerts/${alertId}/acknowledge`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ source_table: sourceTable || 'farm' })
         });
         const data = await response.json();
         if (!data.success) throw new Error(data.error || 'Failed to acknowledge alert');
@@ -7561,11 +7805,12 @@ async function acknowledgeAlert(alertId) {
 /**
  * Resolve an alert
  */
-async function resolveAlert(alertId) {
+async function resolveAlert(alertId, sourceTable) {
     try {
         const response = await authenticatedFetch(`${API_BASE}/api/admin/alerts/${alertId}/resolve`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ source_table: sourceTable || 'farm' })
         });
         const data = await response.json();
         if (!data.success) throw new Error(data.error || 'Failed to resolve alert');
@@ -7578,18 +7823,83 @@ async function resolveAlert(alertId) {
 }
 
 /**
- * Trace alert to source
+ * Acknowledge all active alerts (batch operation)
  */
-async function traceAlert(alertId, context) {
-    console.log('[Alerts] Tracing alert to source:', alertId, context);
-    // Reuse the existing trace logic from anomalies
-    if (context.zone_id) {
-        // Navigate to the zone view if available
-        showToast(`Tracing to ${context.farm_id} / ${context.zone_id}`, 'info');
-    } else if (context.room_id) {
-        showToast(`Tracing to ${context.farm_id} / ${context.room_id}`, 'info');
-    } else {
-        showToast(`Alert source: ${context.farm_id}`, 'info');
+async function acknowledgeAllAlerts() {
+    try {
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/alerts/acknowledge-all`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Failed to acknowledge alerts');
+        showToast(`${data.count} alert(s) acknowledged`, 'success');
+        await loadAlertsView();
+    } catch (error) {
+        console.error('[Alerts] Error acknowledging all alerts:', error);
+        showToast('Failed to acknowledge alerts', 'error');
+    }
+}
+
+/**
+ * Resolve all unresolved alerts (batch operation)
+ */
+async function resolveAllAlerts() {
+    try {
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/alerts/resolve-all`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Failed to resolve alerts');
+        showToast(`${data.count} alert(s) resolved`, 'success');
+        await loadAlertsView();
+    } catch (error) {
+        console.error('[Alerts] Error resolving all alerts:', error);
+        showToast('Failed to resolve alerts', 'error');
+    }
+}
+
+/**
+ * Resolve all alerts for a specific farm
+ */
+async function bulkResolveFarm(farmId) {
+    if (!confirm('Resolve all alerts for this farm?')) return;
+    try {
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/alerts/bulk-resolve`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ farm_id: farmId })
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error);
+        showToast(`${data.count} alert(s) resolved for farm`, 'success');
+        await loadAlertsView();
+    } catch (error) {
+        console.error('[Alerts] Bulk resolve farm error:', error);
+        showToast('Failed to resolve farm alerts', 'error');
+    }
+}
+
+/**
+ * Resolve alerts older than N hours (prompted)
+ */
+async function bulkResolveOlder() {
+    const hours = prompt('Resolve alerts older than how many hours?\n(e.g. 24 for 1 day, 168 for 1 week)', '24');
+    if (!hours || isNaN(hours)) return;
+    try {
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/alerts/bulk-resolve`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ older_than_hours: parseInt(hours) })
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error);
+        showToast(`${data.count} older alert(s) resolved`, 'success');
+        await loadAlertsView();
+    } catch (error) {
+        console.error('[Alerts] Bulk resolve older error:', error);
+        showToast('Failed to resolve older alerts', 'error');
     }
 }
 
@@ -8985,6 +9295,9 @@ function openAddRecipeModal() {
 async function editRecipe(recipeId) {
     try {
         const response = await authenticatedFetch(`/api/admin/recipes/${recipeId}`);
+        if (!response) {
+            throw new Error('Authentication required. Please log in again.');
+        }
         const data = await response.json();
         
         if (!isRecipeResponseOk(data)) {
@@ -9180,6 +9493,10 @@ async function saveRecipe(event) {
             body: JSON.stringify(payload)
         });
         
+        if (!response) {
+            throw new Error('Authentication required. Please log in again.');
+        }
+        
         const data = await response.json();
         
         if (!isRecipeResponseOk(data)) {
@@ -9214,6 +9531,10 @@ async function deleteRecipe(recipeId, recipeName) {
         const response = await authenticatedFetch(`/api/admin/recipes/${recipeId}`, {
             method: 'DELETE'
         });
+        
+        if (!response) {
+            throw new Error('Authentication required. Please log in again.');
+        }
         
         const data = await response.json();
         
@@ -10935,8 +11256,13 @@ function showAddProductModal(editData) {
                         </label>
                     </div>
                     <label style="color: var(--text-secondary); font-size: 13px;">Thumbnail Image
-                        <input type="file" id="cpf-thumbnail" accept="image/*"
+                        <input type="file" id="cpf-thumbnail" accept="image/jpeg,image/png,image/webp"
                             style="width: 100%; padding: 8px; margin-top: 4px; background: var(--bg-main); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px;">
+                        <div style="margin-top: 6px; font-size: 11px; color: #64748b; line-height: 1.5;">
+                            Max 2 MB. Formats: JPG, PNG, or WebP. Recommended: 800x800 px square.<br>
+                            To reduce size: use WebP format, resize to 800x800, or compress at 80% quality.<br>
+                            Free tools: <span style="color:#94a3b8;">squoosh.app</span> (browser) or Preview > Export (macOS).
+                        </div>
                         ${editData && editData.thumbnail_url ? '<div style="margin-top: 6px;"><img src="' + editData.thumbnail_url + '" style="max-height: 60px; border-radius: 4px;" alt="Current thumbnail"></div>' : ''}
                     </label>
                 </div>
@@ -11001,7 +11327,7 @@ async function saveCustomProduct(productId) {
 
         const res = await authenticatedFetch(url, {
             method,
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'x-farm-id': farmId },
             body: JSON.stringify(payload)
         });
         const data = res && res.ok ? await res.json() : null;
@@ -11020,6 +11346,7 @@ async function saveCustomProduct(productId) {
             try {
                 await authenticatedFetch(`${API_BASE}/api/farm/products/${savedId}/image`, {
                     method: 'POST',
+                    headers: { 'x-farm-id': farmId },
                     body: formData
                 });
             } catch (imgErr) {
@@ -11133,14 +11460,15 @@ function syncEditPrices(source) {
     const ozInput = document.getElementById('edit-retail-oz');
     const lbInput = document.getElementById('edit-retail-lb');
     const wsInput = document.getElementById('edit-wholesale-lb');
+    const defaultSkuFactor = 0.75;
     if (source === 'oz' && ozInput.value) {
         const ozVal = parseFloat(ozInput.value);
         lbInput.value = (ozVal * 16).toFixed(2);
-        wsInput.value = (ozVal * 16 * 0.65).toFixed(2);
+        wsInput.value = (ozVal * 16 * defaultSkuFactor).toFixed(2);
     } else if (source === 'lb' && lbInput.value) {
         const lbVal = parseFloat(lbInput.value);
         ozInput.value = (lbVal / 16).toFixed(2);
-        wsInput.value = (lbVal * 0.65).toFixed(2);
+        wsInput.value = (lbVal * defaultSkuFactor).toFixed(2);
     }
 }
 
@@ -11207,7 +11535,8 @@ async function deleteProduct(sku) {
 
     try {
         const res = await authenticatedFetch(`${API_BASE}/api/farm/products/${product.id}`, {
-            method: 'DELETE'
+            method: 'DELETE',
+            headers: { 'x-farm-id': currentFarmId }
         });
         const data = res && res.ok ? await res.json() : null;
         if (!data || !data.success) {
@@ -11825,10 +12154,205 @@ function filterAiActivity(filter) {
 
 // ==================== MARKETING AI ====================
 
+// ======================================================================
+// S.C.O.T.T. Marketing Agent -- Chat Functions
+// ======================================================================
+
+let scottConversationId = localStorage.getItem('scott_conversation_id') || null;
+let scottLoading = false;
+
+/**
+ * Initialize Scott chat -- check agent status and load any directives.
+ */
+async function initScottChat() {
+    const badge = document.getElementById('scott-status-badge');
+    try {
+        const res = await authenticatedFetch(`${API_BASE}/api/admin/scott/status`);
+        if (res.ok) {
+            const data = await res.json();
+            if (data.ok) {
+                badge.textContent = 'Online';
+                badge.style.background = 'rgba(16,185,129,0.15)';
+                badge.style.color = '#10b981';
+            } else {
+                badge.textContent = 'Degraded';
+                badge.style.background = 'rgba(245,158,11,0.15)';
+                badge.style.color = '#f59e0b';
+            }
+        } else {
+            badge.textContent = 'Offline';
+            badge.style.background = 'rgba(239,68,68,0.15)';
+            badge.style.color = '#ef4444';
+        }
+    } catch {
+        badge.textContent = 'Offline';
+        badge.style.background = 'rgba(239,68,68,0.15)';
+        badge.style.color = '#ef4444';
+    }
+
+    // Restore previous conversation if one exists in localStorage
+    if (scottConversationId) {
+        try {
+            const histRes = await authenticatedFetch(`${API_BASE}/api/admin/scott/history/${encodeURIComponent(scottConversationId)}`);
+            if (histRes.ok) {
+                const histData = await histRes.json();
+                if (histData.ok && histData.messages && histData.messages.length > 0) {
+                    const welcome = document.getElementById('scott-welcome');
+                    if (welcome) welcome.style.display = 'none';
+                    for (const msg of histData.messages) {
+                        if (msg.role === 'user' || msg.role === 'assistant') {
+                            appendScottMessage(msg.role, msg.content);
+                        }
+                    }
+                }
+            }
+        } catch { /* history restore is non-fatal */ }
+    }
+}
+
+/**
+ * Send a message to Scott.
+ */
+async function sendScottMessage() {
+    const input = document.getElementById('scott-input');
+    const message = input.value.trim();
+    if (!message || scottLoading) return;
+
+    // Hide welcome
+    const welcome = document.getElementById('scott-welcome');
+    if (welcome) welcome.style.display = 'none';
+
+    // Add user message to chat
+    appendScottMessage('user', message);
+    input.value = '';
+    input.style.height = 'auto';
+
+    // Show loading
+    scottLoading = true;
+    const sendBtn = document.getElementById('scott-send-btn');
+    sendBtn.disabled = true;
+    sendBtn.textContent = '...';
+
+    const loadingId = appendScottMessage('assistant', 'Thinking...');
+
+    try {
+        const res = await authenticatedFetch(`${API_BASE}/api/admin/scott/chat`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                message,
+                conversation_id: scottConversationId
+            })
+        });
+
+        const data = await res.json();
+
+        // Remove loading message
+        const loadingEl = document.getElementById(loadingId);
+        if (loadingEl) loadingEl.remove();
+
+        if (data.ok) {
+            scottConversationId = data.conversation_id;
+            localStorage.setItem('scott_conversation_id', scottConversationId);
+            appendScottMessage('assistant', data.reply, data.tool_calls);
+        } else {
+            appendScottMessage('assistant', `Error: ${data.error || 'Unknown error'}`);
+        }
+    } catch (err) {
+        const loadingEl = document.getElementById(loadingId);
+        if (loadingEl) loadingEl.remove();
+        appendScottMessage('assistant', `Connection error: ${err.message}`);
+    } finally {
+        scottLoading = false;
+        sendBtn.disabled = false;
+        sendBtn.textContent = 'Send';
+    }
+}
+
+/**
+ * Append a message to the Scott chat display.
+ */
+function appendScottMessage(role, content, toolCalls) {
+    const container = document.getElementById('scott-messages');
+    const id = 'scott-msg-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6);
+    const div = document.createElement('div');
+    div.id = id;
+    div.style.cssText = role === 'user'
+        ? 'align-self:flex-end;max-width:75%;padding:12px 16px;border-radius:12px 12px 4px 12px;background:var(--accent-blue);color:#fff;font-size:14px;line-height:1.6;'
+        : 'align-self:flex-start;max-width:85%;padding:12px 16px;border-radius:12px 12px 12px 4px;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);font-size:14px;line-height:1.6;';
+
+    if (role === 'assistant' && content !== 'Thinking...') {
+        div.innerHTML = formatScottResponse(content);
+    } else {
+        div.textContent = content;
+        if (content === 'Thinking...') {
+            div.style.opacity = '0.6';
+            div.style.fontStyle = 'italic';
+        }
+    }
+
+    // Show tool calls as a subtle indicator
+    if (toolCalls && toolCalls.length > 0) {
+        const toolDiv = document.createElement('div');
+        toolDiv.style.cssText = 'margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-size:12px;color:var(--text-muted);';
+        const toolNames = toolCalls.map(t => t.tool.replace(/_/g, ' ')).join(', ');
+        toolDiv.textContent = `Tools used: ${toolNames}`;
+        div.appendChild(toolDiv);
+    }
+
+    container.appendChild(div);
+    container.scrollTop = container.scrollHeight;
+    return id;
+}
+
+/**
+ * Format Scott's response with basic markdown-like rendering.
+ */
+function formatScottResponse(text) {
+    if (!text) return '';
+    let html = text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.*?)\*/g, '<em>$1</em>')
+        .replace(/`([^`]+)`/g, '<code style="background:var(--bg-secondary);padding:2px 6px;border-radius:4px;font-size:13px;">$1</code>')
+        .replace(/\n\n/g, '</p><p style="margin:8px 0;">')
+        .replace(/\n- /g, '<br>&#x2022; ')
+        .replace(/\n(\d+)\. /g, '<br>$1. ')
+        .replace(/\n/g, '<br>');
+    return '<p style="margin:0;">' + html + '</p>';
+}
+
+/**
+ * Start a new Scott conversation -- clears history and resets state.
+ */
+function scottNewChat() {
+    scottConversationId = null;
+    localStorage.removeItem('scott_conversation_id');
+    const container = document.getElementById('scott-messages');
+    const welcome = document.getElementById('scott-welcome');
+    // Remove all messages but keep the welcome panel
+    while (container.firstChild) container.removeChild(container.firstChild);
+    if (welcome) {
+        welcome.style.display = '';
+        container.appendChild(welcome);
+    }
+}
+
+/**
+ * Quick action button handler for Scott.
+ */
+function scottQuickAction(message) {
+    const input = document.getElementById('scott-input');
+    input.value = message;
+    sendScottMessage();
+}
+
 /**
  * Marketing AI Dashboard - state
  */
-let mktCurrentTab = 'generate';
+let mktCurrentTab = 'queue';
 let mktQueueFilter = 'all';
 
 /**
@@ -11850,14 +12374,12 @@ async function loadMarketingDashboard() {
         document.getElementById('mkt-kpi-published').textContent = metrics.summary?.total_published || 0;
         document.getElementById('mkt-kpi-scheduled').textContent = metrics.summary?.total_scheduled || 0;
         document.getElementById('mkt-kpi-cost').textContent = '$' + Number(metrics.summary?.total_cost || 0).toFixed(2);
-        document.getElementById('mkt-kpi-provider').textContent =
-            settings.ai?.anthropic?.configured ? 'Claude' : (settings.ai?.openai?.configured ? 'OpenAI' : 'None');
     } catch (err) {
         console.error('[Marketing AI] Dashboard load error:', err);
     }
 
-    // Load current tab (or default to 'generate' on first load)
-    const activeTab = mktCurrentTab || 'generate';
+    // Load current tab (or default to 'queue' on first load)
+    const activeTab = mktCurrentTab || 'queue';
     switchMarketingTab(activeTab);
 }
 
@@ -12838,6 +13360,178 @@ function exportFleetReport() {
     a.click();
     URL.revokeObjectURL(url);
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SALAD MIX MANAGEMENT
+// ═══════════════════════════════════════════════════════════════════════════
+
+let saladMixesData = [];
+
+async function loadSaladMixes() {
+    try {
+        const token = localStorage.getItem('adminToken');
+        const resp = await fetch('/api/admin/salad-mixes', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await resp.json();
+        if (data.success) {
+            saladMixesData = data.mixes || [];
+            renderSaladMixesTable();
+        }
+    } catch (err) {
+        console.error('[SaladMixes] Load error:', err);
+    }
+}
+
+function renderSaladMixesTable() {
+    const tbody = document.getElementById('salad-mixes-tbody');
+    if (!tbody) return;
+
+    const countEl = document.getElementById('salad-mixes-count');
+    if (countEl) countEl.textContent = saladMixesData.length;
+
+    if (saladMixesData.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--text-secondary);">No salad mixes defined yet. Click "Add New Mix" to create one.</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = saladMixesData.map(mix => {
+        const compList = (mix.components || []).map(c =>
+            `${c.product_name} (${(parseFloat(c.ratio) * 100).toFixed(0)}%)`
+        ).join(', ');
+        return `<tr>
+            <td><strong>${mix.name}</strong></td>
+            <td>${mix.description || '-'}</td>
+            <td>${compList}</td>
+            <td><span class="status-badge ${mix.status === 'active' ? 'status-active' : 'status-inactive'}">${mix.status}</span></td>
+            <td>
+                <button class="btn btn-sm" onclick="openEditMixModal(${mix.id})" title="Edit">Edit</button>
+                <button class="btn btn-sm btn-danger" onclick="deleteSaladMix(${mix.id})" title="Delete">Delete</button>
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+function openAddMixModal() {
+    document.getElementById('mix-modal-title').textContent = 'Add New Salad Mix';
+    document.getElementById('mix-modal-id').value = '';
+    document.getElementById('mix-modal-name').value = '';
+    document.getElementById('mix-modal-description').value = '';
+    document.getElementById('mix-modal-status').value = 'active';
+    const container = document.getElementById('mix-components-container');
+    container.innerHTML = '';
+    addMixComponentRow();
+    addMixComponentRow();
+    document.getElementById('mix-modal').style.display = 'flex';
+}
+
+function openEditMixModal(mixId) {
+    const mix = saladMixesData.find(m => m.id === mixId);
+    if (!mix) return;
+    document.getElementById('mix-modal-title').textContent = 'Edit Salad Mix';
+    document.getElementById('mix-modal-id').value = mix.id;
+    document.getElementById('mix-modal-name').value = mix.name;
+    document.getElementById('mix-modal-description').value = mix.description || '';
+    document.getElementById('mix-modal-status').value = mix.status || 'active';
+    const container = document.getElementById('mix-components-container');
+    container.innerHTML = '';
+    for (const c of mix.components) {
+        addMixComponentRow(c.product_name, (parseFloat(c.ratio) * 100).toFixed(0), c.product_id);
+    }
+    document.getElementById('mix-modal').style.display = 'flex';
+}
+
+function closeMixModal() {
+    document.getElementById('mix-modal').style.display = 'none';
+}
+
+function addMixComponentRow(name, pct, productId) {
+    const container = document.getElementById('mix-components-container');
+    const rows = container.querySelectorAll('.mix-comp-row');
+    if (rows.length >= 4) return; // max 4 components
+    const row = document.createElement('div');
+    row.className = 'mix-comp-row';
+    row.style.cssText = 'display:grid;grid-template-columns:1fr 80px 30px;gap:8px;margin-bottom:8px;align-items:center;';
+    row.innerHTML = `
+        <input type="text" class="mix-comp-name" placeholder="Product name (e.g. Romaine Lettuce)" value="${name || ''}" style="padding:8px;border:1px solid var(--border-color);border-radius:6px;background:var(--bg-secondary);color:var(--text-primary);">
+        <input type="number" class="mix-comp-pct" placeholder="%" min="1" max="100" value="${pct || ''}" style="padding:8px;border:1px solid var(--border-color);border-radius:6px;background:var(--bg-secondary);color:var(--text-primary);text-align:center;">
+        <button onclick="this.parentElement.remove()" style="background:none;border:none;color:var(--danger-color);cursor:pointer;font-size:18px;">X</button>
+    `;
+    if (productId) {
+        const nameInput = row.querySelector('.mix-comp-name');
+        nameInput.dataset.productId = productId;
+    }
+    container.appendChild(row);
+}
+
+async function saveSaladMix() {
+    const id = document.getElementById('mix-modal-id').value;
+    const name = document.getElementById('mix-modal-name').value.trim();
+    const description = document.getElementById('mix-modal-description').value.trim();
+    const status = document.getElementById('mix-modal-status').value;
+
+    if (!name) { alert('Mix name is required'); return; }
+
+    const rows = document.querySelectorAll('#mix-components-container .mix-comp-row');
+    const components = [];
+    for (const row of rows) {
+        const pName = row.querySelector('.mix-comp-name').value.trim();
+        const pct = parseFloat(row.querySelector('.mix-comp-pct').value);
+        const pId = row.querySelector('.mix-comp-name').dataset.productId || pName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+        if (pName && pct > 0) {
+            components.push({ product_name: pName, product_id: pId, ratio: pct / 100 });
+        }
+    }
+
+    if (components.length < 2 || components.length > 4) {
+        alert('A mix must have 2-4 components'); return;
+    }
+    const sum = components.reduce((s, c) => s + c.ratio, 0);
+    if (Math.abs(sum - 1.0) > 0.01) {
+        alert(`Ratios must sum to 100%. Current: ${(sum * 100).toFixed(1)}%`); return;
+    }
+
+    try {
+        const token = localStorage.getItem('adminToken');
+        const method = id ? 'PUT' : 'POST';
+        const url = id ? `/api/admin/salad-mixes/${id}` : '/api/admin/salad-mixes';
+        const resp = await fetch(url, {
+            method,
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ name, description, status, components })
+        });
+        const data = await resp.json();
+        if (data.success) {
+            closeMixModal();
+            await loadSaladMixes();
+        } else {
+            alert(data.error || 'Failed to save mix');
+        }
+    } catch (err) {
+        console.error('[SaladMixes] Save error:', err);
+        alert('Failed to save mix');
+    }
+}
+
+async function deleteSaladMix(mixId) {
+    if (!confirm('Delete this salad mix template?')) return;
+    try {
+        const token = localStorage.getItem('adminToken');
+        const resp = await fetch(`/api/admin/salad-mixes/${mixId}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await resp.json();
+        if (data.success) {
+            await loadSaladMixes();
+        } else {
+            alert(data.error || 'Failed to delete');
+        }
+    } catch (err) {
+        console.error('[SaladMixes] Delete error:', err);
+    }
+}
+
 console.log('  window.DEBUG.getEvents(20) - Get last 20 events');
 console.log('  window.DEBUG.showPageViews() - Show all page views');
 console.log('  window.DEBUG.showLastError() - Show last error');

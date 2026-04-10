@@ -298,6 +298,168 @@ support@greenreach.ca
   }
 
   /**
+   * Notify buyer that their order has been accepted by a farm.
+   * Sends a verification + receipt email with itemised line items,
+   * totals, delivery details, and a tracking link.
+   */
+  async notifyBuyerOrderAccepted(order, subOrder) {
+    const items = subOrder.items || [];
+    const subTotal = Number(subOrder.sub_total) || items.reduce((s, i) => s + (i.line_total || 0), 0);
+    const brokerFee = Number(order.broker_fee_total) || +(subTotal * 0.12).toFixed(2);
+    const grandTotal = Number(order.grand_total) || +(subTotal + brokerFee).toFixed(2);
+    const farmName = subOrder.farm_name || subOrder.farm_id;
+    const orderId = order.id || order.master_order_id;
+    const deliveryDate = order.delivery_date
+      ? new Date(order.delivery_date).toLocaleDateString('en-CA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+      : 'TBD';
+    const acceptedAt = new Date().toLocaleString('en-CA', { dateStyle: 'long', timeStyle: 'short' });
+
+    const itemRows = items.map(item => {
+      const qty = Number(item.quantity) || 0;
+      const price = Number(item.price_per_unit) || 0;
+      const lineTotal = Number(item.line_total) || +(qty * price).toFixed(2);
+      return `<tr style="border-bottom:1px solid #e2e8f0;">
+        <td style="padding:10px 12px;color:#1a202c;">${item.product_name || item.sku_id}</td>
+        <td style="padding:10px 12px;text-align:center;">${qty} ${item.unit || ''}</td>
+        <td style="padding:10px 12px;text-align:right;">$${price.toFixed(2)}</td>
+        <td style="padding:10px 12px;text-align:right;font-weight:600;">$${lineTotal.toFixed(2)}</td>
+      </tr>`;
+    }).join('');
+
+    const subject = `Order #${orderId} Accepted by ${farmName} -- Receipt`;
+
+    const htmlBody = `<!DOCTYPE html>
+<html>
+<body style="margin:0;padding:0;background:#f1f5f9;font-family:Arial,Helvetica,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:40px 20px;"><tr><td align="center">
+<table width="600" cellpadding="0" cellspacing="0" style="background:white;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+
+<!-- Header -->
+<tr><td style="background:linear-gradient(135deg,#2d5016 0%,#3d6b1f 100%);padding:30px 40px;text-align:center;">
+  <h1 style="color:white;margin:0;font-size:22px;">Order Accepted</h1>
+  <p style="color:#c6f6d5;margin:8px 0 0;font-size:14px;">Order #${orderId}</p>
+</td></tr>
+
+<!-- Confirmation Banner -->
+<tr><td style="padding:24px 40px 0;">
+  <table width="100%" style="background:#f0fdf4;border-left:4px solid #38a169;border-radius:4px;"><tr><td style="padding:16px 20px;">
+    <p style="margin:0;color:#22543d;font-weight:700;font-size:15px;">Your order has been verified and accepted</p>
+    <p style="margin:6px 0 0;color:#276749;font-size:14px;">${farmName} confirmed all items on ${acceptedAt}.</p>
+  </td></tr></table>
+</td></tr>
+
+<!-- Items Table -->
+<tr><td style="padding:24px 40px;">
+  <h3 style="color:#2d3748;font-size:16px;margin:0 0 12px;">Order Items</h3>
+  <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:14px;">
+    <tr style="background:#f8fafc;">
+      <th style="text-align:left;padding:10px 12px;color:#64748b;font-weight:600;border-bottom:2px solid #e2e8f0;">Product</th>
+      <th style="text-align:center;padding:10px 12px;color:#64748b;font-weight:600;border-bottom:2px solid #e2e8f0;">Qty</th>
+      <th style="text-align:right;padding:10px 12px;color:#64748b;font-weight:600;border-bottom:2px solid #e2e8f0;">Unit Price</th>
+      <th style="text-align:right;padding:10px 12px;color:#64748b;font-weight:600;border-bottom:2px solid #e2e8f0;">Total</th>
+    </tr>
+    ${itemRows}
+  </table>
+</td></tr>
+
+<!-- Totals -->
+<tr><td style="padding:0 40px 24px;">
+  <table width="100%" style="background:#f0fdf4;border-radius:8px;"><tr><td style="padding:16px 20px;">
+    <table width="100%" cellspacing="0" cellpadding="4" style="font-size:14px;">
+      <tr><td style="color:#4a5568;">Subtotal</td><td style="text-align:right;color:#1a202c;">$${subTotal.toFixed(2)} CAD</td></tr>
+      <tr><td style="color:#4a5568;">Marketplace Fee (12%)</td><td style="text-align:right;color:#1a202c;">$${brokerFee.toFixed(2)}</td></tr>
+      <tr style="border-top:2px solid #86efac;">
+        <td style="color:#166534;font-size:16px;font-weight:700;padding-top:8px;">Total Charged</td>
+        <td style="text-align:right;color:#166534;font-size:16px;font-weight:700;padding-top:8px;">$${grandTotal.toFixed(2)} CAD</td>
+      </tr>
+    </table>
+  </td></tr></table>
+</td></tr>
+
+<!-- Delivery Details -->
+<tr><td style="padding:0 40px 24px;">
+  <table width="100%" style="background:#e7f3ff;border-left:4px solid #3182ce;border-radius:4px;"><tr><td style="padding:16px 20px;">
+    <p style="margin:0 0 4px;color:#2c5282;font-weight:700;font-size:14px;">Delivery Details</p>
+    <p style="margin:2px 0;color:#2d3748;font-size:14px;">${deliveryDate}</p>
+    ${order.delivery_address ? `<p style="margin:2px 0;color:#4a5568;font-size:13px;">${order.delivery_address}${order.delivery_city ? ', ' + order.delivery_city : ''}${order.delivery_province ? ', ' + order.delivery_province : ''}</p>` : ''}
+    ${order.fulfillment_cadence ? `<p style="margin:2px 0;color:#4a5568;font-size:13px;">Schedule: ${this.formatCadence(order.fulfillment_cadence)}</p>` : ''}
+  </td></tr></table>
+</td></tr>
+
+<!-- Next Steps -->
+<tr><td style="padding:0 40px 24px;">
+  <h3 style="color:#2d3748;font-size:16px;margin:0 0 10px;">What Happens Next</h3>
+  <ol style="line-height:1.8;color:#4a5568;font-size:14px;margin:0;padding-left:20px;">
+    <li>The farm begins picking and packing your items</li>
+    <li>You will receive a notification when your order is ready</li>
+    <li>Delivery or pickup on ${deliveryDate}</li>
+  </ol>
+</td></tr>
+
+<!-- CTA Button -->
+<tr><td style="padding:0 40px 32px;text-align:center;">
+  <a href="${this.appUrl}/GR-wholesale.html?view=orders&order_id=${orderId}"
+     style="display:inline-block;background:#82c341;color:white;padding:14px 32px;text-decoration:none;border-radius:6px;font-weight:700;font-size:15px;">
+    Track Your Order
+  </a>
+</td></tr>
+
+<!-- Payment Reference -->
+${order.payment_id ? `<tr><td style="padding:0 40px 24px;">
+  <p style="color:#94a3b8;font-size:12px;margin:0;text-align:center;">Payment Ref: ${order.payment_id}</p>
+</td></tr>` : ''}
+
+<!-- Footer -->
+<tr><td style="background:#f8fafc;padding:20px 40px;border-top:1px solid #e2e8f0;text-align:center;">
+  <p style="color:#94a3b8;font-size:12px;margin:0 0 4px;">GreenReach Wholesale Marketplace</p>
+  <p style="color:#94a3b8;font-size:11px;margin:0;">This is your order receipt. Please keep it for your records.</p>
+</td></tr>
+
+</table></td></tr></table>
+</body>
+</html>`;
+
+    const textBody = `Order #${orderId} -- Accepted by ${farmName}
+
+Your order has been verified and accepted on ${acceptedAt}.
+
+ORDER ITEMS
+${items.map(i => `  ${i.product_name || i.sku_id} -- ${i.quantity} ${i.unit || ''} x $${(Number(i.price_per_unit) || 0).toFixed(2)} = $${(Number(i.line_total) || 0).toFixed(2)}`).join('\n')}
+
+Subtotal:          $${subTotal.toFixed(2)} CAD
+Marketplace Fee:   $${brokerFee.toFixed(2)}
+Total Charged:     $${grandTotal.toFixed(2)} CAD
+
+DELIVERY
+  Date: ${deliveryDate}
+  ${order.delivery_address ? 'Address: ' + order.delivery_address : ''}
+
+NEXT STEPS
+  1. Farm begins picking and packing
+  2. Notification when order is ready
+  3. Delivery or pickup on ${deliveryDate}
+
+Track your order: ${this.appUrl}/GR-wholesale.html?view=orders&order_id=${orderId}
+${order.payment_id ? 'Payment Ref: ' + order.payment_id : ''}
+
+--
+GreenReach Wholesale Marketplace`;
+
+    try {
+      await this.emailTransporter.sendMail({
+        from: this.fromEmail,
+        to: order.buyer_email,
+        subject,
+        text: textBody,
+        html: htmlBody
+      });
+      console.log(`[Notifications] Order accepted receipt sent to ${order.buyer_email} for order ${orderId}`);
+    } catch (error) {
+      console.error('[Notifications] Buyer acceptance receipt failed:', error.message);
+    }
+  }
+
+  /**
    * Notify buyer that farm modified their order
    */
   async notifyBuyerModifications(order, modifiedSubOrders) {

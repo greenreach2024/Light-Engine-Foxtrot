@@ -12,13 +12,16 @@ import adminPricingRoutes from './admin-pricing.js';
 import adminDeliveryRoutes from './admin-delivery.js';
 import adminAiMonitoringRoutes from './admin-ai-monitoring.js';
 import adminMarketingRoutes from './admin-marketing.js';
+import adminSaladMixesRoutes from './admin-salad-mixes.js';
 import { getInMemoryGroups, getInMemoryStore } from './sync.js';
 import { query, isDatabaseAvailable } from '../config/database.js';
 
 const router = express.Router();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const RECIPES_DIR = path.join(__dirname, '../data/recipes-v2');
+const RECIPES_DIR = process.env.DEPLOYMENT_MODE === 'cloud'
+    ? '/opt/recipes-v2'
+    : path.join(__dirname, '../data/recipes-v2');
 const AI_RULES_PATH = path.join(__dirname, '../data/ai-rules.json');
 const ADMIN_SALT_ROUNDS = 12;
 
@@ -408,6 +411,9 @@ router.use('/ai', adminAiMonitoringRoutes);
 
 // Mount Marketing AI routes
 router.use('/marketing', adminMarketingRoutes);
+
+// Mount Salad Mixes admin routes
+router.use('/salad-mixes', adminSaladMixesRoutes);
 
 /**
  * GET /api/admin/ai-rules
@@ -1464,11 +1470,17 @@ router.post('/farms/:farmId/reset-credentials', async (req, res) => {
 
         // Update or create farm admin user
         const existingUser = await query(
-            'SELECT id FROM farm_users WHERE farm_id = $1 AND role = $2 LIMIT 1',
+            'SELECT id, email FROM farm_users WHERE farm_id = $1 AND role = $2 LIMIT 1',
             [farmId, 'admin']
         );
 
+        // Use the existing user's email if present; only fall back for new users
+        const loginEmail = (existingUser.rows.length && existingUser.rows[0].email)
+            ? existingUser.rows[0].email
+            : (farm.email || `admin@${farmId.toLowerCase()}.local`);
+
         if (existingUser.rows.length) {
+            // Update password only — preserve the existing email address
             await query(
                 `UPDATE farm_users SET password_hash = $1, must_change_password = true, updated_at = NOW()
                  WHERE farm_id = $2 AND role = 'admin'`,
@@ -1476,19 +1488,18 @@ router.post('/farms/:farmId/reset-credentials', async (req, res) => {
             );
         } else {
             // No admin user exists — create one using the farm's email
-            const adminEmail = farm.email || `admin@${farmId.toLowerCase()}.local`;
             await query(
-                `INSERT INTO farm_users (farm_id, email, password_hash, role, must_change_password)
-                 VALUES ($1, $2, $3, 'admin', true)`,
-                [farmId, adminEmail, passwordHash]
+                `INSERT INTO farm_users (farm_id, email, password_hash, role, must_change_password, status)
+                 VALUES ($1, $2, $3, 'admin', true, 'active')`,
+                [farmId, loginEmail, passwordHash]
             );
         }
 
-        console.log(`[Admin API] Credentials reset for farm ${farmId}`);
+        console.log(`[Admin API] Credentials reset for farm ${farmId} (email: ${loginEmail})`);
 
         res.json({
             success: true,
-            email: farm.email || 'admin',
+            email: loginEmail,
             temp_password: tempPassword,
             message: 'Farm credentials reset successfully.'
         });

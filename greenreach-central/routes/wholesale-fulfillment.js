@@ -37,6 +37,12 @@ import emailService from '../services/email-service.js';
 
 const router = Router();
 
+// Skip webhook HMAC check if the request was already JWT-authenticated by
+// authMiddleware (browser calls from LE-farm-admin.html).  Server-to-server
+// calls that lack a Bearer token still go through verifyWebhookSignature.
+const jwtOrWebhookAuth = (req, res, next) =>
+  req.user ? next() : verifyWebhookSignature(req, res, next);
+
 // Overlay stores used by farm-admin UI for status/tracking persistence.
 // They keep behavior stable even when DB rows do not map 1:1 to sub-order IDs.
 const uiOrderStatuses = new Map();
@@ -48,6 +54,7 @@ function normalizeStatusUpdates(body = {}) {
       .filter(u => u && u.order_id && typeof u.status === 'string')
       .map(u => ({
         order_id: String(u.order_id),
+        sub_order_id: u.sub_order_id ? String(u.sub_order_id) : null,
         status: String(u.status),
         farm_id: u.farm_id ? String(u.farm_id) : null,
         timestamp: u.timestamp ? String(u.timestamp) : null,
@@ -377,7 +384,17 @@ router.post('/order-statuses', async (req, res) => {
           }
 
           const orderData = dbOrder.order_data || {};
-          const subOrder = findMatchingSubOrder(orderData, orderId);
+          let subOrder = findMatchingSubOrder(orderData, orderId);
+          // If no sub-order matched by order_id (e.g. order_id is the master),
+          // try matching by sub_order_id or farm_id from the update payload.
+          if (!subOrder && Array.isArray(orderData.farm_sub_orders)) {
+            if (update.sub_order_id) {
+              subOrder = findMatchingSubOrder(orderData, String(update.sub_order_id));
+            }
+            if (!subOrder && update.farm_id) {
+              subOrder = orderData.farm_sub_orders.find(s => s && String(s.farm_id) === String(update.farm_id)) || null;
+            }
+          }
           const currentStatus = normalizeQueueStatus(subOrder?.status || dbOrder.status || orderData.status || '');
 
           if (currentStatus && currentStatus !== nextStatus && !isValidOrderTransition(currentStatus, nextStatus)) {
@@ -756,8 +773,9 @@ router.get('/orders/pending-verification/:farmId', async (req, res) => {
     if (await isDatabaseAvailable()) {
       try {
         const result = await query(
-          `SELECT id, status, buyer_email, delivery_date, total_amount, created_at
-           FROM wholesale_orders WHERE farm_id = $1 AND status = 'pending'
+          `SELECT id, master_order_id, status, buyer_email, delivery_date, total_amount,
+                  order_data, created_at
+           FROM wholesale_orders WHERE farm_id = $1 AND status IN ('pending', 'pending_verification', 'confirmed')
            ORDER BY created_at DESC`,
           [farmId]
         );
@@ -771,47 +789,180 @@ router.get('/orders/pending-verification/:farmId', async (req, res) => {
 });
 
 // POST /orders/farm-verify — Verify an order (farm side)
-router.post('/orders/farm-verify', verifyWebhookSignature, async (req, res) => {
+// Accepts both webhook format {order_id, verified, notes} and
+// browser format {farm_id, sub_order_id, action, reason}.
+router.post('/orders/farm-verify', jwtOrWebhookAuth, async (req, res) => {
   try {
-    const { order_id, verified, notes } = req.body;
-    const targetStatus = verified ? 'confirmed' : 'rejected';
+    const { order_id, sub_order_id, verified, notes, action, farm_id, reason } = req.body;
+    const orderId = order_id || sub_order_id;
+
+    if (!orderId) {
+      return res.status(400).json({ success: false, error: 'order_id or sub_order_id required' });
+    }
+
+    // Determine target status from either format
+    let targetStatus;
+    if (action) {
+      targetStatus = action === 'accept' ? 'confirmed' : action === 'decline' ? 'rejected' : 'rejected';
+    } else {
+      targetStatus = verified ? 'confirmed' : 'rejected';
+    }
+
+    let updated = false;
+
     if (await isDatabaseAvailable()) {
       try {
-        const current = await query(`SELECT status FROM wholesale_orders WHERE id = $1`, [order_id]);
-        if (current.rows.length && !isValidOrderTransition(current.rows[0].status, targetStatus)) {
-          return res.status(409).json({ success: false, error: `Invalid transition: ${current.rows[0].status} → ${targetStatus}` });
+        const dbOrder = await findWholesaleOrderRecord(orderId);
+        if (dbOrder) {
+          const orderData = dbOrder.order_data || {};
+          let subOrder = findMatchingSubOrder(orderData, orderId);
+          if (!subOrder && sub_order_id) {
+            subOrder = findMatchingSubOrder(orderData, String(sub_order_id));
+          }
+          if (!subOrder && farm_id && Array.isArray(orderData.farm_sub_orders)) {
+            subOrder = orderData.farm_sub_orders.find(s => s && String(s.farm_id) === String(farm_id)) || null;
+          }
+
+          const currentStatus = normalizeQueueStatus(subOrder?.status || dbOrder.status || orderData.status || '');
+          if (currentStatus && currentStatus !== targetStatus && !isValidOrderTransition(currentStatus, targetStatus)) {
+            return res.status(409).json({ success: false, error: `Invalid transition: ${currentStatus} -> ${targetStatus}` });
+          }
+
+          // Update sub-order status inside order_data
+          if (subOrder) {
+            subOrder.status = targetStatus;
+            subOrder.status_updated_at = new Date().toISOString();
+            if (reason) subOrder.verification_notes = reason;
+          }
+          orderData.status = targetStatus;
+          orderData.status_updated_at = new Date().toISOString();
+
+          await query(
+            `UPDATE wholesale_orders
+                SET status = $1,
+                    order_data = $2::jsonb,
+                    updated_at = NOW()
+              WHERE id = $3`,
+            [targetStatus, JSON.stringify(orderData), dbOrder.id]
+          );
+          updated = true;
+
+          // Sync in-memory store
+          const memOrderKey = dbOrder.master_order_id || orderId;
+          const memOrder = await getOrderById(memOrderKey, { includeArchived: true });
+          if (memOrder) {
+            memOrder.status = targetStatus;
+            memOrder.status_updated_at = orderData.status_updated_at;
+            if (subOrder && Array.isArray(memOrder.farm_sub_orders)) {
+              const memSub = findMatchingSubOrder(memOrder, orderId);
+              if (memSub) {
+                memSub.status = targetStatus;
+                memSub.status_updated_at = orderData.status_updated_at;
+                if (reason) memSub.verification_notes = reason;
+              }
+            }
+            await saveOrder(memOrder).catch(() => {});
+          }
+
+          // Set UI overlay
+          uiOrderStatuses.set(orderId, targetStatus);
+          if (dbOrder.master_order_id) uiOrderStatuses.set(String(dbOrder.master_order_id), targetStatus);
+          if (subOrder?.sub_order_id) uiOrderStatuses.set(String(subOrder.sub_order_id), targetStatus);
+
+          logOrderEvent(dbOrder.master_order_id || orderId, targetStatus === 'confirmed' ? 'farm_accepted' : 'farm_rejected', {
+            farm_id, sub_order_id: orderId, reason: reason || notes
+          });
         }
-        await query(
-          `UPDATE wholesale_orders SET status = $1, updated_at = NOW() WHERE id = $2`,
-          [targetStatus, order_id]
-        );
-      } catch { /* table may not exist */ }
+      } catch (dbErr) {
+        console.error('[farm-verify] DB error:', dbErr.message);
+      }
     }
-    res.json({ success: true, order_id, verified, notes });
+
+    // Fallback: update in-memory store even if DB lookup missed
+    if (!updated) {
+      const memOrder = await getOrderById(orderId, { includeArchived: true });
+      if (memOrder) {
+        memOrder.status = targetStatus;
+        memOrder.status_updated_at = new Date().toISOString();
+        const subOrder = findMatchingSubOrder(memOrder, orderId)
+          || (farm_id && Array.isArray(memOrder.farm_sub_orders)
+            ? memOrder.farm_sub_orders.find(s => s && String(s.farm_id) === String(farm_id))
+            : null);
+        if (subOrder) {
+          subOrder.status = targetStatus;
+          subOrder.status_updated_at = memOrder.status_updated_at;
+          if (reason) subOrder.verification_notes = reason;
+        }
+        await saveOrder(memOrder).catch(() => {});
+        updated = true;
+      }
+      uiOrderStatuses.set(orderId, targetStatus);
+    }
+
+    if (!updated) {
+      // No order found at all — still set overlay for UI consistency
+      uiOrderStatuses.set(orderId, targetStatus);
+      console.warn(`[farm-verify] No order found for id=${orderId}, overlay set only`);
+    }
+
+    res.json({ success: true, order_id: orderId, verified: targetStatus === 'confirmed', updated, notes: notes || reason });
   } catch (error) {
+    console.error('[farm-verify] Error:', error.message);
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
 // POST /orders/:orderId/verify — Verify specific order
-router.post('/orders/:orderId/verify', verifyWebhookSignature, async (req, res) => {
+router.post('/orders/:orderId/verify', jwtOrWebhookAuth, async (req, res) => {
   try {
     const { orderId } = req.params;
     const { verified = true, notes } = req.body;
     const targetStatus = verified ? 'confirmed' : 'rejected';
+    let updated = false;
+
     if (await isDatabaseAvailable()) {
       try {
-        const current = await query(`SELECT status FROM wholesale_orders WHERE id = $1`, [orderId]);
-        if (current.rows.length && !isValidOrderTransition(current.rows[0].status, targetStatus)) {
-          return res.status(409).json({ success: false, error: `Invalid transition: ${current.rows[0].status} → ${targetStatus}` });
+        const dbOrder = await findWholesaleOrderRecord(orderId);
+        if (dbOrder) {
+          const currentStatus = normalizeQueueStatus(dbOrder.status || '');
+          if (currentStatus && currentStatus !== targetStatus && !isValidOrderTransition(currentStatus, targetStatus)) {
+            return res.status(409).json({ success: false, error: `Invalid transition: ${currentStatus} -> ${targetStatus}` });
+          }
+          const orderData = dbOrder.order_data || {};
+          orderData.status = targetStatus;
+          orderData.status_updated_at = new Date().toISOString();
+          await query(
+            `UPDATE wholesale_orders SET status = $1, order_data = $2::jsonb, updated_at = NOW() WHERE id = $3`,
+            [targetStatus, JSON.stringify(orderData), dbOrder.id]
+          );
+          updated = true;
+
+          const memOrder = await getOrderById(dbOrder.master_order_id || orderId, { includeArchived: true });
+          if (memOrder) {
+            memOrder.status = targetStatus;
+            memOrder.status_updated_at = orderData.status_updated_at;
+            await saveOrder(memOrder).catch(() => {});
+          }
+          uiOrderStatuses.set(orderId, targetStatus);
+          if (dbOrder.master_order_id) uiOrderStatuses.set(String(dbOrder.master_order_id), targetStatus);
         }
-        await query(
-          `UPDATE wholesale_orders SET status = $1, updated_at = NOW() WHERE id = $2`,
-          [targetStatus, orderId]
-        );
-      } catch { /* table may not exist */ }
+      } catch (dbErr) {
+        console.error('[verify] DB error:', dbErr.message);
+      }
     }
-    res.json({ success: true, orderId, verified, notes });
+
+    if (!updated) {
+      const memOrder = await getOrderById(orderId, { includeArchived: true });
+      if (memOrder) {
+        memOrder.status = targetStatus;
+        memOrder.status_updated_at = new Date().toISOString();
+        await saveOrder(memOrder).catch(() => {});
+        updated = true;
+      }
+      uiOrderStatuses.set(orderId, targetStatus);
+    }
+
+    res.json({ success: true, orderId, verified, updated, notes });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }

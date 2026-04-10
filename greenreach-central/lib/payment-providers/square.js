@@ -417,9 +417,9 @@ export class SquarePaymentProvider extends PaymentProvider {
    */
   async listCards(customerId) {
     try {
-      // v43: .list({ customerId }) not .listCards(undefined, customerId), response is flat
-      const response = await this.cardsApi.list({ customerId });
-      const cards = (response.cards || []).map(c => ({
+      // v43: .list() returns a Page object; cards are in .data (not .response.cards)
+      const page = await this.cardsApi.list({ customerId });
+      const cards = (page.data || []).map(c => ({
         cardId: c.id,
         brand: c.cardBrand,
         last4: c.last4,
