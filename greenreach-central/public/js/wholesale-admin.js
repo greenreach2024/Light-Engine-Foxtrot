@@ -755,11 +755,20 @@
     async loadPayments() {
       const headers = this.getAuthHeaders();
       try {
-        const response = await fetch('/api/wholesale/webhooks/payments', { headers });
-        const data = await response.json();
+        // Fetch payments, orders, and farms in parallel for cross-referencing
+        const [payRes, ordRes, farmRes] = await Promise.all([
+          fetch('/api/wholesale/webhooks/payments', { headers }),
+          fetch('/api/admin/wholesale/orders', { headers }),
+          fetch('/api/wholesale/network/farms', { headers })
+        ]);
+        const payData = await payRes.json();
+        const ordData = await ordRes.json();
+        const farmData = await farmRes.json();
 
-        if (data.status === 'ok') {
-          this.payments = data.data?.payments || data.payments || [];
+        if (payData.status === 'ok') {
+          this.payments = payData.data?.payments || payData.payments || [];
+          this.orders = ordData.data?.orders || ordData.orders || [];
+          this.farms = farmData.data?.farms || [];
           this.renderPaymentsTable();
           this.renderPayoutSummary();
         } else {
@@ -769,6 +778,33 @@
         console.error('Load payments error:', error);
         this.showToast('Network error loading payments', 'error');
       }
+    },
+
+    // Resolve farm name for a payment by looking up the related order
+    resolveFarmForPayment(payment) {
+      // Try split data first (has per-farm breakdown)
+      if (payment.split && Array.isArray(payment.split)) {
+        const names = payment.split.map(s => {
+          const f = this.farms.find(fm => fm.farm_id === s.farm_id);
+          return f ? (f.farm_name || f.name || s.farm_id) : s.farm_id;
+        }).filter(Boolean);
+        if (names.length) return names.join(', ');
+      }
+      // Fall back to order's farm_sub_orders
+      const order = (this.orders || []).find(o => o.master_order_id === payment.order_id);
+      if (order && order.farm_sub_orders && order.farm_sub_orders.length > 0) {
+        const names = order.farm_sub_orders.map(s => {
+          const f = this.farms.find(fm => fm.farm_id === s.farm_id);
+          return f ? (f.farm_name || f.name || s.farm_id) : s.farm_id;
+        }).filter(Boolean);
+        if (names.length) return names.join(', ');
+      }
+      // Last resort: use farm_id directly
+      if (payment.farm_id) {
+        const f = this.farms.find(fm => fm.farm_id === payment.farm_id);
+        return f ? (f.farm_name || f.name || payment.farm_id) : payment.farm_id;
+      }
+      return 'Unassigned';
     },
 
     renderPaymentsTable() {
@@ -784,7 +820,7 @@
           (p) => `
           <tr>
             <td>${p.payment_id.substring(0, 12)}...</td>
-            <td>${p.farm_id || ''}</td>
+            <td>${this.escHtml(this.resolveFarmForPayment(p))}</td>
             <td>$${p.amount.toFixed(2)}</td>
             <td>$${p.broker_fee_amount.toFixed(2)}</td>
             <td><span class="badge ${p.status}">${p.status}</span></td>
@@ -801,13 +837,15 @@
     renderPayoutSummary() {
       const tbody = document.getElementById('payout-summary-table');
 
+      // Build farm summary by resolving farm names from orders/split data
       const farmSummary = {};
       this.payments.forEach((p) => {
         if (p.status === 'completed') {
-          if (!farmSummary[p.farm_id]) farmSummary[p.farm_id] = { gross: 0, fees: 0, count: 0 };
-          farmSummary[p.farm_id].gross += p.amount;
-          farmSummary[p.farm_id].fees += p.broker_fee_amount;
-          farmSummary[p.farm_id].count += 1;
+          const farmName = this.resolveFarmForPayment(p);
+          if (!farmSummary[farmName]) farmSummary[farmName] = { gross: 0, fees: 0, count: 0 };
+          farmSummary[farmName].gross += p.amount;
+          farmSummary[farmName].fees += p.broker_fee_amount;
+          farmSummary[farmName].count += 1;
         }
       });
 
@@ -818,9 +856,9 @@
 
       tbody.innerHTML = Object.entries(farmSummary)
         .map(
-          ([farm_id, summary]) => `
+          ([farmName, summary]) => `
           <tr>
-            <td>${farm_id}</td>
+            <td>${this.escHtml(farmName)}</td>
             <td>$${summary.gross.toFixed(2)}</td>
             <td>$${summary.fees.toFixed(2)}</td>
             <td><strong>$${(summary.gross - summary.fees).toFixed(2)}</strong></td>
@@ -951,6 +989,11 @@
       const updatedCount = source.updated_count != null ? Number(source.updated_count) : matched;
       const failedCount = source.failed_count != null ? Number(source.failed_count) : unmatched + errors.length;
 
+      // Square cross-check results
+      const squareChecked = Number(source.square_checked || 0);
+      const squareDiscrepancies = Array.isArray(source.square_discrepancies) ? source.square_discrepancies : [];
+      const squareAvailable = source.square_available === true;
+
       return {
         reconciledAt: source.reconciled_at || source.reconciledAt || null,
         totalPayments: Number(source.total_payments || source.totalPayments || 0),
@@ -958,7 +1001,10 @@
         unmatched,
         updatedCount,
         failedCount,
-        errors
+        errors,
+        squareChecked,
+        squareDiscrepancies,
+        squareAvailable
       };
     },
 
@@ -975,11 +1021,14 @@
 
         if (response.ok && data.status === 'ok') {
           const summary = this.normalizeReconciliationData(data);
-          const issueCount = summary.unmatched + summary.errors.length;
-          this.showToast(
-            `Reconciliation complete: ${summary.totalPayments} checked, ${issueCount} issues detected`,
-            issueCount > 0 ? 'info' : 'success'
-          );
+          const issueCount = summary.unmatched + summary.errors.length + summary.squareDiscrepancies.length;
+          let msg = `Reconciliation complete: ${summary.totalPayments} checked, ${issueCount} issues detected`;
+          if (summary.squareChecked > 0) {
+            msg += ` | Square: ${summary.squareChecked} verified, ${summary.squareDiscrepancies.length} discrepancies`;
+          } else if (!summary.squareAvailable) {
+            msg += ' | Square API not configured';
+          }
+          this.showToast(msg, issueCount > 0 ? 'info' : 'success');
           this.loadPayments();
         } else {
           this.showToast(`Reconciliation failed: ${data.message || `HTTP ${response.status}`}`, 'error');
@@ -1034,14 +1083,42 @@
                 <p>Unmatched: ${summary.unmatched}</p>
                 <p>Updated: ${summary.updatedCount}</p>
                 <p>Failed: ${summary.failedCount}</p>
+                ${summary.squareAvailable
+                  ? `<p style="margin-top: 0.5rem; font-weight: 600;">Square Cross-Check: ${summary.squareChecked} verified, ${summary.squareDiscrepancies.length} discrepancies</p>`
+                  : '<p style="margin-top: 0.5rem; color: var(--text-secondary);">Square API not configured — internal check only</p>'
+                }
                 <p>Completed at: ${completedAt.toLocaleString()}</p>
                 ${summary.errors.length > 0
                   ? `
                   <details style="margin-top: 1rem;">
-                    <summary>Errors (${summary.errors.length})</summary>
+                    <summary>Internal Errors (${summary.errors.length})</summary>
                     <ul style="margin-top: 0.5rem;">
                       ${summary.errors
                         .map((e) => `<li>${this.escHtml(e.payment_id || e.order_id || 'unknown')}: ${this.escHtml(e.error || e.issue || 'unknown')}</li>`)
+                        .join('')}
+                    </ul>
+                  </details>
+                `
+                  : ''}
+                ${summary.squareDiscrepancies.length > 0
+                  ? `
+                  <details style="margin-top: 0.75rem;" open>
+                    <summary style="color: var(--error); font-weight: 600;">Square Discrepancies (${summary.squareDiscrepancies.length})</summary>
+                    <ul style="margin-top: 0.5rem;">
+                      ${summary.squareDiscrepancies
+                        .map((d) => {
+                          const id = this.escHtml(d.square_payment_id || d.payment_id || 'unknown');
+                          if (d.issue === 'square_status_mismatch') {
+                            return `<li>${id}: Status mismatch — local: ${this.escHtml(d.local_status)}, Square: ${this.escHtml(d.square_status)}</li>`;
+                          }
+                          if (d.issue === 'square_amount_mismatch') {
+                            return `<li>${id}: Amount mismatch — local: $${Number(d.local_amount).toFixed(2)}, Square: $${Number(d.square_amount).toFixed(2)} (diff: $${Number(d.difference).toFixed(2)})</li>`;
+                          }
+                          if (d.issue === 'square_lookup_failed') {
+                            return `<li>${id}: Square lookup failed — ${this.escHtml(d.error || 'unknown')}</li>`;
+                          }
+                          return `<li>${id}: ${this.escHtml(d.issue || 'unknown')}</li>`;
+                        })
                         .join('')}
                     </ul>
                   </details>
@@ -1184,7 +1261,7 @@
       tbody.innerHTML = payments.map(p => `
         <tr>
           <td>${p.payment_id.substring(0, 12)}...</td>
-          <td>${p.farm_id || ""}</td>
+          <td>${this.escHtml(this.resolveFarmForPayment(p))}</td>
           <td>$${p.amount.toFixed(2)}</td>
           <td>$${p.broker_fee_amount.toFixed(2)}</td>
           <td><span class="badge ${p.status}">${p.status}</span></td>
@@ -1948,15 +2025,23 @@
         if (totalEl) totalEl.textContent = buyers.length;
         if (activeEl) activeEl.textContent = buyers.filter(b => b.status !== 'deactivated').length;
 
-        // Load aggregate order stats
+        // Load aggregate order/payment stats — use completed payments for revenue (consistent with Overview)
         let orderCount = 0;
         let revenue = 0;
         try {
-          const ordRes = await fetch('/api/admin/wholesale/orders', { headers });
+          const [ordRes, payRes] = await Promise.all([
+            fetch('/api/admin/wholesale/orders', { headers }),
+            fetch('/api/wholesale/webhooks/payments', { headers })
+          ]);
           const ordJson = await ordRes.json();
+          const payJson = await payRes.json();
           const orders = ordJson.data?.orders || ordJson.orders || [];
+          const payments = payJson.data?.payments || payJson.payments || [];
           orderCount = orders.length;
-          revenue = orders.reduce((s, o) => s + (parseFloat(o.grand_total || o.total) || 0), 0);
+          // Revenue = completed payments only (matches Overview GMV calculation)
+          revenue = payments
+            .filter(p => p.status === 'completed')
+            .reduce((s, p) => s + (parseFloat(p.amount) || 0), 0);
         } catch (_) {}
         const ordTotalEl = document.getElementById('buyers-orders-total');
         const revEl = document.getElementById('buyers-revenue');

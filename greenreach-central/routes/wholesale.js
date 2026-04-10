@@ -3819,7 +3819,10 @@ router.post('/webhooks/reconcile', adminAuthMiddleware, async (req, res) => {
     let matched = 0;
     let unmatched = 0;
     let mismatches = [];
+    let squareChecked = 0;
+    let squareDiscrepancies = [];
 
+    // Phase 1: Internal consistency — match payments to orders
     for (const payment of payments) {
       const order = orderMap.get(payment.order_id);
       if (!order) {
@@ -3842,6 +3845,76 @@ router.post('/webhooks/reconcile', adminAuthMiddleware, async (req, res) => {
       matched++;
     }
 
+    // Phase 2: Square API cross-check — verify completed payments against Square records
+    const squareToken = process.env.SQUARE_ACCESS_TOKEN;
+    if (squareToken) {
+      try {
+        const { SquareClient, SquareEnvironment } = await import('square');
+        const sqClient = new SquareClient({
+          token: squareToken,
+          environment: process.env.SQUARE_ENVIRONMENT === 'production'
+            ? SquareEnvironment.Production
+            : SquareEnvironment.Sandbox,
+        });
+
+        // Check each completed payment that has Square details
+        const squarePayments = payments.filter(p =>
+          p.status === 'completed' && p.provider === 'square' && p.square_details
+        );
+
+        for (const payment of squarePayments) {
+          const squareSubPayments = payment.square_details?.payments || [];
+          for (const sub of squareSubPayments) {
+            const squarePaymentId = sub.paymentId || sub.payment_id;
+            if (!squarePaymentId) continue;
+
+            try {
+              const sqPayment = await sqClient.payments.get({ paymentId: squarePaymentId });
+              const sqAmount = Number(sqPayment.payment?.amountMoney?.amount || 0) / 100;
+              const localAmount = Number(sub.amountMoney?.amount || 0) / 100;
+              const sqStatus = sqPayment.payment?.status || 'UNKNOWN';
+
+              squareChecked++;
+
+              // Flag status mismatches
+              if (sqStatus !== 'COMPLETED') {
+                squareDiscrepancies.push({
+                  payment_id: payment.payment_id,
+                  square_payment_id: squarePaymentId,
+                  issue: 'square_status_mismatch',
+                  local_status: 'completed',
+                  square_status: sqStatus,
+                });
+              }
+
+              // Flag amount mismatches (compare in dollars)
+              if (Math.abs(sqAmount - localAmount) > 0.01) {
+                squareDiscrepancies.push({
+                  payment_id: payment.payment_id,
+                  square_payment_id: squarePaymentId,
+                  issue: 'square_amount_mismatch',
+                  local_amount: localAmount,
+                  square_amount: sqAmount,
+                  difference: Math.round((localAmount - sqAmount) * 100) / 100,
+                });
+              }
+            } catch (sqErr) {
+              squareDiscrepancies.push({
+                payment_id: payment.payment_id,
+                square_payment_id: squarePaymentId,
+                issue: 'square_lookup_failed',
+                error: sqErr.message || 'Unknown error',
+              });
+            }
+          }
+        }
+      } catch (importErr) {
+        console.warn('[Reconcile] Square SDK not available:', importErr.message);
+      }
+    }
+
+    const allIssues = [...mismatches, ...squareDiscrepancies];
+
     return res.json({
       status: 'ok',
       data: {
@@ -3850,7 +3923,10 @@ router.post('/webhooks/reconcile', adminAuthMiddleware, async (req, res) => {
         matched,
         unmatched,
         mismatches,
-        clean: mismatches.length === 0,
+        square_checked: squareChecked,
+        square_discrepancies: squareDiscrepancies,
+        square_available: !!squareToken,
+        clean: allIssues.length === 0,
       },
     });
   } catch (err) {

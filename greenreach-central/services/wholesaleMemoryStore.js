@@ -619,6 +619,8 @@ export async function loadPaymentsFromDb() {
         net_to_farms_total: row.metadata?.net_to_farms_total || 0,
         split: row.metadata?.split || null,
         farm_id: row.metadata?.farm_id || null,
+        square_details: row.metadata?.square_details || null,
+        greenreach_held: row.metadata?.greenreach_held || false,
         created_at: row.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString()
       };
       if (!paymentsById.has(payment.payment_id)) {
