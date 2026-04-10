@@ -1336,7 +1336,7 @@ router.get('/farm-sales/reports/quickbooks-daily-summary', authMiddleware, async
     }
 
     const processingFee = totalCard * 0.029 + orders.length * 0.30;
-    const wholesaleCommissionRate = Number(process.env.WHOLESALE_COMMISSION_RATE || 0.12);
+    const wholesaleCommissionRate = Number(process.env.WHOLESALE_COMMISSION_RATE || 0);
     const brokerFee = channels.wholesale * wholesaleCommissionRate;
 
     // QuickBooks IIF-style daily summary CSV

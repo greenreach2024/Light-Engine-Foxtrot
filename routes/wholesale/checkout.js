@@ -126,7 +126,7 @@ router.post('/preview', async (req, res) => {
 
     // Allocate order
     const taxConfig = loadFarmTaxConfig();
-    const commissionRate = Number(process.env.WHOLESALE_COMMISSION_RATE || 0.12);
+    const commissionRate = Number(process.env.WHOLESALE_COMMISSION_RATE || 0);
 
     // Resolve buyer discount from purchase history (optional auth on preview)
     const previewBuyerId = getBuyerIdFromRequest(req);
@@ -247,7 +247,7 @@ router.post('/execute', async (req, res) => {
     // Step 2: Allocate order
     console.log('[Checkout] Step 2: Allocating order...');
     const taxConfig = loadFarmTaxConfig();
-    const commissionRate = Number(process.env.WHOLESALE_COMMISSION_RATE || 0.12);
+    const commissionRate = Number(process.env.WHOLESALE_COMMISSION_RATE || 0);
 
     // Compute buyer volume discount from purchase history
     const buyerDiscount = await getBuyerDiscount(resolvedBuyerId);

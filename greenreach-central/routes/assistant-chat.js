@@ -2163,7 +2163,7 @@ MIXED GREENS / GENERAL CROP FORECASTING:
 WHOLESALE PRICING MODEL:
 - Wholesale pricing follows a formula: wholesale_price = retail_price * 0.70 (base wholesale).
 - Volume discount tiers: Tier 1 = 15% off retail, Tier 2 = 25% off retail, Tier 3 = 35% off retail.
-- The 12% broker commission (app_fee_money via Square) is separate from the wholesale price — do not subtract it from the forecast.
+- The broker commission (app_fee_money via Square) is currently 0% -- no commission is collected on wholesale orders.
 - When the farmer specifies "100% wholesale", use pricing_tier: "wholesale" in tool calls. Present the wholesale price clearly and note the volume discount tiers available to buyers.
 
 AUTO-PRICING:

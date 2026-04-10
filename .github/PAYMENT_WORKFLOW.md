@@ -12,7 +12,7 @@ GreenReach operates a wholesale marketplace where buyers purchase produce from m
 
 - Each farm can connect their own Square account via OAuth
 - When farms lack Square, GreenReach processes payment on their behalf (direct-charge fallback)
-- A 12% broker commission (app_fee_money) is collected on every farm-split payment
+- Broker commission is currently **0%** (`WHOLESALE_COMMISSION_RATE=0`). No `app_fee_money` on new orders
 - Double-entry accounting tracks all revenue, payables, payouts, and refunds
 - Square and Stripe webhooks provide real-time payment status updates
 
@@ -194,9 +194,9 @@ Requires buyer auth. Full checkout with payment processing.
 
 ### Commission Rate
 
-**Broker commission**: **12%** (`WHOLESALE_COMMISSION_RATE` env var, default 0.12)
+**Broker commission**: **0%** (`WHOLESALE_COMMISSION_RATE` env var, default 0). Previously 12%.
 
-Collected via Square `app_fee_money` on farm-split payments. On GreenReach direct-charge payments, the commission is tracked via accounting ledger only (GreenReach receives the full amount).
+No `app_fee_money` is collected on new orders. On GreenReach direct-charge payments, the full amount goes to GreenReach with no commission split.
 
 ---
 
@@ -214,7 +214,7 @@ Checkout Execute
        |
        +-- YES --> processSquarePayments()
        |           Charge buyer on FARM's Square account
-       |           app_fee_money = 12% broker commission
+       |           app_fee_money = 0 (commission removed)
        |           GreenReach collects commission via Square
        |
        +-- NO  --> processGreenReachDirectPayment()
@@ -231,9 +231,9 @@ Checkout Execute
 **Flow**:
 1. Fetch each farm's Square OAuth credentials via `getBatchFarmSquareCredentials(farmIds)`
 2. Loop per farm sub-order:
-   - Calculate `brokerFeeCents = Math.round(amountCents * commissionRate)`
+   - Calculate `brokerFeeCents = Math.round(amountCents * commissionRate)` (currently 0)
    - Create payment on the farm's Square account
-   - Pass `app_fee_money: { amount: brokerFeeCents, currency: 'CAD' }` -- Square collects this for GreenReach
+   - `app_fee_money` is 0 (commission removed). Square collects nothing for GreenReach
 3. Return per-farm results: `{ paymentId, amountMoney, brokerFeeMoney, status }`
 
 **Idempotency**: SHA-256 of `masterOrderId:farmId:amountCents`
@@ -672,7 +672,7 @@ squarePaymentService.js
        +-- Farm has Square OAuth?
        |   YES: processSquarePayments()
        |         Charge on farm's Square account
-       |         app_fee_money = 12% broker commission
+       |         app_fee_money = 0 (commission removed)
        |   NO:  processGreenReachDirectPayment()
        |         Charge on GreenReach's Square account
        |         greenreach_held = true
@@ -713,7 +713,7 @@ Settlement Complete
 
 | Constant | Value | Source |
 |----------|-------|--------|
-| `WHOLESALE_COMMISSION_RATE` | 0.12 (12%) | Env var, default 0.12 |
+| `WHOLESALE_COMMISSION_RATE` | 0 (0%) | Env var, default 0. Previously 12% |
 | `WHOLESALE_DEFAULT_SKU_FACTOR` | 0.65 | Env var, default 0.65, range 0.50-0.75 |
 | Square processing fee | 2.6% | Hardcoded in revenue-accounting-connector.js |
 | Stripe processing fee | 2.9% | Hardcoded in revenue-accounting-connector.js |
