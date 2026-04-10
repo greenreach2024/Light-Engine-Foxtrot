@@ -682,6 +682,13 @@ router.get('/:farmId', async (req, res) => {
   try {
     const { farmId } = req.params;
 
+    // Clean stale auto-inventory entries before returning data
+    try {
+      await recalculateAutoInventoryFromGroups(farmId);
+    } catch (err) {
+      console.warn("[Inventory] Auto-recalculate during load:", err.message);
+    }
+
     const result = await query(
       `SELECT *,
         COALESCE(auto_quantity_lbs, 0) + COALESCE(manual_quantity_lbs, 0) - COALESCE(sold_quantity_lbs, 0) AS available_lbs,

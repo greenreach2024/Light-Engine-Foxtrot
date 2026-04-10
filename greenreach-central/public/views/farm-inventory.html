@@ -1169,24 +1169,32 @@
       dbProducts = dbProducts || [];
       pricingMap = pricingMap || {};
 
-      // Calculate today's total retail value from all DB inventory (auto + manual + custom)
+      // Compute available weight, product count, and retail value from DB
+      // inventory (the single source of truth for all summary cards).
       let totalRetailValue = 0;
+      let totalAvailableLbs = 0;
+      let wholesaleProductCount = 0;
       dbProducts.forEach(p => {
-        const qty = Number(p.available_lbs ?? p.quantity_available ?? 0);
+        const qty = Math.max(0, Number(p.available_lbs ?? p.quantity_available ?? 0));
         let price = Number(p.retail_price || p.price || 0);
-        // If no price set on the inventory row, look up from crop pricing
         if (!price && p.product_name) {
           const cp = pricingMap[p.product_name.toLowerCase()];
           if (cp && cp.retailPrice) price = Number(cp.retailPrice);
         }
         totalRetailValue += qty * price;
+        totalAvailableLbs += qty;
+        if (qty > 0) wholesaleProductCount++;
       });
 
+      // Use DB-derived weight (consistent with Today's Total Value card).
+      // Fall back to tray-based generalInventoryLbs only when no DB data.
+      const effectiveLbs = wholesaleProductCount > 0 ? totalAvailableLbs : generalLbs;
+
       // Format weight: show oz for < 1 lb, lbs otherwise
-      const weightDisplay = generalLbs >= 1
-        ? `${generalLbs.toFixed(1)} lbs`
-        : generalLbs > 0
-          ? `${(generalLbs * 16).toFixed(1)} oz`
+      const weightDisplay = effectiveLbs >= 1
+        ? `${effectiveLbs.toFixed(1)} lbs`
+        : effectiveLbs > 0
+          ? `${(effectiveLbs * 16).toFixed(1)} oz`
           : '0 lbs';
 
       document.getElementById('summaryCards').innerHTML = `
@@ -1203,7 +1211,7 @@
         <div class="summary-card">
           <div class="label">Available Inventory</div>
           <div class="value">${weightDisplay}</div>
-          <div class="subvalue">${data.generalInventoryCount || 0} products for wholesale</div>
+          <div class="subvalue">${wholesaleProductCount} products for wholesale</div>
         </div>
         <div class="summary-card">
           <div class="label">Crop Varieties</div>

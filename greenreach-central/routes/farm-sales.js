@@ -30,6 +30,7 @@ import jwt from 'jsonwebtoken';
 import { randomBytes } from 'crypto';
 import { query, isDatabaseAvailable } from '../config/database.js';
 import { authMiddleware } from '../middleware/auth.js';
+import { recalculateAutoInventoryFromGroups } from "./inventory.js";
 
 const router = Router();
 async function ensureDeliveryTables() {
@@ -445,6 +446,12 @@ router.get('/farm-sales/inventory', authMiddleware, async (req, res) => {
   try {
     const farmId = req.farmId;
     let inventory = [];
+
+      // Clean stale auto-inventory entries before querying
+      if (farmId) {
+        try { await recalculateAutoInventoryFromGroups(farmId); }
+        catch (e) { console.warn("[FarmSales] Auto-recalculate:", e.message); }
+      }
 
     // Try DB
     if (isDatabaseAvailable() && farmId) {
