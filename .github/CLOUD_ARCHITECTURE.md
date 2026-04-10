@@ -1,7 +1,7 @@
 # Cloud Architecture Reference
 
-**Version**: 2.1.0
-**Date**: April 8, 2026
+**Version**: 2.2.0
+**Date**: April 10, 2026
 **Authority**: This document is the canonical source of truth for system architecture. All agents MUST read this before modifying any infrastructure, deployment, data flow, or sensor-related code.
 
 ---
@@ -167,6 +167,12 @@ The following EB environments are DEPRECATED and will be terminated:
 
 | Date | Service | Revision | Commit | Notes |
 |------|---------|----------|--------|-------|
+| 2026-04-10 | greenreach-central | 00090-9f8 | e0b85130 | Phantom inventory elimination: replace recalculateAutoInventoryFromGroups with DELETE-only cleanup (4 call sites) |
+| 2026-04-10 | light-engine | 00050-78q | e0b85130 | Synced phantom inventory elimination fix |
+| 2026-04-10 | greenreach-central | 00087-n7v | bc7853d4 | Fix crop inventory cards: POS doubling dedup, yieldFactor removal, Available Inventory from dbProducts |
+| 2026-04-10 | light-engine | 00048-x2x | bc7853d4 | Synced crop inventory card fixes |
+| 2026-04-10 | greenreach-central | 00086-8zh | 461cf8b5 | Wholesale admin cross-page: revenue source, farm name resolution, Square reconciliation |
+| 2026-04-10 | light-engine | 00047-clx | 461cf8b5 | Synced wholesale-admin.js cross-page fixes |
 | 2026-04-10 | greenreach-central | 00085-4km | 7b21850c | Fix phantom farm value ($99k auto-inventory cleanup), activity feed noise (JSONB upsert) |
 | 2026-04-10 | greenreach-central | 00084-nbc | 2b91f62d | Fix farm accounting $0 revenue (field names, DB queries) |
 | 2026-04-10 | greenreach-central | 00083-rwj | bfe9def8 | filterOrders/filterPayments, order status dropdown |

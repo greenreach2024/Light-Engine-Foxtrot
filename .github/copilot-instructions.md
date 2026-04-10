@@ -47,7 +47,28 @@ The farm runs entirely on Google Cloud Run. The Light Engine Cloud Run service I
     - File: `greenreach-central/server.js` -- `syncFarmData()` now calls `recalculateAutoInventoryFromGroups()` after groups DB upsert. Runs every 5 min, cleaning stale auto entries automatically.
     - File: `greenreach-central/server.js` -- `upsertFarmData()` uses JSONB equality comparison to only bump `updated_at` when data actually changes, preventing activity feed noise from unchanged groups/rooms/schedules being refreshed every 5 minutes.
     - Investigation confirmed LE sync-service feedback loop is NOT active in production (`edgeConfig.isEdgeMode()` returns false on Cloud Run -- `EDGE_MODE` env var not set, default mode is `'cloud'`).
-    - Current revisions: Central `greenreach-central-00085-4km`, LE `light-engine-00046-5m9`.
+
+30. **Wholesale Admin Cross-Page Data Consistency (deployed greenreach-central-00086-8zh, light-engine-00047-clx)**
+    - File: `greenreach-central/public/js/wholesale-admin.js` -- Buyers page revenue now uses completed payments (same source as Overview GMV) instead of all orders regardless of status.
+    - File: `greenreach-central/public/js/wholesale-admin.js` -- Payment tables resolve farm names from `order.farm_sub_orders` and `payment.split` instead of showing raw null `farm_id`. Payout summary groups by resolved farm name.
+    - File: `greenreach-central/routes/wholesale.js` -- Square reconciliation endpoint now queries Square Payments API to cross-check local records (status + amount). Shows Square discrepancy details (status mismatch, amount mismatch, lookup failures) separately from internal mismatches.
+    - File: `greenreach-central/services/wholesaleMemoryStore.js` -- Loads `square_details` and `greenreach_held` from DB metadata for reconciliation cross-checks.
+    - Files changed: `wholesale-admin.js` (both locations), `wholesale.js`, `wholesaleMemoryStore.js`
+
+31. **Crop Inventory Card Fixes (deployed greenreach-central-00087-n7v through 00089, light-engine-00048-x2x through 00049)**
+    - File: `greenreach-central/public/farm-admin.js` -- `loadAccountingData()`: deduplicated orders by `master_order_id` between `/api/farm-sales/orders` and `/api/wholesale/order-events` (both query `wholesale_orders` table, causing POS doubling).
+    - File: `greenreach-central/public/farm-admin.js` -- `loadRevenueBreakdown()`: default channel changed from `'POS (Retail)'` to `'Wholesale (B2B)'` to match `loadAccountingData` fallback. Non-POS orders were being classified as POS, inflating retail revenue.
+    - File: `greenreach-central/public/farm-admin.js` -- `loadCropValueData()`: removed `yieldFactor` from value calculation. `quantity_available` already represents actual weight; multiplying by `yieldFactor` double-discounted auto entries.
+    - File: `greenreach-central/public/views/farm-inventory.html` -- Available Inventory card now computes from `dbProducts` (same source as Total Value card) instead of separate `generalInventoryLbs` that only included manual items.
+
+32. **Phantom Inventory Elimination (deployed greenreach-central-00090-9f8, light-engine-00050-78q)**
+    - Root cause: `recalculateAutoInventoryFromGroups()` UPSERT phase sets `last_updated = NOW()` on every call, causing phantom entries to reappear in activity feed ("Inventory updated: Salad Bowl Oakleaf -- 3336.000 lb" etc.) even when groups have zero crops. Values were INCREASING on each page load because UPSERT recalculates from `trays * 12`.
+    - Fix: replaced ALL 4 call sites with inline DELETE-only queries that remove stale auto-inventory entries without ever creating/upserting new ones. The `recalculateAutoInventoryFromGroups()` function itself is preserved in `inventory.js` for future use when groups actually have crop assignments.
+    - File: `greenreach-central/routes/inventory.js` -- GET `/:farmId` uses inline DELETE-only cleanup.
+    - File: `greenreach-central/routes/farm-sales.js` -- GET `/farm-sales/inventory` uses inline DELETE-only cleanup. Removed `recalculateAutoInventoryFromGroups` import.
+    - File: `greenreach-central/server.js` -- `syncFarmData()` uses inline DELETE-only cleanup. Removed `recalculateAutoInventoryFromGroups` import.
+    - File: `greenreach-central/routes/sync.js` -- POST `/sync/groups` uses inline DELETE-only cleanup. Removed `recalculateAutoInventoryFromGroups` import.
+    - Current revisions: Central `greenreach-central-00090-9f8`, LE `light-engine-00050-78q`.
 
 ### Recent Fixes (Apr 8, 2026)
 
