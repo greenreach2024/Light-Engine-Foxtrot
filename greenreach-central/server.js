@@ -33,6 +33,7 @@ import farmRoutes from './routes/farms.js';
 import authRoutes from './routes/auth.js';
 import monitoringRoutes from './routes/monitoring.js';
 import inventoryRoutes from './routes/inventory.js';
+import { recalculateAutoInventoryFromGroups } from './routes/inventory.js';
 import inventoryMgmtRoutes from './routes/inventory-mgmt.js';
 import ordersRoutes from './routes/orders.js';
 import alertsRoutes from './routes/alerts.js';
@@ -1360,9 +1361,13 @@ async function syncFarmData(options = {}) {
         async function upsertFarmData(dataType, data) {
           await dbQuery(
             `INSERT INTO farm_data (farm_id, data_type, data, updated_at)
-             VALUES ($1, $2, $3, NOW())
+             VALUES ($1, $2, $3::jsonb, NOW())
              ON CONFLICT (farm_id, data_type)
-             DO UPDATE SET data = $3, updated_at = NOW()`,
+             DO UPDATE SET data = $3::jsonb,
+               updated_at = CASE
+                 WHEN farm_data.data = $3::jsonb THEN farm_data.updated_at
+                 ELSE NOW()
+               END`,
             [farmId, dataType, JSON.stringify(data)]
           );
         }
@@ -1383,6 +1388,17 @@ async function syncFarmData(options = {}) {
 
         const groups = resolve('groups.json', 'groups.json', r => Array.isArray(r) ? r : (r.groups || []));
         if (groups) { await upsertFarmData('groups', groups); logger.info(`[${syncLabel}] DB: ${groups.length} groups for ${farmId}`); }
+
+        // Reconcile auto-inventory with current groups: removes stale
+        // auto entries for crops no longer assigned to any growth group.
+        try {
+          const autoResult = await recalculateAutoInventoryFromGroups(farmId);
+          if (autoResult.cleaned > 0) {
+            logger.info(`[${syncLabel}] Auto-inventory: cleaned ${autoResult.cleaned} stale entries for ${farmId}`);
+          }
+        } catch (autoErr) {
+          logger.warn(`[${syncLabel}] Auto-inventory reconciliation failed:`, autoErr.message);
+        }
 
         const rooms = resolve('rooms.json', 'rooms.json', r => Array.isArray(r) ? r : (r.rooms || [r]));
         if (rooms) { await upsertFarmData('rooms', rooms); logger.info(`[${syncLabel}] DB: ${rooms.length} rooms for ${farmId}`); }

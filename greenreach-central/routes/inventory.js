@@ -42,7 +42,9 @@ export async function recalculateAutoInventoryFromGroups(farmId) {
     const raw = gResult.rows[0].data;
     groups = Array.isArray(raw) ? raw : (raw?.groups || []);
   }
-  if (groups.length === 0) return { updated: 0 };
+  // Only skip if no groups row exists in DB at all. If groups exist but
+  // have no crops assigned, we still need to clean stale auto entries below.
+  if (gResult.rows.length === 0) return { updated: 0 };
 
   const cropRegistry = getCropRegistry();
 
@@ -104,7 +106,38 @@ export async function recalculateAutoInventoryFromGroups(farmId) {
     updated++;
   }
 
-  return { updated, crops: Object.keys(cropTotals) };
+  // Clean stale auto entries: remove auto-inventory rows for crops that no
+  // longer appear in any growth group. This prevents phantom farm value from
+  // persisting after crops are removed or groups are emptied.
+  const activeCrops = Object.keys(cropTotals);
+  let cleaned = 0;
+  try {
+    let delResult;
+    if (activeCrops.length === 0) {
+      delResult = await query(
+        `DELETE FROM farm_inventory
+         WHERE farm_id = $1 AND inventory_source = 'auto'
+         AND COALESCE(is_custom, FALSE) = FALSE`,
+        [farmId]
+      );
+    } else {
+      delResult = await query(
+        `DELETE FROM farm_inventory
+         WHERE farm_id = $1 AND inventory_source = 'auto'
+         AND COALESCE(is_custom, FALSE) = FALSE
+         AND product_name != ALL($2)`,
+        [farmId, activeCrops]
+      );
+    }
+    cleaned = delResult?.rowCount || 0;
+    if (cleaned > 0) {
+      console.log(`[Inventory Auto] Cleaned ${cleaned} stale auto entries for ${farmId}`);
+    }
+  } catch (cleanErr) {
+    console.warn('[Inventory Auto] Stale entry cleanup failed:', cleanErr.message);
+  }
+
+  return { updated, crops: activeCrops, cleaned };
 }
 
 /**
