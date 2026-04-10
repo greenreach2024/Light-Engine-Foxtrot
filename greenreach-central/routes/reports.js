@@ -35,8 +35,11 @@ router.get('/revenue-summary', async (_req, res) => {
     const payments = listPayments() || [];
 
     const totalRevenue = (orders || []).reduce((sum, o) => {
-      const t = o.totals || {};
-      return sum + (t.total || t.subtotal || 0);
+      return sum + Number(o.grand_total || o.totals?.grand_total || o.totals?.subtotal || 0);
+    }, 0);
+
+    const brokerFeeTotal = (orders || []).reduce((sum, o) => {
+      return sum + Number(o.broker_fee_total || o.totals?.broker_fee_total || 0);
     }, 0);
 
     const totalPayments = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
@@ -52,6 +55,7 @@ router.get('/revenue-summary', async (_req, res) => {
         totalPayments: Math.round(totalPayments * 100) / 100,
         orderCount,
         avgOrderValue: Math.round(avgOrderValue * 100) / 100,
+        brokerFeeTotal: Math.round(brokerFeeTotal * 100) / 100,
         outstanding: Math.round((totalRevenue - totalPayments) * 100) / 100,
       },
       generatedAt: new Date().toISOString(),

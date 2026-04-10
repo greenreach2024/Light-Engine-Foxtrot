@@ -13194,6 +13194,7 @@ async function loadCentralAccounting() {
         const orderCount = revenueData?.data?.orderCount || 0;
         const avgOrderValue = revenueData?.data?.avgOrderValue || 0;
         const outstanding = revenueData?.data?.outstanding || 0;
+        const brokerFeeTotal = revenueData?.data?.brokerFeeTotal || 0;
 
         // Expense numbers from accounting transactions
         let totalExpenses = 0;
@@ -13211,6 +13212,8 @@ async function loadCentralAccounting() {
         document.getElementById('central-wholesale-revenue').textContent = `$${totalRevenue.toFixed(2)}`;
         document.getElementById('central-order-count').textContent = orderCount;
         document.getElementById('central-avg-order').textContent = `$${avgOrderValue.toFixed(2)}`;
+        const brokerFeesEl = document.getElementById('central-broker-fees');
+        if (brokerFeesEl) brokerFeesEl.textContent = `$${brokerFeeTotal.toFixed(2)}`;
         document.getElementById('central-total-expenses').textContent = `$${totalExpenses.toFixed(2)}`;
 
         const margin = totalRevenue > 0
@@ -13330,6 +13333,8 @@ function exportFleetReport() {
     csv += `Net Margin,${document.getElementById('central-net-margin').textContent}\n`;
     csv += `Order Count,${document.getElementById('central-order-count').textContent}\n`;
     csv += `Avg Order Value,${document.getElementById('central-avg-order').textContent}\n`;
+        const brokerFeesEl = document.getElementById('central-broker-fees');
+        if (brokerFeesEl) brokerFeesEl.textContent = `$${brokerFeeTotal.toFixed(2)}`;
     csv += `Outstanding,${document.getElementById('central-outstanding').textContent}\n`;
 
     // Farm breakdown
