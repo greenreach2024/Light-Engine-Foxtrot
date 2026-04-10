@@ -20778,6 +20778,15 @@ app.use('/api/inventory/manual', proxyCorsMiddleware, createProxyMiddleware({
   onProxyReq(proxyReq, req) {
     const outgoingPath = req.originalUrl;
     console.log(`[-> inventory/manual] ${req.method} ${outgoingPath} -> ${_centralUrl()}${outgoingPath}`);
+    // Service-to-service API key auth fallback (user JWT may be expired)
+    const apiKey = process.env.GREENREACH_API_KEY;
+    if (apiKey && !proxyReq.getHeader('x-api-key')) {
+      proxyReq.setHeader('x-api-key', apiKey);
+    }
+    const farmId = req.headers['x-farm-id'] || process.env.FARM_ID;
+    if (farmId && !proxyReq.getHeader('x-farm-id')) {
+      proxyReq.setHeader('x-farm-id', farmId);
+    }
   },
   onProxyRes(proxyRes, req) {
     const origin = req.headers?.origin;
@@ -20804,9 +20813,12 @@ app.get('/api/inventory/:farmId', (req, res, next) => {
   const url = `${target}/api/inventory/${encodeURIComponent(farmId)}`;
   console.log(`[-> inventory/:farmId] GET ${req.originalUrl} -> ${url}`);
 
-  const headers = {};
+  const headers = { 'x-farm-id': farmId };
   if (req.headers.authorization) headers['Authorization'] = req.headers.authorization;
   if (req.headers['x-farm-id']) headers['x-farm-id'] = req.headers['x-farm-id'];
+  // Service-to-service API key auth fallback (user JWT may be expired)
+  const apiKey = process.env.GREENREACH_API_KEY;
+  if (apiKey) headers['x-api-key'] = apiKey;
 
   fetch(url, { headers })
     .then(async (upstream) => {
@@ -20863,7 +20875,7 @@ app.use('/api/farm/products', proxyCorsMiddleware, createProxyMiddleware({
  * GET /api/inventory/current
  * Returns current inventory summary with detailed tray data
  */
-app.get('/api/inventory/current', (req, res) => {
+app.get('/api/inventory/current', async (req, res) => {
   try {
     // Load from groups.json (real crop data)
     const groupsPath = path.join(PUBLIC_DIR, 'data', 'groups.json');
@@ -20946,10 +20958,36 @@ app.get('/api/inventory/current', (req, res) => {
       .filter(t => t.stage === 'Seedling')
       .reduce((sum, t) => sum + t.plantCount, 0);
 
+    // Query DB for general inventory (manual/custom entries) to include in current stats
+    let generalInventoryLbs = 0;
+    let generalInventoryCount = 0;
+    const db = req.app.locals.db;
+    if (db) {
+      try {
+        const invResult = await db.query(
+          `SELECT COALESCE(SUM(LEAST(COALESCE(manual_quantity_lbs, 0), COALESCE(quantity_available, 0))), 0) AS total_lbs,
+                  COUNT(*) AS cnt
+           FROM farm_inventory
+           WHERE farm_id = $1
+             AND COALESCE(status, 'active') != 'inactive'
+             AND LEAST(COALESCE(manual_quantity_lbs, 0), COALESCE(quantity_available, 0)) > 0`,
+          [process.env.FARM_ID || 'FARM-MLTP9LVH-B0B85039']
+        );
+        if (invResult.rows.length > 0) {
+          generalInventoryLbs = Number(invResult.rows[0].total_lbs) || 0;
+          generalInventoryCount = Number(invResult.rows[0].cnt) || 0;
+        }
+      } catch (dbErr) {
+        console.warn('[inventory] DB inventory query failed:', dbErr.message);
+      }
+    }
+
     res.json({
       activeTrays: totalTrays,
       totalPlants: totalPlants,
       seedlingPlants: seedlingPlants,
+      generalInventoryLbs,
+      generalInventoryCount,
       farmCount: 1,
       byFarm: [
         {
