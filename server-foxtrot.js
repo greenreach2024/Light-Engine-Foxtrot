@@ -7185,14 +7185,23 @@ app.post('/api/setup/certifications', asyncHandler(async (req, res) => {
     const farmId = req.session?.farmId || req.user?.farmId || req.headers['x-farm-id'] || process.env.FARM_ID;
 
     if (dbPool && farmId) {
-      await dbPool.query(
-        'UPDATE farms SET certifications = $1, updated_at = NOW() WHERE farm_id = $2',
-        [JSON.stringify(certData), farmId]
-      );
+      try {
+        await dbPool.query(
+          'UPDATE farms SET certifications = $1, updated_at = NOW() WHERE farm_id = $2',
+          [JSON.stringify(certData), farmId]
+        );
+      } catch (colErr) {
+        // Column may not exist -- create it then retry
+        console.warn('[setup] certifications column missing, adding it:', colErr.message);
+        await dbPool.query('ALTER TABLE farms ADD COLUMN IF NOT EXISTS certifications JSONB');
+        await dbPool.query(
+          'UPDATE farms SET certifications = $1, updated_at = NOW() WHERE farm_id = $2',
+          [JSON.stringify(certData), farmId]
+        );
+      }
       console.log('[setup] Saved certifications to DB for farm:', farmId, certData);
     } else if (db) {
       // NeDB fallback
-      const existing = await db.findOne({ key: 'setup_config' }) || {};
       await db.update(
         { key: 'setup_config' },
         { $set: { certifications: certData } },
@@ -7226,20 +7235,36 @@ app.get('/api/setup/status', asyncHandler(async (req, res) => {
       }
       
       // Check if farm exists and is active
-      const farmResult = await dbPool.query(
-        'SELECT status, certifications FROM farms WHERE farm_id = $1',
-        [farmId]
-      );
+      let farm = null;
+      try {
+        const farmResult = await dbPool.query(
+          'SELECT status, certifications FROM farms WHERE farm_id = $1',
+          [farmId]
+        );
+        farm = farmResult.rows[0];
+      } catch (colErr) {
+        // certifications column may not exist yet -- fall back to status only
+        console.warn('[setup-wizard] certifications column query failed, falling back:', colErr.message);
+        const farmResult = await dbPool.query(
+          'SELECT status FROM farms WHERE farm_id = $1',
+          [farmId]
+        );
+        farm = farmResult.rows[0];
+      }
       
-      const farm = farmResult.rows[0];
       const isActive = farm && farm.status === 'active';
       
-      // Also check if rooms exist (more thorough)
-      const roomResult = await dbPool.query(
-        'SELECT COUNT(*) as count FROM rooms WHERE farm_id = $1',
-        [farmId]
-      );
-      const hasRooms = parseInt(roomResult.rows[0]?.count) > 0;
+      // Also check if rooms exist (graceful if table missing)
+      let hasRooms = false;
+      try {
+        const roomResult = await dbPool.query(
+          'SELECT COUNT(*) as count FROM rooms WHERE farm_id = $1',
+          [farmId]
+        );
+        hasRooms = parseInt(roomResult.rows[0]?.count) > 0;
+      } catch (roomErr) {
+        console.warn('[setup-wizard] rooms table query failed (table may not exist):', roomErr.message);
+      }
       
       // Setup is complete if farm is active OR has rooms
       const completed = isActive || hasRooms;
