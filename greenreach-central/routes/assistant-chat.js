@@ -19,6 +19,7 @@ import { TOOL_CATALOG, executeTool } from './farm-ops-agent.js';
 import leamBridge from '../lib/leam-bridge.js';
 import { getLatestAnalyses } from '../services/market-analysis-agent.js';
 import { getMarketDataAsync } from './market-intelligence.js';
+import { getLastFxRate } from '../services/market-data-fetcher.js';
 import { getCropPricing } from './crop-pricing.js';
 import { analyzeDemandPatterns } from '../services/wholesaleMemoryStore.js';
 import farmStore from '../lib/farm-data-store.js';
@@ -161,7 +162,7 @@ const pendingActions = new Map();
 // ── Autonomous Action Trust Tiers ─────────────────────────────────────
 const TRUST_TIERS = {
   // AUTO: Execute immediately, notify after
-  auto: new Set(['dismiss_alert', 'save_user_memory', 'escalate_to_faye', 'reply_to_faye', 'get_faye_directives', 'read_skill_file', 'get_gwen_messages', 'reply_to_gwen']),
+  auto: new Set(['dismiss_alert', 'get_ai_pricing_recommendations', 'save_user_memory', 'escalate_to_faye', 'reply_to_faye', 'get_faye_directives', 'read_skill_file', 'get_gwen_messages', 'reply_to_gwen']),
   // QUICK-CONFIRM: Execute with brief undo window
   quick_confirm: new Set(['mark_harvest_complete', 'update_farm_profile', 'update_group_crop', 'create_room', 'create_zone', 'update_certifications', 'complete_setup', 'update_crop_price', 'add_inventory_item', 'update_manual_inventory', 'record_harvest', 'update_room_specs', 'apply_crop_environment', 'recommend_farm_layout']),
   // CONFIRM: Ask before executing (default for write tools)
@@ -383,6 +384,19 @@ const GPT_TOOLS = [
       parameters: {
         type: 'object',
         properties: {}
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_ai_pricing_recommendations',
+      description: 'Get AI-generated pricing recommendations for crops based on real market data, retailer surveys, price trends, and Gemini AI analysis. Returns per-crop recommendations with: current market price (CAD), recommended price, price trends, AI outlook (bullish/bearish/stable), confidence level, movement drivers, and retailer data. This is the same data that powers the AI Pricing Assistant on the Crop Pricing Management page. Use this to advise farmers on competitive pricing.',
+      parameters: {
+        type: 'object',
+        properties: {
+          crop: { type: 'string', description: 'Filter by specific crop name (optional). Omit for all crops.' }
+        }
       }
     }
   },
@@ -2098,7 +2112,7 @@ DEVICE MANAGEMENT AND ONBOARDING WORKFLOW:
 
 PRICING WORKFLOW:
 - When the farmer asks to update crop prices, FIRST call get_pricing_info to see current prices and units.
-- If they say "update to current values" or "use the AI pricing", call get_market_intelligence and get_pricing_decisions to determine the recommended price, then propose the specific new values.
+- If they say "update to current values" or "use the AI pricing", call get_ai_pricing_recommendations to get AI-analyzed market pricing with trends, outlook, and recommended prices. Cross-reference with get_pricing_decisions for historical context, then propose the specific new values.
 - Always include the unit (e.g. "$23.52/lb") when displaying or proposing prices.
 - After a price update is confirmed and executed, call get_pricing_info again to verify the change was saved, and report the confirmed new prices.
 - Update each crop individually using update_crop_price — one tool call per crop.
@@ -2593,6 +2607,107 @@ async function executeExtendedTool(toolName, params, farmId) {
       try {
         const pricing = await getCropPricing(farmId);
         return { ok: true, crops: pricing, count: pricing.length };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+
+    case 'get_ai_pricing_recommendations': {
+      try {
+        const pool = getDatabase();
+        const [marketData, aiAnalyses] = await Promise.all([
+          getMarketDataAsync(pool),
+          pool ? getLatestAnalyses(pool) : Promise.resolve([]),
+        ]);
+        const fxRate = getLastFxRate();
+        const aiMap = new Map((aiAnalyses || []).map(a => [a.product, a]));
+        const cropFilter = params.crop?.toLowerCase();
+        const recommendations = [];
+
+        for (const [product, data] of Object.entries(marketData || {})) {
+          if (cropFilter && !product.toLowerCase().includes(cropFilter)) continue;
+          const ai = aiMap.get(product) || null;
+          const avgPriceCAD = data.avgPriceCAD || 0;
+          const avgWeightOz = data.avgWeightOz || 16;
+          const pricePerOzCAD = avgWeightOz > 0 ? avgPriceCAD / avgWeightOz : avgPriceCAD;
+          const pricePerLbCAD = pricePerOzCAD * 16;
+
+          let trendPct = data.trendPercent || 0;
+          const trend = data.trend || (trendPct > 5 ? 'increasing' : trendPct < -5 ? 'decreasing' : 'stable');
+
+          const priceRange = Array.isArray(data.priceRange) && data.priceRange.length >= 2
+            ? data.priceRange.map(p => avgWeightOz > 0 ? p / avgWeightOz : p)
+            : [pricePerOzCAD * 0.9, pricePerOzCAD * 1.1];
+
+          recommendations.push({
+            product,
+            avgPriceCAD,
+            pricePerOzCAD,
+            pricePerLbCAD,
+            priceRange,
+            trend,
+            trendPercent: trendPct,
+            confidence: ai?.confidence || (data.observationCount >= 10 ? 'high' : 'medium'),
+            observationCount: data.observationCount || 0,
+            retailers: data.retailers || [],
+            aiOutlook: ai?.outlook || null,
+            aiAction: ai?.action || null,
+            aiForecastPrice: ai?.price_forecast ? parseFloat(ai.price_forecast) : null,
+            aiReasoning: ai?.reasoning || null,
+            fxRate,
+            dataSource: data.dataSource || 'static'
+          });
+        }
+
+        recommendations.sort((a, b) => Math.abs(b.trendPercent) - Math.abs(a.trendPercent));
+        return { ok: true, recommendations, fxRate, count: recommendations.length };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+
+    case 'get_pricing_decisions': {
+      try {
+        if (!isDatabaseAvailable()) return { ok: true, decisions: [], message: 'Database unavailable' };
+        const cropFilter = params.crop ? String(params.crop) : null;
+        const limit = Math.min(parseInt(params.limit, 10) || 10, 50);
+        let sql = `SELECT id, farm_id, crop, previous_price, recommended_price, applied_price, market_average, ai_outlook, ai_action, trend, data_source, decision, created_at
+          FROM pricing_decisions WHERE farm_id = $1`;
+        const values = [farmId];
+        if (cropFilter) { sql += ` AND LOWER(crop) LIKE $${values.length + 1}`; values.push(`%${cropFilter.toLowerCase()}%`); }
+        sql += ` ORDER BY created_at DESC LIMIT $${values.length + 1}`;
+        values.push(limit);
+        const result = await query(sql, values);
+        return { ok: true, decisions: result.rows, count: result.rows.length };
+      } catch (err) {
+        if (err.message?.includes('does not exist')) return { ok: true, decisions: [], message: 'No pricing decisions recorded yet' };
+        return { ok: false, error: err.message };
+      }
+    }
+
+    case 'update_crop_price': {
+      try {
+        const cropName = String(params.crop || '').trim();
+        if (!cropName) return { ok: false, error: 'crop name is required' };
+        const pricing = await getCropPricing(farmId);
+        const cropIdx = pricing.findIndex(c => c.crop.toLowerCase() === cropName.toLowerCase());
+        if (cropIdx === -1) return { ok: false, error: `Crop "${cropName}" not found in pricing. Use get_pricing_info to see available crops.` };
+
+        const updated = { ...pricing[cropIdx] };
+        if (params.retail_price != null) updated.retailPrice = parseFloat(params.retail_price);
+        if (params.wholesale_price != null) updated.wholesalePrice = parseFloat(params.wholesale_price);
+
+        pricing[cropIdx] = updated;
+        await farmStore.set(farmId, 'crop_pricing', { crops: pricing, lastUpdated: new Date().toISOString() });
+
+        return {
+          ok: true,
+          message: `Updated pricing for ${updated.crop}`,
+          crop: updated.crop,
+          retailPrice: updated.retailPrice,
+          wholesalePrice: updated.wholesalePrice,
+          unit: updated.unit || 'lb'
+        };
       } catch (err) {
         return { ok: false, error: err.message };
       }
