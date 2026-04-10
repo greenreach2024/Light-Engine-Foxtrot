@@ -29,6 +29,26 @@ The farm runs entirely on Google Cloud Run. The Light Engine Cloud Run service I
 8. **AWS/EB is DEPRECATED.** Do not reference EB environments, use `eb deploy`, or use any `aws elasticbeanstalk` commands. All infrastructure is Google Cloud Run. See `.github/CLOUD_ARCHITECTURE.md`.
 9. **GCP Project**: `project-5d00790f-13a9-4637-a40`, region `us-east1`. Artifact Registry: `us-east1-docker.pkg.dev/project-5d00790f-13a9-4637-a40/greenreach`.
 
+### Recent Fixes (Apr 9-10, 2026)
+
+28. **Wholesale Admin Dashboard Data Accuracy (deployed greenreach-central-00081 through 00084, light-engine-00042 through 00046)**
+    - Restored 12% broker commission across 12+ files after prior agent reverted it. Commission (`WHOLESALE_COMMISSION_RATE=0.12`) is GreenReach's revenue model -- NEVER change it.
+    - File: `greenreach-central/routes/admin-wholesale.js` -- Fixed Network Accounting tab showing $0 revenue: `revenue-summary` endpoint now reads `grand_total` from order root (not nonexistent `totals.total`).
+    - File: `greenreach-central/routes/admin-wholesale.js` -- Fixed Buyers tab $0 revenue: `buyer-analytics` endpoint now reads `grand_total`, `broker_fee_total`, `net_to_farms_total` from order root.
+    - File: `greenreach-central/routes/admin-wholesale.js` -- Implemented `filterOrders()` and `filterPayments()` helpers for date range and status filtering across Network Accounting, Orders, and Buyers tabs.
+    - File: `greenreach-central/routes/admin-wholesale.js` -- Completed order status dropdown with full lifecycle states.
+    - File: `greenreach-central/public/farm-admin.js` -- Fixed Farm Accounting tab $0 revenue: corrected field names (`grand_total` not `total`), fixed broken DB query for wholesale orders, added proper broker fee and net calculations.
+    - File: `greenreach-central/routes/farm-sales.js` -- Fixed `/farm-accounting` endpoint: corrected `x.grand_total` field access, added fallback for orders without broker_fee_total.
+    - Files changed: `admin-wholesale.js`, `farm-admin.js`, `farm-sales.js`, `procurement-admin.js`, `wholesale-fulfillment.js`, `wholesale.js`, `central-admin.js`
+
+29. **Phantom Farm Value Fix (deployed greenreach-central-00085-4km)**
+    - Root cause: `recalculateAutoInventoryFromGroups()` in `inventory.js` only UPSERTed auto-inventory rows but never DELETEd them when crops were removed from growth groups. Four phantom rows (Salad Bowl Oakleaf 1912 lb, Buttercrunch 2390 lb, Bibb Butterhead 2868 lb, Astro Arugula 1434 lb) persisted indefinitely, inflating "Today's Farm Value" to $99,433.01.
+    - File: `greenreach-central/routes/inventory.js` -- `recalculateAutoInventoryFromGroups()` now DELETEs `inventory_source='auto'` rows for crops no longer in any growth group. Preserves manual and custom entries.
+    - File: `greenreach-central/server.js` -- `syncFarmData()` now calls `recalculateAutoInventoryFromGroups()` after groups DB upsert. Runs every 5 min, cleaning stale auto entries automatically.
+    - File: `greenreach-central/server.js` -- `upsertFarmData()` uses JSONB equality comparison to only bump `updated_at` when data actually changes, preventing activity feed noise from unchanged groups/rooms/schedules being refreshed every 5 minutes.
+    - Investigation confirmed LE sync-service feedback loop is NOT active in production (`edgeConfig.isEdgeMode()` returns false on Cloud Run -- `EDGE_MODE` env var not set, default mode is `'cloud'`).
+    - Current revisions: Central `greenreach-central-00085-4km`, LE `light-engine-00046-5m9`.
+
 ### Recent Fixes (Apr 8, 2026)
 
 26. **FAYE Diagnostic Tools Fix + New Tools (deployed greenreach-central-00048-fhx)**

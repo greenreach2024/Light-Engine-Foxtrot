@@ -167,6 +167,12 @@ The following EB environments are DEPRECATED and will be terminated:
 
 | Date | Service | Revision | Commit | Notes |
 |------|---------|----------|--------|-------|
+| 2026-04-10 | greenreach-central | 00085-4km | 7b21850c | Fix phantom farm value ($99k auto-inventory cleanup), activity feed noise (JSONB upsert) |
+| 2026-04-10 | greenreach-central | 00084-nbc | 2b91f62d | Fix farm accounting $0 revenue (field names, DB queries) |
+| 2026-04-10 | greenreach-central | 00083-rwj | bfe9def8 | filterOrders/filterPayments, order status dropdown |
+| 2026-04-10 | greenreach-central | 00082-gfm | 56e1138b | Revenue summary uses grand_total (not totals.total) |
+| 2026-04-10 | greenreach-central | 00081-qvd | 3c17d5dc | Restore 12% broker commission across 12+ files |
+| 2026-04-10 | light-engine | 00046-5m9 | 2b91f62d | Synced farm-admin.js fixes |
 | 2026-04-08 | greenreach-central | 00048-fhx | latest | FAYE diagnostic tools fix (get_sync_status, search_codebase, get_page_route_map) |
 | 2026-04-07 | greenreach-central | 00009-qsp | 72752e99 | GCP migration complete, AlloyDB connected, 168 tables |
 | 2026-04-07 | light-engine | 00005-74n | 72752e99 | GCP migration complete, sensor data flowing |

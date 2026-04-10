@@ -2543,7 +2543,7 @@ removed_at: null, removal_reason: null, group_id
 
 #### Phase 6: Inventory Availability (THE GAP)
 
-**Current State**: Harvested crop data lives in NeDB tray-runs on LE. The farm_inventory table (PostgreSQL on Central) that POS and wholesale read from is populated via a SEPARATE mechanism: recalculateAutoInventoryFromGroups(), which uses theoretical plant counts from groups.json -- NOT actual harvest data.
+**Current State**: Harvested crop data lives in NeDB tray-runs on LE. The farm_inventory table (PostgreSQL on Central) that POS and wholesale read from is populated via a SEPARATE mechanism: recalculateAutoInventoryFromGroups(), which uses theoretical plant counts from groups.json -- NOT actual harvest data. As of Apr 10 2026, stale auto entries are automatically cleaned when crops are removed from groups (syncFarmData runs every 5 min and triggers cleanup).
 
 ```
 WHAT ACTUALLY HAPPENS:
@@ -2556,6 +2556,8 @@ WHAT ACTUALLY HAPPENS:
        ^
        | recalculateAutoInventoryFromGroups()
        | triggered by POST /api/sync/groups
+       | AND by syncFarmData() every 5 min
+       | ALSO deletes stale auto entries for removed crops
        |
   groups.json (theoretical plant counts)
        + crop_benchmarks (statistical averages)
@@ -2781,6 +2783,9 @@ Source B: Theoretical Capacity (Groups Recalculation)
     -> recalculateAutoInventoryFromGroups(farmId)
     -> total_plants x yieldFactor x avgWeight / 16
     -> farm_inventory.auto_quantity_lbs (THEORETICAL, not actual)
+    -> ALSO: syncFarmData() calls recalculate every 5 min after groups upsert
+    -> CLEANUP: DELETEs auto entries for crops no longer in any growth group
+    -> Prevents phantom inventory from persisting when crops are removed
 
 Source C: Manual Entry (Farmer Adds Directly)
   LE-farm-admin.html or API -> POST /api/inventory/manual
