@@ -3600,7 +3600,7 @@ router.post('/checkout/execute', checkoutLimiter, requireWholesaleDbForCriticalP
             refund_results: refundResults
           });
 
-          const adminEmail = process.env.ADMIN_ALERT_EMAIL || process.env.SES_FROM_EMAIL;
+          const adminEmail = process.env.ADMIN_ALERT_EMAIL || process.env.ADMIN_EMAIL;
           if (adminEmail) {
             emailService.sendEmail({
               to: adminEmail,
@@ -3799,7 +3799,7 @@ router.post('/checkout/execute', checkoutLimiter, requireWholesaleDbForCriticalP
     // If we reach here, network allocation didn't run — something is misconfigured.
     // Block the order and alert admin immediately.
     console.error('[Checkout] BLOCKED: checkout fell through to demo fallback. Network allocation did not run. Buyer:', req.wholesaleBuyer?.id);
-    const adminEmail = process.env.ADMIN_ALERT_EMAIL || process.env.SES_FROM_EMAIL;
+    const adminEmail = process.env.ADMIN_ALERT_EMAIL || process.env.ADMIN_EMAIL;
     if (adminEmail) {
       emailService.sendEmail({
         to: adminEmail,
