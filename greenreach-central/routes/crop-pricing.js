@@ -16,6 +16,16 @@ const router = express.Router();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const RECIPES_FILE = path.resolve(__dirname, '../public/data/lighting-recipes.json');
+const PRICING_FILE = path.resolve(__dirname, '../public/data/crop-pricing.json');
+
+// Recipe metadata for display names & descriptions
+const RECIPE_META_PATH = process.env.DEPLOYMENT_MODE === 'cloud'
+    ? '/app/data/recipes-v2/_recipe-meta.json'
+    : path.resolve(__dirname, '../data/recipes-v2/_recipe-meta.json');
+
+function loadRecipeMetaSync() {
+    try { return JSON.parse(fs.readFileSync(RECIPE_META_PATH, 'utf8')); } catch { return {}; }
+}
 
 // Crop utilities — Phase 2a unified crop registry
 const _require = createRequire(import.meta.url);
@@ -41,7 +51,20 @@ router.get('/', async (req, res) => {
     const fid = farmStore.farmIdFromReq(req);
 
     // Load existing pricing data (farm-scoped)
-    const pricingData = await farmStore.get(fid, 'crop_pricing') || { crops: [] };
+    let pricingData = await farmStore.get(fid, 'crop_pricing') || { crops: [] };
+
+    // Always load baked-in file as reference prices (never return all-zero)
+    let bakedInMap = {};
+    try {
+      const bakedIn = JSON.parse(fs.readFileSync(PRICING_FILE, 'utf8'));
+      (bakedIn.crops || []).forEach(c => { bakedInMap[c.crop] = c; });
+    } catch { /* baked-in file missing — non-fatal */ }
+
+    // If farmStore returned empty (no DB row yet), use baked-in data directly
+    if (!(pricingData.crops?.length > 0)) {
+      pricingData = { crops: Object.values(bakedInMap) };
+      console.log(`[crop-pricing] farmStore empty for ${fid || 'default'}, using ${pricingData.crops.length} baked-in crops`);
+    }
     
     // Build a map of existing prices by crop name
     const priceMap = {};
@@ -71,21 +94,31 @@ router.get('/', async (req, res) => {
     // Merge: recipe crops only (legacy DB entries excluded to prevent ghost rows)
     const allCropSet = new Set([...allCropNames, ...growingCrops]);
     
+    // Load recipe metadata for display names & descriptions
+    const recipeMeta = loadRecipeMetaSync();
+
     const mergedCrops = Array.from(allCropSet).sort().map(cropName => {
       const existing = priceMap[cropName];
+      const baked = bakedInMap[cropName];
+      const meta = recipeMeta[cropName] || {};
+      // Use DB price if non-zero, otherwise fall back to baked-in file price
+      const retailPrice = (existing?.retailPrice > 0) ? existing.retailPrice : (baked?.retailPrice || 0);
+      const wholesalePrice = (existing?.wholesalePrice > 0) ? existing.wholesalePrice : (baked?.wholesalePrice || 0);
       return {
         crop: cropName,
-        unit: existing?.unit || 'oz',
-        retailPrice: existing?.retailPrice || 0,
-        wholesalePrice: existing?.wholesalePrice || 0,
+        displayName: meta.displayName || null,
+        description: meta.description || null,
+        unit: existing?.unit || baked?.unit || 'lb',
+        retailPrice,
+        wholesalePrice,
         ws1Discount: existing?.ws1Discount || 15,
         ws2Discount: existing?.ws2Discount || 25,
         ws3Discount: existing?.ws3Discount || 35,
-        floor_price: existing?.floor_price ?? 0,
-        sku_factor: existing?.sku_factor ?? 0.65,
+        floor_price: existing?.floor_price ?? baked?.floor_price ?? 0,
+        sku_factor: existing?.sku_factor ?? baked?.sku_factor ?? 0.65,
         isTaxable: existing?.isTaxable || false,
         isGrowing: growingCrops.has(cropName),
-        hasPricing: !!existing
+        hasPricing: !!existing || !!baked
       };
     });
     
@@ -135,6 +168,9 @@ router.put('/', async (req, res) => {
     
     // Save to farm-scoped store
     await farmStore.set(fid, 'crop_pricing', data);
+
+    // Also write to baked-in file so flat-file fallback stays current
+    try { fs.writeFileSync(PRICING_FILE, JSON.stringify(data, null, 2), 'utf8'); } catch { /* optional */ }
     
     console.log(`[crop-pricing] Updated ${crops.length} crop prices for farm ${fid || 'default'}`);
     

@@ -37,6 +37,17 @@ const GROUPS_FILE = path.join(PUBLIC_DIR, 'data', 'groups.json');
 const RECIPES_FILE = path.join(PUBLIC_DIR, 'data', 'lighting-recipes.json');
 const WHOLESALE_STATUS_FILE = path.join(PUBLIC_DIR, 'data', 'wholesale-status.json');
 
+// Recipe metadata for display names (shared GCS mount with Central)
+const RECIPE_META_PATH = process.env.DEPLOYMENT_MODE === 'cloud'
+    ? '/app/data/recipes-v2/_recipe-meta.json'
+    : path.resolve(__dirname, '../greenreach-central/data/recipes-v2/_recipe-meta.json');
+
+function loadRecipeMetaSync() {
+    try {
+        return JSON.parse(fs.readFileSync(RECIPE_META_PATH, 'utf8'));
+    } catch { return {}; }
+}
+
 function readFarmInfo() {
   const farmPath = path.join(PUBLIC_DIR, 'data', 'farm.json');
   let farmInfo = { farmId: 'light-engine-demo', name: 'GreenReach Demo Farm' };
@@ -105,13 +116,16 @@ function buildLotsFromFarmData(groups, farmInfo, today, reservedBySku, deductedB
     recipes = {};
   }
 
+  const recipeMeta = loadRecipeMetaSync();
   const lots = [];
 
   groups.forEach((group) => {
-    const cropName = (group.crop || group.recipe || '').trim();
-    if (!cropName) return;
+    const rawCropName = (group.crop || group.recipe || '').trim();
+    if (!rawCropName) return;
+    const cropMeta = recipeMeta[rawCropName] || {};
+    const cropName = cropMeta.displayName || rawCropName;
 
-    const recipe = recipes[cropName];
+    const recipe = recipes[rawCropName];
     let growDays = 35;
     if (recipe && recipe.day_by_day && Array.isArray(recipe.day_by_day)) {
       growDays = recipe.day_by_day.length;
@@ -134,7 +148,7 @@ function buildLotsFromFarmData(groups, farmInfo, today, reservedBySku, deductedB
     const qtyAvailableBase = Math.ceil(totalLbs / 5);
 
     const farmIdForQr = farmInfo.farmId || 'light-engine-demo';
-    const skuId = `SKU-${cropName.toUpperCase().replace(/\s+/g, '-')}-5LB`;
+    const skuId = `SKU-${rawCropName.toUpperCase().replace(/\s+/g, '-')}-5LB`;
     const reservedQty = reservedBySku.get(skuId) || 0;
     const deductedQty = deductedBySku.get(skuId) || 0;
     const actualAvailable = Math.max(0, qtyAvailableBase - reservedQty - deductedQty);
@@ -156,6 +170,7 @@ function buildLotsFromFarmData(groups, farmInfo, today, reservedBySku, deductedB
       quality_flags: ['local', 'vertical_farm', 'pesticide_free'],
       location: group.zone || group.roomId || 'Unknown',
       crop_type: cropName,
+      description: cropMeta.description || null,
       days_to_harvest: daysUntilHarvest
     });
   });
@@ -340,6 +355,7 @@ router.get('/inventory', async (req, res) => {
 
     // Include manual inventory entries from farm_inventory DB
     const db = req.app.locals.db;
+    const recipeMeta = loadRecipeMetaSync();
     if (db) {
       try {
         const dbResult = await db.query(
@@ -353,7 +369,9 @@ router.get('/inventory', async (req, res) => {
           [farmInfo.farmId]
         );
         for (const row of dbResult.rows) {
-          const cropName = row.product_name || 'Unknown';
+          const rawCropName = row.product_name || 'Unknown';
+          const cropMetaEntry = recipeMeta[rawCropName] || {};
+          const cropName = cropMetaEntry.displayName || rawCropName;
           const qtyLbs = Number(row.quantity_available ?? row.manual_quantity_lbs ?? 0);
           const skuId = String(row.product_id || cropName).trim().toLowerCase().replace(/[^a-z0-9-]/g, '-');
           const reservedQty = Number(reservedBySku.get(skuId) || 0);
@@ -390,7 +408,7 @@ router.get('/inventory', async (req, res) => {
             days_to_harvest: 0,
             inventory_source: row.inventory_source || null,
             is_custom: isCustom,
-            description: row.description || null,
+            description: row.description || cropMetaEntry.description || null,
             thumbnail_url: row.thumbnail_url || null
           });
         }
@@ -705,8 +723,11 @@ router.post('/inventory/reserve', wholesaleAuthMiddleware, express.json({ limit:
           [farmInfo.farmId]
         );
 
+        const reserveRecipeMeta = loadRecipeMetaSync();
         for (const row of dbResult.rows) {
-          const cropName = row.product_name || 'Unknown';
+          const rawCropName = row.product_name || 'Unknown';
+          const cropMetaEntry2 = reserveRecipeMeta[rawCropName] || {};
+          const cropName = cropMetaEntry2.displayName || rawCropName;
           const qtyLbs = Number(row.quantity_available ?? row.manual_quantity_lbs ?? 0);
           const skuId = String(row.product_id || cropName).trim().toLowerCase().replace(/[^a-z0-9-]/g, '-');
           const reservedQty = Number(reservedBySku.get(skuId) || 0);

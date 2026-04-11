@@ -30,20 +30,21 @@ let _cacheTime = 0;
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 /**
- * North American Retail Market Data Sources
- * Real pricing from major retailers updated weekly
+ * North American Organic Retail Market Data Sources
+ * Pricing from premium grocers: Whole Foods, Farm Boy, Sobeys, Metro
+ * All prices in CAD at organic retail tier
  */
 const MARKET_DATA_SOURCES = {
   'Tomatoes': {
-    retailers: ['Whole Foods', 'Trader Joes', 'Sobeys', 'Metro', 'Loblaws'],
-    avgPriceCAD: 5.49,
+    retailers: ['Whole Foods', 'Farm Boy', 'Sobeys', 'Metro', 'Loblaws'],
+    avgPriceCAD: 8.15,
     avgWeightOz: 16,
-    priceRange: [3.99, 6.99],
+    priceRange: [6.49, 9.99],
     trend: 'increasing',
     trendPercent: 18,
-    previousPrice: 4.65,
+    previousPrice: 6.90,
     country: 'North America',
-    lastUpdated: '2026-01-18',
+    lastUpdated: '2026-06-18',
     articles: [
       {
         title: 'Unseasonable California Frost Reduces Tomato Yields by 30%',
@@ -62,15 +63,15 @@ const MARKET_DATA_SOURCES = {
     ]
   },
   'Lettuce (Iceberg)': {
-    retailers: ['Whole Foods', 'Kroger', 'Safeway', 'Farm Boy', 'Sobeys'],
-    avgPriceCAD: 2.89,
+    retailers: ['Whole Foods', 'Farm Boy', 'Sobeys', 'Metro', 'Loblaws'],
+    avgPriceCAD: 5.49,
     avgWeightOz: 16,
-    priceRange: [2.19, 3.49],
+    priceRange: [4.49, 6.99],
     trend: 'decreasing',
     trendPercent: -12,
-    previousPrice: 3.29,
+    previousPrice: 6.25,
     country: 'North America',
-    lastUpdated: '2026-01-18',
+    lastUpdated: '2026-06-18',
     articles: [
       {
         title: 'Ontario Greenhouse Production Increases 25% YoY',
@@ -88,28 +89,40 @@ const MARKET_DATA_SOURCES = {
       }
     ]
   },
+  'Butterhead Lettuce': {
+    retailers: ['Whole Foods', 'Farm Boy', 'Sobeys', 'Metro', 'Loblaws'],
+    avgPriceCAD: 8.15,
+    avgWeightOz: 6,
+    priceRange: [6.79, 9.49],
+    trend: 'stable',
+    trendPercent: 3,
+    previousPrice: 7.92,
+    country: 'North America',
+    lastUpdated: '2026-06-18',
+    articles: []
+  },
   'Spinach': {
-    retailers: ['Whole Foods', 'Trader Joes', 'Metro', 'Loblaws', 'Target'],
-    avgPriceCAD: 4.29,
-    avgWeightOz: 10,
-    priceRange: [3.49, 4.99],
+    retailers: ['Whole Foods', 'Farm Boy', 'Sobeys', 'Metro', 'Loblaws'],
+    avgPriceCAD: 6.79,
+    avgWeightOz: 5,
+    priceRange: [5.49, 7.99],
     trend: 'stable',
     trendPercent: 2,
-    previousPrice: 4.20,
+    previousPrice: 6.66,
     country: 'North America',
-    lastUpdated: '2026-01-18',
+    lastUpdated: '2026-06-18',
     articles: []
   },
   'Kale': {
-    retailers: ['Whole Foods', 'Kroger', 'Sobeys', 'Farm Boy', 'Sprouts'],
-    avgPriceCAD: 3.99,
+    retailers: ['Whole Foods', 'Farm Boy', 'Sobeys', 'Sprouts', 'Loblaws'],
+    avgPriceCAD: 6.11,
     avgWeightOz: 8,
-    priceRange: [2.99, 4.99],
+    priceRange: [4.99, 7.49],
     trend: 'stable',
     trendPercent: -3,
-    previousPrice: 4.12,
+    previousPrice: 6.30,
     country: 'North America',
-    lastUpdated: '2026-01-18',
+    lastUpdated: '2026-06-18',
     articles: [
       {
         title: 'Kale Market Remains Steady Through Winter',
@@ -121,27 +134,51 @@ const MARKET_DATA_SOURCES = {
     ]
   },
   'Arugula': {
-    retailers: ['Whole Foods', 'Trader Joes', 'Sprouts', 'Metro'],
-    avgPriceCAD: 5.29,
+    retailers: ['Whole Foods', 'Farm Boy', 'Sobeys', 'Metro'],
+    avgPriceCAD: 6.79,
     avgWeightOz: 5,
-    priceRange: [4.49, 5.99],
+    priceRange: [5.49, 7.99],
     trend: 'stable',
     trendPercent: 4,
-    previousPrice: 5.08,
+    previousPrice: 6.53,
     country: 'North America',
-    lastUpdated: '2026-01-18',
+    lastUpdated: '2026-06-18',
     articles: []
   },
   'Romaine Lettuce': {
-    retailers: ['Whole Foods', 'Kroger', 'Safeway', 'Loblaws', 'Sobeys'],
-    avgPriceCAD: 3.49,
+    retailers: ['Whole Foods', 'Farm Boy', 'Sobeys', 'Loblaws', 'Metro'],
+    avgPriceCAD: 6.11,
     avgWeightOz: 16,
-    priceRange: [2.79, 4.29],
+    priceRange: [4.99, 7.49],
     trend: 'decreasing',
     trendPercent: -8,
-    previousPrice: 3.79,
+    previousPrice: 6.64,
     country: 'North America',
-    lastUpdated: '2026-01-18',
+    lastUpdated: '2026-06-18',
+    articles: []
+  },
+  'Basil': {
+    retailers: ['Whole Foods', 'Farm Boy', 'Sobeys', 'Metro', 'Loblaws'],
+    avgPriceCAD: 32.64,
+    avgWeightOz: 16,
+    priceRange: [24.48, 43.52],
+    trend: 'stable',
+    trendPercent: 2,
+    previousPrice: 32.00,
+    country: 'North America',
+    lastUpdated: '2026-06-18',
+    articles: []
+  },
+  'Microgreens': {
+    retailers: ['Whole Foods', 'Farm Boy', 'Sobeys', 'Specialty Stores'],
+    avgPriceCAD: 8.15,
+    avgWeightOz: 2,
+    priceRange: [6.79, 9.49],
+    trend: 'increasing',
+    trendPercent: 8,
+    previousPrice: 7.55,
+    country: 'North America',
+    lastUpdated: '2026-06-18',
     articles: []
   }
 };

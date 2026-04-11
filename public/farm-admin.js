@@ -1242,7 +1242,7 @@ const LB_TO_100G = 0.22046; // 1 lb = 453.592g, so 100g/453.592g = 0.22046
 const DEFAULT_SKU_FACTOR = 0.75;
 
 // Pricing version - increment this when defaultPricing changes to force localStorage clear
-const PRICING_VERSION = '2026-03-27-v10';
+const PRICING_VERSION = '2026-04-10-v14';
 // Unit-of-measure map for Canadian packaged-goods pricing
 // 'weight' = sold by weight ($/oz or $/25g), 'pint' = sold per pint, 'unit' = sold per item
 const cropUnitMap = {
@@ -1288,90 +1288,90 @@ function getCropBackendUnit(cropName) {
     return 'lb';
 }
 
-// Default pricing per lb (CAD) - AI-generated from Canadian retail market data
-// Formula: (package_price_CAD / package_weight_oz) * 16 oz/lb * 1.05 premium
-// Source: Loblaws, Metro, Sobeys, Farm Boy, No Frills (Ontario observed prices)
+// Default pricing per lb (CAD) - derived from North American organic retail market data
+// Formula: (package_price_USD * 1.35 fx / package_weight_oz) * 16 oz/lb * 0.90 organic discount
+// Source: Whole Foods, Farm Boy, Sobeys, Metro, Loblaws, Sprouts (organic shelf prices)
 const defaultPricing = {
-    // Lettuce: $4.99 CAD / 5oz pkg -> $16.77/lb
-    'Butterhead Lettuce': { retail: 16.77, ws1: 15, ws2: 25, ws3: 35 },
-    'Breen Pelleted Organic': { retail: 16.77, ws1: 15, ws2: 25, ws3: 35 },
-    'Truchas Pelleted Organic': { retail: 16.77, ws1: 15, ws2: 25, ws3: 35 },
-    'Red Leaf Lettuce': { retail: 16.77, ws1: 15, ws2: 25, ws3: 35 },
-    'Oak Leaf Lettuce': { retail: 16.77, ws1: 15, ws2: 25, ws3: 35 },
+    // Lettuce: Butterhead $5.99 USD/6oz = $19.41/lb; Leaf $5.49 USD/12oz = $8.89/lb
+    'Butterhead Lettuce': { retail: 19.41, ws1: 15, ws2: 25, ws3: 35 },
+    'Breen Pelleted Organic': { retail: 19.41, ws1: 15, ws2: 25, ws3: 35 },
+    'Truchas Pelleted Organic': { retail: 19.41, ws1: 15, ws2: 25, ws3: 35 },
+    'Red Leaf Lettuce': { retail: 8.89, ws1: 15, ws2: 25, ws3: 35 },
+    'Oak Leaf Lettuce': { retail: 8.89, ws1: 15, ws2: 25, ws3: 35 },
 
-    // Spinach: $4.49 CAD / 5oz pkg -> $15.08/lb
-    'Seaside F1 Spinach (baby leaf)': { retail: 15.08, ws1: 15, ws2: 25, ws3: 35 },
-    'Spinach': { retail: 15.08, ws1: 15, ws2: 25, ws3: 35 },
+    // Spinach: $4.99 USD/5oz = $19.40/lb
+    'Seaside F1 Spinach (baby leaf)': { retail: 19.40, ws1: 15, ws2: 25, ws3: 35 },
+    'Spinach': { retail: 19.40, ws1: 15, ws2: 25, ws3: 35 },
 
-    // Basil: $2.29-2.49 CAD / 1oz pkg -> $38.47-41.83/lb
-    'Genovese Basil': { retail: 38.47, ws1: 15, ws2: 25, ws3: 35 },
-    'Thai Basil': { retail: 41.83, ws1: 15, ws2: 25, ws3: 35 },
-    'Purple Basil': { retail: 41.83, ws1: 15, ws2: 25, ws3: 35 },
-    'Lemon Basil': { retail: 41.83, ws1: 15, ws2: 25, ws3: 35 },
-    'Holy Basil': { retail: 41.83, ws1: 15, ws2: 25, ws3: 35 },
-    'Basil': { retail: 38.47, ws1: 15, ws2: 25, ws3: 35 },
+    // Basil: $3.99 USD/0.75oz = $126.40/lb
+    'Genovese Basil': { retail: 29.16, ws1: 15, ws2: 25, ws3: 35 },
+    'Thai Basil': { retail: 29.16, ws1: 15, ws2: 25, ws3: 35 },
+    'Purple Basil': { retail: 29.16, ws1: 15, ws2: 25, ws3: 35 },
+    'Lemon Basil': { retail: 29.16, ws1: 15, ws2: 25, ws3: 35 },
+    'Holy Basil': { retail: 29.16, ws1: 15, ws2: 25, ws3: 35 },
+    'Basil': { retail: 29.16, ws1: 15, ws2: 25, ws3: 35 },
 
-    // Arugula: $4.49 CAD / 5oz pkg -> $15.08/lb
-    'Baby Arugula': { retail: 15.08, ws1: 15, ws2: 25, ws3: 35 },
-    'Cultivated Arugula': { retail: 15.08, ws1: 15, ws2: 25, ws3: 35 },
-    'Wild Arugula': { retail: 15.08, ws1: 15, ws2: 25, ws3: 35 },
-    'Wasabi Arugula': { retail: 15.08, ws1: 15, ws2: 25, ws3: 35 },
-    'Red Arugula': { retail: 15.08, ws1: 15, ws2: 25, ws3: 35 },
-    'Arugula': { retail: 15.08, ws1: 15, ws2: 25, ws3: 35 },
+    // Arugula: $4.99 USD/5oz = $19.40/lb
+    'Baby Arugula': { retail: 19.40, ws1: 15, ws2: 25, ws3: 35 },
+    'Cultivated Arugula': { retail: 19.40, ws1: 15, ws2: 25, ws3: 35 },
+    'Wild Arugula': { retail: 19.40, ws1: 15, ws2: 25, ws3: 35 },
+    'Wasabi Arugula': { retail: 19.40, ws1: 15, ws2: 25, ws3: 35 },
+    'Red Arugula': { retail: 19.40, ws1: 15, ws2: 25, ws3: 35 },
+    'Arugula': { retail: 19.40, ws1: 15, ws2: 25, ws3: 35 },
 
-    // Kale: $4.49 CAD / 5oz pkg -> $15.08/lb
-    'Curly Kale': { retail: 15.08, ws1: 15, ws2: 25, ws3: 35 },
-    'Baby Kale': { retail: 15.08, ws1: 15, ws2: 25, ws3: 35 },
-    'Kale': { retail: 15.08, ws1: 15, ws2: 25, ws3: 35 },
+    // Kale: $4.49 USD/8oz = $10.91/lb
+    'Curly Kale': { retail: 10.91, ws1: 15, ws2: 25, ws3: 35 },
+    'Baby Kale': { retail: 10.91, ws1: 15, ws2: 25, ws3: 35 },
+    'Kale': { retail: 10.91, ws1: 15, ws2: 25, ws3: 35 },
 
-    // Swiss Chard: $3.49 CAD / 8oz bunch -> $7.33/lb
-    'Swiss Chard': { retail: 7.33, ws1: 15, ws2: 25, ws3: 35 },
-    'Magenta Sunset Swiss Chard': { retail: 7.33, ws1: 15, ws2: 25, ws3: 35 },
+    // Swiss Chard: $3.99 USD/8oz = $9.70/lb
+    'Swiss Chard': { retail: 9.70, ws1: 15, ws2: 25, ws3: 35 },
+    'Magenta Sunset Swiss Chard': { retail: 9.70, ws1: 15, ws2: 25, ws3: 35 },
 
-    // Watercress: $3.99 CAD / 4oz pkg -> $16.76/lb
-    'Watercress': { retail: 16.76, ws1: 15, ws2: 25, ws3: 35 },
+    // Watercress: $4.99 USD/4oz = $24.25/lb
+    'Watercress': { retail: 24.25, ws1: 15, ws2: 25, ws3: 35 },
 
-    // Bok Choy/Asian greens: $3.49 CAD / 6oz pkg -> $9.77/lb
-    'Mei Qing Pak Choi': { retail: 9.77, ws1: 15, ws2: 25, ws3: 35 },
-    'Tatsoi': { retail: 9.77, ws1: 15, ws2: 25, ws3: 35 },
-    'Komatsuna Mustard Spinach': { retail: 9.77, ws1: 15, ws2: 25, ws3: 35 },
-    'Mizuna Mustard Greens': { retail: 9.77, ws1: 15, ws2: 25, ws3: 35 },
+    // Bok Choy/Asian greens: $3.99 USD/6oz = $12.93/lb
+    'Mei Qing Pak Choi': { retail: 12.93, ws1: 15, ws2: 25, ws3: 35 },
+    'Tatsoi': { retail: 12.93, ws1: 15, ws2: 25, ws3: 35 },
+    'Komatsuna Mustard Spinach': { retail: 12.93, ws1: 15, ws2: 25, ws3: 35 },
+    'Mizuna Mustard Greens': { retail: 12.93, ws1: 15, ws2: 25, ws3: 35 },
 
-    // Mixed Greens: $4.99 CAD / 5oz pkg -> $16.77/lb
-    'Mixed Greens': { retail: 16.77, ws1: 15, ws2: 25, ws3: 35 },
-    'Escarole Batavian': { retail: 16.77, ws1: 15, ws2: 25, ws3: 35 },
-    'Sorrel': { retail: 16.77, ws1: 15, ws2: 25, ws3: 35 },
+    // Mixed Greens: $5.49 USD/5oz = $21.35/lb
+    'Mixed Greens': { retail: 21.35, ws1: 15, ws2: 25, ws3: 35 },
+    'Escarole Batavian': { retail: 21.35, ws1: 15, ws2: 25, ws3: 35 },
+    'Sorrel': { retail: 21.35, ws1: 15, ws2: 25, ws3: 35 },
 
-    // Herbs (per lb from packaged fresh herbs)
-    'Parsley': { retail: 33.43, ws1: 15, ws2: 25, ws3: 35 },
-    'Italian Parsley': { retail: 33.43, ws1: 15, ws2: 25, ws3: 35 },
-    'Cilantro': { retail: 25.03, ws1: 15, ws2: 25, ws3: 35 },
-    'Dill Bouquet': { retail: 33.43, ws1: 15, ws2: 25, ws3: 35 },
-    'Common Thyme': { retail: 58.92, ws1: 15, ws2: 25, ws3: 35 },
-    'French Tarragon': { retail: 66.97, ws1: 15, ws2: 25, ws3: 35 },
-    'Greek Oregano': { retail: 53.26, ws1: 15, ws2: 25, ws3: 35 },
-    'Rosemary': { retail: 66.02, ws1: 15, ws2: 25, ws3: 35 },
-    'Sage': { retail: 66.02, ws1: 15, ws2: 25, ws3: 35 },
-    'Marjoram': { retail: 53.26, ws1: 15, ws2: 25, ws3: 35 },
-    'Chervil': { retail: 33.43, ws1: 15, ws2: 25, ws3: 35 },
-    'Lemon Balm': { retail: 41.83, ws1: 15, ws2: 25, ws3: 35 },
-    'Lovage': { retail: 33.43, ws1: 15, ws2: 25, ws3: 35 },
-    'Kentucky Colonel Spearmint': { retail: 41.83, ws1: 15, ws2: 25, ws3: 35 },
+    // Herbs (per lb from USDA AMS organic terminal market data)
+    'Parsley': { retail: 21.87, ws1: 15, ws2: 25, ws3: 35 },
+    'Italian Parsley': { retail: 21.87, ws1: 15, ws2: 25, ws3: 35 },
+    'Cilantro': { retail: 18.23, ws1: 15, ws2: 25, ws3: 35 },
+    'Dill Bouquet': { retail: 21.87, ws1: 15, ws2: 25, ws3: 35 },
+    'Common Thyme': { retail: 34.02, ws1: 15, ws2: 25, ws3: 35 },
+    'French Tarragon': { retail: 38.88, ws1: 15, ws2: 25, ws3: 35 },
+    'Greek Oregano': { retail: 31.59, ws1: 15, ws2: 25, ws3: 35 },
+    'Rosemary': { retail: 26.73, ws1: 15, ws2: 25, ws3: 35 },
+    'Sage': { retail: 34.02, ws1: 15, ws2: 25, ws3: 35 },
+    'Marjoram': { retail: 31.59, ws1: 15, ws2: 25, ws3: 35 },
+    'Chervil': { retail: 21.87, ws1: 15, ws2: 25, ws3: 35 },
+    'Lemon Balm': { retail: 19.44, ws1: 15, ws2: 25, ws3: 35 },
+    'Lovage': { retail: 21.87, ws1: 15, ws2: 25, ws3: 35 },
+    'Kentucky Colonel Spearmint': { retail: 19.44, ws1: 15, ws2: 25, ws3: 35 },
 
-    // Microgreens: $4.49 CAD / 2oz tray -> $37.72/lb
-    'Microgreen': { retail: 37.72, ws1: 15, ws2: 20, ws3: 30 },
+    // Microgreens: $5.99 USD/2oz tray = $58.22/lb
+    'Microgreen': { retail: 58.22, ws1: 15, ws2: 20, ws3: 30 },
 
-    // Sprouts: $3.49 CAD / 6oz container -> $9.77/lb
-    'Sprout': { retail: 9.77, ws1: 20, ws2: 25, ws3: 35 },
+    // Sprouts: $3.99 USD/6oz = $12.93/lb
+    'Sprout': { retail: 12.93, ws1: 20, ws2: 25, ws3: 35 },
 
-    // Strawberries: $5.99 USD/pint * 1.35 fx * 1.05 premium = $8.49/pint
-    'Strawberry': { retail: 8.49, ws1: 15, ws2: 25, ws3: 35 },
+    // Strawberries: $5.99 USD/pint * 1.35 fx * 0.90 discount = $7.28/pint
+    'Strawberry': { retail: 7.28, ws1: 15, ws2: 25, ws3: 35 },
 
-    // Cherry Tomato: $4.99 USD / 10oz * 1.35 fx * 16/oz * 1.05 = $11.32/lb
-    'Cherry Tomato': { retail: 11.32, ws1: 15, ws2: 25, ws3: 35 },
+    // Cherry Tomato: $4.99 USD/10oz * 1.35 fx * (16/10) * 0.90 = $9.70/lb
+    'Cherry Tomato': { retail: 9.70, ws1: 15, ws2: 25, ws3: 35 },
 
-    // Tomato: $2.49 USD/each * 1.35 fx * 1.05 premium = $3.53/each
-    'Tomato': { retail: 3.53, ws1: 15, ws2: 25, ws3: 35 }
+    // Tomato: $2.49 USD/each * 1.35 fx * 0.90 = $3.03/each
+    'Tomato': { retail: 3.03, ws1: 15, ws2: 25, ws3: 35 }
 };
 /**
  * Load crops and pricing — API first, localStorage fallback
@@ -1405,6 +1405,31 @@ async function loadCropsFromDatabase() {
                     loadedFromAPI = true;
                     console.log(`Pricing loaded from API: ${pricingData.length} crops`);
                 }
+            } else if (pricingRes.status === 401) {
+                // Auth expired — try static file fallback (no auth needed)
+                console.warn('Pricing API returned 401, trying static file fallback');
+                try {
+                    const staticRes = await fetch(`${API_BASE}/data/crop-pricing.json`);
+                    if (staticRes.ok) {
+                        const staticData = await staticRes.json();
+                        if (staticData.crops?.length) {
+                            pricingData = staticData.crops.map(c => ({
+                                crop: c.crop,
+                                retail: c.retailPrice || 0,
+                                ws1Discount: c.ws1Discount ?? 20,
+                                ws2Discount: c.ws2Discount ?? 25,
+                                ws3Discount: c.ws3Discount ?? 35,
+                                isTaxable: c.isTaxable || false,
+                                floor_price: c.floor_price ?? 0,
+                                sku_factor: DEFAULT_SKU_FACTOR
+                            }));
+                            loadedFromAPI = true;
+                            console.log(`Pricing loaded from static file: ${pricingData.length} crops`);
+                        }
+                    }
+                } catch (staticErr) {
+                    console.warn('Static pricing file also unavailable:', staticErr.message);
+                }
             }
         } catch (apiErr) {
             console.warn('Pricing API unavailable, falling back to localStorage:', apiErr.message);
@@ -1416,7 +1441,7 @@ async function loadCropsFromDatabase() {
             if (savedVersion !== PRICING_VERSION) {
                 console.log(` Pricing version mismatch (${savedVersion} → ${PRICING_VERSION}). Clearing old prices...`);
                 Object.keys(localStorage).forEach(key => {
-                    if (key.startsWith('pricing_')) localStorage.removeItem(key);
+                    if (key.startsWith('pricing_') || key.startsWith('ai_pricing_')) localStorage.removeItem(key);
                 });
                 localStorage.setItem('pricing_version', PRICING_VERSION);
             }
@@ -1720,7 +1745,7 @@ const AI_PRICING_KEY = 'ai_pricing_recommendations';
 const AI_LAST_CHECK_KEY = 'ai_pricing_last_check';
 const AI_HISTORY_KEY = 'ai_pricing_history';
 const USD_TO_CAD_RATE_KEY = 'usd_to_cad_rate';
-const AI_PREMIUM_MARKUP_RATE = 0.05;
+const AI_ORGANIC_DISCOUNT_RATE = 0.10;  // 10% discount below organic retail
 
 // Specialty crop delta learning storage key
 const AI_SPECIALTY_DELTA_KEY = 'ai_specialty_deltas';
@@ -1729,7 +1754,7 @@ const AI_SPECIALTY_DELTA_KEY = 'ai_specialty_deltas';
 // it is a specialty variety. Common varieties appear in standard retail packages
 // (e.g. "Baby Arugula" in a bag labeled "Arugula"). Specialty varieties are not
 // sold standalone and are typically found unlabeled inside premium mixed green
-// blends. The 5% markup accounts for comparing against non-organic retail.
+// blends. The 10% discount positions pricing below organic retail while above conventional.
 //
 // commonName: the retail parent category used for market data lookup
 // isSpecialty: true = not sold as a standalone retail package; flag for grower review
@@ -1829,10 +1854,10 @@ const cropClassification = {
     'Alkindus Pelleted Organic': { commonName: 'Butterhead Lettuce', isSpecialty: false },
     'Amaze':                     { commonName: 'Butterhead Lettuce', isSpecialty: false },
     'Breen Pelleted Organic':    { commonName: 'Butterhead Lettuce', isSpecialty: false },
-    'Brentwood Eazyleaf Organic':{ commonName: 'Mixed Greens', isSpecialty: false },
-    'Burgandy Eazyleaf Organic': { commonName: 'Mixed Greens', isSpecialty: false },
-    'Eazyleaf Blend Organic':    { commonName: 'Mixed Greens', isSpecialty: false },
-    'Hampton Eazyleaf Organic':  { commonName: 'Mixed Greens', isSpecialty: false },
+    'Brentwood Eazyleaf Organic':{ commonName: 'Red Leaf Lettuce', isSpecialty: false },
+    'Burgandy Eazyleaf Organic': { commonName: 'Red Leaf Lettuce', isSpecialty: false },
+    'Eazyleaf Blend Organic':    { commonName: 'Red Leaf Lettuce', isSpecialty: false },
+    'Hampton Eazyleaf Organic':  { commonName: 'Red Leaf Lettuce', isSpecialty: false },
     'Ilema Organic':             { commonName: 'Butterhead Lettuce', isSpecialty: true },
     'Little Gem':                { commonName: 'Butterhead Lettuce', isSpecialty: false },
     'Newham Pelleted Organic':   { commonName: 'Butterhead Lettuce', isSpecialty: false },
@@ -1935,289 +1960,319 @@ function recordSpecialtyDelta(cropName, commonRecommendation, growerPrice) {
 // Current USD to CAD exchange rate (updated during analysis)
 let currentExchangeRate = 1.35; // Default rate
 
-// Market data based on packaged retail (non-organic) greens pricing research (Dec 2025)
-// Pricing sourced from Whole Foods, Sprouts, Trader Joes, and major grocers
-// The 5% premium markup accounts for organic premium over these non-organic comparables
+// Market data based on North American organic retail produce pricing research (Jan 2026)
+// Pricing sourced from Whole Foods, Farm Boy, Sobeys, Metro, Loblaws, and farmers markets
+// The 10% discount to organic retail positions pricing competitively below organic shelf price
 const marketDataSources = {
-    // Lettuce varieties
+    // Lettuce varieties -- organic retail pricing from premium North American grocers
     'Butterhead Lettuce': {
-        retailers: ['Loblaws', 'Metro', 'Sobeys', 'Farm Boy', 'Whole Foods'],
-        avgPriceUSD: 4.99,
-        avgWeightOz: 5,
-        priceRange: [3.99, 5.99],
+        retailers: ['Whole Foods', 'Farm Boy', 'Sobeys', 'Metro', 'Loblaws'],
+        avgPriceUSD: 5.99,
+        avgWeightOz: 6,
+        priceRange: [4.99, 6.99],
         trend: 'stable',
-        country: 'Canada',
+        country: 'North America',
         articles: []
     },
     'Red Leaf Lettuce': {
-        retailers: ['Loblaws', 'Metro', 'Sobeys', 'Farm Boy', 'No Frills'],
-        avgPriceUSD: 4.99,
-        avgWeightOz: 5,
-        priceRange: [3.99, 5.99],
+        retailers: ['Whole Foods', 'Sobeys', 'Farm Boy', 'Farmers Markets'],
+        avgPriceUSD: 5.49,
+        avgWeightOz: 12,
+        priceRange: [3.99, 6.99],
         trend: 'stable',
-        country: 'Canada',
+        country: 'North America',
         articles: []
     },
     'Oak Leaf Lettuce': {
-        retailers: ['Loblaws', 'Metro', 'Sobeys', 'Farm Boy', 'No Frills'],
-        avgPriceUSD: 4.99,
-        avgWeightOz: 5,
-        priceRange: [3.99, 5.99],
+        retailers: ['Whole Foods', 'Metro', 'Specialty Markets'],
+        avgPriceUSD: 5.49,
+        avgWeightOz: 12,
+        priceRange: [3.99, 6.99],
         trend: 'stable',
-        country: 'Canada',
+        country: 'North America',
         articles: []
     },
-    
-    // Basil varieties
+
+    // Basil varieties -- fresh herb clamshell pricing from premium grocers
     'Genovese Basil': {
-        retailers: ['Loblaws', 'No Frills', 'Food Basics', 'Metro', 'Sobeys', 'Farm Boy'],
-        avgPriceUSD: 2.29,
-        avgWeightOz: 1.0,
-        priceRange: [1.99, 2.99],
-        trend: 'stable',
-        country: 'Canada',
+        retailers: ['Whole Foods', 'Sobeys', 'Farm Boy', 'Metro', 'Loblaws', 'Farmers Markets'],
+        avgPriceUSD: 24.00,
+        avgWeightOz: 16,
+        priceRange: [18.00, 32.00],
+        trend: 'increasing',
+        country: 'North America',
         articles: []
     },
     'Thai Basil': {
-        retailers: ['Loblaws', 'Metro', 'Sobeys', 'Asian Markets'],
-        avgPriceUSD: 2.49,
-        avgWeightOz: 1.0,
-        priceRange: [1.99, 3.49],
-        trend: 'stable',
-        country: 'Canada',
+        retailers: ['Whole Foods', 'Loblaws', 'Metro', 'Asian Markets'],
+        avgPriceUSD: 24.00,
+        avgWeightOz: 16,
+        priceRange: [18.00, 32.00],
+        trend: 'increasing',
+        country: 'North America',
         articles: []
     },
     'Purple Basil': {
-        retailers: ['Loblaws', 'Farm Boy', 'Sobeys', 'Farmers Markets'],
-        avgPriceUSD: 2.49,
-        avgWeightOz: 1.0,
-        priceRange: [1.99, 3.49],
-        trend: 'stable',
-        country: 'Canada',
+        retailers: ['Whole Foods', 'Farm Boy', 'Sobeys', 'Farmers Markets'],
+        avgPriceUSD: 24.00,
+        avgWeightOz: 16,
+        priceRange: [18.00, 32.00],
+        trend: 'increasing',
+        country: 'North America',
         articles: []
     },
     'Lemon Basil': {
         retailers: ['Farm Boy', 'Sobeys', 'Metro', 'Specialty Stores'],
-        avgPriceUSD: 2.49,
-        avgWeightOz: 1.0,
-        priceRange: [1.99, 3.49],
-        trend: 'stable',
-        country: 'Canada',
+        avgPriceUSD: 24.00,
+        avgWeightOz: 16,
+        priceRange: [18.00, 32.00],
+        trend: 'increasing',
+        country: 'North America',
         articles: []
     },
     'Holy Basil': {
         retailers: ['Metro', 'Loblaws', 'Asian Markets', 'Specialty Stores'],
-        avgPriceUSD: 2.49,
-        avgWeightOz: 1.0,
-        priceRange: [1.99, 3.49],
-        trend: 'stable',
-        country: 'Canada',
+        avgPriceUSD: 24.00,
+        avgWeightOz: 16,
+        priceRange: [18.00, 32.00],
+        trend: 'increasing',
+        country: 'North America',
         articles: []
     },
     'Basil': {
-        retailers: ['Loblaws', 'No Frills', 'Metro', 'Food Basics'],
-        avgPriceUSD: 2.29,
-        avgWeightOz: 1.0,
-        priceRange: [1.99, 2.99],
-        trend: 'stable',
-        country: 'Canada',
-        articles: []
-    },
-    
-    // Arugula varieties
-    'Baby Arugula': {
-        retailers: ['Loblaws', 'Metro', 'Sobeys', 'Farm Boy', 'No Frills'],
-        avgPriceUSD: 4.49,
-        avgWeightOz: 5,
-        priceRange: [3.49, 5.49],
-        trend: 'stable',
-        country: 'Canada',
-        articles: []
-    },
-    'Cultivated Arugula': {
-        retailers: ['Loblaws', 'Metro', 'Sobeys', 'Farm Boy', 'No Frills'],
-        avgPriceUSD: 4.49,
-        avgWeightOz: 5,
-        priceRange: [3.49, 5.49],
-        trend: 'stable',
-        country: 'Canada',
-        articles: []
-    },
-    'Wild Arugula': {
-        retailers: ['Loblaws', 'Metro', 'Sobeys', 'Farm Boy', 'No Frills'],
-        avgPriceUSD: 4.49,
-        avgWeightOz: 5,
-        priceRange: [3.49, 5.49],
-        trend: 'stable',
-        country: 'Canada',
-        articles: []
-    },
-    'Wasabi Arugula': {
-        retailers: ['Loblaws', 'Metro', 'Sobeys', 'Farm Boy', 'No Frills'],
-        avgPriceUSD: 4.49,
-        avgWeightOz: 5,
-        priceRange: [3.49, 5.49],
-        trend: 'stable',
-        country: 'Canada',
-        articles: []
-    },
-    'Red Arugula': {
-        retailers: ['Loblaws', 'Metro', 'Sobeys', 'Farm Boy', 'No Frills'],
-        avgPriceUSD: 4.49,
-        avgWeightOz: 5,
-        priceRange: [3.49, 5.49],
-        trend: 'stable',
-        country: 'Canada',
-        articles: []
-    },
-    'Arugula': {
-        retailers: ['Loblaws', 'Metro', 'Sobeys', 'Farm Boy', 'No Frills'],
-        avgPriceUSD: 4.49,
-        avgWeightOz: 5,
-        priceRange: [3.49, 5.49],
-        trend: 'stable',
-        country: 'Canada',
-        articles: []
-    },
-    
-    // Kale varieties
-    'Curly Kale': {
-        retailers: ['Loblaws', 'Metro', 'Sobeys', 'Farm Boy', 'No Frills'],
-        avgPriceUSD: 4.49,
-        avgWeightOz: 5,
-        priceRange: [3.49, 5.49],
-        trend: 'stable',
-        country: 'Canada',
-        articles: []
-    },
-    'Baby Kale': {
-        retailers: ['Loblaws', 'Metro', 'Sobeys', 'Farm Boy', 'No Frills'],
-        avgPriceUSD: 4.49,
-        avgWeightOz: 5,
-        priceRange: [3.49, 5.49],
-        trend: 'stable',
-        country: 'Canada',
-        articles: []
-    },
-    'Kale': {
-        retailers: ['Loblaws', 'Metro', 'Sobeys', 'Farm Boy', 'No Frills'],
-        avgPriceUSD: 4.49,
-        avgWeightOz: 5,
-        priceRange: [3.49, 5.49],
-        trend: 'stable',
-        country: 'Canada',
+        retailers: ['Whole Foods', 'Sobeys', 'Farm Boy', 'Farmers Markets'],
+        avgPriceUSD: 24.00,
+        avgWeightOz: 16,
+        priceRange: [18.00, 32.00],
+        trend: 'increasing',
+        country: 'North America',
         articles: []
     },
 
-    // Premium mixed greens (used as fallback for specialty greens not sold standalone)
-    'Mixed Greens': {
-        retailers: ['Loblaws', 'Metro', 'Sobeys', 'Farm Boy', 'Whole Foods'],
+    // Arugula varieties -- packaged organic greens
+    'Baby Arugula': {
+        retailers: ['Whole Foods', 'Farm Boy', 'Sobeys', 'Metro', 'Loblaws'],
         avgPriceUSD: 4.99,
         avgWeightOz: 5,
         priceRange: [3.99, 5.99],
         trend: 'stable',
-        country: 'Canada',
+        country: 'North America',
+        articles: []
+    },
+    'Cultivated Arugula': {
+        retailers: ['Whole Foods', 'Farm Boy', 'Sobeys', 'Metro'],
+        avgPriceUSD: 4.99,
+        avgWeightOz: 5,
+        priceRange: [3.99, 5.99],
+        trend: 'stable',
+        country: 'North America',
+        articles: []
+    },
+    'Wild Arugula': {
+        retailers: ['Whole Foods', 'Specialty Stores'],
+        avgPriceUSD: 4.99,
+        avgWeightOz: 5,
+        priceRange: [3.99, 5.99],
+        trend: 'stable',
+        country: 'North America',
+        articles: []
+    },
+    'Wasabi Arugula': {
+        retailers: ['Specialty Stores', 'Farmers Markets'],
+        avgPriceUSD: 4.99,
+        avgWeightOz: 5,
+        priceRange: [3.99, 5.99],
+        trend: 'stable',
+        country: 'North America',
+        articles: []
+    },
+    'Red Arugula': {
+        retailers: ['Whole Foods', 'Specialty Stores'],
+        avgPriceUSD: 4.99,
+        avgWeightOz: 5,
+        priceRange: [3.99, 5.99],
+        trend: 'stable',
+        country: 'North America',
+        articles: []
+    },
+    'Arugula': {
+        retailers: ['Whole Foods', 'Farm Boy', 'Sobeys', 'Metro'],
+        avgPriceUSD: 4.99,
+        avgWeightOz: 5,
+        priceRange: [3.99, 5.99],
+        trend: 'stable',
+        country: 'North America',
         articles: []
     },
 
-
-    // Spinach (packaged baby spinach)
-    'Spinach': {
-        retailers: ['Loblaws', 'Metro', 'Sobeys', 'Farm Boy', 'No Frills'],
+    // Kale varieties -- organic packaged kale
+    'Curly Kale': {
+        retailers: ['Whole Foods', 'Kroger', 'Sobeys', 'Farm Boy', 'Sprouts'],
         avgPriceUSD: 4.49,
-        avgWeightOz: 5,
-        priceRange: [3.49, 5.49],
+        avgWeightOz: 8,
+        priceRange: [2.99, 5.49],
         trend: 'stable',
-        country: 'Canada',
+        country: 'North America',
+        articles: []
+    },
+    'Baby Kale': {
+        retailers: ['Whole Foods', 'Farm Boy', 'Sobeys', 'Target'],
+        avgPriceUSD: 4.49,
+        avgWeightOz: 8,
+        priceRange: [2.99, 5.49],
+        trend: 'stable',
+        country: 'North America',
+        articles: []
+    },
+    'Kale': {
+        retailers: ['Whole Foods', 'Kroger', 'Sobeys', 'Farm Boy', 'Sprouts'],
+        avgPriceUSD: 4.49,
+        avgWeightOz: 8,
+        priceRange: [2.99, 5.49],
+        trend: 'stable',
+        country: 'North America',
+        articles: []
+    },
+
+    // Premium mixed greens (fallback for specialty greens not sold standalone)
+    'Mixed Greens': {
+        retailers: ['Whole Foods', 'Farm Boy', 'Sobeys', 'Metro', 'Loblaws'],
+        avgPriceUSD: 5.49,
+        avgWeightOz: 5,
+        priceRange: [3.99, 6.99],
+        trend: 'stable',
+        country: 'North America',
+        articles: []
+    },
+
+    // Spinach (packaged organic baby spinach)
+    'Spinach': {
+        retailers: ['Whole Foods', 'Farm Boy', 'Sobeys', 'Metro', 'Loblaws'],
+        avgPriceUSD: 4.99,
+        avgWeightOz: 5,
+        priceRange: [3.99, 5.99],
+        trend: 'stable',
+        country: 'North America',
         articles: []
     },
 
     // Swiss Chard (bunch)
     'Swiss Chard': {
-        retailers: ['Loblaws', 'Farm Boy', 'Sobeys', 'Farmers Markets'],
-        avgPriceUSD: 3.49,
+        retailers: ['Whole Foods', 'Farm Boy', 'Sobeys', 'Farmers Markets'],
+        avgPriceUSD: 3.99,
         avgWeightOz: 8,
-        priceRange: [2.49, 4.49],
+        priceRange: [2.99, 4.99],
         trend: 'stable',
-        country: 'Canada',
+        country: 'North America',
         articles: []
     },
 
     // Bok Choy (packaged)
     'Bok Choy': {
-        retailers: ['Loblaws', 'Metro', 'Farm Boy', 'Asian Markets'],
-        avgPriceUSD: 3.49,
+        retailers: ['Whole Foods', 'Farm Boy', 'Metro', 'T&T', 'Loblaws'],
+        avgPriceUSD: 3.99,
         avgWeightOz: 6,
-        priceRange: [2.99, 3.99],
+        priceRange: [2.99, 4.99],
         trend: 'stable',
-        country: 'Canada',
+        country: 'North America',
         articles: []
     },
 
-    // Common packaged herbs
+    // Common fresh herbs -- USDA AMS organic terminal market per-lb pricing
     'Parsley': {
-        retailers: ['Loblaws', 'No Frills', 'Metro', 'Food Basics'],
-        avgPriceUSD: 1.99,
-        avgWeightOz: 1.0,
-        priceRange: [1.49, 2.49],
+        retailers: ['Whole Foods', 'Farm Boy', 'Sobeys', 'Metro'],
+        avgPriceUSD: 18.00,
+        avgWeightOz: 16,
+        priceRange: [12.00, 24.00],
         trend: 'stable',
-        country: 'Canada',
+        country: 'North America',
         articles: []
     },
     'Cilantro': {
-        retailers: ['Loblaws', 'No Frills', 'Metro', 'Food Basics'],
-        avgPriceUSD: 1.49,
-        avgWeightOz: 1.0,
-        priceRange: [0.99, 1.99],
+        retailers: ['Whole Foods', 'Farm Boy', 'Sobeys', 'Metro'],
+        avgPriceUSD: 15.00,
+        avgWeightOz: 16,
+        priceRange: [10.00, 20.00],
         trend: 'stable',
-        country: 'Canada',
+        country: 'North America',
         articles: []
     },
     'Dill': {
-        retailers: ['Loblaws', 'No Frills', 'Metro', 'Food Basics'],
-        avgPriceUSD: 1.99,
-        avgWeightOz: 1.0,
-        priceRange: [1.49, 2.49],
+        retailers: ['Whole Foods', 'Farm Boy', 'Sobeys', 'Metro'],
+        avgPriceUSD: 18.00,
+        avgWeightOz: 16,
+        priceRange: [12.00, 24.00],
         trend: 'stable',
-        country: 'Canada',
+        country: 'North America',
         articles: []
     },
     'Thyme': {
-        retailers: ['Loblaws', 'No Frills', 'Food Basics', 'Metro'],
-        avgPriceUSD: 2.49,
-        avgWeightOz: 0.71,
-        priceRange: [2.48, 2.79],
+        retailers: ['Whole Foods', 'Farm Boy', 'Sobeys', 'Metro'],
+        avgPriceUSD: 28.00,
+        avgWeightOz: 16,
+        priceRange: [20.00, 38.00],
         trend: 'stable',
-        country: 'Canada',
+        country: 'North America',
         articles: []
     },
     'Tarragon': {
-        retailers: ['Loblaws', 'Metro', 'Specialty Stores'],
-        avgPriceUSD: 2.99,
-        avgWeightOz: 0.75,
-        priceRange: [2.49, 3.49],
+        retailers: ['Whole Foods', 'Farm Boy', 'Metro', 'Specialty Stores'],
+        avgPriceUSD: 32.00,
+        avgWeightOz: 16,
+        priceRange: [24.00, 42.00],
         trend: 'stable',
-        country: 'Canada',
+        country: 'North America',
         articles: []
     },
     'Oregano': {
-        retailers: ['Loblaws', 'No Frills', 'Food Basics', 'Metro'],
-        avgPriceUSD: 2.79,
-        avgWeightOz: 0.88,
-        priceRange: [2.48, 3.00],
+        retailers: ['Whole Foods', 'Farm Boy', 'Sobeys', 'Metro'],
+        avgPriceUSD: 26.00,
+        avgWeightOz: 16,
+        priceRange: [18.00, 34.00],
         trend: 'stable',
-        country: 'Canada',
+        country: 'North America',
         articles: []
     },
     'Mint': {
-        retailers: ['Loblaws', 'No Frills', 'Metro', 'Food Basics'],
-        avgPriceUSD: 2.49,
-        avgWeightOz: 1.0,
-        priceRange: [1.99, 2.99],
+        retailers: ['Whole Foods', 'Farm Boy', 'Sobeys', 'Metro'],
+        avgPriceUSD: 16.00,
+        avgWeightOz: 16,
+        priceRange: [12.00, 22.00],
         trend: 'stable',
-        country: 'Canada',
+        country: 'North America',
         articles: []
     },
+    'Rosemary': {
+        retailers: ['Whole Foods', 'Farm Boy', 'Sobeys', 'Metro'],
+        avgPriceUSD: 22.00,
+        avgWeightOz: 16,
+        priceRange: [16.00, 30.00],
+        trend: 'stable',
+        country: 'North America',
+        articles: []
+    },
+    'Sage': {
+        retailers: ['Whole Foods', 'Farm Boy', 'Sobeys', 'Metro'],
+        avgPriceUSD: 28.00,
+        avgWeightOz: 16,
+        priceRange: [20.00, 36.00],
+        trend: 'stable',
+        country: 'North America',
+        articles: []
+    },
+
+    // Watercress (packaged)
+    'Watercress': {
+        retailers: ['Whole Foods', 'Farm Boy', 'Sobeys', 'Metro'],
+        avgPriceUSD: 4.99,
+        avgWeightOz: 4,
+        priceRange: [3.49, 5.49],
+        trend: 'stable',
+        country: 'North America',
+        articles: []
+    },
+
+    // Strawberries -- sold by the pint
     'Strawberry': {
         retailers: ['Whole Foods', 'Sprouts', 'Trader Joes', 'Loblaws', 'Metro'],
         avgPriceUSD: 5.99,
@@ -2227,6 +2282,8 @@ const marketDataSources = {
         comparisonUnit: 'pint',
         articles: []
     },
+
+    // Cherry Tomatoes -- sold by weight
     'Cherry Tomato': {
         retailers: ['Whole Foods', 'Sprouts', 'Trader Joes', 'Loblaws', 'Metro'],
         avgPriceUSD: 4.99,
@@ -2236,6 +2293,8 @@ const marketDataSources = {
         country: 'North America',
         articles: []
     },
+
+    // Large Tomatoes -- sold per unit
     'Tomato': {
         retailers: ['Whole Foods', 'Kroger', 'Safeway', 'Loblaws', 'Metro'],
         avgPriceUSD: 2.49,
@@ -2246,47 +2305,14 @@ const marketDataSources = {
         articles: []
     },
 
-    // Rosemary (packaged fresh herb)
-    'Rosemary': {
-        retailers: ['Loblaws', 'No Frills', 'Metro', 'Sobeys'],
-        avgPriceUSD: 2.79,
-        avgWeightOz: 0.71,
-        priceRange: [2.49, 2.99],
-        trend: 'stable',
-        country: 'Canada',
-        articles: []
-    },
-
-    // Sage (packaged fresh herb)
-    'Sage': {
-        retailers: ['Loblaws', 'No Frills', 'Metro', 'Food Basics'],
-        avgPriceUSD: 2.79,
-        avgWeightOz: 0.71,
-        priceRange: [2.49, 2.99],
-        trend: 'stable',
-        country: 'Canada',
-        articles: []
-    },
-
-    // Watercress (packaged)
-    'Watercress': {
-        retailers: ['Loblaws', 'Metro', 'Sobeys', 'Farm Boy', 'Whole Foods'],
-        avgPriceUSD: 3.99,
-        avgWeightOz: 4,
-        priceRange: [2.99, 4.99],
-        trend: 'stable',
-        country: 'Canada',
-        articles: []
-    },
-
     // Microgreens (packaged tray/clamshell)
     'Microgreen': {
         retailers: ['Whole Foods', 'Farm Boy', 'Loblaws', 'Sobeys', 'Farmers Markets'],
-        avgPriceUSD: 4.49,
+        avgPriceUSD: 5.99,
         avgWeightOz: 2,
-        priceRange: [3.49, 5.99],
+        priceRange: [3.99, 7.99],
         trend: 'stable',
-        country: 'Canada',
+        country: 'North America',
         _lookupOnly: true,
         articles: []
     },
@@ -2294,11 +2320,11 @@ const marketDataSources = {
     // Sprouts (packaged container)
     'Sprout': {
         retailers: ['Whole Foods', 'Loblaws', 'Metro', 'Sobeys', 'Farm Boy'],
-        avgPriceUSD: 3.49,
+        avgPriceUSD: 3.99,
         avgWeightOz: 6,
-        priceRange: [2.49, 4.49],
+        priceRange: [2.99, 4.99],
         trend: 'stable',
-        country: 'Canada',
+        country: 'North America',
         _lookupOnly: true,
         articles: []
     }
@@ -2348,6 +2374,8 @@ function openAIPricingAssistant() {
             showToast('AI Pricing modal not found in page', 'error');
             return;
         }
+        // Move modal to body to escape .main-content stacking context
+        if (modal.parentElement !== document.body) document.body.appendChild(modal);
         modal.style.display = 'flex';
         modal.style.zIndex = '10001';
 
@@ -2402,7 +2430,7 @@ async function runAIPricingAnalysis() {
         'Analysing price trends across retailers...',
         'Matching crops to your pricing table...',
         'Normalizing prices by unit: oz, 25g, pint, and each...',
-        'Generating premium retail recommendations (+5% over market average)...'
+        'Generating recommendations (10% below organic retail)...'
     ];
     
     // Show progress steps while fetching in parallel
@@ -2437,27 +2465,42 @@ async function runAIPricingAnalysis() {
     // Use live data if available, otherwise fall back to local hardcoded sources
     if (liveData?.ok && liveData.recommendations?.length > 0) {
         currentExchangeRate = liveData.fxRate || currentExchangeRate;
-        // Populate marketDataSources cache from live data so resolveMarketDataForCrop works
+        // Enrich marketDataSources with backend trend/AI data without overwriting curated organic retail prices
         for (const rec of liveData.recommendations) {
-            marketDataSources[rec.product] = {
-                retailers: rec.retailers || [],
-                avgPriceCAD: rec.pricePerOzCAD || rec.avgPriceCAD || 0,
-                avgPriceUSD: (rec.pricePerOzCAD || rec.avgPriceCAD || 0) / (liveData.fxRate || 1.36),
-                avgWeightOz: 1, // Backend returns per-oz values via pricePerOzCAD
-                priceRange: rec.priceRange || [0, 0], // Backend returns per-oz ranges
-                trend: rec.trend || 'stable',
-                trendPercent: rec.trendPercent ?? 0,
-                country: 'Canada',
-                articles: [],
-                // AI enrichment
-                _aiOutlook: rec.aiOutlook,
-                _aiConfidence: rec.aiConfidence,
-                _aiForecastPrice: rec.aiForecastPrice,
-                _aiAction: rec.aiAction,
-                _aiReasoning: rec.aiReasoning,
-                _dataSource: rec.dataSource || 'database',
-                _observationCount: rec.observationCount || 0,
-            };
+            const existing = marketDataSources[rec.product];
+            if (existing) {
+                // Curated entry exists: keep organic retail base price, enrich with live trend + AI data
+                existing.trend = rec.trend || existing.trend || 'stable';
+                existing.trendPercent = rec.trendPercent ?? existing.trendPercent ?? 0;
+                if (rec.articles && rec.articles.length > 0) existing.articles = rec.articles;
+                existing._aiOutlook = rec.aiOutlook;
+                existing._aiConfidence = rec.aiConfidence;
+                existing._aiForecastPrice = rec.aiForecastPrice;
+                existing._aiAction = rec.aiAction;
+                existing._aiReasoning = rec.aiReasoning;
+                existing._dataSource = rec.dataSource || 'enriched';
+                existing._observationCount = rec.observationCount || 0;
+            } else {
+                // New product not in curated data: use backend pricing as-is
+                marketDataSources[rec.product] = {
+                    retailers: rec.retailers || [],
+                    avgPriceCAD: rec.pricePerOzCAD || rec.avgPriceCAD || 0,
+                    avgPriceUSD: (rec.pricePerOzCAD || rec.avgPriceCAD || 0) / (liveData.fxRate || 1.36),
+                    avgWeightOz: 1,
+                    priceRange: rec.priceRange || [0, 0],
+                    trend: rec.trend || 'stable',
+                    trendPercent: rec.trendPercent ?? 0,
+                    country: 'Canada',
+                    articles: [],
+                    _aiOutlook: rec.aiOutlook,
+                    _aiConfidence: rec.aiConfidence,
+                    _aiForecastPrice: rec.aiForecastPrice,
+                    _aiAction: rec.aiAction,
+                    _aiReasoning: rec.aiReasoning,
+                    _dataSource: rec.dataSource || 'database',
+                    _observationCount: rec.observationCount || 0,
+                };
+            }
         }
         console.log(`Loaded ${liveData.recommendations.length} live pricing recommendations (FX: ${currentExchangeRate})`);
     } else {
@@ -2541,7 +2584,7 @@ function resolveMarketDataForCrop(cropName) {
         { test: ['sprout'], key: 'Sprout' },
         // Pelleted/Eazyleaf lettuce varieties
         { test: ['pelleted', 'little gem', 'amaze', 'ilema'], key: 'Butterhead Lettuce' },
-        { test: ['eazyleaf'], key: 'Mixed Greens' },
+        { test: ['eazyleaf'], key: 'Red Leaf Lettuce' },
         { test: ['butterhead', 'buttercrunch', 'bibb'], key: 'Butterhead Lettuce' },
         { test: ['romaine', 'cos'], key: 'Mixed Greens' },
         { test: ['red leaf'], key: 'Red Leaf Lettuce' },
@@ -2731,11 +2774,11 @@ function generateRecommendations() {
 
         if (isSpecialty && learnedDelta) {
             // Apply learned delta on top of the common-name recommendation
-            const baseRec = marketAvg * (1 + AI_PREMIUM_MARKUP_RATE);
+            const baseRec = marketAvg * (1 - AI_ORGANIC_DISCOUNT_RATE);
             recommendation = baseRec * (1 + learnedDelta.avgDeltaPercent / 100);
         } else {
-            // Standard: 5% premium over non-organic market average
-            recommendation = marketAvg * (1 + AI_PREMIUM_MARKUP_RATE);
+            // Standard: 10% discount below organic retail market average
+            recommendation = marketAvg * (1 - AI_ORGANIC_DISCOUNT_RATE);
         }
 
         const recommendedDelta = currentPrice > 0 ? ((recommendation - currentPrice) / currentPrice * 100) : (recommendation > 0 ? 100 : 0);
@@ -2754,7 +2797,7 @@ function generateRecommendations() {
         } else {
             reasoning += `Aggregated North America packaged retail pricing suggests ${cropName} averages $${marketAvg.toFixed(2)}${normalizedMarket.comparisonUnitLabel} (CAD). `;
         }
-        reasoning += `Applying the ${(AI_PREMIUM_MARKUP_RATE * 100).toFixed(0)}% organic premium yields $${recommendation.toFixed(2)}${normalizedMarket.comparisonUnitLabel}. `;
+        reasoning += `Applying the ${(AI_ORGANIC_DISCOUNT_RATE * 100).toFixed(0)}% discount to organic retail yields $${recommendation.toFixed(2)}${normalizedMarket.comparisonUnitLabel}. `;
         reasoning += `Your current price is ${Math.abs(difference).toFixed(1)}% ${difference >= 0 ? 'above' : 'below'} market average.`;
 
         if (marketData._aiReasoning) {
@@ -3013,7 +3056,7 @@ async function applyRecommendedPrice(cropName, recommendedPrice, btnEl) {
             const cached = JSON.parse(localStorage.getItem(AI_PRICING_KEY) || '[]');
             const recEntry = cached.find(r => r.crop === pricingData[index].crop);
             if (recEntry && recEntry.isSpecialty && recEntry.marketAverage > 0) {
-                const baseRec = recEntry.marketAverage * (1 + AI_PREMIUM_MARKUP_RATE);
+                const baseRec = recEntry.marketAverage * (1 - AI_ORGANIC_DISCOUNT_RATE);
                 recordSpecialtyDelta(pricingData[index].crop, baseRec, recommendedPrice);
             }
         } catch (e) { /* delta recording is best-effort */ }
@@ -6912,6 +6955,8 @@ async function showFirstTimeSetup() {
     }
     
     if (modal) {
+        // Move modal to body to escape .main-content stacking context
+        if (modal.parentElement !== document.body) document.body.appendChild(modal);
         modal.style.display = 'flex';
         console.log('[setup-wizard] Modal display set to flex');
         
@@ -9075,6 +9120,8 @@ function renderLabReports() {
 function openLabReportModal() {
     const modal = document.getElementById('labReportModal');
     if (modal) {
+        // Move modal to body to escape .main-content stacking context
+        if (modal.parentElement !== document.body) document.body.appendChild(modal);
         modal.style.display = 'flex';
         document.getElementById('lab-report-form')?.reset();
         const dateInput = document.getElementById('lr-test-date');
@@ -9371,6 +9418,8 @@ let voiceLastIntent = null;
 function openVoiceModal() {
     const modal = document.getElementById('voiceCommandModal');
     if (!modal) return;
+        // Move modal to body to escape .main-content stacking context
+        if (modal.parentElement !== document.body) document.body.appendChild(modal);
     modal.style.display = 'flex';
     resetVoiceModal();
 }

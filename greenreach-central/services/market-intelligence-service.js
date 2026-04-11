@@ -12,18 +12,21 @@
 
 import logger from '../utils/logger.js';
 
-// Fallback seed prices (used only when DB has no observations)
+// Fallback seed prices — organic retail tier per-lb basis
+// Greens: organic clamshell pricing. Herbs: USDA AMS organic terminal market per-lb * 1.36 FX
 const SEED_PRICES = {
-  'Basil':               { retailers: ['Whole Foods', 'Sobeys', 'Metro', 'Loblaws', 'Trader Joes'], baseCAD: 3.99, unit: 'per_bunch', weightOz: 1 },
-  'Kale':                { retailers: ['Whole Foods', 'Sobeys', 'Farm Boy', 'Loblaws', 'Kroger'],   baseCAD: 3.99, unit: 'per_bunch', weightOz: 8 },
-  'Lettuce (Romaine)':   { retailers: ['Whole Foods', 'Sobeys', 'Metro', 'Loblaws', 'Safeway'],     baseCAD: 3.49, unit: 'per_head',  weightOz: 16 },
-  'Spinach':             { retailers: ['Whole Foods', 'Trader Joes', 'Metro', 'Loblaws', 'Target'], baseCAD: 4.29, unit: 'per_10oz', weightOz: 10 },
-  'Arugula':             { retailers: ['Whole Foods', 'Trader Joes', 'Sobeys', 'Metro'],            baseCAD: 5.29, unit: 'per_5oz',  weightOz: 5 },
-  'Microgreens':         { retailers: ['Whole Foods', 'Farm Boy', 'Sobeys', 'Metro'],               baseCAD: 5.99, unit: 'per_4oz',  weightOz: 4 },
-  'Cilantro':            { retailers: ['Sobeys', 'Metro', 'Loblaws', 'Walmart', 'FreshCo'],        baseCAD: 1.49, unit: 'per_bunch', weightOz: 1 },
-  'Mint':                { retailers: ['Whole Foods', 'Metro', 'Sobeys', 'Loblaws'],               baseCAD: 2.49, unit: 'per_bunch', weightOz: 0.75 },
-  'Bok Choy':            { retailers: ['Whole Foods', 'T&T', 'Metro', 'Loblaws'],                  baseCAD: 2.99, unit: 'per_lb',   weightOz: 16 },
-  'Watercress':          { retailers: ['Whole Foods', 'Farm Boy', 'Sobeys'],                       baseCAD: 4.99, unit: 'per_bunch', weightOz: 3 },
+  'Basil':               { retailers: ['Whole Foods', 'Farm Boy', 'Sobeys', 'Metro', 'Loblaws'],   baseCAD: 32.64, unit: 'per_lb',   weightOz: 16 },
+  'Kale':                { retailers: ['Whole Foods', 'Farm Boy', 'Sobeys', 'Loblaws', 'Sprouts'], baseCAD: 6.11,  unit: 'per_bunch', weightOz: 8 },
+  'Lettuce (Romaine)':   { retailers: ['Whole Foods', 'Farm Boy', 'Sobeys', 'Metro', 'Loblaws'],   baseCAD: 6.11,  unit: 'per_head',  weightOz: 16 },
+  'Butterhead Lettuce':  { retailers: ['Whole Foods', 'Farm Boy', 'Sobeys', 'Metro', 'Loblaws'],   baseCAD: 8.15,  unit: 'per_head',  weightOz: 6 },
+  'Spinach':             { retailers: ['Whole Foods', 'Farm Boy', 'Sobeys', 'Metro', 'Loblaws'],   baseCAD: 6.79,  unit: 'per_5oz',   weightOz: 5 },
+  'Arugula':             { retailers: ['Whole Foods', 'Farm Boy', 'Sobeys', 'Metro'],              baseCAD: 6.79,  unit: 'per_5oz',   weightOz: 5 },
+  'Microgreens':         { retailers: ['Whole Foods', 'Farm Boy', 'Sobeys', 'Specialty Stores'],   baseCAD: 8.15,  unit: 'per_2oz',   weightOz: 2 },
+  'Cilantro':            { retailers: ['Whole Foods', 'Farm Boy', 'Sobeys', 'Metro', 'Loblaws'],   baseCAD: 20.40, unit: 'per_lb',    weightOz: 16 },
+  'Mint':                { retailers: ['Whole Foods', 'Farm Boy', 'Sobeys', 'Metro'],              baseCAD: 21.76, unit: 'per_lb',    weightOz: 16 },
+  'Thyme':               { retailers: ['Whole Foods', 'Farm Boy', 'Sobeys', 'Metro'],              baseCAD: 38.08, unit: 'per_lb',    weightOz: 16 },
+  'Bok Choy':            { retailers: ['Whole Foods', 'Farm Boy', 'Metro', 'T&T', 'Loblaws'],     baseCAD: 5.43,  unit: 'per_lb',    weightOz: 6 },
+  'Watercress':          { retailers: ['Whole Foods', 'Farm Boy', 'Sobeys'],                       baseCAD: 6.79,  unit: 'per_4oz',   weightOz: 4 },
 };
 
 /**

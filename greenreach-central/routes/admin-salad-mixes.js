@@ -18,9 +18,10 @@ router.get('/', async (req, res) => {
         let componentsMap = {};
         if (templateIds.length > 0) {
             const { rows: components } = await query(
-                `SELECT id, mix_template_id, product_name, product_id, ratio
+                `SELECT id, mix_template_id, product_name, product_id, ratio,
+                        trait_role, color_profile, taste_profile, texture_profile
                  FROM mix_components WHERE mix_template_id = ANY($1)
-                 ORDER BY mix_template_id, product_name`,
+                 ORDER BY mix_template_id, ratio DESC`,
                 [templateIds]
             );
             for (const c of components) {
@@ -55,8 +56,10 @@ router.get('/:id', async (req, res) => {
         if (!template) return res.status(404).json({ success: false, error: 'Mix template not found' });
 
         const { rows: components } = await query(
-            `SELECT id, product_name, product_id, ratio FROM mix_components
-             WHERE mix_template_id = $1 ORDER BY product_name`, [id]
+            `SELECT id, product_name, product_id, ratio,
+                    trait_role, color_profile, taste_profile, texture_profile
+             FROM mix_components
+             WHERE mix_template_id = $1 ORDER BY ratio DESC`, [id]
         );
         res.json({ success: true, mix: { ...template, components } });
     } catch (err) {
@@ -104,9 +107,11 @@ router.post('/', async (req, res) => {
         const insertedComponents = [];
         for (const c of components) {
             const { rows: [comp] } = await query(
-                `INSERT INTO mix_components (mix_template_id, product_name, product_id, ratio)
-                 VALUES ($1, $2, $3, $4) RETURNING id, product_name, product_id, ratio`,
-                [template.id, c.product_name.trim(), c.product_id || null, parseFloat(c.ratio)]
+                `INSERT INTO mix_components (mix_template_id, product_name, product_id, ratio, trait_role, color_profile, taste_profile, texture_profile)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                 RETURNING id, product_name, product_id, ratio, trait_role, color_profile, taste_profile, texture_profile`,
+                [template.id, c.product_name.trim(), c.product_id || null, parseFloat(c.ratio),
+                 c.trait_role?.trim() || null, c.color_profile || null, c.taste_profile || null, c.texture_profile || null]
             );
             insertedComponents.push(comp);
         }
@@ -161,9 +166,11 @@ router.put('/:id', async (req, res) => {
         const insertedComponents = [];
         for (const c of components) {
             const { rows: [comp] } = await query(
-                `INSERT INTO mix_components (mix_template_id, product_name, product_id, ratio)
-                 VALUES ($1, $2, $3, $4) RETURNING id, product_name, product_id, ratio`,
-                [id, c.product_name.trim(), c.product_id || null, parseFloat(c.ratio)]
+                `INSERT INTO mix_components (mix_template_id, product_name, product_id, ratio, trait_role, color_profile, taste_profile, texture_profile)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                 RETURNING id, product_name, product_id, ratio, trait_role, color_profile, taste_profile, texture_profile`,
+                [id, c.product_name.trim(), c.product_id || null, parseFloat(c.ratio),
+                 c.trait_role?.trim() || null, c.color_profile || null, c.taste_profile || null, c.texture_profile || null]
             );
             insertedComponents.push(comp);
         }

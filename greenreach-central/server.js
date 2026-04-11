@@ -80,6 +80,7 @@ import { correlateAnomalies } from './jobs/anomaly-correlation.js';
 import wholesaleFulfillmentRouter from './routes/wholesale-fulfillment.js';
 import producerPortalRouter from './routes/producer-portal.js';
 import wholesaleExportsRouter from './routes/wholesale-exports.js';
+import wholesaleDonationsRouter from "./routes/wholesale-donations.js";
 import miscStubsRouter from './routes/misc-stubs.js';
 import adminCalendarRouter from './routes/admin-calendar.js';
 
@@ -123,6 +124,7 @@ import { startSensorCleanupScheduler } from './routes/sync.js';
 // Grant wizard — enabled by default (set ENABLE_GRANT_WIZARD=false to disable)
 import adminPricingRoutes from './routes/admin-pricing.js';
 import mountFarmJsonRoute from "./routes/farm-json-merge.js";
+import farmSaladMixesRouter from './routes/farm-salad-mixes.js';
 let grantWizardRoutes, startGrantProgramSync, seedGrantPrograms, cleanupExpiredApplications;
 if (process.env.ENABLE_GRANT_WIZARD !== 'false') {
   const gwMod = await import('./routes/grant-wizard.js');
@@ -3548,6 +3550,7 @@ app.use('/api/farm/square', squareOAuthProxyRoutes); // Central-owned Square con
 app.use('/api/farm/stripe', stripeConnectControlRouter); // Central-owned Stripe control plane
 
 app.use('/', purchaseRouter);                                // Purchase/checkout pipeline (Square) — MUST precede /api/farms auth
+app.use('/api/farm/salad-mixes', farmSaladMixesRouter);                                           // Farm-accessible salad mix templates (no admin auth)
 app.use('/api/farm/products', authOrAdminMiddleware, customProductsRouter);                       // /api/farm/products/* -- Custom product CRUD (MUST precede /api/farm auth)
 app.use('/api/farms', authOrAdminMiddleware, farmRoutes);
 app.use('/api/farm', authOrAdminMiddleware, farmRoutes); // Singular route for profile endpoint
@@ -3616,6 +3619,7 @@ app.use('/api/recipes', recipesRoutes); // Read-only public recipes API
 // Public price-alerts for wholesale buyers (market data is not farm-specific)
 app.get("/api/wholesale/market/price-alerts", (req, res, next) => { req.url = "/price-alerts"; next(); }, marketIntelligenceRoutes);
 app.use('/api/wholesale', wholesaleRoutes); // Core wholesale: catalog, orders, payments, network farms
+app.use("/api/wholesale/donations", wholesaleDonationsRouter); // Food bank donation offers, claims, CRA receipts
 app.use('/api/square-proxy', squareOAuthProxyRoutes); // Compatibility alias for legacy admin UI callers
 app.use('/api/admin', adminRoutes); // Admin dashboard API (sub-mounts /wholesale, /recipes, /pricing, /delivery, /ai)
 app.use('/api/delivery/driver-applications', driverApplicationsRoutes); // Public driver enrollment

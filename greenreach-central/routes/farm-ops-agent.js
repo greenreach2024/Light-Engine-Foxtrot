@@ -1229,7 +1229,8 @@ export const TOOL_CATALOG = {
       const discovered = [];
 
       // 1. Check Light Engine edge proxy
-      const edgeUrl = process.env.LIGHT_ENGINE_URL || process.env.EDGE_URL;
+      const edgeUrl = process.env.FARM_EDGE_URL || process.env.LE_API_URL || process.env.LIGHT_ENGINE_URL || process.env.EDGE_URL;
+      console.log('[scan_devices] Edge URL:', edgeUrl ? edgeUrl : '(none)');
       if (edgeUrl) {
         try {
           const resp = await fetch(`${edgeUrl}/discovery/scan`, {
@@ -1241,6 +1242,7 @@ export const TOOL_CATALOG = {
           if (resp.ok) {
             const data = await resp.json();
             const edgeDevices = Array.isArray(data.devices) ? data.devices : [];
+            console.log('[scan_devices] LE edge returned', edgeDevices.length, 'device(s)');
             discovered.push(...edgeDevices.map(d => ({
               name: d.name || d.deviceName || 'Unknown Device',
               device_id: d.deviceId || d.id || null,
@@ -1252,7 +1254,7 @@ export const TOOL_CATALOG = {
             })));
           }
         } catch (err) {
-          // Light Engine unreachable — continue with cloud scan
+          console.warn('[scan_devices] LE edge scan failed:', err.message);
         }
       }
 
@@ -1332,7 +1334,7 @@ export const TOOL_CATALOG = {
               }
             }
           }
-        } catch { /* SwitchBot scan failed — non-fatal */ }
+        } catch (sbErr) { console.warn('[scan_devices] SwitchBot cloud scan failed:', sbErr.message); }
       }
 
       // 3. Check what's already registered to avoid duplicates

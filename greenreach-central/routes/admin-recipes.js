@@ -8,10 +8,33 @@ const router = express.Router();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// In Cloud Run, /app/data is a GCS FUSE mount that shadows the local data/ dir.
+// In Cloud Run, /app/data is a GCS FUSE mount — recipes live there so edits persist.
+// /opt/recipes-v2 holds the Docker-baked seed CSVs (read-only fallback).
 const RECIPES_DIR = process.env.DEPLOYMENT_MODE === 'cloud'
-    ? '/opt/recipes-v2'
+    ? '/app/data/recipes-v2'
     : path.join(__dirname, '../data/recipes-v2');
+
+const SEED_DIR = '/opt/recipes-v2';
+
+// One-time seed: populate GCS-backed recipes dir from baked-in CSVs if empty.
+(async () => {
+  if (process.env.DEPLOYMENT_MODE !== 'cloud') return;
+  try {
+    await fs.mkdir(RECIPES_DIR, { recursive: true });
+    const existing = await fs.readdir(RECIPES_DIR);
+    const csvs = existing.filter(f => f.endsWith('.csv'));
+    if (csvs.length === 0) {
+      const seeds = await fs.readdir(SEED_DIR);
+      await Promise.all(seeds.map(f => fs.copyFile(
+        path.join(SEED_DIR, f),
+        path.join(RECIPES_DIR, f)
+      )));
+      console.log(`[Recipes] Seeded ${seeds.length} recipes from /opt/recipes-v2 to GCS`);
+    }
+  } catch (err) {
+    console.warn('[Recipes] Seed from /opt/recipes-v2 failed:', err.message);
+  }
+})();
 
 // Load crop descriptions from lighting-recipes.json
 const RECIPES_JSON_PATH = path.join(__dirname, '../public/data/lighting-recipes.json');
@@ -25,6 +48,79 @@ try {
     }
 } catch (err) {
     console.warn('[Recipes] Could not load lighting-recipes.json for descriptions:', err.message);
+}
+
+// Recipe metadata: persists user-chosen category + description across loads
+const RECIPE_META_PATH = path.join(RECIPES_DIR, '_recipe-meta.json');
+const LEGACY_META_PATH = path.join(RECIPES_DIR, '_category-meta.json');
+
+async function loadRecipeMeta() {
+    try {
+        const raw = await fs.readFile(RECIPE_META_PATH, 'utf-8');
+        return JSON.parse(raw);
+    } catch {
+        // Migrate from legacy _category-meta.json if it exists
+        try {
+            const legacy = JSON.parse(await fs.readFile(LEGACY_META_PATH, 'utf-8'));
+            const migrated = {};
+            for (const [name, val] of Object.entries(legacy)) {
+                migrated[name] = typeof val === 'string' ? { category: val } : val;
+            }
+            await saveRecipeMeta(migrated);
+            return migrated;
+        } catch { return {}; }
+    }
+}
+
+async function saveRecipeMeta(meta) {
+    await fs.writeFile(RECIPE_META_PATH, JSON.stringify(meta, null, 2), 'utf-8');
+}
+/**
+ * Derive a recipe category from its name using keyword matching.
+ * Returns 'Vegetables' as fallback when no keyword matches.
+ */
+function deriveCategory(name) {
+    const lowerName = (name || '').toLowerCase();
+
+    if (lowerName.startsWith('microgreen')) return 'Microgreens';
+    if (lowerName.startsWith('sprout')) return 'Sprouts';
+
+    if (lowerName.includes('basil') || lowerName.includes('cilantro') ||
+        lowerName.includes('parsley') || lowerName.includes('thyme') ||
+        lowerName.includes('oregano') || lowerName.includes('rosemary') ||
+        lowerName.includes('sage') || lowerName.includes('dill') ||
+        lowerName.includes('tarragon') || lowerName.includes('marjoram') ||
+        lowerName.includes('mint') || lowerName.includes('chervil') ||
+        lowerName.includes('lovage') || lowerName.includes('lemon balm') ||
+        lowerName.includes('sorrel')) return 'Herbs';
+
+    if (lowerName.includes('lettuce') || lowerName.includes('arugula') ||
+        lowerName.includes('spinach') || lowerName.includes('kale') ||
+        lowerName.includes('chard') || lowerName.includes('endive') ||
+        lowerName.includes('escarole') || lowerName.includes('frisée') ||
+        lowerName.includes('romaine') || lowerName.includes('oakleaf') ||
+        lowerName.includes('butterhead') || lowerName.includes('pelleted') ||
+        lowerName.includes('eazyleaf') || lowerName.includes('little gem') ||
+        lowerName.includes('watercress') || lowerName.includes('mizuna') ||
+        lowerName.includes('tatsoi') || lowerName.includes('pak choi') ||
+        lowerName.includes('komatsuna') ||
+        lowerName.includes('amaze') || lowerName.includes('ilema') ||
+        lowerName.includes('spretnak') || lowerName.includes('alkindus')) return 'Leafy Greens';
+
+    if (lowerName.includes('tomato') || lowerName.includes('boy') ||
+        lowerName.includes('brandywine') || lowerName.includes('celebrity') ||
+        lowerName.includes('heatmaster') || lowerName.includes('marzano') ||
+        lowerName.includes('gold')) return 'Tomatoes';
+
+    if (lowerName.includes('strawberry') || lowerName.includes('albion') ||
+        lowerName.includes('chandler') || lowerName.includes('eversweet') ||
+        lowerName.includes('mara') || lowerName.includes('monterey') ||
+        lowerName.includes('ozark') || lowerName.includes('seascape') ||
+        lowerName.includes('sequoia') || lowerName.includes('tribute') ||
+        lowerName.includes('tristar') || lowerName.includes('fort laramie') ||
+        lowerName.includes('jewel')) return 'Berries';
+
+    return 'Vegetables';
 }
 
 /**
@@ -77,57 +173,20 @@ router.get('/', async (req, res) => {
         
         // Read all CSV files from recipes directory
         const files = await fs.readdir(RECIPES_DIR);
-        const recipeFiles = files.filter(f => f.endsWith('.csv'));
+        const recipeFiles = files.filter(f => f.endsWith('.csv') && !f.startsWith('_'));
+        
+        // Load persisted recipe metadata (category + description)
+        const recipeMeta = await loadRecipeMeta();
         
         // Load recipe details from CSV files
         const recipesPromises = recipeFiles.map(async file => {
             // Remove "-Table 1.csv" suffix
-            const name = file.replace(/-Table 1\.csv$/, '');
+            const originalName = file.replace(/-Table 1\.csv$/, '');
             
-            // Determine category based on name
-            let category = 'Vegetables';
-            const lowerName = name.toLowerCase();
-            
-            if (lowerName.startsWith('microgreen')) {
-                category = 'Microgreens';
-            } else if (lowerName.startsWith('sprout')) {
-                category = 'Sprouts';
-            } else if (lowerName.includes('basil') || lowerName.includes('cilantro') || 
-                lowerName.includes('parsley') || lowerName.includes('thyme') ||
-                lowerName.includes('oregano') || lowerName.includes('rosemary') ||
-                lowerName.includes('sage') || lowerName.includes('dill') ||
-                lowerName.includes('tarragon') || lowerName.includes('marjoram') ||
-                lowerName.includes('mint') || lowerName.includes('chervil') ||
-                lowerName.includes('lovage') || lowerName.includes('lemon balm') ||
-                lowerName.includes('sorrel')) {
-                category = 'Herbs';
-            } else if (lowerName.includes('lettuce') || lowerName.includes('arugula') ||
-                       lowerName.includes('spinach') || lowerName.includes('kale') ||
-                       lowerName.includes('chard') || lowerName.includes('endive') ||
-                       lowerName.includes('escarole') || lowerName.includes('frisée') ||
-                       lowerName.includes('romaine') || lowerName.includes('oakleaf') ||
-                       lowerName.includes('butterhead') || lowerName.includes('pelleted') ||
-                       lowerName.includes('eazyleaf') || lowerName.includes('little gem') ||
-                       lowerName.includes('watercress') || lowerName.includes('mizuna') ||
-                       lowerName.includes('tatsoi') || lowerName.includes('pak choi') ||
-                       lowerName.includes('komatsuna') ||
-                       lowerName.includes('amaze') || lowerName.includes('ilema') ||
-                       lowerName.includes('spretnak')) {
-                category = 'Leafy Greens';
-            } else if (lowerName.includes('tomato') || lowerName.includes('boy') ||
-                       lowerName.includes('brandywine') || lowerName.includes('celebrity') ||
-                       lowerName.includes('heatmaster') || lowerName.includes('marzano') ||
-                       lowerName.includes('gold')) {
-                category = 'Tomatoes';
-            } else if (lowerName.includes('strawberry') || lowerName.includes('albion') ||
-                       lowerName.includes('chandler') || lowerName.includes('eversweet') ||
-                       lowerName.includes('mara') || lowerName.includes('monterey') ||
-                       lowerName.includes('ozark') || lowerName.includes('seascape') ||
-                       lowerName.includes('sequoia') || lowerName.includes('tribute') ||
-                       lowerName.includes('tristar') || lowerName.includes('fort laramie') ||
-                       lowerName.includes('jewel')) {
-                category = 'Berries';
-            }
+            // Use persisted category if available, otherwise derive from name
+            const meta = recipeMeta[originalName] || {};
+            const category = meta.category || deriveCategory(meta.displayName || originalName);
+            const name = meta.displayName || originalName;
             
             // Parse CSV to get schedule data
             try {
@@ -139,7 +198,7 @@ router.get('/', async (req, res) => {
                     name: name,
                     category: category,
                     file: file,
-                    description: cropDescriptions[name.toLowerCase()] || `Growing recipe for ${name}`,
+                    description: meta.description || cropDescriptions[originalName.toLowerCase()] || `Growing recipe for ${name}`,
                     total_days: recipeData.totalDays,
                     schedule_length: recipeData.phases.length,
                     data: {
@@ -154,7 +213,7 @@ router.get('/', async (req, res) => {
                     name: name,
                     category: category,
                     file: file,
-                    description: cropDescriptions[name.toLowerCase()] || `Growing recipe for ${name}`,
+                    description: meta.description || cropDescriptions[originalName.toLowerCase()] || `Growing recipe for ${name}`,
                     total_days: 0,
                     schedule_length: 0,
                     data: null
@@ -227,13 +286,21 @@ router.get('/:id', async (req, res) => {
         const recipeData = await parseRecipeCSV(filePath);
         
         // Extract recipe name
-        const name = filename.replace(/-Table 1\.csv$/, '');
+        const originalName = filename.replace(/-Table 1\.csv$/, '');
+        
+        // Resolve category: persisted override > name derivation
+        const recipeMeta = await loadRecipeMeta();
+        const meta = recipeMeta[originalName] || {};
+        const category = meta.category || deriveCategory(meta.displayName || originalName);
+        const name = meta.displayName || originalName;
         
         res.json({
             success: true,
             recipe: {
                 id: id,
                 name: name,
+                category: category,
+                description: meta.description || cropDescriptions[originalName.toLowerCase()] || `Growing recipe for ${name}`,
                 table_name: recipeData.tableName,
                 headers: recipeData.headers,
                 phases: recipeData.phases,
@@ -347,12 +414,22 @@ router.post('/', async (req, res) => {
         const csv = scheduleToCsv(safeName, data.schedule);
         await fs.writeFile(filePath, csv, 'utf-8');
 
+        // Persist user-chosen category + description
+        const resolvedCategory = category || deriveCategory(safeName);
+        if (category || description) {
+            const recipeMeta = await loadRecipeMeta();
+            recipeMeta[safeName] = recipeMeta[safeName] || {};
+            if (category) recipeMeta[safeName].category = category;
+            if (description) recipeMeta[safeName].description = description;
+            await saveRecipeMeta(recipeMeta);
+        }
+
         res.json({
             success: true,
             recipe: {
                 id: `${safeName}-Table 1`,
                 name: safeName,
-                category: category || 'Vegetables',
+                category: resolvedCategory,
                 file: filename,
                 total_days: data.schedule.length
             }
@@ -388,26 +465,26 @@ router.put('/:id', async (req, res) => {
             return res.status(404).json({ success: false, error: 'Recipe not found' });
         }
 
-        const recipeName = (name || id).replace(/-Table 1$/, '');
-        const csv = scheduleToCsv(recipeName, data.schedule);
+        const originalName = id.replace(/-Table 1$/, '');
+        const csv = scheduleToCsv(originalName, data.schedule);
         await fs.writeFile(filePath, csv, 'utf-8');
 
-        // If name changed, rename the file
-        if (name) {
-            const safeName = sanitizeFilename(name);
-            const newFilename = `${safeName}-Table 1.csv`;
-            if (newFilename !== filename) {
-                const newPath = path.join(RECIPES_DIR, newFilename);
-                await fs.rename(filePath, newPath);
-            }
-        }
+        // Persist display name, category, and description (CSV file stays unchanged)
+        const recipeMeta = await loadRecipeMeta();
+        recipeMeta[originalName] = recipeMeta[originalName] || {};
+        if (name && name !== originalName) recipeMeta[originalName].displayName = name;
+        if (category) recipeMeta[originalName].category = category;
+        if (description) recipeMeta[originalName].description = description;
+        await saveRecipeMeta(recipeMeta);
+
+        const resolvedCategory = recipeMeta[originalName].category || category || deriveCategory(name || originalName);
 
         res.json({
             success: true,
             recipe: {
                 id: id,
-                name: recipeName,
-                category: category || 'Vegetables',
+                name: recipeMeta[originalName].displayName || originalName,
+                category: resolvedCategory,
                 file: filename,
                 total_days: data.schedule.length
             }

@@ -740,19 +740,26 @@
       </div>
       <div id="saladmixView" class="inventory-view">
         <div class="manual-inv-panel">
-          <p style="color:#94a3b8; margin-bottom:1rem;">List salad mixes for wholesale. Select a mix template defined by the admin and enter the quantity in lbs you want to list. Pricing is calculated as a weighted average of component wholesale prices.</p>
-          <form id="mixEntryForm" class="manual-entry-form" onsubmit="submitMixEntry(event)" style="display:grid;grid-template-columns:1fr 120px auto;gap:12px;align-items:end;margin-bottom:1.5rem;">
-            <div>
-              <label style="display:block;margin-bottom:4px;font-weight:600;color:#e2e8f0;">Mix Template</label>
-              <select id="mixTemplateSelect" required style="width:100%;padding:10px;border:1px solid #334155;border-radius:8px;background:#1e293b;color:#e2e8f0;">
-                <option value="">Loading mixes...</option>
-              </select>
+          <p style="color:#94a3b8; margin-bottom:1rem;">List salad mixes for wholesale. Select a mix template, customize crop choices per slot if desired, and enter the quantity in lbs. Pricing is calculated as a weighted average of component wholesale prices.</p>
+          <form id="mixEntryForm" class="manual-entry-form" onsubmit="submitMixEntry(event)" style="margin-bottom:1.5rem;">
+            <div style="display:grid;grid-template-columns:1fr 120px auto;gap:12px;align-items:end;margin-bottom:12px;">
+              <div>
+                <label style="display:block;margin-bottom:4px;font-weight:600;color:#e2e8f0;">Mix Template</label>
+                <select id="mixTemplateSelect" required onchange="onMixTemplateSelected()" style="width:100%;padding:10px;border:1px solid #334155;border-radius:8px;background:#1e293b;color:#e2e8f0;">
+                  <option value="">Loading mixes...</option>
+                </select>
+              </div>
+              <div>
+                <label style="display:block;margin-bottom:4px;font-weight:600;color:#e2e8f0;">Quantity (lbs)</label>
+                <input type="number" id="mixQuantityLbs" min="0.1" step="0.1" required placeholder="lbs" style="width:100%;padding:10px;border:1px solid #334155;border-radius:8px;background:#1e293b;color:#e2e8f0;">
+              </div>
+              <button type="submit" class="add-manual-btn" style="padding:10px 20px;background:#22c55e;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600;">Add Mix</button>
             </div>
-            <div>
-              <label style="display:block;margin-bottom:4px;font-weight:600;color:#e2e8f0;">Quantity (lbs)</label>
-              <input type="number" id="mixQuantityLbs" min="0.1" step="0.1" required placeholder="lbs" style="width:100%;padding:10px;border:1px solid #334155;border-radius:8px;background:#1e293b;color:#e2e8f0;">
+            <!-- Component customization panel (shows when a template is selected) -->
+            <div id="mixComponentPanel" style="display:none;background:#0f172a;border:1px solid #334155;border-radius:8px;padding:16px;margin-bottom:8px;">
+              <p style="margin:0 0 10px;font-weight:600;color:#e2e8f0;font-size:0.95rem;">Component Slots <span style="font-weight:400;color:#94a3b8;font-size:0.85rem;">-- click Swap to choose an alternative crop</span></p>
+              <div id="mixComponentSlots"></div>
             </div>
-            <button type="submit" class="add-manual-btn" style="padding:10px 20px;background:#22c55e;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600;">Add Mix</button>
           </form>
           <table class="inventory-table" style="width:100%;border-collapse:collapse;">
             <thead><tr style="border-bottom:1px solid #334155;">
@@ -773,11 +780,16 @@
   <script>
     // Wrap in IIFE to prevent API_BASE conflicts when loaded in iframe
     (function() {
+      // Lookup maps populated from crop-pricing API (displayName & description from recipe-meta)
+      const _cropDisplayNames = {};  // raw crop name -> curated displayName
+      const _cropDescriptions = {};  // raw crop name -> description
+
       /**
-       * Extract display name from plan ID — delegates to cropUtils (Phase 2b)
+       * Extract display name from plan ID — checks recipe-meta first, falls back to cropUtils
        */
       function extractCropDisplayName(planId) {
-        return (window.cropUtils && cropUtils.planIdToCropName(planId)) || 'Unknown';
+        const rawName = (window.cropUtils && cropUtils.planIdToCropName(planId)) || 'Unknown';
+        return _cropDisplayNames[rawName] || rawName;
       }
 
       // Use current server origin for API calls (works on localhost and AWS)
@@ -996,7 +1008,10 @@
 
         // Calculate unique crops: tray groups + manual/custom DB entries
         // Guard: only call extractCropDisplayName when plan is truthy to avoid 'Unknown' for empty farms
-        const uniqueCrops = new Set(groupsData.map(g => g.crop || (g.plan ? extractCropDisplayName(g.plan) : '')).filter(Boolean));
+        const uniqueCrops = new Set(groupsData.map(g => {
+          const raw = g.crop || (g.plan ? extractCropDisplayName(g.plan) : '');
+          return _cropDisplayNames[raw] || raw;
+        }).filter(Boolean));
         // Add manual and custom entry crop names to the unique count
         dbInventoryProducts.forEach(p => {
           if (p.product_name && (p.inventory_source === 'manual' || p.inventory_source === 'custom' || p.inventory_source === 'hybrid' || p.is_custom)) {
@@ -2262,10 +2277,12 @@
     // ═══════════════════════════════════════════════════════════════════════
 
     let _mixTemplates = [];
+    let _mixAlternatives = {}; // keyed by template id -> { components, alternatives }
+    let _mixOverrides = {}; // keyed by component id -> chosen crop name
 
     async function loadMixTemplates() {
       try {
-        const resp = await fetchWithFarmAuth(API_BASE + '/api/admin/salad-mixes');
+        const resp = await fetchWithFarmAuth(API_BASE + '/api/farm/salad-mixes');
         if (!resp.ok) throw new Error('HTTP ' + resp.status);
         const data = await resp.json();
         _mixTemplates = (data.mixes || []).filter(m => m.status === 'active');
@@ -2275,13 +2292,139 @@
         } else {
           sel.innerHTML = '<option value="">-- Select a mix --</option>' +
             _mixTemplates.map(m => {
-              const comps = (m.components || []).map(c => c.product_name + ' ' + (parseFloat(c.ratio)*100).toFixed(0) + '%').join(', ');
+              const comps = (m.components || []).map(c => {
+                const displayCrop = c.farm_substitute || c.product_name;
+                return displayCrop + ' ' + (parseFloat(c.ratio)*100).toFixed(0) + '%';
+              }).join(', ');
               return `<option value="${m.id}">${escHtml(m.name)} (${comps})</option>`;
             }).join('');
+        }
+        // Init overrides from server data
+        _mixOverrides = {};
+        for (const m of _mixTemplates) {
+          for (const c of (m.components || [])) {
+            if (c.farm_substitute) _mixOverrides[c.id] = c.farm_substitute;
+          }
         }
       } catch (err) {
         console.error('[MixInventory] Failed to load templates:', err.message);
         document.getElementById('mixTemplateSelect').innerHTML = '<option value="">Failed to load mixes</option>';
+      }
+    }
+
+    async function onMixTemplateSelected() {
+      const sel = document.getElementById('mixTemplateSelect');
+      const templateId = sel.value;
+      const panel = document.getElementById('mixComponentPanel');
+      const slotsContainer = document.getElementById('mixComponentSlots');
+      if (!templateId) {
+        panel.style.display = 'none';
+        slotsContainer.innerHTML = '';
+        return;
+      }
+      const mix = _mixTemplates.find(m => String(m.id) === String(templateId));
+      if (!mix || !mix.components || mix.components.length === 0) {
+        panel.style.display = 'none';
+        return;
+      }
+      panel.style.display = 'block';
+
+      // Fetch alternatives for this template
+      try {
+        const resp = await fetchWithFarmAuth(API_BASE + '/api/farm/salad-mixes/' + templateId + '/alternatives');
+        if (resp.ok) {
+          const data = await resp.json();
+          _mixAlternatives[templateId] = data;
+        }
+      } catch (err) {
+        console.warn('[MixInventory] Could not load alternatives:', err.message);
+      }
+
+      renderComponentSlots(mix);
+    }
+
+    function renderComponentSlots(mix) {
+      const slotsContainer = document.getElementById('mixComponentSlots');
+      const altData = _mixAlternatives[mix.id] || {};
+      const alts = altData.alternatives || {};
+
+      slotsContainer.innerHTML = (mix.components || []).map(c => {
+        const pct = (parseFloat(c.ratio) * 100).toFixed(0);
+        const currentCrop = _mixOverrides[c.id] || c.product_name;
+        const isOverridden = _mixOverrides[c.id] && _mixOverrides[c.id] !== c.product_name;
+        const roleName = c.trait_role || 'Slot';
+        const traits = [c.color_profile, c.taste_profile, c.texture_profile].filter(Boolean).join(' / ');
+        const alternatives = alts[c.id] || [];
+        const altOptions = alternatives.map(a =>
+          `<option value="${escHtml(a.crop_name)}" ${a.crop_name === currentCrop ? 'selected' : ''}>${escHtml(a.crop_name)} [${a.color_profile}/${a.taste_profile}/${a.texture_profile}]</option>`
+        ).join('');
+
+        return `<div style="display:grid;grid-template-columns:140px 1fr auto;gap:8px;padding:8px 0;border-bottom:1px solid #1e293b;align-items:center;">
+          <div>
+            <div style="font-weight:600;color:#e2e8f0;font-size:0.9rem;">${escHtml(roleName)} (${pct}%)</div>
+            ${traits ? `<div style="color:#64748b;font-size:0.75rem;">${escHtml(traits)}</div>` : ''}
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="color:${isOverridden ? '#22c55e' : '#e2e8f0'};font-weight:500;" id="mixSlotCrop-${c.id}">${escHtml(currentCrop)}</span>
+            ${isOverridden ? `<span style="color:#64748b;font-size:0.8em;text-decoration:line-through;">${escHtml(c.product_name)}</span>` : ''}
+          </div>
+          <div>
+            ${alternatives.length > 0 ? `
+              <select onchange="swapMixCrop(${c.id}, ${mix.id}, this.value)" style="padding:6px 8px;border:1px solid #334155;border-radius:6px;background:#1e293b;color:#e2e8f0;font-size:0.85em;max-width:200px;">
+                <option value="${escHtml(c.product_name)}" ${!isOverridden ? 'selected' : ''}>Default: ${escHtml(c.product_name)}</option>
+                ${altOptions}
+              </select>
+            ` : '<span style="color:#475569;font-size:0.8em;">No alternatives</span>'}
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    async function swapMixCrop(componentId, templateId, newCrop) {
+      const mix = _mixTemplates.find(m => m.id === templateId);
+      if (!mix) return;
+      const comp = mix.components.find(c => c.id === componentId);
+      if (!comp) return;
+
+      if (newCrop === comp.product_name) {
+        // Revert to default
+        delete _mixOverrides[componentId];
+      } else {
+        _mixOverrides[componentId] = newCrop;
+      }
+
+      // Save override to server
+      try {
+        const overrides = [];
+        for (const c of mix.components) {
+          if (_mixOverrides[c.id]) {
+            overrides.push({ component_id: c.id, substitute_crop: _mixOverrides[c.id] });
+          }
+        }
+        await fetchWithFarmAuth(API_BASE + '/api/farm/salad-mixes/overrides', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mix_template_id: templateId, overrides })
+        });
+      } catch (err) {
+        console.warn('[MixInventory] Override save failed:', err.message);
+      }
+
+      // Re-render the slots
+      renderComponentSlots(mix);
+      // Update the dropdown option text
+      updateMixDropdownText(mix);
+    }
+
+    function updateMixDropdownText(mix) {
+      const sel = document.getElementById('mixTemplateSelect');
+      const opt = sel.querySelector(`option[value="${mix.id}"]`);
+      if (opt) {
+        const comps = (mix.components || []).map(c => {
+          const displayCrop = _mixOverrides[c.id] || c.product_name;
+          return displayCrop + ' ' + (parseFloat(c.ratio)*100).toFixed(0) + '%';
+        }).join(', ');
+        opt.textContent = `${mix.name} (${comps})`;
       }
     }
 
@@ -2299,7 +2442,14 @@
         }
         tbody.innerHTML = items.map(item => {
           const sd = item.source_data || {};
-          const comps = (sd.components || []).map(c => c.product_name + ' (' + (parseFloat(c.ratio)*100).toFixed(0) + '%)').join(', ');
+          const comps = (sd.components || []).map(c => {
+            const name = c.substitute || c.product_name;
+            const isSwapped = c.substitute && c.substitute !== c.product_name;
+            const pct = (parseFloat(c.ratio)*100).toFixed(0);
+            return isSwapped
+              ? `<span style="color:#22c55e;">${escHtml(name)}</span> <span style="color:#475569;text-decoration:line-through;font-size:0.85em;">${escHtml(c.product_name)}</span> (${pct}%)`
+              : `${escHtml(name)} (${pct}%)`;
+          }).join(', ');
           return `<tr>
             <td style="padding:8px;font-weight:600;">${escHtml(item.product_name)}</td>
             <td style="padding:8px;color:#94a3b8;font-size:0.9em;">${comps || '-'}</td>
@@ -2322,11 +2472,25 @@
       if (!templateId || !qtyLbs || qtyLbs <= 0) {
         alert('Select a mix template and enter a quantity in lbs.'); return;
       }
+      // Build component overrides for submission
+      const mix = _mixTemplates.find(m => String(m.id) === String(templateId));
+      const componentOverrides = {};
+      if (mix) {
+        for (const c of mix.components) {
+          if (_mixOverrides[c.id]) {
+            componentOverrides[c.id] = _mixOverrides[c.id];
+          }
+        }
+      }
       try {
         const resp = await fetchWithFarmAuth(API_BASE + '/api/inventory/mix', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ mix_template_id: parseInt(templateId, 10), quantity_lbs: qtyLbs })
+          body: JSON.stringify({
+            mix_template_id: parseInt(templateId, 10),
+            quantity_lbs: qtyLbs,
+            component_overrides: componentOverrides
+          })
         });
         const data = await resp.json();
         if (data.error) throw new Error(data.error);
@@ -2359,6 +2523,8 @@
 
     window.submitMixEntry = submitMixEntry;
     window.removeMixInventory = removeMixInventory;
+    window.onMixTemplateSelected = onMixTemplateSelected;
+    window.swapMixCrop = swapMixCrop;
 
     // Seed product name datalist from crop pricing API (all farm recipes)
     let _cropCategories = {};
@@ -2370,6 +2536,11 @@
         const data = await resp.json();
         const crops = data.pricing?.crops || [];
         const names = crops.map(c => c.crop).filter(Boolean).sort();
+        // Populate displayName & description lookup maps from recipe-meta
+        crops.forEach(c => {
+          if (c.displayName) _cropDisplayNames[c.crop] = c.displayName;
+          if (c.description) _cropDescriptions[c.crop] = c.description;
+        });
         const dl = document.getElementById('crop-names-list');
         dl.innerHTML = names.map(n => `<option value="${escHtml(n)}">`).join('');
         // Build category lookup for auto-fill from crop name patterns

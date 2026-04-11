@@ -76,7 +76,7 @@ async function logDecision(toolName, params, result) {
 }
 
 // ── Confirmation Pattern Detection ─────────────────────────────────
-const CONFIRM_PATTERNS = /^(confirm|do it|go ahead|proceed|approve|execute|run it)$/i;
+const CONFIRM_PATTERNS = /^(yes|yeah|yep|yup|confirm|do it|go ahead|proceed|approve|execute|run it|create it|save it|do that|make it|sounds good|looks good)$/i;
 
 async function getConversation(convId, adminId) {
   const cached = conversations.get(convId);
@@ -354,6 +354,18 @@ You have ${Object.keys(ADMIN_TOOL_CATALOG).length} tools available across these 
 - LE Diagnostics (read-only): LE health checks, service connectivity, inventory inspection, source code review, config + permission audit, git history, deploy status
 - Learning: knowledge base, outcome tracking, pattern recognition, alert accuracy
 - Autonomy: trust evaluation, domain ownership, shadow mode logging
+- Crop & Inventory Management: view farm product catalogs, update crop prices and descriptions for any farm, add manual inventory, create custom products per farm, manage GreenReach network salad mix templates (create, update, list)
+
+## Crop & Inventory Management
+You can manage crops and inventory for any farm in the network:
+- **View catalog**: Use \`get_farm_product_catalog\` to list all inventory items for a farm — crops, custom products, salad mixes with prices, quantities, and descriptions.
+- **Update pricing**: Use \`update_farm_crop_price\` to set retail and/or wholesale prices for a crop at a specific farm.
+- **Update descriptions**: Use \`update_farm_crop_description\` to set or update the buyer-facing product description for any crop or product at a specific farm.
+- **Add inventory**: Use \`add_farm_manual_inventory\` to set manual_quantity_lbs for a crop at a farm (creates the row if it does not exist).
+- **Custom products**: Use \`create_farm_custom_product\` to create value-added goods, merchandise, or non-crop products for a specific farm.
+- **Salad mix templates**: Use \`list_salad_mix_templates\`, \`create_salad_mix_template\`, and \`update_salad_mix_template\` to manage the GreenReach network mix library. Templates define the crop blend and ratios — farms then add inventory quantities from these templates.
+- Always call \`get_farm_product_catalog\` first to confirm a product exists before updating it.
+- Price and description updates are quick-confirm; creating new products and templates requires explicit confirmation.
 
 Always use tools to verify data before answering. Never fabricate numbers.
 
@@ -783,7 +795,7 @@ router.post('/chat', async (req, res) => {
 
       let result;
       try {
-        result = await chatWithGemini(systemPrompt, summaryMessages, tools, convId, adminId);
+        result = await chatWithGemini(systemPrompt, summaryMessages, [], convId, adminId);
       } catch {
         result = { reply: actionResult.ok !== false ? `Action "${pending.tool}" completed successfully.` : `Action "${pending.tool}" failed: ${actionResult.error}`,
           toolCalls: [{ tool: pending.tool, params: pending.params, success: actionResult.ok !== false }],

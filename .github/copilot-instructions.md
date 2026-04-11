@@ -29,6 +29,17 @@ The farm runs entirely on Google Cloud Run. The Light Engine Cloud Run service I
 8. **AWS/EB is DEPRECATED.** Do not reference EB environments, use `eb deploy`, or use any `aws elasticbeanstalk` commands. All infrastructure is Google Cloud Run. See `.github/CLOUD_ARCHITECTURE.md`.
 9. **GCP Project**: `project-5d00790f-13a9-4637-a40`, region `us-east1`. Artifact Registry: `us-east1-docker.pkg.dev/project-5d00790f-13a9-4637-a40/greenreach`.
 
+### Recent Fixes (Apr 10, 2026)
+
+34. **Trait-Based Salad Mix System (deployed greenreach-central-00113-7r9, light-engine-00069-sqt)**
+    - **401 Fix**: Farm inventory page called `/api/admin/salad-mixes` (admin-auth-protected). Created new farm-accessible endpoint `/api/farm/salad-mixes` (no admin auth). Added LE proxy to forward requests to Central.
+    - **Trait-Based Components**: Admin now defines mix component slots with trait metadata (role name + color/taste/texture profiles) instead of just specific crop names. Farms can substitute crops within matching trait profiles.
+    - **DB Schema**: Migration 058 adds `trait_role`, `color_profile`, `taste_profile`, `texture_profile` columns to `mix_components`. New `crop_traits` table (29 salad-eligible crops seeded). New `farm_mix_overrides` table for per-farm crop substitutions.
+    - **New Central Endpoint**: `/api/farm/salad-mixes` (GET list, GET :id/alternatives, PUT /overrides, DELETE /overrides/:id, GET /crop-traits). File: `greenreach-central/routes/farm-salad-mixes.js` (new).
+    - **Admin UI**: Component rows now include trait role input + color/taste/texture dropdowns. Table shows trait tags per component.
+    - **Farm UI**: Template selector now shows component panel with swap dropdowns. Each slot shows default crop + alternatives filtered by matching traits (2-of-3 trait match). Overrides saved to server and remembered per farm.
+    - Files changed: `greenreach-central/config/database.js`, `greenreach-central/routes/admin-salad-mixes.js`, `greenreach-central/routes/farm-salad-mixes.js` (new), `greenreach-central/server.js`, `greenreach-central/public/central-admin.js`, `greenreach-central/public/GR-central-admin.html`, `public/views/farm-inventory.html`, `greenreach-central/public/views/farm-inventory.html`, `server-foxtrot.js`
+
 ### Recent Fixes (Apr 9-10, 2026)
 
 28. **Wholesale Admin Dashboard Data Accuracy (deployed greenreach-central-00081 through 00084, light-engine-00042 through 00046)**

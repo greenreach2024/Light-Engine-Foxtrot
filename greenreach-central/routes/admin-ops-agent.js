@@ -247,6 +247,46 @@ async function pushWatchlistToLeam(farmId) {
 
 // ── Tool Catalog ──────────────────────────────────────────────
 
+// Parse component strings from LLM in various formats into [{crop, ratio}]
+function parseComponents(input) {
+  if (!input) return null;
+  // Already an array
+  if (Array.isArray(input)) return input.length > 0 ? input : null;
+  if (typeof input !== 'string') return null;
+  const str = input.trim();
+  if (!str) return null;
+
+  // Try JSON parse first
+  try {
+    const parsed = JSON.parse(str);
+    if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+  } catch { /* not JSON, try text formats */ }
+
+  // Format: "CropName:ratio, CropName:ratio" (colon-separated)
+  if (str.includes(':')) {
+    const parts = str.split(',').map(s => s.trim()).filter(Boolean);
+    const result = parts.map(p => {
+      const [crop, r] = p.split(':').map(s => s.trim());
+      return { crop, ratio: Number(r) || 0 };
+    }).filter(c => c.crop);
+    if (result.length > 0) return result;
+  }
+
+  // Format: "40% Red Leaf Lettuce, 35% Green Leaf Lettuce"
+  const pctParts = str.split(',').map(s => s.trim()).filter(Boolean);
+  const pctResult = pctParts.map(p => {
+    const m = p.match(/^(\d+(?:\.\d+)?)%?\s+(.+)$/);
+    if (m) return { crop: m[2].trim(), ratio: Number(m[1]) };
+    // "Red Leaf Lettuce 40%"
+    const m2 = p.match(/^(.+?)\s+(\d+(?:\.\d+)?)%?$/);
+    if (m2) return { crop: m2[1].trim(), ratio: Number(m2[2]) };
+    return null;
+  }).filter(Boolean);
+  if (pctResult.length > 0) return pctResult;
+
+  return null;
+}
+
 export const ADMIN_TOOL_CATALOG = {
 
   // ── System Health & Monitoring ──
@@ -4897,6 +4937,291 @@ export const ADMIN_TOOL_CATALOG = {
         return { ok: false, error: err.message };
       }
     }
+  },
+
+  // ── Crop & Inventory Management ──
+
+  'get_farm_product_catalog': {
+    description: 'List inventory items and products for a specific farm — crops, custom products, and salad mixes with prices, quantities, and descriptions. Use this before updating prices or descriptions to confirm the item exists.',
+    category: 'read',
+    required: ['farm_id'],
+    optional: ['category', 'limit'],
+    handler: async (params) => {
+      try {
+        if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+        const limit = parseInt(params.limit, 10) || 100;
+        let sql = `SELECT product_name, sku, category, description, retail_price, wholesale_price,
+                          quantity_available, unit, inventory_source, is_custom, status, updated_at
+                   FROM farm_inventory WHERE farm_id = $1 AND status != 'inactive'`;
+        const values = [params.farm_id];
+        let idx = 2;
+        if (params.category) { sql += ` AND LOWER(category) = LOWER($${idx++})`; values.push(params.category); }
+        sql += ` ORDER BY product_name LIMIT $${idx}`;
+        values.push(limit);
+        const result = await dbQuery(sql, values);
+        return { ok: true, farm_id: params.farm_id, count: result.rows.length, products: result.rows };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  'update_farm_crop_price': {
+    description: 'Update the retail and/or wholesale price for a crop or product at a specific farm. Prices are in CAD per unit. WRITE operation — confirm with admin first.',
+    category: 'write',
+    required: ['farm_id', 'crop_name'],
+    optional: ['retail_price', 'wholesale_price'],
+    handler: async (params) => {
+      try {
+        if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+        if (params.retail_price == null && params.wholesale_price == null) {
+          return { ok: false, error: 'At least one of retail_price or wholesale_price is required' };
+        }
+        const setClauses = ['updated_at = NOW()'];
+        const values = [params.farm_id, params.crop_name];
+        let idx = 3;
+        if (params.retail_price != null) { setClauses.push(`retail_price = $${idx++}`); values.push(Number(params.retail_price)); }
+        if (params.wholesale_price != null) { setClauses.push(`wholesale_price = $${idx++}`); values.push(Number(params.wholesale_price)); }
+        setClauses.push('price = COALESCE(wholesale_price, retail_price)');
+        const result = await dbQuery(
+          `UPDATE farm_inventory SET ${setClauses.join(', ')}
+           WHERE farm_id = $1 AND LOWER(product_name) = LOWER($2) AND status != 'inactive'
+           RETURNING product_name, retail_price, wholesale_price, unit`,
+          values
+        );
+        if (result.rowCount === 0) return { ok: false, error: `No product "${params.crop_name}" found at farm ${params.farm_id}` };
+        return { ok: true, message: `Price updated for "${result.rows[0].product_name}" at ${params.farm_id}.`, product: result.rows[0] };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  'update_farm_crop_description': {
+    description: 'Update the product description for a crop or product at a specific farm. Descriptions are shown to wholesale buyers in the marketplace catalog. WRITE operation — confirm with admin first.',
+    category: 'write',
+    required: ['farm_id', 'crop_name', 'description'],
+    optional: [],
+    handler: async (params) => {
+      try {
+        if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+        const description = String(params.description || '').slice(0, 2000);
+        let result = await dbQuery(
+          `UPDATE farm_inventory SET description = $1, updated_at = NOW()
+           WHERE farm_id = $2 AND LOWER(product_name) = LOWER($3) AND status != 'inactive'
+           RETURNING product_name, description`,
+          [description, params.farm_id, params.crop_name]
+        );
+        if (result.rowCount === 0) {
+          result = await dbQuery(
+            `UPDATE farm_inventory SET description = $1, updated_at = NOW()
+             WHERE farm_id = $2 AND LOWER(product_name) LIKE LOWER($3) AND status != 'inactive'
+             RETURNING product_name, description`,
+            [description, params.farm_id, `%${params.crop_name}%`]
+          );
+        }
+        if (result.rowCount === 0) return { ok: false, error: `No product "${params.crop_name}" found at farm ${params.farm_id}` };
+        return { ok: true, message: `Description updated for "${result.rows[0].product_name}" at ${params.farm_id}.`, updated_count: result.rowCount };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  'add_farm_manual_inventory': {
+    description: 'Add or update manual inventory weight (lbs) for a crop at a specific farm. Creates the inventory row if it does not exist. WRITE operation — confirm with admin first.',
+    category: 'write',
+    required: ['farm_id', 'crop_name', 'quantity_lbs'],
+    optional: ['retail_price', 'wholesale_price', 'category'],
+    handler: async (params) => {
+      try {
+        if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+        const farmId = params.farm_id;
+        const cropName = (params.crop_name || '').trim();
+        const quantityLbs = Number(params.quantity_lbs);
+        if (!cropName) return { ok: false, error: 'crop_name is required' };
+        if (isNaN(quantityLbs) || quantityLbs < 0) return { ok: false, error: 'quantity_lbs must be a non-negative number' };
+
+        const productId = cropName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+        const check = await dbQuery(
+          'SELECT product_id, COALESCE(auto_quantity_lbs, 0) AS auto_qty FROM farm_inventory WHERE farm_id = $1 AND product_id = $2',
+          [farmId, productId]
+        );
+
+        if (check.rows.length > 0) {
+          const autoQty = Number(check.rows[0].auto_qty);
+          const setClauses = [`manual_quantity_lbs = $3`, `quantity_available = $4`, `updated_at = NOW()`, `inventory_source = 'manual'`];
+          const values = [farmId, productId, quantityLbs, autoQty + quantityLbs];
+          let idx = 5;
+          if (params.retail_price != null) { setClauses.push(`retail_price = $${idx++}`); values.push(Number(params.retail_price)); }
+          if (params.wholesale_price != null) { setClauses.push(`wholesale_price = $${idx++}`); values.push(Number(params.wholesale_price)); }
+          await dbQuery(`UPDATE farm_inventory SET ${setClauses.join(', ')} WHERE farm_id = $1 AND product_id = $2`, values);
+        } else {
+          await dbQuery(
+            `INSERT INTO farm_inventory (farm_id, product_id, product_name, quantity, manual_quantity_lbs, quantity_available, unit, quantity_unit, inventory_source, retail_price, wholesale_price, category, status, created_at, updated_at)
+             VALUES ($1, $2, $3, $4, $4, $4, 'lb', 'lb', 'manual', $5, $6, $7, 'active', NOW(), NOW())`,
+            [farmId, productId, cropName, quantityLbs,
+             params.retail_price ? Number(params.retail_price) : null,
+             params.wholesale_price ? Number(params.wholesale_price) : null,
+             params.category || 'Leafy Greens']
+          );
+        }
+        return { ok: true, message: `Manual inventory set to ${quantityLbs} lbs of "${cropName}" at farm ${farmId}.` };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  'create_farm_custom_product': {
+    description: 'Create a custom (non-crop) product in a specific farm\'s inventory — value-added goods, merchandise, prepared foods, etc. WRITE operation — confirm with admin first.',
+    category: 'write',
+    required: ['farm_id', 'product_name'],
+    optional: ['category', 'description', 'wholesale_price', 'retail_price', 'quantity_available', 'unit', 'is_taxable', 'available_for_wholesale', 'variety'],
+    handler: async (params) => {
+      try {
+        if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+        const farmId = params.farm_id;
+        const productName = (params.product_name || '').trim();
+        if (!productName) return { ok: false, error: 'product_name is required' };
+        if (productName.length > 255) return { ok: false, error: 'product_name must be 255 chars or fewer' };
+
+        const farmShort = (farmId || 'FARM').replace(/^FARM-/, '').substring(0, 8);
+        const rand = Math.random().toString(36).substring(2, 10).toUpperCase();
+        const sku = `CUSTOM-${farmShort}-${rand}-${Date.now().toString(16).toUpperCase()}`;
+
+        const wholesalePrice = params.wholesale_price != null ? Number(params.wholesale_price) : null;
+        const retailPrice = params.retail_price != null ? Number(params.retail_price) : null;
+        const price = wholesalePrice != null ? wholesalePrice : retailPrice;
+
+        const result = await dbQuery(
+          `INSERT INTO farm_inventory (
+            farm_id, product_id, product_name, sku, sku_id, sku_name, category, variety,
+            description, is_taxable, is_custom,
+            wholesale_price, retail_price, price,
+            quantity_available, quantity, unit,
+            available_for_wholesale, inventory_source, status,
+            created_at, updated_at
+          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,TRUE,$11,$12,$13,$14,$15,$16,$17,'custom','active',NOW(),NOW())
+          RETURNING id, product_name, sku, category, wholesale_price, retail_price, quantity_available`,
+          [farmId, sku, productName, sku, sku, productName,
+           params.category || 'Custom', params.variety || null,
+           params.description ? String(params.description).slice(0, 2000) : null,
+           params.is_taxable !== false,
+           wholesalePrice, retailPrice, price,
+           Number(params.quantity_available) || 0,
+           Number(params.quantity_available) || 0,
+           params.unit || 'unit',
+           params.available_for_wholesale !== false]
+        );
+        return {
+          ok: true,
+          message: `Custom product "${productName}" created for farm ${farmId} (SKU: ${sku})`,
+          product: result.rows[0]
+        };
+      } catch (err) {
+        if (err.code === '23505') return { ok: false, error: 'SKU conflict — try again.' };
+        return { ok: false, error: err.message };
+      }
+    }
+  },
+
+  'list_salad_mix_templates': {
+    description: 'List all GreenReach network salad mix templates. Shows each template\'s name, description, status, and component crops with ratios. Filter by status (default: all).',
+    category: 'read',
+    required: [],
+    optional: ['status'],
+    handler: async (params) => {
+      try {
+        if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+        let sql = `SELECT mt.id, mt.name, mt.description, mt.status,
+                          json_agg(json_build_object('crop', mc.product_name, 'ratio', mc.ratio) ORDER BY mc.product_name) FILTER (WHERE mc.product_name IS NOT NULL) AS components
+                   FROM mix_templates mt
+                   LEFT JOIN mix_components mc ON mc.mix_template_id = mt.id`;
+        const values = [];
+        if (params.status) { sql += ' WHERE mt.status = $1'; values.push(params.status); }
+        sql += ' GROUP BY mt.id, mt.name, mt.description, mt.status ORDER BY mt.status, mt.name';
+        const result = await dbQuery(sql, values);
+        return { ok: true, templates: result.rows, count: result.rows.length };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  'create_salad_mix_template': {
+    description: 'Create a new GreenReach network salad mix template — defines a named multi-crop blend with component crops and ratios that farms can use to add inventory. Pass components as a JSON array of {crop, ratio} objects, e.g. [{"crop":"Red Leaf Lettuce","ratio":40},{"crop":"Green Leaf Lettuce","ratio":35}]. Ratios should sum to 100.',
+    category: 'write',
+    required: ['name', 'components'],
+    optional: ['description'],
+    handler: async (params) => {
+      try {
+        if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+        const name = (params.name || '').trim();
+        if (!name) return { ok: false, error: 'name is required' };
+
+        let components = parseComponents(params.components);
+        if (!components) return { ok: false, error: 'components must be a JSON array of {crop, ratio} objects, e.g. [{"crop":"Lettuce","ratio":50}]' };
+
+        const tmpl = await dbQuery(
+          `INSERT INTO mix_templates (name, description, status, created_at) VALUES ($1, $2, 'active', NOW()) RETURNING id, name`,
+          [name, params.description || null]
+        );
+        const templateId = tmpl.rows[0].id;
+
+        for (const comp of components) {
+          const cropName = (comp.crop || comp.product_name || '').trim();
+          if (cropName) {
+            await dbQuery(
+              `INSERT INTO mix_components (mix_template_id, product_name, ratio) VALUES ($1, $2, $3)`,
+              [templateId, cropName, Number(comp.ratio) || 0]
+            );
+          }
+        }
+
+        return {
+          ok: true,
+          message: `Salad mix template "${name}" created (id: ${templateId}) with ${components.length} component${components.length !== 1 ? 's' : ''}.`,
+          template: tmpl.rows[0]
+        };
+      } catch (err) {
+        if (err.code === '23505') return { ok: false, error: `A mix template named "${params.name}" already exists.` };
+        return { ok: false, error: err.message };
+      }
+    }
+  },
+
+  'update_salad_mix_template': {
+    description: 'Update an existing GreenReach salad mix template — rename it, change the description, update its status (active/inactive), or replace its component crops and ratios. If updating components, pass as a JSON array of {crop, ratio} objects.',
+    category: 'write',
+    required: ['template_id'],
+    optional: ['name', 'description', 'status', 'components'],
+    handler: async (params) => {
+      try {
+        if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+        const templateId = Number(params.template_id);
+        if (!templateId) return { ok: false, error: 'template_id is required' };
+        const check = await dbQuery('SELECT id FROM mix_templates WHERE id = $1', [templateId]);
+        if (check.rows.length === 0) return { ok: false, error: `Mix template id=${templateId} not found` };
+
+        const setClauses = [];
+        const values = [templateId];
+        let idx = 2;
+        if (params.name !== undefined) { setClauses.push(`name = $${idx++}`); values.push(String(params.name).trim()); }
+        if (params.description !== undefined) { setClauses.push(`description = $${idx++}`); values.push(params.description); }
+        if (params.status !== undefined) { setClauses.push(`status = $${idx++}`); values.push(params.status); }
+        if (setClauses.length > 0) {
+          await dbQuery(`UPDATE mix_templates SET ${setClauses.join(', ')} WHERE id = $1`, values);
+        }
+
+        if (params.components !== undefined) {
+          let components = parseComponents(params.components);
+          if (!components) return { ok: false, error: 'components must be a JSON array of {crop, ratio} objects' };
+          await dbQuery('DELETE FROM mix_components WHERE mix_template_id = $1', [templateId]);
+          for (const comp of components) {
+            const cropName = (comp.crop || comp.product_name || '').trim();
+            if (cropName) {
+              await dbQuery(
+                `INSERT INTO mix_components (mix_template_id, product_name, ratio) VALUES ($1, $2, $3)`,
+                [templateId, cropName, Number(comp.ratio) || 0]
+              );
+            }
+          }
+        }
+
+        return { ok: true, message: `Salad mix template id=${templateId} updated.` };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
   }
 
 };
@@ -4929,10 +5254,9 @@ function _leHeaders(extra = {}) {
 // ADMIN: Critical action — require admin to type the action name
 
 export const TRUST_TIERS = {
-  auto: new Set(['create_alert', 'acknowledge_alert', 'acknowledge_farm_alert', 'acknowledge_all_alerts', 'save_admin_memory', 'update_farm_notes', 'store_insight', 'record_outcome', 'rate_alert', 'log_shadow_decision', 'send_message_to_evie', 'record_recommendation_feedback', 'review_producer_applications']),
-  quick_confirm: new Set(['resolve_alert', 'resolve_farm_alert', 'resolve_all_alerts', 'classify_transaction', 'archive_insight', 'set_domain_ownership']),
-  confirm: new Set(['send_admin_email', 'send_sms', 'approve_producer_application', 'reject_producer_application']),
-  confirm: new Set(['send_admin_email', 'send_sms']),
+  auto: new Set(['create_alert', 'acknowledge_alert', 'acknowledge_farm_alert', 'acknowledge_all_alerts', 'save_admin_memory', 'update_farm_notes', 'store_insight', 'record_outcome', 'rate_alert', 'log_shadow_decision', 'send_message_to_evie', 'record_recommendation_feedback', 'review_producer_applications', 'create_salad_mix_template', 'update_salad_mix_template']),
+  quick_confirm: new Set(['resolve_alert', 'resolve_farm_alert', 'resolve_all_alerts', 'classify_transaction', 'archive_insight', 'set_domain_ownership', 'update_farm_crop_price', 'update_farm_crop_description', 'add_farm_manual_inventory']),
+  confirm: new Set(['send_admin_email', 'send_sms', 'approve_producer_application', 'reject_producer_application', 'create_farm_custom_product']),
   admin: new Set(['process_refund'])
 };
 

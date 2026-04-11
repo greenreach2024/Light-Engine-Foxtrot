@@ -3771,7 +3771,13 @@
                             <option value="">All Categories</option>
                             <option value="Leafy Greens">Leafy Greens</option>
                             <option value="Herbs">Herbs</option>
+                            <option value="Microgreens">Microgreens</option>
+                            <option value="Sprouts">Sprouts</option>
+                            <option value="Tomatoes">Tomatoes</option>
+                            <option value="Berries">Berries</option>
+                            <option value="Vegetables">Vegetables</option>
                             <option value="Fruiting Crops">Fruiting Crops</option>
+                            <option value="Other">Other</option>
                         </select>
                         <input type="text" id="recipe-search" placeholder="Search recipes..." onkeyup="filterRecipes()" style="padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-primary); width: 250px;">
                         <button class="btn-primary" onclick="openAddRecipeModal()">
@@ -3836,8 +3842,8 @@
                 </div>
                 <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:24px;">
                     <div class="kpi-card"><div class="kpi-label">Total Mixes</div><div class="kpi-value" id="salad-mixes-count">0</div></div>
-                    <div class="kpi-card"><div class="kpi-label">Min Components</div><div class="kpi-value">2</div></div>
-                    <div class="kpi-card"><div class="kpi-label">Max Components</div><div class="kpi-value">4</div></div>
+                    <div class="kpi-card"><div class="kpi-label">Trait Profiles</div><div class="kpi-value">Color / Taste / Texture</div></div>
+                    <div class="kpi-card"><div class="kpi-label">Components</div><div class="kpi-value">2-4 per mix</div></div>
                 </div>
                 <div class="card">
                     <div class="card-header">
@@ -3849,7 +3855,7 @@
                                 <tr>
                                     <th>Mix Name</th>
                                     <th>Description</th>
-                                    <th>Components (Ratio)</th>
+                                    <th>Components (Role / Traits / Ratio)</th>
                                     <th>Status</th>
                                     <th>Actions</th>
                                 </tr>
@@ -3884,6 +3890,7 @@
                     </div>
                     <div style="margin-bottom:12px;">
                         <label style="display:block;margin-bottom:4px;font-weight:600;">Components (2-4 greens, ratios must total 100%)</label>
+                        <p style="margin:0 0 8px;color:var(--text-secondary);font-size:0.85rem;">Each slot defines a role with trait tags. Farms can swap to any crop matching the same traits.</p>
                         <div id="mix-components-container"></div>
                         <button class="btn btn-sm" onclick="addMixComponentRow()" style="margin-top:4px;">+ Add Component</button>
                     </div>
@@ -5513,6 +5520,11 @@
                                     <select id="recipe-category" required style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary);">
                                         <option value="Leafy Greens">Leafy Greens</option>
                                         <option value="Herbs">Herbs</option>
+                                        <option value="Microgreens">Microgreens</option>
+                                        <option value="Sprouts">Sprouts</option>
+                                        <option value="Tomatoes">Tomatoes</option>
+                                        <option value="Berries">Berries</option>
+                                        <option value="Vegetables">Vegetables</option>
                                         <option value="Fruiting Crops">Fruiting Crops</option>
                                         <option value="Other">Other</option>
                                     </select>

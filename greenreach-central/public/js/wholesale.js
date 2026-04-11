@@ -345,6 +345,7 @@
       this.populateCheckoutForm();
       this.loadOrders();
       this.loadBuyerInsights();
+      this.updateDonationsTabVisibility();
     },
 
     updateBuyerProfile() {
@@ -525,6 +526,7 @@
       this.renderOrders();
       this.showToast('Signed out', 'info');
       this.loadBuyerInsights();
+      this.updateDonationsTabVisibility();
       this.navigateTo('catalog');
     },
 
@@ -537,7 +539,7 @@
     },
 
     navigateTo(view) {
-      if ((view === 'checkout' || view === 'orders' || view === 'requests' || view === 'account') && !this.currentBuyer) {
+      if ((view === 'checkout' || view === 'orders' || view === 'requests' || view === 'account' || view === 'donations') && !this.currentBuyer) {
         this.showToast('Please sign in to access buyer-only tools', 'info');
         this.showAuthModal('sign-in');
         return;
@@ -561,6 +563,7 @@
       if (view === 'orders') this.loadOrders();
       if (view === 'requests') this.loadProductRequests();
       if (view === 'account') this.loadAccountSettings();
+      if (view === 'donations') this.loadDonations();
     },
 
     async loadAccountSettings() {
@@ -2337,7 +2340,7 @@
         // Call market intelligence API for real-time price alerts
         const headers = {};
         if (this.token) headers['Authorization'] = `Bearer ${this.token}`;
-        const response = await fetch('/api/market-intelligence/price-alerts?threshold=7', { headers });
+        const response = await fetch('/api/wholesale/market/price-alerts?threshold=7', { headers });
         if (!response.ok) {
           // Silently handle auth/permission errors - price alerts are optional
           priceContent.innerHTML = '<div class="loading-state">All monitored prices stable (no significant changes detected)</div>';
@@ -3136,6 +3139,206 @@
         payAllBtn.style.display = 'inline-block';
       } else {
         payAllBtn.style.display = 'none';
+      }
+    },
+
+    // ── Donations (food_bank buyers) ─────────────────────────────────
+
+    updateDonationsTabVisibility() {
+      const tab = document.getElementById('donations-tab');
+      if (!tab) return;
+      const isFoodBank = this.currentBuyer?.buyerType === 'food_bank';
+      tab.style.display = isFoodBank ? '' : 'none';
+      if (isFoodBank) this.loadDonations();
+    },
+
+    async loadDonations() {
+      if (!this.currentBuyer || this.currentBuyer.buyerType !== 'food_bank') return;
+      await Promise.all([this.loadAvailableDonations(), this.loadClaimedDonations()]);
+    },
+
+    async loadAvailableDonations() {
+      const container = document.getElementById('donation-offers-list');
+      if (!container) return;
+      container.innerHTML = '<p style="color: var(--text-secondary);">Loading available donations...</p>';
+
+      try {
+        const { response, json } = await this.apiFetch('/api/wholesale/donations/available');
+        if (!response.ok || json?.status !== 'ok') {
+          container.innerHTML = '<p style="color: var(--text-secondary);">Unable to load donations at this time.</p>';
+          return;
+        }
+        const offers = json.data?.offers || [];
+        if (offers.length === 0) {
+          container.innerHTML = '<p style="color: var(--text-secondary);">No surplus produce currently available. You will be notified by email when new donations are posted.</p>';
+          return;
+        }
+        container.innerHTML = offers.map(offer => this.renderDonationOfferCard(offer)).join('');
+      } catch (err) {
+        console.error('Load donations error:', err);
+        container.innerHTML = '<p style="color: var(--text-secondary);">Error loading donations.</p>';
+      }
+    },
+
+    renderDonationOfferCard(offer) {
+      const items = offer.items || [];
+      const totalFmv = items.reduce((s, i) => s + Number(i.fair_market_value || 0), 0);
+      const reasonLabel = { surplus: 'Surplus', planned: 'Planned', seasonal: 'Seasonal', end_of_day: 'End of Day' }[offer.reason] || offer.reason;
+      const expiresAt = offer.expires_at ? new Date(offer.expires_at).toLocaleDateString('en-CA') : 'No expiry';
+
+      return `
+        <div class="order-card" style="border-left: 4px solid #2d5016;" data-offer-id="${offer.id}">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+            <div>
+              <h3 style="margin: 0 0 0.25rem 0;">Donation Offer</h3>
+              <p style="margin: 0; font-size: 0.85rem; color: var(--text-secondary);">
+                ${reasonLabel} | Farm: ${offer.farm_id} | Available until: ${expiresAt}
+              </p>
+              ${offer.pickup_window ? `<p style="margin: 0.25rem 0 0 0; font-size: 0.85rem;">Pickup: ${offer.pickup_window}</p>` : ''}
+            </div>
+            <span style="background: #e8f5e9; color: #2d5016; padding: 0.25rem 0.75rem; border-radius: 4px; font-size: 0.8rem; font-weight: 600;">
+              FMV $${totalFmv.toFixed(2)}
+            </span>
+          </div>
+          <div style="margin-top: 0.75rem;">
+            <table style="width: 100%; font-size: 0.9rem; border-collapse: collapse;">
+              <thead>
+                <tr style="border-bottom: 1px solid var(--border-color);">
+                  <th style="text-align: left; padding: 0.35rem 0;">Product</th>
+                  <th style="text-align: right; padding: 0.35rem 0;">Available</th>
+                  <th style="text-align: right; padding: 0.35rem 0;">Claim Qty</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${items.map(item => `
+                  <tr>
+                    <td style="padding: 0.35rem 0;">${item.product_name}${item.category ? ` <span style="color:var(--text-secondary);font-size:0.8rem;">(${item.category})</span>` : ''}</td>
+                    <td style="text-align: right; padding: 0.35rem 0;">${item.remaining_qty} ${item.unit || 'lbs'}</td>
+                    <td style="text-align: right; padding: 0.35rem 0;">
+                      <input type="number" min="0" max="${item.remaining_qty}" step="0.5" value="${item.remaining_qty}"
+                             class="donation-claim-qty" data-product="${item.product_name}"
+                             style="width: 70px; padding: 0.25rem; text-align: right; border: 1px solid var(--border-color); border-radius: 4px;" />
+                    </td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+          ${offer.notes ? `<p style="margin: 0.5rem 0 0 0; font-size: 0.85rem; color: var(--text-secondary);">Note: ${offer.notes}</p>` : ''}
+          <div style="margin-top: 0.75rem; text-align: right;">
+            <button class="btn btn-primary" onclick="WholesaleApp.claimDonation('${offer.id}')" style="background: #2d5016;">
+              Claim Donation
+            </button>
+          </div>
+        </div>`;
+    },
+
+    async claimDonation(offerId) {
+      const card = document.querySelector(`[data-offer-id="${offerId}"]`);
+      if (!card) return;
+
+      const inputs = card.querySelectorAll('.donation-claim-qty');
+      const items = [];
+      inputs.forEach(input => {
+        const qty = parseFloat(input.value);
+        if (qty > 0) {
+          items.push({ product_name: input.dataset.product, quantity: qty });
+        }
+      });
+
+      if (items.length === 0) {
+        this.showToast('Enter quantities to claim', 'info');
+        return;
+      }
+
+      try {
+        const { response, json } = await this.apiFetch('/api/wholesale/donations/claim', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ offer_id: offerId, items })
+        });
+
+        if (response.ok && json?.status === 'ok') {
+          this.showToast(`Donation claimed. Order ${json.data.order_id} created.`, 'success');
+          this.loadDonations();
+        } else {
+          this.showToast(json?.message || 'Failed to claim donation', 'error');
+        }
+      } catch (err) {
+        console.error('Claim donation error:', err);
+        this.showToast('Error claiming donation', 'error');
+      }
+    },
+
+    async loadClaimedDonations() {
+      const container = document.getElementById('claimed-donations-list');
+      if (!container) return;
+
+      try {
+        const { response, json } = await this.apiFetch('/api/wholesale/donations/my-claims');
+        if (!response.ok || json?.status !== 'ok') {
+          container.innerHTML = '<p style="color: var(--text-secondary);">Unable to load claim history.</p>';
+          return;
+        }
+        const claims = json.data?.claims || [];
+        if (claims.length === 0) {
+          container.innerHTML = '<p style="color: var(--text-secondary);">No donations claimed yet.</p>';
+          return;
+        }
+        container.innerHTML = claims.map(claim => this.renderClaimedDonationCard(claim)).join('');
+      } catch (err) {
+        console.error('Load claimed donations error:', err);
+        container.innerHTML = '<p style="color: var(--text-secondary);">Error loading claim history.</p>';
+      }
+    },
+
+    renderClaimedDonationCard(claim) {
+      const items = claim.items || [];
+      const totalFmv = items.reduce((s, i) => s + Number(i.fair_market_value || 0), 0);
+      const statusColors = { claimed: '#1565c0', fulfilled: '#2d5016', cancelled: '#c62828' };
+      const statusColor = statusColors[claim.status] || '#666';
+      const claimedDate = new Date(claim.claimed_at).toLocaleDateString('en-CA');
+
+      return `
+        <div class="order-card" style="border-left: 4px solid ${statusColor};">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+            <div>
+              <h3 style="margin: 0 0 0.25rem 0;">${claim.id}</h3>
+              <p style="margin: 0; font-size: 0.85rem; color: var(--text-secondary);">
+                Claimed: ${claimedDate} | Farm: ${claim.farm_id} | Order: ${claim.order_id || 'N/A'}
+              </p>
+            </div>
+            <div style="text-align: right;">
+              <span style="background: ${statusColor}22; color: ${statusColor}; padding: 0.25rem 0.75rem; border-radius: 4px; font-size: 0.8rem; font-weight: 600;">
+                ${claim.status}
+              </span>
+              <div style="font-size: 0.85rem; margin-top: 0.25rem; color: var(--text-secondary);">FMV $${totalFmv.toFixed(2)}</div>
+            </div>
+          </div>
+          <div style="margin-top: 0.5rem;">
+            ${items.map(i => `<span style="display: inline-block; background: var(--bg-card); padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.85rem; margin: 0.15rem 0.15rem 0 0;">${i.quantity} ${i.unit || 'lbs'} ${i.product_name}</span>`).join('')}
+          </div>
+          ${claim.status === 'claimed' ? `<div style="margin-top: 0.5rem; text-align: right;">
+            <button class="btn btn-secondary" onclick="WholesaleApp.cancelDonationClaim('${claim.id}')" style="font-size: 0.85rem;">Cancel Claim</button>
+          </div>` : ''}
+        </div>`;
+    },
+
+    async cancelDonationClaim(claimId) {
+      if (!confirm('Cancel this donation claim?')) return;
+      try {
+        const { response, json } = await this.apiFetch(`/api/wholesale/donations/claims/${claimId}/cancel`, {
+          method: 'POST'
+        });
+        if (response.ok && json?.status === 'ok') {
+          this.showToast('Claim cancelled', 'info');
+          this.loadDonations();
+        } else {
+          this.showToast(json?.message || 'Failed to cancel claim', 'error');
+        }
+      } catch (err) {
+        console.error('Cancel claim error:', err);
+        this.showToast('Error cancelling claim', 'error');
       }
     }
   };

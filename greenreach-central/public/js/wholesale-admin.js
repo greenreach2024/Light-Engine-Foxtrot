@@ -137,6 +137,9 @@
         case 'product-requests':
           this.loadProductRequests();
           break;
+        case 'donations':
+          this.loadDonationsDashboard();
+          break;
       }
     },
 
@@ -2344,6 +2347,260 @@
       const d = document.createElement('div');
       d.textContent = str;
       return d.innerHTML;
+    },
+
+    // ── Donations Admin Methods ──────────────────────────────────────
+
+    async loadDonationsDashboard() {
+      const headers = this.getHeaders();
+      try {
+        const [summaryRes, offersRes] = await Promise.all([
+          fetch('/api/wholesale/donations/summary', { headers }),
+          fetch('/api/wholesale/donations/offers', { headers })
+        ]);
+
+        if (summaryRes.ok) {
+          const summaryData = await summaryRes.json();
+          const s = summaryData.data || {};
+          const el = (id, val) => { const e = document.getElementById(id); if (e) e.textContent = val; };
+          el('stat-total-qty', s.total_quantity != null ? Number(s.total_quantity).toLocaleString() : '0');
+          el('stat-total-fmv', s.total_fmv != null ? '$' + Number(s.total_fmv).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '$0.00');
+          el('stat-total-claims', s.total_claims != null ? String(s.total_claims) : '0');
+          el('stat-unique-recipients', s.unique_recipients != null ? String(s.unique_recipients) : '0');
+        }
+
+        const offersContainer = document.getElementById('admin-donation-offers');
+        const claimsContainer = document.getElementById('admin-donation-claims');
+
+        if (offersRes.ok) {
+          const offersData = await offersRes.json();
+          const offers = offersData.data || [];
+          if (offers.length === 0) {
+            offersContainer.innerHTML = '<p style="color: #888;">No donation offers yet. Click "New Donation Offer" to create one.</p>';
+          } else {
+            offersContainer.innerHTML = offers.map(o => this.renderAdminOfferCard(o)).join('');
+          }
+
+          // Render claims from offers that have them
+          const allClaims = [];
+          for (const o of offers) {
+            if (o.claims && o.claims.length) {
+              for (const c of o.claims) {
+                allClaims.push({ ...c, offer: o });
+              }
+            }
+          }
+          if (allClaims.length === 0) {
+            claimsContainer.innerHTML = '<p style="color: #888;">No claims yet.</p>';
+          } else {
+            claimsContainer.innerHTML = allClaims.map(c => this.renderAdminClaimCard(c)).join('');
+          }
+        } else {
+          offersContainer.innerHTML = '<p style="color: #c62828;">Failed to load offers.</p>';
+        }
+      } catch (err) {
+        console.error('[Donations] Dashboard load error:', err);
+      }
+    },
+
+    renderAdminOfferCard(offer) {
+      const statusColors = { available: '#2d5016', claimed: '#1565c0', fulfilled: '#2e7d32', cancelled: '#c62828', expired: '#888' };
+      const statusColor = statusColors[offer.status] || '#888';
+      const items = offer.items || [];
+      const totalQty = items.reduce((sum, i) => sum + Number(i.quantity || 0), 0);
+      const totalFmv = items.reduce((sum, i) => sum + Number(i.fair_market_value || 0), 0);
+      const created = offer.created_at ? new Date(offer.created_at).toLocaleDateString() : '--';
+      const expires = offer.expires_at ? new Date(offer.expires_at).toLocaleDateString() : 'None';
+
+      let itemsHtml = items.map(i =>
+        `<tr><td>${this.esc(i.product_name)}</td><td>${Number(i.quantity).toFixed(1)} ${this.esc(i.unit || 'lbs')}</td><td>$${Number(i.retail_price || 0).toFixed(2)}</td><td>$${Number(i.fair_market_value || 0).toFixed(2)}</td></tr>`
+      ).join('');
+
+      return `
+        <div style="background: var(--bg-card, #1e1e1e); border-radius: 8px; padding: 1.25rem; margin-bottom: 1rem; border-left: 3px solid ${statusColor};">
+          <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.75rem;">
+            <div>
+              <strong style="font-size: 1rem;">${this.esc(offer.id)}</strong>
+              <span style="background:${statusColor}; color:#fff; padding:2px 8px; border-radius:4px; font-size:0.75rem; margin-left:0.5rem;">${this.esc(offer.status)}</span>
+            </div>
+            <div style="text-align: right; font-size: 0.8rem; color: #888;">
+              <div>Created: ${created}</div>
+              <div>Expires: ${expires}</div>
+            </div>
+          </div>
+          <div style="font-size: 0.85rem; color: #aaa; margin-bottom: 0.5rem;">
+            Farm: ${this.esc(offer.farm_id)} | Reason: ${this.esc(offer.reason || 'surplus')} | Pickup: ${this.esc(offer.pickup_window || 'TBD')}
+          </div>
+          ${offer.notes ? `<div style="font-size: 0.85rem; color: #aaa; margin-bottom: 0.5rem;">Notes: ${this.esc(offer.notes)}</div>` : ''}
+          <table style="width:100%; font-size:0.85rem; border-collapse:collapse; margin-bottom:0.5rem;">
+            <thead><tr style="border-bottom:1px solid #333;"><th style="text-align:left;padding:4px;">Product</th><th style="text-align:left;padding:4px;">Qty</th><th style="text-align:left;padding:4px;">Retail</th><th style="text-align:left;padding:4px;">FMV</th></tr></thead>
+            <tbody>${itemsHtml}</tbody>
+            <tfoot><tr style="border-top:1px solid #333; font-weight:600;"><td style="padding:4px;">Total</td><td style="padding:4px;">${totalQty.toFixed(1)} lbs</td><td></td><td style="padding:4px;">$${totalFmv.toFixed(2)}</td></tr></tfoot>
+          </table>
+          <div style="font-size: 0.8rem; color: #888;">${offer.claim_count || 0} claim(s)</div>
+          ${offer.status === 'available' ? `<button onclick="admin.cancelDonationOffer('${offer.id}')" style="margin-top:0.5rem; background:none; border:1px solid #c62828; color:#c62828; padding:4px 10px; border-radius:4px; cursor:pointer; font-size:0.8rem;">Cancel Offer</button>` : ''}
+        </div>`;
+    },
+
+    renderAdminClaimCard(claim) {
+      const buyer = claim.buyer || {};
+      const items = claim.items || [];
+      const totalFmv = items.reduce((sum, i) => sum + Number(i.fair_market_value || 0), 0);
+      const claimedAt = claim.claimed_at ? new Date(claim.claimed_at).toLocaleDateString() : '--';
+      const statusColors = { claimed: '#1565c0', fulfilled: '#2e7d32', cancelled: '#c62828' };
+      const statusColor = statusColors[claim.status] || '#888';
+
+      return `
+        <div style="background: var(--bg-card, #1e1e1e); border-radius: 8px; padding: 1rem; margin-bottom: 0.75rem; border-left: 3px solid ${statusColor};">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+            <div>
+              <strong>${this.esc(claim.id)}</strong>
+              <span style="background:${statusColor}; color:#fff; padding:2px 6px; border-radius:4px; font-size:0.7rem; margin-left:0.5rem;">${this.esc(claim.status)}</span>
+            </div>
+            <span style="font-size:0.8rem; color:#888;">${claimedAt}</span>
+          </div>
+          <div style="font-size: 0.85rem;">
+            <div>Organization: <strong>${this.esc(buyer.businessName || buyer.business_name || claim.buyer_id || '--')}</strong></div>
+            <div>Offer: ${this.esc(claim.offer_id || (claim.offer && claim.offer.id) || '--')}</div>
+            <div>Items: ${items.length} | FMV: $${totalFmv.toFixed(2)}</div>
+            ${claim.order_id ? `<div>Order: ${this.esc(claim.order_id)}</div>` : ''}
+          </div>
+          ${claim.status === 'claimed' ? `<button onclick="admin.viewDonationReceipt('${claim.id}')" style="margin-top:0.5rem; background:none; border:1px solid #2d5016; color:#2d5016; padding:4px 10px; border-radius:4px; cursor:pointer; font-size:0.8rem;">View Receipt</button>` : ''}
+        </div>`;
+    },
+
+    async cancelDonationOffer(offerId) {
+      if (!confirm('Cancel this donation offer? This cannot be undone.')) return;
+      try {
+        const res = await fetch(`/api/wholesale/donations/offers/${encodeURIComponent(offerId)}/status`, {
+          method: 'PATCH',
+          headers: this.getHeaders(),
+          body: JSON.stringify({ status: 'cancelled' })
+        });
+        if (res.ok) {
+          this.loadDonationsDashboard();
+        } else {
+          const err = await res.json().catch(() => ({}));
+          alert(err.message || 'Failed to cancel offer');
+        }
+      } catch (err) {
+        console.error('[Donations] Cancel offer error:', err);
+      }
+    },
+
+    async viewDonationReceipt(claimId) {
+      try {
+        const res = await fetch(`/api/wholesale/donations/receipt/${encodeURIComponent(claimId)}`, {
+          headers: this.getHeaders()
+        });
+        if (!res.ok) {
+          alert('Failed to load receipt');
+          return;
+        }
+        const data = await res.json();
+        const r = data.data || {};
+        const itemsHtml = (r.items || []).map(i =>
+          `<tr><td>${this.esc(i.product_name)}</td><td>${Number(i.quantity).toFixed(1)} ${this.esc(i.unit)}</td><td>$${Number(i.fair_market_value).toFixed(2)}</td></tr>`
+        ).join('');
+        const html = `
+          <div style="font-family:sans-serif; max-width:600px; margin:auto; padding:2rem;">
+            <h2>Charitable Donation Receipt</h2>
+            <p><strong>Claim ID:</strong> ${this.esc(r.claim_id || claimId)}</p>
+            <p><strong>Donor:</strong> ${this.esc(r.donor?.farm_name || '--')} (${this.esc(r.donor?.farm_id || '--')})</p>
+            <p><strong>Recipient:</strong> ${this.esc(r.recipient?.organization || '--')}</p>
+            <p><strong>Date:</strong> ${r.claimed_at ? new Date(r.claimed_at).toLocaleDateString() : '--'}</p>
+            <table style="width:100%; border-collapse:collapse; margin:1rem 0;">
+              <thead><tr style="border-bottom:2px solid #333;"><th style="text-align:left;padding:4px;">Product</th><th style="text-align:left;padding:4px;">Quantity</th><th style="text-align:left;padding:4px;">FMV</th></tr></thead>
+              <tbody>${itemsHtml}</tbody>
+            </table>
+            <p><strong>Total Fair Market Value:</strong> $${Number(r.total_fmv || 0).toFixed(2)} CAD</p>
+            <p><strong>Valuation Method:</strong> ${this.esc(r.valuation_method || 'retail market price')}</p>
+            <p style="color:#888; font-size:0.85rem;">This receipt is for record-keeping purposes. Consult CRA guidelines for charitable donation deductions.</p>
+          </div>`;
+        const w = window.open('', '_blank', 'width=700,height=600');
+        if (w) { w.document.write(html); w.document.close(); }
+      } catch (err) {
+        console.error('[Donations] Receipt error:', err);
+      }
+    },
+
+    async submitDonationOffer(event) {
+      event.preventDefault();
+      const form = document.getElementById('donation-offer-form');
+      const farmId = document.getElementById('don-farm-id')?.value?.trim();
+      const reason = document.getElementById('don-reason')?.value;
+      const pickup = document.getElementById('don-pickup')?.value?.trim();
+      const expires = document.getElementById('don-expires')?.value;
+      const notes = document.getElementById('don-notes')?.value?.trim();
+
+      const rows = document.querySelectorAll('#don-items-container .don-item-row');
+      const items = [];
+      for (const row of rows) {
+        const productName = row.querySelector('[name="product_name"]')?.value?.trim();
+        const quantity = parseFloat(row.querySelector('[name="quantity"]')?.value);
+        const unit = row.querySelector('[name="unit"]')?.value || 'lbs';
+        const retailPrice = parseFloat(row.querySelector('[name="retail_price"]')?.value) || 0;
+        if (!productName || !quantity || quantity <= 0) continue;
+        items.push({ product_name: productName, quantity, unit, retail_price: retailPrice });
+      }
+
+      if (!farmId || items.length === 0) {
+        alert('Farm ID and at least one item are required.');
+        return;
+      }
+
+      const submitBtn = form.querySelector('button[type="submit"]');
+      if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Creating...'; }
+
+      try {
+        const res = await fetch('/api/wholesale/donations/offers', {
+          method: 'POST',
+          headers: this.getHeaders(),
+          body: JSON.stringify({ farm_id: farmId, reason, pickup_window: pickup, expires_at: expires || null, notes, items })
+        });
+        if (res.ok) {
+          this.closeCreateDonationModal();
+          this.loadDonationsDashboard();
+        } else {
+          const err = await res.json().catch(() => ({}));
+          alert(err.message || 'Failed to create donation offer');
+        }
+      } catch (err) {
+        console.error('[Donations] Submit offer error:', err);
+        alert('Network error creating donation offer');
+      } finally {
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Create Offer'; }
+      }
+    },
+
+    openCreateDonationModal() {
+      const modal = document.getElementById('create-donation-modal');
+      if (modal) {
+        modal.style.display = 'flex';
+        const form = document.getElementById('donation-offer-form');
+        if (form) form.reset();
+        // Reset item rows to just one
+        const container = document.getElementById('don-items-container');
+        const rows = container?.querySelectorAll('.don-item-row');
+        if (rows && rows.length > 1) {
+          for (let i = rows.length - 1; i > 0; i--) rows[i].remove();
+        }
+      }
+    },
+
+    closeCreateDonationModal() {
+      const modal = document.getElementById('create-donation-modal');
+      if (modal) modal.style.display = 'none';
+    },
+
+    addDonationItemRow() {
+      const container = document.getElementById('don-items-container');
+      if (!container) return;
+      const firstRow = container.querySelector('.don-item-row');
+      if (!firstRow) return;
+      const newRow = firstRow.cloneNode(true);
+      newRow.querySelectorAll('input').forEach(inp => { inp.value = ''; });
+      container.appendChild(newRow);
     }
   };
 
@@ -2353,6 +2610,12 @@
 
   // Expose admin globally for onclick handlers
   window.admin = admin;
+
+  // Global functions for donations modal
+  window.openCreateDonationModal = function() { admin.openCreateDonationModal(); };
+  window.closeCreateDonationModal = function() { admin.closeCreateDonationModal(); };
+  window.addDonationItemRow = function() { admin.addDonationItemRow(); };
+  window.submitDonationOffer = function(event) { admin.submitDonationOffer(event); };
 
   // Global functions for alert banner
   window.resolveOverselling = function() {

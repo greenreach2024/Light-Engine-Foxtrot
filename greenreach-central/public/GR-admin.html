@@ -650,6 +650,7 @@
     <button class="nav-tab" data-view="reconciliation">Reconciliation</button>
     <button class="nav-tab" data-view="compliance">Compliance Export</button>
     <button class="nav-tab" data-view="crop-analytics">⚖️ Crop Analytics</button>
+    <button class="nav-tab" data-view="donations">Donations</button>
   </nav>
 
   <main>
@@ -1391,6 +1392,122 @@
 
   <div id="crop-analytics-view" class="view">
     <iframe src="/views/crop-weight-analytics.html" style="width:100%;height:calc(100vh - 80px);border:none;"></iframe>
+  </div>
+
+  <!-- Donations Admin View -->
+  <div id="donations-view" class="view">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+      <div>
+        <h2 style="margin: 0;">Food Bank Donations</h2>
+        <p style="color: #888; margin: 0.25rem 0 0 0;">Create donation offers from surplus produce and track claims by food bank organizations</p>
+      </div>
+      <button class="btn btn-primary" onclick="openCreateDonationModal()" style="background: #2d5016;">
+        New Donation Offer
+      </button>
+    </div>
+
+    <!-- Donation Summary -->
+    <div id="donation-summary" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+      <div class="stat-card" style="padding: 1rem; background: var(--bg-card, #1e1e1e); border-radius: 8px;">
+        <div style="font-size: 0.8rem; color: #888;">Total Donated</div>
+        <div id="stat-total-qty" style="font-size: 1.5rem; font-weight: 700;">--</div>
+        <div style="font-size: 0.75rem; color: #888;">lbs</div>
+      </div>
+      <div class="stat-card" style="padding: 1rem; background: var(--bg-card, #1e1e1e); border-radius: 8px;">
+        <div style="font-size: 0.8rem; color: #888;">Fair Market Value</div>
+        <div id="stat-total-fmv" style="font-size: 1.5rem; font-weight: 700;">--</div>
+        <div style="font-size: 0.75rem; color: #888;">CAD</div>
+      </div>
+      <div class="stat-card" style="padding: 1rem; background: var(--bg-card, #1e1e1e); border-radius: 8px;">
+        <div style="font-size: 0.8rem; color: #888;">Claims</div>
+        <div id="stat-total-claims" style="font-size: 1.5rem; font-weight: 700;">--</div>
+      </div>
+      <div class="stat-card" style="padding: 1rem; background: var(--bg-card, #1e1e1e); border-radius: 8px;">
+        <div style="font-size: 0.8rem; color: #888;">Recipients</div>
+        <div id="stat-unique-recipients" style="font-size: 1.5rem; font-weight: 700;">--</div>
+      </div>
+    </div>
+
+    <!-- Active Offers -->
+    <h3>Active Offers</h3>
+    <div id="admin-donation-offers" style="margin-bottom: 2rem;">
+      <p style="color: #888;">Loading...</p>
+    </div>
+
+    <!-- Claim History -->
+    <h3>Claim History</h3>
+    <div id="admin-donation-claims">
+      <p style="color: #888;">Loading...</p>
+    </div>
+  </div>
+
+  <!-- Create Donation Modal -->
+  <div id="create-donation-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:1000; align-items:center; justify-content:center;">
+    <div style="background:var(--bg-card, #1e1e1e); border-radius:12px; padding:2rem; max-width:600px; width:90%; max-height:80vh; overflow-y:auto;">
+      <h2 style="margin:0 0 1rem 0;">Create Donation Offer</h2>
+      <form id="donation-offer-form" onsubmit="submitDonationOffer(event)">
+        <div style="margin-bottom:1rem;">
+          <label style="display:block; margin-bottom:0.25rem; font-size:0.9rem;">Farm ID</label>
+          <input type="text" id="don-farm-id" value="GR-00001" required style="width:100%; padding:0.5rem; border:1px solid #444; border-radius:6px; background:var(--bg-main, #121212); color:inherit;" />
+        </div>
+        <div style="margin-bottom:1rem;">
+          <label style="display:block; margin-bottom:0.25rem; font-size:0.9rem;">Reason</label>
+          <select id="don-reason" style="width:100%; padding:0.5rem; border:1px solid #444; border-radius:6px; background:var(--bg-main, #121212); color:inherit;">
+            <option value="surplus">Surplus Produce</option>
+            <option value="planned">Planned Donation</option>
+            <option value="seasonal">Seasonal Excess</option>
+            <option value="end_of_day">End of Day</option>
+          </select>
+        </div>
+        <div style="margin-bottom:1rem;">
+          <label style="display:block; margin-bottom:0.25rem; font-size:0.9rem;">Pickup Window</label>
+          <input type="text" id="don-pickup" placeholder="e.g. Apr 12, 9am-1pm" style="width:100%; padding:0.5rem; border:1px solid #444; border-radius:6px; background:var(--bg-main, #121212); color:inherit;" />
+        </div>
+        <div style="margin-bottom:1rem;">
+          <label style="display:block; margin-bottom:0.25rem; font-size:0.9rem;">Expires (optional)</label>
+          <input type="date" id="don-expires" style="width:100%; padding:0.5rem; border:1px solid #444; border-radius:6px; background:var(--bg-main, #121212); color:inherit;" />
+        </div>
+        <div style="margin-bottom:1rem;">
+          <label style="display:block; margin-bottom:0.25rem; font-size:0.9rem;">Notes</label>
+          <textarea id="don-notes" rows="2" style="width:100%; padding:0.5rem; border:1px solid #444; border-radius:6px; background:var(--bg-main, #121212); color:inherit;"></textarea>
+        </div>
+        <div>
+          <label style="display:block; margin-bottom:0.5rem; font-size:0.9rem; font-weight:600;">Items</label>
+          <div id="don-items-container">
+            <div class="don-item-row" style="display:grid; grid-template-columns:2fr 1fr 80px 1fr auto; gap:0.5rem; margin-bottom:0.5rem; align-items:end;">
+              <div>
+                <label style="font-size:0.75rem; color:#888;">Product</label>
+                <input type="text" name="product_name" required placeholder="Butterhead Lettuce" style="width:100%; padding:0.4rem; border:1px solid #444; border-radius:4px; background:var(--bg-main, #121212); color:inherit;" />
+              </div>
+              <div>
+                <label style="font-size:0.75rem; color:#888;">Quantity</label>
+                <input type="number" name="quantity" required min="0.1" step="0.5" placeholder="25" style="width:100%; padding:0.4rem; border:1px solid #444; border-radius:4px; background:var(--bg-main, #121212); color:inherit;" />
+              </div>
+              <div>
+                <label style="font-size:0.75rem; color:#888;">Unit</label>
+                <select name="unit" style="width:100%; padding:0.4rem; border:1px solid #444; border-radius:4px; background:var(--bg-main, #121212); color:inherit;">
+                  <option value="lbs">lbs</option>
+                  <option value="kg">kg</option>
+                  <option value="heads">heads</option>
+                  <option value="bunches">bunches</option>
+                  <option value="flats">flats</option>
+                </select>
+              </div>
+              <div>
+                <label style="font-size:0.75rem; color:#888;">Retail $/unit</label>
+                <input type="number" name="retail_price" min="0" step="0.01" placeholder="4.50" style="width:100%; padding:0.4rem; border:1px solid #444; border-radius:4px; background:var(--bg-main, #121212); color:inherit;" />
+              </div>
+              <button type="button" onclick="this.closest('.don-item-row').remove()" style="background:none; border:none; color:#c62828; cursor:pointer; font-size:1.2rem; padding:0.4rem;">X</button>
+            </div>
+          </div>
+          <button type="button" onclick="addDonationItemRow()" style="background:none; border:1px dashed #666; color:inherit; padding:0.4rem 0.75rem; border-radius:4px; cursor:pointer; font-size:0.85rem; margin-top:0.25rem;">+ Add Item</button>
+        </div>
+        <div style="display:flex; gap:0.75rem; margin-top:1.5rem; justify-content:flex-end;">
+          <button type="button" onclick="closeCreateDonationModal()" class="btn btn-secondary">Cancel</button>
+          <button type="submit" class="btn btn-primary" style="background:#2d5016;">Create Offer</button>
+        </div>
+      </form>
+    </div>
   </div>
 
   <script src="/js/wholesale-admin.js" defer></script>

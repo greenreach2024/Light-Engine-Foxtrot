@@ -803,6 +803,18 @@ const ENV_SOURCE = process.env.ENV_SOURCE || (CLOUD_ENDPOINT_URL ? "cloud" : "lo
 const ENV_PATH = path.resolve("./public/data/env.json");
 const DATA_DIR = path.resolve("./public/data");
 
+// Recipe metadata: display names + descriptions from Central admin
+// Shared GCS mount at /app/data on both LE and Central Cloud Run services
+const RECIPE_META_PATH = process.env.DEPLOYMENT_MODE === 'cloud'
+    ? '/app/data/recipes-v2/_recipe-meta.json'
+    : path.resolve('./greenreach-central/data/recipes-v2/_recipe-meta.json');
+
+function loadRecipeMetaSync() {
+    try {
+        return JSON.parse(fs.readFileSync(RECIPE_META_PATH, 'utf8'));
+    } catch { return {}; }
+}
+
 // Sprint 0: P2 Adaptive Control, P8 Anomaly Diagnostics, P4 Succession Planner
 const adaptiveControl = new AdaptiveControl({ tier: 1 });
 const anomalyDiagnostics = new AnomalyDiagnostics(DATA_DIR);
@@ -1099,11 +1111,14 @@ function loadPlansDocument() {
       .replace(/^-+|-+$/g, '');
     
     // Convert recipes to plan format
+    const recipeMeta = loadRecipeMetaSync();
     const plans = [];
     for (const [cropName, days] of Object.entries(recipesData.crops)) {
       if (!Array.isArray(days) || !days.length) continue;
       
       const id = `crop-${slugify(cropName)}`;
+      const meta = recipeMeta[cropName] || {};
+      const displayName = meta.displayName || cropName;
       const lightDays = days.map(row => ({
         day: Number(row.day),
         stage: String(row.stage || ''),
@@ -1130,10 +1145,10 @@ function loadPlansDocument() {
       plans.push({
         id,
         key: id,
-        name: String(cropName),
-        crop: String(cropName),
+        name: String(displayName),
+        crop: String(displayName),
         kind: 'recipe',
-        description: `Lighting recipe for ${cropName}`,
+        description: meta.description || `Lighting recipe for ${displayName}`,
         light: { days: lightDays },
         ...(envDays.length ? { env: { days: envDays } } : {}),
         meta: {
@@ -20835,6 +20850,53 @@ function getCropStageAtDay(planId, daysOld) {
 // ═══════════════════════════════════════════════════════════════════════════
 const _centralUrl = () => process.env.GREENREACH_CENTRAL_URL || process.env.CENTRAL_URL || 'https://greenreachgreens.com';
 
+// Farm-accessible salad mix templates proxy (no admin auth)
+app.use('/api/farm/salad-mixes', proxyCorsMiddleware, createProxyMiddleware({
+  target: _centralUrl(),
+  router: () => _centralUrl(),
+  changeOrigin: true,
+  xfwd: true,
+  logLevel: 'debug',
+  timeout: 8000,
+  proxyTimeout: 8000,
+  agent: keepAliveHttpsAgent,
+  pathRewrite: (p) => (p.startsWith('/api/farm/salad-mixes') ? p : `/api/farm/salad-mixes${p}`),
+  onProxyReq(proxyReq, req) {
+    const outgoingPath = req.originalUrl;
+    console.log(`[-> farm/salad-mixes] ${req.method} ${outgoingPath} -> ${_centralUrl()}${outgoingPath}`);
+    const apiKey = process.env.GREENREACH_API_KEY;
+    if (apiKey && !proxyReq.getHeader('x-api-key')) {
+      proxyReq.setHeader('x-api-key', apiKey);
+    }
+    const farmId = req.headers['x-farm-id'] || process.env.FARM_ID;
+    if (farmId && !proxyReq.getHeader('x-farm-id')) {
+      proxyReq.setHeader('x-farm-id', farmId);
+    }
+    // Re-stream JSON body consumed by express.json() so Central receives it
+    if (req.body && Object.keys(req.body).length > 0 && /PUT|POST|PATCH/.test(req.method)) {
+      const bodyData = JSON.stringify(req.body);
+      proxyReq.setHeader('Content-Type', 'application/json');
+      proxyReq.setHeader('Content-Length', Buffer.byteLength(bodyData));
+      proxyReq.write(bodyData);
+    }
+  },
+  onProxyRes(proxyRes, req) {
+    const origin = req.headers?.origin;
+    if (origin) {
+      proxyRes.headers['access-control-allow-origin'] = origin;
+    } else {
+      proxyRes.headers['access-control-allow-origin'] = '*';
+    }
+    proxyRes.headers['access-control-allow-methods'] = 'GET,POST,PUT,PATCH,DELETE,OPTIONS';
+    proxyRes.headers['access-control-allow-headers'] = 'Content-Type, Authorization, X-Requested-With, x-farm-id';
+  },
+  onError(err, req, res) {
+    console.warn('[proxy:/api/farm/salad-mixes] error:', err?.message || err);
+    res.statusCode = 502;
+    res.end(JSON.stringify({ error: 'proxy_error', target: 'central-salad-mixes', detail: String(err) }));
+  }
+}));
+
 app.use('/api/inventory/manual', proxyCorsMiddleware, createProxyMiddleware({
   target: _centralUrl(),
   router: () => _centralUrl(),
@@ -26899,6 +26961,7 @@ app.get('/plans', (req, res) => {
     function synthesizePlansFromRecipes(recipes) {
       if (!recipes || typeof recipes !== 'object') return [];
       const crops = recipes.crops && typeof recipes.crops === 'object' ? recipes.crops : {};
+      const recipeMeta = loadRecipeMetaSync();
       const toNumber = (v) => {
         const n = Number(v);
         return Number.isFinite(n) ? n : null;
@@ -26911,6 +26974,8 @@ app.get('/plans', (req, res) => {
       for (const [cropName, days] of Object.entries(crops)) {
         if (!Array.isArray(days) || !days.length) continue;
         const id = `crop-${slugify(cropName)}`;
+        const meta = recipeMeta[cropName] || {};
+        const displayName = meta.displayName || cropName;
         const lightDays = days.map((row) => {
           // Convert recipe (R/B/G format) to driver mix (CW/WW/BL/RD format)
           // Using proper normalization + scaling algorithm
@@ -26955,10 +27020,10 @@ app.get('/plans', (req, res) => {
         const plan = {
           id,
           key: id,
-          name: String(cropName),
-          crop: String(cropName),
+          name: String(displayName),
+          crop: String(displayName),
           kind: 'recipe',
-          description: `Imported from lighting-recipes.json for ${cropName}.`,
+          description: meta.description || `Lighting recipe for ${displayName}.`,
           light: { days: lightDays },
           ...(envDays.length ? { env: { days: envDays } } : {}),
           meta: {

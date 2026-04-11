@@ -3882,6 +3882,103 @@ async function runMigrations(client) {
     logger.warn('Migration 057 warning:', err.message);
   }
 
+  // --- Migration 058: Trait-based salad mix system ---
+  try {
+    // Add trait columns to mix_components (nullable for backward compat)
+    await client.query(`ALTER TABLE mix_components ADD COLUMN IF NOT EXISTS trait_role VARCHAR(60)`);
+    await client.query(`ALTER TABLE mix_components ADD COLUMN IF NOT EXISTS color_profile VARCHAR(30)`);
+    await client.query(`ALTER TABLE mix_components ADD COLUMN IF NOT EXISTS taste_profile VARCHAR(30)`);
+    await client.query(`ALTER TABLE mix_components ADD COLUMN IF NOT EXISTS texture_profile VARCHAR(30)`);
+
+    // Crop traits reference table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS crop_traits (
+        crop_name VARCHAR(200) PRIMARY KEY,
+        color_profile VARCHAR(30) NOT NULL DEFAULT 'green',
+        taste_profile VARCHAR(30) NOT NULL DEFAULT 'mild',
+        texture_profile VARCHAR(30) NOT NULL DEFAULT 'tender',
+        salad_eligible BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+
+    // Farm-level substitutions for mix template slots
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS farm_mix_overrides (
+        id SERIAL PRIMARY KEY,
+        farm_id VARCHAR(100) NOT NULL,
+        mix_template_id INT NOT NULL REFERENCES mix_templates(id) ON DELETE CASCADE,
+        component_id INT NOT NULL REFERENCES mix_components(id) ON DELETE CASCADE,
+        substitute_crop VARCHAR(200) NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(farm_id, component_id)
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_farm_mix_overrides_farm ON farm_mix_overrides (farm_id, mix_template_id)`);
+
+    logger.info('Trait-based mix system tables ready (migration 058)');
+  } catch (err) {
+    logger.warn('Migration 058 warning:', err.message);
+  }
+
+  // --- Migration 059: Seed crop_traits for salad-eligible crops ---
+  try {
+    const { rows: [{ cnt }] } = await client.query(`SELECT COUNT(*)::int AS cnt FROM crop_traits`);
+    if (cnt === 0) {
+      const traits = [
+        // Base greens - mild, crisp
+        ['Newham Pelleted Organic', 'green', 'mild', 'crisp'],
+        ['Little Gem', 'green', 'mild', 'crisp'],
+        ['Bibb Butterhead', 'green', 'mild', 'tender'],
+        ['Buttercrunch Lettuce', 'green', 'mild', 'tender'],
+        ['Amaze', 'green', 'mild', 'crisp'],
+        ['Salad Bowl Oakleaf', 'green', 'mild', 'tender'],
+        // Red / Purple accent - mild, tender
+        ['Breen Pelleted Organic', 'red', 'mild', 'tender'],
+        ['Tropicana Pelleted Organic', 'red', 'mild', 'crisp'],
+        ['Burgandy Eazyleaf Organic', 'purple', 'mild', 'tender'],
+        ['Truchas Pelleted Organic', 'red', 'mild', 'tender'],
+        // Peppery / Spicy accent
+        ['Astro Arugula', 'green', 'peppery', 'tender'],
+        ['Mizuna Mustard Greens', 'green', 'peppery', 'tender'],
+        ['Watercress', 'green', 'peppery', 'crisp'],
+        // Bitter / Tangy
+        ['Frisée Endive', 'green', 'bitter', 'crisp'],
+        ['Escarole Batavian', 'green', 'bitter', 'crisp'],
+        ['Sorrel', 'green', 'tangy', 'tender'],
+        // Earthy / Crunchy
+        ['KX-1 Kale (baby leaf)', 'green', 'earthy', 'crunchy'],
+        ['Tatsoi', 'green', 'earthy', 'tender'],
+        ['Komatsuna Mustard Spinach', 'green', 'earthy', 'tender'],
+        ['Mei Qing Pak Choi', 'green', 'mild', 'crunchy'],
+        // Smooth / Silky
+        ['Seaside F1 Spinach (baby leaf)', 'green', 'mild', 'silky'],
+        ['Spretnak Organic', 'green', 'mild', 'tender'],
+        ['Ilema Organic', 'green', 'mild', 'tender'],
+        // Colorful / Mixed
+        ['Magenta Sunset Swiss Chard', 'mixed', 'earthy', 'crunchy'],
+        ['Eazyleaf Blend Organic', 'mixed', 'mild', 'tender'],
+        // Eazyleaf varieties
+        ['Hampton Eazyleaf Organic', 'green', 'mild', 'tender'],
+        ['Brentwood Eazyleaf Organic', 'green', 'mild', 'crisp'],
+        // Additional varieties
+        ['Alkindus', 'green', 'mild', 'tender'],
+        ['Alkindus Pelleted Organic', 'green', 'mild', 'tender'],
+      ];
+      for (const [name, color, taste, texture] of traits) {
+        await client.query(
+          `INSERT INTO crop_traits (crop_name, color_profile, taste_profile, texture_profile)
+           VALUES ($1, $2, $3, $4) ON CONFLICT (crop_name) DO NOTHING`,
+          [name, color, taste, texture]
+        );
+      }
+      logger.info(`Seeded ${traits.length} crop traits (migration 059)`);
+    }
+  } catch (err) {
+    logger.warn('Migration 059 warning:', err.message);
+  }
+
 
     // --- Admin user bootstrap: seed default admin if table is empty ---
     try {

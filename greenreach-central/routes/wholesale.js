@@ -1,10 +1,25 @@
 import express from 'express';
 import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import jwt from 'jsonwebtoken';
 import rateLimit from 'express-rate-limit';
 import { isDatabaseAvailable, query } from '../config/database.js';
 import { ValidationError } from '../middleware/errorHandler.js';
 import { adminAuthMiddleware } from '../middleware/adminAuth.js';
+
+const __filename_ws = fileURLToPath(import.meta.url);
+const __dirname_ws = path.dirname(__filename_ws);
+
+// Recipe metadata for display names & descriptions (enriches DB lots)
+const RECIPE_META_PATH_WS = process.env.DEPLOYMENT_MODE === 'cloud'
+    ? '/app/data/recipes-v2/_recipe-meta.json'
+    : path.resolve(__dirname_ws, '../data/recipes-v2/_recipe-meta.json');
+
+function loadRecipeMetaSyncWS() {
+    try { return JSON.parse(fs.readFileSync(RECIPE_META_PATH_WS, 'utf8')); } catch { return {}; }
+}
 
 import {
   authenticateBuyer,
@@ -309,18 +324,18 @@ function inferPriceUnit(name, category, fallbackUnit) {
 
   if (family === 'cherry_tomatoes' || family === 'weight_crops') {
     const normalizedFallback = String(fallbackUnit || '').toLowerCase();
-    if (['oz', 'g', 'kg'].includes(normalizedFallback)) {
+    if (['lb', 'oz', 'g', 'kg'].includes(normalizedFallback)) {
       return normalizedFallback;
     }
-    return 'oz';
+    return 'lb';
   }
 
-  // Default: use 'oz' for weight-like fallbacks since all pricing is per-oz
+  // Default: use 'lb' for weight-like fallbacks since all pricing is per-lb
   const normFB = String(fallbackUnit || '').toLowerCase();
-  if (['oz', 'g', 'kg'].includes(normFB)) return normFB;
+  if (['lb', 'oz', 'g', 'kg'].includes(normFB)) return normFB;
   if (normFB === 'pint') return 'pint';
   if (normFB === 'unit' || normFB === 'each') return normFB;
-  return 'oz';
+  return 'lb';
 }
 
 function mean(values) {
@@ -1294,6 +1309,7 @@ router.get('/inventory', async (req, res) => {
       [farmId]
     );
 
+    const recipeMetaWS = loadRecipeMetaSyncWS();
     const lots = result.rows.map(row => {
       const qty = Number(row.quantity_available ?? row.manual_quantity_lbs ?? 0);
       const inventorySource = String(row.inventory_source || '').toLowerCase();
@@ -1301,11 +1317,12 @@ router.get('/inventory', async (req, res) => {
       const qualityFlags = [];
       if (inventorySource === 'manual') qualityFlags.push('manual_entry');
       if (isCustom) qualityFlags.push('custom_product');
+      const metaEntry = recipeMetaWS[row.product_name] || {};
 
       return {
         lot_id: row.product_id,
         sku_id: row.sku || row.product_id,
-        sku_name: row.product_name || row.sku_name || row.sku,
+        sku_name: metaEntry.displayName || row.product_name || row.sku_name || row.sku,
         crop_type: row.category || row.product_name,
         qty_available: qty,
         pack_size: 1,
@@ -1317,7 +1334,7 @@ router.get('/inventory', async (req, res) => {
         location: null,
         inventory_source: row.inventory_source || null,
         is_custom: isCustom,
-        description: row.description || null,
+        description: row.description || metaEntry.description || null,
         thumbnail_url: row.thumbnail_url || null
       };
     });
@@ -1807,13 +1824,14 @@ router.get('/catalog', async (req, res, next) => {
     }
 
     // Format response
+    const dbRecipeMeta = loadRecipeMetaSyncWS();
     const items = catalogRows.map(row => ({
       id: row.id,
       productId: row.product_id,
       name: row.product_name,
       category: row.category,
       variety: row.variety,
-      description: row.description || null,
+      description: row.description || (dbRecipeMeta[row.product_name] || {}).description || null,
       thumbnailUrl: row.thumbnail_url || null,
       isCustom: row.is_custom === true || String(row.inventory_source || '').toLowerCase() === 'custom',
       inventorySource: row.inventory_source || null,

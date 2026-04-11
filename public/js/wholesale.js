@@ -1122,7 +1122,10 @@
           <div class="sku-card">
             <div class="sku-thumbnail"><img src="${sku.thumbnail_url ? escapeAttr(sku.thumbnail_url) : '/product-images/crops/' + encodeURIComponent(sku.product_name.toLowerCase().replace(/\s+/g, '-')) + '.webp'}" alt="${escapeAttr(sku.product_name)}" loading="lazy" onerror="this.onerror=null;this.src=&quot;/images/default-product.svg&quot;" /></div>
             <div class="sku-header">
-              <div class="sku-name">${escapeHtml(sku.product_name)}</div>
+              <div class="sku-name-row">
+                <span class="sku-name">${escapeHtml(sku.product_name)}</span>
+                ${this.getSkuGrowingBadges(sku)}
+              </div>
               <div class="sku-badges">
                 ${sku.is_custom ? '<span class="sku-badge sku-badge-custom">Custom</span>' : ''}
                 ${sku.organic ? '<span class="sku-badge">Organic</span>' : ''}
@@ -2206,6 +2209,28 @@
       );
 
       return `<span class="farm-cert-badge food-safety-cert" title="Food Safety Certified: ${cert}">️ Food Safety</span>`;
+    },
+
+    getSkuGrowingBadges(sku) {
+      const farms = sku.farms || [];
+      const allPractices = new Set(
+        farms.flatMap(f => {
+          const dir = this.farmDirectory[f.farm_id] || {};
+          return [...(f.practices || []), ...(dir.practices || [])];
+        })
+      );
+      if (!allPractices.size) return '';
+      let badges = '';
+      if (allPractices.has('hydroponic')) {
+        badges += `<span class="growing-badge growing-badge-hydroponic" title="Grown hydroponically">Hydroponic</span>`;
+      }
+      if (allPractices.has('pesticide_free')) {
+        badges += `<span class="growing-badge growing-badge-no-pesticides" title="No pesticides used">No Pesticides</span>`;
+      }
+      if (allPractices.has('herbicide_free')) {
+        badges += `<span class="growing-badge growing-badge-no-herbicides" title="No herbicides used">No Herbicides</span>`;
+      }
+      return badges ? `<span class="growing-badges">${badges}</span>` : '';
     },
 
     /**

@@ -8,10 +8,22 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // In Cloud Run, /app/data is a GCS FUSE mount that shadows the local data/ dir.
-// Dockerfile copies recipes-v2 to /opt/recipes-v2 to avoid this.
+// In Cloud Run, /app/data is a GCS FUSE mount — recipes live there so edits persist.
+// Dockerfile copies seed CSVs to /opt/recipes-v2 as a build-time fallback.
 const RECIPES_DIR = process.env.DEPLOYMENT_MODE === 'cloud'
-    ? '/opt/recipes-v2'
+    ? '/app/data/recipes-v2'
     : path.join(__dirname, '../data/recipes-v2');
+
+const RECIPE_META_PATH = path.join(RECIPES_DIR, '_recipe-meta.json');
+
+async function loadRecipeMeta() {
+    try {
+        const raw = await fs.readFile(RECIPE_META_PATH, 'utf-8');
+        return JSON.parse(raw);
+    } catch {
+        return {};
+    }
+}
 
 /**
  * Parse a recipe CSV file and return structured data
@@ -65,46 +77,55 @@ router.get('/', async (req, res) => {
         const files = await fs.readdir(RECIPES_DIR);
         const recipeFiles = files.filter(f => f.endsWith('.csv'));
         
+        // Load persisted recipe metadata (displayName, category, description)
+        const recipeMeta = await loadRecipeMeta();
+        
         // Extract recipe names and categorize
         let recipes = recipeFiles.map(file => {
             // Remove "-Table 1.csv" suffix
-            const name = file.replace(/-Table 1\.csv$/, '');
+            const originalName = file.replace(/-Table 1\.csv$/, '');
+            const meta = recipeMeta[originalName] || {};
+            const name = meta.displayName || originalName;
             
-            // Determine category based on name
-            let recipeCategory = 'Vegetables';
-            const lowerName = name.toLowerCase();
+            // Use persisted category, else derive from name
+            let recipeCategory = meta.category;
+            if (!recipeCategory) {
+                const lowerName = name.toLowerCase();
             
-            if (lowerName.includes('basil') || lowerName.includes('cilantro') || 
-                lowerName.includes('parsley') || lowerName.includes('thyme') ||
-                lowerName.includes('oregano') || lowerName.includes('rosemary') ||
-                lowerName.includes('sage') || lowerName.includes('dill') ||
-                lowerName.includes('tarragon') || lowerName.includes('marjoram') ||
-                lowerName.includes('mint') || lowerName.includes('chervil') ||
-                lowerName.includes('lovage') || lowerName.includes('lemon balm')) {
-                recipeCategory = 'Herbs';
-            } else if (lowerName.includes('lettuce') || lowerName.includes('arugula') ||
-                       lowerName.includes('spinach') || lowerName.includes('kale') ||
-                       lowerName.includes('chard') || lowerName.includes('endive') ||
-                       lowerName.includes('escarole') || lowerName.includes('frisée') ||
-                       lowerName.includes('romaine') || lowerName.includes('oakleaf') ||
-                       lowerName.includes('butterhead') || lowerName.includes('pak choi') ||
-                       lowerName.includes('mizuna') || lowerName.includes('tatsoi') ||
-                       lowerName.includes('komatsuna') || lowerName.includes('mustard') ||
-                       lowerName.includes('watercress') || lowerName.includes('sorrel')) {
-                recipeCategory = 'Leafy Greens';
-            } else if (lowerName.includes('tomato') || lowerName.includes('boy') ||
-                       lowerName.includes('brandywine') || lowerName.includes('celebrity') ||
-                       lowerName.includes('heatmaster') || lowerName.includes('marzano') ||
-                       lowerName.includes('gold')) {
-                recipeCategory = 'Tomatoes';
-            } else if (lowerName.includes('strawberry') || lowerName.includes('albion') ||
-                       lowerName.includes('chandler') || lowerName.includes('eversweet') ||
-                       lowerName.includes('mara') || lowerName.includes('monterey') ||
-                       lowerName.includes('ozark') || lowerName.includes('seascape') ||
-                       lowerName.includes('sequoia') || lowerName.includes('tribute') ||
-                       lowerName.includes('tristar') || lowerName.includes('fort laramie') ||
-                       lowerName.includes('jewel')) {
-                recipeCategory = 'Berries';
+                if (lowerName.includes('basil') || lowerName.includes('cilantro') || 
+                    lowerName.includes('parsley') || lowerName.includes('thyme') ||
+                    lowerName.includes('oregano') || lowerName.includes('rosemary') ||
+                    lowerName.includes('sage') || lowerName.includes('dill') ||
+                    lowerName.includes('tarragon') || lowerName.includes('marjoram') ||
+                    lowerName.includes('mint') || lowerName.includes('chervil') ||
+                    lowerName.includes('lovage') || lowerName.includes('lemon balm')) {
+                    recipeCategory = 'Herbs';
+                } else if (lowerName.includes('lettuce') || lowerName.includes('arugula') ||
+                           lowerName.includes('spinach') || lowerName.includes('kale') ||
+                           lowerName.includes('chard') || lowerName.includes('endive') ||
+                           lowerName.includes('escarole') || lowerName.includes('frisée') ||
+                           lowerName.includes('romaine') || lowerName.includes('oakleaf') ||
+                           lowerName.includes('butterhead') || lowerName.includes('pak choi') ||
+                           lowerName.includes('mizuna') || lowerName.includes('tatsoi') ||
+                           lowerName.includes('komatsuna') || lowerName.includes('mustard') ||
+                           lowerName.includes('watercress') || lowerName.includes('sorrel')) {
+                    recipeCategory = 'Leafy Greens';
+                } else if (lowerName.includes('tomato') || lowerName.includes('boy') ||
+                           lowerName.includes('brandywine') || lowerName.includes('celebrity') ||
+                           lowerName.includes('heatmaster') || lowerName.includes('marzano') ||
+                           lowerName.includes('gold')) {
+                    recipeCategory = 'Tomatoes';
+                } else if (lowerName.includes('strawberry') || lowerName.includes('albion') ||
+                           lowerName.includes('chandler') || lowerName.includes('eversweet') ||
+                           lowerName.includes('mara') || lowerName.includes('monterey') ||
+                           lowerName.includes('ozark') || lowerName.includes('seascape') ||
+                           lowerName.includes('sequoia') || lowerName.includes('tribute') ||
+                           lowerName.includes('tristar') || lowerName.includes('fort laramie') ||
+                           lowerName.includes('jewel')) {
+                    recipeCategory = 'Berries';
+                } else {
+                    recipeCategory = 'Vegetables';
+                }
             }
             
             return {
@@ -112,8 +133,8 @@ router.get('/', async (req, res) => {
                 name: name,
                 category: recipeCategory,
                 file: file,
-                description: `Growing recipe for ${name}`,
-                duration_days: null, // Will be populated when file is loaded
+                description: meta.description || `Growing recipe for ${name}`,
+                duration_days: null,
                 stages: []
             };
         });
@@ -286,14 +307,19 @@ router.get('/:id', async (req, res) => {
         // Parse the recipe
         const recipeData = await parseRecipeCSV(filePath);
         
-        // Extract recipe name
-        const name = filename.replace(/-Table 1\.csv$/, '');
+        // Extract recipe name and load metadata
+        const originalName = filename.replace(/-Table 1\.csv$/, '');
+        const recipeMeta = await loadRecipeMeta();
+        const meta = recipeMeta[originalName] || {};
+        const name = meta.displayName || originalName;
         
         res.json({
             success: true,
             recipe: {
                 id: filename.replace('.csv', ''),
                 name: name,
+                category: meta.category || undefined,
+                description: meta.description || `Growing recipe for ${name}`,
                 table_name: recipeData.tableName,
                 headers: recipeData.headers,
                 phases: recipeData.phases,

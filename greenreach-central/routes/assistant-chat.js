@@ -164,7 +164,7 @@ const TRUST_TIERS = {
   // AUTO: Execute immediately, notify after
   auto: new Set(['dismiss_alert', 'get_ai_pricing_recommendations', 'save_user_memory', 'escalate_to_faye', 'reply_to_faye', 'get_faye_directives', 'read_skill_file', 'get_gwen_messages', 'reply_to_gwen']),
   // QUICK-CONFIRM: Execute with brief undo window
-  quick_confirm: new Set(['mark_harvest_complete', 'update_farm_profile', 'update_group_crop', 'create_room', 'create_zone', 'update_certifications', 'complete_setup', 'update_crop_price', 'add_inventory_item', 'update_manual_inventory', 'record_harvest', 'update_room_specs', 'apply_crop_environment', 'recommend_farm_layout']),
+  quick_confirm: new Set(['mark_harvest_complete', 'update_farm_profile', 'update_group_crop', 'create_room', 'create_zone', 'update_certifications', 'complete_setup', 'update_crop_price', 'add_inventory_item', 'update_manual_inventory', 'record_harvest', 'update_room_specs', 'apply_crop_environment', 'recommend_farm_layout', 'update_crop_description', 'add_salad_mix_inventory']),
   // CONFIRM: Ask before executing (default for write tools)
   confirm: new Set([
     'create_planting_assignment', 'update_order_status',
@@ -754,6 +754,50 @@ const GPT_TOOLS = [
           product_id: { type: 'number', description: 'Product ID to deactivate (from list_custom_products)' }
         },
         required: ['product_id']
+      }
+    }
+  },
+  // --- Crop Description & Salad Mix Tools ---
+  {
+    type: 'function',
+    function: {
+      name: 'update_crop_description',
+      description: 'Update the product description for a crop or product in this farm\'s inventory. Descriptions are shown to wholesale buyers in the catalog. WRITE operation -- confirm with user first.',
+      parameters: {
+        type: 'object',
+        properties: {
+          crop_name: { type: 'string', description: 'Crop or product name (e.g. "Genovese Basil", "Spring Mix"). Partial name matching is used.' },
+          description: { type: 'string', description: 'New product description (max 2000 chars). Visible to buyers in the wholesale catalog.' },
+          farm_id: { type: 'string', description: 'Farm ID (optional)' }
+        },
+        required: ['crop_name', 'description']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'list_salad_mix_templates',
+      description: 'List available GreenReach salad mix templates -- pre-defined multi-crop blends that can be added to farm inventory. Returns template name, description, and component crops with ratios.',
+      parameters: {
+        type: 'object',
+        properties: {}
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'add_salad_mix_inventory',
+      description: 'Add farm inventory for a salad mix using a GreenReach mix template. The mix appears as a catalog item with the specified weight available. Use list_salad_mix_templates first to find the right template. WRITE operation -- confirm with user first.',
+      parameters: {
+        type: 'object',
+        properties: {
+          mix_template_id: { type: 'number', description: 'Template ID (from list_salad_mix_templates)' },
+          mix_name: { type: 'string', description: 'Template name (alternative to mix_template_id -- used to look up the template by name)' },
+          quantity_lbs: { type: 'number', description: 'Available quantity in lbs' },
+          farm_id: { type: 'string', description: 'Farm ID (optional)' }
+        }
       }
     }
   },
@@ -2371,6 +2415,22 @@ CUSTOM PRODUCTS:
 - Deletion: use delete_custom_product -- soft-deletes (sets status to inactive).
 - When a farmer asks "add a product", "create a new item", "I sell pesto jars", or similar -- use create_custom_product (not add_inventory_item, which is for crop stock).
 
+CROP DESCRIPTIONS:
+- You can set or update the description shown for any crop or product in the wholesale catalog.
+- Use update_crop_description when the farmer says "add a description to basil", "update the product description", or "describe [crop] for buyers".
+- The description is stored on the farm_inventory row and shown to wholesale buyers in the marketplace listing.
+- Always call get_inventory_summary first to confirm the crop exists in farm inventory before updating the description.
+
+SALAD MIXES:
+- GreenReach provides pre-defined salad mix templates (e.g. Spring Greens Mix, Asian Greens Blend) that define a multi-crop blend with component ratios.
+- To add mix inventory:
+  1. Call list_salad_mix_templates to show the farmer available options.
+  2. Confirm which template and how many lbs they want to list.
+  3. Call add_salad_mix_inventory with the template ID and quantity.
+  4. The mix appears in the wholesale catalog immediately.
+- Mix inventory is stored as inventory_source='mix' and counts toward the farm's available product catalog.
+- If no templates exist, tell the farmer to contact GreenReach to have custom mix templates added.
+
 IMAGE DIAGNOSIS:
 - When a farmer uploads an image, analyse it for: plant species, growth stage, visible issues (nutrient deficiency, pest damage, disease, environmental stress), severity, and recommended corrective action.
 - Cross-reference visual diagnosis with the farm's current environment data — if you detect calcium deficiency, check the nutrient dashboard to confirm.
@@ -2385,7 +2445,7 @@ RULES:
 - For complex planning questions, a thorough structured answer is better than a short one. Use rich formatting.
 - When you call a tool, summarize the result naturally — don't dump raw JSON.
 - Use the tools proactively — if a user asks you to do something and you have a tool for it, use the tool. Do not ask the user for information the tools can provide.
-- For WRITE operations (update_farm_profile, create_room, create_zone, update_certifications, complete_setup, update_crop_price, create_planting_assignment, create_planting_plan (with execute=true), mark_harvest_complete, update_order_status, add_inventory_item, update_manual_inventory, create_custom_product, update_custom_product, delete_custom_product, dismiss_alert, auto_assign_devices, register_device, seed_benchmarks, update_nutrient_targets, update_target_ranges, set_light_schedule, update_group_crop, create_procurement_order, update_room_specs, apply_crop_environment): you MUST describe the proposed change and ask the user to confirm BEFORE calling the tool. Do NOT call write tools until the user says "yes", "confirm", "do it", or similar.
+- For WRITE operations (update_farm_profile, create_room, create_zone, update_certifications, complete_setup, update_crop_price, create_planting_assignment, create_planting_plan (with execute=true), mark_harvest_complete, update_order_status, add_inventory_item, update_manual_inventory, update_crop_description, add_salad_mix_inventory, create_custom_product, update_custom_product, delete_custom_product, dismiss_alert, auto_assign_devices, register_device, seed_benchmarks, update_nutrient_targets, update_target_ranges, set_light_schedule, update_group_crop, create_procurement_order, update_room_specs, apply_crop_environment): you MUST describe the proposed change and ask the user to confirm BEFORE calling the tool. Do NOT call write tools until the user says "yes", "confirm", "do it", or similar.
 - PROCUREMENT SAFETY: create_procurement_order requires reading back the full order summary (items, quantities, cost) and getting explicit approval. Never place orders without confirmed quantities. Never source from outside the procurement catalog.
 - After any WRITE operation succeeds, verify by calling the corresponding read tool and report the confirmed result.
 - If you can't help, say so briefly and suggest what you CAN do.
@@ -5405,6 +5465,128 @@ async function executeExtendedTool(toolName, params, farmId) {
 
         if (result.rowCount === 0) return { ok: false, error: 'Custom product not found or already inactive' };
         return { ok: true, message: `Custom product deactivated (id: ${productDbId}). It will no longer appear in the catalog.` };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+
+    // ── Crop Description & Salad Mix Management ────────────────────────
+    case 'update_crop_description': {
+      try {
+        if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+        const cropName = (params.crop_name || '').trim();
+        const description = (params.description || '').trim();
+        if (!cropName) return { ok: false, error: 'crop_name is required' };
+        if (!description) return { ok: false, error: 'description is required' };
+        if (description.length > 2000) return { ok: false, error: 'description must be 2000 characters or fewer' };
+
+        // Exact match first
+        let result = await query(
+          `UPDATE farm_inventory SET description = $1, updated_at = NOW()
+           WHERE farm_id = $2 AND LOWER(product_name) = LOWER($3) AND status != 'inactive'
+           RETURNING product_name, description`,
+          [description, farmId, cropName]
+        );
+
+        // Partial match fallback
+        if (result.rowCount === 0) {
+          result = await query(
+            `UPDATE farm_inventory SET description = $1, updated_at = NOW()
+             WHERE farm_id = $2 AND LOWER(product_name) LIKE LOWER($3) AND status != 'inactive'
+             RETURNING product_name, description`,
+            [description, farmId, `%${cropName}%`]
+          );
+        }
+
+        if (result.rowCount === 0) {
+          return { ok: false, error: `No inventory entry found for "${cropName}". The crop may not be in your farm inventory yet. Use update_manual_inventory to add it first, then update the description.` };
+        }
+        return {
+          ok: true,
+          message: `Description updated for "${result.rows[0].product_name}".`,
+          updated_count: result.rowCount
+        };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+
+    case 'list_salad_mix_templates': {
+      try {
+        if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+        const result = await query(
+          `SELECT mt.id, mt.name, mt.description,
+                  json_agg(json_build_object('crop', mc.product_name, 'ratio', mc.ratio) ORDER BY mc.product_name) FILTER (WHERE mc.product_name IS NOT NULL) AS components
+           FROM mix_templates mt
+           LEFT JOIN mix_components mc ON mc.mix_template_id = mt.id
+           WHERE mt.status = 'active'
+           GROUP BY mt.id, mt.name, mt.description
+           ORDER BY mt.name`
+        );
+        return {
+          ok: true,
+          templates: result.rows,
+          count: result.rows.length,
+          message: result.rows.length === 0
+            ? 'No salad mix templates are available. Contact GreenReach to have mix templates added.'
+            : `${result.rows.length} mix template${result.rows.length !== 1 ? 's' : ''} available.`
+        };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+
+    case 'add_salad_mix_inventory': {
+      try {
+        if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+        const quantityLbs = Number(params.quantity_lbs);
+        if (!quantityLbs || quantityLbs <= 0) return { ok: false, error: 'quantity_lbs must be a positive number' };
+
+        // Resolve template by ID or name
+        let template = null;
+        if (params.mix_template_id) {
+          const tr = await query(
+            `SELECT id, name, description FROM mix_templates WHERE id = $1 AND status = 'active'`,
+            [Number(params.mix_template_id)]
+          );
+          template = tr.rows[0];
+        } else if (params.mix_name) {
+          const tr = await query(
+            `SELECT id, name, description FROM mix_templates WHERE LOWER(name) LIKE LOWER($1) AND status = 'active' LIMIT 1`,
+            [`%${params.mix_name}%`]
+          );
+          template = tr.rows[0];
+        }
+
+        if (!template) {
+          return { ok: false, error: 'Salad mix template not found. Call list_salad_mix_templates to see available options.' };
+        }
+
+        const productId = `mix-${template.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+
+        // Upsert the mix inventory row
+        const result = await query(
+          `INSERT INTO farm_inventory (
+            farm_id, product_id, product_name, description, unit, quantity_unit,
+            quantity_available, quantity, manual_quantity_lbs,
+            inventory_source, category, status, is_custom,
+            created_at, updated_at
+          ) VALUES ($1, $2, $3, $4, 'lb', 'lb', $5, $5, $5, 'mix', 'Salad Mix', 'active', FALSE, NOW(), NOW())
+          ON CONFLICT (farm_id, product_id) DO UPDATE SET
+            manual_quantity_lbs = $5,
+            quantity_available = $5,
+            quantity = $5,
+            updated_at = NOW()
+          RETURNING id, product_name, quantity_available, unit`,
+          [farmId, productId, template.name, template.description || null, quantityLbs]
+        );
+
+        return {
+          ok: true,
+          message: `${quantityLbs} lbs of "${template.name}" added to inventory.`,
+          product: result.rows[0],
+          tip: 'The mix now appears in your wholesale catalog and POS immediately.'
+        };
       } catch (err) {
         return { ok: false, error: err.message };
       }

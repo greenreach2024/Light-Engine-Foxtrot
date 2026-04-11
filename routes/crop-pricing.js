@@ -22,6 +22,15 @@ const PRICING_REL = 'public/data/crop-pricing.json';
 const RECIPES_FILE = path.resolve(__dirname, '../public/data/lighting-recipes.json');
 const GROUPS_FILE = path.resolve(__dirname, '../public/data/groups.json');
 
+// Recipe metadata for display names & descriptions
+const RECIPE_META_PATH = process.env.DEPLOYMENT_MODE === 'cloud'
+    ? '/app/data/recipes-v2/_recipe-meta.json'
+    : path.resolve(__dirname, '../greenreach-central/data/recipes-v2/_recipe-meta.json');
+
+function loadRecipeMetaSync() {
+    try { return JSON.parse(fs.readFileSync(RECIPE_META_PATH, 'utf8')); } catch { return {}; }
+}
+
 // Crop utilities — Phase 2a unified crop registry
 const _require = createRequire(import.meta.url);
 const cropUtils = _require('../public/js/crop-utils.js');
@@ -44,8 +53,9 @@ function planIdToCropName(planId) {
 router.get('/', async (req, res) => {
   try {
     // Load existing pricing data (GCS first, local fallback)
+    // Fall back to local baked-in file if GCS has null OR an empty crops array.
     let pricingData = await readJSON(PRICING_REL, null);
-    if (!pricingData) {
+    if (!pricingData || !(pricingData.crops?.length > 0)) {
       try { pricingData = JSON.parse(fs.readFileSync(PRICING_FILE, 'utf8')); } catch { pricingData = { crops: [] }; }
     }
     
@@ -79,16 +89,24 @@ router.get('/', async (req, res) => {
     // Merge: all recipe crops + any extra crops in pricing that aren't in recipes
     const allCropSet = new Set([...allCropNames, ...Object.keys(priceMap)]);
     
+    // Load recipe metadata for display names & descriptions
+    const recipeMeta = loadRecipeMetaSync();
+
     const mergedCrops = Array.from(allCropSet).sort().map(cropName => {
       const existing = priceMap[cropName];
+      const meta = recipeMeta[cropName] || {};
       return {
         crop: cropName,
+        displayName: meta.displayName || null,
+        description: meta.description || null,
         unit: existing?.unit || 'lb',
         retailPrice: existing?.retailPrice || 0,
         wholesalePrice: existing?.wholesalePrice || 0,
         ws1Discount: existing?.ws1Discount ?? 20,
         ws2Discount: existing?.ws2Discount || 25,
         ws3Discount: existing?.ws3Discount || 35,
+        floor_price: existing?.floor_price ?? 0,
+        isTaxable: existing?.isTaxable || false,
         isGrowing: growingCrops.has(cropName),
         hasPricing: !!existing
       };
@@ -193,14 +211,26 @@ router.get('/:cropName', async (req, res) => {
   }
 });
 
-// On startup, hydrate local file from GCS so subsequent reads are fast
+// On startup: if GCS has pricing data, hydrate local; if GCS is empty/missing, seed GCS from the baked-in local file.
 (async () => {
   try {
     const gcsData = await readJSON(PRICING_REL, null);
     if (gcsData && gcsData.crops && gcsData.crops.length > 0) {
+      // GCS has data — write it to local for fast subsequent reads
       fs.mkdirSync(path.dirname(PRICING_FILE), { recursive: true });
       fs.writeFileSync(PRICING_FILE, JSON.stringify(gcsData, null, 2), 'utf8');
       console.log(`[crop-pricing] Hydrated local pricing file from GCS (${gcsData.crops.length} crops)`);
+    } else {
+      // GCS is empty or missing — seed it from the baked-in local pricing file
+      try {
+        const localData = JSON.parse(fs.readFileSync(PRICING_FILE, 'utf8'));
+        if (localData && localData.crops && localData.crops.length > 0) {
+          await writeJSON(PRICING_REL, localData);
+          console.log(`[crop-pricing] Seeded GCS pricing from local baked-in file (${localData.crops.length} crops)`);
+        }
+      } catch (seedErr) {
+        console.warn('[crop-pricing] GCS pricing seed from local failed:', seedErr.message);
+      }
     }
   } catch (err) {
     console.warn('[crop-pricing] GCS hydration skipped:', err.message);

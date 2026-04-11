@@ -1,0 +1,407 @@
+{
+  "Albion": {
+    "category": "Berries",
+    "description": "Large, firm, and beautifully sweet with bright strawberry flavour. A versatile berry that shines in fresh desserts, salads, preserves, and paired with cream, chocolate, or balsamic."
+  },
+  "Alkindus Pelleted Organic": {
+    "category": "Leafy Greens",
+    "description": "A deep red romaine with crisp texture and mild, slightly sweet flavour. Excellent in salads with citrus, nuts, grilled chicken, feta, and robust vinaigrettes."
+  },
+  "Amaze": {
+    "displayName": "Amaze Lettuce",
+    "category": "Leafy Greens",
+    "description": "Fresh, mild, and crisp with strong visual appeal. A versatile lettuce that works well with herbs, berries, citrus, grilled vegetables, chicken, and seafood."
+  },
+  "Astro Arugula": {
+    "category": "Leafy Greens",
+    "description": "Bright, peppery, and lively with a fresh kick. Perfect with lemon, parmesan, tomato, prosciutto, grilled meats, and roasted vegetables."
+  },
+  "Better Boy": {
+    "category": "Tomatoes",
+    "description": "Classic, full-bodied tomato flavour with a balanced sweetness and firm, juicy flesh. Ideal sliced for sandwiches, burgers, fresh salads, and paired with basil, mozzarella, or olive oil."
+  },
+  "Bibb Butterhead": {
+    "displayName": "Butterhead Lettuce",
+    "category": "Leafy Greens",
+    "description": "Velvety, tender, and mildly sweet with a soft, delicate bite. Ideal for elegant salads with herbs, eggs, seafood, and spring vegetables."
+  },
+  "Brandywine": {
+    "category": "Tomatoes",
+    "description": "Rich, complex heirloom flavour with deep sweetness and a meaty, succulent texture. A standout for caprese, open-faced sandwiches, and pairing with aged cheeses, olive oil, and fresh herbs."
+  },
+  "Breen Pelleted Organic": {
+    "displayName": "Breen Lettuce",
+    "category": "Leafy Greens",
+    "description": "Rich red colour with a mild, balanced flavour and soft texture. Pairs well with goat cheese, apples, beets, nuts, and vinaigrettes."
+  },
+  "Brentwood Eazyleaf Organic": {
+    "displayName": "Brentwood Lettuce",
+    "category": "Leafy Greens",
+    "description": "Bright green oak-leaf lettuce with a mild, buttery flavour and tender texture. Perfect for mixed salads with fresh herbs, cucumber, radish, and light citrus dressings."
+  },
+  "Burgandy Eazyleaf Organic": {
+    "displayName": "Burgundy Lettuce",
+    "category": "Leafy Greens",
+    "description": "Striking deep burgundy leaves with a mild, slightly sweet flavour and delicate crunch. Beautiful in salads with pear, walnuts, blue cheese, and balsamic vinaigrette."
+  },
+  "Buttercrunch Lettuce": {
+    "category": "Leafy Greens",
+    "description": "Soft, sweet leaves with a gentle crispness through the ribs. Versatile and fresh, it pairs well with citrus, avocado, herbs, seafood, and creamy dressings."
+  },
+  "Celebrity": {
+    "category": "Tomatoes",
+    "description": "Smooth, well-rounded flavour with a gentle sweetness and reliable firmness. A dependable all-purpose tomato for salads, salsas, sauces, and everyday cooking."
+  },
+  "Chandler": {
+    "category": "Berries",
+    "description": "Sweet, juicy, and generously sized with classic strawberry flavour. Wonderful for fresh eating, shortcakes, tarts, smoothies, and pairing with whipped cream or mint."
+  },
+  "Chervil": {
+    "category": "Herbs",
+    "description": "Subtle and refined with delicate notes of anise and parsley. A French kitchen essential that elevates eggs, cream sauces, spring vegetables, fish, and chilled soups."
+  },
+  "Common Thyme": {
+    "category": "Herbs",
+    "description": "Warm, earthy, and gently aromatic with savoury depth. Indispensable in roasts, stews, grilled meats, mushrooms, root vegetables, and fresh bread."
+  },
+  "Dill Bouquet": {
+    "category": "Herbs",
+    "description": "Bright, grassy, and fresh with a gentle anise finish. Pairs beautifully with salmon, cucumber, potatoes, yogurt sauces, pickles, and Scandinavian dishes."
+  },
+  "Eazyleaf Blend Organic": {
+    "displayName": "Eazyleaf Blend",
+    "category": "Leafy Greens",
+    "description": "A thoughtfully curated blend of oak-leaf lettuces offering a range of colour, texture, and mild flavour. Ready for salads with any topping, from grilled proteins to fresh fruit and cheese."
+  },
+  "Escarole Batavian": {
+    "displayName": "Escarole",
+    "category": "Leafy Greens",
+    "description": "Broad, sturdy leaves with a pleasantly mild bitterness that softens when cooked. Excellent in Italian wedding soup, white bean dishes, sauteed with garlic, or raw in hearty winter salads."
+  },
+  "Eversweet": {
+    "category": "Berries",
+    "description": "Reliably sweet and aromatic with a soft, succulent texture. A wonderful everbearing berry for fresh eating, fruit salads, preserves, and pairing with cream or meringue."
+  },
+  "Fort Laramie": {
+    "category": "Berries",
+    "description": "Hardy and sweet with a bright, clean strawberry flavour and juicy texture. Great for fresh snacking, smoothies, desserts, and topping cereals or yogurt."
+  },
+  "French Tarragon": {
+    "category": "Herbs",
+    "description": "Elegant and aromatic with a distinctive anise-licorice warmth. A cornerstone of French cuisine, perfect with chicken, fish, eggs, cream sauces, and mustard vinaigrettes."
+  },
+  "Fris\u00e9e Endive": {
+    "displayName": "Frisee Endive",
+    "category": "Leafy Greens",
+    "description": "Lacy, curly leaves with a pleasantly bitter edge and light crunch. A classic in French bistro salads with lardons, poached egg, Dijon, and warm vinaigrettes."
+  },
+  "Genovese Basil": {
+    "category": "Herbs",
+    "description": "Sweet, aromatic, and full-flavoured with classic notes of clove and anise. Tender green leaves pair beautifully with tomato, mozzarella, pasta, citrus, and Mediterranean dishes."
+  },
+  "Greek Oregano": {
+    "category": "Herbs",
+    "description": "Bold, warm, and intensely aromatic with a peppery bite. Essential for Greek salads, grilled lamb, roasted vegetables, pizza, marinades, and Mediterranean cooking."
+  },
+  "Hampton Eazyleaf Organic": {
+    "displayName": "Hampton Lettuce",
+    "category": "Leafy Greens",
+    "description": "Bright green leaves with a clean, mild flavour and satisfying crunch. A reliable everyday lettuce for wraps, sandwiches, side salads, and pairing with a wide range of dressings."
+  },
+  "Heatmaster F1": {
+    "category": "Tomatoes",
+    "description": "Robust and full-flavoured with dependable firmness and rich tomato taste. Well-suited for grilling, roasting, fresh slicing, and pairing with herbs, garlic, and olive oil."
+  },
+  "Ilema Organic": {
+    "displayName": "Ilema Lettuce",
+    "category": "Leafy Greens",
+    "description": "Crisp and refreshing with a clean, mild flavour and dense, satisfying crunch. Ideal for Caesar-style salads, wraps, burgers, and pairing with bold dressings and grilled proteins."
+  },
+  "Italian Parsley": {
+    "category": "Herbs",
+    "description": "Clean, bright, and slightly peppery with a fresh, grassy finish. A kitchen staple for sauces, salads, tabbouleh, grilled meats, seafood, and finishing almost any savoury dish."
+  },
+  "Jewel": {
+    "category": "Berries",
+    "description": "Firm, richly coloured, and deeply flavoured with classic sweetness. Excellent for fresh eating, pies, preserves, and pairing with chocolate, mint, or vanilla cream."
+  },
+  "KX-1 Kale (baby leaf)": {
+    "displayName": "Baby Kale",
+    "category": "Leafy Greens",
+    "description": "Tender, mild, and nutrient-dense with none of the toughness of mature kale. Delicious raw in salads with lemon, olive oil, parmesan, nuts, dried fruit, and grain bowls."
+  },
+  "Kentucky Colonel Spearmint": {
+    "displayName": "Spearmint",
+    "category": "Herbs",
+    "description": "Cool, sweet, and refreshing with a clean, bright aroma. Perfect for teas, cocktails, fruit salads, lamb dishes, yogurt sauces, and fresh spring rolls."
+  },
+  "Komatsuna Mustard Spinach": {
+    "displayName": "Komatsuna",
+    "category": "Leafy Greens",
+    "description": "Mild, tender leaves with a subtle mustard warmth and spinach-like versatility. Wonderful in stir-fries, miso soup, noodle bowls, salads, and sauteed with garlic and sesame."
+  },
+  "Lemon Balm": {
+    "category": "Herbs",
+    "description": "Bright, gentle lemon fragrance with a sweet, calming flavour. Lovely in teas, lemonades, fruit desserts, salad dressings, fish dishes, and infused waters."
+  },
+  "Little Gem": {
+    "category": "Leafy Greens",
+    "description": "Compact, sweet, and satisfyingly crunchy with the best qualities of romaine and butterhead. Ideal halved and grilled, in Caesar salads, or with anchovies, parmesan, and lemon."
+  },
+  "Lovage": {
+    "category": "Herbs",
+    "description": "Bold, complex celery-like flavour with an earthy, slightly peppery depth. Excellent in soups, stocks, potato dishes, stews, and as an aromatic garnish for savoury plates."
+  },
+  "Magenta Sunset Swiss Chard": {
+    "displayName": "Rainbow Swiss Chard",
+    "category": "Leafy Greens",
+    "description": "Bold in colour and earthy in flavour, with tender leaves and crisp, colourful stems. Excellent with garlic, lemon, olive oil, grains, legumes, and aged cheeses."
+  },
+  "Mara de Bois": {
+    "category": "Berries",
+    "description": "Intensely aromatic with complex wild-strawberry fragrance and a rich, honeyed sweetness. A gourmet favourite for fresh eating, elegant desserts, and pairing with champagne or cream."
+  },
+  "Marjoram": {
+    "category": "Herbs",
+    "description": "Sweet, delicate, and gently floral with a milder warmth than oregano. Lovely with roasted poultry, sausages, root vegetables, eggs, butter sauces, and Mediterranean dishes."
+  },
+  "Mei Qing Pak Choi": {
+    "displayName": "Baby Pak Choi",
+    "category": "Leafy Greens",
+    "description": "Crisp, mild, and subtly sweet with juicy stems and tender leaves. Excellent stir-fried, steamed, in ramen, with ginger and soy, sesame oil, and Asian-inspired dishes."
+  },
+  "Microgreen Arugula": {
+    "category": "Microgreens",
+    "description": "Concentrated peppery punch in a tiny, vibrant leaf. Perfect for finishing pizzas, pasta, sandwiches, eggs, charcuterie boards, and adding bold flavour to any plate."
+  },
+  "Microgreen Basil": {
+    "category": "Microgreens",
+    "description": "Intense basil aroma and flavour in a delicate, miniature form. Beautiful as a garnish for caprese, bruschetta, Thai dishes, cocktails, and fresh summer plates."
+  },
+  "Microgreen Beet": {
+    "category": "Microgreens",
+    "description": "Earthy, sweet, and strikingly coloured with deep ruby stems. Adds vibrant colour and flavour to salads, grain bowls, goat cheese dishes, and elegant plating."
+  },
+  "Microgreen Broccoli Organic": {
+    "displayName": "Microgreen Broccoli",
+    "category": "Microgreens",
+    "description": "Mild, fresh, and subtly peppery with remarkable nutritional density. A versatile garnish for soups, sandwiches, smoothie bowls, wraps, and health-focused dishes."
+  },
+  "Microgreen Kale": {
+    "category": "Microgreens",
+    "description": "Tender and mild with a gentle earthiness, far softer than mature kale. Ideal for smoothie bowls, avocado toast, grain salads, and adding subtle green depth to any dish."
+  },
+  "Microgreen Kohlrabi": {
+    "category": "Microgreens",
+    "description": "Crisp and mild with a delicate cabbage-like sweetness. A refined garnish for seafood, Asian-inspired dishes, tacos, spring rolls, and light salads."
+  },
+  "Microgreen Pac Choi": {
+    "displayName": "Microgreen Pak Choi",
+    "category": "Microgreens",
+    "description": "Fresh, mild, and slightly tangy with tender stems and bright green leaves. Lovely on noodle bowls, dumplings, sushi, stir-fries, and Asian-fusion plates."
+  },
+  "Microgreen Pea Shoots": {
+    "category": "Microgreens",
+    "description": "Sweet, fresh, and unmistakably pea-flavoured with tender curling tendrils. Wonderful in salads, on toast, with spring vegetables, seafood, risotto, and as an elegant garnish."
+  },
+  "Microgreen Radish Organic": {
+    "displayName": "Microgreen Radish",
+    "category": "Microgreens",
+    "description": "Spicy, zesty, and vibrant with a satisfying crunch and peppery heat. Perfect for tacos, sushi, sandwiches, avocado dishes, and adding a bright kick to any plate."
+  },
+  "Microgreen Sunflower Organic": {
+    "displayName": "Microgreen Sunflower",
+    "category": "Microgreens",
+    "description": "Nutty, crunchy, and mildly sweet with substantial, satisfying leaves. Excellent in salads, wraps, smoothie bowls, grain dishes, and as a hearty garnish for soups."
+  },
+  "Microgreen Swiss Chard": {
+    "category": "Microgreens",
+    "description": "Earthy, mild, and beautifully colourful with delicate ruby and gold stems. A stunning garnish for fine dining plates, salads, appetizers, and grain bowls."
+  },
+  "Mizuna Mustard Greens": {
+    "displayName": "Mizuna",
+    "category": "Leafy Greens",
+    "description": "Feathery, delicate leaves with a mild peppery bite and fresh, clean finish. Beautiful in Japanese-inspired salads, stir-fries, noodle bowls, and paired with sesame, miso, and citrus."
+  },
+  "Monterey": {
+    "category": "Berries",
+    "description": "Large, sweet, and generously juicy with a bright, appealing flavour. Wonderful for fresh eating, fruit platters, smoothies, tarts, and pairing with whipped cream or chocolate."
+  },
+  "Newham Pelleted Organic": {
+    "displayName": "Newham Mini Romaine",
+    "category": "Leafy Greens",
+    "description": "Compact and crisp with a sweet, mild flavour and satisfying crunch. Perfect for mini Caesar salads, grilled lettuce wedges, wraps, and pairing with bold, creamy dressings."
+  },
+  "Ozark Beauty": {
+    "category": "Berries",
+    "description": "Sweet, aromatic, and reliably productive with a well-balanced berry flavour. Great for fresh eating, freezing, desserts, and pairing with vanilla, mint, or citrus."
+  },
+  "Rosemary": {
+    "category": "Herbs",
+    "description": "Pine-scented, woody, and deeply aromatic with a warm, resinous intensity. Essential for roasted lamb, focaccia, potatoes, grilled vegetables, olive oil infusions, and hearty Mediterranean dishes."
+  },
+  "Sage": {
+    "category": "Herbs",
+    "description": "Warm, earthy, and softly peppery with a velvety texture and savoury depth. Perfect with brown butter, pork, poultry, squash, stuffing, pasta, and autumn dishes."
+  },
+  "Salad Bowl Oakleaf": {
+    "displayName": "Oakleaf Lettuce",
+    "category": "Leafy Greens",
+    "description": "Delicate and tender with a mild, slightly nutty flavour. A refined choice for salads with soft cheeses, fruit, herbs, and light vinaigrettes."
+  },
+  "San Marzano-": {
+    "displayName": "San Marzano",
+    "category": "Tomatoes",
+    "description": "Dense, meaty, and rich with low acidity and a deep, sweet tomato flavour. The gold standard for sauces, slow-cooked ragus, pizza, bruschetta, and Italian cooking."
+  },
+  "Seascape": {
+    "category": "Berries",
+    "description": "Firm, sweet, and brightly flavoured with a pleasing balance of tartness. Excellent for fresh eating, dipping in chocolate, topping pancakes, and pairing with citrus or cream."
+  },
+  "Seaside F1 Spinach (baby leaf)": {
+    "displayName": "Baby Spinach",
+    "category": "Leafy Greens",
+    "description": "Tender, mild, and subtly sweet with smooth, dark green leaves. Essential for fresh salads, smoothies, sauteed with garlic, eggs, pasta, and grain bowls."
+  },
+  "Sequoia": {
+    "category": "Berries",
+    "description": "Extra sweet, soft, and richly aromatic with a delicate, melt-in-your-mouth texture. Best enjoyed fresh, in fruit salads, with angel food cake, or alongside whipped cream and berries."
+  },
+  "Sorrel": {
+    "category": "Leafy Greens",
+    "description": "Bright, tangy, and refreshingly lemony with a unique sharp flavour. Wonderful in French-style soups, cream sauces, fish dishes, spring salads, and paired with eggs or potatoes."
+  },
+  "Spretnak Organic": {
+    "displayName": "Spretnak Lettuce",
+    "category": "Leafy Greens",
+    "description": "Beautiful red-tinged butterhead with velvety, tender leaves and a mild, sweet flavour. Lovely in composed salads with fresh herbs, radish, avocado, and delicate vinaigrettes."
+  },
+  "Sprout Adzuki Bean Organic": {
+    "displayName": "Adzuki Bean Sprouts",
+    "category": "Sprouts",
+    "description": "Nutty, slightly sweet, and satisfyingly crunchy with a subtle earthy depth. Excellent in Asian stir-fries, salads, grain bowls, wraps, and paired with soy, ginger, and sesame."
+  },
+  "Sprout Alfalfa Organic": {
+    "displayName": "Alfalfa Sprouts",
+    "category": "Sprouts",
+    "description": "Mild, fresh, and delicately grassy with fine, tender strands. A classic for sandwiches, wraps, salads, spring rolls, and adding light texture to any fresh dish."
+  },
+  "Sprout Barley Organic": {
+    "displayName": "Barley Sprouts",
+    "category": "Sprouts",
+    "description": "Sweet, malty, and pleasantly chewy with wholesome grain flavour. Great in grain bowls, hearty salads, soups, and paired with roasted vegetables and earthy dressings."
+  },
+  "Sprout Bean Salad Mix Organic": {
+    "displayName": "Bean Salad Sprout Mix",
+    "category": "Sprouts",
+    "description": "A hearty blend of sprouted beans with varied textures and mild, earthy flavour. Perfect for protein-rich salads, wraps, stir-fries, and topping soups and grain bowls."
+  },
+  "Sprout Broccoli Organic": {
+    "displayName": "Broccoli Sprouts",
+    "category": "Sprouts",
+    "description": "Mild, fresh, and subtly peppery with impressive nutritional value. Ideal for sandwiches, smoothies, salad topping, wraps, and adding a healthful boost to everyday meals."
+  },
+  "Sprout Brown Mustard Organic": {
+    "displayName": "Brown Mustard Sprouts",
+    "category": "Sprouts",
+    "description": "Spicy, bold, and pungent with a satisfying mustard heat. Wonderful on sandwiches, in Asian dishes, with grilled meats, charcuterie, and as a zesty garnish."
+  },
+  "Sprout Go Go Mix Organic": {
+    "displayName": "Go Go Sprout Mix",
+    "category": "Sprouts",
+    "description": "An energizing blend of sprouted seeds with a lively, varied flavour profile. Great for sandwiches, wraps, salads, smoothie bowls, and quick, nutritious snacking."
+  },
+  "Sprout Gourmet Mix Organic": {
+    "displayName": "Gourmet Sprout Mix",
+    "category": "Sprouts",
+    "description": "A carefully curated mix of premium sprouts offering complex flavour and varied texture. Ideal for fine salads, elegant garnishes, seafood plates, and upscale sandwiches."
+  },
+  "Sprout Green Hunter Organic": {
+    "displayName": "Green Hunter Sprout Mix",
+    "category": "Sprouts",
+    "description": "A vibrant green blend of nutrient-rich sprouts with fresh, mild flavour. Perfect for salads, juicing, smoothies, wraps, and adding green vitality to any dish."
+  },
+  "Sprout Green Lentils Organic": {
+    "displayName": "Green Lentil Sprouts",
+    "category": "Sprouts",
+    "description": "Earthy, hearty, and satisfying with a gentle, nutty flavour. Wonderful in grain bowls, Indian-inspired dishes, hearty salads, soups, and paired with cumin and lemon."
+  },
+  "Sprout Green Peas Organic": {
+    "displayName": "Green Pea Sprouts",
+    "category": "Sprouts",
+    "description": "Sweet, fresh, and delightfully crunchy with true pea flavour. Excellent in salads, stir-fries, spring rolls, on toast, and as a crisp, sweet garnish."
+  },
+  "Sprout Mung Bean Organic": {
+    "displayName": "Mung Bean Sprouts",
+    "category": "Sprouts",
+    "description": "Crisp, mild, and refreshingly clean with a satisfying crunch. A staple for stir-fries, pho, pad thai, bibimbap, spring rolls, and Asian-inspired dishes."
+  },
+  "Sprout Radish Organic": {
+    "displayName": "Radish Sprouts",
+    "category": "Sprouts",
+    "description": "Zesty, peppery, and bright with a lively kick and crisp texture. Perfect for sushi, tacos, sandwiches, avocado toast, and adding colour and spice to fresh plates."
+  },
+  "Sprout Red Clover Organic": {
+    "displayName": "Red Clover Sprouts",
+    "category": "Sprouts",
+    "description": "Mild, slightly sweet, and delicately fresh with fine, tender shoots. Lovely in sandwiches, wraps, smoothies, light salads, and as a gentle, nutritious garnish."
+  },
+  "Sprout Salad Mix Organic": {
+    "displayName": "Salad Sprout Mix",
+    "category": "Sprouts",
+    "description": "A fresh, balanced blend of mild and peppery sprouts designed for everyday salads. Ready for any bowl, wrap, or plate that needs a boost of crunch and flavour."
+  },
+  "Sprout Sandwich Booster Mix Organic": {
+    "displayName": "Sandwich Booster Sprout Mix",
+    "category": "Sprouts",
+    "description": "A crunchy, layered mix of sprouts built for adding texture and freshness to sandwiches, wraps, burgers, and any handheld meal."
+  },
+  "Sprout Wheatgrass Organic": {
+    "displayName": "Wheatgrass",
+    "category": "Sprouts",
+    "description": "Sweet, vibrant, and deeply green with a fresh, grassy flavour. Ideal for juicing, smoothies, wellness shots, and adding concentrated green nutrition to your routine."
+  },
+  "Sprout Yellow Mustard Organic": {
+    "displayName": "Yellow Mustard Sprouts",
+    "category": "Sprouts",
+    "description": "Mildly spicy with a gentle mustard warmth and crisp, juicy stems. Great on sandwiches, in coleslaw, with grilled sausages, and as a tangy salad topping."
+  },
+  "Sun Gold": {
+    "category": "Tomatoes",
+    "description": "Intensely sweet, bright, and bursting with tropical-fruity flavour. An irresistible cherry tomato for fresh snacking, salads, pasta, roasting, and pairing with basil, burrata, or balsamic."
+  },
+  "Tatsoi": {
+    "category": "Leafy Greens",
+    "description": "Tender, spoon-shaped leaves with a mild, creamy mustard flavour and buttery texture. Delicious in stir-fries, soups, salads, and paired with soy, ginger, garlic, and sesame."
+  },
+  "Thai Basil": {
+    "category": "Herbs",
+    "description": "Spicy, aromatic, and distinctly anise-flavoured with sturdy, beautiful purple-tinged leaves. Essential for Thai curries, pho, stir-fries, spring rolls, and Southeast Asian dishes."
+  },
+  "Tribute": {
+    "category": "Berries",
+    "description": "Firm, bright, and well-balanced with a pleasant tartness alongside natural sweetness. Excellent for fresh eating, jams, cobblers, and pairing with cream, lemon, or honey."
+  },
+  "Tristar": {
+    "category": "Berries",
+    "description": "Small but intensely sweet and aromatic with concentrated strawberry essence. Wonderful for fresh eating, dessert garnishes, fruit sauces, and savouring just as they are."
+  },
+  "Tropicana Pelleted Organic": {
+    "displayName": "Tropicana Lettuce",
+    "category": "Leafy Greens",
+    "description": "Bright green and refreshing with a clean, mild flavour and gentle crunch. A versatile lettuce for everyday salads, sandwiches, tacos, wraps, and light summer meals."
+  },
+  "Truchas Pelleted Organic": {
+    "displayName": "Truchas Lettuce",
+    "category": "Leafy Greens",
+    "description": "Deep red romaine-type lettuce with a mild, slightly sweet flavour and crisp texture. Beautiful in mixed green salads with beets, walnuts, chevre, and tangy vinaigrettes."
+  },
+  "Watercress": {
+    "category": "Leafy Greens",
+    "description": "Crisp, peppery, and refreshingly bright with a clean, slightly tangy bite. Classic in tea sandwiches, soups, salads, and paired with smoked salmon, eggs, citrus, and butter."
+  },
+  "Alkindus": {
+    "category": "Leafy Greens",
+    "description": "A deep red romaine with crisp texture and mild, slightly sweet flavour. Excellent in salads with citrus, nuts, grilled chicken, feta, and robust vinaigrettes."
+  }
+}
