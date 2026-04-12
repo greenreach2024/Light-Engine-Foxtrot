@@ -5294,6 +5294,138 @@
             </div>
 
             <!-- Central Accounting View -->
+            <!-- Donations View -->
+            <div id="donations-view" class="view" style="display: none;">
+                <div class="breadcrumb">
+                    <a href="#" onclick="event.preventDefault(); navigate('overview', this)">Overview</a>
+                    <span>/</span>
+                    <span>Wholesale</span>
+                    <span>/</span>
+                    <span>Donations</span>
+                </div>
+
+                <div class="header">
+                    <h1>Network Donations</h1>
+                    <div style="display: flex; gap: 12px; align-items: center;">
+                        <button class="btn" onclick="loadDonations()" style="padding: 8px 16px;">Refresh</button>
+                    </div>
+                </div>
+
+                <!-- Donation KPIs -->
+                <div class="kpi-grid">
+                    <div class="kpi-card">
+                        <div class="kpi-label">Total Claims</div>
+                        <div class="kpi-value" id="donation-total-claims">0</div>
+                        <div class="kpi-change neutral"><span>Fulfilled donations</span></div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Offers Claimed</div>
+                        <div class="kpi-value" id="donation-offers-claimed">0</div>
+                        <div class="kpi-change neutral"><span>Unique offers</span></div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Recipients</div>
+                        <div class="kpi-value" id="donation-unique-recipients">0</div>
+                        <div class="kpi-change neutral"><span>Food banks served</span></div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Quantity Donated</div>
+                        <div class="kpi-value" id="donation-total-qty">0</div>
+                        <div class="kpi-change neutral"><span>Units distributed</span></div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Fair Market Value</div>
+                        <div class="kpi-value" id="donation-total-fmv">$0.00</div>
+                        <div class="kpi-change neutral"><span>CRA tax receipt value</span></div>
+                    </div>
+                </div>
+
+                <!-- Active Donation Offers -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Donation Offers</div>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <select id="donation-status-filter" onchange="loadDonations()" style="padding: 6px 12px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary); font-size: 13px;">
+                                <option value="">All Statuses</option>
+                                <option value="available">Available</option>
+                                <option value="fully_claimed">Fully Claimed</option>
+                                <option value="cancelled">Cancelled</option>
+                                <option value="expired">Expired</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Offer ID</th>
+                                        <th>Farm</th>
+                                        <th>Status</th>
+                                        <th>Items</th>
+                                        <th>FMV</th>
+                                        <th>Claims</th>
+                                        <th>Created</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="donation-offers-tbody">
+                                    <tr><td colspan="7" class="loading">Loading donation offers...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Donations by Product -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Donations by Product</div>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Product</th>
+                                        <th>Unit</th>
+                                        <th>Total Qty</th>
+                                        <th>Fair Market Value</th>
+                                        <th>Recipients</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="donation-by-product-tbody">
+                                    <tr><td colspan="5" class="loading">Loading product breakdown...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Donations by Recipient -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Donations by Recipient</div>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Recipient</th>
+                                        <th>Claims</th>
+                                        <th>Total Qty</th>
+                                        <th>Fair Market Value</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="donation-by-recipient-tbody">
+                                    <tr><td colspan="4" class="loading">Loading recipient breakdown...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div id="accounting-view" class="view" style="display: none;">
                 <div class="breadcrumb">
                     <a href="#" onclick="event.preventDefault(); navigate('overview', this)">Overview</a>

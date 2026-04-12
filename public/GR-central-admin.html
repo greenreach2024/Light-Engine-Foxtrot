@@ -3771,7 +3771,13 @@
                             <option value="">All Categories</option>
                             <option value="Leafy Greens">Leafy Greens</option>
                             <option value="Herbs">Herbs</option>
+                            <option value="Microgreens">Microgreens</option>
+                            <option value="Sprouts">Sprouts</option>
+                            <option value="Tomatoes">Tomatoes</option>
+                            <option value="Berries">Berries</option>
+                            <option value="Vegetables">Vegetables</option>
                             <option value="Fruiting Crops">Fruiting Crops</option>
+                            <option value="Other">Other</option>
                         </select>
                         <input type="text" id="recipe-search" placeholder="Search recipes..." onkeyup="filterRecipes()" style="padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-primary); width: 250px;">
                         <button class="btn-primary" onclick="openAddRecipeModal()">
@@ -3836,8 +3842,8 @@
                 </div>
                 <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:24px;">
                     <div class="kpi-card"><div class="kpi-label">Total Mixes</div><div class="kpi-value" id="salad-mixes-count">0</div></div>
-                    <div class="kpi-card"><div class="kpi-label">Min Components</div><div class="kpi-value">2</div></div>
-                    <div class="kpi-card"><div class="kpi-label">Max Components</div><div class="kpi-value">4</div></div>
+                    <div class="kpi-card"><div class="kpi-label">Trait Profiles</div><div class="kpi-value">Color / Taste / Texture</div></div>
+                    <div class="kpi-card"><div class="kpi-label">Components</div><div class="kpi-value">2-4 per mix</div></div>
                 </div>
                 <div class="card">
                     <div class="card-header">
@@ -3849,7 +3855,7 @@
                                 <tr>
                                     <th>Mix Name</th>
                                     <th>Description</th>
-                                    <th>Components (Ratio)</th>
+                                    <th>Components (Role / Traits / Ratio)</th>
                                     <th>Status</th>
                                     <th>Actions</th>
                                 </tr>
@@ -3884,6 +3890,7 @@
                     </div>
                     <div style="margin-bottom:12px;">
                         <label style="display:block;margin-bottom:4px;font-weight:600;">Components (2-4 greens, ratios must total 100%)</label>
+                        <p style="margin:0 0 8px;color:var(--text-secondary);font-size:0.85rem;">Each slot defines a role with trait tags. Farms can swap to any crop matching the same traits.</p>
                         <div id="mix-components-container"></div>
                         <button class="btn btn-sm" onclick="addMixComponentRow()" style="margin-top:4px;">+ Add Component</button>
                     </div>
@@ -5287,6 +5294,138 @@
             </div>
 
             <!-- Central Accounting View -->
+            <!-- Donations View -->
+            <div id="donations-view" class="view" style="display: none;">
+                <div class="breadcrumb">
+                    <a href="#" onclick="event.preventDefault(); navigate('overview', this)">Overview</a>
+                    <span>/</span>
+                    <span>Wholesale</span>
+                    <span>/</span>
+                    <span>Donations</span>
+                </div>
+
+                <div class="header">
+                    <h1>Network Donations</h1>
+                    <div style="display: flex; gap: 12px; align-items: center;">
+                        <button class="btn" onclick="loadDonations()" style="padding: 8px 16px;">Refresh</button>
+                    </div>
+                </div>
+
+                <!-- Donation KPIs -->
+                <div class="kpi-grid">
+                    <div class="kpi-card">
+                        <div class="kpi-label">Total Claims</div>
+                        <div class="kpi-value" id="donation-total-claims">0</div>
+                        <div class="kpi-change neutral"><span>Fulfilled donations</span></div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Offers Claimed</div>
+                        <div class="kpi-value" id="donation-offers-claimed">0</div>
+                        <div class="kpi-change neutral"><span>Unique offers</span></div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Recipients</div>
+                        <div class="kpi-value" id="donation-unique-recipients">0</div>
+                        <div class="kpi-change neutral"><span>Food banks served</span></div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Quantity Donated</div>
+                        <div class="kpi-value" id="donation-total-qty">0</div>
+                        <div class="kpi-change neutral"><span>Units distributed</span></div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Fair Market Value</div>
+                        <div class="kpi-value" id="donation-total-fmv">$0.00</div>
+                        <div class="kpi-change neutral"><span>CRA tax receipt value</span></div>
+                    </div>
+                </div>
+
+                <!-- Active Donation Offers -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Donation Offers</div>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <select id="donation-status-filter" onchange="loadDonations()" style="padding: 6px 12px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary); font-size: 13px;">
+                                <option value="">All Statuses</option>
+                                <option value="available">Available</option>
+                                <option value="fully_claimed">Fully Claimed</option>
+                                <option value="cancelled">Cancelled</option>
+                                <option value="expired">Expired</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Offer ID</th>
+                                        <th>Farm</th>
+                                        <th>Status</th>
+                                        <th>Items</th>
+                                        <th>FMV</th>
+                                        <th>Claims</th>
+                                        <th>Created</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="donation-offers-tbody">
+                                    <tr><td colspan="7" class="loading">Loading donation offers...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Donations by Product -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Donations by Product</div>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Product</th>
+                                        <th>Unit</th>
+                                        <th>Total Qty</th>
+                                        <th>Fair Market Value</th>
+                                        <th>Recipients</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="donation-by-product-tbody">
+                                    <tr><td colspan="5" class="loading">Loading product breakdown...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Donations by Recipient -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Donations by Recipient</div>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Recipient</th>
+                                        <th>Claims</th>
+                                        <th>Total Qty</th>
+                                        <th>Fair Market Value</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="donation-by-recipient-tbody">
+                                    <tr><td colspan="4" class="loading">Loading recipient breakdown...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div id="accounting-view" class="view" style="display: none;">
                 <div class="breadcrumb">
                     <a href="#" onclick="event.preventDefault(); navigate('overview', this)">Overview</a>
@@ -5485,7 +5624,7 @@
     </div>
 
     <!-- Recipe Edit/Add Modal -->
-    <div id="recipe-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 9999; overflow-y: auto;">
+    <div id="recipe-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 10003; overflow-y: auto;">
         <div style="min-height: 100vh; padding: 40px; display: flex; align-items: center; justify-content: center;">
             <div style="background: var(--bg-card); border-radius: 12px; width: 100%; max-width: 1200px; max-height: 90vh; overflow-y: auto; border: 1px solid var(--border);">
                 <div style="padding: 24px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
@@ -5513,6 +5652,11 @@
                                     <select id="recipe-category" required style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary);">
                                         <option value="Leafy Greens">Leafy Greens</option>
                                         <option value="Herbs">Herbs</option>
+                                        <option value="Microgreens">Microgreens</option>
+                                        <option value="Sprouts">Sprouts</option>
+                                        <option value="Tomatoes">Tomatoes</option>
+                                        <option value="Berries">Berries</option>
+                                        <option value="Vegetables">Vegetables</option>
                                         <option value="Fruiting Crops">Fruiting Crops</option>
                                         <option value="Other">Other</option>
                                     </select>

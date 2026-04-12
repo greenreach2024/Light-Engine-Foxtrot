@@ -1309,7 +1309,8 @@ function renderContextualSidebar() {
                     items: [
                         { label: 'Admin Dashboard', view: 'wholesale-admin' },
                         { label: 'Pricing & Products', view: 'pricing-management' },
-                        { label: 'Delivery Services', view: 'delivery-management' }
+                        { label: 'Delivery Services', view: 'delivery-management' },
+                        { label: 'Donations', view: 'donations' }
                     ]
                 },
                 {
@@ -5625,6 +5626,11 @@ async function navigate(view, element) {
             await loadCentralAccounting();
             break;
 
+        case 'donations':
+            document.getElementById('donations-view').style.display = 'block';
+            await loadDonations();
+            break;
+
         case 'faye-core':
             loadIframeView('/faye-core.html');
             break;
@@ -9149,7 +9155,7 @@ async function viewRecipe(recipeId) {
         
         // Update modal header
         document.getElementById('recipe-view-title').textContent = recipe.name || 'Recipe';
-        document.getElementById('recipe-view-category').textContent = recipe.category || 'Vegetables';
+        document.getElementById('recipe-view-category').textContent = recipe.category || 'Other';
         document.getElementById('recipe-view-days').textContent = recipe.total_days || recipe.totalDays || schedule.length;
         
         const formatNumber = (value, decimals) => {
@@ -9312,7 +9318,7 @@ async function editRecipe(recipeId) {
         
         document.getElementById('recipe-modal-title').textContent = 'Edit Recipe';
         document.getElementById('recipe-name').value = recipe.name || '';
-        document.getElementById('recipe-category').value = recipe.category || 'Vegetables';
+        document.getElementById('recipe-category').value = recipe.category || 'Leafy Greens';
         document.getElementById('recipe-description').value = recipe.description || '';
         
         // Render schedule
@@ -13324,6 +13330,102 @@ async function loadCentralAccounting() {
     }
 }
 
+// ── Donations Dashboard ──────────────────────────────────────────────
+
+async function loadDonations() {
+    console.log('[Donations] Loading donations dashboard...');
+    try {
+        // Fetch summary KPIs
+        const summaryRes = await authenticatedFetch(`${API_BASE}/api/wholesale/donations/summary`);
+        if (summaryRes && summaryRes.ok) {
+            const summaryJson = await summaryRes.json();
+            const d = summaryJson.data || {};
+            document.getElementById('donation-total-claims').textContent = d.total_claims || 0;
+            document.getElementById('donation-offers-claimed').textContent = d.total_offers_claimed || 0;
+            document.getElementById('donation-unique-recipients').textContent = d.unique_recipients || 0;
+            document.getElementById('donation-total-qty').textContent = d.total_quantity_donated || 0;
+            document.getElementById('donation-total-fmv').textContent = '$' + Number(d.total_fair_market_value || 0).toFixed(2);
+
+            // By-product table
+            const productTbody = document.getElementById('donation-by-product-tbody');
+            if (productTbody) {
+                if (d.by_product && d.by_product.length) {
+                    productTbody.innerHTML = d.by_product.map(p => `
+                        <tr>
+                            <td>${p.product_name || '--'}</td>
+                            <td>${Number(p.total_qty || 0)} ${p.unit || ''}</td>
+                            <td>$${Number(p.total_fmv || 0).toFixed(2)}</td>
+                            <td>${p.recipient_count || 0}</td>
+                        </tr>
+                    `).join('');
+                } else {
+                    productTbody.innerHTML = '<tr><td colspan="4" class="loading">No donation products yet</td></tr>';
+                }
+            }
+
+            // By-recipient table
+            const recipientTbody = document.getElementById('donation-by-recipient-tbody');
+            if (recipientTbody) {
+                if (d.by_recipient && d.by_recipient.length) {
+                    recipientTbody.innerHTML = d.by_recipient.map(r => `
+                        <tr>
+                            <td>${r.business_name || r.buyer_id}</td>
+                            <td>${Number(r.total_qty || 0)}</td>
+                            <td>$${Number(r.total_fmv || 0).toFixed(2)}</td>
+                            <td>${r.claim_count || 0}</td>
+                        </tr>
+                    `).join('');
+                } else {
+                    recipientTbody.innerHTML = '<tr><td colspan="4" class="loading">No recipients yet</td></tr>';
+                }
+            }
+        } else {
+            console.warn('[Donations] Summary fetch failed or returned null');
+        }
+
+        // Fetch offers list with optional status filter
+        const statusFilter = document.getElementById('donation-status-filter')?.value || '';
+        const statusParam = statusFilter ? `?status=${statusFilter}` : '';
+        const offersRes = await authenticatedFetch(`${API_BASE}/api/wholesale/donations/offers${statusParam}`);
+        if (offersRes && offersRes.ok) {
+            const offersJson = await offersRes.json();
+            const offers = offersJson.data?.offers || [];
+            const offersTbody = document.getElementById('donation-offers-tbody');
+            if (offersTbody) {
+                if (offers.length) {
+                    offersTbody.innerHTML = offers.map(o => {
+                        const items = Array.isArray(o.items) ? o.items : [];
+                        const totalFmv = items.reduce((sum, i) => sum + Number(i.fair_market_value || 0), 0);
+                        const claimCount = Array.isArray(o.claims) ? o.claims.length : 0;
+                        const statusClass = o.status === 'available' ? 'color: var(--success)' :
+                                            o.status === 'cancelled' ? 'color: var(--danger, #e74c3c)' :
+                                            o.status === 'expired' ? 'color: var(--text-muted, #888)' : '';
+                        return `<tr>
+                            <td>${o.id}</td>
+                            <td>${o.farm_id || '--'}</td>
+                            <td><span style="${statusClass}; font-weight: 600;">${o.status}</span></td>
+                            <td>${items.length}</td>
+                            <td>$${totalFmv.toFixed(2)}</td>
+                            <td>${claimCount}</td>
+                            <td>${o.reason || '--'}</td>
+                            <td>${o.created_at ? new Date(o.created_at).toLocaleDateString() : '--'}</td>
+                        </tr>`;
+                    }).join('');
+                } else {
+                    offersTbody.innerHTML = '<tr><td colspan="8" class="loading">No donation offers found</td></tr>';
+                }
+            }
+        } else {
+            console.warn('[Donations] Offers fetch failed or returned null');
+        }
+
+        console.log('[Donations] Dashboard loaded successfully');
+    } catch (error) {
+        console.error('[Donations] Load error:', error);
+        document.getElementById('donation-total-claims').textContent = 'Error';
+    }
+}
+
 /**
  * Export fleet financial report as CSV
  */
@@ -13408,13 +13510,16 @@ function renderSaladMixesTable() {
     }
 
     tbody.innerHTML = saladMixesData.map(mix => {
-        const compList = (mix.components || []).map(c =>
-            `${c.product_name} (${(parseFloat(c.ratio) * 100).toFixed(0)}%)`
-        ).join(', ');
+        const compList = (mix.components || []).map(c => {
+            const role = c.trait_role ? `<strong>${c.trait_role}</strong>: ` : '';
+            const traits = [c.color_profile, c.taste_profile, c.texture_profile].filter(Boolean).join('/');
+            const traitTag = traits ? ` <span style="color:var(--text-secondary);font-size:0.8em;">[${traits}]</span>` : '';
+            return `${role}${c.product_name} (${(parseFloat(c.ratio) * 100).toFixed(0)}%)${traitTag}`;
+        }).join('<br>');
         return `<tr>
             <td><strong>${mix.name}</strong></td>
             <td>${mix.description || '-'}</td>
-            <td>${compList}</td>
+            <td style="line-height:1.6;">${compList}</td>
             <td><span class="status-badge ${mix.status === 'active' ? 'status-active' : 'status-inactive'}">${mix.status}</span></td>
             <td>
                 <button class="btn btn-sm" onclick="openEditMixModal(${mix.id})" title="Edit">Edit</button>
@@ -13448,7 +13553,8 @@ function openEditMixModal(mixId) {
     const container = document.getElementById('mix-components-container');
     container.innerHTML = '';
     for (const c of mix.components) {
-        addMixComponentRow(c.product_name, (parseFloat(c.ratio) * 100).toFixed(0), c.product_id);
+        addMixComponentRow(c.product_name, (parseFloat(c.ratio) * 100).toFixed(0), c.product_id,
+                           c.trait_role || '', c.color_profile || '', c.taste_profile || '', c.texture_profile || '');
     }
     document.getElementById('mix-modal').style.display = 'flex';
 }
@@ -13457,17 +13563,33 @@ function closeMixModal() {
     document.getElementById('mix-modal').style.display = 'none';
 }
 
-function addMixComponentRow(name, pct, productId) {
+function addMixComponentRow(name, pct, productId, traitRole, color, taste, texture) {
     const container = document.getElementById('mix-components-container');
     const rows = container.querySelectorAll('.mix-comp-row');
     if (rows.length >= 4) return; // max 4 components
     const row = document.createElement('div');
     row.className = 'mix-comp-row';
-    row.style.cssText = 'display:grid;grid-template-columns:1fr 80px 30px;gap:8px;margin-bottom:8px;align-items:center;';
+    row.style.cssText = 'display:grid;grid-template-columns:1fr 100px 80px 30px;gap:8px;margin-bottom:8px;align-items:start;';
+
+    const colorOpts = ['', 'green', 'red', 'purple', 'mixed'].map(v =>
+        `<option value="${v}" ${v === (color || '') ? 'selected' : ''}>${v || '---'}</option>`).join('');
+    const tasteOpts = ['', 'mild', 'peppery', 'bitter', 'sweet', 'tangy', 'earthy'].map(v =>
+        `<option value="${v}" ${v === (taste || '') ? 'selected' : ''}>${v || '---'}</option>`).join('');
+    const textureOpts = ['', 'crisp', 'tender', 'crunchy', 'silky'].map(v =>
+        `<option value="${v}" ${v === (texture || '') ? 'selected' : ''}>${v || '---'}</option>`).join('');
+
     row.innerHTML = `
-        <input type="text" class="mix-comp-name" placeholder="Product name (e.g. Romaine Lettuce)" value="${name || ''}" style="padding:8px;border:1px solid var(--border-color);border-radius:6px;background:var(--bg-secondary);color:var(--text-primary);">
+        <div>
+            <input type="text" class="mix-comp-role" placeholder="Role (e.g. Base Green)" value="${traitRole || ''}" style="padding:6px 8px;border:1px solid var(--border-color);border-radius:6px;background:var(--bg-secondary);color:var(--text-primary);width:100%;margin-bottom:4px;font-size:0.85em;">
+            <input type="text" class="mix-comp-name" placeholder="Default crop (e.g. Romaine)" value="${name || ''}" style="padding:8px;border:1px solid var(--border-color);border-radius:6px;background:var(--bg-secondary);color:var(--text-primary);width:100%;">
+        </div>
+        <div style="display:flex;flex-direction:column;gap:3px;">
+            <select class="mix-comp-color" style="padding:4px;border:1px solid var(--border-color);border-radius:4px;background:var(--bg-secondary);color:var(--text-primary);font-size:0.8em;">${colorOpts}</select>
+            <select class="mix-comp-taste" style="padding:4px;border:1px solid var(--border-color);border-radius:4px;background:var(--bg-secondary);color:var(--text-primary);font-size:0.8em;">${tasteOpts}</select>
+            <select class="mix-comp-texture" style="padding:4px;border:1px solid var(--border-color);border-radius:4px;background:var(--bg-secondary);color:var(--text-primary);font-size:0.8em;">${textureOpts}</select>
+        </div>
         <input type="number" class="mix-comp-pct" placeholder="%" min="1" max="100" value="${pct || ''}" style="padding:8px;border:1px solid var(--border-color);border-radius:6px;background:var(--bg-secondary);color:var(--text-primary);text-align:center;">
-        <button onclick="this.parentElement.remove()" style="background:none;border:none;color:var(--danger-color);cursor:pointer;font-size:18px;">X</button>
+        <button onclick="this.parentElement.remove()" style="background:none;border:none;color:var(--danger-color);cursor:pointer;font-size:18px;margin-top:8px;">X</button>
     `;
     if (productId) {
         const nameInput = row.querySelector('.mix-comp-name');
@@ -13490,8 +13612,18 @@ async function saveSaladMix() {
         const pName = row.querySelector('.mix-comp-name').value.trim();
         const pct = parseFloat(row.querySelector('.mix-comp-pct').value);
         const pId = row.querySelector('.mix-comp-name').dataset.productId || pName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+        const traitRole = (row.querySelector('.mix-comp-role')?.value || '').trim();
+        const colorProfile = row.querySelector('.mix-comp-color')?.value || '';
+        const tasteProfile = row.querySelector('.mix-comp-taste')?.value || '';
+        const textureProfile = row.querySelector('.mix-comp-texture')?.value || '';
         if (pName && pct > 0) {
-            components.push({ product_name: pName, product_id: pId, ratio: pct / 100 });
+            components.push({
+                product_name: pName, product_id: pId, ratio: pct / 100,
+                trait_role: traitRole || null,
+                color_profile: colorProfile || null,
+                taste_profile: tasteProfile || null,
+                texture_profile: textureProfile || null
+            });
         }
     }
 

@@ -1309,7 +1309,8 @@ function renderContextualSidebar() {
                     items: [
                         { label: 'Admin Dashboard', view: 'wholesale-admin' },
                         { label: 'Pricing & Products', view: 'pricing-management' },
-                        { label: 'Delivery Services', view: 'delivery-management' }
+                        { label: 'Delivery Services', view: 'delivery-management' },
+                        { label: 'Donations', view: 'donations' }
                     ]
                 },
                 {
@@ -5623,6 +5624,11 @@ async function navigate(view, element) {
         case 'accounting':
             document.getElementById('accounting-view').style.display = 'block';
             await loadCentralAccounting();
+            break;
+
+        case 'donations':
+            document.getElementById('donations-view').style.display = 'block';
+            await loadDonations();
             break;
 
         case 'faye-core':
@@ -13321,6 +13327,102 @@ async function loadCentralAccounting() {
     } catch (error) {
         console.error('[Central Accounting] Load error:', error);
         document.getElementById('central-total-revenue').textContent = 'Error';
+    }
+}
+
+// ── Donations Dashboard ──────────────────────────────────────────────
+
+async function loadDonations() {
+    console.log('[Donations] Loading donations dashboard...');
+    try {
+        // Fetch summary KPIs
+        const summaryRes = await authenticatedFetch(`${API_BASE}/api/wholesale/donations/summary`);
+        if (summaryRes && summaryRes.ok) {
+            const summaryJson = await summaryRes.json();
+            const d = summaryJson.data || {};
+            document.getElementById('donation-total-claims').textContent = d.total_claims || 0;
+            document.getElementById('donation-offers-claimed').textContent = d.total_offers_claimed || 0;
+            document.getElementById('donation-unique-recipients').textContent = d.unique_recipients || 0;
+            document.getElementById('donation-total-qty').textContent = d.total_quantity_donated || 0;
+            document.getElementById('donation-total-fmv').textContent = '$' + Number(d.total_fair_market_value || 0).toFixed(2);
+
+            // By-product table
+            const productTbody = document.getElementById('donation-by-product-tbody');
+            if (productTbody) {
+                if (d.by_product && d.by_product.length) {
+                    productTbody.innerHTML = d.by_product.map(p => `
+                        <tr>
+                            <td>${p.product_name || '--'}</td>
+                            <td>${Number(p.total_qty || 0)} ${p.unit || ''}</td>
+                            <td>$${Number(p.total_fmv || 0).toFixed(2)}</td>
+                            <td>${p.recipient_count || 0}</td>
+                        </tr>
+                    `).join('');
+                } else {
+                    productTbody.innerHTML = '<tr><td colspan="4" class="loading">No donation products yet</td></tr>';
+                }
+            }
+
+            // By-recipient table
+            const recipientTbody = document.getElementById('donation-by-recipient-tbody');
+            if (recipientTbody) {
+                if (d.by_recipient && d.by_recipient.length) {
+                    recipientTbody.innerHTML = d.by_recipient.map(r => `
+                        <tr>
+                            <td>${r.business_name || r.buyer_id}</td>
+                            <td>${Number(r.total_qty || 0)}</td>
+                            <td>$${Number(r.total_fmv || 0).toFixed(2)}</td>
+                            <td>${r.claim_count || 0}</td>
+                        </tr>
+                    `).join('');
+                } else {
+                    recipientTbody.innerHTML = '<tr><td colspan="4" class="loading">No recipients yet</td></tr>';
+                }
+            }
+        } else {
+            console.warn('[Donations] Summary fetch failed or returned null');
+        }
+
+        // Fetch offers list with optional status filter
+        const statusFilter = document.getElementById('donation-status-filter')?.value || '';
+        const statusParam = statusFilter ? `?status=${statusFilter}` : '';
+        const offersRes = await authenticatedFetch(`${API_BASE}/api/wholesale/donations/offers${statusParam}`);
+        if (offersRes && offersRes.ok) {
+            const offersJson = await offersRes.json();
+            const offers = offersJson.data?.offers || [];
+            const offersTbody = document.getElementById('donation-offers-tbody');
+            if (offersTbody) {
+                if (offers.length) {
+                    offersTbody.innerHTML = offers.map(o => {
+                        const items = Array.isArray(o.items) ? o.items : [];
+                        const totalFmv = items.reduce((sum, i) => sum + Number(i.fair_market_value || 0), 0);
+                        const claimCount = Array.isArray(o.claims) ? o.claims.length : 0;
+                        const statusClass = o.status === 'available' ? 'color: var(--success)' :
+                                            o.status === 'cancelled' ? 'color: var(--danger, #e74c3c)' :
+                                            o.status === 'expired' ? 'color: var(--text-muted, #888)' : '';
+                        return `<tr>
+                            <td>${o.id}</td>
+                            <td>${o.farm_id || '--'}</td>
+                            <td><span style="${statusClass}; font-weight: 600;">${o.status}</span></td>
+                            <td>${items.length}</td>
+                            <td>$${totalFmv.toFixed(2)}</td>
+                            <td>${claimCount}</td>
+                            <td>${o.reason || '--'}</td>
+                            <td>${o.created_at ? new Date(o.created_at).toLocaleDateString() : '--'}</td>
+                        </tr>`;
+                    }).join('');
+                } else {
+                    offersTbody.innerHTML = '<tr><td colspan="8" class="loading">No donation offers found</td></tr>';
+                }
+            }
+        } else {
+            console.warn('[Donations] Offers fetch failed or returned null');
+        }
+
+        console.log('[Donations] Dashboard loaded successfully');
+    } catch (error) {
+        console.error('[Donations] Load error:', error);
+        document.getElementById('donation-total-claims').textContent = 'Error';
     }
 }
 
