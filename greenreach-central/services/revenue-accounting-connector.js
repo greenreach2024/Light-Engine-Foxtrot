@@ -89,9 +89,11 @@ export async function ingestPaymentRevenue({
     }
 
     // Build idempotency key to prevent duplicates
+    // Uses order_id + amount (not provider/payment_id) so that checkout, webhook,
+    // and reconcile code paths all produce the same key for the same logical payment.
     const crypto = await import('crypto');
     const idempotencyKey = crypto.createHash('sha256')
-      .update(`revenue|${provider}|${payment_id}|${order_id}|${amount}`)
+      .update(`revenue|${order_id}|${Number(amount).toFixed(2)}`)
       .digest('hex');
 
     // Call the accounting ingest endpoint logic directly (same DB)
@@ -165,7 +167,7 @@ export async function ingestRefundReversal({
 
     const crypto = await import('crypto');
     const idempotencyKey = crypto.createHash('sha256')
-      .update(`refund|${provider}|${refund_id}|${order_id}|${amount}`)
+      .update(`refund|${order_id}|${refund_id}|${Number(amount).toFixed(2)}`)
       .digest('hex');
 
     const sourceKey = `payment_${provider}`;
@@ -237,7 +239,7 @@ export async function ingestFarmPayables({
 
       const crypto = await import('crypto');
       const idempotencyKey = crypto.createHash('sha256')
-        .update(`farm_payable|${provider}|${order_id}|${sub.farm_id}|${farmAmount}`)
+        .update(`farm_payable|${order_id}|${sub.farm_id}|${farmAmount.toFixed(2)}`)
         .digest('hex');
 
       const sourceKey = 'wholesale_payable';
@@ -317,7 +319,7 @@ export async function ingestFarmPayout({
 
     const crypto = await import('crypto');
     const idempotencyKey = crypto.createHash('sha256')
-      .update(`farm_payout|${provider}|${payout_id}|${farm_id}|${amount}`)
+      .update(`farm_payout|${order_id}|${farm_id}|${Number(amount).toFixed(2)}`)
       .digest('hex');
 
     const sourceKey = `payout_${provider}`;

@@ -262,6 +262,8 @@ router.post('/transactions/ingest', async (req, res) => {
 /**
  * GET /api/accounting/expense-summary
  * Sum only actual expense accounts (COGS 500000 + Processing Fees 630000).
+ * Deduplicates by source_txn_id to prevent double-counting from multiple
+ * ingestion paths (checkout, webhooks, reconcile) that may create duplicate entries.
  * Query: from, to (ISO dates)
  */
 router.get('/expense-summary', async (req, res) => {
@@ -273,31 +275,46 @@ router.get('/expense-summary', async (req, res) => {
     const from = req.query.from;
     const to = req.query.to;
 
-    const conditions = [];
+    const dateConditions = [];
     const params = [];
-    // Expense account codes: 500000 = COGS, 630000 = Processing Fees
-    conditions.push(`e.account_code IN ('500000', '630000')`);
 
     if (from) {
       params.push(from);
-      conditions.push(`t.txn_date >= $${params.length}::date`);
+      dateConditions.push(`t.txn_date >= $${params.length}::date`);
     }
     if (to) {
       params.push(to);
-      conditions.push(`t.txn_date <= $${params.length}::date`);
+      dateConditions.push(`t.txn_date <= $${params.length}::date`);
     }
 
-    const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+    const dateWhere = dateConditions.length ? `AND ${dateConditions.join(' AND ')}` : '';
 
+    // Use DISTINCT ON (source_txn_id, account_code) to deduplicate entries from
+    // multiple ingestion paths (checkout vs webhook vs reconcile) that create
+    // duplicate transactions for the same logical event.
+    // For COGS (500000): source_txn_id = 'order_id:farm_id'
+    // For Processing Fees (630000): source_txn_id = payment_id (may differ,
+    //   so we also group by raw_payload->>'order_id' as fallback)
     const result = await query(
       `SELECT
-         e.account_code,
-         SUM(e.debit) AS total_debit,
-         SUM(e.credit) AS total_credit
-       FROM accounting_entries e
-       JOIN accounting_transactions t ON t.id = e.transaction_id
-       ${whereClause}
-       GROUP BY e.account_code`,
+         account_code,
+         SUM(debit) AS total_debit,
+         SUM(credit) AS total_credit
+       FROM (
+         SELECT DISTINCT ON (
+           COALESCE(t.source_txn_id, t.id::text),
+           e.account_code
+         )
+           e.account_code,
+           e.debit,
+           e.credit
+         FROM accounting_entries e
+         JOIN accounting_transactions t ON t.id = e.transaction_id
+         WHERE e.account_code IN ('500000', '630000')
+           ${dateWhere}
+         ORDER BY COALESCE(t.source_txn_id, t.id::text), e.account_code, t.id ASC
+       ) deduped
+       GROUP BY account_code`,
       params
     );
 
@@ -316,6 +333,69 @@ router.get('/expense-summary', async (req, res) => {
     });
   } catch (error) {
     return res.status(500).json({ ok: false, error: 'expense_summary_failed', message: error.message });
+  }
+});
+
+/**
+ * POST /api/accounting/cleanup-duplicates
+ * One-time cleanup to remove duplicate accounting transactions that were created
+ * by multiple ingestion paths (checkout + webhook + reconcile) with different
+ * idempotency keys but the same source_txn_id.
+ * Keeps the FIRST transaction (lowest id) for each source_txn_id and deletes the rest.
+ */
+router.post('/cleanup-duplicates', async (req, res) => {
+  if (!await isDatabaseAvailable()) {
+    return res.status(503).json({ ok: false, error: 'database_unavailable' });
+  }
+
+  try {
+    // Find duplicate transactions (same source_txn_id, multiple rows)
+    const dupes = await query(
+      `SELECT source_txn_id, COUNT(*) as cnt, MIN(id) as keep_id
+       FROM accounting_transactions
+       WHERE source_txn_id IS NOT NULL
+       GROUP BY source_txn_id
+       HAVING COUNT(*) > 1`
+    );
+
+    if (dupes.rows.length === 0) {
+      return res.json({ ok: true, message: 'No duplicates found', removed_transactions: 0, removed_entries: 0 });
+    }
+
+    let removedTransactions = 0;
+    let removedEntries = 0;
+
+    for (const row of dupes.rows) {
+      // Delete entries for duplicate transactions (keep the first one)
+      const entryResult = await query(
+        `DELETE FROM accounting_entries
+         WHERE transaction_id IN (
+           SELECT id FROM accounting_transactions
+           WHERE source_txn_id = $1 AND id != $2
+         )`,
+        [row.source_txn_id, row.keep_id]
+      );
+      removedEntries += entryResult.rowCount || 0;
+
+      // Delete the duplicate transactions themselves
+      const txnResult = await query(
+        `DELETE FROM accounting_transactions
+         WHERE source_txn_id = $1 AND id != $2`,
+        [row.source_txn_id, row.keep_id]
+      );
+      removedTransactions += txnResult.rowCount || 0;
+    }
+
+    console.log(`[Accounting Cleanup] Removed ${removedTransactions} duplicate transactions, ${removedEntries} entries`);
+    return res.json({
+      ok: true,
+      duplicate_groups: dupes.rows.length,
+      removed_transactions: removedTransactions,
+      removed_entries: removedEntries,
+    });
+  } catch (error) {
+    console.error('[Accounting Cleanup] Error:', error);
+    return res.status(500).json({ ok: false, error: 'cleanup_failed', message: error.message });
   }
 });
 
