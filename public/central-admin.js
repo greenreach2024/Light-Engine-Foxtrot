@@ -13202,15 +13202,17 @@ async function loadCentralAccounting() {
         const outstanding = revenueData?.data?.outstanding || 0;
         const brokerFeeTotal = revenueData?.data?.brokerFeeTotal || 0;
 
-        // Expense numbers from double-entry ledger (only actual expense accounts)
-        let totalExpenses = expData?.ok ? Number(expData.totalExpenses || 0) : 0;
+        // Expense numbers: derive from revenue data for consistency
+        // COGS = what farms are owed = total revenue minus broker commission
+        // Processing fees = from accounting ledger (account 630000) or estimated at 2.6%
+        const farmPayables = Math.max(0, totalRevenue - brokerFeeTotal);
+        const processingFees = (expData?.ok && expData.breakdown?.['630000'])
+            ? Number(expData.breakdown['630000'])
+            : Math.round(totalRevenue * 0.026 * 100) / 100;
+        let totalExpenses = farmPayables + processingFees;
         const expenseCategories = {};
-        if (expData?.ok && expData.breakdown) {
-            for (const [code, amount] of Object.entries(expData.breakdown)) {
-                const label = code === '500000' ? 'Cost of Goods Sold' : code === '630000' ? 'Processing Fees' : code;
-                expenseCategories[label] = Number(amount || 0);
-            }
-        }
+        if (farmPayables > 0) expenseCategories['Farm Payables (COGS)'] = farmPayables;
+        if (processingFees > 0) expenseCategories['Processing Fees'] = processingFees;
 
         // Update KPIs
         document.getElementById('central-total-revenue').textContent = `$${totalRevenue.toFixed(2)}`;
