@@ -259,6 +259,66 @@ router.post('/transactions/ingest', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/accounting/expense-summary
+ * Sum only actual expense accounts (COGS 500000 + Processing Fees 630000).
+ * Query: from, to (ISO dates)
+ */
+router.get('/expense-summary', async (req, res) => {
+  if (!await isDatabaseAvailable()) {
+    return res.status(503).json({ ok: false, error: 'database_unavailable' });
+  }
+
+  try {
+    const from = req.query.from;
+    const to = req.query.to;
+
+    const conditions = [];
+    const params = [];
+    // Expense account codes: 500000 = COGS, 630000 = Processing Fees
+    conditions.push(`e.account_code IN ('500000', '630000')`);
+
+    if (from) {
+      params.push(from);
+      conditions.push(`t.txn_date >= $${params.length}::date`);
+    }
+    if (to) {
+      params.push(to);
+      conditions.push(`t.txn_date <= $${params.length}::date`);
+    }
+
+    const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    const result = await query(
+      `SELECT
+         e.account_code,
+         SUM(e.debit) AS total_debit,
+         SUM(e.credit) AS total_credit
+       FROM accounting_entries e
+       JOIN accounting_transactions t ON t.id = e.transaction_id
+       ${whereClause}
+       GROUP BY e.account_code`,
+      params
+    );
+
+    let totalExpenses = 0;
+    const breakdown = {};
+    for (const row of result.rows) {
+      const net = Number(row.total_debit || 0) - Number(row.total_credit || 0);
+      totalExpenses += net;
+      breakdown[row.account_code] = net;
+    }
+
+    return res.json({
+      ok: true,
+      totalExpenses: Math.round(totalExpenses * 100) / 100,
+      breakdown,
+    });
+  } catch (error) {
+    return res.status(500).json({ ok: false, error: 'expense_summary_failed', message: error.message });
+  }
+});
+
 router.get('/transactions', async (req, res) => {
   if (!await isDatabaseAvailable()) {
     return res.status(503).json({ ok: false, error: 'database_unavailable' });

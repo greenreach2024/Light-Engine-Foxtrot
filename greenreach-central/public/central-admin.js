@@ -13170,6 +13170,12 @@ async function loadCentralAccounting() {
         );
         const txnData = txnRes?.ok ? await txnRes.json() : null;
 
+        // Fetch actual expense totals from double-entry ledger (COGS + processing fees only)
+        const expRes = await authenticatedFetch(
+            `${API_BASE}/api/accounting/expense-summary?from=${fromDateStr}&to=${toDateStr}`
+        );
+        const expData = expRes?.ok ? await expRes.json() : null;
+
         // Fetch procurement revenue summary and breakdown
         let procurementData = null;
         try {
@@ -13196,14 +13202,13 @@ async function loadCentralAccounting() {
         const outstanding = revenueData?.data?.outstanding || 0;
         const brokerFeeTotal = revenueData?.data?.brokerFeeTotal || 0;
 
-        // Expense numbers from accounting transactions
-        let totalExpenses = 0;
+        // Expense numbers from double-entry ledger (only actual expense accounts)
+        let totalExpenses = expData?.ok ? Number(expData.totalExpenses || 0) : 0;
         const expenseCategories = {};
-        if (txnData?.ok && Array.isArray(txnData.transactions)) {
-            for (const txn of txnData.transactions) {
-                totalExpenses += Number(txn.total_amount || 0);
-                const cat = txn.source_key || 'uncategorized';
-                expenseCategories[cat] = (expenseCategories[cat] || 0) + Number(txn.total_amount || 0);
+        if (expData?.ok && expData.breakdown) {
+            for (const [code, amount] of Object.entries(expData.breakdown)) {
+                const label = code === '500000' ? 'Cost of Goods Sold' : code === '630000' ? 'Processing Fees' : code;
+                expenseCategories[label] = Number(amount || 0);
             }
         }
 
