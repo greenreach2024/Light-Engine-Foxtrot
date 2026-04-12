@@ -8,6 +8,48 @@ const router = express.Router();
 
 const DEFAULT_CLASSIFICATION_THRESHOLD = 0.85;
 
+// One-time startup cleanup: remove duplicate accounting transactions
+// caused by multiple ingestion paths (checkout + webhook + reconcile)
+// generating different idempotency keys for the same logical event
+(async function cleanupDuplicateTransactionsOnStartup() {
+  try {
+    // Wait for DB to be ready
+    await new Promise(r => setTimeout(r, 8000));
+    if (!await isDatabaseAvailable()) return;
+
+    const dupes = await query(
+      `SELECT source_txn_id, COUNT(*) as cnt, MIN(id) as keep_id
+       FROM accounting_transactions
+       WHERE source_txn_id IS NOT NULL
+       GROUP BY source_txn_id
+       HAVING COUNT(*) > 1`
+    );
+
+    if (dupes.rows.length === 0) {
+      console.log('[Accounting Startup] No duplicate transactions found');
+      return;
+    }
+
+    let removedTxns = 0, removedEntries = 0;
+    for (const row of dupes.rows) {
+      const er = await query(
+        `DELETE FROM accounting_entries WHERE transaction_id IN (
+           SELECT id FROM accounting_transactions WHERE source_txn_id = $1 AND id != $2
+         )`, [row.source_txn_id, row.keep_id]
+      );
+      removedEntries += er.rowCount || 0;
+      const tr = await query(
+        `DELETE FROM accounting_transactions WHERE source_txn_id = $1 AND id != $2`,
+        [row.source_txn_id, row.keep_id]
+      );
+      removedTxns += tr.rowCount || 0;
+    }
+    console.log(`[Accounting Startup] Cleaned up ${removedTxns} duplicate transactions, ${removedEntries} entries across ${dupes.rows.length} groups`);
+  } catch (err) {
+    console.warn('[Accounting Startup] Duplicate cleanup skipped:', err.message);
+  }
+})();
+
 function inferCategoryFromText({ sourceKey, description, memo, accountCode }) {
   const haystack = `${sourceKey || ''} ${description || ''} ${memo || ''} ${accountCode || ''}`.toLowerCase();
 
