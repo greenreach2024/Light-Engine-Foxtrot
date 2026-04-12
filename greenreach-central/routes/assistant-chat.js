@@ -5239,6 +5239,97 @@ async function executeExtendedTool(toolName, params, farmId) {
       }
     }
 
+    // ── Device Discovery (Wireless: SwitchBot) ──────────────────────────
+    case 'scan_devices': {
+      const protocol = (params.protocol || 'all').toLowerCase();
+      const mode = (params.mode || 'wireless').toLowerCase();
+      const forceRefresh = params.force === true;
+      const leUrl = (process.env.FARM_EDGE_URL || process.env.LE_API_URL || process.env.FARM_API_URL || '').replace(/\/$/, '');
+
+      const assets = [];
+      const errors = [];
+
+      // Wireless scan: SwitchBot API
+      if (mode !== 'wired' && (protocol === 'all' || protocol === 'switchbot')) {
+        if (!leUrl) {
+          errors.push({ source: 'switchbot', error: 'FARM_EDGE_URL not configured — cannot reach Light Engine' });
+        } else {
+          try {
+            const refreshParam = forceRefresh ? '?refresh=true' : '?refresh=true'; // always force when E.V.I.E. scans
+            const sbResp = await fetch(`${leUrl}/api/switchbot/devices${refreshParam}`, {
+              headers: { 'Accept': 'application/json' },
+              signal: AbortSignal.timeout(12000)
+            });
+            if (sbResp.ok) {
+              const sbData = await sbResp.json();
+              const devList = (sbData.body || sbData).deviceList || [];
+              const irList = (sbData.body || sbData).infraredRemoteList || [];
+              for (const dev of devList) {
+                assets.push({
+                  asset_kind: dev.deviceType?.toLowerCase().includes('sensor') ? 'sensor' : dev.deviceType?.toLowerCase().includes('hub') ? 'hub' : 'device',
+                  source: 'switchbot',
+                  device_id: dev.deviceId,
+                  name: dev.deviceName,
+                  device_type: dev.deviceType,
+                  hub_device_id: dev.hubDeviceId,
+                  cloud_enabled: dev.enableCloudService !== false,
+                  registration_state: 'discovered'
+                });
+              }
+              for (const dev of irList) {
+                assets.push({
+                  asset_kind: 'infrared_remote',
+                  source: 'switchbot',
+                  device_id: dev.deviceId,
+                  name: dev.deviceName,
+                  device_type: dev.remoteType,
+                  hub_device_id: dev.hubDeviceId,
+                  registration_state: 'discovered'
+                });
+              }
+            } else {
+              errors.push({ source: 'switchbot', error: `HTTP ${sbResp.status}` });
+            }
+          } catch (err) {
+            errors.push({ source: 'switchbot', error: err.message });
+          }
+        }
+      }
+
+      // Wired scan: delegate to scan_bus_channels via TOOL_CATALOG
+      if (mode === 'wired' || mode === 'all') {
+        try {
+          const busResult = await executeTool('scan_bus_channels', { farm_id: farmId, bus_type: params.bus_type || 'all' });
+          if (busResult.ok && busResult.channels) {
+            for (const ch of busResult.channels) {
+              assets.push({
+                asset_kind: 'bus_channel',
+                source: 'wired',
+                device_id: ch.address || ch.id,
+                name: ch.name || `${ch.bus_type?.toUpperCase()} 0x${ch.address}`,
+                device_type: ch.bus_type,
+                registration_state: 'discovered'
+              });
+            }
+          }
+        } catch (err) {
+          errors.push({ source: 'wired', error: err.message });
+        }
+      }
+
+      const discovery_session_id = `scan-${Date.now()}`;
+      return {
+        ok: true,
+        discovery_session_id,
+        total: assets.length,
+        assets,
+        errors: errors.length > 0 ? errors : undefined,
+        note: assets.length === 0
+          ? 'No devices found. Verify SwitchBot Hub is powered and credentials in farm.json integrations.switchbot are correct.'
+          : `Found ${assets.length} device(s). Use register_device with these details to add any to the farm inventory, or auto_assign_devices to assign existing devices to rooms.`
+      };
+    }
+
     // ── Bus Mapping & Wired Channel Tools ──────────────────────────────
     case 'scan_bus_channels':
     case 'get_bus_mappings':

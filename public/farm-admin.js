@@ -9874,18 +9874,23 @@ function renderDonations() {
     document.getElementById('hd-donation-count').textContent = _donationsCache.length + ' donation' + (_donationsCache.length !== 1 ? 's' : '');
 
     if (_donationsCache.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 40px; color: var(--text-secondary);">No donations recorded yet. Click "+ Record Donation" to add one.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 40px; color: var(--text-secondary);">No donations recorded yet. Click "+ Record Donation" to add one.</td></tr>';
         return;
     }
 
     tbody.innerHTML = _donationsCache.sort(function(a, b) {
         return new Date(b.date) - new Date(a.date);
     }).map(function(d) {
+        var pType = d.product_type || 'harvest';
+        var typeLabel = pType === 'custom' ? 'Custom' : pType === 'value_added' ? 'Value-Added' : 'Crop';
+        var typeColor = pType === 'custom' ? 'rgba(249,115,22,0.15);color:#f97316' : pType === 'value_added' ? 'rgba(59,130,246,0.15);color:#3b82f6' : 'rgba(52,211,153,0.15);color:#34d399';
+        var unit = d.unit || 'kg';
         return '<tr>' +
             '<td>' + (d.date ? new Date(d.date).toLocaleDateString() : '--') + '</td>' +
             '<td>' + (d.recipient || '--') + '</td>' +
-            '<td>' + (d.crop || '--') + '</td>' +
-            '<td>' + (parseFloat(d.weight || 0).toFixed(1)) + ' kg</td>' +
+            '<td>' + (d.crop || d.product_name || '--') + '</td>' +
+            '<td><span style="font-size:11px;padding:2px 6px;border-radius:4px;background:' + typeColor + ';">' + typeLabel + '</span></td>' +
+            '<td>' + (parseFloat(d.weight || 0).toFixed(1)) + ' ' + unit + '</td>' +
             '<td>' + (d.notes || '--') + '</td>' +
         '</tr>';
     }).join('');
@@ -9897,6 +9902,13 @@ function showAddDonationModal() {
     document.getElementById('donation-crop').value = '';
     document.getElementById('donation-weight').value = '';
     document.getElementById('donation-notes').value = '';
+    var typeEl = document.getElementById('donation-product-type');
+    if (typeEl) typeEl.value = 'harvest';
+    var unitEl = document.getElementById('donation-unit');
+    if (unitEl) unitEl.value = 'kg';
+    var reasonEl = document.getElementById('donation-reason');
+    if (reasonEl) reasonEl.value = 'surplus';
+    if (typeof toggleDonationProductField === 'function') toggleDonationProductField();
     document.getElementById('addDonationModal').style.display = 'flex';
 }
 
@@ -9905,18 +9917,24 @@ function saveDonation() {
     var recipient = document.getElementById('donation-recipient').value.trim();
     var crop = document.getElementById('donation-crop').value.trim();
     var weight = parseFloat(document.getElementById('donation-weight').value) || 0;
+    var unit = (document.getElementById('donation-unit') || {}).value || 'kg';
+    var productType = (document.getElementById('donation-product-type') || {}).value || 'harvest';
+    var reason = (document.getElementById('donation-reason') || {}).value || 'surplus';
     var notes = document.getElementById('donation-notes').value.trim();
 
     if (!recipient) { showToast('Please enter a recipient', 'error'); return; }
-    if (!crop) { showToast('Please enter a crop', 'error'); return; }
-    if (weight <= 0) { showToast('Please enter a valid weight', 'error'); return; }
+    if (!crop) { showToast('Please enter a product name', 'error'); return; }
+    if (weight <= 0) { showToast('Please enter a valid quantity', 'error'); return; }
 
     _donationsCache.push({
         id: Date.now().toString(36),
         date: date || new Date().toISOString().split('T')[0],
         recipient: recipient,
         crop: crop,
+        product_type: productType,
         weight: weight,
+        unit: unit,
+        reason: reason,
         notes: notes
     });
 

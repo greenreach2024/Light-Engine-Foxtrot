@@ -1347,7 +1347,7 @@
                         <span class="nav-item-icon">■</span>
                         Traceability
                     </a>
-                    <a href="#harvest-donations" class="nav-item" data-section="harvest-donations" data-help-title="Harvest & Donations" data-help="View total harvest weight and history. Track crop donations to food banks, community programs, and other recipients.">
+                    <a href="#harvest-donations" class="nav-item" data-section="harvest-donations" data-help-title="Harvest & Donations" data-help="View total harvest weight and history. Track donations of crops, value-added products, and custom items to food banks, community programs, and other recipients.">
                         <span class="nav-item-icon">&#9632;</span>
                         Harvest & Donations
                     </a>
@@ -3848,7 +3848,7 @@
                 <div class="card" style="margin-top: 24px; border-left: 4px solid #8b5cf6;">
                     <div class="card-header">
                         <h2>Donation Recommendations</h2>
-                        <span style="font-size: 12px; color: var(--text-muted);">Mature crops exceeding order + retail demand -- consider donating to reduce waste</span>
+                        <span style="font-size: 12px; color: var(--text-muted);">Mature crops exceeding order + retail demand -- consider donating surplus to reduce waste</span>
                     </div>
                     <div id="wo-donation-recommendations">
                         <div style="text-align: center; padding: 2rem; color: var(--text-muted);">
@@ -3862,7 +3862,7 @@
             <div id="section-harvest-donations" class="content-section" style="display: none;">
                 <div class="header">
                     <h1>Harvest & Donations</h1>
-                    <p class="header-subtitle">Track total harvest output and manage crop donations</p>
+                    <p class="header-subtitle">Track harvest output and manage donations -- crops, value-added products, and custom items</p>
                 </div>
 
                 <!-- Harvest Summary Cards -->
@@ -3930,13 +3930,14 @@
                                 <tr>
                                     <th>Date</th>
                                     <th>Recipient</th>
-                                    <th>Crop</th>
+                                    <th>Product</th>
+                                    <th>Type</th>
                                     <th>Weight</th>
                                     <th>Notes</th>
                                 </tr>
                             </thead>
                             <tbody id="hd-donation-list">
-                                <tr><td colspan="5" style="text-align: center; padding: 40px; color: var(--text-secondary);">No donations recorded yet. Click "+ Record Donation" to add one.</td></tr>
+                                <tr><td colspan="6" style="text-align: center; padding: 40px; color: var(--text-secondary);">No donations recorded yet. Click "+ Record Donation" to add one.</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -3959,12 +3960,45 @@
                                 <input type="text" id="donation-recipient" placeholder="e.g. Local Food Bank" style="width: 100%; padding: 10px; border-radius: 6px; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-primary);">
                             </div>
                             <div>
-                                <label style="display: block; margin-bottom: 4px; color: var(--text-secondary); font-size: 13px;">Crop</label>
-                                <input type="text" id="donation-crop" placeholder="e.g. Lettuce, Mixed Greens" style="width: 100%; padding: 10px; border-radius: 6px; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-primary);">
+                                <label style="display: block; margin-bottom: 4px; color: var(--text-secondary); font-size: 13px;">Product Type</label>
+                                <select id="donation-product-type" onchange="toggleDonationProductField()" style="width: 100%; padding: 10px; border-radius: 6px; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-primary);">
+                                    <option value="harvest">Harvested Crop</option>
+                                    <option value="value_added">Value-Added Product (salad mix, etc.)</option>
+                                    <option value="custom">Custom / Manual Entry</option>
+                                </select>
                             </div>
                             <div>
-                                <label style="display: block; margin-bottom: 4px; color: var(--text-secondary); font-size: 13px;">Weight (kg)</label>
-                                <input type="number" id="donation-weight" step="0.1" min="0" placeholder="0.0" style="width: 100%; padding: 10px; border-radius: 6px; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-primary);">
+                                <label style="display: block; margin-bottom: 4px; color: var(--text-secondary); font-size: 13px;">Product Name</label>
+                                <input type="text" id="donation-crop" list="donation-product-list" placeholder="Select or type a product name" style="width: 100%; padding: 10px; border-radius: 6px; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-primary);">
+                                <datalist id="donation-product-list"></datalist>
+                                <div id="donation-product-hint" style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Choose from harvested crops or type any product name</div>
+                            </div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                                <div>
+                                    <label style="display: block; margin-bottom: 4px; color: var(--text-secondary); font-size: 13px;">Quantity</label>
+                                    <input type="number" id="donation-weight" step="0.1" min="0" placeholder="0.0" style="width: 100%; padding: 10px; border-radius: 6px; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-primary);">
+                                </div>
+                                <div>
+                                    <label style="display: block; margin-bottom: 4px; color: var(--text-secondary); font-size: 13px;">Unit</label>
+                                    <select id="donation-unit" style="width: 100%; padding: 10px; border-radius: 6px; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-primary);">
+                                        <option value="kg">kg</option>
+                                        <option value="lbs">lbs</option>
+                                        <option value="oz">oz</option>
+                                        <option value="units">units</option>
+                                        <option value="bags">bags</option>
+                                        <option value="boxes">boxes</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div>
+                                <label style="display: block; margin-bottom: 4px; color: var(--text-secondary); font-size: 13px;">Reason</label>
+                                <select id="donation-reason" style="width: 100%; padding: 10px; border-radius: 6px; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-primary);">
+                                    <option value="surplus">Surplus</option>
+                                    <option value="end_of_day">End of Day</option>
+                                    <option value="seasonal">Seasonal</option>
+                                    <option value="planned">Planned Donation</option>
+                                    <option value="other">Other</option>
+                                </select>
                             </div>
                             <div>
                                 <label style="display: block; margin-bottom: 4px; color: var(--text-secondary); font-size: 13px;">Notes (optional)</label>
@@ -6269,24 +6303,87 @@
         const donationTbody = el('hd-donation-list');
         if (donationTbody) {
           if (donations.length === 0) {
-            donationTbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--text-secondary);">No donations recorded yet. Click "+ Record Donation" to add one.</td></tr>';
+            donationTbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-secondary);">No donations recorded yet. Click "+ Record Donation" to add one.</td></tr>';
           } else {
             donationTbody.innerHTML = donations.map(d => {
               const date = d.date || d.created_at;
+              const pType = d.product_type || 'harvest';
+              const typeLabel = pType === 'custom' ? 'Custom' : pType === 'value_added' ? 'Value-Added' : 'Crop';
+              const unit = d.unit || 'kg';
+              const qty = d.weight_kg || d.weight || d.quantity || 0;
               return `<tr>
                 <td>${date ? new Date(date).toLocaleDateString() : '--'}</td>
                 <td>${escapeHtmlWo(d.recipient || d.recipient_name || '--')}</td>
                 <td>${escapeHtmlWo(d.crop || d.product_name || '--')}</td>
-                <td>${d.weight_kg || d.weight || 0} kg</td>
+                <td><span style="font-size:11px;padding:2px 6px;border-radius:4px;background:${pType === 'custom' ? 'rgba(249,115,22,0.15);color:#f97316' : pType === 'value_added' ? 'rgba(59,130,246,0.15);color:#3b82f6' : 'rgba(52,211,153,0.15);color:#34d399'};">${typeLabel}</span></td>
+                <td>${qty} ${unit}</td>
                 <td>${escapeHtmlWo(d.notes || '')}</td>
               </tr>`;
             }).join('');
           }
         }
 
+        // Populate product datalist from harvest data for the donation modal
+        _hdHarvestProducts = [];
+        const productSet = new Set();
+        harvests.forEach(h => {
+          const name = h.crop || h.common_name;
+          if (name && !productSet.has(name.toLowerCase())) {
+            productSet.add(name.toLowerCase());
+            _hdHarvestProducts.push(name);
+          }
+        });
+
+        // Also pull from inventory if available
+        try {
+          const { headers: invHeaders } = _woHeaders();
+          const invRes = await fetch('/api/farm-sales/inventory', { headers: invHeaders }).catch(() => null);
+          if (invRes && invRes.ok) {
+            const invData = await invRes.json();
+            (invData.inventory || []).forEach(item => {
+              const name = item.product_name || item.sku_id;
+              if (name && !productSet.has(name.toLowerCase())) {
+                productSet.add(name.toLowerCase());
+                _hdHarvestProducts.push(name);
+              }
+            });
+          }
+        } catch (e) { /* inventory is optional */ }
+
       } catch (err) {
         console.error('[Harvest & Donations] Error:', err);
       }
+    }
+
+    // Product list from harvest/inventory data, populated by loadHarvestDonationData
+    var _hdHarvestProducts = [];
+
+    function toggleDonationProductField() {
+      const typeEl = document.getElementById('donation-product-type');
+      const hintEl = document.getElementById('donation-product-hint');
+      const cropEl = document.getElementById('donation-crop');
+      if (!typeEl || !hintEl || !cropEl) return;
+
+      const t = typeEl.value;
+      if (t === 'harvest') {
+        hintEl.textContent = 'Choose from harvested crops or type a crop name';
+        cropEl.placeholder = 'Select or type a crop name';
+        populateDonationDatalist(_hdHarvestProducts);
+      } else if (t === 'value_added') {
+        hintEl.textContent = 'Enter any value-added product (salad mix, herb bundle, etc.)';
+        cropEl.placeholder = 'e.g. Spring Mix, Herb Bundle, Microgreen Box';
+        populateDonationDatalist([]);
+      } else {
+        hintEl.textContent = 'Type any product or item name';
+        cropEl.placeholder = 'e.g. Compost, Seedlings, Gift Basket';
+        populateDonationDatalist([]);
+      }
+    }
+
+    function populateDonationDatalist(products) {
+      const dl = document.getElementById('donation-product-list');
+      if (!dl) return;
+      dl.innerHTML = products.map(p => `<option value="${escapeHtmlWo(p)}">`).join('');
     }
 
     function showAddDonationModal() {
@@ -6297,6 +6394,16 @@
         if (dateInput && !dateInput.value) {
           dateInput.value = new Date().toISOString().slice(0, 10);
         }
+        // Reset fields
+        const typeEl = document.getElementById('donation-product-type');
+        if (typeEl) typeEl.value = 'harvest';
+        const unitEl = document.getElementById('donation-unit');
+        if (unitEl) unitEl.value = 'kg';
+        const reasonEl = document.getElementById('donation-reason');
+        if (reasonEl) reasonEl.value = 'surplus';
+        // Populate datalist with known products
+        populateDonationDatalist(_hdHarvestProducts);
+        toggleDonationProductField();
       }
     }
 
@@ -6305,10 +6412,13 @@
       const recipient = document.getElementById('donation-recipient')?.value?.trim();
       const crop = document.getElementById('donation-crop')?.value?.trim();
       const weight = document.getElementById('donation-weight')?.value;
+      const unit = document.getElementById('donation-unit')?.value || 'kg';
+      const productType = document.getElementById('donation-product-type')?.value || 'harvest';
+      const reason = document.getElementById('donation-reason')?.value || 'surplus';
       const notes = document.getElementById('donation-notes')?.value?.trim();
 
       if (!recipient || !crop || !weight) {
-        alert('Please fill in recipient, crop, and weight.');
+        alert('Please fill in recipient, product name, and quantity.');
         return;
       }
 
@@ -6323,7 +6433,10 @@
             date: date || new Date().toISOString().slice(0, 10),
             recipient_name: recipient,
             product_name: crop,
+            product_type: productType,
             weight_kg: Number(weight),
+            unit: unit,
+            reason: reason,
             notes: notes || '',
             farm_id: farmId
           })
