@@ -140,6 +140,10 @@
     }
 
     /* ---- Override foxtrot card/panel styles inside our container ---- */
+    /* Force all data-panel sections visible inside our card layout */
+    .fs-container [data-panel] {
+      display: block !important;
+    }
     .fs-container .card,
     .fs-container [class*="card--compact"] {
       background: transparent !important;

@@ -874,7 +874,7 @@
       STATE.rooms.push(newRoom);
 
       try {
-        // Save to rooms.json
+        // Save to farmStore via API
         const response = await fetch('/api/room-mapper/save', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -882,6 +882,24 @@
         });
 
         if (!response.ok) throw new Error('Failed to save room');
+
+        // Also write to rooms.json so all pages see the new room
+        const roomsResponse = await fetchWithFarmAuth('/data/rooms.json', { cache: 'no-store' });
+        let roomsData = { rooms: [] };
+        if (roomsResponse.ok) {
+          roomsData = await roomsResponse.json();
+          if (!Array.isArray(roomsData.rooms)) roomsData.rooms = [];
+        }
+        // Only add if not already present
+        if (!roomsData.rooms.some(r => String(r.id || r.name) === String(roomId))) {
+          roomsData.rooms.push({ id: roomId, name: roomName.trim(), zones: [] });
+          await fetchWithFarmAuth('/data/rooms.json', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(roomsData)
+          });
+          console.log('[Room Mapper] Room added to rooms.json:', roomId);
+        }
 
         console.log('[Room Mapper] Room created:', roomId);
         
@@ -2026,11 +2044,12 @@
         }
         const roomsData = await roomsResponse.json();
         
-        // Find current room
-        const room = roomsData.rooms.find(r => (r.id || r.name) === roomId);
+        // Find current room, or create it if missing
+        let room = roomsData.rooms.find(r => (r.id || r.name) === roomId);
         if (!room) {
-          console.error('[Room Mapper] Room not found in rooms.json:', roomId);
-          return;
+          console.log('[Room Mapper] Room not in rooms.json, creating entry:', roomId);
+          room = { id: roomId, name: roomId, zones: [] };
+          roomsData.rooms.push(room);
         }
         
         // Update each zone with sensor assignments

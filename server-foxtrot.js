@@ -30821,11 +30821,14 @@ function syncZonesToRoomsJson(roomMapBody, baseName) {
       .filter(Boolean);
 
     const roomsData = readJSON('rooms.json', { rooms: [] });
-    const rooms = Array.isArray(roomsData?.rooms) ? roomsData.rooms : [];
-    const room = rooms.find(r => String(r.id) === String(targetRoomId));
+    if (!Array.isArray(roomsData.rooms)) roomsData.rooms = [];
+    const rooms = roomsData.rooms;
+    let room = rooms.find(r => String(r.id) === String(targetRoomId));
     if (!room) {
-      console.log(`[zone-rooms-sync] Room ${targetRoomId} not found in rooms.json — skipping`);
-      return;
+      // Upsert: create the room entry so all pages can see it
+      room = { id: targetRoomId, name: targetRoomId, zones: [] };
+      rooms.push(room);
+      console.log(`[zone-rooms-sync] Room ${targetRoomId} not in rooms.json — creating entry`);
     }
 
     const existingZones = Array.isArray(room.zones) ? room.zones : [];

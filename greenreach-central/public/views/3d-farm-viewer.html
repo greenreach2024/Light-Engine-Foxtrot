@@ -16,7 +16,7 @@
       flex-direction: column;
     }
 
-    /* ── Header ──────────────────────────────────────────── */
+    /* -- Header ------------------------------------------------ */
     .header {
       background: rgba(0,0,0,0.6);
       padding: 0.5rem 1.25rem;
@@ -31,14 +31,11 @@
     .header-left { display: flex; align-items: center; gap: 1rem; }
     .header h1 { font-size: 1.1rem; font-weight: 700; letter-spacing: -0.3px; white-space: nowrap; }
     .header h1 em { font-style: normal; color: #818cf8; }
-    .breadcrumb {
-      display: flex; align-items: center; gap: 0.4rem;
-      color: #64748b; font-size: 0.72rem;
-    }
+    .breadcrumb { display: flex; align-items: center; gap: 0.4rem; color: #64748b; font-size: 0.72rem; }
     .breadcrumb a { color: #64748b; text-decoration: none; }
     .breadcrumb a:hover { color: #e2e8f0; }
 
-    /* ── Toolbar ─────────────────────────────────────────── */
+    /* -- Toolbar ----------------------------------------------- */
     .toolbar { display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; }
     .toolbar button, .toolbar select {
       background: rgba(30,41,59,0.85);
@@ -56,11 +53,11 @@
     .toolbar select { outline: none; }
     .toolbar .sep { width: 1px; height: 18px; background: rgba(148,163,184,0.15); margin: 0 0.15rem; }
 
-    /* ── Canvas container ────────────────────────────────── */
+    /* -- Canvas container -------------------------------------- */
     #viewer-container { flex: 1; position: relative; overflow: hidden; }
     #viewer-container canvas { display: block; }
 
-    /* ── Data Legend (gradient bar) ───────────────────────── */
+    /* -- Data Legend (gradient bar) ----------------------------- */
     .data-legend {
       position: absolute;
       bottom: 16px; left: 50%; transform: translateX(-50%);
@@ -76,34 +73,11 @@
       min-width: 340px;
     }
     .data-legend.visible { display: flex; }
-    .data-legend .legend-title {
-      font-size: 0.72rem;
-      font-weight: 600;
-      color: #94a3b8;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      white-space: nowrap;
-    }
-    .data-legend .gradient-bar {
-      flex: 1;
-      height: 12px;
-      border-radius: 4px;
-      min-width: 140px;
-    }
-    .data-legend .range-labels {
-      display: flex;
-      justify-content: space-between;
-      font-size: 0.68rem;
-      color: #94a3b8;
-      margin-top: 2px;
-    }
-    .data-legend .legend-value {
-      font-size: 0.72rem;
-      color: #e2e8f0;
-      white-space: nowrap;
-    }
+    .data-legend .legend-title { font-size: 0.72rem; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap; }
+    .data-legend .gradient-bar { flex: 1; height: 12px; border-radius: 4px; min-width: 140px; }
+    .data-legend .range-labels { display: flex; justify-content: space-between; font-size: 0.68rem; color: #94a3b8; margin-top: 2px; }
 
-    /* ── Zone Info HUD (bottom-left) ─────────────────────── */
+    /* -- Zone Info HUD (bottom-left) --------------------------- */
     .zone-hud {
       position: absolute;
       bottom: 16px; left: 16px;
@@ -113,31 +87,14 @@
       padding: 0.8rem 1rem;
       z-index: 60;
       backdrop-filter: blur(10px);
-      min-width: 200px;
-      max-width: 280px;
-      opacity: 0;
-      transform: translateY(10px);
+      min-width: 200px; max-width: 280px;
+      opacity: 0; transform: translateY(10px);
       transition: opacity 0.25s, transform 0.25s;
       pointer-events: none;
     }
     .zone-hud.visible { opacity: 1; transform: translateY(0); pointer-events: auto; }
-    .zone-hud h4 {
-      font-size: 0.85rem;
-      font-weight: 600;
-      color: #c7d2fe;
-      margin-bottom: 0.4rem;
-      display: flex;
-      align-items: center;
-      gap: 0.4rem;
-    }
-    .zone-hud .hud-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 0.25rem 0;
-      border-bottom: 1px solid rgba(148,163,184,0.06);
-      font-size: 0.78rem;
-    }
+    .zone-hud h4 { font-size: 0.85rem; font-weight: 600; color: #c7d2fe; margin-bottom: 0.4rem; }
+    .zone-hud .hud-row { display: flex; justify-content: space-between; align-items: center; padding: 0.25rem 0; border-bottom: 1px solid rgba(148,163,184,0.06); font-size: 0.78rem; }
     .zone-hud .hud-row:last-child { border-bottom: none; }
     .zone-hud .hud-label { color: #64748b; }
     .zone-hud .hud-value { color: #e2e8f0; font-weight: 600; }
@@ -145,41 +102,24 @@
     .zone-hud .hud-value.warn { color: #fbbf24; }
     .zone-hud .hud-value.danger { color: #f87171; }
 
-    /* ── Farm stats bar (top-right overlay) ──────────────── */
-    .farm-stats {
-      position: absolute;
-      top: 12px; right: 12px;
-      display: flex;
-      gap: 0.5rem;
-      z-index: 60;
-    }
+    /* -- Farm stats bar (top-right) ---------------------------- */
+    .farm-stats { position: absolute; top: 12px; right: 12px; display: flex; gap: 0.5rem; z-index: 60; }
     .stat-chip {
       background: rgba(15,23,42,0.88);
       border: 1px solid rgba(99,102,241,0.15);
       border-radius: 8px;
       padding: 0.4rem 0.75rem;
       backdrop-filter: blur(8px);
-      text-align: center;
-      min-width: 72px;
+      text-align: center; min-width: 72px;
     }
-    .stat-chip .chip-value {
-      font-size: 1.05rem;
-      font-weight: 700;
-      color: #e2e8f0;
-      line-height: 1.2;
-    }
-    .stat-chip .chip-label {
-      font-size: 0.6rem;
-      color: #64748b;
-      text-transform: uppercase;
-      letter-spacing: 0.4px;
-    }
+    .stat-chip .chip-value { font-size: 1.05rem; font-weight: 700; color: #e2e8f0; line-height: 1.2; }
+    .stat-chip .chip-label { font-size: 0.6rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.4px; }
 
-    /* ── Detail panel (right side) ───────────────────────── */
+    /* -- Detail panel (right side) ----------------------------- */
     .detail-panel {
       position: absolute;
       top: 56px; right: 12px;
-      width: 300px;
+      width: 310px;
       max-height: calc(100% - 80px);
       overflow-y: auto;
       background: rgba(15,23,42,0.94);
@@ -193,31 +133,50 @@
       transition: all 0.25s ease;
     }
     .detail-panel.visible { opacity: 1; pointer-events: auto; transform: translateX(0); }
-    .detail-panel .close-btn {
-      position: absolute; top: 6px; right: 8px;
-      background: none; border: none; color: #475569; font-size: 1rem; cursor: pointer;
-    }
+    .detail-panel .close-btn { position: absolute; top: 6px; right: 8px; background: none; border: none; color: #475569; font-size: 1rem; cursor: pointer; }
     .detail-panel .close-btn:hover { color: #e2e8f0; }
     .detail-panel h3 { font-size: 0.9rem; font-weight: 600; color: #c7d2fe; margin-bottom: 0.6rem; }
     .detail-panel .dp-section { margin-top: 0.6rem; }
     .detail-panel .dp-label { font-size: 0.65rem; color: #475569; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.15rem; }
     .detail-panel .dp-value { font-size: 0.85rem; color: #e2e8f0; }
-    .detail-panel .dp-grid {
-      display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;
-      margin-top: 0.5rem;
-    }
-    .detail-panel .dp-metric {
-      background: rgba(99,102,241,0.06);
-      border-radius: 8px;
-      padding: 0.5rem;
-      text-align: center;
-    }
+    .detail-panel .dp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-top: 0.5rem; }
+    .detail-panel .dp-metric { background: rgba(99,102,241,0.06); border-radius: 8px; padding: 0.5rem; text-align: center; }
     .detail-panel .dp-metric .metric-val { font-size: 1.1rem; font-weight: 700; color: #e2e8f0; }
     .detail-panel .dp-metric .metric-lbl { font-size: 0.62rem; color: #64748b; text-transform: uppercase; }
     .detail-panel .dp-sparkline { margin-top: 0.5rem; }
     .detail-panel .dp-sparkline canvas { width: 100%; height: 40px; border-radius: 6px; background: rgba(0,0,0,0.2); }
 
-    /* ── GWEN assist button ──────────────────────────────── */
+    /* -- Inline editable fields -------------------------------- */
+    .dp-input-row { display: flex; align-items: center; gap: 0.35rem; margin-top: 0.3rem; }
+    .dp-input-row label { font-size: 0.68rem; color: #64748b; min-width: 20px; }
+    .dp-input-row input, .dp-input-row select {
+      background: rgba(30,41,59,0.9);
+      border: 1px solid rgba(99,102,241,0.2);
+      color: #e2e8f0;
+      padding: 0.25rem 0.4rem;
+      border-radius: 5px;
+      font-size: 0.78rem;
+      width: 60px;
+      outline: none;
+    }
+    .dp-input-row input:focus, .dp-input-row select:focus { border-color: #818cf8; }
+    .dp-input-row select { width: auto; }
+    .dp-input-row .unit { font-size: 0.62rem; color: #475569; }
+    .dp-save-btn {
+      margin-top: 0.5rem;
+      background: rgba(99,102,241,0.15);
+      border: 1px solid rgba(99,102,241,0.3);
+      color: #c7d2fe;
+      padding: 0.3rem 0.7rem;
+      border-radius: 6px;
+      font-size: 0.72rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .dp-save-btn:hover { background: rgba(99,102,241,0.25); border-color: #818cf8; }
+    .dp-save-btn.saved { background: rgba(34,197,94,0.15); border-color: rgba(34,197,94,0.3); color: #86efac; }
+
+    /* -- GWEN assist button ------------------------------------ */
     .gwen-fab {
       position: absolute;
       bottom: 16px; right: 16px;
@@ -225,13 +184,9 @@
       border-radius: 50%;
       background: linear-gradient(135deg, #6366f1, #8b5cf6);
       border: 2px solid rgba(255,255,255,0.15);
-      color: #fff;
-      font-size: 1.1rem;
-      cursor: pointer;
-      z-index: 70;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      color: #fff; font-size: 1.1rem;
+      cursor: pointer; z-index: 70;
+      display: flex; align-items: center; justify-content: center;
       box-shadow: 0 4px 20px rgba(99,102,241,0.3);
       transition: all 0.2s;
     }
@@ -242,36 +197,26 @@
       border: 1px solid rgba(99,102,241,0.3);
       border-radius: 8px;
       padding: 0.4rem 0.7rem;
-      font-size: 0.72rem;
-      white-space: nowrap;
-      opacity: 0;
-      transition: opacity 0.2s;
-      pointer-events: none;
-      color: #c7d2fe;
+      font-size: 0.72rem; white-space: nowrap;
+      opacity: 0; transition: opacity 0.2s;
+      pointer-events: none; color: #c7d2fe;
     }
     .gwen-fab:hover .gwen-tooltip { opacity: 1; }
 
-    /* ── Loading overlay ─────────────────────────────────── */
+    /* -- Loading overlay --------------------------------------- */
     .loading-overlay {
       position: absolute; inset: 0;
       background: rgba(15,23,42,0.96);
       display: flex; flex-direction: column;
       align-items: center; justify-content: center;
-      z-index: 200;
-      transition: opacity 0.6s;
+      z-index: 200; transition: opacity 0.6s;
     }
     .loading-overlay.done { opacity: 0; pointer-events: none; }
-    .loading-spinner {
-      width: 44px; height: 44px;
-      border: 3px solid rgba(99,102,241,0.15);
-      border-top-color: #818cf8;
-      border-radius: 50%;
-      animation: spin 0.7s linear infinite;
-    }
+    .loading-spinner { width: 44px; height: 44px; border: 3px solid rgba(99,102,241,0.15); border-top-color: #818cf8; border-radius: 50%; animation: spin 0.7s linear infinite; }
     .loading-text { margin-top: 0.8rem; color: #64748b; font-size: 0.82rem; }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    /* ── Tooltip ─────────────────────────────────────────── */
+    /* -- Tooltip ----------------------------------------------- */
     .hover-tip {
       position: absolute;
       background: rgba(15,23,42,0.94);
@@ -279,18 +224,16 @@
       border-radius: 8px;
       padding: 0.4rem 0.65rem;
       font-size: 0.74rem;
-      pointer-events: none;
-      z-index: 80;
+      pointer-events: none; z-index: 80;
       transform: translate(-50%, -115%);
       white-space: nowrap;
-      opacity: 0;
-      transition: opacity 0.12s;
+      opacity: 0; transition: opacity 0.12s;
     }
     .hover-tip.visible { opacity: 1; }
     .hover-tip .ht-title { font-weight: 600; color: #c7d2fe; }
     .hover-tip .ht-sub { color: #64748b; font-size: 0.66rem; margin-top: 1px; }
 
-    /* ── Status bar ──────────────────────────────────────── */
+    /* -- Status bar -------------------------------------------- */
     .status-bar {
       position: absolute;
       bottom: 16px; right: 68px;
@@ -298,12 +241,9 @@
       border: 1px solid rgba(148,163,184,0.08);
       border-radius: 6px;
       padding: 0.25rem 0.6rem;
-      font-size: 0.62rem;
-      color: #475569;
-      z-index: 55;
+      font-size: 0.62rem; color: #475569; z-index: 55;
     }
 
-    /* ── Scrollbar ───────────────────────────────────────── */
     ::-webkit-scrollbar { width: 5px; }
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: rgba(99,102,241,0.2); border-radius: 3px; }
@@ -311,20 +251,13 @@
 </head>
 <body>
 
-  <!-- Header -->
   <div class="header">
     <div class="header-left">
-      <div class="breadcrumb">
-        <a href="/LE-farm-admin.html">Farm</a>
-        <span>/</span>
-        <span>3D Viewer</span>
-      </div>
+      <div class="breadcrumb"><a href="/LE-farm-admin.html">Farm</a><span>/</span><span>3D Viewer</span></div>
       <h1>3D <em>Farm Viewer</em></h1>
     </div>
     <div class="toolbar">
-      <select id="roomSelect" title="Room filter">
-        <option value="__all">All Rooms</option>
-      </select>
+      <select id="roomSelect" title="Room filter"><option value="__all">All Rooms</option></select>
       <div class="sep"></div>
       <button data-overlay="none" class="active">Off</button>
       <button data-overlay="temperature">Temp</button>
@@ -332,62 +265,41 @@
       <button data-overlay="co2">CO2</button>
       <button data-overlay="vpd">VPD</button>
       <div class="sep"></div>
+      <button id="btnWalls" class="active" title="Toggle walls and ceiling">Walls</button>
+      <div class="sep"></div>
       <button id="btnTop" title="Top-down view">Top</button>
       <button id="btnAngle" title="Angled view">3D</button>
       <button id="btnReset" title="Reset camera">Reset</button>
     </div>
   </div>
 
-  <!-- Canvas -->
   <div id="viewer-container">
     <canvas id="farmCanvas"></canvas>
-
     <div class="loading-overlay" id="loadingOverlay">
       <div class="loading-spinner"></div>
       <div class="loading-text">Loading farm environment...</div>
     </div>
-
-    <!-- Hover tooltip -->
     <div class="hover-tip" id="hoverTip">
       <div class="ht-title" id="htTitle"></div>
       <div class="ht-sub" id="htSub"></div>
     </div>
-
-    <!-- Farm stat chips -->
     <div class="farm-stats" id="farmStats"></div>
-
-    <!-- Zone HUD (appears on hover/click) -->
     <div class="zone-hud" id="zoneHud"></div>
-
-    <!-- Data legend (gradient + range for active overlay) -->
     <div class="data-legend" id="dataLegend">
       <div class="legend-title" id="legendTitle">Temperature</div>
       <div style="flex:1">
         <div class="gradient-bar" id="legendGradient"></div>
-        <div class="range-labels">
-          <span id="legendMin">15C</span>
-          <span id="legendMax">35C</span>
-        </div>
+        <div class="range-labels"><span id="legendMin">15C</span><span id="legendMax">35C</span></div>
       </div>
     </div>
-
-    <!-- Detail panel -->
     <div class="detail-panel" id="detailPanel">
       <button class="close-btn" id="detailClose">&#10005;</button>
       <div id="detailContent"></div>
     </div>
-
-    <!-- Status bar -->
     <div class="status-bar" id="statusBar">Ready</div>
-
-    <!-- GWEN assist -->
-    <button class="gwen-fab" id="gwenFab" title="Ask GWEN about this view">
-      G
-      <div class="gwen-tooltip">Ask GWEN to analyze zone data</div>
-    </button>
+    <button class="gwen-fab" id="gwenFab" title="Ask GWEN about this view">G<div class="gwen-tooltip">Ask GWEN to analyze zone data</div></button>
   </div>
 
-  <!-- Three.js r160 -->
   <script type="importmap">
   {
     "imports": {
@@ -404,15 +316,15 @@
   (function() {
     'use strict';
 
-    // ─── Auth ───────────────────────────────────────────────────
     function authFetch(url, opts = {}) {
       const token = localStorage.getItem('token');
       const h = Object.assign({}, opts.headers || {});
-      if (token) h['Authorization'] = `Bearer ${token}`;
+      if (token) h['Authorization'] = 'Bearer ' + token;
+      if (!h['Content-Type'] && opts.body) h['Content-Type'] = 'application/json';
       return fetch(url, Object.assign({}, opts, { headers: h }));
     }
 
-    // ─── State ──────────────────────────────────────────────────
+    // ---- State -----------------------------------------------
     const S = {
       rooms: [], groups: [], roomMaps: {}, envData: null,
       iotDevices: [], cropRegistry: {},
@@ -420,16 +332,19 @@
       scene: null, camera: null, renderer: null, controls: null,
       raycaster: new THREE.Raycaster(), mouse: new THREE.Vector2(),
       clock: new THREE.Clock(),
-      meshes: { floors: [], zones: [], trays: [], sensors: [], equipment: [], walls: [], labels: [] },
-      // Zone mesh lookup for overlay + interaction
-      zoneMeshMap: {},   // zoneId -> mesh
-      zoneDataMap: {},   // zoneId -> { temp, humidity, co2, vpd, name, groups[] }
+      meshes: { floors: [], zones: [], trays: [], sensors: [], equipment: [], walls: [], ceilings: [], labels: [] },
+      zoneMeshMap: {},
+      zoneDataMap: {},
+      floorMeshMap: {},    // roomId -> floor mesh (for overlay fallback)
       particleSystems: [],
       hoveredZone: null,
       selectedZone: null,
+      wallsVisible: true,
+      // Persisted dimensions keyed by group/room id
+      groupDimensions: {},   // groupId -> { length, width, height, lightOrientation }
+      roomDimensions: {},    // roomId  -> { length, width, height }
     };
 
-    // ─── Palette ────────────────────────────────────────────────
     const ZONE_PALETTE = [0x6366f1, 0x8b5cf6, 0x3b82f6, 0x06b6d4, 0x10b981, 0xf59e0b, 0xef4444, 0xec4899, 0x14b8a6, 0xa855f7];
     const STATUS_COLOR = { active: 0x22c55e, growing: 0x22c55e, deployed: 0x22c55e, planned: 0x3b82f6, draft: 0x475569, completed: 0xf59e0b, archived: 0x334155 };
 
@@ -440,7 +355,23 @@
       vpd:         { min: 0.2, max: 2.0, unit: 'kPa', label: 'Vapor Pressure Deficit', colors: [0x3b82f6, 0x22c55e, 0xf59e0b, 0xef4444], key: 'vpd' },
     };
 
-    // ─── Init Three.js ──────────────────────────────────────────
+    // ---- Persistence helpers ---------------------------------
+    function loadPersistedDimensions() {
+      try {
+        const gd = localStorage.getItem('farm3d_groupDims');
+        if (gd) S.groupDimensions = JSON.parse(gd);
+        const rd = localStorage.getItem('farm3d_roomDims');
+        if (rd) S.roomDimensions = JSON.parse(rd);
+      } catch (e) {}
+    }
+    function saveGroupDimensions() {
+      try { localStorage.setItem('farm3d_groupDims', JSON.stringify(S.groupDimensions)); } catch (e) {}
+    }
+    function saveRoomDimensions() {
+      try { localStorage.setItem('farm3d_roomDims', JSON.stringify(S.roomDimensions)); } catch (e) {}
+    }
+
+    // ---- Init Three.js ---------------------------------------
     function initScene() {
       const container = document.getElementById('viewer-container');
       const canvas = document.getElementById('farmCanvas');
@@ -467,12 +398,9 @@
       S.controls.maxPolarAngle = Math.PI / 2.1;
       S.controls.minDistance = 4;
       S.controls.maxDistance = 80;
-      S.controls.autoRotate = false;
-      S.controls.autoRotateSpeed = 0.3;
 
-      // Lighting -- cinematic three-point
-      const ambient = new THREE.AmbientLight(0x334155, 0.4);
-      S.scene.add(ambient);
+      // Cinematic three-point lighting
+      S.scene.add(new THREE.AmbientLight(0x334155, 0.4));
 
       const keyLight = new THREE.DirectionalLight(0xdbeafe, 0.9);
       keyLight.position.set(25, 40, 15);
@@ -494,15 +422,15 @@
       S.scene.add(rimLight);
 
       // Ground
-      const groundGeo = new THREE.PlaneGeometry(120, 120);
-      const groundMat = new THREE.MeshStandardMaterial({ color: 0x080c18, roughness: 1, metalness: 0 });
-      const ground = new THREE.Mesh(groundGeo, groundMat);
+      const ground = new THREE.Mesh(
+        new THREE.PlaneGeometry(120, 120),
+        new THREE.MeshStandardMaterial({ color: 0x080c18, roughness: 1, metalness: 0 })
+      );
       ground.rotation.x = -Math.PI / 2;
       ground.position.y = -0.05;
       ground.receiveShadow = true;
       S.scene.add(ground);
 
-      // Subtle grid
       const grid = new THREE.GridHelper(60, 60, 0x131a2e, 0x131a2e);
       grid.position.y = 0.01;
       grid.material.transparent = true;
@@ -521,24 +449,21 @@
 
     function animate() {
       requestAnimationFrame(animate);
-      const dt = S.clock.getDelta();
       S.controls.update();
-
-      // Animate sensor pulse
       const t = S.clock.getElapsedTime();
+      const dt = S.clock.getDelta();
+
       S.meshes.sensors.forEach(m => {
         if (m.userData._pulse) {
-          const scale = 1 + 0.15 * Math.sin(t * 2 + m.userData._pulseOffset);
-          m.scale.setScalar(scale);
+          m.scale.setScalar(1 + 0.15 * Math.sin(t * 2 + m.userData._pulseOffset));
         }
       });
 
-      // Animate particles
       S.particleSystems.forEach(ps => {
-        const positions = ps.geometry.attributes.position.array;
-        for (let i = 1; i < positions.length; i += 3) {
-          positions[i] += ps.userData.speed * dt;
-          if (positions[i] > ps.userData.ceiling) positions[i] = ps.userData.floor;
+        const pos = ps.geometry.attributes.position.array;
+        for (let i = 1; i < pos.length; i += 3) {
+          pos[i] += ps.userData.speed * dt;
+          if (pos[i] > ps.userData.ceiling) pos[i] = ps.userData.floor;
         }
         ps.geometry.attributes.position.needsUpdate = true;
       });
@@ -546,7 +471,7 @@
       S.renderer.render(S.scene, S.camera);
     }
 
-    // ─── Data Loading ───────────────────────────────────────────
+    // ---- Data Loading ----------------------------------------
     async function loadAllData() {
       const status = (msg) => { const el = document.getElementById('statusBar'); if (el) el.textContent = msg; };
       try {
@@ -568,7 +493,7 @@
         status('Loading room layouts...');
         for (const room of S.rooms) {
           try {
-            let res = await authFetch(`/data/room-map-${room.id}.json`);
+            let res = await authFetch('/data/room-map-' + room.id + '.json');
             if (!res.ok) res = await authFetch('/data/room-map.json');
             if (res.ok) S.roomMaps[room.id] = await res.json();
           } catch (e) {}
@@ -585,11 +510,12 @@
           } catch (e) {}
         }
 
+        loadPersistedDimensions();
         buildZoneDataMap();
         populateRoomDropdown();
         buildScene();
         renderFarmStats();
-        status(`${S.rooms.length} room${S.rooms.length !== 1 ? 's' : ''} -- ${S.groups.length} growing groups -- updated ${new Date().toLocaleTimeString()}`);
+        status(S.rooms.length + ' room' + (S.rooms.length !== 1 ? 's' : '') + ' -- ' + S.groups.length + ' growing groups -- updated ' + new Date().toLocaleTimeString());
       } catch (err) {
         console.error('[3D Viewer]', err);
         status('Error loading farm data');
@@ -598,7 +524,7 @@
       }
     }
 
-    // ─── Build zone data map (merge env + groups) ───────────────
+    // ---- Zone data map (merge env + groups) ------------------
     function buildZoneDataMap() {
       S.zoneDataMap = {};
       const envZones = S.envData?.zones || [];
@@ -620,13 +546,18 @@
         };
       });
 
-      // Attach groups to zones
       S.groups.forEach(g => {
         const zId = String(g.zone ?? g.zoneId ?? '');
-        // Try direct match, then name matching
         let entry = S.zoneDataMap[zId];
         if (!entry) {
-          const key = Object.keys(S.zoneDataMap).find(k => S.zoneDataMap[k].name === zId);
+          // Try matching by name
+          const key = Object.keys(S.zoneDataMap).find(k => S.zoneDataMap[k].name === zId || k === zId);
+          if (key) entry = S.zoneDataMap[key];
+        }
+        if (!entry) {
+          // Try matching zone name embedded in zoneId (e.g., "room-3xxjln-zZone 1" -> "Zone 1")
+          const zoneName = zId.replace(/^.*-z/, '');
+          const key = Object.keys(S.zoneDataMap).find(k => S.zoneDataMap[k].name === zoneName);
           if (key) entry = S.zoneDataMap[key];
         }
         if (entry) entry.groups.push(g);
@@ -658,16 +589,17 @@
       return [];
     }
 
-    // ─── Build 3D Scene ─────────────────────────────────────────
+    // ---- Build 3D Scene --------------------------------------
     function buildScene() {
-      // Clear
-      Object.values(S.meshes).forEach(arr => {
-        arr.forEach(m => { S.scene.remove(m); disposeMesh(m); });
-        arr.length = 0;
+      // Clear all meshes
+      ['floors','zones','trays','sensors','equipment','walls','ceilings','labels'].forEach(k => {
+        (S.meshes[k] || []).forEach(m => { S.scene.remove(m); disposeMesh(m); });
+        S.meshes[k] = [];
       });
       S.particleSystems.forEach(ps => { S.scene.remove(ps); ps.geometry.dispose(); ps.material.dispose(); });
       S.particleSystems.length = 0;
       S.zoneMeshMap = {};
+      S.floorMeshMap = {};
 
       const visible = S.roomFilter === '__all' ? S.rooms : S.rooms.filter(r => r.id === S.roomFilter);
       let offsetX = 0;
@@ -675,56 +607,115 @@
       visible.forEach((room) => {
         const map = S.roomMaps[room.id];
         const gridSize = map?.gridSize || 20;
-        const roomW = gridSize, roomD = gridSize;
+
+        // Use persisted room dimensions or fallback to grid-based
+        const dims = S.roomDimensions[room.id] || {};
+        const roomW = dims.length || gridSize;
+        const roomD = dims.width  || gridSize;
+        const wallH = dims.height || 3.5;
+
         const cx = offsetX + roomW / 2, cz = roomD / 2;
 
-        // Floor -- polished concrete look
+        // Floor
         const floorGeo = new THREE.BoxGeometry(roomW, 0.12, roomD);
         const floorMat = new THREE.MeshStandardMaterial({ color: 0x151d2e, roughness: 0.85, metalness: 0.05 });
         const floor = new THREE.Mesh(floorGeo, floorMat);
         floor.position.set(cx, 0, cz);
         floor.receiveShadow = true;
-        floor.userData = { type: 'room', room };
+        floor.userData = { type: 'room', room, roomW, roomD, wallH };
         S.scene.add(floor);
         S.meshes.floors.push(floor);
+        S.floorMeshMap[room.id] = floor;
 
-        // Walls -- glass-like
-        const wallH = 3.5;
+        // Walls (4) + ceiling -- togglable, see-through
         const wallMat = new THREE.MeshPhysicalMaterial({
-          color: 0x94a3b8, transparent: true, opacity: 0.08,
-          roughness: 0.1, metalness: 0, transmission: 0.6,
+          color: 0x94a3b8, transparent: true, opacity: 0.06,
+          roughness: 0.1, metalness: 0, transmission: 0.7,
           side: THREE.DoubleSide,
         });
-        [[roomW, 0.08, cx, 0], [roomW, 0.08, cx, roomD], [0.08, roomD, offsetX, cz], [0.08, roomD, offsetX + roomW, cz]].forEach(([w, d, x, z]) => {
-          const geo = new THREE.BoxGeometry(w, wallH, d);
-          const wall = new THREE.Mesh(geo, wallMat);
-          wall.position.set(x, wallH / 2, z);
+        const ceilMat = new THREE.MeshPhysicalMaterial({
+          color: 0x94a3b8, transparent: true, opacity: 0.04,
+          roughness: 0.1, metalness: 0, transmission: 0.8,
+          side: THREE.DoubleSide,
+        });
+
+        // front, back, left, right
+        const wallDefs = [
+          { w: roomW, d: 0.08, x: cx, z: 0 },
+          { w: roomW, d: 0.08, x: cx, z: roomD },
+          { w: 0.08, d: roomD, x: offsetX, z: cz },
+          { w: 0.08, d: roomD, x: offsetX + roomW, z: cz },
+        ];
+        wallDefs.forEach(wd => {
+          const geo = new THREE.BoxGeometry(wd.w, wallH, wd.d);
+          const wall = new THREE.Mesh(geo, wallMat.clone());
+          wall.position.set(wd.x, wallH / 2, wd.z);
+          wall.visible = S.wallsVisible;
+          wall.userData = { type: 'wall', room };
           S.scene.add(wall);
           S.meshes.walls.push(wall);
         });
 
+        // Ceiling
+        const ceilGeo = new THREE.BoxGeometry(roomW, 0.06, roomD);
+        const ceil = new THREE.Mesh(ceilGeo, ceilMat.clone());
+        ceil.position.set(cx, wallH, cz);
+        ceil.visible = S.wallsVisible;
+        ceil.userData = { type: 'ceiling', room };
+        S.scene.add(ceil);
+        S.meshes.ceilings.push(ceil);
+
         // Wall edge glow
-        const edgeMat = new THREE.LineBasicMaterial({ color: 0x6366f1, transparent: true, opacity: 0.2 });
         const edgeGeo = new THREE.EdgesGeometry(new THREE.BoxGeometry(roomW, wallH, roomD));
+        const edgeMat = new THREE.LineBasicMaterial({ color: 0x6366f1, transparent: true, opacity: 0.2 });
         const edges = new THREE.LineSegments(edgeGeo, edgeMat);
         edges.position.set(cx, wallH / 2, cz);
+        edges.visible = S.wallsVisible;
         S.scene.add(edges);
         S.meshes.walls.push(edges);
 
-        // Room label -- clean, above walls
+        // Room label
         makeLabel(room.name || room.id, cx, wallH + 0.6, cz, { size: 18, color: '#94a3b8', opacity: 0.7 });
 
-        // Zones
-        const zones = map?.zones || room.zones || [];
+        // Dimension label (small, bottom corner)
+        const dimStr = roomW + 'L x ' + roomD + 'W x ' + wallH + 'H';
+        makeLabel(dimStr, offsetX + 1.5, 0.3, 0.4, { size: 8, color: '#475569', opacity: 0.5 });
+
+        // Build zones from env data if room-map doesn't have explicit zone boundaries
+        const mapZones = map?.zones || [];
+        const roomZoneNames = room.zones || [];
+        let zones = [];
+
+        if (mapZones.length > 0) {
+          zones = mapZones;
+        } else if (roomZoneNames.length > 0) {
+          // Synthesize zone rectangles from room zone name list
+          const nz = roomZoneNames.length;
+          const zoneW = roomW / nz;
+          roomZoneNames.forEach((zName, zi) => {
+            zones.push({
+              zone: zName, name: zName,
+              x1: zi * zoneW, y1: 0,
+              x2: (zi + 1) * zoneW, y2: roomD,
+            });
+          });
+        } else {
+          // Single zone covering entire room
+          zones.push({
+            zone: room.name || room.id,
+            name: room.name || room.id,
+            x1: 0, y1: 0, x2: roomW, y2: roomD,
+          });
+        }
+
         zones.forEach((zone, zi) => {
           const x1 = (zone.x1 ?? 0) + offsetX, y1 = zone.y1 ?? 0;
-          const x2 = (zone.x2 ?? gridSize) + offsetX, y2 = zone.y2 ?? gridSize;
+          const x2 = (zone.x2 ?? roomW) + offsetX, y2 = zone.y2 ?? roomD;
           const zw = Math.abs(x2 - x1), zd = Math.abs(y2 - y1);
           const zcx = (x1 + x2) / 2, zcz = (y1 + y2) / 2;
           const zColor = ZONE_PALETTE[zi % ZONE_PALETTE.length];
-          const zoneId = String(zone.zone ?? zone.id ?? zone.name ?? `z${zi}`);
+          const zoneId = String(zone.zone ?? zone.id ?? zone.name ?? ('z' + zi));
 
-          // Zone platform (raised slightly)
           const zoneGeo = new THREE.BoxGeometry(zw - 0.2, 0.06, zd - 0.2);
           const zoneMat = new THREE.MeshStandardMaterial({
             color: zColor, transparent: true, opacity: 0.15, roughness: 0.5, metalness: 0.1,
@@ -737,7 +728,17 @@
           S.meshes.zones.push(zoneMesh);
           S.zoneMeshMap[zoneId] = zoneMesh;
 
-          // Zone border -- subtle line at base
+          // Also map by variant keys for overlay matching
+          // env data zone names like "Zone 1" vs room zone refs
+          const envKey = Object.keys(S.zoneDataMap).find(k =>
+            k === zoneId || S.zoneDataMap[k].name === zoneId ||
+            k === String(zone.name) || S.zoneDataMap[k].name === String(zone.name)
+          );
+          if (envKey && envKey !== zoneId) {
+            S.zoneMeshMap[envKey] = zoneMesh;
+          }
+
+          // Zone border
           const borderGeo = new THREE.EdgesGeometry(new THREE.BoxGeometry(zw - 0.2, 0.02, zd - 0.2));
           const borderMat = new THREE.LineBasicMaterial({ color: zColor, transparent: true, opacity: 0.35 });
           const border = new THREE.LineSegments(borderGeo, borderMat);
@@ -745,12 +746,10 @@
           S.scene.add(border);
           S.meshes.zones.push(border);
 
-          // Zone name -- small, tucked in corner
-          const zName = zone.name || `Zone ${zone.zone ?? zi + 1}`;
-          makeLabel(zName, x1 + 1.2, 0.4, y1 + 0.6, { size: 10, color: '#64748b', opacity: 0.6 });
+          makeLabel(String(zone.name || ('Zone ' + (zi + 1))), x1 + 1.2, 0.4, y1 + 0.6, { size: 10, color: '#64748b', opacity: 0.6 });
         });
 
-        // Growing groups (trays)
+        // Growing groups
         const roomGroups = S.groups.filter(g => {
           const gr = g.roomId || g.room || '';
           return gr === room.id || gr === room.name || (S.rooms.length === 1);
@@ -758,11 +757,11 @@
 
         roomGroups.forEach((group, gi) => {
           const gZone = String(group.zone ?? group.zoneId ?? '');
-          const matched = zones.find(z => String(z.zone) === gZone || String(z.name) === gZone || String(z.id) === gZone);
+          const matched = zones.find(z => String(z.zone) === gZone || String(z.name) === gZone || String(z.id) === gZone || gZone.endsWith(String(z.zone)) || gZone.endsWith(String(z.name)));
           let gx, gz;
           if (matched) {
             const zx1 = (matched.x1 ?? 0) + offsetX, zy1 = matched.y1 ?? 0;
-            const zx2 = (matched.x2 ?? gridSize) + offsetX, zy2 = matched.y2 ?? gridSize;
+            const zx2 = (matched.x2 ?? roomW) + offsetX, zy2 = matched.y2 ?? roomD;
             const cols = Math.max(1, Math.floor(Math.abs(zx2 - zx1) / 2.5));
             gx = Math.min(zx1, zx2) + 1.2 + (gi % cols) * 2.5;
             gz = Math.min(zy1, zy2) + 1.2 + Math.floor(gi / cols) * 2.5;
@@ -771,43 +770,79 @@
             gz = 2 + Math.floor(gi / 6) * 3;
           }
 
-          const status = (group.status || 'active').toLowerCase();
+          const gStatus = (group.status || 'active').toLowerCase();
           const trayCount = Math.max(1, Math.min(Number(group.trays) || 1, 20));
-          const color = STATUS_COLOR[status] || 0x22c55e;
+          const color = STATUS_COLOR[gStatus] || 0x22c55e;
 
-          // Tray cluster -- rounded box effect
-          const tw = Math.min(trayCount, 4) * 0.45;
-          const td = Math.ceil(trayCount / 4) * 0.45;
-          const trayGeo = new THREE.BoxGeometry(tw, 0.3, td);
+          // Use persisted dimensions if available
+          const gDims = S.groupDimensions[group.id] || {};
+          const gLength = gDims.length || Math.min(trayCount, 4) * 0.45;
+          const gWidth  = gDims.width  || Math.ceil(trayCount / 4) * 0.45;
+          const gHeight = gDims.height || 0.3;
+          const lightOri = gDims.lightOrientation || 'out-of-canopy';
+
+          const trayGeo = new THREE.BoxGeometry(gLength, gHeight, gWidth);
           const trayMat = new THREE.MeshStandardMaterial({ color, roughness: 0.5, metalness: 0.15 });
           const tray = new THREE.Mesh(trayGeo, trayMat);
-          tray.position.set(gx, 0.3, gz);
+          tray.position.set(gx, gHeight / 2 + 0.12, gz);
           tray.castShadow = true;
           tray.receiveShadow = true;
-          tray.userData = { type: 'group', group, room };
+          tray.userData = { type: 'group', group, room, dims: { length: gLength, width: gWidth, height: gHeight }, lightOrientation: lightOri };
           S.scene.add(tray);
           S.meshes.trays.push(tray);
 
-          // Small crop indicator (no text clutter) -- colored top strip
-          if (status === 'active' || status === 'growing') {
-            const indicGeo = new THREE.BoxGeometry(tw, 0.04, td);
+          // Active indicator strip on top
+          if (gStatus === 'active' || gStatus === 'growing') {
+            const indicGeo = new THREE.BoxGeometry(gLength, 0.04, gWidth);
             const indicMat = new THREE.MeshStandardMaterial({ color: 0x4ade80, emissive: 0x4ade80, emissiveIntensity: 0.3 });
             const indic = new THREE.Mesh(indicGeo, indicMat);
-            indic.position.set(gx, 0.47, gz);
+            indic.position.set(gx, gHeight + 0.14, gz);
             S.scene.add(indic);
             S.meshes.trays.push(indic);
           }
+
+          // Light bar representation
+          if (group.lights?.length) {
+            const lightY = lightOri === 'intercanopy'
+              ? gHeight / 2 + 0.12   // at canopy level
+              : gHeight + 0.35;       // above canopy
+            const lightGeo = new THREE.BoxGeometry(gLength * 0.8, 0.04, 0.12);
+            const lightColor = lightOri === 'intercanopy' ? 0xfbbf24 : 0xa78bfa;
+            const lightMat = new THREE.MeshStandardMaterial({
+              color: lightColor, emissive: lightColor, emissiveIntensity: 0.6,
+              transparent: true, opacity: 0.85,
+            });
+            const lightBar = new THREE.Mesh(lightGeo, lightMat);
+            lightBar.position.set(gx, lightY, gz);
+            lightBar.userData = { type: 'light', group, orientation: lightOri };
+            S.scene.add(lightBar);
+            S.meshes.equipment.push(lightBar);
+
+            // Light cone (downward glow)
+            const coneH = lightOri === 'intercanopy' ? 0.3 : 0.5;
+            const coneGeo = new THREE.ConeGeometry(gLength * 0.3, coneH, 6, 1, true);
+            const coneMat = new THREE.MeshBasicMaterial({
+              color: lightColor, transparent: true, opacity: 0.06, side: THREE.DoubleSide
+            });
+            const cone = new THREE.Mesh(coneGeo, coneMat);
+            cone.position.set(gx, lightY - coneH / 2, gz);
+            cone.rotation.x = Math.PI;
+            S.scene.add(cone);
+            S.meshes.equipment.push(cone);
+          }
         });
 
-        // Devices (sensors + equipment)
+        // Devices (sensors + equipment from room-map)
         const devices = map?.devices || [];
+        const scaleX = roomW / gridSize;
+        const scaleZ = roomD / gridSize;
         devices.forEach((dev, di) => {
-          const dx = dev.x + offsetX, dz = dev.y;
+          const dx = dev.x * scaleX + offsetX;
+          const dz = dev.y * scaleZ;
           const cat = (dev.snapshot?.category || dev.snapshot?.type || '').toLowerCase();
           const isSensor = cat.includes('sensor') || cat.includes('temp') || cat.includes('humid') || cat.includes('environment');
 
           if (isSensor) {
-            // Sensor -- glowing sphere with pulse
             const sGeo = new THREE.SphereGeometry(0.22, 20, 20);
             const sMat = new THREE.MeshStandardMaterial({
               color: 0xfbbf24, emissive: 0xfbbf24, emissiveIntensity: 0.5,
@@ -820,7 +855,6 @@
             S.scene.add(sMesh);
             S.meshes.sensors.push(sMesh);
 
-            // Sensor ring
             const ringGeo = new THREE.RingGeometry(0.35, 0.4, 24);
             const ringMat = new THREE.MeshBasicMaterial({ color: 0xfbbf24, transparent: true, opacity: 0.15, side: THREE.DoubleSide });
             const ring = new THREE.Mesh(ringGeo, ringMat);
@@ -829,7 +863,6 @@
             S.scene.add(ring);
             S.meshes.sensors.push(ring);
           } else {
-            // Equipment cube
             const eGeo = new THREE.BoxGeometry(0.5, 0.5, 0.5);
             const eMat = new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.6, metalness: 0.2 });
             const eMesh = new THREE.Mesh(eGeo, eMat);
@@ -841,17 +874,15 @@
           }
         });
 
-        // Ambient particles (floating spores/humidity)
         addParticles(cx, cz, roomW, roomD);
-
         offsetX += roomW + 4;
       });
 
       // Center camera
       if (visible.length > 0) {
         const totalW = offsetX - 4;
-        const firstMap = S.roomMaps[visible[0].id];
-        const totalD = firstMap?.gridSize || 20;
+        const firstDims = S.roomDimensions[visible[0].id] || {};
+        const totalD = firstDims.width || S.roomMaps[visible[0].id]?.gridSize || 20;
         const cx = totalW / 2, cz = totalD / 2;
         S.controls.target.set(cx, 1, cz);
         S.camera.position.set(cx - 8, 18, cz + 22);
@@ -861,7 +892,7 @@
       applyOverlay(S.overlay);
     }
 
-    // ─── Ambient particles ──────────────────────────────────────
+    // ---- Particles -------------------------------------------
     function addParticles(cx, cz, w, d) {
       const count = 60;
       const positions = new Float32Array(count * 3);
@@ -879,15 +910,14 @@
       S.particleSystems.push(points);
     }
 
-    // ─── Text labels (canvas sprite, no clutter) ────────────────
+    // ---- Labels (canvas sprite) ------------------------------
     function makeLabel(text, x, y, z, opts = {}) {
       const size = opts.size || 14;
       const color = opts.color || '#94a3b8';
       const opacity = opts.opacity ?? 1;
-
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
-      const font = `${size * 4}px -apple-system, BlinkMacSystemFont, sans-serif`;
+      const font = (size * 4) + 'px -apple-system, BlinkMacSystemFont, sans-serif';
       ctx.font = font;
       const tw = ctx.measureText(text).width + 16;
       const th = size * 5;
@@ -913,13 +943,10 @@
 
     function disposeMesh(m) {
       if (m.geometry) m.geometry.dispose();
-      if (m.material) {
-        if (m.material.map) m.material.map.dispose();
-        m.material.dispose();
-      }
+      if (m.material) { if (m.material.map) m.material.map.dispose(); m.material.dispose(); }
     }
 
-    // ─── Overlay system ─────────────────────────────────────────
+    // ---- Overlay system (FIXED: applies to both zones AND floor) ----
     function applyOverlay(type) {
       S.overlay = type;
 
@@ -928,50 +955,96 @@
         if (m.isMesh && m.userData.type === 'zone') {
           m.material.color.setHex(m.userData.baseColor);
           m.material.opacity = m.userData.baseOpacity;
-          m.material.emissive?.setHex(0x000000);
+          if (m.material.emissive) m.material.emissive.setHex(0x000000);
           m.material.emissiveIntensity = 0;
         }
       });
+      // Reset floor meshes
+      Object.values(S.floorMeshMap).forEach(fm => {
+        fm.material.color.setHex(0x151d2e);
+        if (fm.material.emissive) fm.material.emissive.setHex(0x000000);
+        fm.material.emissiveIntensity = 0;
+      });
 
       const legend = document.getElementById('dataLegend');
-      if (type === 'none' || !S.envData) {
+      if (type === 'none') {
         legend.classList.remove('visible');
         return;
       }
 
       const cfg = OVERLAY_CFG[type];
-      if (!cfg) return;
+      if (!cfg) { legend.classList.remove('visible'); return; }
 
-      // Apply heatmap colors
-      S.meshes.zones.forEach(m => {
-        if (!m.isMesh || m.userData.type !== 'zone') return;
-        const zId = m.userData.zoneId;
-        const data = S.zoneDataMap[zId];
-        if (!data) return;
+      // Collect all env data values for this metric (for fallback coloring)
+      const allVals = Object.values(S.zoneDataMap).map(d => d[cfg.key]).filter(v => v != null);
+      const hasData = allVals.length > 0;
+
+      if (!hasData) {
+        // No env data at all -- show legend but leave scene neutral
+        legend.classList.add('visible');
+        document.getElementById('legendTitle').textContent = cfg.label + ' (no data)';
+        document.getElementById('legendMin').textContent = cfg.min + cfg.unit;
+        document.getElementById('legendMax').textContent = cfg.max + cfg.unit;
+        const gradBar = document.getElementById('legendGradient');
+        gradBar.style.background = 'linear-gradient(to right, #334155, #475569)';
+        return;
+      }
+
+      // Apply heatmap to zone meshes that match env data
+      let appliedCount = 0;
+      Object.entries(S.zoneDataMap).forEach(([zId, data]) => {
         const val = data[cfg.key];
         if (val == null) return;
 
         const t = Math.max(0, Math.min(1, (val - cfg.min) / (cfg.max - cfg.min)));
         const color = multiLerp(cfg.colors, t);
-        m.material.color.setHex(color);
-        m.material.opacity = 0.55;
-        m.material.emissive = new THREE.Color(color);
-        m.material.emissiveIntensity = 0.15;
+
+        // Try to find matching zone mesh
+        let mesh = S.zoneMeshMap[zId];
+        if (!mesh) {
+          // Try matching by name in all zone meshes
+          mesh = S.meshes.zones.find(m => m.isMesh && m.userData.type === 'zone' &&
+            (m.userData.zoneId === zId || String(m.userData.zone?.name) === data.name || String(m.userData.zone?.zone) === data.name)
+          );
+        }
+        if (mesh) {
+          mesh.material.color.setHex(color);
+          mesh.material.opacity = 0.55;
+          mesh.material.emissive = new THREE.Color(color);
+          mesh.material.emissiveIntensity = 0.15;
+          appliedCount++;
+        }
       });
+
+      // Fallback: if no zone mesh matches were found, tint the room floors instead
+      if (appliedCount === 0 && allVals.length > 0) {
+        const avg = allVals.reduce((a, b) => a + b, 0) / allVals.length;
+        const t = Math.max(0, Math.min(1, (avg - cfg.min) / (cfg.max - cfg.min)));
+        const color = multiLerp(cfg.colors, t);
+        Object.values(S.floorMeshMap).forEach(fm => {
+          fm.material.color.setHex(color);
+          fm.material.emissive = new THREE.Color(color);
+          fm.material.emissiveIntensity = 0.08;
+        });
+      }
 
       // Show legend
       legend.classList.add('visible');
       document.getElementById('legendTitle').textContent = cfg.label;
       document.getElementById('legendMin').textContent = cfg.min + cfg.unit;
       document.getElementById('legendMax').textContent = cfg.max + cfg.unit;
-
-      // Gradient bar
       const gradBar = document.getElementById('legendGradient');
       const stops = cfg.colors.map((c, i) => {
         const pct = (i / (cfg.colors.length - 1)) * 100;
-        return `#${c.toString(16).padStart(6, '0')} ${pct}%`;
+        return '#' + c.toString(16).padStart(6, '0') + ' ' + pct + '%';
       });
-      gradBar.style.background = `linear-gradient(to right, ${stops.join(', ')})`;
+      gradBar.style.background = 'linear-gradient(to right, ' + stops.join(', ') + ')';
+
+      // Also show current values on legend
+      if (allVals.length > 0) {
+        const avg = allVals.reduce((a, b) => a + b, 0) / allVals.length;
+        document.getElementById('legendTitle').textContent = cfg.label + ' (avg: ' + avg.toFixed(1) + cfg.unit + ')';
+      }
     }
 
     function multiLerp(colors, t) {
@@ -980,27 +1053,18 @@
       const lt = (t * n) - i;
       return lerpColor(colors[i], colors[i + 1], lt);
     }
-
     function lerpColor(c1, c2, t) {
       const r1 = (c1 >> 16) & 0xff, g1 = (c1 >> 8) & 0xff, b1 = c1 & 0xff;
       const r2 = (c2 >> 16) & 0xff, g2 = (c2 >> 8) & 0xff, b2 = c2 & 0xff;
       return (Math.round(r1 + (r2 - r1) * t) << 16) | (Math.round(g1 + (g2 - g1) * t) << 8) | Math.round(b1 + (b2 - b1) * t);
     }
 
-    // ─── Farm stats chips ───────────────────────────────────────
+    // ---- Farm stats ------------------------------------------
     function renderFarmStats() {
       const el = document.getElementById('farmStats');
       const activeGroups = S.groups.filter(g => ['active', 'growing', 'deployed'].includes((g.status || '').toLowerCase()));
       const totalTrays = activeGroups.reduce((s, g) => s + (Number(g.trays) || 0), 0);
-      const sensorCount = S.iotDevices.filter(d => {
-        const cat = (d.category || d.type || '').toLowerCase();
-        return cat.includes('sensor') || cat.includes('temp') || cat.includes('environment');
-      }).length + Object.values(S.roomMaps).reduce((s, m) => s + (m.devices || []).filter(d => {
-        const cat = (d.snapshot?.category || '').toLowerCase();
-        return cat.includes('sensor') || cat.includes('temp') || cat.includes('environment');
-      }).length, 0);
 
-      // Average environment
       let avgTemp = null, avgHumidity = null, avgVpd = null;
       const vals = Object.values(S.zoneDataMap);
       if (vals.length > 0) {
@@ -1013,16 +1077,15 @@
       }
 
       let html = '';
-      if (avgTemp != null) html += `<div class="stat-chip"><div class="chip-value">${avgTemp}\u00b0C</div><div class="chip-label">Avg Temp</div></div>`;
-      if (avgHumidity != null) html += `<div class="stat-chip"><div class="chip-value">${avgHumidity}%</div><div class="chip-label">Avg RH</div></div>`;
-      if (avgVpd != null) html += `<div class="stat-chip"><div class="chip-value">${avgVpd}</div><div class="chip-label">VPD kPa</div></div>`;
-      html += `<div class="stat-chip"><div class="chip-value">${activeGroups.length}</div><div class="chip-label">Active Groups</div></div>`;
-      html += `<div class="stat-chip"><div class="chip-value">${totalTrays}</div><div class="chip-label">Trays</div></div>`;
-      if (sensorCount > 0) html += `<div class="stat-chip"><div class="chip-value">${sensorCount}</div><div class="chip-label">Sensors</div></div>`;
+      if (avgTemp != null) html += '<div class="stat-chip"><div class="chip-value">' + avgTemp + '\u00b0C</div><div class="chip-label">Avg Temp</div></div>';
+      if (avgHumidity != null) html += '<div class="stat-chip"><div class="chip-value">' + avgHumidity + '%</div><div class="chip-label">Avg RH</div></div>';
+      if (avgVpd != null) html += '<div class="stat-chip"><div class="chip-value">' + avgVpd + '</div><div class="chip-label">VPD kPa</div></div>';
+      html += '<div class="stat-chip"><div class="chip-value">' + activeGroups.length + '</div><div class="chip-label">Active Groups</div></div>';
+      html += '<div class="stat-chip"><div class="chip-value">' + totalTrays + '</div><div class="chip-label">Trays</div></div>';
       el.innerHTML = html;
     }
 
-    // ─── Interaction ────────────────────────────────────────────
+    // ---- Interaction -----------------------------------------
     function onMouseMove(e) {
       const container = document.getElementById('viewer-container');
       const rect = container.getBoundingClientRect();
@@ -1033,7 +1096,7 @@
       const targets = [
         ...S.meshes.trays.filter(m => m.userData.type === 'group'),
         ...S.meshes.sensors.filter(m => m.userData.type === 'sensor'),
-        ...S.meshes.equipment.filter(m => m.userData.type === 'equipment'),
+        ...S.meshes.equipment.filter(m => m.userData.type === 'equipment' || m.userData.type === 'light'),
         ...S.meshes.zones.filter(m => m.isMesh && m.userData.type === 'zone'),
       ];
       const hits = S.raycaster.intersectObjects(targets);
@@ -1047,24 +1110,23 @@
         if (ud.type === 'group') {
           const g = ud.group;
           title = g.name || g.crop || g.recipe || 'Group';
-          sub = `${g.trays || 0} trays | ${(g.status || 'active')}`;
+          const d = ud.dims;
+          sub = d.length.toFixed(1) + 'L x ' + d.width.toFixed(1) + 'W x ' + d.height.toFixed(1) + 'H | ' + (g.trays || 0) + ' trays';
         } else if (ud.type === 'sensor') {
           title = ud.device.snapshot?.name || 'Sensor';
           const zData = findSensorZoneData(ud.device);
-          sub = zData ? `${zData.temp?.toFixed(1) ?? '--'}\u00b0C | ${Math.round(zData.humidity ?? 0)}% RH` : 'No data';
+          sub = zData ? (zData.temp?.toFixed(1) ?? '--') + '\u00b0C | ' + Math.round(zData.humidity ?? 0) + '% RH' : 'No data';
         } else if (ud.type === 'equipment') {
-          title = ud.device.snapshot?.name || 'Equipment';
-          sub = ud.device.snapshot?.category || '';
+          title = ud.device?.snapshot?.name || 'Equipment';
+          sub = ud.device?.snapshot?.category || '';
+        } else if (ud.type === 'light') {
+          title = (ud.group?.lights?.[0]?.name) || 'Light';
+          sub = ud.orientation === 'intercanopy' ? 'Inter-canopy' : 'Out-of-canopy';
         } else if (ud.type === 'zone') {
-          title = ud.zone.name || `Zone ${ud.zone.zone}`;
-          const zData = S.zoneDataMap[ud.zoneId];
-          sub = zData ? `${zData.temp?.toFixed(1) ?? '--'}\u00b0C | ${Math.round(zData.humidity ?? 0)}% | VPD ${zData.vpd?.toFixed(2) ?? '--'}` : '';
-
-          // Show zone HUD
-          if (S.hoveredZone !== ud.zoneId) {
-            S.hoveredZone = ud.zoneId;
-            showZoneHud(ud.zoneId, ud.zone);
-          }
+          title = ud.zone.name || ('Zone ' + ud.zone.zone);
+          const zData = S.zoneDataMap[ud.zoneId] || findZoneDataByName(ud.zone.name || ud.zone.zone);
+          sub = zData ? (zData.temp?.toFixed(1) ?? '--') + '\u00b0C | ' + Math.round(zData.humidity ?? 0) + '% | VPD ' + (zData.vpd?.toFixed(2) ?? '--') : '';
+          if (S.hoveredZone !== ud.zoneId) { S.hoveredZone = ud.zoneId; showZoneHud(ud.zoneId, ud.zone); }
         }
 
         document.getElementById('htTitle').textContent = title;
@@ -1073,51 +1135,47 @@
         tip.style.top = (e.clientY - rect.top) + 'px';
         tip.classList.add('visible');
         document.body.style.cursor = 'pointer';
-
-        if (ud.type !== 'zone' && S.hoveredZone) {
-          S.hoveredZone = null;
-          hud.classList.remove('visible');
-        }
+        if (ud.type !== 'zone' && S.hoveredZone) { S.hoveredZone = null; hud.classList.remove('visible'); }
       } else {
         tip.classList.remove('visible');
         document.body.style.cursor = 'default';
-        if (S.hoveredZone) {
-          S.hoveredZone = null;
-          hud.classList.remove('visible');
-        }
+        if (S.hoveredZone) { S.hoveredZone = null; hud.classList.remove('visible'); }
       }
     }
 
     function findSensorZoneData(device) {
       const zone = String(device.snapshot?.zone ?? '');
-      return S.zoneDataMap[zone] || Object.values(S.zoneDataMap)[0] || null;
+      return S.zoneDataMap[zone] || findZoneDataByName(zone) || Object.values(S.zoneDataMap)[0] || null;
+    }
+
+    function findZoneDataByName(name) {
+      const n = String(name);
+      return Object.values(S.zoneDataMap).find(d => d.name === n) || null;
     }
 
     function showZoneHud(zoneId, zone) {
       const hud = document.getElementById('zoneHud');
-      const data = S.zoneDataMap[zoneId];
-      const zName = zone.name || `Zone ${zone.zone}`;
+      const data = S.zoneDataMap[zoneId] || findZoneDataByName(zone.name || zone.zone);
+      const zName = zone.name || ('Zone ' + zone.zone);
 
-      let html = `<h4>${zName}</h4>`;
-
+      let html = '<h4>' + zName + '</h4>';
       if (data) {
         const rows = [];
-        if (data.temp != null) rows.push({ label: 'Temperature', value: `${data.temp.toFixed(1)}\u00b0C`, cls: tempClass(data.temp) });
-        if (data.humidity != null) rows.push({ label: 'Humidity', value: `${Math.round(data.humidity)}%`, cls: humidityClass(data.humidity) });
-        if (data.vpd != null) rows.push({ label: 'VPD', value: `${data.vpd.toFixed(2)} kPa`, cls: vpdClass(data.vpd) });
-        if (data.co2 != null) rows.push({ label: 'CO\u2082', value: `${Math.round(data.co2)} ppm`, cls: co2Class(data.co2) });
+        if (data.temp != null) rows.push({ label: 'Temperature', value: data.temp.toFixed(1) + '\u00b0C', cls: tempClass(data.temp) });
+        if (data.humidity != null) rows.push({ label: 'Humidity', value: Math.round(data.humidity) + '%', cls: humidityClass(data.humidity) });
+        if (data.vpd != null) rows.push({ label: 'VPD', value: data.vpd.toFixed(2) + ' kPa', cls: vpdClass(data.vpd) });
+        if (data.co2 != null) rows.push({ label: 'CO\u2082', value: Math.round(data.co2) + ' ppm', cls: co2Class(data.co2) });
         rows.forEach(r => {
-          html += `<div class="hud-row"><span class="hud-label">${r.label}</span><span class="hud-value ${r.cls}">${r.value}</span></div>`;
+          html += '<div class="hud-row"><span class="hud-label">' + r.label + '</span><span class="hud-value ' + r.cls + '">' + r.value + '</span></div>';
         });
         if (data.groups.length > 0) {
-          html += `<div class="hud-row"><span class="hud-label">Groups</span><span class="hud-value">${data.groups.length}</span></div>`;
-          const totalTrays = data.groups.reduce((s, g) => s + (Number(g.trays) || 0), 0);
-          html += `<div class="hud-row"><span class="hud-label">Total Trays</span><span class="hud-value">${totalTrays}</span></div>`;
+          html += '<div class="hud-row"><span class="hud-label">Groups</span><span class="hud-value">' + data.groups.length + '</span></div>';
+          const tt = data.groups.reduce((s, g) => s + (Number(g.trays) || 0), 0);
+          html += '<div class="hud-row"><span class="hud-label">Total Trays</span><span class="hud-value">' + tt + '</span></div>';
         }
       } else {
-        html += `<div class="hud-row"><span class="hud-label">No sensor data</span></div>`;
+        html += '<div class="hud-row"><span class="hud-label">No sensor data</span></div>';
       }
-
       hud.innerHTML = html;
       hud.classList.add('visible');
     }
@@ -1127,7 +1185,7 @@
     function vpdClass(v) { return v >= 0.8 && v <= 1.4 ? 'good' : v < 0.4 || v > 1.8 ? 'danger' : 'warn'; }
     function co2Class(v) { return v >= 400 && v <= 1200 ? 'good' : v > 1500 ? 'danger' : 'warn'; }
 
-    // ─── Click -> detail panel ──────────────────────────────────
+    // ---- Click -> detail panel with editable dimensions ------
     function onClick(e) {
       const container = document.getElementById('viewer-container');
       const rect = container.getBoundingClientRect();
@@ -1139,7 +1197,7 @@
         ...S.meshes.floors,
         ...S.meshes.trays.filter(m => m.userData.type === 'group'),
         ...S.meshes.sensors.filter(m => m.userData.type === 'sensor'),
-        ...S.meshes.equipment.filter(m => m.userData.type === 'equipment'),
+        ...S.meshes.equipment.filter(m => m.userData.type === 'equipment' || m.userData.type === 'light'),
         ...S.meshes.zones.filter(m => m.isMesh && m.userData.type === 'zone'),
       ];
       const hits = S.raycaster.intersectObjects(targets);
@@ -1151,160 +1209,207 @@
       const content = document.getElementById('detailContent');
       panel.classList.add('visible');
 
-      if (ud.type === 'zone') {
-        const z = ud.zone;
-        const data = S.zoneDataMap[ud.zoneId];
-        const zName = z.name || `Zone ${z.zone}`;
-        let html = `<h3>${zName}</h3>`;
-        html += `<div class="dp-label">Room</div><div class="dp-value">${ud.room?.name || '--'}</div>`;
-
-        if (data) {
-          html += `<div class="dp-grid">`;
-          if (data.temp != null) html += `<div class="dp-metric"><div class="metric-val">${data.temp.toFixed(1)}\u00b0</div><div class="metric-lbl">Temp</div></div>`;
-          if (data.humidity != null) html += `<div class="dp-metric"><div class="metric-val">${Math.round(data.humidity)}%</div><div class="metric-lbl">RH</div></div>`;
-          if (data.vpd != null) html += `<div class="dp-metric"><div class="metric-val">${data.vpd.toFixed(2)}</div><div class="metric-lbl">VPD kPa</div></div>`;
-          if (data.co2 != null) html += `<div class="dp-metric"><div class="metric-val">${Math.round(data.co2)}</div><div class="metric-lbl">CO2 ppm</div></div>`;
-          html += `</div>`;
-
-          // Sparkline for temp history
-          if (data.tempHistory.length > 2) {
-            html += `<div class="dp-section"><div class="dp-label">Temperature (24h)</div>`;
-            html += `<div class="dp-sparkline"><canvas id="sparkTemp" width="260" height="40"></canvas></div></div>`;
-          }
-          if (data.humidityHistory.length > 2) {
-            html += `<div class="dp-section"><div class="dp-label">Humidity (24h)</div>`;
-            html += `<div class="dp-sparkline"><canvas id="sparkHumidity" width="260" height="40"></canvas></div></div>`;
-          }
-
-          // Groups in zone
-          if (data.groups.length > 0) {
-            html += `<div class="dp-section"><div class="dp-label">Growing Groups (${data.groups.length})</div>`;
-            data.groups.forEach(g => {
-              const crop = g.crop || g.recipe || '--';
-              const st = g.status || 'active';
-              html += `<div style="margin-top:4px;padding:5px 7px;background:rgba(99,102,241,0.06);border-radius:6px;font-size:0.78rem;">`;
-              html += `<strong>${g.name || g.id}</strong><br><span style="color:#64748b">${crop} | ${g.trays || 0} trays | ${st}</span></div>`;
-            });
-            html += `</div>`;
-          }
-        }
-        content.innerHTML = html;
-        // Draw sparklines after DOM update
-        requestAnimationFrame(() => {
-          if (data?.tempHistory.length > 2) drawSparkline('sparkTemp', data.tempHistory, '#818cf8');
-          if (data?.humidityHistory.length > 2) drawSparkline('sparkHumidity', data.humidityHistory, '#06b6d4');
-        });
-
-      } else if (ud.type === 'group') {
+      if (ud.type === 'group') {
         const g = ud.group;
         const crop = g.crop || g.recipe || 'Unknown';
-        let html = `<h3>${g.name || g.id}</h3>`;
-        html += `<div class="dp-label">Crop</div><div class="dp-value">${crop}</div>`;
-        html += `<div class="dp-label">Status</div><div class="dp-value" style="text-transform:capitalize">${g.status || 'active'}</div>`;
-        html += `<div class="dp-label">Location</div><div class="dp-value">${g.room || g.roomId || '--'} / Zone ${g.zone ?? '--'}</div>`;
-        html += `<div class="dp-grid">`;
-        html += `<div class="dp-metric"><div class="metric-val">${g.trays || 0}</div><div class="metric-lbl">Trays</div></div>`;
-        html += `<div class="dp-metric"><div class="metric-val">${g.plants || 0}</div><div class="metric-lbl">Plants</div></div>`;
-        html += `</div>`;
+        const d = ud.dims;
+        const gId = g.id;
+        let html = '<h3>' + (g.name || g.id) + '</h3>';
+        html += '<div class="dp-label">Crop</div><div class="dp-value">' + crop + '</div>';
+        html += '<div class="dp-label">Status</div><div class="dp-value" style="text-transform:capitalize">' + (g.status || 'active') + '</div>';
+        html += '<div class="dp-label">Location</div><div class="dp-value">' + (g.room || g.roomId || '--') + ' / ' + (g.zone || '--') + '</div>';
+        html += '<div class="dp-grid">';
+        html += '<div class="dp-metric"><div class="metric-val">' + (g.trays || 0) + '</div><div class="metric-lbl">Trays</div></div>';
+        html += '<div class="dp-metric"><div class="metric-val">' + (g.plants || 0) + '</div><div class="metric-lbl">Plants</div></div>';
+        html += '</div>';
+
+        // Editable dimensions
+        html += '<div class="dp-section"><div class="dp-label">Equipment Dimensions</div>';
+        html += '<div class="dp-input-row"><label>L</label><input type="number" step="0.1" min="0.1" id="dimL" value="' + d.length.toFixed(1) + '"><span class="unit">m</span>';
+        html += '<label>W</label><input type="number" step="0.1" min="0.1" id="dimW" value="' + d.width.toFixed(1) + '"><span class="unit">m</span>';
+        html += '<label>H</label><input type="number" step="0.1" min="0.1" id="dimH" value="' + d.height.toFixed(1) + '"><span class="unit">m</span></div>';
+        html += '</div>';
+
+        // Light orientation
+        html += '<div class="dp-section"><div class="dp-label">Light Orientation</div>';
+        html += '<div class="dp-input-row">';
+        html += '<select id="lightOri">';
+        html += '<option value="out-of-canopy"' + (ud.lightOrientation === 'out-of-canopy' ? ' selected' : '') + '>Out-of-canopy</option>';
+        html += '<option value="intercanopy"' + (ud.lightOrientation === 'intercanopy' ? ' selected' : '') + '>Inter-canopy</option>';
+        html += '</select></div></div>';
+
         if (g.lights?.length) {
-          html += `<div class="dp-section"><div class="dp-label">Lighting</div>`;
+          html += '<div class="dp-section"><div class="dp-label">Lighting</div>';
           g.lights.forEach(l => {
-            html += `<div style="margin-top:4px;font-size:0.78rem;color:#94a3b8">${l.name || 'Light'} -- ${l.ppfd || '--'} PPFD</div>`;
+            html += '<div style="margin-top:4px;font-size:0.78rem;color:#94a3b8">' + (l.name || 'Light') + ' -- ' + (l.ppfd || '--') + ' PPFD | ' + (l.spectrum || '--') + '</div>';
           });
-          html += `</div>`;
+          html += '</div>';
+        }
+
+        html += '<button class="dp-save-btn" id="saveDims">Save Dimensions</button>';
+        content.innerHTML = html;
+
+        document.getElementById('saveDims').addEventListener('click', () => {
+          const l = parseFloat(document.getElementById('dimL').value) || d.length;
+          const w = parseFloat(document.getElementById('dimW').value) || d.width;
+          const h = parseFloat(document.getElementById('dimH').value) || d.height;
+          const ori = document.getElementById('lightOri').value;
+          S.groupDimensions[gId] = { length: l, width: w, height: h, lightOrientation: ori };
+          saveGroupDimensions();
+          const btn = document.getElementById('saveDims');
+          btn.textContent = 'Saved';
+          btn.classList.add('saved');
+          setTimeout(() => { btn.textContent = 'Save Dimensions'; btn.classList.remove('saved'); }, 1500);
+          buildScene();
+          renderFarmStats();
+        });
+
+      } else if (ud.type === 'zone') {
+        const z = ud.zone;
+        const data = S.zoneDataMap[ud.zoneId] || findZoneDataByName(z.name || z.zone);
+        const zName = z.name || ('Zone ' + z.zone);
+        let html = '<h3>' + zName + '</h3>';
+        html += '<div class="dp-label">Room</div><div class="dp-value">' + (ud.room?.name || '--') + '</div>';
+
+        if (data) {
+          html += '<div class="dp-grid">';
+          if (data.temp != null) html += '<div class="dp-metric"><div class="metric-val">' + data.temp.toFixed(1) + '\u00b0</div><div class="metric-lbl">Temp</div></div>';
+          if (data.humidity != null) html += '<div class="dp-metric"><div class="metric-val">' + Math.round(data.humidity) + '%</div><div class="metric-lbl">RH</div></div>';
+          if (data.vpd != null) html += '<div class="dp-metric"><div class="metric-val">' + data.vpd.toFixed(2) + '</div><div class="metric-lbl">VPD kPa</div></div>';
+          if (data.co2 != null) html += '<div class="dp-metric"><div class="metric-val">' + Math.round(data.co2) + '</div><div class="metric-lbl">CO2 ppm</div></div>';
+          html += '</div>';
+
+          if (data.tempHistory.length > 2) {
+            html += '<div class="dp-section"><div class="dp-label">Temperature (24h)</div><div class="dp-sparkline"><canvas id="sparkTemp" width="260" height="40"></canvas></div></div>';
+          }
+          if (data.humidityHistory.length > 2) {
+            html += '<div class="dp-section"><div class="dp-label">Humidity (24h)</div><div class="dp-sparkline"><canvas id="sparkHum" width="260" height="40"></canvas></div></div>';
+          }
+          if (data.groups.length > 0) {
+            html += '<div class="dp-section"><div class="dp-label">Growing Groups (' + data.groups.length + ')</div>';
+            data.groups.forEach(g => {
+              html += '<div style="margin-top:4px;padding:5px 7px;background:rgba(99,102,241,0.06);border-radius:6px;font-size:0.78rem;"><strong>' + (g.name || g.id) + '</strong><br><span style="color:#64748b">' + (g.crop || g.recipe || '--') + ' | ' + (g.trays || 0) + ' trays | ' + (g.status || 'active') + '</span></div>';
+            });
+            html += '</div>';
+          }
         }
         content.innerHTML = html;
+        requestAnimationFrame(() => {
+          if (data?.tempHistory.length > 2) drawSparkline('sparkTemp', data.tempHistory, '#818cf8');
+          if (data?.humidityHistory.length > 2) drawSparkline('sparkHum', data.humidityHistory, '#06b6d4');
+        });
+
+      } else if (ud.type === 'room') {
+        const r = ud.room;
+        const rId = r.id;
+        const dims = S.roomDimensions[rId] || {};
+        const map = S.roomMaps[rId];
+        const gs = map?.gridSize || 20;
+        const rL = dims.length || gs;
+        const rW = dims.width  || gs;
+        const rH = dims.height || 3.5;
+        const roomGroups = S.groups.filter(g => (g.roomId || g.room) === r.id || (g.roomId || g.room) === r.name);
+
+        let html = '<h3>' + (r.name || r.id) + '</h3>';
+        html += '<div class="dp-grid">';
+        html += '<div class="dp-metric"><div class="metric-val">' + (r.zones || []).length + '</div><div class="metric-lbl">Zones</div></div>';
+        html += '<div class="dp-metric"><div class="metric-val">' + roomGroups.length + '</div><div class="metric-lbl">Groups</div></div>';
+        html += '<div class="dp-metric"><div class="metric-val">' + roomGroups.reduce((s, g) => s + (Number(g.trays) || 0), 0) + '</div><div class="metric-lbl">Trays</div></div>';
+        html += '</div>';
+
+        // Editable room dimensions
+        html += '<div class="dp-section"><div class="dp-label">Room Dimensions</div>';
+        html += '<div class="dp-input-row"><label>L</label><input type="number" step="0.5" min="1" id="roomL" value="' + rL + '"><span class="unit">m</span>';
+        html += '<label>W</label><input type="number" step="0.5" min="1" id="roomW" value="' + rW + '"><span class="unit">m</span>';
+        html += '<label>H</label><input type="number" step="0.1" min="1" id="roomH" value="' + rH + '"><span class="unit">m</span></div>';
+        html += '</div>';
+        html += '<button class="dp-save-btn" id="saveRoom">Save Room Dimensions</button>';
+        content.innerHTML = html;
+
+        document.getElementById('saveRoom').addEventListener('click', () => {
+          const l = parseFloat(document.getElementById('roomL').value) || rL;
+          const w = parseFloat(document.getElementById('roomW').value) || rW;
+          const h = parseFloat(document.getElementById('roomH').value) || rH;
+          S.roomDimensions[rId] = { length: l, width: w, height: h };
+          saveRoomDimensions();
+          const btn = document.getElementById('saveRoom');
+          btn.textContent = 'Saved';
+          btn.classList.add('saved');
+          setTimeout(() => { btn.textContent = 'Save Room Dimensions'; btn.classList.remove('saved'); }, 1500);
+          buildScene();
+          renderFarmStats();
+        });
 
       } else if (ud.type === 'sensor') {
         const d = ud.device;
         const zData = findSensorZoneData(d);
-        let html = `<h3>${d.snapshot?.name || d.deviceId || 'Sensor'}</h3>`;
-        html += `<div class="dp-label">Category</div><div class="dp-value">${d.snapshot?.category || 'environmental'}</div>`;
-        html += `<div class="dp-label">Position</div><div class="dp-value">Grid (${d.x}, ${d.y})</div>`;
+        let html = '<h3>' + (d.snapshot?.name || d.deviceId || 'Sensor') + '</h3>';
+        html += '<div class="dp-label">Category</div><div class="dp-value">' + (d.snapshot?.category || 'environmental') + '</div>';
+        html += '<div class="dp-label">Position</div><div class="dp-value">Grid (' + d.x + ', ' + d.y + ')</div>';
         if (zData) {
-          html += `<div class="dp-grid">`;
-          if (zData.temp != null) html += `<div class="dp-metric"><div class="metric-val">${zData.temp.toFixed(1)}\u00b0</div><div class="metric-lbl">Temp</div></div>`;
-          if (zData.humidity != null) html += `<div class="dp-metric"><div class="metric-val">${Math.round(zData.humidity)}%</div><div class="metric-lbl">RH</div></div>`;
-          if (zData.vpd != null) html += `<div class="dp-metric"><div class="metric-val">${zData.vpd.toFixed(2)}</div><div class="metric-lbl">VPD</div></div>`;
-          if (zData.co2 != null) html += `<div class="dp-metric"><div class="metric-val">${Math.round(zData.co2)}</div><div class="metric-lbl">CO2</div></div>`;
-          html += `</div>`;
+          html += '<div class="dp-grid">';
+          if (zData.temp != null) html += '<div class="dp-metric"><div class="metric-val">' + zData.temp.toFixed(1) + '\u00b0</div><div class="metric-lbl">Temp</div></div>';
+          if (zData.humidity != null) html += '<div class="dp-metric"><div class="metric-val">' + Math.round(zData.humidity) + '%</div><div class="metric-lbl">RH</div></div>';
+          if (zData.vpd != null) html += '<div class="dp-metric"><div class="metric-val">' + zData.vpd.toFixed(2) + '</div><div class="metric-lbl">VPD</div></div>';
+          if (zData.co2 != null) html += '<div class="dp-metric"><div class="metric-val">' + Math.round(zData.co2) + '</div><div class="metric-lbl">CO2</div></div>';
+          html += '</div>';
         }
         content.innerHTML = html;
 
-      } else if (ud.type === 'equipment') {
+      } else if (ud.type === 'equipment' || ud.type === 'light') {
         const d = ud.device;
-        let html = `<h3>${d.snapshot?.name || d.deviceId || 'Equipment'}</h3>`;
-        html += `<div class="dp-label">Category</div><div class="dp-value">${d.snapshot?.category || '--'}</div>`;
-        html += `<div class="dp-label">Position</div><div class="dp-value">Grid (${d.x}, ${d.y})</div>`;
-        content.innerHTML = html;
-
-      } else if (ud.type === 'room') {
-        const r = ud.room;
-        const roomGroups = S.groups.filter(g => (g.roomId || g.room) === r.id || (g.roomId || g.room) === r.name);
-        let html = `<h3>${r.name || r.id}</h3>`;
-        html += `<div class="dp-grid">`;
-        html += `<div class="dp-metric"><div class="metric-val">${(r.zones || []).length}</div><div class="metric-lbl">Zones</div></div>`;
-        html += `<div class="dp-metric"><div class="metric-val">${roomGroups.length}</div><div class="metric-lbl">Groups</div></div>`;
-        html += `<div class="dp-metric"><div class="metric-val">${roomGroups.reduce((s, g) => s + (Number(g.trays) || 0), 0)}</div><div class="metric-lbl">Trays</div></div>`;
-        html += `</div>`;
+        let html = '';
+        if (ud.type === 'light') {
+          html = '<h3>' + ((ud.group?.lights?.[0]?.name) || 'Light') + '</h3>';
+          html += '<div class="dp-label">Orientation</div><div class="dp-value" style="text-transform:capitalize">' + (ud.orientation === 'intercanopy' ? 'Inter-canopy' : 'Out-of-canopy') + '</div>';
+          html += '<div class="dp-label">Group</div><div class="dp-value">' + (ud.group?.name || '--') + '</div>';
+          if (ud.group?.lights?.[0]) {
+            const l = ud.group.lights[0];
+            html += '<div class="dp-grid">';
+            if (l.ppfd) html += '<div class="dp-metric"><div class="metric-val">' + l.ppfd + '</div><div class="metric-lbl">PPFD</div></div>';
+            if (l.ppf) html += '<div class="dp-metric"><div class="metric-val">' + l.ppf + '</div><div class="metric-lbl">PPF</div></div>';
+            html += '</div>';
+            if (l.spectrum) html += '<div class="dp-label">Spectrum</div><div class="dp-value">' + l.spectrum + '</div>';
+          }
+        } else {
+          html = '<h3>' + (d?.snapshot?.name || d?.deviceId || 'Equipment') + '</h3>';
+          html += '<div class="dp-label">Category</div><div class="dp-value">' + (d?.snapshot?.category || '--') + '</div>';
+          html += '<div class="dp-label">Position</div><div class="dp-value">Grid (' + (d?.x ?? '--') + ', ' + (d?.y ?? '--') + ')</div>';
+        }
         content.innerHTML = html;
       }
     }
 
-    // ─── Sparkline drawing ──────────────────────────────────────
+    // ---- Sparkline -------------------------------------------
     function drawSparkline(canvasId, data, color) {
       const canvas = document.getElementById(canvasId);
       if (!canvas) return;
       const ctx = canvas.getContext('2d');
       const w = canvas.width, h = canvas.height;
       ctx.clearRect(0, 0, w, h);
-
       const valid = data.filter(v => v != null && !isNaN(v));
       if (valid.length < 2) return;
       const min = Math.min(...valid), max = Math.max(...valid);
       const range = max - min || 1;
       const step = w / (valid.length - 1);
-
-      // Fill gradient
       const grad = ctx.createLinearGradient(0, 0, 0, h);
       grad.addColorStop(0, color + '30');
       grad.addColorStop(1, color + '05');
-
       ctx.beginPath();
       ctx.moveTo(0, h);
-      valid.forEach((v, i) => {
-        const x = i * step;
-        const y = h - ((v - min) / range) * (h - 4) - 2;
-        if (i === 0) ctx.lineTo(x, y);
-        else ctx.lineTo(x, y);
-      });
-      ctx.lineTo(w, h);
-      ctx.closePath();
-      ctx.fillStyle = grad;
-      ctx.fill();
-
-      // Line
+      valid.forEach((v, i) => { const x = i * step; const y = h - ((v - min) / range) * (h - 4) - 2; ctx.lineTo(x, y); });
+      ctx.lineTo(w, h); ctx.closePath();
+      ctx.fillStyle = grad; ctx.fill();
       ctx.beginPath();
-      valid.forEach((v, i) => {
-        const x = i * step;
-        const y = h - ((v - min) / range) * (h - 4) - 2;
-        if (i === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-      });
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
-
-      // Current value dot
+      valid.forEach((v, i) => { const x = i * step; const y = h - ((v - min) / range) * (h - 4) - 2; i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); });
+      ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.stroke();
       const lastY = h - ((valid[valid.length - 1] - min) / range) * (h - 4) - 2;
-      ctx.beginPath();
-      ctx.arc(w - 1, lastY, 2.5, 0, Math.PI * 2);
-      ctx.fillStyle = color;
-      ctx.fill();
+      ctx.beginPath(); ctx.arc(w - 1, lastY, 2.5, 0, Math.PI * 2); ctx.fillStyle = color; ctx.fill();
     }
 
-    // ─── Camera presets ─────────────────────────────────────────
-    function animateTo(target, duration = 600) {
+    // ---- Camera presets --------------------------------------
+    function animateTo(target, duration) {
+      duration = duration || 600;
       const start = { x: S.camera.position.x, y: S.camera.position.y, z: S.camera.position.z };
       const t0 = performance.now();
       function step(now) {
@@ -1318,7 +1423,6 @@
       requestAnimationFrame(step);
     }
 
-    // ─── Room dropdown ──────────────────────────────────────────
     function populateRoomDropdown() {
       const sel = document.getElementById('roomSelect');
       sel.innerHTML = '<option value="__all">All Rooms</option>';
@@ -1330,95 +1434,82 @@
       });
     }
 
-    // ─── GWEN integration ───────────────────────────────────────
-    function openGwenWithContext() {
-      // Gather current view state for GWEN
-      const envSummary = {};
-      Object.entries(S.zoneDataMap).forEach(([id, data]) => {
-        envSummary[data.name || id] = {
-          temp: data.temp, humidity: data.humidity, vpd: data.vpd, co2: data.co2,
-          groups: data.groups.map(g => ({ name: g.name, crop: g.crop || g.recipe, trays: g.trays, status: g.status })),
-        };
-      });
-
-      const prompt = `I'm looking at the 3D Farm Viewer. Here is the current environment snapshot:\n${JSON.stringify(envSummary, null, 2)}\n\nCan you analyze the current growing conditions and suggest any adjustments?`;
-
-      // Navigate to research workspace with GWEN context
-      const encoded = encodeURIComponent(prompt);
-      window.parent?.postMessage({ type: 'gwen-query', prompt }, '*');
-
-      // Fallback: copy to clipboard
-      if (navigator.clipboard) {
-        navigator.clipboard.writeText(prompt).catch(() => {});
-      }
+    // ---- Toggle walls/ceiling --------------------------------
+    function toggleWalls() {
+      S.wallsVisible = !S.wallsVisible;
+      S.meshes.walls.forEach(m => { m.visible = S.wallsVisible; });
+      S.meshes.ceilings.forEach(m => { m.visible = S.wallsVisible; });
+      const btn = document.getElementById('btnWalls');
+      btn.classList.toggle('active', S.wallsVisible);
     }
 
-    // ─── Toolbar binding ────────────────────────────────────────
+    // ---- GWEN integration ------------------------------------
+    function openGwenWithContext() {
+      const envSummary = {};
+      Object.entries(S.zoneDataMap).forEach(function(entry) {
+        var id = entry[0], data = entry[1];
+        envSummary[data.name || id] = {
+          temp: data.temp, humidity: data.humidity, vpd: data.vpd, co2: data.co2,
+          groups: data.groups.map(function(g) { return { name: g.name, crop: g.crop || g.recipe, trays: g.trays, status: g.status }; }),
+        };
+      });
+      var prompt = 'I am looking at the 3D Farm Viewer. Here is the current environment snapshot:\n' + JSON.stringify(envSummary, null, 2) + '\n\nCan you analyze the current growing conditions and suggest any adjustments?';
+      window.parent?.postMessage({ type: 'gwen-query', prompt: prompt }, '*');
+      if (navigator.clipboard) navigator.clipboard.writeText(prompt).catch(function(){});
+    }
+
+    // ---- Events ----------------------------------------------
     function bindEvents() {
-      // Overlay buttons
-      document.querySelectorAll('.toolbar button[data-overlay]').forEach(btn => {
-        btn.addEventListener('click', () => {
-          document.querySelectorAll('.toolbar button[data-overlay]').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.toolbar button[data-overlay]').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          document.querySelectorAll('.toolbar button[data-overlay]').forEach(function(b) { b.classList.remove('active'); });
           btn.classList.add('active');
           applyOverlay(btn.dataset.overlay);
         });
       });
 
-      // Camera presets
-      document.getElementById('btnTop').addEventListener('click', () => {
-        const t = S.controls.target;
-        animateTo({ x: t.x, y: 35, z: t.z + 0.1 });
-      });
-      document.getElementById('btnAngle').addEventListener('click', () => {
-        const t = S.controls.target;
-        animateTo({ x: t.x - 10, y: 16, z: t.z + 18 });
-      });
-      document.getElementById('btnReset').addEventListener('click', () => {
-        const totalW = Object.values(S.roomMaps).reduce((s, m) => s + (m.gridSize || 20), 0) || 20;
-        const cx = totalW / 2, cz = 10;
+      document.getElementById('btnWalls').addEventListener('click', toggleWalls);
+      document.getElementById('btnTop').addEventListener('click', function() { var t = S.controls.target; animateTo({ x: t.x, y: 35, z: t.z + 0.1 }); });
+      document.getElementById('btnAngle').addEventListener('click', function() { var t = S.controls.target; animateTo({ x: t.x - 10, y: 16, z: t.z + 18 }); });
+      document.getElementById('btnReset').addEventListener('click', function() {
+        var totalW = Object.values(S.roomMaps).reduce(function(s, m) { return s + (m.gridSize || 20); }, 0) || 20;
+        var cx = totalW / 2, cz = 10;
         S.controls.target.set(cx, 1, cz);
         animateTo({ x: cx - 8, y: 18, z: cz + 22 });
       });
 
-      // Room selector
-      document.getElementById('roomSelect').addEventListener('change', (e) => {
+      document.getElementById('roomSelect').addEventListener('change', function(e) {
         S.roomFilter = e.target.value;
         buildScene();
         renderFarmStats();
       });
 
-      // Canvas events
-      const canvas = document.getElementById('farmCanvas');
+      var canvas = document.getElementById('farmCanvas');
       canvas.addEventListener('mousemove', onMouseMove);
       canvas.addEventListener('click', onClick);
-
-      // Detail panel close
-      document.getElementById('detailClose').addEventListener('click', () => {
-        document.getElementById('detailPanel').classList.remove('visible');
-      });
-
-      // GWEN button
+      document.getElementById('detailClose').addEventListener('click', function() { document.getElementById('detailPanel').classList.remove('visible'); });
       document.getElementById('gwenFab').addEventListener('click', openGwenWithContext);
     }
 
-    // ─── Auto-refresh ───────────────────────────────────────────
+    // ---- Auto-refresh ----------------------------------------
     function startAutoRefresh() {
-      setInterval(async () => {
-        try {
-          const res = await authFetch('/env?hours=24&t=' + Date.now(), { cache: 'no-store' });
-          if (res.ok) {
-            S.envData = await res.json();
+      setInterval(function() {
+        authFetch('/env?hours=24&t=' + Date.now(), { cache: 'no-store' }).then(function(res) {
+          if (res.ok) return res.json();
+        }).then(function(data) {
+          if (data) {
+            S.envData = data;
             buildZoneDataMap();
             applyOverlay(S.overlay);
             renderFarmStats();
             document.getElementById('statusBar').textContent = 'Updated ' + new Date().toLocaleTimeString();
           }
-        } catch (e) {}
+        }).catch(function(){});
       }, 120000);
     }
 
-    // ─── Bootstrap ──────────────────────────────────────────────
-    document.addEventListener('DOMContentLoaded', () => {
+    // ---- Bootstrap -------------------------------------------
+    document.addEventListener('DOMContentLoaded', function() {
       initScene();
       bindEvents();
       loadAllData();
