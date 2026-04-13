@@ -11332,379 +11332,226 @@ class RoomWizard {
       'other': 'Other equipment setup'
     };
     titleEl.textContent = titles[catId] || 'Category setup';
-    // Render category-specific micro-forms (3-tap style where applicable)
-    const v = (x)=> x==null? '' : String(x);
-    const data = (this.data.category || (this.data.category = {}));
-    const catData = (data[catId] || (data[catId] = {}));
-    // Template helpers for chip groups
-    const chipRow = (id, values, selected) => {
-      return `<div class="chip-row" id="${id}">` + values.map(opt => `<button type="button" class="chip-option${selected===opt? ' active':''}" data-value="${opt}">${opt}</button>`).join('') + `</div>`;
-    };
-    let html = '';
-    if (catId === 'hvac') {
-      html = `
-        <div class="tiny">Central HVAC units</div>
-        <label class="tiny">How many? <input type="number" id="cat-hvac-count" min="0" value="${v(catData.count||0)}" style="width:80px"></label>
-      `;
-    } else if (catId === 'mini-split') {
-      html = `
-        <div class="tiny">Mini Split units</div>
-        
-        <div style="margin-bottom: 12px;">
-          <label style="display: block; margin-bottom: 8px; font-size: 13px;">Search mini-splits:</label>
-          <input id="cat-mini-split-search" type="text" placeholder="Search models (e.g., Mitsubishi MSZ-FH09NA)" 
-                 style="width: 100%; padding: 8px; font-size: 14px;">
-        </div>
-        
-        <div style="margin-bottom: 12px;">
-          <div style="font-size: 12px; color: #64748b; margin-bottom: 4px;">Search Results:</div>
-          <div id="cat-mini-split-results" style="max-height: 150px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 4px; min-height: 60px;">
-            <div style="padding: 20px; text-align: center; color: #64748b; font-size: 13px;">
-              Type to search for mini-split models...
-            </div>
-          </div>
-        </div>
-        
-        <div style="margin-bottom: 12px;">
-          <div style="font-size: 12px; color: #64748b; margin-bottom: 4px;">Selected Mini-Splits:</div>
-          <div id="cat-mini-split-selected" style="min-height: 60px; border: 1px solid #e2e8f0; border-radius: 4px; padding: 8px;">
-            <div style="color: #64748b; font-size: 13px;">No mini-splits selected yet</div>
-          </div>
-        </div>
-        
-      `;
-    } else if (catId === 'dehumidifier') {
-      html = `
-        <div class="tiny">Dehumidifiers</div>
-        
-        <div style="margin-bottom: 12px;">
-          <label style="display: block; margin-bottom: 8px; font-size: 13px;">Search dehumidifiers:</label>
-          <input id="cat-dehu-search" type="text" placeholder="Search models (e.g., Quest Dual 155)" 
-                 style="width: 100%; padding: 8px; font-size: 14px;">
-        </div>
-        
-        <div style="margin-bottom: 12px;">
-          <div style="font-size: 12px; color: #64748b; margin-bottom: 4px;">Search Results:</div>
-          <div id="cat-dehu-results" style="max-height: 150px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 4px; min-height: 60px;">
-            <div style="padding: 20px; text-align: center; color: #64748b; font-size: 13px;">
-              Type to search for dehumidifier models...
-            </div>
-          </div>
-        </div>
-        
-        <div style="margin-bottom: 12px;">
-          <div style="font-size: 12px; color: #64748b; margin-bottom: 4px;">Selected Dehumidifiers:</div>
-          <div id="cat-dehu-selected" style="min-height: 60px; border: 1px solid #e2e8f0; border-radius: 4px; padding: 8px;">
-            <div style="color: #64748b; font-size: 13px;">No dehumidifiers selected yet</div>
-          </div>
-        </div>
-        
-      `;
-    } else if (catId === 'fans') {
-      html = `
-        <div class="tiny">Fans</div>
-        <div class="equipment-selection">
-          <label class="tiny">Manufacturer
-            <input type="text" id="cat-fans-manufacturer" placeholder="Search manufacturer..." value="${v(catData.manufacturer||'')}" style="width:200px">
-          </label>
-        </div>
-        <label class="tiny">How many? <input type="number" id="cat-fans-count" min="0" value="${v(catData.count||0)}" style="width:80px"></label>
-      `;
-    } else if (catId === 'vents') {
-      html = `
-        <div class="tiny">Vents</div>
-        <div class="equipment-selection">
-          <label class="tiny">Manufacturer
-            <input type="text" id="cat-vents-manufacturer" placeholder="Search manufacturer..." value="${v(catData.manufacturer||'')}" style="width:200px">
-          </label>
-        </div>
-        <label class="tiny">How many? <input type="number" id="cat-vents-count" min="0" value="${v(catData.count||0)}" style="width:80px"></label>
-      `;
-    } else if (catId === 'controllers') {
-      html = `
-        <div class="tiny">Controllers / hubs</div>
-        <label class="tiny">How many hubs? <input type="number" id="cat-ctl-count" min="0" value="${v(catData.count||0)}" style="width:90px"></label>
-      `;
-    } else if (catId === 'energy-monitor') {
-      html = `
-        <div class="tiny">Energy Monitors</div>
-        <label class="tiny">How many? <input type="number" id="cat-energy-count" min="0" value="${v(catData.count||0)}" style="width:80px"></label>
-      `;
-    } else {
-      html = `
-        <div class="tiny">Other equipment</div>
-        <div class="equipment-selection">
-          <label class="tiny">Manufacturer
-            <input type="text" id="cat-other-manufacturer" placeholder="Search manufacturer..." value="${v(catData.manufacturer||'')}" style="width:200px">
-          </label>
-        </div>
-  <label class="tiny">Describe <input type="text" id="cat-other-notes" value="${v(catData.notes||'')}" placeholder="e.g., CO2 burner" style="min-width:220px"></label>
-      `;
-    }
-    body.innerHTML = html;
-    
-    // Add event listeners for manufacturer search to populate model dropdowns
-    this.setupManufacturerSearch();
-    // Prevent Enter in number inputs from submitting the form in category-setup
-    body.querySelectorAll('input[type="number"]').forEach(input => {
-      input.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-          e.preventDefault();
-          return false;
-        }
-      });
-    });
-    
-    // Wire chip groups to update data (for categories that still use chips)
-    body.querySelectorAll('.chip-row').forEach(row => {
-      row.addEventListener('click', (e) => {
-        const btn = e.target.closest('.chip-option'); 
-        if (!btn) return;
-        
-        // Remove active from all buttons in this row
-        row.querySelectorAll('.chip-option').forEach(b => b.classList.remove('active'));
-        // Add active to clicked button
-        btn.classList.add('active');
-        
-        const val = btn.getAttribute('data-value');
-        const id = row.getAttribute('id');
-        
-        // Ensure category objects exist before setting properties
-        if (id === 'cat-hvac-control') {
-          this.data.category.hvac = this.data.category.hvac || {};
-          this.data.category.hvac.control = val;
-        }
-        if (id === 'cat-mini-split-control') {
-          this.data.category['mini-split'] = this.data.category['mini-split'] || {};
-          this.data.category['mini-split'].control = val;
-        }
-        if (id === 'cat-vents-control') {
-          this.data.category.vents = this.data.category.vents || {};
-          this.data.category.vents.control = val;
-        }
-        if (id === 'cat-energy-type') {
-          this.data.category['energy-monitor'] = this.data.category['energy-monitor'] || {};
-          this.data.category['energy-monitor'].type = val;
-        }
-      });
-    });
 
-    // Wire manufacturer search inputs for equipment types
-    ['dehu', 'fans', 'mini-split', 'vents', 'other'].forEach(prefix => {
-      const manufacturerInput = document.getElementById(`cat-${prefix}-manufacturer`);
-      const wifiCheckbox = document.getElementById(`cat-${prefix}-wifi`);
-      const wiredCheckbox = document.getElementById(`cat-${prefix}-wired`);
-      
-      if (manufacturerInput) {
-        manufacturerInput.addEventListener('input', (e) => {
-          const categoryName = prefix === 'dehu' ? 'dehumidifier' : 
-                              prefix === 'mini-split' ? 'mini-split' :
-                              prefix === 'vents' ? 'vents' :
-                              prefix === 'other' ? 'other' : 'fans';
-          this.data.category[categoryName] = this.data.category[categoryName] || {};
-          this.data.category[categoryName].manufacturer = e.target.value.trim();
-        });
-      }
-      
-      if (wifiCheckbox) {
-        wifiCheckbox.addEventListener('change', (e) => {
-          const categoryName = prefix === 'dehu' ? 'dehumidifier' : 
-                              prefix === 'mini-split' ? 'mini-split' : 'fans';
-          this.data.category[categoryName] = this.data.category[categoryName] || {};
-          this.data.category[categoryName].wifi = e.target.checked;
-        });
-      }
-      
-      if (wiredCheckbox) {
-        wiredCheckbox.addEventListener('change', (e) => {
-          const categoryName = prefix === 'dehu' ? 'dehumidifier' : 
-                              prefix === 'mini-split' ? 'mini-split' : 'fans';
-          this.data.category[categoryName] = this.data.category[categoryName] || {};
-          this.data.category[categoryName].wired = e.target.checked;
-        });
-      }
+    // Map catId to equipment-kb category name
+    const kbCat = catId;
+    const prefix = catId === 'dehumidifier' ? 'dehu' : catId;
+
+    body.innerHTML = `
+      <div style="margin-bottom:12px;">
+        <label style="display:block;margin-bottom:8px;font-size:13px;">Search ${titles[catId] || catId}:</label>
+        <input id="cat-${prefix}-search" type="text" placeholder="Search models..."
+               style="width:100%;padding:8px;font-size:14px;">
+      </div>
+      <div style="margin-bottom:12px;">
+        <div style="font-size:12px;color:#64748b;margin-bottom:4px;">Search Results:</div>
+        <div id="cat-${prefix}-results" style="max-height:150px;overflow-y:auto;border:1px solid rgba(59,130,246,0.15);border-radius:8px;min-height:60px;background:rgba(15,23,42,0.4);">
+          <div style="padding:20px;text-align:center;color:#64748b;font-size:13px;">
+            Type to search for models...
+          </div>
+        </div>
+      </div>
+      <div style="margin-bottom:12px;">
+        <div style="font-size:12px;color:#64748b;margin-bottom:4px;">Selected Equipment:</div>
+        <div id="cat-${prefix}-selected" style="min-height:60px;border:1px solid rgba(59,130,246,0.15);border-radius:8px;padding:8px;background:rgba(15,23,42,0.4);">
+          <div style="color:#64748b;font-size:13px;">No equipment selected yet</div>
+        </div>
+      </div>
+    `;
+
+    // Wire search input
+    const searchInput = document.getElementById(`cat-${prefix}-search`);
+    if (searchInput) {
+      searchInput.addEventListener('input', (e) => {
+        this.searchEquipment(kbCat, e.target.value, `cat-${prefix}-results`);
+      });
+    }
+    // Render any previously selected equipment
+    this.renderSelectedEquipment(kbCat, `cat-${prefix}-selected`);
+
+    // Prevent Enter from submitting form
+    body.querySelectorAll('input').forEach(input => {
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); return false; }
+      });
     });
   }
 
-  // Capture inputs for the current category
+  // Render selected equipment items with per-model shared specs (dimensions + category-specific)
+  renderSelectedEquipment(category, selectedElementId) {
+    const selectedDiv = document.getElementById(selectedElementId);
+    if (!selectedDiv) return;
+    const catId = this.getCurrentCategoryId();
+    if (!catId) return;
+
+    const selectedEquipment = (this.categoryProgress[catId]?.selectedEquipment || [])
+      .filter(e => e.category === category);
+
+    if (selectedEquipment.length === 0) {
+      selectedDiv.innerHTML = '<div style="color:#64748b;font-size:13px;">No equipment selected yet</div>';
+      return;
+    }
+
+    // Category-specific spec field builder
+    const specFieldFor = (item) => {
+      const s = item.specs || {};
+      const cat = item.category;
+      if (cat === 'fans') return '<label class="tiny" style="color:#94a3b8;">CFM <input type="number" class="eq-spec" data-spec="cfm" min="0" value="' + (s.cfm||'') + '" style="width:75px;margin-left:4px;"></label>';
+      if (cat === 'hvac' || cat === 'mini-split') return '<label class="tiny" style="color:#94a3b8;">BTU <input type="number" class="eq-spec" data-spec="btu" min="0" value="' + (s.btu||'') + '" style="width:85px;margin-left:4px;"></label>';
+      if (cat === 'dehumidifier') return '<label class="tiny" style="color:#94a3b8;">PPD <input type="number" class="eq-spec" data-spec="ppd" min="0" value="' + (s.ppd||'') + '" style="width:75px;margin-left:4px;"></label>';
+      if (cat === 'vents') return '<label class="tiny" style="color:#94a3b8;">Dia (in) <input type="number" class="eq-spec" data-spec="diameter" min="0" step="0.5" value="' + (s.diameter||'') + '" style="width:70px;margin-left:4px;"></label>';
+      if (cat === 'energy-monitor') return '<label class="tiny" style="color:#94a3b8;">Amps <input type="number" class="eq-spec" data-spec="amps" min="0" value="' + (s.amps||'') + '" style="width:70px;margin-left:4px;"></label>';
+      if (cat === 'other') return '<label class="tiny" style="color:#94a3b8;">Notes <input type="text" class="eq-spec" data-spec="notes" value="' + escapeHtml(s.notes||'') + '" placeholder="e.g., CO2 burner" style="min-width:140px;margin-left:4px;"></label>';
+      return '';
+    };
+
+    selectedDiv.innerHTML = '';
+    const self = this;
+    selectedEquipment.forEach((item, idx) => {
+      const d = item.dimensions || {};
+      const itemDiv = document.createElement('div');
+      itemDiv.style.cssText = 'padding:10px;border-bottom:1px solid rgba(59,130,246,0.1);';
+
+      // Row 1: model info + count controls
+      const row1 = document.createElement('div');
+      row1.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;';
+      row1.innerHTML = '<div>'
+        + '<div style="font-weight:500;font-size:14px;color:#f1f5f9;">' + escapeHtml(item.vendor) + ' ' + escapeHtml(item.model) + '</div>'
+        + '<div style="font-size:12px;color:#94a3b8;">' + escapeHtml(item.capacity) + ' -- ' + escapeHtml(item.control) + '</div>'
+        + '</div>'
+        + '<div style="display:flex;gap:6px;align-items:center;">'
+        + '<button type="button" class="btn-decrease" style="width:24px;height:24px;border:1px solid rgba(59,130,246,0.3);background:rgba(30,41,59,0.6);color:#93c5fd;border-radius:4px;cursor:pointer;font-size:16px;line-height:1;">-</button>'
+        + '<span style="min-width:20px;text-align:center;font-size:14px;color:#f1f5f9;">' + item.count + '</span>'
+        + '<button type="button" class="btn-increase" style="width:24px;height:24px;border:1px solid rgba(59,130,246,0.3);background:rgba(30,41,59,0.6);color:#93c5fd;border-radius:4px;cursor:pointer;font-size:16px;line-height:1;">+</button>'
+        + '<button type="button" class="btn-remove" style="width:24px;height:24px;border:1px solid rgba(239,68,68,0.4);background:rgba(239,68,68,0.1);color:#f87171;border-radius:4px;cursor:pointer;font-size:14px;line-height:1;">x</button>'
+        + '</div>';
+
+      // Row 2: Shared specs banner + dimension fields + category-specific field
+      const row2 = document.createElement('div');
+      row2.style.cssText = 'background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.12);border-radius:6px;padding:8px 10px;margin-top:4px;';
+      row2.innerHTML = '<div style="font-size:11px;font-weight:600;color:#60a5fa;margin-bottom:6px;letter-spacing:0.03em;">'
+        + 'Shared specs -- applies to all ' + item.count + ' unit' + (item.count !== 1 ? 's' : '')
+        + '</div>'
+        + '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">'
+        + '<label class="tiny" style="color:#94a3b8;">L<input type="number" class="eq-dim" data-dim="l" min="0" step="0.1" value="' + (d.l||'') + '" style="width:60px;margin-left:4px;" placeholder="in"> in</label>'
+        + '<label class="tiny" style="color:#94a3b8;">W<input type="number" class="eq-dim" data-dim="w" min="0" step="0.1" value="' + (d.w||'') + '" style="width:60px;margin-left:4px;" placeholder="in"> in</label>'
+        + '<label class="tiny" style="color:#94a3b8;">H<input type="number" class="eq-dim" data-dim="h" min="0" step="0.1" value="' + (d.h||'') + '" style="width:60px;margin-left:4px;" placeholder="in"> in</label>'
+        + specFieldFor(item)
+        + '</div>';
+
+      itemDiv.appendChild(row1);
+      itemDiv.appendChild(row2);
+
+      // Wire count buttons
+      row1.querySelector('.btn-decrease').addEventListener('click', () => {
+        self.changeEquipmentCount(category, item.vendor, item.model, -1);
+      });
+      row1.querySelector('.btn-increase').addEventListener('click', () => {
+        self.changeEquipmentCount(category, item.vendor, item.model, 1);
+      });
+      row1.querySelector('.btn-remove').addEventListener('click', () => {
+        self.removeEquipment(category, item.vendor, item.model);
+      });
+
+      // Wire dimension inputs -- update item.dimensions and persist
+      row2.querySelectorAll('.eq-dim').forEach(input => {
+        input.addEventListener('input', () => {
+          if (!item.dimensions) item.dimensions = {};
+          const val = parseFloat(input.value);
+          item.dimensions[input.dataset.dim] = Number.isFinite(val) ? val : undefined;
+        });
+      });
+
+      // Wire spec inputs -- update item.specs and persist
+      row2.querySelectorAll('.eq-spec').forEach(input => {
+        input.addEventListener('input', () => {
+          if (!item.specs) item.specs = {};
+          const key = input.dataset.spec;
+          if (input.type === 'number') {
+            const val = parseFloat(input.value);
+            item.specs[key] = Number.isFinite(val) ? val : undefined;
+          } else {
+            item.specs[key] = (input.value || '').trim() || undefined;
+          }
+        });
+      });
+
+      selectedDiv.appendChild(itemDiv);
+    });
+  }
+
   captureCurrentCategoryForm() {
     const catId = this.getCurrentCategoryId();
     if (!catId) return;
     const data = (this.data.category || (this.data.category = {}));
     const catData = (data[catId] || (data[catId] = {}));
-    const getNum = (id) => { const el = document.getElementById(id); if (!el) return undefined; const n = Number(el.value||0); return Number.isFinite(n)? n: undefined; };
-    const getStr = (id) => { const el = document.getElementById(id); return el ? (el.value||'').trim() : undefined; };
-    const getChecked = (id) => { const el = document.getElementById(id); return el ? el.checked : false; };
-    if (catId === 'hvac') {
-      catData.count = getNum('cat-hvac-count') ?? catData.count;
-    }
-    if (catId === 'mini-split') {
-      // Use new selectedEquipment structure  
-      const selectedEquipment = this.categoryProgress[catId]?.selectedEquipment?.filter(e => e.category === 'mini-split') || [];
-      catData.selectedEquipment = selectedEquipment;
-      catData.wifi = getChecked('cat-mini-split-wifi');
-      catData.wired = getChecked('cat-mini-split-wired');
-      
-      // Backward compatibility - calculate total count
-      catData.count = selectedEquipment.reduce((sum, item) => sum + item.count, 0);
-      if (selectedEquipment.length > 0) {
-        catData.manufacturer = selectedEquipment[0].vendor;
-        catData.model = selectedEquipment[0].model;
-      }
-    }
-    if (catId === 'dehumidifier') {
-      // Use new selectedEquipment structure
-      const selectedEquipment = this.categoryProgress[catId]?.selectedEquipment?.filter(e => e.category === 'dehumidifier') || [];
-      catData.selectedEquipment = selectedEquipment;
-      catData.wifi = getChecked('cat-dehu-wifi');
-      catData.wired = getChecked('cat-dehu-wired');
-      
-      // Backward compatibility - calculate total count
-      catData.count = selectedEquipment.reduce((sum, item) => sum + item.count, 0);
-      if (selectedEquipment.length > 0) {
-        catData.manufacturer = selectedEquipment[0].vendor;
-        catData.model = selectedEquipment[0].model;
-      }
-    }
-    if (catId === 'fans') {
-      catData.count = getNum('cat-fans-count') ?? catData.count;
-      catData.manufacturer = getStr('cat-fans-manufacturer') ?? catData.manufacturer;
-      catData.wifi = getChecked('cat-fans-wifi');
-      catData.wired = getChecked('cat-fans-wired');
-    }
-    if (catId === 'vents') {
-      catData.count = getNum('cat-vents-count') ?? catData.count;
-      catData.manufacturer = getStr('cat-vents-manufacturer') ?? catData.manufacturer;
-    }
-    if (catId === 'controllers') {
-      catData.count = getNum('cat-ctl-count') ?? catData.count;
-    }
-    if (catId === 'energy-monitor') {
-      catData.count = getNum('cat-energy-count') ?? catData.count;
-    }
-    if (catId === 'other') {
-      catData.notes = getStr('cat-other-notes') ?? catData.notes;
-      catData.manufacturer = getStr('cat-other-manufacturer') ?? catData.manufacturer;
+
+    // All categories now use selectedEquipment with per-model specs
+    const selectedEquipment = (this.categoryProgress[catId]?.selectedEquipment || []);
+    catData.selectedEquipment = selectedEquipment.map(e => ({...e}));
+    catData.count = selectedEquipment.reduce((sum, item) => sum + item.count, 0);
+    if (selectedEquipment.length > 0) {
+      catData.manufacturer = selectedEquipment[0].vendor;
+      catData.model = selectedEquipment[0].model;
     }
   }
 
   setupManufacturerSearch() {
-    console.log('[DEBUG] Setting up modern equipment search...');
-    
-    // Setup search for dehumidifiers
-    const dehuSearchInput = document.getElementById('cat-dehu-search');
-    if (dehuSearchInput) {
-      console.log('[DEBUG] Found dehumidifier search input, setting up listener');
-      dehuSearchInput.addEventListener('input', (e) => {
-        console.log('[DEBUG] Dehumidifier search input event:', e.target.value);
-        this.searchEquipment('dehumidifier', e.target.value, 'cat-dehu-results');
-      });
-      this.renderSelectedEquipment('dehumidifier', 'cat-dehu-selected');
-    } else {
-      console.log('[DEBUG] Dehumidifier search input not found!');
-    }
-
-    // Setup search for mini-splits
-    const miniSplitSearchInput = document.getElementById('cat-mini-split-search');
-    if (miniSplitSearchInput) {
-      console.log('[DEBUG] Found mini-split search input, setting up listener');
-      miniSplitSearchInput.addEventListener('input', (e) => {
-        console.log('[DEBUG] Mini-split search input event:', e.target.value);
-        this.searchEquipment('mini-split', e.target.value, 'cat-mini-split-results');
-      });
-      this.renderSelectedEquipment('mini-split', 'cat-mini-split-selected');
-    } else {
-      console.log('[DEBUG] Mini-split search input not found!');
-    }
-
-    // Setup manufacturer search for fans
-    const fansManufacturerInput = document.getElementById('cat-fans-manufacturer');
-    if (fansManufacturerInput) {
-      fansManufacturerInput.addEventListener('input', (e) => {
-        this.populateModelDropdown('cat-fans-model', e.target.value, 'fans');
-      });
-    }
-
-    // Setup manufacturer search for other equipment
-    const otherManufacturerInput = document.getElementById('cat-other-manufacturer');
-    if (otherManufacturerInput) {
-      otherManufacturerInput.addEventListener('input', (e) => {
-        this.populateModelDropdown('cat-other-model', e.target.value, 'other');
-      });
-    }
+    // All categories now use the unified search pattern wired in renderCurrentCategoryForm
   }
 
   searchEquipment(category, query, resultsElementId) {
     const resultsDiv = document.getElementById(resultsElementId);
-    
-    if (!query.trim()) {
-      resultsDiv.innerHTML = `<div style="padding: 20px; text-align: center; color: #64748b; font-size: 13px;">Type to search for ${category} models...</div>`;
+    if (!resultsDiv) return;
+
+    if (!query || !query.trim()) {
+      resultsDiv.innerHTML = '<div style="padding:20px;text-align:center;color:#64748b;font-size:13px;">Type to search for models...</div>';
       return;
     }
-    
-    console.log('[DEBUG] Searching equipment for category:', category, 'query:', query);
-    console.log('[DEBUG] STATE object keys:', Object.keys(STATE || {}));
-    console.log('[DEBUG] STATE.equipmentKB:', STATE.equipmentKB);
-    console.log('[DEBUG] STATE.equipmentKB exists:', !!STATE.equipmentKB);
-    console.log('[DEBUG] Equipment array length:', STATE.equipmentKB?.equipment?.length || 0);
-    
+
     // Search in equipment database
     const equipment = STATE.equipmentKB?.equipment || [];
-    
+
     if (equipment.length === 0) {
-      console.warn('[WARN] Equipment database is empty or not loaded!');
-      console.warn('[WARN] Attempting to reload equipment database...');
-      
       // Try to load the equipment database on-demand
       fetch('/data/equipment-kb.json')
         .then(r => r.json())
         .then(data => {
           if (data && Array.isArray(data.equipment)) {
             STATE.equipmentKB = data;
-            console.log(' Successfully loaded equipment database on-demand:', data.equipment.length, 'items');
-            // Retry the search
             this.searchEquipment(category, query, resultsElementId);
           } else {
-            console.error('[ERROR] Invalid equipment database structure:', data);
-            resultsDiv.innerHTML = `<div style="padding: 20px; text-align: center; color: #ef4444; font-size: 13px;">Equipment database has invalid structure.</div>`;
+            resultsDiv.innerHTML = '<div style="padding:20px;text-align:center;color:#f87171;font-size:13px;">Equipment database has invalid structure.</div>';
           }
         })
         .catch(err => {
-          console.warn('[Equipment] Failed to load equipment database:', err?.message || err);
-          resultsDiv.innerHTML = `<div style="padding: 20px; text-align: center; color: #ef4444; font-size: 13px;">Failed to load equipment database: ${err.message}</div>`;
+          resultsDiv.innerHTML = '<div style="padding:20px;text-align:center;color:#f87171;font-size:13px;">Failed to load equipment database.</div>';
         });
       return;
     }
-    
+
+    const q = query.toLowerCase();
     const filtered = equipment.filter(item => {
       const searchText = (item.vendor + ' ' + item.model + ' ' + (item.tags || []).join(' ')).toLowerCase();
-      const matches = item.category === category && searchText.includes(query.toLowerCase());
-      if (query.toLowerCase().length >= 2) {
-        console.log('[DEBUG] Checking:', item.vendor, item.model, 'category:', item.category, 'vs', category, 'match:', matches);
-      }
-      return matches;
+      return item.category === category && searchText.includes(q);
     });
-    
-    console.log('[DEBUG] Found', filtered.length, 'matching equipment');
-    
+
     if (filtered.length === 0) {
-      resultsDiv.innerHTML = `<div style="padding: 20px; text-align: center; color: #64748b; font-size: 13px;">No ${category} models found matching "${query}"</div>`;
+      resultsDiv.innerHTML = '<div style="padding:20px;text-align:center;color:#64748b;font-size:13px;">No models found matching "' + escapeHtml(query) + '"</div>';
       return;
     }
-    
-    // Clear and populate with event listeners instead of inline onclick
+
     resultsDiv.innerHTML = '';
     filtered.forEach(item => {
       const div = document.createElement('div');
-      div.className = 'equipment-result';
-      div.style.cssText = 'padding: 8px; border-bottom: 1px solid #f1f5f9; cursor: pointer; display: flex; justify-content: space-between; align-items: center;';
-      div.innerHTML = `
-        <div>
-          <div style="font-weight: 500; font-size: 14px;">${escapeHtml(item.vendor)} ${escapeHtml(item.model)}</div>
-          <div style="font-size: 12px; color: #64748b;">${escapeHtml(item.capacity || item.power || 'Unknown capacity')} • ${escapeHtml(item.control || 'Manual')}</div>
-        </div>
-        <div style="font-size: 12px; color: #3b82f6; font-weight: 500;">+ Add</div>
-      `;
+      div.style.cssText = 'padding:8px;border-bottom:1px solid rgba(59,130,246,0.08);cursor:pointer;display:flex;justify-content:space-between;align-items:center;transition:background 0.15s;';
+      div.innerHTML = '<div>'
+        + '<div style="font-weight:500;font-size:14px;color:#f1f5f9;">' + escapeHtml(item.vendor) + ' ' + escapeHtml(item.model) + '</div>'
+        + '<div style="font-size:12px;color:#94a3b8;">' + escapeHtml(item.capacity || item.power || '') + ' -- ' + escapeHtml(item.control || 'Manual') + '</div>'
+        + '</div>'
+        + '<div style="font-size:12px;color:#60a5fa;font-weight:500;">+ Add</div>';
+      div.addEventListener('mouseenter', () => { div.style.background = 'rgba(59,130,246,0.08)'; });
+      div.addEventListener('mouseleave', () => { div.style.background = ''; });
       div.addEventListener('click', () => {
         this.addEquipment(category, item.vendor, item.model, item.capacity || item.power || 'Unknown', item.control || 'Manual');
       });
@@ -11713,120 +11560,57 @@ class RoomWizard {
   }
 
   addEquipment(category, vendor, model, capacity, control) {
-    console.log('[DEBUG] Adding equipment:', category, vendor, model);
     const catId = this.getCurrentCategoryId();
-    if (!catId) {
-      console.error('[ERROR] Cannot add equipment - no current category ID');
-      return;
-    }
-    // Initialize selected equipment array if it doesn't exist - indexed by category ID
-    if (!this.categoryProgress[catId]) {
-      this.categoryProgress[catId] = {};
-    }
-    if (!this.categoryProgress[catId].selectedEquipment) {
-      this.categoryProgress[catId].selectedEquipment = [];
-    }
-    // Check if already selected
-    const existing = this.categoryProgress[catId].selectedEquipment.find(e => 
+    if (!catId) return;
+    if (!this.categoryProgress[catId]) this.categoryProgress[catId] = {};
+    if (!this.categoryProgress[catId].selectedEquipment) this.categoryProgress[catId].selectedEquipment = [];
+
+    const existing = this.categoryProgress[catId].selectedEquipment.find(e =>
       e.category === category && e.vendor === vendor && e.model === model
     );
     if (existing) {
       existing.count += 1;
     } else {
       this.categoryProgress[catId].selectedEquipment.push({
-        category,
-        vendor,
-        model,
-        capacity,
-        control,
-        count: 1
+        category, vendor, model, capacity, control,
+        count: 1,
+        dimensions: {},
+        specs: {}
       });
     }
-    // Re-render the category form and manufacturer search to update the UI
-          const pin = getFarmPin();
-          if (pin) headers['x-farm-pin'] = pin;
-    // Clear and rebuild with event listeners
-    selectedDiv.innerHTML = '';
-    selectedEquipment.forEach(item => {
-      const itemDiv = document.createElement('div');
-      itemDiv.style.cssText = 'display: flex; justify-content: space-between; align-items: center; padding: 8px; border-bottom: 1px solid #f1f5f9;';
-      
-      itemDiv.innerHTML = `
-        <div>
-          <div style="font-weight: 500; font-size: 14px;">${escapeHtml(item.vendor)} ${escapeHtml(item.model)}</div>
-          <div style="font-size: 12px; color: #64748b;">Qty: ${item.count} • ${escapeHtml(item.capacity)} • ${escapeHtml(item.control)}</div>
-        </div>
-        <div style="display: flex; gap: 8px; align-items: center;">
-          <button type="button" class="btn-decrease" 
-                  style="width: 24px; height: 24px; border: 1px solid #d1d5db; background: white; border-radius: 4px; cursor: pointer;">-</button>
-          <span style="min-width: 20px; text-align: center; font-size: 14px;">${item.count}</span>
-          <button type="button" class="btn-increase" 
-                  style="width: 24px; height: 24px; border: 1px solid #d1d5db; background: white; border-radius: 4px; cursor: pointer;">+</button>
-          <button type="button" class="btn-remove" 
-                  style="width: 24px; height: 24px; border: 1px solid #ef4444; background: #fef2f2; color: #ef4444; border-radius: 4px; cursor: pointer;">×</button>
-        </div>
-      `;
-      
-      // Add event listeners
-      const decreaseBtn = itemDiv.querySelector('.btn-decrease');
-      const increaseBtn = itemDiv.querySelector('.btn-increase');
-      const removeBtn = itemDiv.querySelector('.btn-remove');
-      
-      decreaseBtn.addEventListener('click', () => {
-        this.changeEquipmentCount(category, item.vendor, item.model, -1);
-      });
-      
-      increaseBtn.addEventListener('click', () => {
-        this.changeEquipmentCount(category, item.vendor, item.model, 1);
-      });
-      
-      removeBtn.addEventListener('click', () => {
-        this.removeEquipment(category, item.vendor, item.model);
-      });
-      
-      selectedDiv.appendChild(itemDiv);
-    });
+    const prefix = category === 'dehumidifier' ? 'dehu' : category;
+    this.renderSelectedEquipment(category, 'cat-' + prefix + '-selected');
   }
 
-
   changeEquipmentCount(category, vendor, model, delta) {
-    // Find the category that has this equipment
     let foundCatId = null;
     let item = null;
     for (const [catId, catProg] of Object.entries(this.categoryProgress)) {
       const eqArr = catProg?.selectedEquipment || [];
       const match = eqArr.find(e => e.category === category && e.vendor === vendor && e.model === model);
-      if (match) {
-        foundCatId = catId;
-        item = match;
-        break;
-      }
+      if (match) { foundCatId = catId; item = match; break; }
     }
     if (item && foundCatId !== null) {
       item.count = Math.max(0, item.count + delta);
       if (item.count === 0) {
         this.removeEquipment(category, vendor, model, foundCatId);
       } else {
-        // Map category to element ID prefix
-        const prefix = category === 'dehumidifier' ? 'dehu' : category === 'mini-split' ? 'mini-split' : category;
-        this.renderSelectedEquipment(category, `cat-${prefix}-selected`);
+        const prefix = category === 'dehumidifier' ? 'dehu' : category;
+        this.renderSelectedEquipment(category, 'cat-' + prefix + '-selected');
       }
     }
   }
 
-  removeEquipment(category, vendor, model, catId = null) {
-    // Remove from the correct category if specified, else current category
-    const targetCatId = catId !== null ? catId : this.getCurrentCategoryId();
+  removeEquipment(category, vendor, model, catId) {
+    const targetCatId = catId != null ? catId : this.getCurrentCategoryId();
     if (!targetCatId || !this.categoryProgress[targetCatId]?.selectedEquipment) return;
-    this.categoryProgress[targetCatId].selectedEquipment = 
-      this.categoryProgress[targetCatId].selectedEquipment.filter(e => 
+    this.categoryProgress[targetCatId].selectedEquipment =
+      this.categoryProgress[targetCatId].selectedEquipment.filter(e =>
         !(e.category === category && e.vendor === vendor && e.model === model)
       );
-    // Map category to element ID prefix
-    const prefix = category === 'dehumidifier' ? 'dehu' : category === 'mini-split' ? 'mini-split' : category;
-    this.renderSelectedEquipment(category, `cat-${prefix}-selected`);
+    const prefix = category === 'dehumidifier' ? 'dehu' : category;
+    this.renderSelectedEquipment(category, 'cat-' + prefix + '-selected');
   }
-
   populateModelDropdown(modelSelectId, manufacturerQuery, category) {
     const modelSelect = document.getElementById(modelSelectId);
     if (!modelSelect) {

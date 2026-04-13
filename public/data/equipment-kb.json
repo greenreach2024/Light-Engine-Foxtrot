@@ -3,100 +3,798 @@
     {
       "category": "dehumidifier",
       "vendor": "Quest",
-      "model": "Quest 746 480V",
-      "capacity": "730 PPD",
-      "control": "Manual",
-      "tags": ["dehumidification", "high-capacity", "480V"]
-    },
-    {
-      "category": "dehumidifier",
-      "vendor": "Quest",
-      "model": "Quest 506 208/230V",
-      "capacity": "500 PPD",
-      "control": "Manual",
-      "tags": ["dehumidification", "high-capacity", "208-230V"]
-    },
-    {
-      "category": "dehumidifier",
-      "vendor": "Quest",
-      "model": "Quest 506 277V",
-      "capacity": "500 PPD",
-      "control": "Manual",
-      "tags": ["dehumidification", "high-capacity", "277V"]
-    },
-    {
-      "category": "dehumidifier",
-      "vendor": "Quest",
-      "model": "Quest 335 277V",
-      "capacity": "345 PPD",
-      "control": "Manual",
-      "tags": ["dehumidification", "high-efficiency", "277V"]
-    },
-    {
-      "category": "dehumidifier",
-      "vendor": "Quest",
-      "model": "Quest 335 208/230V",
-      "capacity": "345 PPD",
-      "control": "Manual",
-      "tags": ["dehumidification", "high-efficiency", "208-230V"]
-    },
-    {
-      "category": "dehumidifier",
-      "vendor": "Quest",
-      "model": "Quest 225 208/230V",
-      "capacity": "225 PPD",
-      "control": "Manual",
-      "tags": ["dehumidification", "high-efficiency", "208-230V"]
-    },
-    {
-      "category": "dehumidifier",
-      "vendor": "Quest",
-      "model": "Quest 205",
-      "capacity": "200 PPD",
-      "control": "Manual",
-      "tags": ["dehumidification", "high-efficiency", "110-120V"]
-    },
-    {
-      "category": "dehumidifier",
-      "vendor": "Quest",
-      "model": "Quest Hi-E Dry 195",
-      "capacity": "195 PPD",
-      "control": "Manual",
-      "tags": ["dehumidification", "portable", "115V"]
-    },
-    {
-      "category": "dehumidifier",
-      "vendor": "Quest",
-      "model": "Quest 155",
+      "model": "Dual 155",
       "capacity": "155 PPD",
-      "control": "Manual",
-      "tags": ["dehumidification", "high-efficiency", "110-120V"]
+      "control": "On/Off",
+      "tags": [
+        "quest",
+        "commercial",
+        "ducted"
+      ]
     },
     {
       "category": "dehumidifier",
       "vendor": "Quest",
-      "model": "Quest Hi-E Dry 140",
-      "capacity": "135 PPD",
-      "control": "Manual",
-      "tags": ["dehumidification", "portable", "110-120V"]
+      "model": "Dual 205",
+      "capacity": "205 PPD",
+      "control": "On/Off",
+      "tags": [
+        "quest",
+        "commercial",
+        "ducted"
+      ]
     },
     {
       "category": "dehumidifier",
       "vendor": "Quest",
-      "model": "Quest 100",
-      "capacity": "100 PPD",
+      "model": "Dual 225",
+      "capacity": "225 PPD",
+      "control": "On/Off",
+      "tags": [
+        "quest",
+        "commercial",
+        "ducted"
+      ]
+    },
+    {
+      "category": "dehumidifier",
+      "vendor": "Quest",
+      "model": "335",
+      "capacity": "335 PPD",
+      "control": "On/Off",
+      "tags": [
+        "quest",
+        "commercial",
+        "overhead"
+      ]
+    },
+    {
+      "category": "dehumidifier",
+      "vendor": "Quest",
+      "model": "506",
+      "capacity": "506 PPD",
+      "control": "BACnet",
+      "tags": [
+        "quest",
+        "commercial",
+        "overhead",
+        "smart"
+      ]
+    },
+    {
+      "category": "dehumidifier",
+      "vendor": "Quest",
+      "model": "876",
+      "capacity": "876 PPD",
+      "control": "BACnet",
+      "tags": [
+        "quest",
+        "commercial",
+        "smart"
+      ]
+    },
+    {
+      "category": "dehumidifier",
+      "vendor": "Quest",
+      "model": "IQ Unitary",
+      "capacity": "Variable",
+      "control": "Modbus",
+      "tags": [
+        "quest",
+        "commercial",
+        "vrf",
+        "smart"
+      ]
+    },
+    {
+      "category": "dehumidifier",
+      "vendor": "Anden",
+      "model": "A130V",
+      "capacity": "130 PPD",
+      "control": "On/Off",
+      "tags": [
+        "anden",
+        "commercial",
+        "hanging"
+      ]
+    },
+    {
+      "category": "dehumidifier",
+      "vendor": "Anden",
+      "model": "A210V3",
+      "capacity": "210 PPD",
+      "control": "On/Off",
+      "tags": [
+        "anden",
+        "commercial",
+        "hanging"
+      ]
+    },
+    {
+      "category": "dehumidifier",
+      "vendor": "Anden",
+      "model": "A320V3",
+      "capacity": "320 PPD",
+      "control": "On/Off",
+      "tags": [
+        "anden",
+        "commercial",
+        "floor"
+      ]
+    },
+    {
+      "category": "dehumidifier",
+      "vendor": "Anden",
+      "model": "A710V3",
+      "capacity": "710 PPD",
+      "control": "BACnet",
+      "tags": [
+        "anden",
+        "commercial",
+        "industrial",
+        "smart"
+      ]
+    },
+    {
+      "category": "dehumidifier",
+      "vendor": "Surna",
+      "model": "Sentinel 300",
+      "capacity": "300 PPD",
+      "control": "On/Off",
+      "tags": [
+        "surna",
+        "commercial"
+      ]
+    },
+    {
+      "category": "dehumidifier",
+      "vendor": "Surna",
+      "model": "Sentinel 600",
+      "capacity": "600 PPD",
+      "control": "Modbus",
+      "tags": [
+        "surna",
+        "commercial",
+        "smart"
+      ]
+    },
+    {
+      "category": "dehumidifier",
+      "vendor": "Desert Aire",
+      "model": "GrowAire DG25",
+      "capacity": "250 PPD",
+      "control": "BACnet",
+      "tags": [
+        "desert aire",
+        "commercial",
+        "smart"
+      ]
+    },
+    {
+      "category": "dehumidifier",
+      "vendor": "Desert Aire",
+      "model": "GrowAire DG50",
+      "capacity": "500 PPD",
+      "control": "BACnet",
+      "tags": [
+        "desert aire",
+        "commercial",
+        "smart"
+      ]
+    },
+    {
+      "category": "dehumidifier",
+      "vendor": "DryGair",
+      "model": "DG-12",
+      "capacity": "300 PPD",
+      "control": "On/Off",
+      "tags": [
+        "drygair",
+        "commercial",
+        "heat-recovery"
+      ]
+    },
+    {
+      "category": "dehumidifier",
+      "vendor": "DryGair",
+      "model": "DG-X",
+      "capacity": "500 PPD",
+      "control": "Modbus",
+      "tags": [
+        "drygair",
+        "commercial",
+        "heat-recovery",
+        "smart"
+      ]
+    },
+    {
+      "category": "dehumidifier",
+      "vendor": "Carrier",
+      "model": "OptiClean OCA252",
+      "capacity": "250 PPD",
+      "control": "BACnet",
+      "tags": [
+        "carrier",
+        "commercial",
+        "smart"
+      ]
+    },
+    {
+      "category": "dehumidifier",
+      "vendor": "Trane",
+      "model": "CDQ DH",
+      "capacity": "Variable",
+      "control": "BACnet",
+      "tags": [
+        "trane",
+        "commercial",
+        "smart"
+      ]
+    },
+    {
+      "category": "dehumidifier",
+      "vendor": "Santa Fe",
+      "model": "Advance2",
+      "capacity": "90 PPD",
+      "control": "On/Off",
+      "tags": [
+        "santa fe",
+        "residential",
+        "crawl-space"
+      ]
+    },
+    {
+      "category": "dehumidifier",
+      "vendor": "Santa Fe",
+      "model": "Ultra120",
+      "capacity": "120 PPD",
+      "control": "On/Off",
+      "tags": [
+        "santa fe",
+        "commercial"
+      ]
+    },
+    {
+      "category": "dehumidifier",
+      "vendor": "GrowGeneration",
+      "model": "Active Air 300",
+      "capacity": "300 PPD",
+      "control": "On/Off",
+      "tags": [
+        "growgeneration",
+        "commercial"
+      ]
+    },
+    {
+      "category": "mini-split",
+      "vendor": "Mitsubishi",
+      "model": "MSZ-FH09NA",
+      "capacity": "9,000 BTU",
+      "control": "IR Remote",
+      "tags": [
+        "mitsubishi",
+        "wall-mount",
+        "inverter"
+      ]
+    },
+    {
+      "category": "mini-split",
+      "vendor": "Mitsubishi",
+      "model": "MSZ-FH12NA",
+      "capacity": "12,000 BTU",
+      "control": "IR Remote",
+      "tags": [
+        "mitsubishi",
+        "wall-mount",
+        "inverter"
+      ]
+    },
+    {
+      "category": "mini-split",
+      "vendor": "Mitsubishi",
+      "model": "MSZ-FH18NA",
+      "capacity": "18,000 BTU",
+      "control": "IR Remote",
+      "tags": [
+        "mitsubishi",
+        "wall-mount",
+        "inverter"
+      ]
+    },
+    {
+      "category": "mini-split",
+      "vendor": "Mitsubishi",
+      "model": "MXZ-3C30NAHZ2",
+      "capacity": "30,000 BTU",
+      "control": "Kumo Cloud",
+      "tags": [
+        "mitsubishi",
+        "multi-zone",
+        "hyper-heat",
+        "smart"
+      ]
+    },
+    {
+      "category": "mini-split",
+      "vendor": "Fujitsu",
+      "model": "ASU12RLS3",
+      "capacity": "12,000 BTU",
+      "control": "IR Remote",
+      "tags": [
+        "fujitsu",
+        "wall-mount",
+        "inverter"
+      ]
+    },
+    {
+      "category": "mini-split",
+      "vendor": "Fujitsu",
+      "model": "AOU36RLXFZH",
+      "capacity": "36,000 BTU",
+      "control": "IR Remote",
+      "tags": [
+        "fujitsu",
+        "ducted",
+        "multi-zone"
+      ]
+    },
+    {
+      "category": "mini-split",
+      "vendor": "LG",
+      "model": "LMU360HHV",
+      "capacity": "36,000 BTU",
+      "control": "Wi-Fi",
+      "tags": [
+        "lg",
+        "multi-zone",
+        "smart",
+        "inverter"
+      ]
+    },
+    {
+      "category": "mini-split",
+      "vendor": "Samsung",
+      "model": "AR09TXHZAWKNEU",
+      "capacity": "9,000 BTU",
+      "control": "SmartThings",
+      "tags": [
+        "samsung",
+        "wall-mount",
+        "smart",
+        "inverter"
+      ]
+    },
+    {
+      "category": "mini-split",
+      "vendor": "Daikin",
+      "model": "FTXS09LVJU",
+      "capacity": "9,000 BTU",
+      "control": "IR Remote",
+      "tags": [
+        "daikin",
+        "wall-mount",
+        "inverter"
+      ]
+    },
+    {
+      "category": "mini-split",
+      "vendor": "Daikin",
+      "model": "RMXS48LVJU",
+      "capacity": "48,000 BTU",
+      "control": "BACnet",
+      "tags": [
+        "daikin",
+        "multi-zone",
+        "smart",
+        "commercial"
+      ]
+    },
+    {
+      "category": "mini-split",
+      "vendor": "MrCool",
+      "model": "DIY-12-HP-WM-230C",
+      "capacity": "12,000 BTU",
+      "control": "Wi-Fi",
+      "tags": [
+        "mrcool",
+        "diy",
+        "wall-mount",
+        "smart"
+      ]
+    },
+    {
+      "category": "mini-split",
+      "vendor": "Senville",
+      "model": "SENL-18CD",
+      "capacity": "18,000 BTU",
+      "control": "IR Remote",
+      "tags": [
+        "senville",
+        "wall-mount"
+      ]
+    },
+    {
+      "category": "fans",
+      "vendor": "AC Infinity",
+      "model": "CLOUDLINE T6",
+      "capacity": "402 CFM",
+      "control": "Wi-Fi / App",
+      "tags": [
+        "inline",
+        "duct",
+        "smart"
+      ]
+    },
+    {
+      "category": "fans",
+      "vendor": "AC Infinity",
+      "model": "CLOUDLINE T8",
+      "capacity": "807 CFM",
+      "control": "Wi-Fi / App",
+      "tags": [
+        "inline",
+        "duct",
+        "smart"
+      ]
+    },
+    {
+      "category": "fans",
+      "vendor": "AC Infinity",
+      "model": "CLOUDLINE T4",
+      "capacity": "205 CFM",
+      "control": "Wi-Fi / App",
+      "tags": [
+        "inline",
+        "duct",
+        "smart"
+      ]
+    },
+    {
+      "category": "fans",
+      "vendor": "AC Infinity",
+      "model": "CLOUDLINE S6",
+      "capacity": "402 CFM",
       "control": "Manual",
-      "tags": ["dehumidification", "high-efficiency", "110-120V"]
+      "tags": [
+        "inline",
+        "duct"
+      ]
+    },
+    {
+      "category": "fans",
+      "vendor": "AC Infinity",
+      "model": "CLOUDRAY A9",
+      "capacity": "Oscillating",
+      "control": "Wi-Fi / App",
+      "tags": [
+        "oscillating",
+        "clip",
+        "smart"
+      ]
+    },
+    {
+      "category": "fans",
+      "vendor": "Hurricane",
+      "model": "Classic 6 in",
+      "capacity": "6 in clip",
+      "control": "Manual",
+      "tags": [
+        "clip",
+        "oscillating"
+      ]
+    },
+    {
+      "category": "fans",
+      "vendor": "Hurricane",
+      "model": "Classic 16 in",
+      "capacity": "16 in wall",
+      "control": "Manual",
+      "tags": [
+        "wall",
+        "oscillating"
+      ]
+    },
+    {
+      "category": "fans",
+      "vendor": "Secret Jardin",
+      "model": "Monkey Fan 30",
+      "capacity": "30W",
+      "control": "Manual",
+      "tags": [
+        "clip",
+        "oscillating"
+      ]
+    },
+    {
+      "category": "fans",
+      "vendor": "TerraBloom",
+      "model": "ECMF-200",
+      "capacity": "740 CFM",
+      "control": "0-10V",
+      "tags": [
+        "inline",
+        "duct",
+        "EC"
+      ]
+    },
+    {
+      "category": "fans",
+      "vendor": "Can-Fan",
+      "model": "Max Fan Pro 8",
+      "capacity": "863 CFM",
+      "control": "Manual",
+      "tags": [
+        "inline",
+        "duct"
+      ]
+    },
+    {
+      "category": "fans",
+      "vendor": "Vortex",
+      "model": "VTX600",
+      "capacity": "291 CFM",
+      "control": "Manual",
+      "tags": [
+        "inline",
+        "duct"
+      ]
+    },
+    {
+      "category": "fans",
+      "vendor": "Hyper Fan",
+      "model": "Stealth 8",
+      "capacity": "710 CFM",
+      "control": "Manual",
+      "tags": [
+        "inline",
+        "duct",
+        "quiet"
+      ]
+    },
+    {
+      "category": "vents",
+      "vendor": "AC Infinity",
+      "model": "AIRTAP T4",
+      "capacity": "4 in",
+      "control": "Smart",
+      "tags": [
+        "register",
+        "booster"
+      ]
+    },
+    {
+      "category": "vents",
+      "vendor": "AC Infinity",
+      "model": "AIRTAP T6",
+      "capacity": "6 in",
+      "control": "Smart",
+      "tags": [
+        "register",
+        "booster"
+      ]
+    },
+    {
+      "category": "vents",
+      "vendor": "Keen Home",
+      "model": "Smart Vent 4x10",
+      "capacity": "4x10 in",
+      "control": "Smart",
+      "tags": [
+        "smart",
+        "register"
+      ]
+    },
+    {
+      "category": "vents",
+      "vendor": "Flair",
+      "model": "Smart Vent",
+      "capacity": "4x10 in",
+      "control": "Smart",
+      "tags": [
+        "smart",
+        "register"
+      ]
+    },
+    {
+      "category": "controllers",
+      "vendor": "Trolmaster",
+      "model": "Hydro-X Pro",
+      "capacity": "Multi-zone",
+      "control": "Wi-Fi / App",
+      "tags": [
+        "environment",
+        "multi-zone"
+      ]
+    },
+    {
+      "category": "controllers",
+      "vendor": "Trolmaster",
+      "model": "Aqua-X Pro",
+      "capacity": "Irrigation",
+      "control": "Wi-Fi / App",
+      "tags": [
+        "irrigation",
+        "fertigation"
+      ]
+    },
+    {
+      "category": "controllers",
+      "vendor": "Autopilot",
+      "model": "ECLIPSE F90",
+      "capacity": "Digital environment",
+      "control": "Manual",
+      "tags": [
+        "environment",
+        "temp",
+        "humidity"
+      ]
+    },
+    {
+      "category": "controllers",
+      "vendor": "Inkbird",
+      "model": "ITC-308",
+      "capacity": "Temp only",
+      "control": "Manual",
+      "tags": [
+        "temperature",
+        "simple"
+      ]
+    },
+    {
+      "category": "controllers",
+      "vendor": "Inkbird",
+      "model": "IHC-200",
+      "capacity": "Humidity only",
+      "control": "Manual",
+      "tags": [
+        "humidity",
+        "simple"
+      ]
+    },
+    {
+      "category": "controllers",
+      "vendor": "NIWA",
+      "model": "Grow Hub",
+      "capacity": "Multi-sensor",
+      "control": "Wi-Fi / App",
+      "tags": [
+        "environment",
+        "smart",
+        "multi-sensor"
+      ]
+    },
+    {
+      "category": "other",
+      "vendor": "ZipGrow",
+      "model": "Standard Tower",
+      "capacity": "5 ft tower",
+      "control": "Manual",
+      "tags": [
+        "vertical",
+        "hydroponic",
+        "tower",
+        "zipgrow"
+      ]
+    },
+    {
+      "category": "other",
+      "vendor": "ZipGrow",
+      "model": "Short Tower",
+      "capacity": "3 ft tower",
+      "control": "Manual",
+      "tags": [
+        "vertical",
+        "hydroponic",
+        "tower",
+        "zipgrow"
+      ]
+    },
+    {
+      "category": "other",
+      "vendor": "ZipGrow",
+      "model": "ZipRack",
+      "capacity": "24-tower rack",
+      "control": "Manual",
+      "tags": [
+        "vertical",
+        "rack",
+        "hydroponic",
+        "zipgrow"
+      ]
+    },
+    {
+      "category": "other",
+      "vendor": "Botanicare",
+      "model": "Slide Bench 4x8",
+      "capacity": "4x8 ft",
+      "control": "Manual",
+      "tags": [
+        "bench",
+        "rolling",
+        "flood"
+      ]
+    },
+    {
+      "category": "other",
+      "vendor": "Botanicare",
+      "model": "Slide Bench 4x16",
+      "capacity": "4x16 ft",
+      "control": "Manual",
+      "tags": [
+        "bench",
+        "rolling",
+        "flood"
+      ]
+    },
+    {
+      "category": "other",
+      "vendor": "Active Aqua",
+      "model": "Grow Flow 12",
+      "capacity": "12-site",
+      "control": "Manual",
+      "tags": [
+        "ebb-flow",
+        "hydroponic"
+      ]
+    },
+    {
+      "category": "other",
+      "vendor": "Current Culture",
+      "model": "Under Current UC8XL",
+      "capacity": "8-site DWC",
+      "control": "Manual",
+      "tags": [
+        "DWC",
+        "hydroponic",
+        "recirculating"
+      ]
+    },
+    {
+      "category": "energy-monitor",
+      "vendor": "Sense",
+      "model": "Sense Energy Monitor",
+      "capacity": "400A",
+      "control": "Wi-Fi / App",
+      "tags": [
+        "whole-home",
+        "CT-clamp",
+        "smart"
+      ]
+    },
+    {
+      "category": "energy-monitor",
+      "vendor": "Emporia",
+      "model": "Vue Gen 2",
+      "capacity": "200A",
+      "control": "Wi-Fi / App",
+      "tags": [
+        "whole-home",
+        "CT-clamp",
+        "smart"
+      ]
+    },
+    {
+      "category": "energy-monitor",
+      "vendor": "IoTaWatt",
+      "model": "IoTaWatt",
+      "capacity": "14-channel",
+      "control": "Wi-Fi / App",
+      "tags": [
+        "open-source",
+        "CT-clamp",
+        "multi-circuit"
+      ]
     }
   ],
   "categories": [
     "Lighting",
     "HVAC",
+    "Dehumidifier",
+    "Mini-Split",
     "Irrigation",
     "Sensors",
-    "Controllers",
-    "Dehumidifiers"
+    "Controllers"
   ],
-  "lastUpdated": "2026-02-04T00:00:00Z",
+  "lastUpdated": "2026-02-20",
   "version": "1.1.0"
 }
