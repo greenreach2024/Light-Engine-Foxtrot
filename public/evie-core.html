@@ -154,6 +154,81 @@
     .evie-core-page.embedded .evie-stat-value {
       font-size: 22px;
     }
+
+    /* -- Alert dismiss button ---------------------------------------- */
+    .evie-alert-dismiss {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 5px;
+      color: var(--evie-text-muted);
+      font-size: 10px;
+      padding: 3px 10px;
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+    .evie-alert-dismiss:hover {
+      background: rgba(239,68,68,0.15);
+      border-color: rgba(239,68,68,0.3);
+      color: #ef4444;
+    }
+    .evie-alert-clear-all {
+      background: none;
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 5px;
+      color: var(--evie-text-muted);
+      font-size: 10px;
+      padding: 3px 10px;
+      cursor: pointer;
+      margin-left: 8px;
+      transition: all 0.2s;
+    }
+    .evie-alert-clear-all:hover {
+      background: rgba(239,68,68,0.12);
+      color: #ef4444;
+    }
+
+    /* -- Data freshness badge ---------------------------------------- */
+    .evie-freshness {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 10px;
+      font-weight: 500;
+      padding: 2px 8px;
+      border-radius: 4px;
+      margin-left: 8px;
+      letter-spacing: 0.3px;
+    }
+    .evie-freshness.fresh {
+      color: var(--evie-vitality);
+      background: rgba(16,185,129,0.08);
+      border: 1px solid rgba(16,185,129,0.2);
+    }
+    .evie-freshness.aging {
+      color: #f59e0b;
+      background: rgba(245,158,11,0.08);
+      border: 1px solid rgba(245,158,11,0.2);
+    }
+    .evie-freshness.stale {
+      color: #ef4444;
+      background: rgba(239,68,68,0.08);
+      border: 1px solid rgba(239,68,68,0.2);
+    }
+    .evie-freshness-dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+    }
+    .evie-freshness.fresh .evie-freshness-dot { background: var(--evie-vitality); }
+    .evie-freshness.aging .evie-freshness-dot { background: #f59e0b; }
+    .evie-freshness.stale .evie-freshness-dot { background: #ef4444; }
+    .evie-source-tag {
+      font-size: 9px;
+      color: var(--evie-text-muted);
+      letter-spacing: 0.4px;
+      text-transform: uppercase;
+    }
   </style>
 </head>
 <body class="evie-core-page">
@@ -206,7 +281,7 @@
 
     <!-- Environment -->
     <div class="evie-core-section">
-      <div class="evie-core-section-title">Environment <span class="count" id="section-env-count">0</span></div>
+      <div class="evie-core-section-title">Environment <span class="count" id="section-env-count">0</span><span id="env-freshness"></span></div>
       <div id="section-env">
         <div class="evie-placeholder">Loading environment data...</div>
       </div>
@@ -222,7 +297,7 @@
 
     <!-- Alerts & Risks -->
     <div class="evie-core-section">
-      <div class="evie-core-section-title">Alerts <span class="count" id="section-alert-count">0</span></div>
+      <div class="evie-core-section-title">Alerts <span class="count" id="section-alert-count">0</span><button class="evie-alert-clear-all" id="btn-clear-all-alerts" style="display:none" onclick="clearAllAlerts()">Clear All</button></div>
       <div id="section-alerts">
         <div class="evie-placeholder">Checking alerts...</div>
       </div>
@@ -327,20 +402,65 @@
       document.getElementById('stat-alerts').textContent = alertCount;
       document.getElementById('stat-tasks').textContent = (data.tasks || []).length;
 
+      // Data freshness
+      renderFreshnessBadge(data.env_updated_at, data.env_source);
+
       // Sections
-      renderEnvironment(data.rooms || []);
+      renderEnvironment(data.rooms || [], data.env_updated_at, data.env_source);
       renderCrops(data.crops || []);
       renderAlerts(data.alert_items || []);
       renderTasks(data.tasks || []);
       renderRecommendations(data.recommendations || []);
     }
 
-    function renderEnvironment(rooms) {
+    function getFreshnessClass(ts) {
+      if (!ts) return 'stale';
+      var ageMs = Date.now() - new Date(ts).getTime();
+      var ageMin = ageMs / 60000;
+      if (ageMin < 60) return 'fresh';     // <1h
+      if (ageMin < 1440) return 'aging';   // <24h
+      return 'stale';                       // >24h
+    }
+
+    function renderFreshnessBadge(envTs, envSource) {
+      var el = document.getElementById('env-freshness');
+      if (!el) return;
+      var cls = getFreshnessClass(envTs);
+      var label = envTs ? timeAgo(envTs) : 'unknown';
+      var srcLabel = envSource ? envSource.replace(/\.json$/i, '') : '';
+      el.innerHTML =
+        '<span class="evie-freshness ' + cls + '">' +
+          '<span class="evie-freshness-dot"></span> ' + esc(label) +
+        '</span>' +
+        (srcLabel ? ' <span class="evie-source-tag">' + esc(srcLabel) + '</span>' : '');
+    }
+
+    function renderEnvironment(rooms, envTs, envSource) {
       var el = document.getElementById('section-env');
       var count = document.getElementById('section-env-count');
       if (count) count.textContent = rooms.length;
       if (!el) return;
+      var cls = getFreshnessClass(envTs);
       if (rooms.length === 0) { el.innerHTML = '<div class="evie-notice">No room data available.</div>'; return; }
+      if (cls === 'stale') {
+        el.innerHTML = '<div class="evie-notice" style="color:#ef4444;">&#9888; Sensor data is stale (' + (envTs ? timeAgo(envTs) : 'unknown') + '). Light Engine may be disconnected.</div>';
+        rooms.forEach(function (r) {
+          var sev = 'info';
+          if (r.drift && r.drift > 0) sev = r.drift > 2 ? 'high' : 'medium';
+          var card = document.createElement('div');
+          card.className = 'evie-signal-card signal-' + sev;
+          card.style.opacity = '0.5';
+          card.innerHTML =
+            '<div class="evie-signal-title">' + esc(r.name) + ' <span class="evie-source-tag" style="color:#ef4444;">STALE</span></div>' +
+            '<div class="evie-signal-detail">' +
+            (r.temp != null ? 'Temp: ' + r.temp + (r.temp_unit || 'C') + ' ' : '') +
+            (r.humidity != null ? 'RH: ' + r.humidity + '% ' : '') +
+            '</div>' +
+            (r.drift ? '<div class="evie-signal-meta"><span>Drift: ' + r.drift.toFixed(1) + '</span></div>' : '');
+          el.appendChild(card);
+        });
+        return;
+      }
       el.innerHTML = '';
       rooms.forEach(function (r) {
         var sev = 'info';
@@ -383,19 +503,30 @@
     function renderAlerts(alerts) {
       var el = document.getElementById('section-alerts');
       var count = document.getElementById('section-alert-count');
+      var clearAllBtn = document.getElementById('btn-clear-all-alerts');
       if (count) count.textContent = alerts.length;
+      if (clearAllBtn) clearAllBtn.style.display = alerts.length > 0 ? 'inline-block' : 'none';
       if (!el) return;
+      // Store for clear-all
+      window._evieAlerts = alerts;
       if (alerts.length === 0) { el.innerHTML = '<div class="evie-notice">All systems nominal.</div>'; return; }
       el.innerHTML = '';
       alerts.forEach(function (a) {
+        var age = getFreshnessClass(a.since);
         var card = document.createElement('div');
         card.className = 'evie-signal-card signal-' + (a.severity || 'info');
+        card.id = 'alert-card-' + (a.id || '');
         card.innerHTML =
-          '<div class="evie-signal-title">' + esc(a.title) + '</div>' +
-          '<div class="evie-signal-detail">' + esc(a.detail) + '</div>' +
+          '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">' +
+            '<div style="flex:1">' +
+              '<div class="evie-signal-title">' + esc(a.title) + '</div>' +
+              '<div class="evie-signal-detail">' + esc(a.detail) + '</div>' +
+            '</div>' +
+            (a.id ? '<button class="evie-alert-dismiss" onclick="dismissAlert(\'' + esc(a.id) + '\')">Dismiss</button>' : '') +
+          '</div>' +
           '<div class="evie-signal-meta">' +
           (a.domain ? '<span>' + esc(a.domain) + '</span>' : '') +
-          (a.since ? '<span>' + timeAgo(a.since) + '</span>' : '') +
+          (a.since ? '<span class="evie-freshness ' + age + '" style="margin-left:0"><span class="evie-freshness-dot"></span> ' + timeAgo(a.since) + '</span>' : '') +
           '</div>';
         el.appendChild(card);
       });
@@ -435,6 +566,62 @@
           (r.confidence != null ? '<div class="evie-confidence-bar"><div class="evie-confidence-fill" style="width:' + Math.round(r.confidence * 100) + '%"></div></div>' : '');
         el.appendChild(card);
       });
+    }
+
+    // ── Alert Actions ────────────────────────────────────────────
+
+    window.dismissAlert = async function(alertId) {
+      try {
+        var resp = await fetch(API_BASE.replace('/assistant', '') + '/alerts/' + encodeURIComponent(alertId) + '/dismiss', {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({ reason: 'Dismissed from EVIE dashboard' })
+        });
+        if (resp.ok) {
+          var card = document.getElementById('alert-card-' + alertId);
+          if (card) {
+            card.style.opacity = '0.3';
+            card.style.transition = 'opacity 0.3s';
+            setTimeout(function () { card.remove(); updateAlertCount(); }, 350);
+          }
+        }
+      } catch (e) {
+        console.warn('[E.V.I.E.] Failed to dismiss alert:', e.message);
+      }
+    };
+
+    window.clearAllAlerts = async function() {
+      var alerts = window._evieAlerts || [];
+      if (alerts.length === 0) return;
+      if (!confirm('Clear all ' + alerts.length + ' alert(s)?')) return;
+      for (var i = 0; i < alerts.length; i++) {
+        if (alerts[i].id) {
+          try {
+            await fetch(API_BASE.replace('/assistant', '') + '/alerts/' + encodeURIComponent(alerts[i].id) + '/dismiss', {
+              method: 'POST',
+              headers: getAuthHeaders(),
+              body: JSON.stringify({ reason: 'Bulk clear from EVIE dashboard' })
+            });
+          } catch (e) { /* continue */ }
+        }
+      }
+      // Refresh UI
+      loadState();
+    };
+
+    function updateAlertCount() {
+      var el = document.getElementById('section-alerts');
+      var remaining = el ? el.querySelectorAll('.evie-signal-card').length : 0;
+      var countEl = document.getElementById('section-alert-count');
+      var statEl = document.getElementById('stat-alerts');
+      var clearBtn = document.getElementById('btn-clear-all-alerts');
+      if (countEl) countEl.textContent = remaining;
+      if (statEl) statEl.textContent = remaining;
+      if (clearBtn) clearBtn.style.display = remaining > 0 ? 'inline-block' : 'none';
+      if (remaining === 0) {
+        if (el) el.innerHTML = '<div class="evie-notice">All systems nominal.</div>';
+        setHeroState('idle');
+      }
     }
 
     // ── Chat ─────────────────────────────────────────────────────

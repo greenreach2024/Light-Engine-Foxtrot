@@ -6109,6 +6109,7 @@ router.get('/state', async (req, res) => {
     const roomsRaw = readJSON('rooms.json', {});
     const roomList = (roomsRaw.rooms || Object.values(roomsRaw)).filter(r => typeof r === 'object' && r.id);
     const envCache = readJSON('env-cache.json', {});
+    const envMeta = envCache.meta || {};
     const targetRanges = readJSON('target-ranges.json', {});
     const defaults = targetRanges.defaults || {};
     const zoneTgts = targetRanges.zones || {};
@@ -6292,7 +6293,9 @@ router.get('/state', async (req, res) => {
       farm_name: farmName,
       farm_location: farmLocation,
       proactive_message: proactiveMessage,
-      unread_notifications: unreadNotifications
+      unread_notifications: unreadNotifications,
+      env_updated_at: envMeta.updatedAt || null,
+      env_source: envMeta.source || null
     });
   } catch (err) {
     logger.error('[E.V.I.E. State] Error:', err.message);
