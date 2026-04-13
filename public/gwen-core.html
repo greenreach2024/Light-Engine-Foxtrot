@@ -265,6 +265,7 @@
     <div class="gwen-chat-input-row">
       <textarea class="gwen-chat-input" id="gwenChatInput" rows="2" placeholder="Ask about grants, study design, compliance, data management..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendGwenMessage();}"></textarea>
       <button class="gwen-chat-send" id="gwenChatSend" onclick="sendGwenMessage()">Send</button>
+      <button class="gwen-chat-send" style="background:#444;font-size:11px;padding:6px 8px;" onclick="startNewConversation()" title="Start new conversation">New</button>
     </div>
   </section>
 
@@ -279,6 +280,21 @@
     let conversationId = null;
     let chatOpen = false;
     let isWaiting = false;
+
+    // -- Conversation persistence --
+    function getConvStorageKey() {
+      const farmId = sessionStorage.getItem('farm_id') || sessionStorage.getItem('farmId')
+        || localStorage.getItem('farm_id') || localStorage.getItem('farmId') || 'default';
+      return 'gwen_conversation_id:' + farmId;
+    }
+    function loadConversationId() {
+      try { return localStorage.getItem(getConvStorageKey()) || null; } catch (_) { return null; }
+    }
+    function saveConversationId(id) {
+      if (!id) return;
+      try { localStorage.setItem(getConvStorageKey(), id); } catch (_) { /* best-effort */ }
+    }
+    conversationId = loadConversationId();
 
     // -- Auth --
     function getAuthHeaders() {
@@ -301,10 +317,28 @@
       return resp.json();
     }
 
+    // -- Load conversation history from server --
+    async function loadChatHistory() {
+      if (!conversationId) return;
+      try {
+        const data = await apiFetch('/api/research/gwen/history?conversation_id=' + encodeURIComponent(conversationId));
+        if (data.ok && Array.isArray(data.messages) && data.messages.length > 0) {
+          const container = document.getElementById('gwenChatMessages');
+          // Keep the welcome message, clear any others
+          while (container.children.length > 1) container.removeChild(container.lastChild);
+          for (const m of data.messages) {
+            if (m.role === 'user') appendMessage('user', m.content);
+            else if (m.role === 'assistant') appendMessage('agent', m.content);
+          }
+        }
+      } catch (_) { /* history unavailable — start fresh */ }
+    }
+
     // -- Init --
     window.addEventListener('DOMContentLoaded', function() {
       loadStatus();
       loadState();
+      loadChatHistory();
       setInterval(loadState, 30000);
     });
 
@@ -377,6 +411,7 @@
           body: JSON.stringify({ message: msg, conversation_id: conversationId }),
         });
         conversationId = data.conversation_id;
+        saveConversationId(conversationId);
         appendMessage('agent', data.reply, data.tool_calls);
         // Log tool calls as activity
         if (data.tool_calls && data.tool_calls.length > 0) {
@@ -399,6 +434,14 @@
       if (!chatOpen) toggleChat();
       document.getElementById('gwenChatInput').value = prompt;
       sendGwenMessage();
+    };
+
+    // -- New Conversation --
+    window.startNewConversation = function() {
+      conversationId = null;
+      try { localStorage.removeItem(getConvStorageKey()); } catch (_) {}
+      const container = document.getElementById('gwenChatMessages');
+      while (container.children.length > 1) container.removeChild(container.lastChild);
     };
 
     // -- Append Message --

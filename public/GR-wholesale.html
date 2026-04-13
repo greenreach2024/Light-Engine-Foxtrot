@@ -385,7 +385,61 @@
       gap: 1rem;
     }
 
+    .discount-summary {
+      width: 100%;
+      order: 1;
+    }
+    .discount-tags {
+      display: flex;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+    .discount-tag {
+      display: flex;
+      flex-direction: column;
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      line-height: 1.3;
+    }
+    .discount-tag strong {
+      font-size: 0.95rem;
+    }
+    .discount-tag__label {
+      font-size: 0.75rem;
+      opacity: 0.8;
+      margin-top: 0.15rem;
+    }
+    .discount-tag--wholesale {
+      background: #166534;
+      color: #bbf7d0;
+      border: 1px solid #22c55e;
+    }
+    .discount-tag--volume-active {
+      background: #1e3a5f;
+      color: #93c5fd;
+      border: 1px solid #3b82f6;
+    }
+    .discount-tag--volume-next {
+      background: rgba(59,130,246,0.1);
+      color: #60a5fa;
+      border: 1px dashed #3b82f6;
+    }
+    .discount-tag--volume-locked {
+      background: rgba(100,116,139,0.08);
+      color: #64748b;
+      border: 1px solid rgba(148,163,184,0.2);
+    }
+    .discount-rolling-avg {
+      font-size: 0.8rem;
+      color: #94a3b8;
+      margin-top: 0.35rem;
+    }
+    .discount-rolling-avg strong {
+      color: #e2e8f0;
+    }
     .catalog-filters {
+      order: 2;
       display: flex;
       gap: 1rem;
       flex-wrap: wrap;
@@ -1995,6 +2049,7 @@
     <button class="nav-tab" data-view="checkout">Checkout</button>
     <button class="nav-tab" data-view="orders">My Orders</button>
     <button class="nav-tab" data-view="requests">My Requests</button>
+    <button class="nav-tab" data-view="donations" id="donations-tab" style="display: none;">Available Donations</button>
     <button class="nav-tab" data-view="account">Account</button>
   </nav>
 
@@ -2324,6 +2379,25 @@
     </div>
 
     <!-- Account Settings View -->
+
+    <!-- Donations View (food_bank buyers only) -->
+    <div id="donations-view" class="view">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+        <div>
+          <h1 style="margin: 0;">Available Donations</h1>
+          <p style="color: var(--text-secondary); margin: 0.5rem 0 0 0;">Claim surplus produce donated by local farms through GreenReach</p>
+        </div>
+      </div>
+      <div id="donation-offers-list" class="orders-list">
+        <!-- Donation offer cards populated by JS -->
+      </div>
+      <div style="margin-top: 2rem;">
+        <h2>My Claimed Donations</h2>
+        <div id="claimed-donations-list" class="orders-list">
+          <!-- Claimed donation cards populated by JS -->
+        </div>
+      </div>
+    </div>
     <div id="account-view" class="view">
       <div class="checkout-container">
         <h1>Account Settings</h1>
@@ -2401,6 +2475,7 @@
                 <option value="retail">Retail Store</option>
                 <option value="food_service">Food Service</option>
                 <option value="distributor">Regional Distributor</option>
+            <option value="food_bank">Food Bank / Non-Profit</option>
                 <option value="other">Other</option>
               </select>
             </div>
@@ -2647,6 +2722,7 @@
             <option value="grocery">Grocery / Retail</option>
             <option value="institutional">Institutional Food Service</option>
             <option value="distributor">Regional Distributor</option>
+            <option value="food_bank">Food Bank / Non-Profit</option>
           </select>
         </div>
 
@@ -2689,6 +2765,6 @@
   <!-- Square Web Payments SDK -->
   <script src="https://web.squarecdn.com/v1/square.js"></script>
   
-  <script src="/js/wholesale.js?v=2026-04-10-growing-badges" defer></script>
+  <script src="/js/wholesale.js?v=2026-04-13-price-watch-2pct" defer></script>
 </body>
 </html>

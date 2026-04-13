@@ -19,6 +19,7 @@
       label: 'Growing',
       icon: 'icon-growing',
       items: [
+        { id: 'grow-management',    label: 'Grow Management',    icon: 'icon-growing',            section: 'iframe-view', url: '/views/grow-management.html' },
         { id: 'planting-scheduler', label: 'Planting Scheduler', icon: 'icon-planting-scheduler', section: 'iframe-view', url: '/views/planting-scheduler.html' },
         { id: 'tray-setup',         label: 'Tray Setup',         icon: 'icon-tray-setup',         section: 'iframe-view', url: '/views/tray-setup.html' },
         { id: 'nutrient-mgmt',      label: 'Nutrient Management', icon: 'icon-nutrient',          section: 'iframe-view', url: '/views/nutrient-management.html' },
@@ -35,7 +36,7 @@
       items: [
         { id: 'farm-summary',  label: 'Farm Summary',  icon: 'icon-farm-summary',  section: 'iframe-view', url: '/views/farm-summary.html' },
         { id: 'activity-hub',  label: 'Activity Hub',  icon: 'icon-activity-hub',  section: 'iframe-view', url: '/views/tray-inventory.html' },
-        { id: 'setup-update',  label: 'Setup / Update', icon: 'icon-setup',        section: 'iframe-view', url: '/LE-dashboard.html' },
+        { id: 'farm-setup',    label: 'Farm Setup',     icon: 'icon-setup',        section: 'iframe-view', url: '/views/farm-setup.html' },
         { id: 'devices',       label: 'Devices',        icon: 'icon-devices',      section: 'devices' },
         { id: 'supplies',      label: 'Supplies',       icon: 'icon-supplies',     section: 'inventory-mgmt' },
         { id: 'calendar',      label: 'Calendar',       icon: 'icon-calendar',     section: 'iframe-view', url: '/views/calendar.html' },
@@ -72,6 +73,15 @@
         { id: 'help',     label: 'Help',     icon: 'icon-help',     section: 'help' },
         { id: 'contact-support', label: 'Contact Support', icon: 'icon-help', section: 'external', url: 'mailto:support@lightengine.io' },
       ]
+    },
+    visualization: {
+      label: 'Visualization',
+      icon: 'icon-visualization',
+      items: [
+        { id: '3d-farm-viewer', label: '3D Farm Viewer',  icon: 'icon-visualization', section: 'iframe-view', url: '/views/3d-farm-viewer.html' },
+        { id: 'room-heatmap-viz', label: 'Room Heatmap',  icon: 'icon-heatmap',       section: 'iframe-view', url: '/views/room-heatmap.html' },
+        { id: 'room-mapper-viz',  label: 'Room Mapper',   icon: 'icon-heatmap',       section: 'iframe-view', url: '/views/room-mapper.html' }
+      ]
     }
   };
 
@@ -96,10 +106,34 @@
 
   // ---- Move content-sections from old layout into infotainment layers ----
   function rearrangeDOM() {
-    // Move dashboard into home layer (before category grid)
-    if (dashboardSection && layerHome) {
-      var grid = document.getElementById('infotainment-category-grid');
-      layerHome.insertBefore(dashboardSection, grid);
+    if (dashboardSection && layerHome && categoryGrid) {
+      // 1. Move the dashboard header (title + refresh) ABOVE the category grid
+      var dashHeader = dashboardSection.querySelector('.header');
+      if (dashHeader) {
+        layerHome.insertBefore(dashHeader, categoryGrid);
+      }
+
+      // 2. Extract Quick Actions card and place it right AFTER the category grid
+      var quickActionsCard = null;
+      var cards = dashboardSection.querySelectorAll('.card');
+      for (var i = 0; i < cards.length; i++) {
+        var h2 = cards[i].querySelector('h2');
+        if (h2 && h2.textContent.trim() === 'Quick Actions') {
+          quickActionsCard = cards[i];
+          break;
+        }
+      }
+
+      // 3. Append dashboard (KPIs, Recent Activity, etc.) after category grid
+      layerHome.appendChild(dashboardSection);
+      dashboardSection.style.display = 'block';
+
+      // 4. Insert Quick Actions between category grid and dashboard remainder
+      if (quickActionsCard) {
+        layerHome.insertBefore(quickActionsCard, dashboardSection);
+      }
+    } else if (dashboardSection && layerHome) {
+      layerHome.appendChild(dashboardSection);
       dashboardSection.style.display = 'block';
     }
 
@@ -147,7 +181,7 @@
     if (!categoryGrid) return;
 
     var html = '';
-    var keys = ['growing', 'operations', 'business', 'settings'];
+    var keys = ['growing', 'operations', 'business', 'settings', 'visualization'];
     for (var i = 0; i < keys.length; i++) {
       var key = keys[i];
       var cat = CATEGORIES[key];

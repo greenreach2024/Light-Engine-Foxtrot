@@ -6,6 +6,17 @@ import { syncGitHubBilling } from '../services/githubBillingSync.js';
 
 const router = express.Router();
 
+/**
+ * Escape a value for CSV output
+ */
+function csvEscape(value) {
+  const str = String(value ?? '');
+  if (str.includes('"') || str.includes(',') || str.includes('\n')) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return str;
+}
+
 const DEFAULT_CLASSIFICATION_THRESHOLD = 0.85;
 
 // One-time startup cleanup: remove duplicate accounting transactions
@@ -1501,6 +1512,726 @@ router.get('/reports/balance-sheet', async (req, res) => {
     });
   } catch (error) {
     return res.status(500).json({ ok: false, error: 'balance_sheet_failed', message: error.message });
+  }
+});
+
+// ─── Cash Flow Statement ────────────────────────────────────
+
+/**
+ * GET /api/accounting/reports/cash-flow
+ * Operating, Investing, Financing activities
+ * Query: from, to (ISO dates), farm_id (optional)
+ */
+router.get('/reports/cash-flow', async (req, res) => {
+  if (!await isDatabaseAvailable()) {
+    return res.status(503).json({ ok: false, error: 'database_unavailable' });
+  }
+
+  try {
+    const farmId = req.query.farm_id || null;
+    const from = req.query.from || new Date(new Date().getFullYear(), 0, 1).toISOString();
+    const to = req.query.to || new Date().toISOString();
+
+    // Get cash movements from double-entry ledger
+    let cashSql = `
+      SELECT
+        a.account_type,
+        a.account_class,
+        a.account_name,
+        a.account_code,
+        COALESCE(SUM(e.debit), 0) AS total_debits,
+        COALESCE(SUM(e.credit), 0) AS total_credits
+      FROM accounting_transactions t
+      JOIN accounting_entries e ON e.transaction_id = t.id
+      JOIN accounting_accounts a ON a.account_code = e.account_code
+      WHERE t.txn_date >= $1::date AND t.txn_date <= $2::date
+    `;
+    const params = [from, to];
+    let idx = 3;
+
+    if (farmId) {
+      cashSql += ` AND t.farm_id = $${idx++}`;
+      params.push(farmId);
+    }
+
+    cashSql += ` GROUP BY a.account_type, a.account_class, a.account_name, a.account_code ORDER BY a.account_code`;
+
+    const result = await query(cashSql, params);
+
+    const operating = [];
+    const investing = [];
+    const financing = [];
+    let totalOperating = 0;
+    let totalInvesting = 0;
+    let totalFinancing = 0;
+
+    for (const row of result.rows) {
+      const debits = Number(row.total_debits);
+      const credits = Number(row.total_credits);
+      const type = (row.account_type || '').toLowerCase();
+      const code = row.account_code;
+      const entry = {
+        account: row.account_name,
+        account_code: code,
+        inflow: debits,
+        outflow: credits,
+        net: debits - credits
+      };
+
+      // Classify by account type
+      if (type === 'equity' || type === 'retained_earnings' || type === 'owners_equity') {
+        // Equity changes = financing
+        entry.net = credits - debits; // credit-normal
+        financing.push(entry);
+        totalFinancing += entry.net;
+      } else if (code === '100000' || type === 'cash' || type === 'current_asset') {
+        // Cash and receivables = operating
+        entry.net = debits - credits; // debit-normal for assets
+        operating.push(entry);
+        totalOperating += entry.net;
+      } else if (type === 'operating_income' || type === 'revenue' || type === 'income' || type === 'sales') {
+        // Revenue inflows = operating
+        entry.net = credits - debits; // credit-normal for income
+        operating.push(entry);
+        totalOperating += entry.net;
+      } else if (type === 'cogs' || type === 'operating_expense' || type === 'research_development' || type === 'expense') {
+        // Expenses = operating outflows
+        entry.net = -(debits - credits); // show as negative outflow
+        operating.push(entry);
+        totalOperating += entry.net;
+      } else if (type === 'current_liability' || type === 'liability' || type === 'payable' || type === 'accounts_payable') {
+        // Liability changes = operating (short-term) or financing (long-term)
+        entry.net = credits - debits;
+        operating.push(entry);
+        totalOperating += entry.net;
+      } else {
+        // Default to operating
+        operating.push(entry);
+        totalOperating += entry.net;
+      }
+    }
+
+    const netCashChange = totalOperating + totalInvesting + totalFinancing;
+
+    return res.json({
+      ok: true,
+      report: 'cash_flow_statement',
+      period: { from, to },
+      farm_id: farmId,
+      operating_activities: { items: operating, total: totalOperating },
+      investing_activities: { items: investing, total: totalInvesting },
+      financing_activities: { items: financing, total: totalFinancing },
+      net_cash_change: netCashChange,
+      generated_at: new Date().toISOString()
+    });
+  } catch (error) {
+    return res.status(500).json({ ok: false, error: 'cash_flow_failed', message: error.message });
+  }
+});
+
+// ─── Manual Expense Entry ───────────────────────────────────
+
+/**
+ * POST /api/accounting/expenses
+ * Record a manual expense as a balanced journal entry
+ * Body: { account_code, amount, memo, txn_date, vendor, category, receipt_url }
+ */
+router.post('/expenses', async (req, res) => {
+  if (!await isDatabaseAvailable()) {
+    return res.status(503).json({ ok: false, error: 'database_unavailable' });
+  }
+
+  const {
+    account_code,
+    amount,
+    memo,
+    txn_date,
+    vendor,
+    category,
+    receipt_url
+  } = req.body || {};
+
+  if (!account_code || !amount || amount <= 0) {
+    return res.status(400).json({ ok: false, error: 'account_code_and_positive_amount_required' });
+  }
+
+  // Validate account exists
+  const acctCheck = await query('SELECT account_code, account_name FROM accounting_accounts WHERE account_code = $1', [account_code]);
+  if (acctCheck.rows.length === 0) {
+    return res.status(400).json({ ok: false, error: 'invalid_account_code', message: `Account ${account_code} not found in chart of accounts` });
+  }
+
+  const dateStr = txn_date || new Date().toISOString().slice(0, 10);
+  const idempotencyKey = crypto.createHash('sha256')
+    .update(`manual-expense:${account_code}:${amount}:${dateStr}:${memo || ''}:${Date.now()}`)
+    .digest('hex');
+
+  try {
+    // Create the source record
+    const srcResult = await query(
+      `INSERT INTO accounting_sources (source_key, description) VALUES ('manual_expense', 'Manual expense entry')
+       ON CONFLICT (source_key) DO UPDATE SET description = EXCLUDED.description RETURNING id`
+    );
+    const sourceId = srcResult.rows[0]?.id;
+
+    // Insert the transaction
+    const txnDescription = vendor ? `${vendor} - ${memo || category || 'Manual expense'}` : (memo || category || 'Manual expense');
+    const txnResult = await query(
+      `INSERT INTO accounting_transactions (source_id, source_txn_id, txn_date, description, currency, total_amount, idempotency_key, metadata)
+       VALUES ($1, $2, $3::date, $4, 'CAD', $5, $6, $7::jsonb)
+       RETURNING id`,
+      [
+        sourceId,
+        `manual-${idempotencyKey.slice(0, 16)}`,
+        dateStr,
+        txnDescription,
+        Number(amount),
+        idempotencyKey,
+        JSON.stringify({ vendor: vendor || null, category: category || null, receipt_url: receipt_url || null, entry_type: 'manual_expense' })
+      ]
+    );
+
+    const txnId = txnResult.rows[0].id;
+
+    // Debit the expense account, Credit Cash (100000) — balanced entry
+    await query(
+      `INSERT INTO accounting_entries (transaction_id, line_number, account_code, debit, credit, memo)
+       VALUES ($1, 1, $2, $3, 0, $4), ($1, 2, '100000', 0, $3, $4)`,
+      [txnId, account_code, Number(amount), memo || txnDescription]
+    );
+
+    return res.json({
+      ok: true,
+      transaction_id: txnId,
+      idempotency_key: idempotencyKey,
+      entry: {
+        txn_date: dateStr,
+        account_code,
+        account_name: acctCheck.rows[0].account_name,
+        amount: Number(amount),
+        memo: memo || txnDescription,
+        vendor,
+        category
+      }
+    });
+  } catch (error) {
+    return res.status(500).json({ ok: false, error: 'expense_entry_failed', message: error.message });
+  }
+});
+
+/**
+ * GET /api/accounting/expenses
+ * List manual expense entries
+ * Query: from, to, account_code, limit
+ */
+router.get('/expenses', async (req, res) => {
+  if (!await isDatabaseAvailable()) {
+    return res.status(503).json({ ok: false, error: 'database_unavailable' });
+  }
+
+  const limit = Math.min(parseInt(req.query.limit, 10) || 100, 500);
+  const conditions = [`t.metadata->>'entry_type' = 'manual_expense'`];
+  const params = [];
+
+  if (req.query.from) {
+    params.push(req.query.from);
+    conditions.push(`t.txn_date >= $${params.length}::date`);
+  }
+  if (req.query.to) {
+    params.push(req.query.to);
+    conditions.push(`t.txn_date <= $${params.length}::date`);
+  }
+  if (req.query.account_code) {
+    params.push(req.query.account_code);
+    conditions.push(`e.account_code = $${params.length}`);
+  }
+
+  params.push(limit);
+
+  try {
+    const result = await query(
+      `SELECT t.id, t.txn_date, t.description, t.total_amount, t.metadata, t.created_at,
+              e.account_code, a.account_name
+       FROM accounting_transactions t
+       JOIN accounting_entries e ON e.transaction_id = t.id AND e.debit > 0
+       LEFT JOIN accounting_accounts a ON a.account_code = e.account_code
+       WHERE ${conditions.join(' AND ')}
+       ORDER BY t.txn_date DESC, t.id DESC
+       LIMIT $${params.length}`,
+      params
+    );
+
+    return res.json({ ok: true, expenses: result.rows });
+  } catch (error) {
+    return res.status(500).json({ ok: false, error: 'expense_list_failed', message: error.message });
+  }
+});
+
+// ─── QB CSV Exports ─────────────────────────────────────────
+
+/**
+ * GET /api/accounting/export/chart-of-accounts.csv
+ * Export Chart of Accounts in QB-compatible CSV format
+ */
+router.get('/export/chart-of-accounts.csv', async (req, res) => {
+  if (!await isDatabaseAvailable()) {
+    return res.status(503).json({ ok: false, error: 'database_unavailable' });
+  }
+
+  try {
+    const result = await query(
+      `SELECT account_code, account_name, account_class, account_type, parent_account_code
+       FROM accounting_accounts ORDER BY account_code ASC`
+    );
+
+    // QB Online import format: Account Name, Type, Detail Type, Description
+    const qbTypeMap = {
+      'current_asset': 'Other Current Asset',
+      'cash': 'Bank',
+      'current_liability': 'Other Current Liability',
+      'operating_income': 'Income',
+      'equity': 'Equity',
+      'cogs': 'Cost of Goods Sold',
+      'operating_expense': 'Expense',
+      'research_development': 'Expense'
+    };
+
+    const header = 'Account Name,Account Code,Type,Detail Type,Description\n';
+    const rows = result.rows.map(r =>
+      [r.account_name, r.account_code, qbTypeMap[r.account_type] || 'Other Expense', r.account_type, `${r.account_class} - ${r.account_name}`]
+        .map(csvEscape).join(',')
+    ).join('\n');
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="greenreach-chart-of-accounts-${new Date().toISOString().slice(0,10)}.csv"`);
+    return res.send(header + rows);
+  } catch (error) {
+    return res.status(500).json({ ok: false, error: 'coa_export_failed', message: error.message });
+  }
+});
+
+/**
+ * GET /api/accounting/export/journal-entries.csv
+ * Export journal entries in QB-compatible CSV
+ * Query: from, to, source
+ */
+router.get('/export/journal-entries.csv', async (req, res) => {
+  if (!await isDatabaseAvailable()) {
+    return res.status(503).json({ ok: false, error: 'database_unavailable' });
+  }
+
+  const { from, to, source } = req.query;
+  if (!from || !to) {
+    return res.status(400).json({ ok: false, error: 'from_and_to_query_params_required' });
+  }
+
+  try {
+    const conditions = [`t.txn_date >= $1::date`, `t.txn_date <= $2::date`];
+    const params = [from, to];
+
+    if (source) {
+      params.push(source);
+      conditions.push(`s.source_key = $${params.length}`);
+    }
+
+    const result = await query(
+      `SELECT
+         t.id AS txn_id, t.txn_date, t.description, t.currency, t.source_txn_id,
+         e.line_number, e.account_code, a.account_name, e.debit, e.credit, e.memo
+       FROM accounting_transactions t
+       LEFT JOIN accounting_sources s ON s.id = t.source_id
+       JOIN accounting_entries e ON e.transaction_id = t.id
+       LEFT JOIN accounting_accounts a ON a.account_code = e.account_code
+       WHERE ${conditions.join(' AND ')}
+       ORDER BY t.txn_date ASC, t.id ASC, e.line_number ASC`,
+      params
+    );
+
+    const header = 'Date,Transaction No,Account,Account Name,Debit,Credit,Memo,Description,Currency\n';
+    const rows = result.rows.map(r =>
+      [
+        r.txn_date instanceof Date ? r.txn_date.toISOString().slice(0, 10) : String(r.txn_date).slice(0, 10),
+        `GRC-${r.txn_id}`,
+        r.account_code,
+        r.account_name || '',
+        Number(r.debit || 0).toFixed(2),
+        Number(r.credit || 0).toFixed(2),
+        r.memo || '',
+        r.description || '',
+        r.currency || 'CAD'
+      ].map(csvEscape).join(',')
+    ).join('\n');
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="greenreach-journal-entries-${from}-to-${to}.csv"`);
+    return res.send(header + rows);
+  } catch (error) {
+    return res.status(500).json({ ok: false, error: 'journal_csv_export_failed', message: error.message });
+  }
+});
+
+/**
+ * GET /api/accounting/export/customers.csv
+ * Export wholesale buyers in QB Customer import format
+ */
+router.get('/export/customers.csv', async (req, res) => {
+  if (!await isDatabaseAvailable()) {
+    return res.status(503).json({ ok: false, error: 'database_unavailable' });
+  }
+
+  try {
+    // Pull distinct buyers from wholesale orders
+    const result = await query(
+      `SELECT DISTINCT ON (buyer_email)
+         buyer_id, buyer_email,
+         order_data->'buyer_account'->>'contactName' AS contact_name,
+         order_data->'buyer_account'->>'businessName' AS business_name,
+         order_data->'buyer_account'->>'phone' AS phone,
+         order_data->'buyer_account'->>'address' AS address,
+         MIN(created_at) AS first_order,
+         MAX(created_at) AS last_order,
+         COUNT(*) AS order_count
+       FROM wholesale_orders
+       WHERE buyer_email IS NOT NULL
+       GROUP BY buyer_email, buyer_id, order_data->'buyer_account'
+       ORDER BY buyer_email`
+    );
+
+    const header = 'Customer Name,Company,Email,Phone,Address,First Order,Last Order,Order Count\n';
+    const rows = result.rows.map(r =>
+      [
+        r.contact_name || r.business_name || r.buyer_email,
+        r.business_name || '',
+        r.buyer_email,
+        r.phone || '',
+        r.address || '',
+        r.first_order ? new Date(r.first_order).toISOString().slice(0, 10) : '',
+        r.last_order ? new Date(r.last_order).toISOString().slice(0, 10) : '',
+        r.order_count || 0
+      ].map(csvEscape).join(',')
+    ).join('\n');
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="greenreach-customers-${new Date().toISOString().slice(0,10)}.csv"`);
+    return res.send(header + rows);
+  } catch (error) {
+    return res.status(500).json({ ok: false, error: 'customers_csv_export_failed', message: error.message });
+  }
+});
+
+/**
+ * GET /api/accounting/export/products.csv
+ * Export farm inventory products in QB Products/Services import format
+ */
+router.get('/export/products.csv', async (req, res) => {
+  if (!await isDatabaseAvailable()) {
+    return res.status(503).json({ ok: false, error: 'database_unavailable' });
+  }
+
+  try {
+    const result = await query(
+      `SELECT product_name, sku, sku_id, category, variety, unit,
+              price, wholesale_price, retail_price, is_taxable, status,
+              farm_id, description
+       FROM farm_inventory
+       WHERE status = 'active'
+       ORDER BY product_name ASC`
+    );
+
+    const header = 'Product/Service Name,SKU,Category,Description,Unit,Sales Price,Wholesale Price,Retail Price,Taxable,Type,Farm ID\n';
+    const rows = result.rows.map(r =>
+      [
+        r.product_name || r.sku_id || '',
+        r.sku || r.sku_id || '',
+        r.category || '',
+        r.description || r.variety || '',
+        r.unit || '',
+        Number(r.price || 0).toFixed(2),
+        Number(r.wholesale_price || 0).toFixed(2),
+        Number(r.retail_price || 0).toFixed(2),
+        r.is_taxable ? 'Tax' : 'Non-Taxable',
+        'Inventory',
+        r.farm_id || ''
+      ].map(csvEscape).join(',')
+    ).join('\n');
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="greenreach-products-${new Date().toISOString().slice(0,10)}.csv"`);
+    return res.send(header + rows);
+  } catch (error) {
+    return res.status(500).json({ ok: false, error: 'products_csv_export_failed', message: error.message });
+  }
+});
+
+/**
+ * GET /api/accounting/export/invoices.csv
+ * Export wholesale orders as QB-compatible invoice CSV
+ * Query: from, to
+ */
+router.get('/export/invoices.csv', async (req, res) => {
+  if (!await isDatabaseAvailable()) {
+    return res.status(503).json({ ok: false, error: 'database_unavailable' });
+  }
+
+  const { from, to } = req.query;
+
+  try {
+    let sql = `SELECT master_order_id, buyer_id, buyer_email, status, total_amount,
+                      order_data, created_at FROM wholesale_orders`;
+    const params = [];
+    const conditions = [];
+
+    if (from) {
+      params.push(from);
+      conditions.push(`created_at >= $${params.length}::date`);
+    }
+    if (to) {
+      params.push(to + 'T23:59:59Z');
+      conditions.push(`created_at <= $${params.length}::timestamp`);
+    }
+    if (conditions.length) sql += ' WHERE ' + conditions.join(' AND ');
+    sql += ' ORDER BY created_at DESC LIMIT 5000';
+
+    const result = await query(sql, params);
+
+    const header = 'Invoice No,Date,Customer Name,Customer Email,Item,Quantity,Unit Price,Line Total,Tax Amount,Broker Fee,Invoice Total,Status,Currency\n';
+    const rows = [];
+
+    for (const row of result.rows) {
+      const order = row.order_data || {};
+      const subOrders = order.farm_sub_orders || order.sub_orders || [];
+      const buyerName = order.buyer_account?.contactName || order.buyer_account?.businessName || row.buyer_email || '';
+      const invoiceDate = row.created_at ? new Date(row.created_at).toISOString().slice(0, 10) : '';
+
+      for (const sub of subOrders) {
+        const items = sub.line_items || sub.items || [];
+        for (const item of items) {
+          rows.push([
+            row.master_order_id || '',
+            invoiceDate,
+            buyerName,
+            row.buyer_email || '',
+            item.product_name || item.sku_name || item.sku_id || '',
+            item.qty || item.quantity || 0,
+            Number(item.unit_price || 0).toFixed(2),
+            Number(item.line_total || 0).toFixed(2),
+            Number(sub.tax_amount || 0).toFixed(2),
+            Number(sub.broker_fee_amount || 0).toFixed(2),
+            Number(row.total_amount || order.grand_total || 0).toFixed(2),
+            row.status || 'confirmed',
+            'CAD'
+          ].map(csvEscape).join(','));
+        }
+      }
+    }
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="greenreach-invoices-${from || 'all'}-to-${to || 'now'}.csv"`);
+    return res.send(header + rows.join('\n'));
+  } catch (error) {
+    return res.status(500).json({ ok: false, error: 'invoices_csv_export_failed', message: error.message });
+  }
+});
+
+// ─── Bank Reconciliation ────────────────────────────────────
+
+/**
+ * POST /api/accounting/bank-reconciliation/import
+ * Import bank statement CSV and match against payment records
+ * Body: { entries: [{ date, description, amount, reference }] }
+ */
+router.post('/bank-reconciliation/import', async (req, res) => {
+  if (!await isDatabaseAvailable()) {
+    return res.status(503).json({ ok: false, error: 'database_unavailable' });
+  }
+
+  const { entries, account_id } = req.body || {};
+  if (!Array.isArray(entries) || entries.length === 0) {
+    return res.status(400).json({ ok: false, error: 'entries_array_required', expected: '[{ date, description, amount, reference }]' });
+  }
+
+  try {
+    // Ensure bank_reconciliation table exists
+    await query(`CREATE TABLE IF NOT EXISTS bank_reconciliation (
+      id SERIAL PRIMARY KEY,
+      bank_date DATE NOT NULL,
+      bank_description TEXT,
+      bank_amount NUMERIC(12,2) NOT NULL,
+      bank_reference VARCHAR(255),
+      matched_payment_id VARCHAR(128),
+      matched_transaction_id INTEGER,
+      match_confidence NUMERIC(5,4) DEFAULT 0,
+      status VARCHAR(30) DEFAULT 'unmatched',
+      reconciled_by VARCHAR(255),
+      reconciled_at TIMESTAMP,
+      account_id VARCHAR(50) DEFAULT 'primary',
+      created_at TIMESTAMP DEFAULT NOW()
+    )`);
+
+    let imported = 0;
+    let matched = 0;
+
+    for (const entry of entries) {
+      if (!entry.date || entry.amount == null) continue;
+
+      const bankAmount = Math.abs(Number(entry.amount));
+      const bankDate = entry.date;
+
+      // Try to auto-match against payment_records by amount + date (within 3 days)
+      const matchResult = await query(
+        `SELECT payment_id, order_id, amount, status, created_at
+         FROM payment_records
+         WHERE ABS(amount - $1) < 0.02
+           AND created_at >= ($2::date - INTERVAL '3 days')
+           AND created_at <= ($2::date + INTERVAL '3 days')
+           AND payment_id NOT IN (SELECT matched_payment_id FROM bank_reconciliation WHERE matched_payment_id IS NOT NULL)
+         ORDER BY ABS(EXTRACT(EPOCH FROM (created_at - $2::timestamp))) ASC
+         LIMIT 1`,
+        [bankAmount, bankDate]
+      );
+
+      const autoMatch = matchResult.rows[0] || null;
+      const confidence = autoMatch ? 0.85 : 0;
+
+      await query(
+        `INSERT INTO bank_reconciliation (bank_date, bank_description, bank_amount, bank_reference, matched_payment_id, match_confidence, status, account_id)
+         VALUES ($1::date, $2, $3, $4, $5, $6, $7, $8)`,
+        [
+          bankDate,
+          entry.description || '',
+          Number(entry.amount),
+          entry.reference || '',
+          autoMatch ? autoMatch.payment_id : null,
+          confidence,
+          autoMatch ? 'auto_matched' : 'unmatched',
+          account_id || 'primary'
+        ]
+      );
+
+      imported++;
+      if (autoMatch) matched++;
+    }
+
+    return res.json({
+      ok: true,
+      imported,
+      auto_matched: matched,
+      unmatched: imported - matched
+    });
+  } catch (error) {
+    return res.status(500).json({ ok: false, error: 'bank_import_failed', message: error.message });
+  }
+});
+
+/**
+ * GET /api/accounting/bank-reconciliation/status
+ * Reconciliation summary — matched, unmatched, cleared counts
+ * Query: account_id
+ */
+router.get('/bank-reconciliation/status', async (req, res) => {
+  if (!await isDatabaseAvailable()) {
+    return res.status(503).json({ ok: false, error: 'database_unavailable' });
+  }
+
+  try {
+    const accountId = req.query.account_id || 'primary';
+
+    // Check if table exists
+    const tableCheck = await query(
+      `SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'bank_reconciliation')`
+    );
+    if (!tableCheck.rows[0]?.exists) {
+      return res.json({ ok: true, summary: { total: 0, matched: 0, unmatched: 0, cleared: 0, discrepancy: 0 }, items: [] });
+    }
+
+    const summary = await query(
+      `SELECT
+         COUNT(*) AS total,
+         COUNT(*) FILTER (WHERE status = 'auto_matched' OR status = 'manual_matched') AS matched,
+         COUNT(*) FILTER (WHERE status = 'unmatched') AS unmatched,
+         COUNT(*) FILTER (WHERE status = 'cleared') AS cleared,
+         COUNT(*) FILTER (WHERE status = 'discrepancy') AS discrepancy,
+         COALESCE(SUM(bank_amount) FILTER (WHERE status = 'unmatched'), 0) AS unmatched_total,
+         COALESCE(SUM(bank_amount) FILTER (WHERE status = 'cleared'), 0) AS cleared_total
+       FROM bank_reconciliation
+       WHERE account_id = $1`,
+      [accountId]
+    );
+
+    const items = await query(
+      `SELECT * FROM bank_reconciliation WHERE account_id = $1 ORDER BY bank_date DESC LIMIT 200`,
+      [accountId]
+    );
+
+    return res.json({
+      ok: true,
+      summary: summary.rows[0],
+      items: items.rows
+    });
+  } catch (error) {
+    return res.status(500).json({ ok: false, error: 'reconciliation_status_failed', message: error.message });
+  }
+});
+
+/**
+ * POST /api/accounting/bank-reconciliation/match
+ * Manually match a bank entry to a payment record
+ * Body: { reconciliation_id, payment_id }
+ */
+router.post('/bank-reconciliation/match', async (req, res) => {
+  if (!await isDatabaseAvailable()) {
+    return res.status(503).json({ ok: false, error: 'database_unavailable' });
+  }
+
+  const { reconciliation_id, payment_id } = req.body || {};
+  if (!reconciliation_id || !payment_id) {
+    return res.status(400).json({ ok: false, error: 'reconciliation_id_and_payment_id_required' });
+  }
+
+  try {
+    const result = await query(
+      `UPDATE bank_reconciliation SET matched_payment_id = $1, status = 'manual_matched', match_confidence = 1.0,
+              reconciled_by = 'admin', reconciled_at = NOW()
+       WHERE id = $2 RETURNING *`,
+      [payment_id, reconciliation_id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ ok: false, error: 'reconciliation_entry_not_found' });
+    }
+
+    return res.json({ ok: true, entry: result.rows[0] });
+  } catch (error) {
+    return res.status(500).json({ ok: false, error: 'reconciliation_match_failed', message: error.message });
+  }
+});
+
+/**
+ * POST /api/accounting/bank-reconciliation/clear
+ * Mark matched entries as cleared (verified against bank statement)
+ * Body: { ids: [1, 2, 3] }
+ */
+router.post('/bank-reconciliation/clear', async (req, res) => {
+  if (!await isDatabaseAvailable()) {
+    return res.status(503).json({ ok: false, error: 'database_unavailable' });
+  }
+
+  const { ids } = req.body || {};
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return res.status(400).json({ ok: false, error: 'ids_array_required' });
+  }
+
+  try {
+    const result = await query(
+      `UPDATE bank_reconciliation SET status = 'cleared', reconciled_at = NOW()
+       WHERE id = ANY($1::int[]) AND (status = 'auto_matched' OR status = 'manual_matched')
+       RETURNING id`,
+      [ids]
+    );
+
+    return res.json({ ok: true, cleared: result.rows.length });
+  } catch (error) {
+    return res.status(500).json({ ok: false, error: 'reconciliation_clear_failed', message: error.message });
   }
 });
 

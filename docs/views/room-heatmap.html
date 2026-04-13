@@ -700,7 +700,7 @@
       <div class="status-label">Temperature</div>
       <div>
         <span class="status-value" id="currentTemp">--</span>
-        <span class="status-unit">°F</span>
+        <span class="status-unit">°C</span>
       </div>
       <div class="status-range" id="tempRange">Range: -- to --</div>
     </div>
@@ -1961,23 +1961,9 @@
         nameEl.textContent = `— ${metric.label}`;
       }
 
-      // Compute min/max labels when values exist; otherwise show placeholders
-      const values = [];
-      if (STATE.sensors && STATE.sensors.length > 0) {
-        for (const sensor of STATE.sensors) {
-          if (sensor.telemetry) {
-            let value;
-            if (STATE.currentMetric === 'temperature') {
-              value = sensor.telemetry.temperature;
-            } else if (STATE.currentMetric === 'humidity') {
-              value = sensor.telemetry.humidity;
-            } else if (STATE.currentMetric === 'vpd') {
-              value = sensor.telemetry.vpd;
-            }
-            if (value != null) values.push(value);
-          }
-        }
-      }
+      // Compute min/max labels from LIVE sensor readings (same source as heat map)
+      const liveReadings = getSensorReadingsForMetric(STATE.currentMetric);
+      const values = liveReadings.map(r => r.value).filter(v => v != null);
 
       if (values.length > 0) {
         const min = Math.min(...values);

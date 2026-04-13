@@ -329,10 +329,61 @@
             font-weight: 600;
         }
 
+        .header-title-block {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .header-title-block h1 {
+            margin: 0;
+        }
+
         .header-actions {
             display: flex;
-            gap: 12px;
+            gap: 4px;
             align-items: center;
+        }
+
+        .header-tab-btn {
+            appearance: none;
+            background: transparent;
+            border: none;
+            color: #94a3b8;
+            font-size: 0.85rem;
+            font-weight: 600;
+            letter-spacing: 0.02em;
+            padding: 6px 16px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            border-radius: 6px;
+            position: relative;
+        }
+
+        .header-tab-btn:hover {
+            color: #e2e8f0;
+            background: rgba(99, 102, 241, 0.08);
+        }
+
+        .header-tab-btn::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%) scaleX(0);
+            width: 70%;
+            height: 2px;
+            background: linear-gradient(90deg, #6366f1, #8b5cf6);
+            border-radius: 1px;
+            transition: transform 0.25s ease;
+        }
+
+        .header-tab-btn:hover::after {
+            transform: translateX(-50%) scaleX(1);
         }
 
         .btn {
@@ -514,6 +565,16 @@
         .action-card:hover {
             border-color: var(--accent-blue);
             transform: translateY(-2px);
+        }
+
+        .quick-actions .action-card.card-highlight {
+            animation: none !important;
+            box-shadow: none !important;
+        }
+
+        .quick-actions .action-card.card-highlight:hover {
+            animation: none !important;
+            box-shadow: none !important;
         }
 
         .action-icon {
@@ -1330,6 +1391,18 @@
                 </div>
 
                 <div class="nav-section">
+                    <div class="nav-section-title">Visualization</div>
+                    <a href="#iframe-view" class="nav-item" data-section="iframe-view" data-url="/views/3d-farm-viewer.html" data-help-title="3D Farm Viewer" data-help="Interactive 3D visualization of your entire farm. Explore grow rooms, equipment placement, and environmental data in a spatial view.">
+                        <span class="nav-item-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg></span>
+                        3D Farm Viewer
+                    </a>
+                    <a href="#iframe-view" class="nav-item" data-section="iframe-view" data-url="/views/room-heatmap.html" data-help-title="Room Heatmap" data-help="Spatial heatmap visualization showing temperature, humidity, and environmental gradients across growing rooms.">
+                        <span class="nav-item-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></span>
+                        Room Heatmap
+                    </a>
+                </div>
+
+                <div class="nav-section">
                     <div class="nav-section-title">Enterprise ERP</div>
                     <a href="#inventory-mgmt" class="nav-item" data-section="inventory-mgmt" data-help-title="Farm Supplies" data-help="Manage seeds, nutrients, packaging materials, equipment, and lab supplies. Track inventory levels, log usage, and schedule equipment maintenance.">
                         <span class="nav-item-icon">■</span>
@@ -1450,9 +1523,11 @@
             <!-- Dashboard Section -->
             <div id="section-dashboard" class="content-section">
                 <div class="header">
-                    <h1>Farm Admin Dashboard</h1>
+                    <div class="header-title-block">
+                        <h1>Farm Admin Dashboard</h1>
+                    </div>
                     <div class="header-actions">
-                        <button class="btn" onclick="refreshData()" data-help-title="Refresh Data" data-help="Click to reload all dashboard data and statistics from your farm's sensors and database. This updates KPIs, charts, and activity logs in real-time.">Refresh</button>
+                        <button class="header-tab-btn" onclick="refreshData()" data-help-title="Refresh Data" data-help="Click to reload all dashboard data and statistics from your farm's sensors and database. This updates KPIs, charts, and activity logs in real-time.">Refresh</button>
                     </div>
                 </div>
 
@@ -2999,6 +3074,7 @@
                             <thead>
                                 <tr>
                                     <th>Crop</th>
+                                    <th>Benchmark</th>
                                     <th>Retail <span id="unit-retail">($/lb)</span></th>
                                     <th>Floor<br>Price</th>
                                     <th>SKU<br>Factor</th>

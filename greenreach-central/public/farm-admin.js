@@ -1338,7 +1338,7 @@ const defaultPricing = {
     'Mizuna Mustard Greens': { retail: 12.93, ws1: 15, ws2: 25, ws3: 35 },
 
     // Mixed Greens: $5.49 USD/5oz = $21.35/lb
-    'Mixed Greens': { retail: 21.35, ws1: 15, ws2: 25, ws3: 35 },
+    'Organic Mixed Greens': { retail: 21.35, ws1: 15, ws2: 25, ws3: 35 },
     'Escarole Batavian': { retail: 21.35, ws1: 15, ws2: 25, ws3: 35 },
     'Sorrel': { retail: 21.35, ws1: 15, ws2: 25, ws3: 35 },
 
@@ -1466,6 +1466,7 @@ async function loadCropsFromDatabase() {
         pricingData = pricingData.map(item => ({ ...item, sku_factor: DEFAULT_SKU_FACTOR }));
 
         renderPricingTable();
+        loadBenchmarks();
     } catch (error) {
         console.error(' Error loading crops:', error);
         pricingData = [];
@@ -1526,7 +1527,7 @@ function calculateWholesalePrice(retail, discountPercent) {
  * where floor = max(costFloor, manualFloor)
  */
 function calculateFormulaWholesalePrice(retail, floorPrice, skuFactor) {
-    const factor = DEFAULT_SKU_FACTOR;
+    const factor = Number(skuFactor) || DEFAULT_SKU_FACTOR;
     const floor = Number(floorPrice || 0);
     const computed = retail * factor;
     return Math.max(floor, computed);
@@ -1559,9 +1560,18 @@ function renderPricingTable() {
         const formulaWS = calculateFormulaWholesalePrice(displayRetail, item.floor_price, item.sku_factor);
         const unitBadge = !isWeightCrop ? ` <span style="font-size: 11px; color: var(--text-muted); font-weight: 400;">(${getCropUnitLabel(item.crop)})</span>` : '';
         
+        const bm = (window._benchmarkConfigs || {})[item.crop] || 'direct';
         return `
             <tr>
                 <td class="crop-name">${item.crop}${unitBadge}</td>
+                <td>
+                    <select class="pricing-input" style="width: 110px; font-size: 12px;" data-index="${index}" data-field="benchmark" onchange="updateBenchmark('${item.crop.replace(/'/g, '\\\'')}', this.value)">
+                        <option value="direct"${bm === 'direct' ? ' selected' : ''}>Direct</option>
+                        <option value="mixed_greens"${bm === 'mixed_greens' ? ' selected' : ''}>Organic Mixed Greens</option>
+                        <option value="frozen"${bm === 'frozen' ? ' selected' : ''}>Frozen</option>
+                        <option value="specialty"${bm === 'specialty' ? ' selected' : ''}>Specialty</option>
+                    </select>
+                </td>
                 <td>
                     <input 
                         type="number" 
@@ -1644,6 +1654,50 @@ function updatePricing(index, field, value) {
     pricingData[index].sku_factor = DEFAULT_SKU_FACTOR;
     
     renderPricingTable();
+}
+
+/**
+ * Load benchmark configs from backend
+ */
+window._benchmarkConfigs = {};
+async function loadBenchmarks() {
+    try {
+        const token = currentSession?.token || sessionStorage.getItem('token') || localStorage.getItem('token');
+        const res = await fetch(`${API_BASE}/api/crop-pricing/benchmarks`, {
+            headers: token ? { 'Authorization': `Bearer ${token}` } : undefined
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.success && Array.isArray(data.benchmarks)) {
+            window._benchmarkConfigs = {};
+            for (const b of data.benchmarks) {
+                window._benchmarkConfigs[b.crop_name] = b.benchmark_category;
+            }
+            renderPricingTable();
+        }
+    } catch (err) {
+        console.warn('Failed to load benchmarks:', err);
+    }
+}
+
+/**
+ * Update benchmark category for a crop
+ */
+async function updateBenchmark(cropName, category) {
+    window._benchmarkConfigs[cropName] = category;
+    try {
+        const token = currentSession?.token || sessionStorage.getItem('token') || localStorage.getItem('token');
+        await fetch(`${API_BASE}/api/crop-pricing/benchmarks`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+            },
+            body: JSON.stringify({ updates: [{ crop_name: cropName, benchmark_category: category }] })
+        });
+    } catch (err) {
+        console.warn('Failed to save benchmark:', err);
+    }
 }
 
 /**
@@ -1745,7 +1799,7 @@ const AI_PRICING_KEY = 'ai_pricing_recommendations';
 const AI_LAST_CHECK_KEY = 'ai_pricing_last_check';
 const AI_HISTORY_KEY = 'ai_pricing_history';
 const USD_TO_CAD_RATE_KEY = 'usd_to_cad_rate';
-const AI_ORGANIC_DISCOUNT_RATE = 0.10;  // 10% discount below organic retail
+const AI_WHOLESALE_SKU_FACTOR = 0.75;  // wholesale = retail * 0.75
 
 // Specialty crop delta learning storage key
 const AI_SPECIALTY_DELTA_KEY = 'ai_specialty_deltas';
@@ -1754,7 +1808,7 @@ const AI_SPECIALTY_DELTA_KEY = 'ai_specialty_deltas';
 // it is a specialty variety. Common varieties appear in standard retail packages
 // (e.g. "Baby Arugula" in a bag labeled "Arugula"). Specialty varieties are not
 // sold standalone and are typically found unlabeled inside premium mixed green
-// blends. The 10% discount positions pricing below organic retail while above conventional.
+// blends. Wholesale = retail * 0.75 SKU factor.
 //
 // commonName: the retail parent category used for market data lookup
 // isSpecialty: true = not sold as a standalone retail package; flag for grower review
@@ -1778,16 +1832,16 @@ const cropClassification = {
     'Purple Basil':       { commonName: 'Basil', isSpecialty: true },
 
     // Lettuce family
-    'Butterhead Lettuce':   { commonName: 'Butterhead Lettuce', isSpecialty: false },
-    'Buttercrunch Lettuce': { commonName: 'Butterhead Lettuce', isSpecialty: false },
-    'Bibb Butterhead':      { commonName: 'Butterhead Lettuce', isSpecialty: false },
-    'Romaine Lettuce':      { commonName: 'Mixed Greens', isSpecialty: false },
+    'Butterhead Lettuce':   { commonName: 'Organic Mixed Greens', isSpecialty: false },
+    'Buttercrunch Lettuce': { commonName: 'Organic Mixed Greens', isSpecialty: false },
+    'Bibb Butterhead':      { commonName: 'Organic Mixed Greens', isSpecialty: false },
+    'Romaine Lettuce':      { commonName: 'Organic Mixed Greens', isSpecialty: false },
     'Red Leaf Lettuce':     { commonName: 'Lettuce', isSpecialty: false },
-    'Lettuce':              { commonName: 'Mixed Greens', isSpecialty: false },
-    'Mixed Lettuce':        { commonName: 'Mixed Greens', isSpecialty: false },
-    'Oak Leaf Lettuce':     { commonName: 'Mixed Greens', isSpecialty: true },
-    'Salad Bowl Oakleaf':   { commonName: 'Mixed Greens', isSpecialty: true },
-    'Escarole Batavian':    { commonName: 'Mixed Greens', isSpecialty: true },
+    'Lettuce':              { commonName: 'Organic Mixed Greens', isSpecialty: false },
+    'Mixed Lettuce':        { commonName: 'Organic Mixed Greens', isSpecialty: false },
+    'Oak Leaf Lettuce':     { commonName: 'Organic Mixed Greens', isSpecialty: true },
+    'Salad Bowl Oakleaf':   { commonName: 'Organic Mixed Greens', isSpecialty: true },
+    'Escarole Batavian':    { commonName: 'Organic Mixed Greens', isSpecialty: true },
 
     // Kale family
     'Curly Kale':         { commonName: 'Kale', isSpecialty: false },
@@ -1818,13 +1872,13 @@ const cropClassification = {
     'Mei Qing Pak Choi':    { commonName: 'Bok Choy', isSpecialty: false },
     'Pak Choi':             { commonName: 'Bok Choy', isSpecialty: false },
     'Bok Choy':             { commonName: 'Bok Choy', isSpecialty: false },
-    'Tatsoi':               { commonName: 'Mixed Greens', isSpecialty: true },
-    'Mizuna Mustard Greens':{ commonName: 'Mixed Greens', isSpecialty: true },
-    'Komatsuna Mustard Spinach': { commonName: 'Mixed Greens', isSpecialty: true },
+    'Tatsoi':               { commonName: 'Organic Mixed Greens', isSpecialty: true },
+    'Mizuna Mustard Greens':{ commonName: 'Organic Mixed Greens', isSpecialty: true },
+    'Komatsuna Mustard Spinach': { commonName: 'Organic Mixed Greens', isSpecialty: true },
 
     // Specialty greens
     'Watercress':         { commonName: 'Watercress', isSpecialty: false },
-    'Fris\u00e9e Endive':  { commonName: 'Mixed Greens', isSpecialty: true },
+    'Fris\u00e9e Endive':  { commonName: 'Organic Mixed Greens', isSpecialty: true },
     'Spinach':            { commonName: 'Spinach', isSpecialty: false },
     'Swiss Chard':        { commonName: 'Swiss Chard', isSpecialty: false },
 
@@ -1851,19 +1905,22 @@ const cropClassification = {
     'San Marzano-':      { commonName: 'Tomato', isSpecialty: true },
     'Tribute':            { commonName: 'Tomato', isSpecialty: false },
     // -- Pelleted & Eazyleaf lettuce varieties (added for v3.0.0 recipes) --
-    'Alkindus Pelleted Organic': { commonName: 'Butterhead Lettuce', isSpecialty: false },
-    'Amaze':                     { commonName: 'Butterhead Lettuce', isSpecialty: false },
-    'Breen Pelleted Organic':    { commonName: 'Butterhead Lettuce', isSpecialty: false },
-    'Brentwood Eazyleaf Organic':{ commonName: 'Red Leaf Lettuce', isSpecialty: false },
-    'Burgandy Eazyleaf Organic': { commonName: 'Red Leaf Lettuce', isSpecialty: false },
-    'Eazyleaf Blend Organic':    { commonName: 'Red Leaf Lettuce', isSpecialty: false },
-    'Hampton Eazyleaf Organic':  { commonName: 'Red Leaf Lettuce', isSpecialty: false },
-    'Ilema Organic':             { commonName: 'Butterhead Lettuce', isSpecialty: true },
-    'Little Gem':                { commonName: 'Butterhead Lettuce', isSpecialty: false },
-    'Newham Pelleted Organic':   { commonName: 'Butterhead Lettuce', isSpecialty: false },
-    'Spretnak Organic':          { commonName: 'Butterhead Lettuce', isSpecialty: false },
-    'Tropicana Pelleted Organic':{ commonName: 'Butterhead Lettuce', isSpecialty: false },
-    'Truchas Pelleted Organic':  { commonName: 'Butterhead Lettuce', isSpecialty: false },
+    // All pelleted/eazyleaf varieties are sold as packaged living lettuce / salad
+    // greens at retail. Use Mixed Greens benchmark (~$21 CAD/lb) not standalone
+    // butterhead ($16 CAD/lb) which under-prices the product.
+    'Alkindus Pelleted Organic': { commonName: 'Organic Mixed Greens', isSpecialty: false },
+    'Amaze':                     { commonName: 'Organic Mixed Greens', isSpecialty: false },
+    'Breen Pelleted Organic':    { commonName: 'Organic Mixed Greens', isSpecialty: false },
+    'Brentwood Eazyleaf Organic':{ commonName: 'Organic Mixed Greens', isSpecialty: false },
+    'Burgandy Eazyleaf Organic': { commonName: 'Organic Mixed Greens', isSpecialty: false },
+    'Eazyleaf Blend Organic':    { commonName: 'Organic Mixed Greens', isSpecialty: false },
+    'Hampton Eazyleaf Organic':  { commonName: 'Organic Mixed Greens', isSpecialty: false },
+    'Ilema Organic':             { commonName: 'Organic Mixed Greens', isSpecialty: false },
+    'Little Gem':                { commonName: 'Organic Mixed Greens', isSpecialty: false },
+    'Newham Pelleted Organic':   { commonName: 'Organic Mixed Greens', isSpecialty: false },
+    'Spretnak Organic':          { commonName: 'Organic Mixed Greens', isSpecialty: false },
+    'Tropicana Pelleted Organic':{ commonName: 'Organic Mixed Greens', isSpecialty: false },
+    'Truchas Pelleted Organic':  { commonName: 'Organic Mixed Greens', isSpecialty: false },
 
     // -- Greens with exact-name mismatch --
     'KX-1 Kale (baby leaf)':       { commonName: 'Kale', isSpecialty: false },
@@ -1962,7 +2019,7 @@ let currentExchangeRate = 1.35; // Default rate
 
 // Market data based on North American organic retail produce pricing research (Jan 2026)
 // Pricing sourced from Whole Foods, Farm Boy, Sobeys, Metro, Loblaws, and farmers markets
-// The 10% discount to organic retail positions pricing competitively below organic shelf price
+// Wholesale = retail * 0.75 SKU factor
 const marketDataSources = {
     // Lettuce varieties -- organic retail pricing from premium North American grocers
     'Butterhead Lettuce': {
@@ -1996,54 +2053,54 @@ const marketDataSources = {
     // Basil varieties -- fresh herb clamshell pricing from premium grocers
     'Genovese Basil': {
         retailers: ['Whole Foods', 'Sobeys', 'Farm Boy', 'Metro', 'Loblaws', 'Farmers Markets'],
-        avgPriceUSD: 24.00,
+        avgPriceUSD: 35.00,
         avgWeightOz: 16,
-        priceRange: [18.00, 32.00],
+        priceRange: [28.00, 48.00],
         trend: 'increasing',
         country: 'North America',
         articles: []
     },
     'Thai Basil': {
         retailers: ['Whole Foods', 'Loblaws', 'Metro', 'Asian Markets'],
-        avgPriceUSD: 24.00,
+        avgPriceUSD: 35.00,
         avgWeightOz: 16,
-        priceRange: [18.00, 32.00],
+        priceRange: [28.00, 48.00],
         trend: 'increasing',
         country: 'North America',
         articles: []
     },
     'Purple Basil': {
         retailers: ['Whole Foods', 'Farm Boy', 'Sobeys', 'Farmers Markets'],
-        avgPriceUSD: 24.00,
+        avgPriceUSD: 35.00,
         avgWeightOz: 16,
-        priceRange: [18.00, 32.00],
+        priceRange: [28.00, 48.00],
         trend: 'increasing',
         country: 'North America',
         articles: []
     },
     'Lemon Basil': {
         retailers: ['Farm Boy', 'Sobeys', 'Metro', 'Specialty Stores'],
-        avgPriceUSD: 24.00,
+        avgPriceUSD: 35.00,
         avgWeightOz: 16,
-        priceRange: [18.00, 32.00],
+        priceRange: [28.00, 48.00],
         trend: 'increasing',
         country: 'North America',
         articles: []
     },
     'Holy Basil': {
         retailers: ['Metro', 'Loblaws', 'Asian Markets', 'Specialty Stores'],
-        avgPriceUSD: 24.00,
+        avgPriceUSD: 35.00,
         avgWeightOz: 16,
-        priceRange: [18.00, 32.00],
+        priceRange: [28.00, 48.00],
         trend: 'increasing',
         country: 'North America',
         articles: []
     },
     'Basil': {
         retailers: ['Whole Foods', 'Sobeys', 'Farm Boy', 'Farmers Markets'],
-        avgPriceUSD: 24.00,
+        avgPriceUSD: 35.00,
         avgWeightOz: 16,
-        priceRange: [18.00, 32.00],
+        priceRange: [28.00, 48.00],
         trend: 'increasing',
         country: 'North America',
         articles: []
@@ -2135,7 +2192,7 @@ const marketDataSources = {
     },
 
     // Premium mixed greens (fallback for specialty greens not sold standalone)
-    'Mixed Greens': {
+    'Organic Mixed Greens': {
         retailers: ['Whole Foods', 'Farm Boy', 'Sobeys', 'Metro', 'Loblaws'],
         avgPriceUSD: 5.49,
         avgWeightOz: 5,
@@ -2425,12 +2482,12 @@ async function runAIPricingAnalysis() {
     const steps = [
         'Connecting to market intelligence service...',
         'Fetching real-time price observations from DB...',
-        'Loading AI market analysis (GPT-4o-mini)...',
+        'Loading AI market analysis (Gemini Flash)...',
         'Retrieving Bank of Canada USD/CAD exchange rate...',
         'Analysing price trends across retailers...',
         'Matching crops to your pricing table...',
         'Normalizing prices by unit: oz, 25g, pint, and each...',
-        'Generating recommendations (10% below organic retail)...'
+        'Generating recommended retail prices (wholesale auto-calculated)...'
     ];
     
     // Show progress steps while fetching in parallel
@@ -2465,11 +2522,11 @@ async function runAIPricingAnalysis() {
     // Use live data if available, otherwise fall back to local hardcoded sources
     if (liveData?.ok && liveData.recommendations?.length > 0) {
         currentExchangeRate = liveData.fxRate || currentExchangeRate;
-        // Enrich marketDataSources with backend trend/AI data without overwriting curated organic retail prices
+        // Enrich marketDataSources with backend DB data — live CAD prices override stale hardcoded USD
         for (const rec of liveData.recommendations) {
             const existing = marketDataSources[rec.product];
             if (existing) {
-                // Curated entry exists: keep organic retail base price, enrich with live trend + AI data
+                // Curated entry exists: enrich with live trend + AI data
                 existing.trend = rec.trend || existing.trend || 'stable';
                 existing.trendPercent = rec.trendPercent ?? existing.trendPercent ?? 0;
                 if (rec.articles && rec.articles.length > 0) existing.articles = rec.articles;
@@ -2480,6 +2537,18 @@ async function runAIPricingAnalysis() {
                 existing._aiReasoning = rec.aiReasoning;
                 existing._dataSource = rec.dataSource || 'enriched';
                 existing._observationCount = rec.observationCount || 0;
+                // When DB has real observations, use live CAD pricing instead of
+                // stale hardcoded USD fallbacks. This prevents under-pricing crops
+                // whose hardcoded USD values are lower than actual Canadian retail.
+                if (rec.observationCount > 0 && rec.avgPriceCAD > 0) {
+                    existing.avgPriceCAD = rec.avgPriceCAD;
+                    existing.avgPriceUSD = rec.avgPriceCAD / (liveData.fxRate || 1.38);
+                    existing.country = 'Canada';
+                    if (rec.retailers && rec.retailers.length > 0) existing.retailers = rec.retailers;
+                    if (rec.priceRange && rec.priceRange.length >= 2) {
+                        existing.priceRange = rec.priceRange;
+                    }
+                }
             } else {
                 // New product not in curated data: use backend pricing as-is
                 marketDataSources[rec.product] = {
@@ -2583,22 +2652,23 @@ function resolveMarketDataForCrop(cropName) {
         { test: ['microgreen'], key: 'Microgreen' },
         { test: ['sprout'], key: 'Sprout' },
         // Pelleted/Eazyleaf lettuce varieties
-        { test: ['pelleted', 'little gem', 'amaze', 'ilema'], key: 'Butterhead Lettuce' },
+        { test: ['pelleted', 'little gem', 'amaze', 'ilema'], key: 'Organic Mixed Greens' },
+        { test: ['eazyleaf blend'], key: 'Organic Mixed Greens' },
         { test: ['eazyleaf'], key: 'Red Leaf Lettuce' },
-        { test: ['butterhead', 'buttercrunch', 'bibb'], key: 'Butterhead Lettuce' },
-        { test: ['romaine', 'cos'], key: 'Mixed Greens' },
+        { test: ['butterhead', 'buttercrunch', 'bibb'], key: 'Organic Mixed Greens' },
+        { test: ['romaine', 'cos'], key: 'Organic Mixed Greens' },
         { test: ['red leaf'], key: 'Red Leaf Lettuce' },
-        { test: ['oakleaf', 'oak leaf', 'salad bowl', 'escarole', 'batavian'], key: 'Mixed Greens' },
-        { test: ['lettuce', 'salad'], key: 'Mixed Greens' },
+        { test: ['oakleaf', 'oak leaf', 'salad bowl', 'escarole', 'batavian'], key: 'Organic Mixed Greens' },
+        { test: ['lettuce', 'salad'], key: 'Organic Mixed Greens' },
         { test: ['arugula', 'rocket'], key: 'Arugula' },
         { test: ['basil', 'genovese'], key: 'Basil' },
         { test: ['kale', 'lacinato', 'russian kale'], key: 'Kale' },
-        { test: ['frisee', 'fris\u00e9e', 'endive'], key: 'Mixed Greens' },
+        { test: ['frisee', 'fris\u00e9e', 'endive'], key: 'Organic Mixed Greens' },
         { test: ['watercress'], key: 'Watercress' },
         { test: ['spinach', 'bloomsdale'], key: 'Spinach' },
         { test: ['chard'], key: 'Swiss Chard' },
         { test: ['pak choi', 'pac choi', 'bok choy'], key: 'Bok Choy' },
-        { test: ['tatsoi', 'mizuna', 'komatsuna', 'mustard'], key: 'Mixed Greens' },
+        { test: ['tatsoi', 'mizuna', 'komatsuna', 'mustard'], key: 'Organic Mixed Greens' },
         { test: ['parsley'], key: 'Parsley' },
         { test: ['cilantro'], key: 'Cilantro' },
         { test: ['dill'], key: 'Dill' },
@@ -2608,7 +2678,7 @@ function resolveMarketDataForCrop(cropName) {
         { test: ['rosemary'], key: 'Rosemary' },
         { test: ['sage'], key: 'Sage' },
         { test: ['mint', 'spearmint', 'peppermint'], key: 'Mint' },
-        { test: ['sorrel'], key: 'Mixed Greens' },
+        { test: ['sorrel'], key: 'Organic Mixed Greens' },
         { test: ['lemon balm'], key: 'Mint' },
         { test: ['lovage'], key: 'Parsley' },
         { test: ['chervil'], key: 'Parsley' },
@@ -2728,23 +2798,11 @@ function generateRecommendations() {
         (pricingData || []).map(item => [item.crop, item])
     );
 
-    // Deduplicate: farm crops take priority over generic market keys
-    const seenMarketKeys = new Set();
+    // Only analyse crops that exist in the farm's pricing table (from recipes)
     const analysisCrops = [];
 
     for (const item of (pricingData || [])) {
-        const md = resolveMarketDataForCrop(item.crop);
-        if (md) {
-            const mdKey = Object.keys(marketDataSources).find(k => marketDataSources[k] === md);
-            if (mdKey) seenMarketKeys.add(mdKey);
-        }
         analysisCrops.push(item.crop);
-    }
-
-    for (const key of Object.keys(marketDataSources)) {
-        if (!seenMarketKeys.has(key) && !marketDataSources[key]._lookupOnly) {
-            analysisCrops.push(key);
-        }
     }
 
     analysisCrops.sort().forEach(cropName => {
@@ -2773,12 +2831,12 @@ function generateRecommendations() {
         }
 
         if (isSpecialty && learnedDelta) {
-            // Apply learned delta on top of the common-name recommendation
-            const baseRec = marketAvg * (1 - AI_ORGANIC_DISCOUNT_RATE);
-            recommendation = baseRec * (1 + learnedDelta.avgDeltaPercent / 100);
+            // Apply learned delta on top of the common-name retail recommendation
+            recommendation = marketAvg * (1 + learnedDelta.avgDeltaPercent / 100);
         } else {
-            // Standard: 10% discount below organic retail market average
-            recommendation = marketAvg * (1 - AI_ORGANIC_DISCOUNT_RATE);
+            // Recommend the retail market average -- the pricing table applies
+            // the 0.75 SKU factor automatically to derive wholesale price.
+            recommendation = marketAvg;
         }
 
         const recommendedDelta = currentPrice > 0 ? ((recommendation - currentPrice) / currentPrice * 100) : (recommendation > 0 ? 100 : 0);
@@ -2795,9 +2853,9 @@ function generateRecommendations() {
             reasoning += `Recommendation is based on ${commonName} packaged retail pricing ($${marketAvg.toFixed(2)}${normalizedMarket.comparisonUnitLabel} CAD). `;
             reasoning += `Review and adjust -- as you update, the system learns your specialty premium. `;
         } else {
-            reasoning += `Aggregated North America packaged retail pricing suggests ${cropName} averages $${marketAvg.toFixed(2)}${normalizedMarket.comparisonUnitLabel} (CAD). `;
+            reasoning += `Canadian retail grocer pricing suggests ${cropName} averages $${marketAvg.toFixed(2)}${normalizedMarket.comparisonUnitLabel} (CAD). `;
         }
-        reasoning += `Applying the ${(AI_ORGANIC_DISCOUNT_RATE * 100).toFixed(0)}% discount to organic retail yields $${recommendation.toFixed(2)}${normalizedMarket.comparisonUnitLabel}. `;
+        reasoning += `Recommended retail price: $${recommendation.toFixed(2)}${normalizedMarket.comparisonUnitLabel}. Wholesale is auto-calculated at retail x ${AI_WHOLESALE_SKU_FACTOR} = $${(recommendation * AI_WHOLESALE_SKU_FACTOR).toFixed(2)}${normalizedMarket.comparisonUnitLabel}. `;
         reasoning += `Your current price is ${Math.abs(difference).toFixed(1)}% ${difference >= 0 ? 'above' : 'below'} market average.`;
 
         if (marketData._aiReasoning) {
@@ -2892,7 +2950,7 @@ function displayRecommendations(recommendations) {
 
                 <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 16px; padding: 12px; background: var(--bg-primary); border-radius: 6px;">
                     <div>
-                        <div class="price-label">Market Price (CAD)</div>
+                        <div class="price-label">Retail Price (CAD)</div>
                         ${isWeightComparison ? `
                             <div style="font-size: 16px; font-weight: 600; color: var(--accent-blue);">
                                 $${rec.pricePerLbCAD.toFixed(2)}/lb
@@ -2905,7 +2963,7 @@ function displayRecommendations(recommendations) {
                                 $${rec.marketAverage.toFixed(2)}${unitLabel}
                             </div>
                             <div style="font-size: 13px; color: var(--text-secondary);">
-                                North America aggregate
+                                Canadian retail grocer
                             </div>
                         `}
                     </div>
@@ -2929,14 +2987,14 @@ function displayRecommendations(recommendations) {
                         <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">${unitLabel} (CAD)</div>
                     </div>
                     <div class="price-box" style="background: rgba(59, 130, 246, 0.1);">
-                        <div class="price-label">Recommended Price</div>
+                        <div class="price-label">Recommended Retail</div>
                         <div class="price-value" style="color: var(--accent-blue);">$${rec.recommendedPrice.toFixed(2)}</div>
                         <div class="price-change ${rec.priceChangeType}">
                             ${priceChange > 0 ? '↑' : priceChange < 0 ? '↓' : '→'} ${Math.abs(priceChange)}%
                         </div>
                     </div>
                     <div class="price-box">
-                        <div class="price-label">Market Range (CAD)</div>
+                        <div class="price-label">Retail Range (CAD)</div>
                         <div style="font-size: 14px; font-weight: 600; color: var(--text-primary);">
                             $${rec.priceRange[0].toFixed(2)} - $${rec.priceRange[1].toFixed(2)}
                         </div>
@@ -2968,7 +3026,7 @@ function displayRecommendations(recommendations) {
                 ${hasSignificantChange ? `
                     <div style="margin-top: 16px; display: flex; justify-content: flex-end;">
                         <button class="apply-recommendation-btn" onclick="applyRecommendedPrice('${rec.crop}', ${rec.recommendedPrice}, this)">
-                            Apply Recommended Price
+                            Apply Retail Price
                         </button>
                     </div>
                 ` : ''}
@@ -3056,8 +3114,7 @@ async function applyRecommendedPrice(cropName, recommendedPrice, btnEl) {
             const cached = JSON.parse(localStorage.getItem(AI_PRICING_KEY) || '[]');
             const recEntry = cached.find(r => r.crop === pricingData[index].crop);
             if (recEntry && recEntry.isSpecialty && recEntry.marketAverage > 0) {
-                const baseRec = recEntry.marketAverage * (1 - AI_ORGANIC_DISCOUNT_RATE);
-                recordSpecialtyDelta(pricingData[index].crop, baseRec, recommendedPrice);
+                recordSpecialtyDelta(pricingData[index].crop, recEntry.marketAverage, recommendedPrice);
             }
         } catch (e) { /* delta recording is best-effort */ }
 

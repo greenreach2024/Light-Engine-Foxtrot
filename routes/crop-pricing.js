@@ -177,6 +177,60 @@ router.put('/', async (req, res) => {
   }
 });
 
+// ── Benchmark config routes ────────────────────────────────
+const VALID_BENCHMARK_CATEGORIES = ['direct', 'organic_mixed_greens', 'mixed_greens', 'frozen', 'specialty'];
+
+router.get('/benchmarks', async (req, res) => {
+  const db = req.db;
+  if (!db) return res.status(503).json({ success: false, error: 'Database not available' });
+  try {
+    const result = await db.query(
+      'SELECT crop_name, benchmark_category, search_override, updated_by, updated_at FROM crop_benchmark_config ORDER BY crop_name'
+    );
+    res.json({ success: true, benchmarks: result.rows });
+  } catch (error) {
+    console.error('[crop-pricing] Benchmark list error:', error.message);
+    res.status(500).json({ success: false, error: 'Failed to load benchmarks' });
+  }
+});
+
+router.put('/benchmarks', async (req, res) => {
+  const db = req.db;
+  if (!db) return res.status(503).json({ success: false, error: 'Database not available' });
+  try {
+    const { updates } = req.body;
+    if (!Array.isArray(updates) || updates.length === 0) {
+      return res.status(400).json({ success: false, error: 'updates array required' });
+    }
+    const results = [];
+    for (const u of updates) {
+      const crop = String(u.crop_name || '').trim();
+      const category = String(u.benchmark_category || 'direct').trim();
+      if (!crop) continue;
+      if (!VALID_BENCHMARK_CATEGORIES.includes(category)) {
+        results.push({ crop_name: crop, ok: false, error: `Invalid category: ${category}` });
+        continue;
+      }
+      const override = u.search_override ? String(u.search_override).trim().slice(0, 200) : null;
+      await db.query(
+        `INSERT INTO crop_benchmark_config (crop_name, benchmark_category, search_override, updated_by, updated_at)
+         VALUES ($1, $2, $3, 'admin', NOW())
+         ON CONFLICT (crop_name) DO UPDATE SET
+           benchmark_category = EXCLUDED.benchmark_category,
+           search_override = EXCLUDED.search_override,
+           updated_by = 'admin',
+           updated_at = NOW()`,
+        [crop, category, override]
+      );
+      results.push({ crop_name: crop, ok: true, benchmark_category: category });
+    }
+    res.json({ success: true, results });
+  } catch (error) {
+    console.error('[crop-pricing] Benchmark update error:', error.message);
+    res.status(500).json({ success: false, error: 'Failed to update benchmarks' });
+  }
+});
+
 /**
  * GET /api/crop-pricing/:cropName
  * Get pricing for a specific crop

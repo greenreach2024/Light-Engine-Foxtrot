@@ -12,7 +12,7 @@
  */
 
 import { Router } from 'express';
-import { getGeminiClient, GEMINI_FLASH, estimateGeminiCost, isGeminiConfigured } from '../lib/gemini-client.js';
+import { getGeminiClient, GEMINI_FLASH, estimateGeminiCost, isGeminiConfigured, refreshGeminiToken } from '../lib/gemini-client.js';
 import { query, isDatabaseAvailable, getDatabase } from '../config/database.js';
 import { trackAiUsage, estimateChatCost } from '../lib/ai-usage-tracker.js';
 import { TOOL_CATALOG, executeTool } from './farm-ops-agent.js';
@@ -81,7 +81,34 @@ const router = Router();
 let gemini = null;
 async function ensureGemini() {
   if (gemini) return gemini;
-  gemini = await getGeminiClient();
+  const client = await getGeminiClient();
+  // Wrap client to auto-retry on 401 (expired Vertex AI token)
+  gemini = new Proxy(client, {
+    get(target, prop) {
+      if (prop === 'chat') {
+        return {
+          completions: {
+            create: async (params) => {
+              try {
+                return await target.chat.completions.create(params);
+              } catch (err) {
+                const status = err?.status || err?.response?.status || (err?.message && err.message.match(/(\d{3}) status/)?.[1]);
+                if (String(status) === '401') {
+                  console.warn('[E.V.I.E.] Vertex AI 401 — refreshing token and retrying');
+                  await refreshGeminiToken();
+                  gemini = null; // force re-init on next call
+                  const freshClient = await getGeminiClient();
+                  return await freshClient.chat.completions.create(params);
+                }
+                throw err;
+              }
+            }
+          }
+        };
+      }
+      return target[prop];
+    }
+  });
   return gemini;
 }
 
@@ -186,7 +213,7 @@ function getTrustTier(toolName) {
 
 // ── Conversation Summarization ────────────────────────────────────────
 async function summarizeConversation(messages, farmId) {
-  if (!isGeminiConfigured() || messages.length < 6) return null;
+  if (!isGeminiConfigured() || messages.length < 4) return null;
   try {
     const conversationText = messages
       .filter(m => m.role === 'user' || m.role === 'assistant')
@@ -479,6 +506,24 @@ const GPT_TOOLS = [
         properties: {
           room_id: { type: 'string', description: 'Optional: only assign to this room' }
         }
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'update_device',
+      description: 'Update an existing IoT device — reassign to a different zone or room, rename, or change status. Use this to move sensors between zones. WRITE operation.',
+      parameters: {
+        type: 'object',
+        properties: {
+          device_id: { type: 'string', description: 'The device ID to update (e.g. "dev-sensor-abc123")' },
+          zone: { type: 'string', description: 'New zone assignment (e.g. "zone-1", "zone-2")' },
+          room_id: { type: 'string', description: 'New room assignment' },
+          name: { type: 'string', description: 'New device name' },
+          status: { type: 'string', description: 'New status: online, offline, maintenance' }
+        },
+        required: ['device_id']
       }
     }
   },
@@ -897,6 +942,20 @@ const GPT_TOOLS = [
   }
   ,
   // --- Environment Control Tools ---
+  {
+    type: 'function',
+    function: {
+      name: 'get_outdoor_weather',
+      description: 'Get current outdoor weather conditions at the farm location — temperature, humidity, dew point, VPD estimate, wind speed, cloud cover, solar conditions. Use when the farmer asks about outside weather, heat load, humidity ingress risk, or HVAC demand context. Complements indoor get_environment_readings.',
+      parameters: {
+        type: 'object',
+        properties: {
+          lat: { type: 'number', description: 'Latitude override (defaults to farm location in env/config)' },
+          lon: { type: 'number', description: 'Longitude override (defaults to farm location in env/config)' }
+        }
+      }
+    }
+  },
   {
     type: 'function',
     function: {
@@ -1901,6 +1960,29 @@ async function buildSystemPrompt(farmId) {
     farmContext += `IMPORTANT: When creating planting assignments, group_id can be a zone name like "Zone 1" — the system auto-assigns an available group.\n`;
   } catch { /* non-fatal */ }
 
+  // Inject current device/sensor assignments so E.V.I.E. knows what's where
+  try {
+    const deviceResult = await executeTool('get_device_status', {});
+    if (deviceResult?.ok && deviceResult.total_devices > 0) {
+      farmContext += `IoT devices: ${deviceResult.total_devices} total (${deviceResult.assigned} assigned, ${deviceResult.unassigned} unassigned)\n`;
+      if (deviceResult.assigned_devices?.length > 0) {
+        const byZone = {};
+        for (const d of deviceResult.assigned_devices) {
+          const z = d.zone || 'unzoned';
+          if (!byZone[z]) byZone[z] = [];
+          byZone[z].push(`${d.name || d.id} (${d.type})`);
+        }
+        for (const [zone, devs] of Object.entries(byZone)) {
+          farmContext += `  ${zone}: ${devs.join(', ')}\n`;
+        }
+      }
+      if (deviceResult.unassigned_devices?.length > 0) {
+        farmContext += `  Unassigned: ${deviceResult.unassigned_devices.map(d => d.name || d.id).join(', ')}\n`;
+      }
+      farmContext += `Use update_device to move devices between zones. Use get_device_status for full details.\n`;
+    }
+  } catch { /* non-fatal */ }
+
   // Get quick summary from daily todo (lightweight)
   try {
     const todoResult = await executeTool('get_daily_todo', { limit: 5 });
@@ -2009,6 +2091,13 @@ USER MEMORY:
 - When the user shares personal information (name, preferences, goals, communication style), IMMEDIATELY call save_user_memory to persist it. Do not ask permission to save — just do it.
 - If the USER PROFILE section above contains a user_name, address the user by their name naturally (not every message, but when it feels right — greetings, sign-offs, personalised advice).
 - Examples of things to remember: name, preferred units (metric/imperial), favourite crops, farm goals, communication preferences (brief vs detailed), timezone, role (owner, manager, grower).
+
+INTUITIVE OPERATION — READ THIS BEFORE EVERY RESPONSE:
+- CHECK MEMORY FIRST: Your user memory is right above. Before asking any question, check if the answer is already there. Never re-ask for a name, preference, crop choice, zone, or any detail the user already told you.
+- FILL IN THE BLANKS: When a user gives a simple instruction with missing details (no zone specified, no date given, no crop named), resolve it yourself using your tools and memory. Reasonable defaults and context clues beat asking another question.
+- NO VERIFICATION LOOPS: If the user says "do it", "update it", "set it up", "plant basil in zone 1" — execute. Do not echo the instruction back as a confirmation question. QUICK-CONFIRM and AUTO tier tools should never generate a "shall I?" question.
+- ONE-SHOT EXECUTION: Gather → Execute → Report. The user wants results, not a preview of what you could do. Minimize round-trips.
+- READ INTENT: "check the farm" means pull all relevant data now. "update prices" means use the best available data and apply it. "plan next week" means create a plan with what you know. Act on intent, not literal gaps.
 
 THINKING APPROACH:
 When a farmer asks a complex question (crop planning, what to grow, schedule analysis, compatibility), take a moment to gather the data you need before answering. It is perfectly fine to say something like "Great question — let me pull up the data" while you call multiple tools. Thorough answers prevent back-and-forth. Call the tools you need in one shot rather than asking the user to clarify what you can look up yourself.
@@ -2445,7 +2534,7 @@ RULES:
 - For complex planning questions, a thorough structured answer is better than a short one. Use rich formatting.
 - When you call a tool, summarize the result naturally — don't dump raw JSON.
 - Use the tools proactively — if a user asks you to do something and you have a tool for it, use the tool. Do not ask the user for information the tools can provide.
-- For WRITE operations (update_farm_profile, create_room, create_zone, update_certifications, complete_setup, update_crop_price, create_planting_assignment, create_planting_plan (with execute=true), mark_harvest_complete, update_order_status, add_inventory_item, update_manual_inventory, update_crop_description, add_salad_mix_inventory, create_custom_product, update_custom_product, delete_custom_product, dismiss_alert, auto_assign_devices, register_device, seed_benchmarks, update_nutrient_targets, update_target_ranges, set_light_schedule, update_group_crop, create_procurement_order, update_room_specs, apply_crop_environment): you MUST describe the proposed change and ask the user to confirm BEFORE calling the tool. Do NOT call write tools until the user says "yes", "confirm", "do it", or similar.
+- For WRITE operations, follow the AUTONOMOUS ACTION TIERS defined above. AUTO tier tools execute silently. QUICK-CONFIRM tools execute immediately and report what was done. Only CONFIRM and ADMIN tier tools require pre-confirmation. When the user gives a direct command, that IS confirmation — execute via the appropriate tier. Do NOT ask "shall I?" for operations the user explicitly requested.
 - PROCUREMENT SAFETY: create_procurement_order requires reading back the full order summary (items, quantities, cost) and getting explicit approval. Never place orders without confirmed quantities. Never source from outside the procurement catalog.
 - After any WRITE operation succeeds, verify by calling the corresponding read tool and report the confirmed result.
 - If you can't help, say so briefly and suggest what you CAN do.
@@ -5239,97 +5328,6 @@ async function executeExtendedTool(toolName, params, farmId) {
       }
     }
 
-    // ── Device Discovery (Wireless: SwitchBot) ──────────────────────────
-    case 'scan_devices': {
-      const protocol = (params.protocol || 'all').toLowerCase();
-      const mode = (params.mode || 'wireless').toLowerCase();
-      const forceRefresh = params.force === true;
-      const leUrl = (process.env.FARM_EDGE_URL || process.env.LE_API_URL || process.env.FARM_API_URL || '').replace(/\/$/, '');
-
-      const assets = [];
-      const errors = [];
-
-      // Wireless scan: SwitchBot API
-      if (mode !== 'wired' && (protocol === 'all' || protocol === 'switchbot')) {
-        if (!leUrl) {
-          errors.push({ source: 'switchbot', error: 'FARM_EDGE_URL not configured — cannot reach Light Engine' });
-        } else {
-          try {
-            const refreshParam = forceRefresh ? '?refresh=true' : '?refresh=true'; // always force when E.V.I.E. scans
-            const sbResp = await fetch(`${leUrl}/api/switchbot/devices${refreshParam}`, {
-              headers: { 'Accept': 'application/json' },
-              signal: AbortSignal.timeout(12000)
-            });
-            if (sbResp.ok) {
-              const sbData = await sbResp.json();
-              const devList = (sbData.body || sbData).deviceList || [];
-              const irList = (sbData.body || sbData).infraredRemoteList || [];
-              for (const dev of devList) {
-                assets.push({
-                  asset_kind: dev.deviceType?.toLowerCase().includes('sensor') ? 'sensor' : dev.deviceType?.toLowerCase().includes('hub') ? 'hub' : 'device',
-                  source: 'switchbot',
-                  device_id: dev.deviceId,
-                  name: dev.deviceName,
-                  device_type: dev.deviceType,
-                  hub_device_id: dev.hubDeviceId,
-                  cloud_enabled: dev.enableCloudService !== false,
-                  registration_state: 'discovered'
-                });
-              }
-              for (const dev of irList) {
-                assets.push({
-                  asset_kind: 'infrared_remote',
-                  source: 'switchbot',
-                  device_id: dev.deviceId,
-                  name: dev.deviceName,
-                  device_type: dev.remoteType,
-                  hub_device_id: dev.hubDeviceId,
-                  registration_state: 'discovered'
-                });
-              }
-            } else {
-              errors.push({ source: 'switchbot', error: `HTTP ${sbResp.status}` });
-            }
-          } catch (err) {
-            errors.push({ source: 'switchbot', error: err.message });
-          }
-        }
-      }
-
-      // Wired scan: delegate to scan_bus_channels via TOOL_CATALOG
-      if (mode === 'wired' || mode === 'all') {
-        try {
-          const busResult = await executeTool('scan_bus_channels', { farm_id: farmId, bus_type: params.bus_type || 'all' });
-          if (busResult.ok && busResult.channels) {
-            for (const ch of busResult.channels) {
-              assets.push({
-                asset_kind: 'bus_channel',
-                source: 'wired',
-                device_id: ch.address || ch.id,
-                name: ch.name || `${ch.bus_type?.toUpperCase()} 0x${ch.address}`,
-                device_type: ch.bus_type,
-                registration_state: 'discovered'
-              });
-            }
-          }
-        } catch (err) {
-          errors.push({ source: 'wired', error: err.message });
-        }
-      }
-
-      const discovery_session_id = `scan-${Date.now()}`;
-      return {
-        ok: true,
-        discovery_session_id,
-        total: assets.length,
-        assets,
-        errors: errors.length > 0 ? errors : undefined,
-        note: assets.length === 0
-          ? 'No devices found. Verify SwitchBot Hub is powered and credentials in farm.json integrations.switchbot are correct.'
-          : `Found ${assets.length} device(s). Use register_device with these details to add any to the farm inventory, or auto_assign_devices to assign existing devices to rooms.`
-      };
-    }
-
     // ── Bus Mapping & Wired Channel Tools ──────────────────────────────
     case 'scan_bus_channels':
     case 'get_bus_mappings':
@@ -6059,8 +6057,8 @@ router.post('/chat', async (req, res) => {
     ];
     await upsertConversation(convId, updatedHistory, farmId);
 
-    // Summarize long conversations periodically
-    if (updatedHistory.length >= 30 && updatedHistory.length % 10 === 0) {
+    // Summarize conversations periodically (every 4 messages, starting at 8)
+    if (updatedHistory.length >= 8 && updatedHistory.length % 4 === 0) {
       summarizeConversation(updatedHistory, farmId).catch(() => {});
     }
 
@@ -6528,8 +6526,8 @@ router.post('/chat/stream', async (req, res) => {
       ];
       await upsertConversation(convId, updatedHistory, farmId);
 
-      // Summarize long conversations
-      if (updatedHistory.length >= 30 && updatedHistory.length % 10 === 0) {
+      // Summarize conversations periodically (every 4 messages, starting at 8)
+      if (updatedHistory.length >= 8 && updatedHistory.length % 4 === 0) {
         summarizeConversation(updatedHistory, farmId).catch(() => {});
       }
 

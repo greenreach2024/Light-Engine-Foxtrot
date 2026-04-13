@@ -348,7 +348,7 @@ export async function runAnomalyCheck() {
 // Daily Briefing Email
 // ══════════════════════════════════════════════════════════════════
 
-async function sendDailyBriefing() {
+export async function sendDailyBriefing() {
   const today = new Date().toISOString().slice(0, 10);
   if (lastBriefingDate === today) return; // Already sent today
   lastBriefingDate = today;
@@ -404,6 +404,27 @@ async function sendDailyBriefing() {
       </div>`
     });
     logger.info(`${TAG} Daily briefing sent to ${briefingTo}`);
+
+    // Also notify G.W.E.N. with an operationally-focused briefing for research context
+    try {
+      const gwenBody = [
+        `Daily farm operations summary from F.A.Y.E. — ${today}`,
+        ``,
+        `Open Alerts: ${alertSummary}`,
+        `Yesterday's Orders: ${orders.order_count || 0} order(s), $${Number(orders.revenue || 0).toFixed(2)} revenue`,
+        `Farms Online: ${farms.online || 0} / ${farms.total || 0}`,
+        ``,
+        `Use this context when evaluating environmental anomalies, harvest correlations, or research hypotheses that depend on operational state.`,
+      ].join('\n');
+      await query(
+        `INSERT INTO inter_agent_messages (from_agent, to_agent, message_type, subject, body, priority, status, created_at)
+         VALUES ('faye', 'gwen', 'briefing', $1, $2, 'normal', 'pending', NOW())`,
+        [`Daily Ops Briefing — ${today}`, gwenBody]
+      ).catch(err => logger.warn(`${TAG} Could not send GWEN briefing: ${err.message}`));
+      logger.info(`${TAG} Daily briefing forwarded to G.W.E.N.`);
+    } catch (gwenErr) {
+      logger.warn(`${TAG} GWEN briefing error: ${gwenErr.message}`);
+    }
   } catch (err) {
     logger.error(`${TAG} Briefing email error:`, err.message);
   }

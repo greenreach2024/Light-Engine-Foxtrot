@@ -18,6 +18,7 @@ const AUDIT_HOUR = parseInt(process.env.NIGHTLY_AUDIT_HOUR || '3', 10); // 3 AM
 const TAG = '[NightlyAudit]';
 
 let auditInterval = null;
+let emailVerifySent = false;
 
 // ── Public API ──────────────────────────────────────────────────────
 
@@ -31,8 +32,10 @@ export function startNightlyAuditService() {
 
   logger.info(`${TAG} Scheduled for ${next.toISOString()} (in ${Math.round(msUntilNext / 60000)} min)`);
 
-  // Verify email transport works 30s after startup
-  setTimeout(() => verifyEmailTransport(), 30_000);
+  // Verify email transport once per container cold-start (skip on warm restarts)
+  if (!emailVerifySent) {
+    setTimeout(() => verifyEmailTransport(), 30_000);
+  }
 
   setTimeout(() => {
     runNightlyAudit().catch(e => logger.error(`${TAG} Fatal:`, e));
@@ -47,6 +50,9 @@ export function startNightlyAuditService() {
  * Logs success/failure so operators can confirm email delivery.
  */
 async function verifyEmailTransport() {
+  if (emailVerifySent) return;
+  emailVerifySent = true;
+
   const to = process.env.ADMIN_ALERT_EMAIL || process.env.ADMIN_EMAIL;
   if (!to) {
     logger.warn(`${TAG} No ADMIN_ALERT_EMAIL set -- cannot verify email transport`);

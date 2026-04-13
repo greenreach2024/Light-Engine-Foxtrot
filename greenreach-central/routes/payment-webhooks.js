@@ -142,6 +142,27 @@ router.post('/square', express.raw({ type: 'application/json' }), async (req, re
                     text: `Your payment of $${amount.toFixed(2)} CAD has been confirmed. Order #${String(orderId).substring(0, 8)} is now being prepared for fulfillment.`,
                     html: `<p>Your payment of <strong>$${amount.toFixed(2)} CAD</strong> has been confirmed.</p><p>Order <strong>#${String(orderId).substring(0, 8)}</strong> is now being prepared for fulfillment.</p>`
                   }).catch(e => console.warn('[Webhook:Square] Buyer notification email err:', e.message));
+
+                  // Send invoice email with line item detail
+                  const allItems = (order.farm_sub_orders || []).flatMap(sub =>
+                    (sub.line_items || sub.items || []).map(it => ({
+                      name: it.product_name || it.sku_name || it.sku_id,
+                      quantity: it.qty || it.quantity,
+                      unit_price: it.unit_price || 0,
+                      line_total: it.line_total || 0
+                    }))
+                  );
+                  const totalTax = (order.farm_sub_orders || []).reduce((sum, s) => sum + Number(s.tax_amount || 0), 0);
+                  emailService.sendInvoiceEmail(buyerEmail, {
+                    invoice_number: `INV-${String(orderId).substring(0, 8)}`,
+                    buyer_name: order.buyer_account?.contactName || order.buyer_account?.businessName,
+                    items: allItems,
+                    subtotal: amount - totalTax,
+                    tax_amount: totalTax,
+                    total: amount,
+                    order_id: orderId,
+                    payment_terms: 'Paid'
+                  }).catch(e => console.warn('[Webhook:Square] Invoice email err:', e.message));
                 }
               }
             } catch (e) {
@@ -171,6 +192,29 @@ router.post('/square', express.raw({ type: 'application/json' }), async (req, re
         ingestRefundReversal({
           refund_id: refund.id, order_id: refund.order_id || refund.payment_id, amount, provider: 'square',
         }).catch(e => console.error('[Webhook:Square] Refund reversal err:', e.message));
+
+        // Send refund confirmation email to buyer
+        if (refund.payment_id) {
+          try {
+            const refMatch = await query(
+              'SELECT order_id, metadata FROM payment_records WHERE payment_id = $1 OR metadata->>\'square_payment_id\' = $1 LIMIT 1',
+              [refund.payment_id]
+            );
+            const refOrderId = refMatch.rows[0]?.order_id || refMatch.rows[0]?.metadata?.masterOrderId;
+            if (refOrderId) {
+              const refOrder = await getOrderById(refOrderId);
+              const refBuyerEmail = refOrder?.buyer_account?.email;
+              if (refBuyerEmail) {
+                emailService.sendRefundConfirmationEmail(refBuyerEmail, {
+                  order_id: refOrderId,
+                  amount,
+                  refund_id: refund.id,
+                  buyer_name: refOrder.buyer_account?.contactName || refOrder.buyer_account?.businessName
+                }).catch(e => console.warn('[Webhook:Square] Refund email err:', e.message));
+              }
+            }
+          } catch (e) { console.warn('[Webhook:Square] Refund email lookup err:', e.message); }
+        }
 
         // Downgrade order status to cancelled if refund is completed
         if (refund.payment_id) {
@@ -280,6 +324,27 @@ router.post('/stripe', express.raw({ type: 'application/json' }), async (req, re
          WHERE payment_id = $2 OR metadata->>'stripe_payment_intent_id' = $2`,
         [JSON.stringify({ type: eventType, error: obj.last_payment_error?.message, at: new Date().toISOString() }), obj.id]
       );
+
+      // Send payment failure alert to buyer
+      const failRecord = await query('SELECT * FROM payment_records WHERE payment_id = $1 OR metadata->>\'stripe_payment_intent_id\' = $1 LIMIT 1', [obj.id]);
+      if (failRecord.rows.length > 0) {
+        const r = failRecord.rows[0];
+        const orderId = r.order_id || r.metadata?.masterOrderId;
+        if (orderId) {
+          try {
+            const order = await getOrderById(orderId);
+            const buyerEmail = order?.buyer_account?.email;
+            if (buyerEmail) {
+              emailService.sendPaymentFailureEmail(buyerEmail, {
+                order_id: orderId,
+                amount: Number(r.amount || 0),
+                reason: obj.last_payment_error?.message || 'Payment could not be processed',
+                buyer_name: order.buyer_account?.contactName || order.buyer_account?.businessName
+              }).catch(e => console.warn('[Webhook:Stripe] Payment failure email err:', e.message));
+            }
+          } catch (e) { console.warn('[Webhook:Stripe] Payment failure email lookup err:', e.message); }
+        }
+      }
     } else if (eventType === 'charge.refunded' || eventType === 'charge.refund.updated') {
       const amount = Number(obj.amount_refunded || obj.amount || 0) / 100;
       const paymentIntentId = obj.payment_intent;
@@ -296,6 +361,28 @@ router.post('/stripe', express.raw({ type: 'application/json' }), async (req, re
         ingestRefundReversal({
           refund_id: obj.id, order_id: paymentIntentId, amount, provider: 'stripe',
         }).catch(e => console.error('[Webhook:Stripe] Refund reversal err:', e.message));
+
+        // Send refund confirmation email
+        if (paymentIntentId) {
+          try {
+            const refRecord = await query(
+              'SELECT * FROM payment_records WHERE payment_id = $1 OR metadata->>\'stripe_payment_intent_id\' = $1 LIMIT 1', [paymentIntentId]
+            );
+            const orderId = refRecord.rows[0]?.order_id || refRecord.rows[0]?.metadata?.masterOrderId;
+            if (orderId) {
+              const order = await getOrderById(orderId);
+              const buyerEmail = order?.buyer_account?.email;
+              if (buyerEmail) {
+                emailService.sendRefundConfirmationEmail(buyerEmail, {
+                  order_id: orderId,
+                  amount,
+                  refund_id: obj.id,
+                  buyer_name: order.buyer_account?.contactName || order.buyer_account?.businessName
+                }).catch(e => console.warn('[Webhook:Stripe] Refund email err:', e.message));
+              }
+            }
+          } catch (e) { console.warn('[Webhook:Stripe] Refund email lookup err:', e.message); }
+        }
       }
     }
   } catch (err) {

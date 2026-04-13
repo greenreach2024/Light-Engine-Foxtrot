@@ -51,6 +51,10 @@
     productRequests: [],
     deliveryQuote: null,
     selectedFulfillment: 'delivery',
+    priceWatchState: {
+      alerts: [],
+      result: null,
+    },
 
     normalizeBuyer(buyer) {
       if (!buyer) return null;
@@ -292,6 +296,10 @@
 
         const contactBtn = target.closest('[data-action="contact-farm"]');
         if (contactBtn) return this.contactFarms(contactBtn.dataset.orderid);
+
+        if (target.closest('[data-action="open-price-watch-modal"]')) return this.openPriceWatchModal();
+        if (target.closest('[data-action="close-price-watch-modal"]')) return this.closePriceWatchModal();
+        if (target.id === 'price-watch-modal') return this.closePriceWatchModal();
       });
     },
 
@@ -971,7 +979,9 @@
 
             this.catalog = skus;
             this.farms = farms;
+            this.catalogMeta = data?.meta || {};
             this.renderCatalog();
+            this.renderDiscountSummary();
             this.renderFarmList(); // Show farms even if no inventory
             this.updateDemoBanner();
             return;
@@ -1198,6 +1208,65 @@
           </div>
         `;
       }
+    },
+
+    renderDiscountSummary() {
+      let container = document.getElementById('discount-summary');
+      if (!container) {
+        const header = document.querySelector('.catalog-header');
+        if (!header) return;
+        container = document.createElement('div');
+        container.id = 'discount-summary';
+        container.className = 'discount-summary';
+        // Insert after the h2 and before the filters
+        const filters = header.querySelector('.catalog-filters');
+        if (filters) {
+          header.insertBefore(container, filters);
+        } else {
+          header.appendChild(container);
+        }
+      }
+
+      const meta = this.catalogMeta || {};
+      const skuFactor = Number(meta.sku_factor || 0.75);
+      const buyerDiscount = Number(meta.buyer_discount_rate || 0);
+      const rollingAvg = Number(meta.buyer_rolling_average || 0);
+      const windowDays = Number(meta.window_days || 90);
+      const wholesaleDiscountPct = Math.round((1 - skuFactor) * 100);
+      const tiers = meta.volume_tiers || [
+        { min_avg: 750, rate: 0.02 },
+        { min_avg: 1500, rate: 0.04 },
+        { min_avg: 3000, rate: 0.06 },
+        { min_avg: 5000, rate: 0.08 }
+      ];
+
+      let html = '<div class="discount-tags">';
+      // Wholesale discount from retail
+      html += '<span class="discount-tag discount-tag--wholesale">'
+            + '<strong>' + wholesaleDiscountPct + '% off retail</strong>'
+            + '<span class="discount-tag__label">Wholesale discount</span>'
+            + '</span>';
+
+      // Volume tier ladder
+      for (var i = 0; i < tiers.length; i++) {
+        var tier = tiers[i];
+        var pct = (tier.rate * 100).toFixed(0);
+        var isActive = buyerDiscount >= tier.rate && buyerDiscount > 0;
+        var isNext = !isActive && (i === 0 ? buyerDiscount === 0 : buyerDiscount >= tiers[i - 1].rate);
+        var cls = isActive ? 'discount-tag--volume-active' : (isNext ? 'discount-tag--volume-next' : 'discount-tag--volume-locked');
+        var label = '$' + tier.min_avg.toLocaleString() + '+ avg/' + windowDays + 'd';
+        html += '<span class="discount-tag ' + cls + '">'
+              + '<strong>' + pct + '% volume discount</strong>'
+              + '<span class="discount-tag__label">' + label + (isActive ? ' ✓ Active' : '') + '</span>'
+              + '</span>';
+      }
+      html += '</div>';
+
+      if (rollingAvg > 0) {
+        html += '<div class="discount-rolling-avg">Your ' + windowDays + '-day rolling avg: <strong>$' + rollingAvg.toFixed(2) + '</strong></div>';
+      }
+
+      container.innerHTML = html;
     },
 
     renderFarmList() {
@@ -2240,18 +2309,66 @@
      * Load buyer insights dashboard
      */
     async loadBuyerInsights() {
+      const marketSnapshot = await this.fetchMarketInsightSnapshot(2);
+
       await Promise.all([
-        this.loadDemandTrends(),
-        this.loadPriceAlerts(),
+        this.loadDemandTrends(marketSnapshot),
+        this.loadPriceAlerts(marketSnapshot),
         this.loadEnvironmentalImpact()
       ]);
     },
 
     /**
+     * Fetch price-watch market context once and reuse for insight cards.
+     */
+    async fetchMarketInsightSnapshot(threshold = 7, recencyDays = 14) {
+      try {
+        const headers = {};
+        if (this.token) headers['Authorization'] = `Bearer ${this.token}`;
+        const response = await fetch(`/api/wholesale/market/price-alerts?threshold=${encodeURIComponent(threshold)}&recencyDays=${encodeURIComponent(recencyDays)}`, { headers });
+        if (!response.ok) return null;
+        const payload = await response.json();
+        return payload?.ok ? payload : null;
+      } catch (error) {
+        console.warn('[Wholesale] Market insight snapshot unavailable:', error);
+        return null;
+      }
+    },
+
+    /**
      * Load demand trends from actual order data
      */
-    async loadDemandTrends() {
+    async loadDemandTrends(marketSnapshot = null) {
       const demandContent = document.getElementById('demand-content');
+      const contextualSignals = Array.isArray(marketSnapshot?.topSignals)
+        ? marketSnapshot.topSignals.slice(0, 3)
+        : [];
+
+      const aiContextHtml = contextualSignals.length > 0
+        ? `
+          <div style="margin-top: 0.75rem; padding-top: 0.65rem; border-top: 1px solid var(--border);">
+            <div style="font-size: 0.78rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 0.4rem;">
+              AI National/North American Demand Context
+            </div>
+            ${contextualSignals.map((signal) => {
+              const leadDriver = (signal.movementDrivers || []).find((driver) => driver?.hasEvidence) || (signal.movementDrivers || [])[0];
+              const driverText = leadDriver?.evidence || 'No explicit demand driver available in the latest AI narrative.';
+              const retailerCount = Array.isArray(signal.retailers) ? signal.retailers.length : 0;
+              const changeText = signal.change || '0.0%';
+              return `
+                <div style="margin-bottom: 0.45rem; padding: 0.45rem 0.5rem; border-radius: 6px; background: rgba(0, 0, 0, 0.03);">
+                  <div style="display:flex; justify-content:space-between; gap:0.4rem; align-items:flex-start;">
+                    <strong style="font-size:0.76rem;">${escapeHtml(signal.product || 'Market signal')}</strong>
+                    <span style="font-size:0.74rem; color:var(--text-secondary);">${escapeHtml(changeText)}</span>
+                  </div>
+                  <div style="font-size:0.72rem; color:var(--text-secondary); margin-top:0.2rem;">${escapeHtml(driverText)}</div>
+                  <div style="font-size:0.7rem; color:var(--text-secondary); margin-top:0.2rem;">Coverage: ${retailerCount} national retailers • Confidence: ${escapeHtml(signal.confidence || 'unknown')}</div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        `
+        : '';
 
       try {
         // Use previously loaded orders or fetch them
@@ -2280,7 +2397,7 @@
               </div>
               <div class="demand-trend trending-stable">In Stock</div>
             </div>
-          `).join('');
+          `).join('') + aiContextHtml;
           return;
         }
 
@@ -2323,60 +2440,190 @@
           </div>
         `).join('');
 
-        demandContent.innerHTML = html;
+        demandContent.innerHTML = html + aiContextHtml;
       } catch (err) {
         console.error('[Wholesale] Demand trends error:', err);
         demandContent.innerHTML = '<div class="loading-state">Unable to load demand data</div>';
       }
     },
 
+    isPriceWatchNewsworthy(alert) {
+      const hasArticles = Array.isArray(alert?.articles) && alert.articles.length > 0;
+      const meaningfulDrivers = (Array.isArray(alert?.movementDrivers) ? alert.movementDrivers : [])
+        .filter((driver) => driver && (driver.hasEvidence !== false))
+        .filter((driver) => ['article', 'ai_reasoning', 'seasonality', 'inferred'].includes(String(driver.source || '').toLowerCase()));
+      return hasArticles || meaningfulDrivers.length > 0;
+    },
+
+    renderPriceWatchModal(alerts, result) {
+      const monitorScope = result?.monitorScope === 'national_retailers'
+        ? 'National + North American retailers'
+        : 'North American retailer coverage';
+      const recencyWindowDays = Number(result?.recencyWindowDays || 14);
+
+      let modal = document.getElementById('price-watch-modal');
+      if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'price-watch-modal';
+        modal.className = 'modal';
+        modal.style.display = 'none';
+        document.body.appendChild(modal);
+      }
+
+      const alertsHtml = (Array.isArray(alerts) ? alerts : []).map((alert) => {
+        const alertClass = `anomaly-${alert.type}`;
+        const changeColor = alert.type === 'increase' ? 'color: var(--warning)' : 'color: var(--info)';
+        const movementDrivers = (Array.isArray(alert.movementDrivers) ? alert.movementDrivers : [])
+          .filter((driver) => driver && (driver.hasEvidence !== false))
+          .slice(0, 4);
+        const articles = Array.isArray(alert.articles) ? alert.articles : [];
+
+        const driversHtml = movementDrivers.length > 0
+          ? `<div style="margin-top: 0.6rem; padding: 0.6rem; background: rgba(0, 0, 0, 0.03); border-radius: 6px;">
+              <div style="font-size: 0.78rem; font-weight: 600; margin-bottom: 0.35rem;">Likely Cost Drivers</div>
+              ${movementDrivers.map((driver) => `
+                <div style="font-size: 0.78rem; margin-bottom: 0.28rem; line-height: 1.45;">
+                  <strong>${escapeHtml(driver.label || 'Driver')}:</strong> ${escapeHtml(driver.evidence || '')}
+                </div>
+              `).join('')}
+            </div>`
+          : '';
+
+        const newsHtml = articles.length > 0
+          ? `<div style="margin-top: 0.65rem; font-size: 0.78rem; line-height: 1.45;">
+              <strong>News-worthy Events:</strong>
+              <div style="margin-top: 0.25rem; display: grid; gap: 0.25rem;">
+                ${articles.slice(0, 3).map((article) => `
+                  <a href="${safeUrl(article.url)}" target="_blank" rel="noopener noreferrer" style="color: var(--primary); text-decoration: none;">
+                    ${escapeHtml(article.title || 'Market article')} (${escapeHtml(article.source || 'source')})
+                  </a>
+                `).join('')}
+              </div>
+            </div>`
+          : '';
+
+        return `
+          <div class="price-alert ${alertClass}" style="margin-bottom: 0.75rem;">
+            <div class="price-alert-header">
+              <span class="price-alert-product">${escapeHtml(alert.product)}</span>
+              <span class="price-change" style="${escapeAttr(changeColor)}">${escapeHtml(alert.change)}</span>
+            </div>
+            <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.35rem;">
+              $${Number(alert.previousPrice || 0).toFixed(2)} -> $${Number(alert.currentPrice || 0).toFixed(2)} ${escapeHtml(alert.priceUnit || '')}
+            </div>
+            <div class="price-alert-summary">${escapeHtml(alert.summary || '')}</div>
+            ${driversHtml}
+            ${newsHtml}
+          </div>
+        `;
+      }).join('');
+
+      modal.innerHTML = `
+        <div class="modal-content" style="max-width: min(96vw, 1400px); width: 96vw; margin: 1rem auto;">
+          <div class="modal-header">
+            <h2>Price Watch - Global Market Event Viewer</h2>
+            <button class="modal-close" data-action="close-price-watch-modal">&times;</button>
+          </div>
+          <div class="modal-body" style="max-height: 78vh; overflow-y: auto;">
+            <p style="margin-bottom: 0.85rem; color: var(--text-secondary);">
+              Showing <strong>${alerts.length}</strong> recently changed produce categories (last ${recencyWindowDays} days) from ${escapeHtml(monitorScope)}.
+            </p>
+            ${alertsHtml || '<div class="loading-state">No recent events to display.</div>'}
+          </div>
+        </div>
+      `;
+    },
+
+    openPriceWatchModal() {
+      const modal = document.getElementById('price-watch-modal');
+      if (!modal) return;
+      modal.style.display = 'flex';
+    },
+
+    closePriceWatchModal() {
+      const modal = document.getElementById('price-watch-modal');
+      if (!modal) return;
+      modal.style.display = 'none';
+    },
+
     /**
      * Load price anomaly alerts with real market data from North American retailers
      */
-    async loadPriceAlerts() {
+    async loadPriceAlerts(marketSnapshot = null) {
       const priceContent = document.getElementById('price-content');
       
       try {
-        // Call market intelligence API for real-time price alerts
-        const headers = {};
-        if (this.token) headers['Authorization'] = `Bearer ${this.token}`;
-        const response = await fetch('/api/wholesale/market/price-alerts?threshold=7', { headers });
-        if (!response.ok) {
-          // Silently handle auth/permission errors - price alerts are optional
-          priceContent.innerHTML = '<div class="loading-state">All monitored prices stable (no significant changes detected)</div>';
+        const result = marketSnapshot || await this.fetchMarketInsightSnapshot(2, 14);
+        if (!result || !result.ok) {
+          priceContent.innerHTML = '<div class="loading-state">Price Watch is temporarily unavailable.</div>';
           return;
         }
-        const result = await response.json();
-        
-        if (!result.ok) {
-          throw new Error('Failed to load market data');
-        }
-        
-        const alerts = result.alerts || [];
+
+        const recencyWindowDays = Number(result.recencyWindowDays || 14);
+        const alerts = (Array.isArray(result.alerts) ? result.alerts : [])
+          .filter((alert) => {
+            if (!alert?.lastUpdated) return false;
+            const updatedTs = new Date(alert.lastUpdated).getTime();
+            if (!Number.isFinite(updatedTs)) return false;
+            const ageMs = Date.now() - updatedTs;
+            return ageMs >= 0 && ageMs <= recencyWindowDays * 24 * 60 * 60 * 1000;
+          })
+          .sort((a, b) => Math.abs(parseFloat(b.change || '0')) - Math.abs(parseFloat(a.change || '0')));
+
+        const monitorScope = result.monitorScope === 'national_retailers'
+          ? 'National + North American retailers'
+          : 'North American retailer coverage';
+        const alertThreshold = Number(result.threshold || 7);
+
+        this.priceWatchState = { alerts, result };
         
         if (alerts.length === 0) {
-          priceContent.innerHTML = '<div class="loading-state"> All monitored prices stable (no significant changes detected)</div>';
+          priceContent.innerHTML = `<div class="loading-state">No recent produce price changes above ${alertThreshold.toFixed(0)}% were detected in the last ${recencyWindowDays} days.</div>`;
           return;
         }
-        
-        const html = alerts.map(alert => {
+
+        this.renderPriceWatchModal(alerts, result);
+
+        const newsworthyAlerts = alerts.filter((alert) => this.isPriceWatchNewsworthy(alert));
+        const collapseToModal = alerts.length > 1 && newsworthyAlerts.length > 1;
+
+        if (collapseToModal) {
+          const compactRows = alerts.slice(0, 2).map((alert) => {
+            const changeColor = alert.type === 'increase' ? 'color: var(--warning)' : 'color: var(--info)';
+            return `
+              <div style="padding: 0.55rem 0.65rem; margin-bottom: 0.45rem; background: var(--bg); border-radius: 6px;">
+                <div style="display:flex; justify-content:space-between; gap:0.5rem; align-items:center;">
+                  <strong style="font-size:0.86rem;">${escapeHtml(alert.product)}</strong>
+                  <span style="font-weight:700; ${escapeAttr(changeColor)}">${escapeHtml(alert.change)}</span>
+                </div>
+                <div style="font-size:0.76rem; color:var(--text-secondary); margin-top:0.2rem;">
+                  ${escapeHtml(alert.summary || '')}
+                </div>
+              </div>
+            `;
+          }).join('');
+
+          priceContent.innerHTML = `
+            <div style="font-size:0.82rem; color:var(--text-secondary); margin-bottom:0.55rem;">
+              ${alerts.length} produce categories changed recently. ${newsworthyAlerts.length} include new cost-of-goods signals.
+            </div>
+            ${compactRows}
+            <button class="btn btn-primary" data-action="open-price-watch-modal" style="width:100%; margin-top:0.35rem;">
+              Open Full-Width Market Event Viewer
+            </button>
+            <div style="font-size:0.72rem; color:var(--text-secondary); margin-top:0.4rem;">
+              Scope: ${escapeHtml(monitorScope)} - Threshold: ${alertThreshold.toFixed(0)}% - Window: ${recencyWindowDays} days
+            </div>
+          `;
+          return;
+        }
+
+        const html = alerts.slice(0, 3).map((alert) => {
           const alertClass = `anomaly-${alert.type}`;
           const changeColor = alert.type === 'increase' ? 'color: var(--warning)' : 'color: var(--info)';
-          const movementDrivers = Array.isArray(alert.movementDrivers) ? alert.movementDrivers : [];
-          const freshnessLabel = alert.analysisFreshness === 'fresh'
-            ? 'Fresh (<72h)'
-            : alert.analysisFreshness === 'aging'
-              ? 'Aging (3-7d)'
-              : alert.analysisFreshness === 'stale'
-                ? 'Stale (>7d)'
-                : 'Unknown';
-
-          const driverHtml = movementDrivers.map(driver => {
-            const impact = driver && driver.impact && driver.impact !== 'neutral'
-              ? ` <span style="opacity:0.8;">(${escapeHtml(driver.impact)})</span>`
-              : '';
-            return `<div style="margin-top: 0.2rem;"><strong>${escapeHtml(driver?.label || 'Driver')}:</strong> ${escapeHtml(driver?.evidence || 'No evidence available')}${impact}</div>`;
-          }).join('');
+          const movementDrivers = (Array.isArray(alert.movementDrivers) ? alert.movementDrivers : [])
+            .filter((driver) => driver && (driver.hasEvidence !== false));
+          const leadDriver = movementDrivers[0];
 
           const updatedDisplay = alert.lastUpdated
             ? new Date(alert.lastUpdated).toLocaleString()
@@ -2389,37 +2636,40 @@
                   <span class="price-change" style="${escapeAttr(changeColor)}">${escapeHtml(alert.change)}</span>
               </div>
               <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.5rem;">
-                  $${Number(alert.previousPrice || 0).toFixed(2)} → $${Number(alert.currentPrice || 0).toFixed(2)} ${escapeHtml(alert.priceUnit)}
+                  $${Number(alert.previousPrice || 0).toFixed(2)} → $${Number(alert.currentPrice || 0).toFixed(2)} ${escapeHtml(alert.priceUnit || '')}
               </div>
               <div class="price-alert-summary">
-                  ${escapeHtml(alert.summary)}
+                  ${escapeHtml(alert.summary || '')}
               </div>
-              ${driverHtml ? `
-                <div style="font-size: 0.78rem; color: var(--text-secondary); margin-top: 0.5rem; padding: 0.45rem 0.55rem; background: rgba(0, 0, 0, 0.03); border-radius: 6px;">
-                  <strong>AI Driver Analysis:</strong>
-                  ${driverHtml}
+              ${leadDriver ? `
+                <div style="font-size: 0.78rem; color: var(--text-secondary); margin-top: 0.5rem; padding: 0.45rem 0.55rem; background: rgba(0, 0, 0, 0.03); border-radius: 6px; line-height:1.45;">
+                  <strong>Likely Driver:</strong> ${escapeHtml(leadDriver.label || 'Market Driver')} - ${escapeHtml(leadDriver.evidence || '')}
                 </div>
               ` : ''}
               <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid var(--border);">
-                  ${alert.retailers && alert.retailers.length > 0 ? `<strong>Retailer Coverage:</strong> ${escapeHtml(alert.retailers.join(', '))} (${Number(alert.dataPoints || 0)} observations)<br/>` : ''}
-                  <strong>Last Updated:</strong> ${escapeHtml(updatedDisplay)} • <strong>Confidence:</strong> ${escapeHtml(alert.confidence)} • <strong>AI Freshness:</strong> ${escapeHtml(freshnessLabel)}
-                  ${alert.source === 'gemini_ai' ? ' • <strong>Source:</strong> AI Market Analysis (Gemini)' : ''}
-                  ${alert.aiOutlook ? `<br/><strong>AI Outlook:</strong> ${escapeHtml(alert.aiOutlook)}` : ''}
-                  ${alert.aiAction ? ` • <strong>Action:</strong> ${escapeHtml(alert.aiAction)}` : ''}
-                  ${alert.articles && alert.articles.length > 0 ? `<br/><strong>News References:</strong> ${alert.articles.map(a => `<a href="${safeUrl(a.url)}" target="_blank" rel="noopener noreferrer" style="color: var(--primary);">${escapeHtml(a.title)} (${escapeHtml(a.source)})</a>`).join(', ')}` : ''}
+                  ${alert.retailers && alert.retailers.length > 0 ? `<strong>Coverage:</strong> ${escapeHtml(alert.retailers.join(', '))} (${Number(alert.dataPoints || 0)} observations)<br/>` : ''}
+                  <strong>Updated:</strong> ${escapeHtml(updatedDisplay)} • <strong>Confidence:</strong> ${escapeHtml(alert.confidence || 'unknown')}
+                  ${alert.articles && alert.articles.length > 0 ? `<br/><strong>News:</strong> ${alert.articles.slice(0, 2).map(a => `<a href="${safeUrl(a.url)}" target="_blank" rel="noopener noreferrer" style="color: var(--primary);">${escapeHtml(a.title)} (${escapeHtml(a.source)})</a>`).join(', ')}` : ''}
               </div>
             </div>
           `;
         }).join('');
 
-        priceContent.innerHTML = html;
+        priceContent.innerHTML = `${html}
+          ${alerts.length > 1 ? `
+            <button class="btn btn-secondary" data-action="open-price-watch-modal" style="width:100%; margin-top: 0.45rem;">
+              View All ${alerts.length} Recent Changes (Full Width)
+            </button>
+          ` : ''}
+          <div style="font-size:0.72rem; color:var(--text-secondary); margin-top:0.4rem;">
+            Scope: ${escapeHtml(monitorScope)} • Threshold: ${alertThreshold.toFixed(0)}% • Window: ${recencyWindowDays} days
+          </div>`;
         
-        console.log(`[Price Watch] Loaded ${alerts.length} market alerts from ${result.totalProductsMonitored} monitored products`);
+        console.log(`[Price Watch] Loaded ${alerts.length} recent alerts from ${result.totalProductsMonitored} monitored products`);
         
       } catch (error) {
         console.error('Price Watch error:', error);
-        // Show stable-prices fallback when market API is unavailable
-        priceContent.innerHTML = '<div class="loading-state">All monitored prices stable (no significant changes detected)</div>';
+        priceContent.innerHTML = '<div class="loading-state">Price Watch is temporarily unavailable.</div>';
       }
     },
 
@@ -2613,10 +2863,12 @@
       impactScore.textContent = grade;
       impactScore.className = `impact-score ${gradeClass}`;
 
+      const distanceDisplay = avgDistance < 1 ? '< 1' : avgDistance.toFixed(0);
+
       const html = `
         <div class="impact-metric">
           <span class="impact-label">Average Farm Distance</span>
-          <span class="impact-value">${avgDistance.toFixed(0)} km</span>
+          <span class="impact-value">${distanceDisplay} km</span>
         </div>
         <div class="impact-metric">
           <span class="impact-label">Est. Carbon per Delivery</span>

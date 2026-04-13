@@ -27,7 +27,7 @@ import { listAllOrders, listAllBuyers } from '../services/wholesaleMemoryStore.j
 import { buildLearningContext, learnFromConversation, buildAutonomyContext, getAllDomainOwnership, getTopInsights, buildInterAgentContext, getConversationRecap } from '../services/faye-learning.js';
 import { buildPolicyContext, checkIntegrityGate, checkSecurityGate } from '../services/faye-policy.js';
 import { ENFORCEMENT_PROMPT_BLOCK, enforceResponseShape, sendEnforcedResponse } from '../middleware/agent-enforcement.js';
-import { getGeminiClient, GEMINI_FLASH, estimateGeminiCost, anthropicToolsToOpenAI as convertToolsToOpenAI, isGeminiConfigured } from '../lib/gemini-client.js';
+import { getGeminiClient, GEMINI_FLASH, estimateGeminiCost, anthropicToolsToOpenAI as convertToolsToOpenAI, isGeminiConfigured, refreshGeminiToken } from '../lib/gemini-client.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -48,7 +48,33 @@ try {
 let geminiClient = null;
 async function ensureGemini() {
   if (geminiClient) return geminiClient;
-  geminiClient = await getGeminiClient();
+  const client = await getGeminiClient();
+  geminiClient = new Proxy(client, {
+    get(target, prop) {
+      if (prop === 'chat') {
+        return {
+          completions: {
+            create: async (params) => {
+              try {
+                return await target.chat.completions.create(params);
+              } catch (err) {
+                const status = err?.status || err?.response?.status || (err?.message && err.message.match(/(\d{3}) status/)?.[1]);
+                if (String(status) === '401') {
+                  console.warn('[F.A.Y.E.] Vertex AI 401 — refreshing token and retrying');
+                  await refreshGeminiToken();
+                  geminiClient = null;
+                  const freshClient = await getGeminiClient();
+                  return await freshClient.chat.completions.create(params);
+                }
+                throw err;
+              }
+            }
+          }
+        };
+      }
+      return target[prop];
+    }
+  });
   return geminiClient;
 }
 
@@ -292,6 +318,13 @@ NEVER ask the admin to clarify something you can figure out yourself with your t
 NEVER give a passive summary and then wait. Summaries must include your assessment, your recommended action, and your confidence level. If the situation requires action and you have authority, take it and report what you did.
 
 Your responses should read like a senior operator briefing a CEO -- concise, decisive, action-oriented. No hedging. No throat-clearing. No offers to help more.
+
+## Intuitive Operation — READ THIS BEFORE EVERY RESPONSE
+- CHECK YOUR KNOWLEDGE FIRST: You have a knowledge base, conversation memory, and admin memory. Before asking the admin anything, check if you already know the answer from a prior conversation, stored insight, or the current context. Never re-ask for information you have stored.
+- FILL IN THE BLANKS: When the admin gives a simple instruction with missing details, resolve them yourself using your tools, knowledge base, and current context. If you can make a reasonable assumption, state it and proceed — do not pause for confirmation on what you can infer.
+- NO VERIFICATION LOOPS: If the admin says "check on X", "handle this", "approve it", "look into this" — investigate and act. Do not ask "would you like me to investigate?" when they just told you to.
+- ONE-SHOT EXECUTION: Investigate → Diagnose → Act (or Recommend) → Report. Deliver the full answer in a single response when possible. The admin values thoroughness in one pass over multiple rounds of Q&A.
+- READ INTENT: "How are we doing?" means pull operational data and give an assessment. "What's wrong with the orders?" means diagnose now. "Fix this" means fix it if you have the authority, or propose the specific fix if you need confirmation.
 
 ## Current Context
 - Date: ${dateStr}, ${timeStr}

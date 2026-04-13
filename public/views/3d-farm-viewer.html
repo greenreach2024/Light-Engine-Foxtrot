@@ -1,0 +1,1431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>3D Farm Viewer - Light Engine</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #0f172a;
+      color: #f1f5f9;
+      overflow: hidden;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Header ──────────────────────────────────────────── */
+    .header {
+      background: rgba(0,0,0,0.6);
+      padding: 0.5rem 1.25rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid rgba(148,163,184,0.12);
+      backdrop-filter: blur(12px);
+      z-index: 100;
+      flex-shrink: 0;
+    }
+    .header-left { display: flex; align-items: center; gap: 1rem; }
+    .header h1 { font-size: 1.1rem; font-weight: 700; letter-spacing: -0.3px; white-space: nowrap; }
+    .header h1 em { font-style: normal; color: #818cf8; }
+    .breadcrumb {
+      display: flex; align-items: center; gap: 0.4rem;
+      color: #64748b; font-size: 0.72rem;
+    }
+    .breadcrumb a { color: #64748b; text-decoration: none; }
+    .breadcrumb a:hover { color: #e2e8f0; }
+
+    /* ── Toolbar ─────────────────────────────────────────── */
+    .toolbar { display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; }
+    .toolbar button, .toolbar select {
+      background: rgba(30,41,59,0.85);
+      color: #cbd5e1;
+      border: 1px solid rgba(99,102,241,0.2);
+      padding: 0.3rem 0.65rem;
+      border-radius: 6px;
+      font-size: 0.72rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+    .toolbar button:hover { background: rgba(99,102,241,0.12); border-color: rgba(99,102,241,0.4); }
+    .toolbar button.active { background: rgba(99,102,241,0.22); border-color: #818cf8; color: #e0e7ff; }
+    .toolbar select { outline: none; }
+    .toolbar .sep { width: 1px; height: 18px; background: rgba(148,163,184,0.15); margin: 0 0.15rem; }
+
+    /* ── Canvas container ────────────────────────────────── */
+    #viewer-container { flex: 1; position: relative; overflow: hidden; }
+    #viewer-container canvas { display: block; }
+
+    /* ── Data Legend (gradient bar) ───────────────────────── */
+    .data-legend {
+      position: absolute;
+      bottom: 16px; left: 50%; transform: translateX(-50%);
+      background: rgba(15,23,42,0.92);
+      border: 1px solid rgba(99,102,241,0.2);
+      border-radius: 10px;
+      padding: 0.6rem 1.2rem;
+      z-index: 60;
+      backdrop-filter: blur(10px);
+      display: none;
+      align-items: center;
+      gap: 0.75rem;
+      min-width: 340px;
+    }
+    .data-legend.visible { display: flex; }
+    .data-legend .legend-title {
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      white-space: nowrap;
+    }
+    .data-legend .gradient-bar {
+      flex: 1;
+      height: 12px;
+      border-radius: 4px;
+      min-width: 140px;
+    }
+    .data-legend .range-labels {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.68rem;
+      color: #94a3b8;
+      margin-top: 2px;
+    }
+    .data-legend .legend-value {
+      font-size: 0.72rem;
+      color: #e2e8f0;
+      white-space: nowrap;
+    }
+
+    /* ── Zone Info HUD (bottom-left) ─────────────────────── */
+    .zone-hud {
+      position: absolute;
+      bottom: 16px; left: 16px;
+      background: rgba(15,23,42,0.92);
+      border: 1px solid rgba(99,102,241,0.2);
+      border-radius: 12px;
+      padding: 0.8rem 1rem;
+      z-index: 60;
+      backdrop-filter: blur(10px);
+      min-width: 200px;
+      max-width: 280px;
+      opacity: 0;
+      transform: translateY(10px);
+      transition: opacity 0.25s, transform 0.25s;
+      pointer-events: none;
+    }
+    .zone-hud.visible { opacity: 1; transform: translateY(0); pointer-events: auto; }
+    .zone-hud h4 {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #c7d2fe;
+      margin-bottom: 0.4rem;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+    .zone-hud .hud-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.25rem 0;
+      border-bottom: 1px solid rgba(148,163,184,0.06);
+      font-size: 0.78rem;
+    }
+    .zone-hud .hud-row:last-child { border-bottom: none; }
+    .zone-hud .hud-label { color: #64748b; }
+    .zone-hud .hud-value { color: #e2e8f0; font-weight: 600; }
+    .zone-hud .hud-value.good { color: #4ade80; }
+    .zone-hud .hud-value.warn { color: #fbbf24; }
+    .zone-hud .hud-value.danger { color: #f87171; }
+
+    /* ── Farm stats bar (top-right overlay) ──────────────── */
+    .farm-stats {
+      position: absolute;
+      top: 12px; right: 12px;
+      display: flex;
+      gap: 0.5rem;
+      z-index: 60;
+    }
+    .stat-chip {
+      background: rgba(15,23,42,0.88);
+      border: 1px solid rgba(99,102,241,0.15);
+      border-radius: 8px;
+      padding: 0.4rem 0.75rem;
+      backdrop-filter: blur(8px);
+      text-align: center;
+      min-width: 72px;
+    }
+    .stat-chip .chip-value {
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: #e2e8f0;
+      line-height: 1.2;
+    }
+    .stat-chip .chip-label {
+      font-size: 0.6rem;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+
+    /* ── Detail panel (right side) ───────────────────────── */
+    .detail-panel {
+      position: absolute;
+      top: 56px; right: 12px;
+      width: 300px;
+      max-height: calc(100% - 80px);
+      overflow-y: auto;
+      background: rgba(15,23,42,0.94);
+      border: 1px solid rgba(99,102,241,0.2);
+      border-radius: 12px;
+      backdrop-filter: blur(12px);
+      padding: 1rem;
+      z-index: 55;
+      opacity: 0; pointer-events: none;
+      transform: translateX(15px);
+      transition: all 0.25s ease;
+    }
+    .detail-panel.visible { opacity: 1; pointer-events: auto; transform: translateX(0); }
+    .detail-panel .close-btn {
+      position: absolute; top: 6px; right: 8px;
+      background: none; border: none; color: #475569; font-size: 1rem; cursor: pointer;
+    }
+    .detail-panel .close-btn:hover { color: #e2e8f0; }
+    .detail-panel h3 { font-size: 0.9rem; font-weight: 600; color: #c7d2fe; margin-bottom: 0.6rem; }
+    .detail-panel .dp-section { margin-top: 0.6rem; }
+    .detail-panel .dp-label { font-size: 0.65rem; color: #475569; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.15rem; }
+    .detail-panel .dp-value { font-size: 0.85rem; color: #e2e8f0; }
+    .detail-panel .dp-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;
+      margin-top: 0.5rem;
+    }
+    .detail-panel .dp-metric {
+      background: rgba(99,102,241,0.06);
+      border-radius: 8px;
+      padding: 0.5rem;
+      text-align: center;
+    }
+    .detail-panel .dp-metric .metric-val { font-size: 1.1rem; font-weight: 700; color: #e2e8f0; }
+    .detail-panel .dp-metric .metric-lbl { font-size: 0.62rem; color: #64748b; text-transform: uppercase; }
+    .detail-panel .dp-sparkline { margin-top: 0.5rem; }
+    .detail-panel .dp-sparkline canvas { width: 100%; height: 40px; border-radius: 6px; background: rgba(0,0,0,0.2); }
+
+    /* ── GWEN assist button ──────────────────────────────── */
+    .gwen-fab {
+      position: absolute;
+      bottom: 16px; right: 16px;
+      width: 44px; height: 44px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      border: 2px solid rgba(255,255,255,0.15);
+      color: #fff;
+      font-size: 1.1rem;
+      cursor: pointer;
+      z-index: 70;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 20px rgba(99,102,241,0.3);
+      transition: all 0.2s;
+    }
+    .gwen-fab:hover { transform: scale(1.1); box-shadow: 0 6px 28px rgba(99,102,241,0.45); }
+    .gwen-fab .gwen-tooltip {
+      position: absolute; bottom: 52px; right: 0;
+      background: rgba(15,23,42,0.95);
+      border: 1px solid rgba(99,102,241,0.3);
+      border-radius: 8px;
+      padding: 0.4rem 0.7rem;
+      font-size: 0.72rem;
+      white-space: nowrap;
+      opacity: 0;
+      transition: opacity 0.2s;
+      pointer-events: none;
+      color: #c7d2fe;
+    }
+    .gwen-fab:hover .gwen-tooltip { opacity: 1; }
+
+    /* ── Loading overlay ─────────────────────────────────── */
+    .loading-overlay {
+      position: absolute; inset: 0;
+      background: rgba(15,23,42,0.96);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      z-index: 200;
+      transition: opacity 0.6s;
+    }
+    .loading-overlay.done { opacity: 0; pointer-events: none; }
+    .loading-spinner {
+      width: 44px; height: 44px;
+      border: 3px solid rgba(99,102,241,0.15);
+      border-top-color: #818cf8;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+    .loading-text { margin-top: 0.8rem; color: #64748b; font-size: 0.82rem; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Tooltip ─────────────────────────────────────────── */
+    .hover-tip {
+      position: absolute;
+      background: rgba(15,23,42,0.94);
+      border: 1px solid rgba(99,102,241,0.25);
+      border-radius: 8px;
+      padding: 0.4rem 0.65rem;
+      font-size: 0.74rem;
+      pointer-events: none;
+      z-index: 80;
+      transform: translate(-50%, -115%);
+      white-space: nowrap;
+      opacity: 0;
+      transition: opacity 0.12s;
+    }
+    .hover-tip.visible { opacity: 1; }
+    .hover-tip .ht-title { font-weight: 600; color: #c7d2fe; }
+    .hover-tip .ht-sub { color: #64748b; font-size: 0.66rem; margin-top: 1px; }
+
+    /* ── Status bar ──────────────────────────────────────── */
+    .status-bar {
+      position: absolute;
+      bottom: 16px; right: 68px;
+      background: rgba(15,23,42,0.8);
+      border: 1px solid rgba(148,163,184,0.08);
+      border-radius: 6px;
+      padding: 0.25rem 0.6rem;
+      font-size: 0.62rem;
+      color: #475569;
+      z-index: 55;
+    }
+
+    /* ── Scrollbar ───────────────────────────────────────── */
+    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(99,102,241,0.2); border-radius: 3px; }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-left">
+      <div class="breadcrumb">
+        <a href="/LE-farm-admin.html">Farm</a>
+        <span>/</span>
+        <span>3D Viewer</span>
+      </div>
+      <h1>3D <em>Farm Viewer</em></h1>
+    </div>
+    <div class="toolbar">
+      <select id="roomSelect" title="Room filter">
+        <option value="__all">All Rooms</option>
+      </select>
+      <div class="sep"></div>
+      <button data-overlay="none" class="active">Off</button>
+      <button data-overlay="temperature">Temp</button>
+      <button data-overlay="humidity">Humidity</button>
+      <button data-overlay="co2">CO2</button>
+      <button data-overlay="vpd">VPD</button>
+      <div class="sep"></div>
+      <button id="btnTop" title="Top-down view">Top</button>
+      <button id="btnAngle" title="Angled view">3D</button>
+      <button id="btnReset" title="Reset camera">Reset</button>
+    </div>
+  </div>
+
+  <!-- Canvas -->
+  <div id="viewer-container">
+    <canvas id="farmCanvas"></canvas>
+
+    <div class="loading-overlay" id="loadingOverlay">
+      <div class="loading-spinner"></div>
+      <div class="loading-text">Loading farm environment...</div>
+    </div>
+
+    <!-- Hover tooltip -->
+    <div class="hover-tip" id="hoverTip">
+      <div class="ht-title" id="htTitle"></div>
+      <div class="ht-sub" id="htSub"></div>
+    </div>
+
+    <!-- Farm stat chips -->
+    <div class="farm-stats" id="farmStats"></div>
+
+    <!-- Zone HUD (appears on hover/click) -->
+    <div class="zone-hud" id="zoneHud"></div>
+
+    <!-- Data legend (gradient + range for active overlay) -->
+    <div class="data-legend" id="dataLegend">
+      <div class="legend-title" id="legendTitle">Temperature</div>
+      <div style="flex:1">
+        <div class="gradient-bar" id="legendGradient"></div>
+        <div class="range-labels">
+          <span id="legendMin">15C</span>
+          <span id="legendMax">35C</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Detail panel -->
+    <div class="detail-panel" id="detailPanel">
+      <button class="close-btn" id="detailClose">&#10005;</button>
+      <div id="detailContent"></div>
+    </div>
+
+    <!-- Status bar -->
+    <div class="status-bar" id="statusBar">Ready</div>
+
+    <!-- GWEN assist -->
+    <button class="gwen-fab" id="gwenFab" title="Ask GWEN about this view">
+      G
+      <div class="gwen-tooltip">Ask GWEN to analyze zone data</div>
+    </button>
+  </div>
+
+  <!-- Three.js r160 -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+
+  <script type="module">
+  import * as THREE from 'three';
+  import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+  (function() {
+    'use strict';
+
+    // ─── Auth ───────────────────────────────────────────────────
+    function authFetch(url, opts = {}) {
+      const token = localStorage.getItem('token');
+      const h = Object.assign({}, opts.headers || {});
+      if (token) h['Authorization'] = `Bearer ${token}`;
+      return fetch(url, Object.assign({}, opts, { headers: h }));
+    }
+
+    // ─── State ──────────────────────────────────────────────────
+    const S = {
+      rooms: [], groups: [], roomMaps: {}, envData: null,
+      iotDevices: [], cropRegistry: {},
+      overlay: 'none', roomFilter: '__all',
+      scene: null, camera: null, renderer: null, controls: null,
+      raycaster: new THREE.Raycaster(), mouse: new THREE.Vector2(),
+      clock: new THREE.Clock(),
+      meshes: { floors: [], zones: [], trays: [], sensors: [], equipment: [], walls: [], labels: [] },
+      // Zone mesh lookup for overlay + interaction
+      zoneMeshMap: {},   // zoneId -> mesh
+      zoneDataMap: {},   // zoneId -> { temp, humidity, co2, vpd, name, groups[] }
+      particleSystems: [],
+      hoveredZone: null,
+      selectedZone: null,
+    };
+
+    // ─── Palette ────────────────────────────────────────────────
+    const ZONE_PALETTE = [0x6366f1, 0x8b5cf6, 0x3b82f6, 0x06b6d4, 0x10b981, 0xf59e0b, 0xef4444, 0xec4899, 0x14b8a6, 0xa855f7];
+    const STATUS_COLOR = { active: 0x22c55e, growing: 0x22c55e, deployed: 0x22c55e, planned: 0x3b82f6, draft: 0x475569, completed: 0xf59e0b, archived: 0x334155 };
+
+    const OVERLAY_CFG = {
+      temperature: { min: 15, max: 35, unit: '\u00b0C', label: 'Temperature', colors: [0x3b82f6, 0x22c55e, 0xf59e0b, 0xef4444], key: 'temp' },
+      humidity:    { min: 20, max: 95, unit: '%',   label: 'Relative Humidity', colors: [0xf59e0b, 0x22c55e, 0x3b82f6, 0x6366f1], key: 'humidity' },
+      co2:         { min: 300, max: 1800, unit: 'ppm', label: 'CO\u2082 Concentration', colors: [0x22c55e, 0xf59e0b, 0xef4444, 0x7f1d1d], key: 'co2' },
+      vpd:         { min: 0.2, max: 2.0, unit: 'kPa', label: 'Vapor Pressure Deficit', colors: [0x3b82f6, 0x22c55e, 0xf59e0b, 0xef4444], key: 'vpd' },
+    };
+
+    // ─── Init Three.js ──────────────────────────────────────────
+    function initScene() {
+      const container = document.getElementById('viewer-container');
+      const canvas = document.getElementById('farmCanvas');
+      const w = container.clientWidth, h = container.clientHeight;
+
+      S.scene = new THREE.Scene();
+      S.scene.background = new THREE.Color(0x0a0f1e);
+      S.scene.fog = new THREE.FogExp2(0x0a0f1e, 0.012);
+
+      S.camera = new THREE.PerspectiveCamera(45, w / h, 0.1, 400);
+      S.camera.position.set(0, 24, 28);
+
+      S.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+      S.renderer.setSize(w, h);
+      S.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      S.renderer.shadowMap.enabled = true;
+      S.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      S.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      S.renderer.toneMappingExposure = 1.1;
+
+      S.controls = new OrbitControls(S.camera, canvas);
+      S.controls.enableDamping = true;
+      S.controls.dampingFactor = 0.06;
+      S.controls.maxPolarAngle = Math.PI / 2.1;
+      S.controls.minDistance = 4;
+      S.controls.maxDistance = 80;
+      S.controls.autoRotate = false;
+      S.controls.autoRotateSpeed = 0.3;
+
+      // Lighting -- cinematic three-point
+      const ambient = new THREE.AmbientLight(0x334155, 0.4);
+      S.scene.add(ambient);
+
+      const keyLight = new THREE.DirectionalLight(0xdbeafe, 0.9);
+      keyLight.position.set(25, 40, 15);
+      keyLight.castShadow = true;
+      keyLight.shadow.mapSize.set(2048, 2048);
+      keyLight.shadow.camera.left = -50;
+      keyLight.shadow.camera.right = 50;
+      keyLight.shadow.camera.top = 50;
+      keyLight.shadow.camera.bottom = -50;
+      keyLight.shadow.bias = -0.0005;
+      S.scene.add(keyLight);
+
+      const fillLight = new THREE.DirectionalLight(0x818cf8, 0.25);
+      fillLight.position.set(-18, 25, -12);
+      S.scene.add(fillLight);
+
+      const rimLight = new THREE.DirectionalLight(0x6366f1, 0.15);
+      rimLight.position.set(0, 5, -30);
+      S.scene.add(rimLight);
+
+      // Ground
+      const groundGeo = new THREE.PlaneGeometry(120, 120);
+      const groundMat = new THREE.MeshStandardMaterial({ color: 0x080c18, roughness: 1, metalness: 0 });
+      const ground = new THREE.Mesh(groundGeo, groundMat);
+      ground.rotation.x = -Math.PI / 2;
+      ground.position.y = -0.05;
+      ground.receiveShadow = true;
+      S.scene.add(ground);
+
+      // Subtle grid
+      const grid = new THREE.GridHelper(60, 60, 0x131a2e, 0x131a2e);
+      grid.position.y = 0.01;
+      grid.material.transparent = true;
+      grid.material.opacity = 0.4;
+      S.scene.add(grid);
+
+      window.addEventListener('resize', () => {
+        const w2 = container.clientWidth, h2 = container.clientHeight;
+        S.camera.aspect = w2 / h2;
+        S.camera.updateProjectionMatrix();
+        S.renderer.setSize(w2, h2);
+      });
+
+      animate();
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+      const dt = S.clock.getDelta();
+      S.controls.update();
+
+      // Animate sensor pulse
+      const t = S.clock.getElapsedTime();
+      S.meshes.sensors.forEach(m => {
+        if (m.userData._pulse) {
+          const scale = 1 + 0.15 * Math.sin(t * 2 + m.userData._pulseOffset);
+          m.scale.setScalar(scale);
+        }
+      });
+
+      // Animate particles
+      S.particleSystems.forEach(ps => {
+        const positions = ps.geometry.attributes.position.array;
+        for (let i = 1; i < positions.length; i += 3) {
+          positions[i] += ps.userData.speed * dt;
+          if (positions[i] > ps.userData.ceiling) positions[i] = ps.userData.floor;
+        }
+        ps.geometry.attributes.position.needsUpdate = true;
+      });
+
+      S.renderer.render(S.scene, S.camera);
+    }
+
+    // ─── Data Loading ───────────────────────────────────────────
+    async function loadAllData() {
+      const status = (msg) => { const el = document.getElementById('statusBar'); if (el) el.textContent = msg; };
+      try {
+        status('Loading farm data...');
+        const [roomsRes, groupsRes, iotRes, envRes, regRes] = await Promise.all([
+          authFetch('/data/rooms.json'),
+          authFetch('/data/groups.json'),
+          authFetch('/data/iot-devices.json'),
+          authFetch('/env?hours=24&t=' + Date.now(), { cache: 'no-store' }),
+          authFetch('/data/crop-registry.json'),
+        ]);
+
+        if (roomsRes.ok) { const d = await roomsRes.json(); S.rooms = d.rooms || d || []; }
+        if (groupsRes.ok) { const d = await groupsRes.json(); S.groups = Array.isArray(d) ? d : (d.groups || []); }
+        if (iotRes.ok) { const d = await iotRes.json(); S.iotDevices = Array.isArray(d) ? d : (d.devices || []); }
+        if (envRes.ok) { S.envData = await envRes.json(); }
+        if (regRes.ok) { const d = await regRes.json(); S.cropRegistry = d.crops || d || {}; }
+
+        status('Loading room layouts...');
+        for (const room of S.rooms) {
+          try {
+            let res = await authFetch(`/data/room-map-${room.id}.json`);
+            if (!res.ok) res = await authFetch('/data/room-map.json');
+            if (res.ok) S.roomMaps[room.id] = await res.json();
+          } catch (e) {}
+        }
+        if (S.rooms.length === 0) {
+          try {
+            const res = await authFetch('/data/room-map.json');
+            if (res.ok) {
+              const data = await res.json();
+              const rid = data.roomId || 'default-room';
+              S.roomMaps[rid] = data;
+              S.rooms = [{ id: rid, name: data.name || 'Farm', zones: [] }];
+            }
+          } catch (e) {}
+        }
+
+        buildZoneDataMap();
+        populateRoomDropdown();
+        buildScene();
+        renderFarmStats();
+        status(`${S.rooms.length} room${S.rooms.length !== 1 ? 's' : ''} -- ${S.groups.length} growing groups -- updated ${new Date().toLocaleTimeString()}`);
+      } catch (err) {
+        console.error('[3D Viewer]', err);
+        status('Error loading farm data');
+      } finally {
+        document.getElementById('loadingOverlay')?.classList.add('done');
+      }
+    }
+
+    // ─── Build zone data map (merge env + groups) ───────────────
+    function buildZoneDataMap() {
+      S.zoneDataMap = {};
+      const envZones = S.envData?.zones || [];
+
+      envZones.forEach(z => {
+        const zId = String(z.id ?? z.zone_id ?? z.name ?? '');
+        const sensors = z.sensors || {};
+        S.zoneDataMap[zId] = {
+          name: z.name || zId,
+          temp: getVal(sensors, 'tempC', 'temp', 'temperature_c'),
+          humidity: getVal(sensors, 'rh', 'humidity', 'humidity_pct'),
+          co2: getVal(sensors, 'co2', 'co2_ppm'),
+          vpd: getVal(sensors, 'vpd', 'vpd_kpa'),
+          tempHistory: getHistory(sensors, 'tempC', 'temp', 'temperature_c'),
+          humidityHistory: getHistory(sensors, 'rh', 'humidity', 'humidity_pct'),
+          co2History: getHistory(sensors, 'co2', 'co2_ppm'),
+          vpdHistory: getHistory(sensors, 'vpd', 'vpd_kpa'),
+          groups: [],
+        };
+      });
+
+      // Attach groups to zones
+      S.groups.forEach(g => {
+        const zId = String(g.zone ?? g.zoneId ?? '');
+        // Try direct match, then name matching
+        let entry = S.zoneDataMap[zId];
+        if (!entry) {
+          const key = Object.keys(S.zoneDataMap).find(k => S.zoneDataMap[k].name === zId);
+          if (key) entry = S.zoneDataMap[key];
+        }
+        if (entry) entry.groups.push(g);
+      });
+    }
+
+    function getVal(sensors, ...keys) {
+      if (Array.isArray(sensors)) {
+        for (const s of sensors) {
+          const r = s.readings || s;
+          for (const k of keys) { if (r[k] != null) return Number(r[k]); }
+        }
+        return null;
+      }
+      for (const k of keys) {
+        if (sensors[k] != null) {
+          if (typeof sensors[k] === 'object' && sensors[k].current != null) return Number(sensors[k].current);
+          if (typeof sensors[k] === 'number') return sensors[k];
+        }
+      }
+      return null;
+    }
+
+    function getHistory(sensors, ...keys) {
+      if (Array.isArray(sensors)) return [];
+      for (const k of keys) {
+        if (sensors[k]?.history && Array.isArray(sensors[k].history)) return sensors[k].history;
+      }
+      return [];
+    }
+
+    // ─── Build 3D Scene ─────────────────────────────────────────
+    function buildScene() {
+      // Clear
+      Object.values(S.meshes).forEach(arr => {
+        arr.forEach(m => { S.scene.remove(m); disposeMesh(m); });
+        arr.length = 0;
+      });
+      S.particleSystems.forEach(ps => { S.scene.remove(ps); ps.geometry.dispose(); ps.material.dispose(); });
+      S.particleSystems.length = 0;
+      S.zoneMeshMap = {};
+
+      const visible = S.roomFilter === '__all' ? S.rooms : S.rooms.filter(r => r.id === S.roomFilter);
+      let offsetX = 0;
+
+      visible.forEach((room) => {
+        const map = S.roomMaps[room.id];
+        const gridSize = map?.gridSize || 20;
+        const roomW = gridSize, roomD = gridSize;
+        const cx = offsetX + roomW / 2, cz = roomD / 2;
+
+        // Floor -- polished concrete look
+        const floorGeo = new THREE.BoxGeometry(roomW, 0.12, roomD);
+        const floorMat = new THREE.MeshStandardMaterial({ color: 0x151d2e, roughness: 0.85, metalness: 0.05 });
+        const floor = new THREE.Mesh(floorGeo, floorMat);
+        floor.position.set(cx, 0, cz);
+        floor.receiveShadow = true;
+        floor.userData = { type: 'room', room };
+        S.scene.add(floor);
+        S.meshes.floors.push(floor);
+
+        // Walls -- glass-like
+        const wallH = 3.5;
+        const wallMat = new THREE.MeshPhysicalMaterial({
+          color: 0x94a3b8, transparent: true, opacity: 0.08,
+          roughness: 0.1, metalness: 0, transmission: 0.6,
+          side: THREE.DoubleSide,
+        });
+        [[roomW, 0.08, cx, 0], [roomW, 0.08, cx, roomD], [0.08, roomD, offsetX, cz], [0.08, roomD, offsetX + roomW, cz]].forEach(([w, d, x, z]) => {
+          const geo = new THREE.BoxGeometry(w, wallH, d);
+          const wall = new THREE.Mesh(geo, wallMat);
+          wall.position.set(x, wallH / 2, z);
+          S.scene.add(wall);
+          S.meshes.walls.push(wall);
+        });
+
+        // Wall edge glow
+        const edgeMat = new THREE.LineBasicMaterial({ color: 0x6366f1, transparent: true, opacity: 0.2 });
+        const edgeGeo = new THREE.EdgesGeometry(new THREE.BoxGeometry(roomW, wallH, roomD));
+        const edges = new THREE.LineSegments(edgeGeo, edgeMat);
+        edges.position.set(cx, wallH / 2, cz);
+        S.scene.add(edges);
+        S.meshes.walls.push(edges);
+
+        // Room label -- clean, above walls
+        makeLabel(room.name || room.id, cx, wallH + 0.6, cz, { size: 18, color: '#94a3b8', opacity: 0.7 });
+
+        // Zones
+        const zones = map?.zones || room.zones || [];
+        zones.forEach((zone, zi) => {
+          const x1 = (zone.x1 ?? 0) + offsetX, y1 = zone.y1 ?? 0;
+          const x2 = (zone.x2 ?? gridSize) + offsetX, y2 = zone.y2 ?? gridSize;
+          const zw = Math.abs(x2 - x1), zd = Math.abs(y2 - y1);
+          const zcx = (x1 + x2) / 2, zcz = (y1 + y2) / 2;
+          const zColor = ZONE_PALETTE[zi % ZONE_PALETTE.length];
+          const zoneId = String(zone.zone ?? zone.id ?? zone.name ?? `z${zi}`);
+
+          // Zone platform (raised slightly)
+          const zoneGeo = new THREE.BoxGeometry(zw - 0.2, 0.06, zd - 0.2);
+          const zoneMat = new THREE.MeshStandardMaterial({
+            color: zColor, transparent: true, opacity: 0.15, roughness: 0.5, metalness: 0.1,
+          });
+          const zoneMesh = new THREE.Mesh(zoneGeo, zoneMat);
+          zoneMesh.position.set(zcx, 0.15, zcz);
+          zoneMesh.receiveShadow = true;
+          zoneMesh.userData = { type: 'zone', zone, room, zoneId, baseColor: zColor, baseOpacity: 0.15 };
+          S.scene.add(zoneMesh);
+          S.meshes.zones.push(zoneMesh);
+          S.zoneMeshMap[zoneId] = zoneMesh;
+
+          // Zone border -- subtle line at base
+          const borderGeo = new THREE.EdgesGeometry(new THREE.BoxGeometry(zw - 0.2, 0.02, zd - 0.2));
+          const borderMat = new THREE.LineBasicMaterial({ color: zColor, transparent: true, opacity: 0.35 });
+          const border = new THREE.LineSegments(borderGeo, borderMat);
+          border.position.set(zcx, 0.16, zcz);
+          S.scene.add(border);
+          S.meshes.zones.push(border);
+
+          // Zone name -- small, tucked in corner
+          const zName = zone.name || `Zone ${zone.zone ?? zi + 1}`;
+          makeLabel(zName, x1 + 1.2, 0.4, y1 + 0.6, { size: 10, color: '#64748b', opacity: 0.6 });
+        });
+
+        // Growing groups (trays)
+        const roomGroups = S.groups.filter(g => {
+          const gr = g.roomId || g.room || '';
+          return gr === room.id || gr === room.name || (S.rooms.length === 1);
+        });
+
+        roomGroups.forEach((group, gi) => {
+          const gZone = String(group.zone ?? group.zoneId ?? '');
+          const matched = zones.find(z => String(z.zone) === gZone || String(z.name) === gZone || String(z.id) === gZone);
+          let gx, gz;
+          if (matched) {
+            const zx1 = (matched.x1 ?? 0) + offsetX, zy1 = matched.y1 ?? 0;
+            const zx2 = (matched.x2 ?? gridSize) + offsetX, zy2 = matched.y2 ?? gridSize;
+            const cols = Math.max(1, Math.floor(Math.abs(zx2 - zx1) / 2.5));
+            gx = Math.min(zx1, zx2) + 1.2 + (gi % cols) * 2.5;
+            gz = Math.min(zy1, zy2) + 1.2 + Math.floor(gi / cols) * 2.5;
+          } else {
+            gx = offsetX + 2 + (gi % 6) * 3;
+            gz = 2 + Math.floor(gi / 6) * 3;
+          }
+
+          const status = (group.status || 'active').toLowerCase();
+          const trayCount = Math.max(1, Math.min(Number(group.trays) || 1, 20));
+          const color = STATUS_COLOR[status] || 0x22c55e;
+
+          // Tray cluster -- rounded box effect
+          const tw = Math.min(trayCount, 4) * 0.45;
+          const td = Math.ceil(trayCount / 4) * 0.45;
+          const trayGeo = new THREE.BoxGeometry(tw, 0.3, td);
+          const trayMat = new THREE.MeshStandardMaterial({ color, roughness: 0.5, metalness: 0.15 });
+          const tray = new THREE.Mesh(trayGeo, trayMat);
+          tray.position.set(gx, 0.3, gz);
+          tray.castShadow = true;
+          tray.receiveShadow = true;
+          tray.userData = { type: 'group', group, room };
+          S.scene.add(tray);
+          S.meshes.trays.push(tray);
+
+          // Small crop indicator (no text clutter) -- colored top strip
+          if (status === 'active' || status === 'growing') {
+            const indicGeo = new THREE.BoxGeometry(tw, 0.04, td);
+            const indicMat = new THREE.MeshStandardMaterial({ color: 0x4ade80, emissive: 0x4ade80, emissiveIntensity: 0.3 });
+            const indic = new THREE.Mesh(indicGeo, indicMat);
+            indic.position.set(gx, 0.47, gz);
+            S.scene.add(indic);
+            S.meshes.trays.push(indic);
+          }
+        });
+
+        // Devices (sensors + equipment)
+        const devices = map?.devices || [];
+        devices.forEach((dev, di) => {
+          const dx = dev.x + offsetX, dz = dev.y;
+          const cat = (dev.snapshot?.category || dev.snapshot?.type || '').toLowerCase();
+          const isSensor = cat.includes('sensor') || cat.includes('temp') || cat.includes('humid') || cat.includes('environment');
+
+          if (isSensor) {
+            // Sensor -- glowing sphere with pulse
+            const sGeo = new THREE.SphereGeometry(0.22, 20, 20);
+            const sMat = new THREE.MeshStandardMaterial({
+              color: 0xfbbf24, emissive: 0xfbbf24, emissiveIntensity: 0.5,
+              roughness: 0.3, metalness: 0.3,
+            });
+            const sMesh = new THREE.Mesh(sGeo, sMat);
+            sMesh.position.set(dx, 1.2, dz);
+            sMesh.castShadow = true;
+            sMesh.userData = { type: 'sensor', device: dev, room, _pulse: true, _pulseOffset: di * 0.7 };
+            S.scene.add(sMesh);
+            S.meshes.sensors.push(sMesh);
+
+            // Sensor ring
+            const ringGeo = new THREE.RingGeometry(0.35, 0.4, 24);
+            const ringMat = new THREE.MeshBasicMaterial({ color: 0xfbbf24, transparent: true, opacity: 0.15, side: THREE.DoubleSide });
+            const ring = new THREE.Mesh(ringGeo, ringMat);
+            ring.rotation.x = -Math.PI / 2;
+            ring.position.set(dx, 0.18, dz);
+            S.scene.add(ring);
+            S.meshes.sensors.push(ring);
+          } else {
+            // Equipment cube
+            const eGeo = new THREE.BoxGeometry(0.5, 0.5, 0.5);
+            const eMat = new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.6, metalness: 0.2 });
+            const eMesh = new THREE.Mesh(eGeo, eMat);
+            eMesh.position.set(dx, 0.4, dz);
+            eMesh.castShadow = true;
+            eMesh.userData = { type: 'equipment', device: dev, room };
+            S.scene.add(eMesh);
+            S.meshes.equipment.push(eMesh);
+          }
+        });
+
+        // Ambient particles (floating spores/humidity)
+        addParticles(cx, cz, roomW, roomD);
+
+        offsetX += roomW + 4;
+      });
+
+      // Center camera
+      if (visible.length > 0) {
+        const totalW = offsetX - 4;
+        const firstMap = S.roomMaps[visible[0].id];
+        const totalD = firstMap?.gridSize || 20;
+        const cx = totalW / 2, cz = totalD / 2;
+        S.controls.target.set(cx, 1, cz);
+        S.camera.position.set(cx - 8, 18, cz + 22);
+        S.controls.update();
+      }
+
+      applyOverlay(S.overlay);
+    }
+
+    // ─── Ambient particles ──────────────────────────────────────
+    function addParticles(cx, cz, w, d) {
+      const count = 60;
+      const positions = new Float32Array(count * 3);
+      for (let i = 0; i < count; i++) {
+        positions[i * 3] = cx + (Math.random() - 0.5) * w;
+        positions[i * 3 + 1] = 0.5 + Math.random() * 2.5;
+        positions[i * 3 + 2] = cz + (Math.random() - 0.5) * d;
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      const mat = new THREE.PointsMaterial({ color: 0x818cf8, size: 0.04, transparent: true, opacity: 0.3, sizeAttenuation: true });
+      const points = new THREE.Points(geo, mat);
+      points.userData = { speed: 0.08, ceiling: 3.2, floor: 0.3 };
+      S.scene.add(points);
+      S.particleSystems.push(points);
+    }
+
+    // ─── Text labels (canvas sprite, no clutter) ────────────────
+    function makeLabel(text, x, y, z, opts = {}) {
+      const size = opts.size || 14;
+      const color = opts.color || '#94a3b8';
+      const opacity = opts.opacity ?? 1;
+
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      const font = `${size * 4}px -apple-system, BlinkMacSystemFont, sans-serif`;
+      ctx.font = font;
+      const tw = ctx.measureText(text).width + 16;
+      const th = size * 5;
+      canvas.width = tw; canvas.height = th;
+      ctx.font = font;
+      ctx.fillStyle = color;
+      ctx.globalAlpha = opacity;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(text, tw / 2, th / 2);
+
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.minFilter = THREE.LinearFilter;
+      const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false, opacity });
+      const sprite = new THREE.Sprite(mat);
+      sprite.position.set(x, y, z);
+      const sc = size * 0.06;
+      sprite.scale.set(sc * (tw / th), sc, 1);
+      sprite.userData = { type: 'label' };
+      S.scene.add(sprite);
+      S.meshes.labels.push(sprite);
+    }
+
+    function disposeMesh(m) {
+      if (m.geometry) m.geometry.dispose();
+      if (m.material) {
+        if (m.material.map) m.material.map.dispose();
+        m.material.dispose();
+      }
+    }
+
+    // ─── Overlay system ─────────────────────────────────────────
+    function applyOverlay(type) {
+      S.overlay = type;
+
+      // Reset zone meshes
+      S.meshes.zones.forEach(m => {
+        if (m.isMesh && m.userData.type === 'zone') {
+          m.material.color.setHex(m.userData.baseColor);
+          m.material.opacity = m.userData.baseOpacity;
+          m.material.emissive?.setHex(0x000000);
+          m.material.emissiveIntensity = 0;
+        }
+      });
+
+      const legend = document.getElementById('dataLegend');
+      if (type === 'none' || !S.envData) {
+        legend.classList.remove('visible');
+        return;
+      }
+
+      const cfg = OVERLAY_CFG[type];
+      if (!cfg) return;
+
+      // Apply heatmap colors
+      S.meshes.zones.forEach(m => {
+        if (!m.isMesh || m.userData.type !== 'zone') return;
+        const zId = m.userData.zoneId;
+        const data = S.zoneDataMap[zId];
+        if (!data) return;
+        const val = data[cfg.key];
+        if (val == null) return;
+
+        const t = Math.max(0, Math.min(1, (val - cfg.min) / (cfg.max - cfg.min)));
+        const color = multiLerp(cfg.colors, t);
+        m.material.color.setHex(color);
+        m.material.opacity = 0.55;
+        m.material.emissive = new THREE.Color(color);
+        m.material.emissiveIntensity = 0.15;
+      });
+
+      // Show legend
+      legend.classList.add('visible');
+      document.getElementById('legendTitle').textContent = cfg.label;
+      document.getElementById('legendMin').textContent = cfg.min + cfg.unit;
+      document.getElementById('legendMax').textContent = cfg.max + cfg.unit;
+
+      // Gradient bar
+      const gradBar = document.getElementById('legendGradient');
+      const stops = cfg.colors.map((c, i) => {
+        const pct = (i / (cfg.colors.length - 1)) * 100;
+        return `#${c.toString(16).padStart(6, '0')} ${pct}%`;
+      });
+      gradBar.style.background = `linear-gradient(to right, ${stops.join(', ')})`;
+    }
+
+    function multiLerp(colors, t) {
+      const n = colors.length - 1;
+      const i = Math.min(Math.floor(t * n), n - 1);
+      const lt = (t * n) - i;
+      return lerpColor(colors[i], colors[i + 1], lt);
+    }
+
+    function lerpColor(c1, c2, t) {
+      const r1 = (c1 >> 16) & 0xff, g1 = (c1 >> 8) & 0xff, b1 = c1 & 0xff;
+      const r2 = (c2 >> 16) & 0xff, g2 = (c2 >> 8) & 0xff, b2 = c2 & 0xff;
+      return (Math.round(r1 + (r2 - r1) * t) << 16) | (Math.round(g1 + (g2 - g1) * t) << 8) | Math.round(b1 + (b2 - b1) * t);
+    }
+
+    // ─── Farm stats chips ───────────────────────────────────────
+    function renderFarmStats() {
+      const el = document.getElementById('farmStats');
+      const activeGroups = S.groups.filter(g => ['active', 'growing', 'deployed'].includes((g.status || '').toLowerCase()));
+      const totalTrays = activeGroups.reduce((s, g) => s + (Number(g.trays) || 0), 0);
+      const sensorCount = S.iotDevices.filter(d => {
+        const cat = (d.category || d.type || '').toLowerCase();
+        return cat.includes('sensor') || cat.includes('temp') || cat.includes('environment');
+      }).length + Object.values(S.roomMaps).reduce((s, m) => s + (m.devices || []).filter(d => {
+        const cat = (d.snapshot?.category || '').toLowerCase();
+        return cat.includes('sensor') || cat.includes('temp') || cat.includes('environment');
+      }).length, 0);
+
+      // Average environment
+      let avgTemp = null, avgHumidity = null, avgVpd = null;
+      const vals = Object.values(S.zoneDataMap);
+      if (vals.length > 0) {
+        const temps = vals.map(v => v.temp).filter(v => v != null);
+        const hums = vals.map(v => v.humidity).filter(v => v != null);
+        const vpds = vals.map(v => v.vpd).filter(v => v != null);
+        if (temps.length) avgTemp = (temps.reduce((a, b) => a + b, 0) / temps.length).toFixed(1);
+        if (hums.length) avgHumidity = Math.round(hums.reduce((a, b) => a + b, 0) / hums.length);
+        if (vpds.length) avgVpd = (vpds.reduce((a, b) => a + b, 0) / vpds.length).toFixed(2);
+      }
+
+      let html = '';
+      if (avgTemp != null) html += `<div class="stat-chip"><div class="chip-value">${avgTemp}\u00b0C</div><div class="chip-label">Avg Temp</div></div>`;
+      if (avgHumidity != null) html += `<div class="stat-chip"><div class="chip-value">${avgHumidity}%</div><div class="chip-label">Avg RH</div></div>`;
+      if (avgVpd != null) html += `<div class="stat-chip"><div class="chip-value">${avgVpd}</div><div class="chip-label">VPD kPa</div></div>`;
+      html += `<div class="stat-chip"><div class="chip-value">${activeGroups.length}</div><div class="chip-label">Active Groups</div></div>`;
+      html += `<div class="stat-chip"><div class="chip-value">${totalTrays}</div><div class="chip-label">Trays</div></div>`;
+      if (sensorCount > 0) html += `<div class="stat-chip"><div class="chip-value">${sensorCount}</div><div class="chip-label">Sensors</div></div>`;
+      el.innerHTML = html;
+    }
+
+    // ─── Interaction ────────────────────────────────────────────
+    function onMouseMove(e) {
+      const container = document.getElementById('viewer-container');
+      const rect = container.getBoundingClientRect();
+      S.mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      S.mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+      S.raycaster.setFromCamera(S.mouse, S.camera);
+      const targets = [
+        ...S.meshes.trays.filter(m => m.userData.type === 'group'),
+        ...S.meshes.sensors.filter(m => m.userData.type === 'sensor'),
+        ...S.meshes.equipment.filter(m => m.userData.type === 'equipment'),
+        ...S.meshes.zones.filter(m => m.isMesh && m.userData.type === 'zone'),
+      ];
+      const hits = S.raycaster.intersectObjects(targets);
+      const tip = document.getElementById('hoverTip');
+      const hud = document.getElementById('zoneHud');
+
+      if (hits.length > 0) {
+        const ud = hits[0].object.userData;
+        let title = '', sub = '';
+
+        if (ud.type === 'group') {
+          const g = ud.group;
+          title = g.name || g.crop || g.recipe || 'Group';
+          sub = `${g.trays || 0} trays | ${(g.status || 'active')}`;
+        } else if (ud.type === 'sensor') {
+          title = ud.device.snapshot?.name || 'Sensor';
+          const zData = findSensorZoneData(ud.device);
+          sub = zData ? `${zData.temp?.toFixed(1) ?? '--'}\u00b0C | ${Math.round(zData.humidity ?? 0)}% RH` : 'No data';
+        } else if (ud.type === 'equipment') {
+          title = ud.device.snapshot?.name || 'Equipment';
+          sub = ud.device.snapshot?.category || '';
+        } else if (ud.type === 'zone') {
+          title = ud.zone.name || `Zone ${ud.zone.zone}`;
+          const zData = S.zoneDataMap[ud.zoneId];
+          sub = zData ? `${zData.temp?.toFixed(1) ?? '--'}\u00b0C | ${Math.round(zData.humidity ?? 0)}% | VPD ${zData.vpd?.toFixed(2) ?? '--'}` : '';
+
+          // Show zone HUD
+          if (S.hoveredZone !== ud.zoneId) {
+            S.hoveredZone = ud.zoneId;
+            showZoneHud(ud.zoneId, ud.zone);
+          }
+        }
+
+        document.getElementById('htTitle').textContent = title;
+        document.getElementById('htSub').textContent = sub;
+        tip.style.left = e.clientX + 'px';
+        tip.style.top = (e.clientY - rect.top) + 'px';
+        tip.classList.add('visible');
+        document.body.style.cursor = 'pointer';
+
+        if (ud.type !== 'zone' && S.hoveredZone) {
+          S.hoveredZone = null;
+          hud.classList.remove('visible');
+        }
+      } else {
+        tip.classList.remove('visible');
+        document.body.style.cursor = 'default';
+        if (S.hoveredZone) {
+          S.hoveredZone = null;
+          hud.classList.remove('visible');
+        }
+      }
+    }
+
+    function findSensorZoneData(device) {
+      const zone = String(device.snapshot?.zone ?? '');
+      return S.zoneDataMap[zone] || Object.values(S.zoneDataMap)[0] || null;
+    }
+
+    function showZoneHud(zoneId, zone) {
+      const hud = document.getElementById('zoneHud');
+      const data = S.zoneDataMap[zoneId];
+      const zName = zone.name || `Zone ${zone.zone}`;
+
+      let html = `<h4>${zName}</h4>`;
+
+      if (data) {
+        const rows = [];
+        if (data.temp != null) rows.push({ label: 'Temperature', value: `${data.temp.toFixed(1)}\u00b0C`, cls: tempClass(data.temp) });
+        if (data.humidity != null) rows.push({ label: 'Humidity', value: `${Math.round(data.humidity)}%`, cls: humidityClass(data.humidity) });
+        if (data.vpd != null) rows.push({ label: 'VPD', value: `${data.vpd.toFixed(2)} kPa`, cls: vpdClass(data.vpd) });
+        if (data.co2 != null) rows.push({ label: 'CO\u2082', value: `${Math.round(data.co2)} ppm`, cls: co2Class(data.co2) });
+        rows.forEach(r => {
+          html += `<div class="hud-row"><span class="hud-label">${r.label}</span><span class="hud-value ${r.cls}">${r.value}</span></div>`;
+        });
+        if (data.groups.length > 0) {
+          html += `<div class="hud-row"><span class="hud-label">Groups</span><span class="hud-value">${data.groups.length}</span></div>`;
+          const totalTrays = data.groups.reduce((s, g) => s + (Number(g.trays) || 0), 0);
+          html += `<div class="hud-row"><span class="hud-label">Total Trays</span><span class="hud-value">${totalTrays}</span></div>`;
+        }
+      } else {
+        html += `<div class="hud-row"><span class="hud-label">No sensor data</span></div>`;
+      }
+
+      hud.innerHTML = html;
+      hud.classList.add('visible');
+    }
+
+    function tempClass(v) { return v >= 18 && v <= 28 ? 'good' : v < 15 || v > 32 ? 'danger' : 'warn'; }
+    function humidityClass(v) { return v >= 50 && v <= 75 ? 'good' : v < 30 || v > 90 ? 'danger' : 'warn'; }
+    function vpdClass(v) { return v >= 0.8 && v <= 1.4 ? 'good' : v < 0.4 || v > 1.8 ? 'danger' : 'warn'; }
+    function co2Class(v) { return v >= 400 && v <= 1200 ? 'good' : v > 1500 ? 'danger' : 'warn'; }
+
+    // ─── Click -> detail panel ──────────────────────────────────
+    function onClick(e) {
+      const container = document.getElementById('viewer-container');
+      const rect = container.getBoundingClientRect();
+      S.mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      S.mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+      S.raycaster.setFromCamera(S.mouse, S.camera);
+      const targets = [
+        ...S.meshes.floors,
+        ...S.meshes.trays.filter(m => m.userData.type === 'group'),
+        ...S.meshes.sensors.filter(m => m.userData.type === 'sensor'),
+        ...S.meshes.equipment.filter(m => m.userData.type === 'equipment'),
+        ...S.meshes.zones.filter(m => m.isMesh && m.userData.type === 'zone'),
+      ];
+      const hits = S.raycaster.intersectObjects(targets);
+      if (hits.length > 0) showDetailPanel(hits[0].object.userData);
+    }
+
+    function showDetailPanel(ud) {
+      const panel = document.getElementById('detailPanel');
+      const content = document.getElementById('detailContent');
+      panel.classList.add('visible');
+
+      if (ud.type === 'zone') {
+        const z = ud.zone;
+        const data = S.zoneDataMap[ud.zoneId];
+        const zName = z.name || `Zone ${z.zone}`;
+        let html = `<h3>${zName}</h3>`;
+        html += `<div class="dp-label">Room</div><div class="dp-value">${ud.room?.name || '--'}</div>`;
+
+        if (data) {
+          html += `<div class="dp-grid">`;
+          if (data.temp != null) html += `<div class="dp-metric"><div class="metric-val">${data.temp.toFixed(1)}\u00b0</div><div class="metric-lbl">Temp</div></div>`;
+          if (data.humidity != null) html += `<div class="dp-metric"><div class="metric-val">${Math.round(data.humidity)}%</div><div class="metric-lbl">RH</div></div>`;
+          if (data.vpd != null) html += `<div class="dp-metric"><div class="metric-val">${data.vpd.toFixed(2)}</div><div class="metric-lbl">VPD kPa</div></div>`;
+          if (data.co2 != null) html += `<div class="dp-metric"><div class="metric-val">${Math.round(data.co2)}</div><div class="metric-lbl">CO2 ppm</div></div>`;
+          html += `</div>`;
+
+          // Sparkline for temp history
+          if (data.tempHistory.length > 2) {
+            html += `<div class="dp-section"><div class="dp-label">Temperature (24h)</div>`;
+            html += `<div class="dp-sparkline"><canvas id="sparkTemp" width="260" height="40"></canvas></div></div>`;
+          }
+          if (data.humidityHistory.length > 2) {
+            html += `<div class="dp-section"><div class="dp-label">Humidity (24h)</div>`;
+            html += `<div class="dp-sparkline"><canvas id="sparkHumidity" width="260" height="40"></canvas></div></div>`;
+          }
+
+          // Groups in zone
+          if (data.groups.length > 0) {
+            html += `<div class="dp-section"><div class="dp-label">Growing Groups (${data.groups.length})</div>`;
+            data.groups.forEach(g => {
+              const crop = g.crop || g.recipe || '--';
+              const st = g.status || 'active';
+              html += `<div style="margin-top:4px;padding:5px 7px;background:rgba(99,102,241,0.06);border-radius:6px;font-size:0.78rem;">`;
+              html += `<strong>${g.name || g.id}</strong><br><span style="color:#64748b">${crop} | ${g.trays || 0} trays | ${st}</span></div>`;
+            });
+            html += `</div>`;
+          }
+        }
+        content.innerHTML = html;
+        // Draw sparklines after DOM update
+        requestAnimationFrame(() => {
+          if (data?.tempHistory.length > 2) drawSparkline('sparkTemp', data.tempHistory, '#818cf8');
+          if (data?.humidityHistory.length > 2) drawSparkline('sparkHumidity', data.humidityHistory, '#06b6d4');
+        });
+
+      } else if (ud.type === 'group') {
+        const g = ud.group;
+        const crop = g.crop || g.recipe || 'Unknown';
+        let html = `<h3>${g.name || g.id}</h3>`;
+        html += `<div class="dp-label">Crop</div><div class="dp-value">${crop}</div>`;
+        html += `<div class="dp-label">Status</div><div class="dp-value" style="text-transform:capitalize">${g.status || 'active'}</div>`;
+        html += `<div class="dp-label">Location</div><div class="dp-value">${g.room || g.roomId || '--'} / Zone ${g.zone ?? '--'}</div>`;
+        html += `<div class="dp-grid">`;
+        html += `<div class="dp-metric"><div class="metric-val">${g.trays || 0}</div><div class="metric-lbl">Trays</div></div>`;
+        html += `<div class="dp-metric"><div class="metric-val">${g.plants || 0}</div><div class="metric-lbl">Plants</div></div>`;
+        html += `</div>`;
+        if (g.lights?.length) {
+          html += `<div class="dp-section"><div class="dp-label">Lighting</div>`;
+          g.lights.forEach(l => {
+            html += `<div style="margin-top:4px;font-size:0.78rem;color:#94a3b8">${l.name || 'Light'} -- ${l.ppfd || '--'} PPFD</div>`;
+          });
+          html += `</div>`;
+        }
+        content.innerHTML = html;
+
+      } else if (ud.type === 'sensor') {
+        const d = ud.device;
+        const zData = findSensorZoneData(d);
+        let html = `<h3>${d.snapshot?.name || d.deviceId || 'Sensor'}</h3>`;
+        html += `<div class="dp-label">Category</div><div class="dp-value">${d.snapshot?.category || 'environmental'}</div>`;
+        html += `<div class="dp-label">Position</div><div class="dp-value">Grid (${d.x}, ${d.y})</div>`;
+        if (zData) {
+          html += `<div class="dp-grid">`;
+          if (zData.temp != null) html += `<div class="dp-metric"><div class="metric-val">${zData.temp.toFixed(1)}\u00b0</div><div class="metric-lbl">Temp</div></div>`;
+          if (zData.humidity != null) html += `<div class="dp-metric"><div class="metric-val">${Math.round(zData.humidity)}%</div><div class="metric-lbl">RH</div></div>`;
+          if (zData.vpd != null) html += `<div class="dp-metric"><div class="metric-val">${zData.vpd.toFixed(2)}</div><div class="metric-lbl">VPD</div></div>`;
+          if (zData.co2 != null) html += `<div class="dp-metric"><div class="metric-val">${Math.round(zData.co2)}</div><div class="metric-lbl">CO2</div></div>`;
+          html += `</div>`;
+        }
+        content.innerHTML = html;
+
+      } else if (ud.type === 'equipment') {
+        const d = ud.device;
+        let html = `<h3>${d.snapshot?.name || d.deviceId || 'Equipment'}</h3>`;
+        html += `<div class="dp-label">Category</div><div class="dp-value">${d.snapshot?.category || '--'}</div>`;
+        html += `<div class="dp-label">Position</div><div class="dp-value">Grid (${d.x}, ${d.y})</div>`;
+        content.innerHTML = html;
+
+      } else if (ud.type === 'room') {
+        const r = ud.room;
+        const roomGroups = S.groups.filter(g => (g.roomId || g.room) === r.id || (g.roomId || g.room) === r.name);
+        let html = `<h3>${r.name || r.id}</h3>`;
+        html += `<div class="dp-grid">`;
+        html += `<div class="dp-metric"><div class="metric-val">${(r.zones || []).length}</div><div class="metric-lbl">Zones</div></div>`;
+        html += `<div class="dp-metric"><div class="metric-val">${roomGroups.length}</div><div class="metric-lbl">Groups</div></div>`;
+        html += `<div class="dp-metric"><div class="metric-val">${roomGroups.reduce((s, g) => s + (Number(g.trays) || 0), 0)}</div><div class="metric-lbl">Trays</div></div>`;
+        html += `</div>`;
+        content.innerHTML = html;
+      }
+    }
+
+    // ─── Sparkline drawing ──────────────────────────────────────
+    function drawSparkline(canvasId, data, color) {
+      const canvas = document.getElementById(canvasId);
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      const w = canvas.width, h = canvas.height;
+      ctx.clearRect(0, 0, w, h);
+
+      const valid = data.filter(v => v != null && !isNaN(v));
+      if (valid.length < 2) return;
+      const min = Math.min(...valid), max = Math.max(...valid);
+      const range = max - min || 1;
+      const step = w / (valid.length - 1);
+
+      // Fill gradient
+      const grad = ctx.createLinearGradient(0, 0, 0, h);
+      grad.addColorStop(0, color + '30');
+      grad.addColorStop(1, color + '05');
+
+      ctx.beginPath();
+      ctx.moveTo(0, h);
+      valid.forEach((v, i) => {
+        const x = i * step;
+        const y = h - ((v - min) / range) * (h - 4) - 2;
+        if (i === 0) ctx.lineTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.lineTo(w, h);
+      ctx.closePath();
+      ctx.fillStyle = grad;
+      ctx.fill();
+
+      // Line
+      ctx.beginPath();
+      valid.forEach((v, i) => {
+        const x = i * step;
+        const y = h - ((v - min) / range) * (h - 4) - 2;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      // Current value dot
+      const lastY = h - ((valid[valid.length - 1] - min) / range) * (h - 4) - 2;
+      ctx.beginPath();
+      ctx.arc(w - 1, lastY, 2.5, 0, Math.PI * 2);
+      ctx.fillStyle = color;
+      ctx.fill();
+    }
+
+    // ─── Camera presets ─────────────────────────────────────────
+    function animateTo(target, duration = 600) {
+      const start = { x: S.camera.position.x, y: S.camera.position.y, z: S.camera.position.z };
+      const t0 = performance.now();
+      function step(now) {
+        const p = Math.min(1, (now - t0) / duration);
+        const e = 1 - Math.pow(1 - p, 3);
+        S.camera.position.x = start.x + (target.x - start.x) * e;
+        S.camera.position.y = start.y + (target.y - start.y) * e;
+        S.camera.position.z = start.z + (target.z - start.z) * e;
+        if (p < 1) requestAnimationFrame(step);
+      }
+      requestAnimationFrame(step);
+    }
+
+    // ─── Room dropdown ──────────────────────────────────────────
+    function populateRoomDropdown() {
+      const sel = document.getElementById('roomSelect');
+      sel.innerHTML = '<option value="__all">All Rooms</option>';
+      S.rooms.forEach(r => {
+        const opt = document.createElement('option');
+        opt.value = r.id;
+        opt.textContent = r.name || r.id;
+        sel.appendChild(opt);
+      });
+    }
+
+    // ─── GWEN integration ───────────────────────────────────────
+    function openGwenWithContext() {
+      // Gather current view state for GWEN
+      const envSummary = {};
+      Object.entries(S.zoneDataMap).forEach(([id, data]) => {
+        envSummary[data.name || id] = {
+          temp: data.temp, humidity: data.humidity, vpd: data.vpd, co2: data.co2,
+          groups: data.groups.map(g => ({ name: g.name, crop: g.crop || g.recipe, trays: g.trays, status: g.status })),
+        };
+      });
+
+      const prompt = `I'm looking at the 3D Farm Viewer. Here is the current environment snapshot:\n${JSON.stringify(envSummary, null, 2)}\n\nCan you analyze the current growing conditions and suggest any adjustments?`;
+
+      // Navigate to research workspace with GWEN context
+      const encoded = encodeURIComponent(prompt);
+      window.parent?.postMessage({ type: 'gwen-query', prompt }, '*');
+
+      // Fallback: copy to clipboard
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(prompt).catch(() => {});
+      }
+    }
+
+    // ─── Toolbar binding ────────────────────────────────────────
+    function bindEvents() {
+      // Overlay buttons
+      document.querySelectorAll('.toolbar button[data-overlay]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.toolbar button[data-overlay]').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          applyOverlay(btn.dataset.overlay);
+        });
+      });
+
+      // Camera presets
+      document.getElementById('btnTop').addEventListener('click', () => {
+        const t = S.controls.target;
+        animateTo({ x: t.x, y: 35, z: t.z + 0.1 });
+      });
+      document.getElementById('btnAngle').addEventListener('click', () => {
+        const t = S.controls.target;
+        animateTo({ x: t.x - 10, y: 16, z: t.z + 18 });
+      });
+      document.getElementById('btnReset').addEventListener('click', () => {
+        const totalW = Object.values(S.roomMaps).reduce((s, m) => s + (m.gridSize || 20), 0) || 20;
+        const cx = totalW / 2, cz = 10;
+        S.controls.target.set(cx, 1, cz);
+        animateTo({ x: cx - 8, y: 18, z: cz + 22 });
+      });
+
+      // Room selector
+      document.getElementById('roomSelect').addEventListener('change', (e) => {
+        S.roomFilter = e.target.value;
+        buildScene();
+        renderFarmStats();
+      });
+
+      // Canvas events
+      const canvas = document.getElementById('farmCanvas');
+      canvas.addEventListener('mousemove', onMouseMove);
+      canvas.addEventListener('click', onClick);
+
+      // Detail panel close
+      document.getElementById('detailClose').addEventListener('click', () => {
+        document.getElementById('detailPanel').classList.remove('visible');
+      });
+
+      // GWEN button
+      document.getElementById('gwenFab').addEventListener('click', openGwenWithContext);
+    }
+
+    // ─── Auto-refresh ───────────────────────────────────────────
+    function startAutoRefresh() {
+      setInterval(async () => {
+        try {
+          const res = await authFetch('/env?hours=24&t=' + Date.now(), { cache: 'no-store' });
+          if (res.ok) {
+            S.envData = await res.json();
+            buildZoneDataMap();
+            applyOverlay(S.overlay);
+            renderFarmStats();
+            document.getElementById('statusBar').textContent = 'Updated ' + new Date().toLocaleTimeString();
+          }
+        } catch (e) {}
+      }, 120000);
+    }
+
+    // ─── Bootstrap ──────────────────────────────────────────────
+    document.addEventListener('DOMContentLoaded', () => {
+      initScene();
+      bindEvents();
+      loadAllData();
+      startAutoRefresh();
+    });
+
+  })();
+  </script>
+</body>
+</html>

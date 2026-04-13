@@ -125,6 +125,7 @@ import { startSensorCleanupScheduler } from './routes/sync.js';
 import adminPricingRoutes from './routes/admin-pricing.js';
 import mountFarmJsonRoute from "./routes/farm-json-merge.js";
 import farmSaladMixesRouter from './routes/farm-salad-mixes.js';
+import adminSaladMixesRouter from './routes/admin-salad-mixes.js';
 let grantWizardRoutes, startGrantProgramSync, seedGrantPrograms, cleanupExpiredApplications;
 if (process.env.ENABLE_GRANT_WIZARD !== 'false') {
   const gwMod = await import('./routes/grant-wizard.js');
@@ -147,18 +148,18 @@ import { farmStore, initFarmStore } from './lib/farm-data-store.js';
 // Import services
 import { initDatabase, getDatabase, query, isDatabaseAvailable } from './config/database.js';
 import { startHealthCheckService, stopHealthCheckService } from './services/healthCheck.js';
-import { startNightlyAuditService } from './services/nightly-audit.js';
+import { startNightlyAuditService, runNightlyAudit } from './services/nightly-audit.js';
 import emailService from './services/email-service.js';
-import { startNightlyChecklist } from './services/nightly-checklist.js';
+import { startNightlyChecklist, runNightlyChecklist } from './services/nightly-checklist.js';
 import { startSubscriptionScheduler } from './services/subscriptionScheduler.js';
-import { startFayeIntelligence } from './services/faye-intelligence.js';
+import { startFayeIntelligence, sendDailyBriefing as fayeDailyBriefing } from './services/faye-intelligence.js';
 import { startSyncMonitor } from './services/syncMonitor.js';
 import { startWholesaleNetworkSync } from './services/wholesaleNetworkSync.js';
 import { seedDemoFarm } from './services/seedDemoFarm.js';
 import { startAIPusher } from './services/ai-recommendations-pusher.js';
-import { startAwsCostExplorerScheduler } from './services/awsCostExplorerSync.js';
+import { startAwsCostExplorerScheduler, syncAwsCostExplorer } from './services/awsCostExplorerSync.js';
 import { startMarketDataFetcher } from './services/market-data-fetcher.js';
-import { startMarketAnalysisAgent } from './services/market-analysis-agent.js';
+import { startMarketAnalysisAgent, runMarketAnalysis } from './services/market-analysis-agent.js';
 import { detectHarvestConflicts, analyzeSupplyDemand, generateNetworkRiskAlerts } from './jobs/supply-demand-balancer.js';
 import { generateHarvestPredictions } from './services/harvest-prediction-engine.js';
 import { getCoordinatedPlantingRecommendations } from './services/network-planting-coordinator.js';
@@ -2550,6 +2551,90 @@ app.get('/api/audit/recent', authMiddleware, (_req, res) => {
   return res.json({ ok: true, activities: [] });
 });
 
+// ─── Cloud Scheduler Cron Endpoints ─────────────────────────────────────────
+// These are triggered by GCP Cloud Scheduler with OIDC auth.
+// Fallback: also accept a shared CRON_SECRET header for manual testing.
+function cronAuthMiddleware(req, res, next) {
+  // Cloud Scheduler sends OIDC tokens — verify via header presence
+  const oidcToken = req.headers['authorization'];
+  const cronSecret = req.headers['x-cron-secret'];
+  const expected = process.env.CRON_SECRET;
+  if (oidcToken && oidcToken.startsWith('Bearer ')) return next();
+  if (expected && cronSecret === expected) return next();
+  // Allow if called from localhost / Cloud Run internal
+  const forwarded = req.headers['x-forwarded-for'] || req.ip;
+  if (forwarded === '127.0.0.1' || forwarded === '::1') return next();
+  logger.warn('[Cron] Unauthorized cron request from ' + forwarded);
+  return res.status(403).json({ error: 'Forbidden' });
+}
+
+app.post('/api/cron/nightly-audit', cronAuthMiddleware, async (_req, res) => {
+  try {
+    logger.info('[Cron] Nightly audit triggered by Cloud Scheduler');
+    const result = await runNightlyAudit();
+    return res.json({ ok: true, status: result?.overall_status || 'completed' });
+  } catch (err) {
+    logger.error('[Cron] Nightly audit failed:', err.message);
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.post('/api/cron/nightly-checklist', cronAuthMiddleware, async (_req, res) => {
+  try {
+    logger.info('[Cron] Nightly checklist triggered by Cloud Scheduler');
+    await runNightlyChecklist();
+    return res.json({ ok: true });
+  } catch (err) {
+    logger.error('[Cron] Nightly checklist failed:', err.message);
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.post('/api/cron/faye-briefing', cronAuthMiddleware, async (_req, res) => {
+  try {
+    logger.info('[Cron] FAYE daily briefing triggered by Cloud Scheduler');
+    await fayeDailyBriefing();
+    return res.json({ ok: true });
+  } catch (err) {
+    logger.error('[Cron] FAYE briefing failed:', err.message);
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.post('/api/cron/market-analysis', cronAuthMiddleware, async (_req, res) => {
+  try {
+    logger.info('[Cron] Market analysis triggered by Cloud Scheduler');
+    await runMarketAnalysis();
+    return res.json({ ok: true });
+  } catch (err) {
+    logger.error('[Cron] Market analysis failed:', err.message);
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.post('/api/cron/yield-regression', cronAuthMiddleware, async (_req, res) => {
+  try {
+    logger.info('[Cron] Yield regression triggered by Cloud Scheduler');
+    await runYieldRegression();
+    return res.json({ ok: true });
+  } catch (err) {
+    logger.error('[Cron] Yield regression failed:', err.message);
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.post('/api/cron/aws-cost-sync', cronAuthMiddleware, async (_req, res) => {
+  try {
+    logger.info('[Cron] AWS cost sync triggered by Cloud Scheduler');
+    await syncAwsCostExplorer();
+    return res.json({ ok: true });
+  } catch (err) {
+    logger.error('[Cron] AWS cost sync failed:', err.message);
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+// ─── End Cron Endpoints ─────────────────────────────────────────────────────
+
 app.get('/api/activity-hub/orders/pending', authMiddleware, (_req, res) => {
   return res.json({ ok: true, orders: [] });
 });
@@ -3621,6 +3706,7 @@ app.get("/api/wholesale/market/price-alerts", (req, res, next) => { req.url = "/
 app.use('/api/wholesale', wholesaleRoutes); // Core wholesale: catalog, orders, payments, network farms
 app.use("/api/wholesale/donations", wholesaleDonationsRouter); // Food bank donation offers, claims, CRA receipts
 app.use('/api/square-proxy', squareOAuthProxyRoutes); // Compatibility alias for legacy admin UI callers
+app.use('/api/admin/salad-mixes', adminAuthMiddleware, adminSaladMixesRouter); // Admin salad mix CRUD
 app.use('/api/admin', adminRoutes); // Admin dashboard API (sub-mounts /wholesale, /recipes, /pricing, /delivery, /ai)
 app.use('/api/delivery/driver-applications', driverApplicationsRoutes); // Public driver enrollment
 app.use('/api/campaign', campaignRoutes); // Field of Dreams campaign (public)
@@ -3908,7 +3994,7 @@ app.use('/api/remote', authOrAdminMiddleware, remoteSupportRoutes); // Remote su
 app.use('/api/planting', authMiddleware, plantingRoutes); // Planting scheduler recommendations with market intelligence
 app.use('/api/planning', authMiddleware, planningRoutes); // Production planning (integrates market + crop pricing)
 app.use('/api/market-intelligence', authOrAdminMiddleware, marketIntelligenceRoutes); // North American market data + price alerts
-app.use('/api/crop-pricing', authMiddleware, cropPricingRoutes); // Farm-specific crop pricing
+app.use('/api/crop-pricing', authOrAdminMiddleware, cropPricingRoutes); // Farm-specific crop pricing
 app.use('/api/admin/pricing', adminAuthMiddleware, adminPricingRoutes); // Wholesale pricing management
 app.use('/api/quality', authMiddleware, qualityReportsRoutes);                 // Quality reports + QA checkpoint proxies
 app.use('/api/sustainability', authMiddleware, sustainabilityRoutes);          // Sustainability & ESG dashboard
@@ -5349,7 +5435,7 @@ async function startServer() {
       startAwsCostExplorerScheduler(); // Optional AWS Cost Explorer accounting sync
       startBenchmarkScheduler(); // AI Vision Phase 1: nightly crop benchmark aggregation
       startLotExpiryScheduler(); // Nightly: auto-expire lots past best-by date
-      startMarketDataFetcher(); // Phase 1A: daily USDA price ingestion
+      startMarketDataFetcher(); // Phase 2: daily Canadian retail price lookup via Gemini
       startMarketAnalysisAgent(); // Phase 2A: daily GPT market analysis
       startFayeIntelligence(); // F.A.Y.E. Phase 3: anomaly detection + daily briefing
       startNightlyChecklist(); // Nightly AI Checklist: learning notes exchange + self-eval questions

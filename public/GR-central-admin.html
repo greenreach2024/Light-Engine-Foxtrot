@@ -5614,6 +5614,112 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Manual Expense Entry -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Record Manual Expense</div>
+                    </div>
+                    <div class="card-body" style="padding: 24px;">
+                        <form id="manual-expense-form" onsubmit="submitManualExpense(event)">
+                            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px;">
+                                <div>
+                                    <label style="display: block; margin-bottom: 6px; font-size: 14px; color: var(--text-secondary);">Expense Account *</label>
+                                    <select id="expense-account-code" required style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary);">
+                                        <option value="">Select account...</option>
+                                        <option value="500000">500000 - Cost of Goods Sold</option>
+                                        <option value="610000">610000 - Cloud Infrastructure</option>
+                                        <option value="620000">620000 - Developer Tools</option>
+                                        <option value="630000">630000 - Payment Processing Fees</option>
+                                        <option value="710000">710000 - R&D Expense</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label style="display: block; margin-bottom: 6px; font-size: 14px; color: var(--text-secondary);">Amount (CAD) *</label>
+                                    <input type="number" id="expense-amount" step="0.01" min="0.01" required style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary);">
+                                </div>
+                                <div>
+                                    <label style="display: block; margin-bottom: 6px; font-size: 14px; color: var(--text-secondary);">Date *</label>
+                                    <input type="date" id="expense-date" required style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary);">
+                                </div>
+                            </div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px;">
+                                <div>
+                                    <label style="display: block; margin-bottom: 6px; font-size: 14px; color: var(--text-secondary);">Vendor</label>
+                                    <input type="text" id="expense-vendor" placeholder="e.g. AWS, Google, Office Depot" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary);">
+                                </div>
+                                <div>
+                                    <label style="display: block; margin-bottom: 6px; font-size: 14px; color: var(--text-secondary);">Memo / Description</label>
+                                    <input type="text" id="expense-memo" placeholder="e.g. Monthly hosting, Office supplies" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary);">
+                                </div>
+                            </div>
+                            <div style="margin-top: 16px; display: flex; gap: 12px; align-items: center;">
+                                <button type="submit" class="btn-primary" style="padding: 10px 24px;">Record Expense</button>
+                                <span id="expense-status" style="font-size: 14px; color: var(--text-secondary);"></span>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Financial Reports -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Financial Reports</div>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <label class="gr-u-text-secondary-sm">From:</label>
+                            <input type="date" id="report-from" class="gr-u-filter-control-dark">
+                            <label class="gr-u-text-secondary-sm">To:</label>
+                            <input type="date" id="report-to" class="gr-u-filter-control-dark">
+                        </div>
+                    </div>
+                    <div class="card-body" style="padding: 24px;">
+                        <div style="display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 16px;">
+                            <button class="btn" onclick="generateReport('income-statement')">Income Statement (P&L)</button>
+                            <button class="btn" onclick="generateReport('balance-sheet')">Balance Sheet</button>
+                            <button class="btn" onclick="generateReport('cash-flow')">Cash Flow Statement</button>
+                        </div>
+                        <div id="financial-report-output" style="display: none; background: var(--bg-secondary); border-radius: 8px; padding: 20px; font-family: monospace; font-size: 13px; white-space: pre-wrap; max-height: 500px; overflow-y: auto;"></div>
+                    </div>
+                </div>
+
+                <!-- QuickBooks Export -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">QuickBooks CSV Exports</div>
+                    </div>
+                    <div class="card-body" style="padding: 24px;">
+                        <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                            <button class="btn" onclick="downloadQBExport('chart-of-accounts')">Chart of Accounts</button>
+                            <button class="btn" onclick="downloadQBExport('journal-entries')">Journal Entries</button>
+                            <button class="btn" onclick="downloadQBExport('customers')">Customers</button>
+                            <button class="btn" onclick="downloadQBExport('products')">Products / Services</button>
+                            <button class="btn" onclick="downloadQBExport('invoices')">Invoices</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Bank Reconciliation -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Bank Reconciliation</div>
+                        <button class="btn" onclick="loadBankReconciliation()">Refresh</button>
+                    </div>
+                    <div class="card-body" style="padding: 24px;">
+                        <div id="bank-recon-summary" style="margin-bottom: 16px;">
+                            <div class="kpi-grid">
+                                <div class="kpi-card"><div class="kpi-label">Matched</div><div class="kpi-value" id="recon-matched">0</div></div>
+                                <div class="kpi-card"><div class="kpi-label">Unmatched</div><div class="kpi-value" id="recon-unmatched">0</div></div>
+                                <div class="kpi-card"><div class="kpi-label">Cleared</div><div class="kpi-value" id="recon-cleared">0</div></div>
+                            </div>
+                        </div>
+                        <div style="margin-bottom: 16px;">
+                            <label style="font-size: 14px; color: var(--text-secondary); display: block; margin-bottom: 8px;">Import Bank Statement (paste CSV rows: date, description, amount)</label>
+                            <textarea id="bank-csv-input" rows="4" placeholder="2025-01-15,Payment from customer,150.00&#10;2025-01-16,AWS monthly,-45.99" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary); font-family: monospace; font-size: 13px;"></textarea>
+                            <button class="btn" onclick="importBankStatement()" style="margin-top: 8px;">Import &amp; Auto-Match</button>
+                            <span id="bank-import-status" style="margin-left: 12px; font-size: 14px; color: var(--text-secondary);"></span>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- Iframe View (for embedded agent pages like F.A.Y.E.) -->

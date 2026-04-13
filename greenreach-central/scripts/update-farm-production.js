@@ -42,7 +42,7 @@ async function updateFarm() {
       'http://192.168.2.222:8091',                                     // $1 api_url
       'ae61e0c94acc6c2f6611f2864902dfe8085d18c6aa4b975b33a10b3d6a0e9b3b', // $2 api_key
       'Peter Gilbert',                                                  // $3 contact_name
-      'peter@greenreachgreens.com',                                    // $4 email
+      'greenreachfarms@gmail.com',                                     // $4 email
       'FARM-MKLOMAT3-A9D8'                                             // $5 farm_id
     ]);
     
@@ -58,7 +58,7 @@ async function updateFarm() {
     console.log('  - api_url: http://192.168.2.222:8091');
     console.log('  - api_key: ae61e0c9... (64 chars)');
     console.log('  - contact_name: Peter Gilbert');
-    console.log('  - email: peter@greenreachgreens.com');
+    console.log('  - email: greenreachfarms@gmail.com');
     console.log('  - central_linked: true');
     console.log('\n✅ Now test heartbeat from reTerminal!\n');
     

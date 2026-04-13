@@ -28,64 +28,94 @@ export const GEMINI_LITE = 'google/gemini-2.5-flash-lite';
 
 // ── Client Singleton ──────────────────────────────────────────────────
 let _client = null;
-let _initError = null;
+let _authClient = null;
+let _initInProgress = null;
+
+/**
+ * Force-refresh the ADC token on the existing client.
+ * Called automatically on Vertex AI 401 errors.
+ */
+export async function refreshGeminiToken() {
+  if (!_authClient || !_client) return;
+  try {
+    const freshToken = await _authClient.getAccessToken();
+    _client.apiKey = freshToken.token || freshToken;
+    console.log('[Gemini] Token refreshed successfully');
+  } catch (err) {
+    console.error('[Gemini] Token refresh failed:', err.message);
+    // Force full re-init on next call
+    _client = null;
+    _authClient = null;
+    _initInProgress = null;
+  }
+}
 
 /**
  * Get a shared OpenAI-compatible client pointed at Vertex AI.
  * On Cloud Run this authenticates via ADC (no API key needed).
  * Locally, falls back to GEMINI_API_KEY for the Gemini Developer API.
+ * Init errors are NOT permanently cached — retries are allowed.
  */
 export async function getGeminiClient() {
   if (_client) return _client;
-  if (_initError) throw _initError;
+  // Deduplicate concurrent init calls
+  if (_initInProgress) return _initInProgress;
 
-  try {
-    // Path 1: Vertex AI on GCP (production — uses ADC)
-    if (GCP_PROJECT) {
-      const { GoogleAuth } = await import('google-auth-library');
-      const auth = new GoogleAuth({
-        scopes: ['https://www.googleapis.com/auth/cloud-platform'],
-      });
-      const authClient = await auth.getClient();
-      const token = await authClient.getAccessToken();
+  _initInProgress = (async () => {
+    try {
+      // Path 1: Vertex AI on GCP (production — uses ADC)
+      if (GCP_PROJECT) {
+        const { GoogleAuth } = await import('google-auth-library');
+        const auth = new GoogleAuth({
+          scopes: ['https://www.googleapis.com/auth/cloud-platform'],
+        });
+        _authClient = await auth.getClient();
+        const token = await _authClient.getAccessToken();
 
-      _client = new OpenAI({
-        baseURL: `https://${GCP_REGION}-aiplatform.googleapis.com/v1/projects/${GCP_PROJECT}/locations/${GCP_REGION}/endpoints/openapi`,
-        apiKey: token.token || token,
-        defaultHeaders: { 'Content-Type': 'application/json' },
-      });
+        _client = new OpenAI({
+          baseURL: `https://${GCP_REGION}-aiplatform.googleapis.com/v1/projects/${GCP_PROJECT}/locations/${GCP_REGION}/endpoints/openapi`,
+          apiKey: token.token || token,
+          defaultHeaders: { 'Content-Type': 'application/json' },
+        });
 
-      // Refresh token periodically (tokens expire after ~1 hour)
-      setInterval(async () => {
-        try {
-          const freshToken = await authClient.getAccessToken();
-          _client.apiKey = freshToken.token || freshToken;
-        } catch (err) {
-          console.warn('[Gemini] Token refresh failed:', err.message);
-        }
-      }, 45 * 60 * 1000); // Refresh every 45 minutes
+        // Refresh token every 30 minutes (ADC tokens expire after ~60 min)
+        setInterval(async () => {
+          try {
+            const freshToken = await _authClient.getAccessToken();
+            _client.apiKey = freshToken.token || freshToken;
+          } catch (err) {
+            console.warn('[Gemini] Periodic token refresh failed:', err.message);
+          }
+        }, 30 * 60 * 1000);
 
-      console.log(`[Gemini] Vertex AI client initialized (project: ${GCP_PROJECT}, region: ${GCP_REGION})`);
-      return _client;
+        console.log(`[Gemini] Vertex AI client initialized (project: ${GCP_PROJECT}, region: ${GCP_REGION})`);
+        return _client;
+      }
+
+      // Path 2: Gemini Developer API (local dev / non-GCP)
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (apiKey) {
+        _client = new OpenAI({
+          baseURL: 'https://generativelanguage.googleapis.com/v1beta/',
+          apiKey,
+        });
+        console.log('[Gemini] Developer API client initialized (GEMINI_API_KEY)');
+        return _client;
+      }
+
+      throw new Error('No Gemini credentials available. Set GCP_PROJECT (for Vertex AI ADC) or GEMINI_API_KEY (for Developer API).');
+    } catch (err) {
+      // Do NOT permanently cache — allow retry on next call
+      _client = null;
+      _authClient = null;
+      console.error('[Gemini] Failed to initialize client:', err.message);
+      throw err;
+    } finally {
+      _initInProgress = null;
     }
+  })();
 
-    // Path 2: Gemini Developer API (local dev / non-GCP)
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (apiKey) {
-      _client = new OpenAI({
-        baseURL: 'https://generativelanguage.googleapis.com/v1beta/',
-        apiKey,
-      });
-      console.log('[Gemini] Developer API client initialized (GEMINI_API_KEY)');
-      return _client;
-    }
-
-    throw new Error('No Gemini credentials available. Set GCP_PROJECT (for Vertex AI ADC) or GEMINI_API_KEY (for Developer API).');
-  } catch (err) {
-    _initError = err;
-    console.error('[Gemini] Failed to initialize client:', err.message);
-    throw err;
-  }
+  return _initInProgress;
 }
 
 /**
@@ -126,4 +156,24 @@ export function anthropicToolsToOpenAI(tools) {
       parameters: t.input_schema || { type: 'object', properties: {} },
     },
   }));
+}
+
+/**
+ * Wrapper for chat.completions.create that auto-retries on 401 (expired token).
+ * Use this instead of calling client.chat.completions.create() directly.
+ */
+export async function geminiChatCreate(params) {
+  const client = await getGeminiClient();
+  try {
+    return await client.chat.completions.create(params);
+  } catch (err) {
+    const status = err?.status || err?.response?.status || (err?.message && err.message.match(/(\d{3}) status/)?.[1]);
+    if (String(status) === '401' && GCP_PROJECT) {
+      console.warn('[Gemini] 401 from Vertex AI — refreshing token and retrying');
+      await refreshGeminiToken();
+      const retryClient = await getGeminiClient();
+      return await retryClient.chat.completions.create(params);
+    }
+    throw err;
+  }
 }

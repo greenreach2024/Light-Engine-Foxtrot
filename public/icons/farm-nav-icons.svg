@@ -34,6 +34,14 @@
 
   <!-- Dashboard / Home -->
   <symbol id="icon-home" viewBox="0 0 64 64">
+
+  <!-- Visualization: 3D cube -->
+  <symbol id="icon-visualization" viewBox="0 0 64 64">
+    <path d="M32 8L8 22v20l24 14 24-14V22L32 8z" stroke="currentColor" stroke-width="3" stroke-linejoin="round" fill="none"/>
+    <path d="M32 42L8 28" stroke="currentColor" stroke-width="3" stroke-linecap="round" fill="none" opacity="0.5"/>
+    <path d="M32 42l24-14" stroke="currentColor" stroke-width="3" stroke-linecap="round" fill="none" opacity="0.5"/>
+    <path d="M32 42v14" stroke="currentColor" stroke-width="3" stroke-linecap="round" fill="none"/>
+  </symbol>
     <path d="M8 30L32 8l24 22" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
     <path d="M14 28v24a2 2 0 002 2h12V40h8v14h12a2 2 0 002-2V28" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
   </symbol>

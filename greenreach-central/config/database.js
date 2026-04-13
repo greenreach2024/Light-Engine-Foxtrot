@@ -3979,6 +3979,47 @@ async function runMigrations(client) {
     logger.warn('Migration 059 warning:', err.message);
   }
 
+  // --- Migration 060: Crop benchmark configuration ---
+  try {
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS crop_benchmark_config (
+        id              SERIAL PRIMARY KEY,
+        crop_name       VARCHAR(120) NOT NULL UNIQUE,
+        benchmark_category VARCHAR(30) NOT NULL DEFAULT 'direct'
+          CHECK (benchmark_category IN ('direct', 'mixed_greens', 'frozen', 'specialty')),
+        search_override TEXT,
+        updated_by      VARCHAR(60) DEFAULT 'system',
+        updated_at      TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    logger.info('crop_benchmark_config table ready (migration 060)');
+  } catch (err) {
+    logger.warn('Migration 060 warning:', err.message);
+  }
+
+  // --- Migration 061: Widen benchmark_category CHECK to include organic_mixed_greens ---
+  try {
+    // Drop any existing CHECK constraint on benchmark_category (name may vary)
+    const chkResult = await client.query(`
+      SELECT con.conname FROM pg_constraint con
+      JOIN pg_class rel ON rel.oid = con.conrelid
+      WHERE rel.relname = 'crop_benchmark_config'
+        AND con.contype = 'c'
+        AND pg_get_constraintdef(con.oid) LIKE '%benchmark_category%'
+    `);
+    for (const row of chkResult.rows) {
+      await client.query(`ALTER TABLE crop_benchmark_config DROP CONSTRAINT IF EXISTS "${row.conname}"`);
+    }
+    await client.query(`
+      ALTER TABLE crop_benchmark_config
+        ADD CONSTRAINT crop_benchmark_config_benchmark_category_check
+        CHECK (benchmark_category IN ('direct', 'mixed_greens', 'organic_mixed_greens', 'frozen', 'specialty'))
+    `);
+    logger.info('crop_benchmark_config CHECK updated (migration 061)');
+  } catch (err) {
+    logger.warn('Migration 061 warning:', err.message);
+  }
+
 
     // --- Admin user bootstrap: seed default admin if table is empty ---
     try {
@@ -3998,6 +4039,19 @@ async function runMigrations(client) {
       }
     } catch (seedErr) {
       logger.warn('Admin user seed warning:', seedErr.message);
+    }
+
+    // One-time fix: peter@greenreachgreens.com does not exist — update to working address
+    try {
+      const fixResult = await client.query(
+        `UPDATE farms SET email = 'greenreachfarms@gmail.com', updated_at = NOW()
+         WHERE email = 'peter@greenreachgreens.com'`
+      );
+      if (fixResult.rowCount > 0) {
+        logger.info(`Fixed ${fixResult.rowCount} farm(s) with invalid email peter@greenreachgreens.com -> greenreachfarms@gmail.com`);
+      }
+    } catch (fixErr) {
+      logger.warn('Farm email fix warning:', fixErr.message);
     }
 
     logger.info('Database migrations completed');

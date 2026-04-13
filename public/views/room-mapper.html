@@ -961,12 +961,20 @@
         
         console.log(`[Room Mapper] Fetched ${allDevices.length} total devices from iot-devices.json`);
         
-        // Filter for sensors only - devices with type containing 'sensor' or category 'sensor'
+        // Filter for sensors only - match by type, category, model, or name prefix
         const sensors = allDevices.filter(d => {
           const type = (d.type || '').toLowerCase();
           const category = (d.category || '').toLowerCase();
           const deviceType = (d.deviceType || '').toLowerCase();
-          return type.includes('sensor') || category === 'sensor' || category.includes('sensor') || deviceType.includes('sensor');
+          const model = (d.model || '').toLowerCase();
+          const name = (d.name || '').toLowerCase();
+          // Exclude hubs explicitly
+          if (type.includes('hub') || model.includes('hub')) return false;
+          return type.includes('sensor') || type.includes('meter')
+            || category.includes('sensor') || category.includes('meter')
+            || deviceType.includes('sensor')
+            || model.includes('sensor') || model.includes('meter') || model.includes('woio')
+            || /^sen\s*\d/i.test(d.name || '');
         });
         
         console.log(`[Room Mapper] Filtered to ${sensors.length} sensors`);
@@ -1911,6 +1919,39 @@
           if (saveResp.ok) {
             console.log('[Room Mapper] ✅ Updated iot-devices.json with zone/location from placements');
           }
+
+          // Also update device-meta.json so syncSensorData / env-cache reflect
+          // the new zone assignments immediately without waiting for the 5-min sync.
+          try {
+            const metaResp = await fetchWithFarmAuth('/data/device-meta.json', { cache: 'no-store' });
+            if (metaResp.ok) {
+              const metaRaw = await metaResp.json();
+              const metaDevices = metaRaw.devices || metaRaw;
+              let metaUpdated = false;
+              for (const placed of mapDevices) {
+                const zone = placed.snapshot?.zone;
+                if (zone == null) continue;
+                const normalizedZone = String(zone).startsWith('zone-') ? String(zone) : `zone-${zone}`;
+                const dev = metaDevices[placed.deviceId];
+                if (dev && dev.zone !== normalizedZone) {
+                  dev.zone = normalizedZone;
+                  metaUpdated = true;
+                }
+              }
+              if (metaUpdated) {
+                const metaSave = await fetchWithFarmAuth('/data/device-meta.json', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(metaRaw)
+                });
+                if (metaSave.ok) {
+                  console.log('[Room Mapper] ✅ Updated device-meta.json with zone assignments');
+                }
+              }
+            }
+          } catch (metaErr) {
+            console.warn('[Room Mapper] Failed to update device-meta.json (non-fatal):', metaErr.message);
+          }
         }
       } catch (err) {
         console.warn('[Room Mapper] Failed to update iot-devices.json:', err.message);
@@ -1994,8 +2035,16 @@
         
         // Update each zone with sensor assignments
         if (room.zones && Array.isArray(room.zones)) {
+          // Convert string zones to objects if needed (rooms.json may store ["Zone 1", "Zone 2"])
+          room.zones = room.zones.map((zone, idx) => {
+            if (typeof zone === 'string') {
+              return { id: `zone-${idx + 1}`, name: zone, zone: idx + 1 };
+            }
+            return zone;
+          });
+          
           for (const zone of room.zones) {
-            const zoneNum = extractZoneNum(zone.id || zone.zone || zone) || extractZoneNum(zone);
+            const zoneNum = extractZoneNum(zone.id || zone.zone || zone.name) || extractZoneNum(zone);
             const sensors = zoneSensorMap[zoneNum] || [];
             
             // Assign primary environmental sensor (first one found)
@@ -2123,6 +2172,7 @@
             snapshot: {
               name: d.device?.name || null,
               type: d.device?.type || null,
+              model: d.device?.model || null,
               protocol: d.device?.protocol || null,
               category: d.device?.category || null,
               zone: finalZone,
@@ -2224,10 +2274,93 @@
           }
         }
         
-        console.log('[Room Mapper] No existing map found for this room, starting fresh');
+        console.log('[Room Mapper] No existing map found for this room — auto-generating zones from rooms.json');
+        await autoGenerateZonesFromRoom();
       } catch (error) {
-        console.log('[Room Mapper] No existing map found, starting fresh:', error.message);
+        console.log('[Room Mapper] No existing map found, auto-generating zones:', error.message);
+        await autoGenerateZonesFromRoom();
       }
+    }
+
+    /**
+     * Auto-generate zone boundaries from rooms.json zone names so sensors
+     * with zone assignments can auto-restore even before a map is saved.
+     */
+    async function autoGenerateZonesFromRoom() {
+      const currentRoom = STATE.rooms.find(r => (r.id || r.name) === STATE.currentRoomId);
+      if (!currentRoom || !Array.isArray(currentRoom.zones) || currentRoom.zones.length === 0) {
+        console.log('[Room Mapper] Room has no zones defined, cannot auto-generate');
+        return;
+      }
+
+      // Build default zone boundaries — stack them side-by-side
+      const cols = currentRoom.zones.length;
+      const totalW = STATE.gridSize || 20;
+      const totalH = STATE.gridSize || 20;
+      const zoneWidth = Math.floor(totalW / cols);
+
+      STATE.zones = currentRoom.zones.map((zName, i) => {
+        const num = i + 1;
+        return {
+          zone: num,
+          name: typeof zName === 'string' ? zName : (zName.name || `Zone ${num}`),
+          x1: i * zoneWidth,
+          y1: 0,
+          x2: (i === cols - 1) ? totalW : (i + 1) * zoneWidth,
+          y2: totalH
+        };
+      });
+      console.log(`[Room Mapper] Auto-generated ${STATE.zones.length} zones from rooms.json:`, STATE.zones.map(z => z.name));
+
+      // Load IoT devices if not yet loaded
+      if (!STATE.iotDevices.length) await loadIoTDevices();
+
+      // Auto-place sensors with zone assignments into their matching zone
+      let autoPlaced = 0;
+      for (const sensor of STATE.iotDevices) {
+        const alreadyPlaced = STATE.placedDevices.some(p => p.deviceId === sensor.id);
+        if (alreadyPlaced) continue;
+
+        let sensorZone = sensor.zone != null ? Number(sensor.zone) : null;
+        if (sensorZone == null && typeof sensor.zone === 'string') {
+          const m = sensor.zone.match(/(\d+)/);
+          if (m) sensorZone = Number(m[1]);
+        }
+        if (sensorZone == null) continue;
+
+        const zone = STATE.zones.find(z => Number(z.zone) === sensorZone);
+        if (!zone) continue;
+
+        const zoneWidth = (zone.x2 - zone.x1) || 1;
+        const zoneHeight = (zone.y2 - zone.y1) || 1;
+        const inZone = STATE.placedDevices.filter(p =>
+          p.x >= zone.x1 && p.x <= zone.x2 && p.y >= zone.y1 && p.y <= zone.y2 && !p.isEquipment
+        ).length;
+        const cx = zone.x1 + Math.floor(zoneWidth / 2) + (inZone % 3) - 1;
+        const cy = zone.y1 + Math.floor(zoneHeight / 2) + Math.floor(inZone / 3);
+        const x = Math.max(zone.x1, Math.min(zone.x2, cx));
+        const y = Math.max(zone.y1, Math.min(zone.y2, cy));
+
+        STATE.placedDevices.push({
+          deviceId: sensor.id,
+          device: sensor,
+          x, y,
+          icon: getDeviceIcon(sensor),
+          isEquipment: false,
+          autoRestored: true
+        });
+        autoPlaced++;
+        console.log(`[Room Mapper] Auto-placed sensor "${sensor.name}" (${sensor.id}) into zone ${sensorZone} at (${x},${y})`);
+      }
+      if (autoPlaced > 0) {
+        console.log(`[Room Mapper] ✅ Auto-placed ${autoPlaced} sensors from zone assignments`);
+      }
+
+      updateZoneList();
+      renderDeviceList();
+      renderEquipmentList();
+      draw();
+      updateStats();
     }
 
     async function loadExistingMapData(mapData) {

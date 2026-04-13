@@ -35,6 +35,66 @@ GreenReach's Wholesale Integration connects edge device farms to the GreenReach 
                               └───────────────────────────────┘
 ```
 
+## Wholesale Pricing & Discount Structure
+
+### Base Wholesale Discount
+
+All wholesale buyers receive a **25% discount from retail** price. This is controlled by the `sku_factor` (0.75), meaning:
+
+```
+base_wholesale_price = max(floor_price, retail_price × 0.75)
+```
+
+- **Environment variable:** `WHOLESALE_DEFAULT_SKU_FACTOR=0.75`
+- **Hard cap:** Code clamps between 0.50 and 0.75
+- **Floor price:** The higher of cost-based floor and 20th percentile of wholesale market data
+
+### Volume Discount Tiers (Per Buyer)
+
+Additional discounts are applied on top of the base wholesale price based on each buyer's **90-day rolling average order total**:
+
+| Rolling 90-Day Avg | Volume Discount | Final Discount from Retail |
+|---------------------|-----------------|----------------------------|
+| < $750              | 0%              | 25%                        |
+| $750+               | 2%              | ~26.5%                     |
+| $1,500+             | 4%              | ~28%                       |
+| $3,000+             | 6%              | ~29.5%                     |
+| $5,000+             | 8%              | ~31%                       |
+
+Volume discounts are applied as:
+```
+final_wholesale_price = max(floor_price, base_wholesale_price × (1 - volume_discount_rate))
+```
+
+### Pricing Formula Summary
+
+```
+Step 1: base = max(floor, retail × sku_factor)
+Step 2: final = max(floor, base × (1 - buyer_discount_rate))
+```
+
+### API Meta Response
+
+The catalog API returns discount metadata for client-side display:
+
+```json
+{
+  "meta": {
+    "sku_factor": 0.75,
+    "buyer_discount_rate": 0.04,
+    "buyer_rolling_average": 1850.00,
+    "buyer_order_count": 12,
+    "window_days": 90,
+    "volume_tiers": [
+      { "min_avg": 750, "rate": 0.02 },
+      { "min_avg": 1500, "rate": 0.04 },
+      { "min_avg": 3000, "rate": 0.06 },
+      { "min_avg": 5000, "rate": 0.08 }
+    ]
+  }
+}
+```
+
 ## Features
 
 ### 1. Automatic Catalog Synchronization

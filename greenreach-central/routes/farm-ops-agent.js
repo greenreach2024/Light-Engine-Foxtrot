@@ -88,6 +88,20 @@ function writeJSON(filename, data) {
 }
 
 // ---------------------------------------------------------------------------
+// Room resolution helper — matches by ID or human-readable name
+// ---------------------------------------------------------------------------
+function resolveRoom(roomList, roomIdOrName) {
+  if (!roomIdOrName) return null;
+  const q = String(roomIdOrName);
+  return roomList.find(r => (r.id || r.room_id) === q)
+      || roomList.find(r => r.name && r.name.toLowerCase() === q.toLowerCase());
+}
+function resolveRoomId(roomList, roomIdOrName) {
+  const r = resolveRoom(roomList, roomIdOrName);
+  return r ? (r.id || r.room_id) : null;
+}
+
+// ---------------------------------------------------------------------------
 // Sensor data sync — keeps env-cache.json and device-meta.json fresh
 // ---------------------------------------------------------------------------
 function syncSensorData() {
@@ -108,19 +122,34 @@ function syncSensorData() {
         metaChanged = true;
       }
     }
-    if (metaChanged) {
-      raw.devices = devices;
-      raw.lastUpdated = new Date().toISOString();
-      writeJSON('device-meta.json', raw);
-    }
 
     // --- Rebuild env-cache.json from sensor readings ---
+    // Zone assignments from iot-devices.json (user-controlled via Room Mapper)
+    // take precedence over device-meta.json (set at registration time).
     const sensors = iotDevices.filter(d => d.telemetry && d.telemetry.temperature != null);
     if (sensors.length === 0) return;
 
     const zoneReadings = {};
     for (const s of sensors) {
-      const zoneKey = s.zone ? `zone-${s.zone}` : null;
+      // Prefer zone from iot-devices.json (where Room Mapper / user writes)
+      // over device-meta.json (where E.V.I.E. registration writes).
+      // The user controls zone placement via the Room Mapper UI, so their
+      // assignments should take precedence.
+      const iotZone = s.zone;  // from iot-devices.json
+      const metaZone = devices[s.id]?.zone;
+      const rawZone = iotZone || metaZone;
+
+      // If iot-devices.json has a different zone than device-meta.json, update meta
+      if (iotZone != null && devices[s.id] && metaZone !== undefined) {
+        const normalizedIot = String(iotZone).startsWith('zone-') ? String(iotZone) : `zone-${iotZone}`;
+        const normalizedMeta = metaZone ? (String(metaZone).startsWith('zone-') ? String(metaZone) : `zone-${metaZone}`) : null;
+        if (normalizedIot !== normalizedMeta) {
+          devices[s.id].zone = normalizedIot;
+          metaChanged = true;
+          console.log(`[syncSensorData] Updated device-meta zone for ${s.id} (${s.name}): ${normalizedMeta} → ${normalizedIot}`);
+        }
+      }
+      const zoneKey = rawZone ? (String(rawZone).startsWith('zone-') ? String(rawZone) : `zone-${rawZone}`) : null;
       if (!zoneKey) continue;
       if (!zoneReadings[zoneKey]) zoneReadings[zoneKey] = [];
       zoneReadings[zoneKey].push({
@@ -129,6 +158,13 @@ function syncSensorData() {
         battery: s.telemetry.battery,
         sensor_name: s.name
       });
+    }
+
+    // Write device-meta.json if telemetry or zone assignments changed
+    if (metaChanged) {
+      raw.devices = devices;
+      raw.lastUpdated = new Date().toISOString();
+      writeJSON('device-meta.json', raw);
     }
 
     const zones = {};
@@ -648,8 +684,9 @@ export const TOOL_CATALOG = {
     handler: async ({ room_id }) => {
       const rooms = readJSON('rooms.json', {});
       const roomList = rooms.rooms || Object.values(rooms);
-      const room = roomList.find(r => (r.id || r.room_id) === room_id);
+      const room = resolveRoom(roomList, room_id);
       if (!room) return { ok: false, error: `Room ${room_id} not found` };
+      room_id = room.id || room.room_id || room_id;
       const envCache = readJSON('env-cache.json', {});
       const roomMap = readJSON(`room-map-${room_id}.json`, null);
       const targetRanges = readJSON('target-ranges.json', {});
@@ -1008,7 +1045,7 @@ export const TOOL_CATALOG = {
         assigned: assigned.length,
         unassigned: unassigned.length,
         unassigned_devices: unassigned.map(([id, d]) => ({ id, type: d.type || d.protocol || 'unknown', name: d.name || id })),
-        assigned_devices: assigned.map(([id, d]) => ({ id, type: d.type || d.protocol || 'unknown', room_id: d.room_id, zone: d.zone })),
+        assigned_devices: assigned.map(([id, d]) => ({ id, type: d.type || d.protocol || 'unknown', name: d.name || id, room_id: d.room_id, zone: d.zone })),
         rooms: roomList.map(r => ({ id: r.id || r.room_id, name: r.name })),
       };
     }
@@ -1034,6 +1071,12 @@ export const TOOL_CATALOG = {
 
       if (unassigned.length === 0) {
         return { ok: true, assigned: 0, message: 'All devices are already assigned.' };
+      }
+
+      // Normalize room_id if it was passed as a name
+      if (room_id) {
+        const resolved = resolveRoomId(roomList, room_id);
+        if (resolved) room_id = resolved;
       }
 
       // Simple round-robin assignment: assign to rooms that have fewest devices
@@ -1123,14 +1166,16 @@ export const TOOL_CATALOG = {
         return { ok: false, error: `Device "${id}" already exists` };
       }
 
-      // Validate room_id if provided
+      // Validate room_id if provided (match by ID or name)
       if (room_id) {
         const rooms = readJSON('rooms.json', {});
         const roomList = rooms.rooms || Object.values(rooms).filter(r => r != null && typeof r === 'object');
-        const validRoom = roomList.find(r => (r.id || r.room_id) === room_id);
+        const validRoom = resolveRoom(roomList, room_id);
         if (!validRoom) {
-          return { ok: false, error: `Room "${room_id}" not found. Available rooms: ${roomList.map(r => r.id || r.room_id).join(', ')}` };
+          return { ok: false, error: `Room "${room_id}" not found. Available rooms: ${roomList.map(r => `${r.id || r.room_id} (${r.name || ''})`).join(', ')}` };
         }
+        // Normalize to actual room ID
+        room_id = validRoom.id || validRoom.room_id || room_id;
         // Validate zone if provided
         if (zone && validRoom.zones && validRoom.zones.length > 0) {
           const normZone = zone.toLowerCase().replace(/\s+/g, '-');
@@ -1168,6 +1213,34 @@ export const TOOL_CATALOG = {
         writeJSON('device-meta.json', { devices, lastUpdated: new Date().toISOString(), version: '1.0.0' });
       }
 
+      // Also add to iot-devices.json so the IoT UI sees the device
+      try {
+        const iotList = readJSON('iot-devices.json', []);
+        const iotArr = Array.isArray(iotList) ? iotList : (iotList.devices || []);
+        // Don't duplicate
+        if (!iotArr.find(d => d.id === id || d.deviceId === id)) {
+          iotArr.push({
+            id,
+            deviceId: id,
+            name: device.name,
+            type: device.type,
+            protocol: device.protocol || 'manual',
+            brand: device.brand || '',
+            vendor: device.brand || '',
+            zone: device.zone ? parseInt(String(device.zone).replace(/\D/g, ''), 10) || device.zone : null,
+            location: device.room_id && device.zone ? `${device.room_id} - ${device.zone}` : (device.room_id || ''),
+            trust: 'trusted',
+            status: 'online',
+            address: id,
+            lastSeen: new Date().toISOString(),
+            automationControl: true
+          });
+          writeJSON('iot-devices.json', iotArr);
+        }
+      } catch (iotErr) {
+        console.warn('[register_device] Failed to sync to iot-devices.json:', iotErr.message);
+      }
+
       // Update room category count if type matches a hardware category
       if (room_id) {
         try {
@@ -1199,6 +1272,14 @@ export const TOOL_CATALOG = {
         if (isWrapper) raw.lastUpdated = new Date().toISOString();
         writeJSON('device-meta.json', isWrapper ? raw : devices);
 
+        // Also remove from iot-devices.json
+        try {
+          const iotList = readJSON('iot-devices.json', []);
+          const iotArr = Array.isArray(iotList) ? iotList : (iotList.devices || []);
+          const filtered = iotArr.filter(d => d.id !== id && d.deviceId !== id);
+          if (filtered.length !== iotArr.length) writeJSON('iot-devices.json', filtered);
+        } catch { /* non-fatal */ }
+
         // Decrement room category count
         if (state?.room_id && state?.type) {
           try {
@@ -1212,6 +1293,130 @@ export const TOOL_CATALOG = {
           } catch { /* non-fatal */ }
         }
         return { ok: true, undone: true, message: `Removed device ${id}` };
+      }
+      return { ok: false, error: `Device ${id} not found for undo` };
+    }
+  },
+  'update_device': {
+    description: 'Update an existing IoT device — reassign to a different zone, room, rename, or change status. Use this to move sensors between zones.',
+    category: 'write',
+    required: ['device_id'],
+    optional: ['zone', 'room_id', 'name', 'status'],
+    undoable: true,
+    handler: async ({ device_id, zone, room_id, name, status }) => {
+      const raw = readJSON('device-meta.json', { devices: {}, lastUpdated: null, version: '1.0.0' });
+      const isWrapper = raw.devices && typeof raw.devices === 'object' && !Array.isArray(raw.devices);
+      const devices = isWrapper ? raw.devices : (() => { const { version, lastUpdated, farmId, ...rest } = raw; return rest; })();
+
+      const device = devices[device_id];
+      if (!device) {
+        // Try fuzzy match by name
+        const match = Object.entries(devices).find(([_, d]) => d && d.name && d.name.toLowerCase() === String(device_id).toLowerCase());
+        if (match) {
+          return { ok: false, error: `Device "${device_id}" not found by ID. Did you mean "${match[0]}" (${match[1].name})?` };
+        }
+        return { ok: false, error: `Device "${device_id}" not found. Use get_device_status to list all devices.` };
+      }
+
+      // Snapshot for undo
+      const previousState = { zone: device.zone, room_id: device.room_id, name: device.name, status: device.status };
+      const changes = [];
+
+      if (zone !== undefined && zone !== null) {
+        const normZone = String(zone).toLowerCase().replace(/\s+/g, '-');
+        // Validate zone against rooms if room_id is known
+        const effectiveRoom = room_id || device.room_id;
+        if (effectiveRoom) {
+          const rooms = readJSON('rooms.json', {});
+          const roomList = rooms.rooms || Object.values(rooms).filter(r => r != null && typeof r === 'object');
+          const roomObj = resolveRoom(roomList, effectiveRoom);
+          if (roomObj?.zones?.length > 0) {
+            const validZones = roomObj.zones.map(z => z.toLowerCase().replace(/\s+/g, '-'));
+            if (!validZones.includes(normZone)) {
+              return { ok: false, error: `Zone "${zone}" not valid for room "${effectiveRoom}". Available: ${roomObj.zones.join(', ')}` };
+            }
+          }
+        }
+        device.zone = normZone;
+        changes.push(`zone → ${normZone}`);
+      }
+      if (room_id !== undefined && room_id !== null) {
+        const rooms = readJSON('rooms.json', {});
+        const roomList = rooms.rooms || Object.values(rooms).filter(r => r != null && typeof r === 'object');
+        const resolvedId = resolveRoomId(roomList, room_id);
+        if (!resolvedId) {
+          return { ok: false, error: `Room "${room_id}" not found.` };
+        }
+        device.room_id = resolvedId;
+        changes.push(`room → ${resolvedId}`);
+      }
+      if (name !== undefined && name !== null) {
+        device.name = name.trim();
+        changes.push(`name → ${name.trim()}`);
+      }
+      if (status !== undefined && status !== null) {
+        device.status = status;
+        changes.push(`status → ${status}`);
+      }
+
+      if (changes.length === 0) {
+        return { ok: true, message: 'No changes specified.', device_id };
+      }
+
+      device.updated_at = new Date().toISOString();
+      device.updated_by = 'farm-ops-agent';
+
+      if (isWrapper) {
+        raw.devices = devices;
+        raw.lastUpdated = new Date().toISOString();
+        writeJSON('device-meta.json', raw);
+      } else {
+        writeJSON('device-meta.json', { devices, lastUpdated: new Date().toISOString(), version: '1.0.0' });
+      }
+
+      // Sync changes to iot-devices.json so the IoT UI reflects updates
+      try {
+        const iotList = readJSON('iot-devices.json', []);
+        const iotArr = Array.isArray(iotList) ? iotList : (iotList.devices || []);
+        const iotDev = iotArr.find(d => d.id === device_id || d.deviceId === device_id);
+        if (iotDev) {
+          if (zone !== undefined && zone !== null) {
+            iotDev.zone = parseInt(String(device.zone).replace(/\D/g, ''), 10) || device.zone;
+          }
+          if (room_id !== undefined && room_id !== null) iotDev.location = `${device.room_id} - ${device.zone || ''}`.trim();
+          if (name !== undefined && name !== null) iotDev.name = device.name;
+          if (status !== undefined && status !== null) iotDev.status = device.status;
+          iotDev.lastSeen = new Date().toISOString();
+          writeJSON('iot-devices.json', iotArr);
+        }
+      } catch (iotErr) {
+        console.warn('[update_device] Failed to sync to iot-devices.json:', iotErr.message);
+      }
+
+      return {
+        ok: true,
+        device_id,
+        changes,
+        message: `Updated "${device.name}": ${changes.join(', ')}`,
+        device,
+        _undo_state: { device_id, ...previousState }
+      };
+    },
+    undoHandler: async (params, state) => {
+      const raw = readJSON('device-meta.json', { devices: {} });
+      const isWrapper = raw.devices && typeof raw.devices === 'object' && !Array.isArray(raw.devices);
+      const devices = isWrapper ? raw.devices : raw;
+      const id = state?.device_id;
+      if (id && devices[id]) {
+        if (state.zone !== undefined) devices[id].zone = state.zone;
+        if (state.room_id !== undefined) devices[id].room_id = state.room_id;
+        if (state.name !== undefined) devices[id].name = state.name;
+        if (state.status !== undefined) devices[id].status = state.status;
+        delete devices[id].updated_at;
+        delete devices[id].updated_by;
+        if (isWrapper) raw.lastUpdated = new Date().toISOString();
+        writeJSON('device-meta.json', isWrapper ? raw : devices);
+        return { ok: true, undone: true, message: `Reverted device ${id} to previous state` };
       }
       return { ok: false, error: `Device ${id} not found for undo` };
     }
@@ -1520,6 +1725,70 @@ export const TOOL_CATALOG = {
       return { ok: true, message: `Target ranges reverted for ${prevState.zone_id}` };
     }
   },
+  'get_outdoor_weather': {
+    description: 'Get current outdoor weather conditions at the farm location (temperature, humidity, dew point, solar radiation, wind speed). Uses OpenWeatherMap free API. Essential for understanding external heat/humidity load on the facility, VPD context, and HVAC demand. Farm lat/lon is read from farm.json or env vars.',
+    category: 'read',
+    required: [],
+    optional: ['lat', 'lon'],
+    handler: async (params) => {
+      try {
+        const farm = readJSON('farm.json', {});
+        const lat = params.lat || farm.location?.lat || farm.lat || process.env.FARM_LAT;
+        const lon = params.lon || farm.location?.lon || farm.lon || process.env.FARM_LON;
+        const apiKey = process.env.OPENWEATHERMAP_API_KEY;
+        if (!lat || !lon) {
+          return {
+            ok: false,
+            error: 'Farm location not configured.',
+            hint: 'Set FARM_LAT and FARM_LON env vars on the Cloud Run service, or add location: { lat, lon } to farm.json.'
+          };
+        }
+        if (!apiKey) {
+          return {
+            ok: false,
+            error: 'OPENWEATHERMAP_API_KEY not configured.',
+            hint: 'Sign up at openweathermap.org (free tier: 60 calls/min). Add OPENWEATHERMAP_API_KEY to Cloud Run env vars.'
+          };
+        }
+        const url = `https://api.openweathermap.org/data/2.5/weather?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}&appid=${encodeURIComponent(apiKey)}&units=metric`;
+        const resp = await fetch(url, { signal: AbortSignal.timeout(8000) });
+        if (!resp.ok) {
+          const body = await resp.text().catch(() => '');
+          return { ok: false, error: `OpenWeatherMap API error: HTTP ${resp.status}`, detail: body };
+        }
+        const d = await resp.json();
+        // Dew point approximation (Magnus formula)
+        const tempC = d.main?.temp;
+        const rh = d.main?.humidity;
+        const dewPoint = rh && tempC != null
+          ? Math.round(((17.27 * tempC) / (237.3 + tempC) + Math.log(rh / 100)) / 17.27 * 237.3 * 10 + 2370) / 10
+          : null;
+        // VPD estimate from outdoor conditions (kPa)
+        const svp = tempC != null ? 0.6108 * Math.exp(17.27 * tempC / (tempC + 237.3)) : null;
+        const outdoorVpd = svp && rh ? Math.round(svp * (1 - rh / 100) * 100) / 100 : null;
+        return {
+          ok: true,
+          location: { lat, lon, name: d.name || 'Unknown', country: d.sys?.country },
+          temperature_c: tempC,
+          feels_like_c: d.main?.feels_like,
+          humidity_pct: rh,
+          dew_point_c: dewPoint,
+          outdoor_vpd_kpa: outdoorVpd,
+          pressure_hpa: d.main?.pressure,
+          wind_speed_ms: d.wind?.speed,
+          cloud_cover_pct: d.clouds?.all,
+          weather: d.weather?.[0]?.description || null,
+          sunrise: d.sys?.sunrise ? new Date(d.sys.sunrise * 1000).toISOString() : null,
+          sunset: d.sys?.sunset ? new Date(d.sys.sunset * 1000).toISOString() : null,
+          observed_at: d.dt ? new Date(d.dt * 1000).toISOString() : new Date().toISOString(),
+          note: outdoorVpd != null
+            ? `Outdoor VPD: ${outdoorVpd} kPa. Compare to indoor targets (0.8-1.2 kPa ideal). ${outdoorVpd > 2.0 ? 'High outdoor VPD — increased HVAC and dehumidification demand expected.' : outdoorVpd < 0.4 ? 'Very low outdoor VPD — humidity ingress risk if doors/vents open.' : 'Outdoor VPD within manageable range.'}`
+            : undefined
+        };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
   'get_environment_readings': {
     description: 'Get current real-time environment readings from all sensors — temperature, humidity, battery levels per zone',
     category: 'read',

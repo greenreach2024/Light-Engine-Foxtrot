@@ -1,0 +1,1105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Grow Management - Light Engine</title>
+  <link rel="stylesheet" href="/styles.foxtrot.css">
+  <link rel="stylesheet" href="/styles/le-dashboard-theme.css">
+  <link rel="stylesheet" href="/styles/nav-color-palette.css">
+  <style>
+    /* ===== GROW MANAGEMENT - DARK GLASSMORPHIC OVERRIDES ===== */
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+      color: #f1f5f9;
+      min-height: 100vh;
+      overflow-x: hidden;
+      margin: 0;
+      padding: 0;
+    }
+
+    /* ---- Header ---- */
+    .gm-header {
+      background: rgba(0, 0, 0, 0.3);
+      padding: 1.25rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+      backdrop-filter: blur(10px);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .gm-header h1 {
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: #f1f5f9;
+      letter-spacing: -0.5px;
+      margin: 0;
+    }
+    .gm-header-status {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 0.875rem;
+      color: #94a3b8;
+    }
+
+    /* ---- KPI Row ---- */
+    .gm-kpi-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 1rem;
+      padding: 1.5rem 2rem 0.5rem;
+    }
+    .gm-kpi {
+      background: rgba(15, 23, 42, 0.95);
+      border: 1px solid rgba(59, 130, 246, 0.2);
+      border-radius: 16px;
+      padding: 1.25rem 1.5rem;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+      transition: border-color 0.3s ease, transform 0.2s ease;
+    }
+    .gm-kpi:hover {
+      border-color: rgba(59, 130, 246, 0.4);
+      transform: translateY(-2px);
+    }
+    .gm-kpi-value {
+      font-size: 2rem;
+      font-weight: 700;
+      color: #f1f5f9;
+      line-height: 1.1;
+    }
+    .gm-kpi-label {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .gm-kpi--blue .gm-kpi-value { color: #3b82f6; }
+    .gm-kpi--green .gm-kpi-value { color: #10b981; }
+    .gm-kpi--yellow .gm-kpi-value { color: #f59e0b; }
+    .gm-kpi--purple .gm-kpi-value { color: #8b5cf6; }
+
+    /* ---- Container ---- */
+    .gm-container {
+      max-width: 1600px;
+      margin: 0 auto;
+      padding: 1rem 2rem 3rem;
+    }
+
+    /* ---- Glass Card (reusable) ---- */
+    .gm-card {
+      background: rgba(15, 23, 42, 0.95);
+      border: 1px solid rgba(59, 130, 246, 0.2);
+      border-radius: 16px;
+      padding: 1.5rem;
+      margin-bottom: 1.25rem;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    }
+    .gm-card h3 {
+      font-size: 1.125rem;
+      font-weight: 600;
+      color: #f1f5f9;
+      margin: 0 0 1rem 0;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid rgba(59, 130, 246, 0.15);
+    }
+
+    /* ---- Form overrides inside groupsV2Panel ---- */
+    #groupsV2Panel label,
+    #groupsV2Panel .tiny {
+      color: #94a3b8 !important;
+    }
+    #groupsV2Panel h2,
+    #groupsV2Panel h3,
+    #groupsV2Panel strong {
+      color: #f1f5f9 !important;
+    }
+    #groupsV2Panel .text-muted {
+      color: #64748b !important;
+    }
+    #groupsV2Panel select,
+    #groupsV2Panel input[type="text"],
+    #groupsV2Panel input[type="number"],
+    #groupsV2Panel input[type="date"],
+    #groupsV2Panel input[type="time"],
+    #groupsV2Panel textarea {
+      background: rgba(15, 23, 42, 0.6) !important;
+      border: 2px solid rgba(59, 130, 246, 0.3) !important;
+      border-radius: 10px !important;
+      color: #f1f5f9 !important;
+      padding: 0.5rem 0.75rem !important;
+      font-size: 0.9rem !important;
+      min-height: 36px !important;
+      transition: all 0.2s ease;
+    }
+    #groupsV2Panel select:focus,
+    #groupsV2Panel input:focus {
+      outline: none !important;
+      border-color: #3b82f6 !important;
+      background: rgba(15, 23, 42, 0.8) !important;
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15) !important;
+    }
+    #groupsV2Panel select option {
+      background: #1e293b;
+      color: #f1f5f9;
+    }
+
+    /* ---- Button overrides ---- */
+    #groupsV2Panel .primary,
+    #groupsV2Panel button.primary {
+      background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
+      color: white !important;
+      border: none !important;
+      border-radius: 10px !important;
+      padding: 0.6rem 1.25rem !important;
+      font-weight: 600 !important;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+    }
+    #groupsV2Panel .primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4) !important;
+    }
+    #groupsV2Panel .ghost,
+    #groupsV2Panel button.ghost {
+      background: rgba(30, 41, 59, 0.6) !important;
+      color: #94a3b8 !important;
+      border: 1px solid rgba(148, 163, 184, 0.2) !important;
+      border-radius: 10px !important;
+      padding: 0.5rem 1rem !important;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+    #groupsV2Panel .ghost:hover {
+      background: rgba(30, 41, 59, 0.9) !important;
+      border-color: rgba(59, 130, 246, 0.4) !important;
+      color: #f1f5f9 !important;
+    }
+
+    /* Named action buttons with accent borders */
+    #groupsV2SaveAndDeploy {
+      border-color: #10b981 !important;
+      color: #10b981 !important;
+    }
+    #groupsV2SaveAndDeploy:hover {
+      background: rgba(16, 185, 129, 0.15) !important;
+    }
+    #groupsV2HarvestBtn {
+      border-color: #f59e0b !important;
+      color: #f59e0b !important;
+    }
+    #groupsV2HarvestBtn:hover {
+      background: rgba(245, 158, 11, 0.15) !important;
+    }
+    #groupsV2PrintLabels {
+      border-color: #8b5cf6 !important;
+      color: #8b5cf6 !important;
+    }
+    #groupsV2PrintLabels:hover {
+      background: rgba(139, 92, 246, 0.15) !important;
+    }
+    #buildStockGroupsBtn {
+      border-color: #6366f1 !important;
+      color: #6366f1 !important;
+    }
+    #buildStockGroupsBtn:hover {
+      background: rgba(99, 102, 241, 0.15) !important;
+    }
+    #groupsV2DeleteGroup {
+      color: #ef4444 !important;
+      border-color: rgba(239, 68, 68, 0.3) !important;
+    }
+    #groupsV2DeleteGroup:hover {
+      background: rgba(239, 68, 68, 0.15) !important;
+    }
+
+    /* ---- Section cards (gr-card overrides) ---- */
+    #groupsV2Panel .gr-card,
+    #groupsV2Panel [class*="gr-card"] {
+      background: rgba(15, 23, 42, 0.8) !important;
+      border-color: rgba(59, 130, 246, 0.15) !important;
+      color: #f1f5f9 !important;
+    }
+
+    /* Plan Form card */
+    #groupsV2PlanForm {
+      background: rgba(15, 23, 42, 0.6) !important;
+      border: 1px solid rgba(59, 130, 246, 0.25) !important;
+      border-radius: 16px !important;
+    }
+
+    /* Plan Preview */
+    #groupsV2PlanPreview {
+      background: rgba(15, 23, 42, 0.4) !important;
+      border: 1px dashed rgba(56, 189, 248, 0.4) !important;
+      border-radius: 12px !important;
+      color: #f1f5f9 !important;
+    }
+
+    /* Cycle boxes */
+    .gm-cycle-box {
+      background: rgba(15, 23, 42, 0.5) !important;
+      border: 1px solid rgba(59, 130, 246, 0.25) !important;
+      border-radius: 12px !important;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      min-width: 180px;
+    }
+
+    /* Target temp/humidity box */
+    .gm-targets-box {
+      background: rgba(16, 185, 129, 0.08) !important;
+      border: 1px solid rgba(16, 185, 129, 0.3) !important;
+      border-radius: 12px !important;
+      padding: 12px;
+    }
+    .gm-targets-box .target-readout {
+      padding: 8px;
+      background: rgba(15, 23, 42, 0.5);
+      border-radius: 8px;
+      border: 1px solid rgba(16, 185, 129, 0.2);
+      min-height: 32px;
+      display: flex;
+      align-items: center;
+      color: #94a3b8;
+    }
+
+    /* Group list section */
+    #groupsV2GroupListSection {
+      background: rgba(15, 23, 42, 0.6) !important;
+      border: 1px solid rgba(59, 130, 246, 0.15) !important;
+      border-radius: 16px !important;
+    }
+    #groupsV2GroupListBody {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 12px;
+      max-height: 500px;
+      overflow-y: auto;
+    }
+    /* Dynamically-created group cards */
+    #groupsV2GroupListBody > div,
+    #groupsV2GroupListBody > button {
+      background: rgba(30, 41, 59, 0.8) !important;
+      border: 1px solid rgba(59, 130, 246, 0.15) !important;
+      border-radius: 12px !important;
+      color: #f1f5f9 !important;
+      padding: 12px !important;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    #groupsV2GroupListBody > div:hover,
+    #groupsV2GroupListBody > button:hover {
+      border-color: rgba(59, 130, 246, 0.4) !important;
+      background: rgba(30, 41, 59, 1) !important;
+      transform: translateY(-2px);
+    }
+    #groupsV2GroupListBody span,
+    #groupsV2GroupListBody small,
+    #groupsV2GroupListBody div {
+      color: #f1f5f9 !important;
+    }
+    #groupsV2GroupListBody small,
+    #groupsV2GroupListBody .text-muted {
+      color: #94a3b8 !important;
+    }
+
+    /* Editing indicator */
+    #groupsV2EditingIndicator {
+      background: rgba(59, 130, 246, 0.1) !important;
+      border: 1px solid rgba(59, 130, 246, 0.3) !important;
+      border-radius: 10px !important;
+      color: #93c5fd !important;
+    }
+    #groupsV2ClearEditing {
+      color: #94a3b8 !important;
+    }
+
+    /* Light assignment section */
+    #lightInfoCard {
+      background: rgba(15, 23, 42, 0.8) !important;
+      border: 1px solid rgba(59, 130, 246, 0.2) !important;
+      color: #f1f5f9 !important;
+    }
+
+    /* Plan vs Light comparison */
+    #groupsV2Comparison > div {
+      background: rgba(15, 23, 42, 0.8) !important;
+      border-radius: 12px !important;
+      color: #f1f5f9 !important;
+    }
+    #groupsV2Comparison > div:first-child {
+      border: 2px solid rgba(56, 189, 248, 0.3) !important;
+    }
+    #groupsV2Comparison > div:last-child {
+      border: 2px solid rgba(167, 139, 250, 0.3) !important;
+    }
+
+    /* Assigned lights grid */
+    #groupLightList {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 12px;
+    }
+    #groupLightList > div,
+    #groupLightList > label {
+      background: rgba(30, 41, 59, 0.8) !important;
+      border: 1px solid rgba(59, 130, 246, 0.15) !important;
+      border-radius: 12px !important;
+      color: #f1f5f9 !important;
+      padding: 10px !important;
+    }
+
+    /* Running/Testing indicators */
+    #groupsV2RunningIndicator {
+      background: #10b981 !important;
+    }
+    #groupsV2TestingIndicator {
+      background: #f59e0b !important;
+    }
+
+    /* Harvest strategy indicator */
+    #groupsV2HarvestStrategyIndicator {
+      background: rgba(245, 158, 11, 0.12) !important;
+      border: 1px solid rgba(245, 158, 11, 0.3) !important;
+      color: #fcd34d !important;
+    }
+
+    /* Calibration card */
+    .gm-calibration-card {
+      background: rgba(245, 158, 11, 0.08) !important;
+      border: 1px solid rgba(245, 158, 11, 0.25) !important;
+      border-radius: 16px;
+      padding: 1.25rem;
+      text-align: center;
+    }
+    .gm-calibration-card p {
+      color: #fcd34d;
+      margin: 8px 0 0;
+      font-size: 0.85rem;
+    }
+
+    /* Schedule summary */
+    #groupsV2ScheduleSummary {
+      color: #94a3b8 !important;
+    }
+
+    /* Anchor toggle buttons */
+    #groupsV2AnchorToggle button[aria-pressed="true"] {
+      background: rgba(59, 130, 246, 0.3) !important;
+      border-color: #3b82f6 !important;
+      color: #f1f5f9 !important;
+    }
+    #groupsV2AnchorToggle button[aria-pressed="false"] {
+      background: rgba(30, 41, 59, 0.6) !important;
+      border: 1px solid rgba(148, 163, 184, 0.2) !important;
+      color: #94a3b8 !important;
+    }
+
+    /* Bulk edit / Build stock modals */
+    #bulkEditGroupModal,
+    #buildStockGroupModal {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(4px);
+      z-index: 200;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #bulkEditGroupModal > div,
+    #buildStockGroupModal > div {
+      background: #1e293b !important;
+      border: 1px solid rgba(59, 130, 246, 0.3) !important;
+      border-radius: 16px !important;
+      color: #f1f5f9 !important;
+      max-width: 600px;
+      width: 90%;
+      padding: 2rem;
+    }
+
+    /* Scrollbar styling */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.3); }
+    ::-webkit-scrollbar-thumb { background: rgba(59, 130, 246, 0.3); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(59, 130, 246, 0.5); }
+
+    /* Row utilities (override foxtrot defaults for dark) */
+    .row { display: flex; }
+    .row--between { justify-content: space-between; }
+    .row--center { align-items: center; }
+    .row--wrap { flex-wrap: wrap; }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .gm-header { padding: 1rem; }
+      .gm-header h1 { font-size: 1.25rem; }
+      .gm-kpi-row { grid-template-columns: repeat(2, 1fr); padding: 1rem; }
+      .gm-container { padding: 0.75rem; }
+      .gm-card { padding: 1rem; }
+    }
+
+    /* ---- Danger button class ---- */
+    .danger {
+      color: #ef4444 !important;
+      border-color: rgba(239, 68, 68, 0.3) !important;
+    }
+  </style>
+  <script src="/js/console-wrapper.js"></script>
+  <script src="/js/net.guard.js" defer></script>
+  <script src="/app.foxtrot.js" defer></script>
+  <script src="/groups-v2.js" defer></script>
+</head>
+<body class="le-theme">
+
+  <!-- ===== HEADER ===== -->
+  <header class="gm-header">
+    <h1>Grow Management</h1>
+    <div class="gm-header-status">
+      <span id="groupsV2Status" aria-live="polite"></span>
+      <span id="groupsV2StatusBadge"></span>
+    </div>
+  </header>
+
+  <!-- ===== KPI ROW ===== -->
+  <div class="gm-kpi-row">
+    <div class="gm-kpi gm-kpi--blue">
+      <span class="gm-kpi-value" id="kpiTotalGroups">--</span>
+      <span class="gm-kpi-label">Total Groups</span>
+    </div>
+    <div class="gm-kpi gm-kpi--green">
+      <span class="gm-kpi-value" id="kpiDeployed">--</span>
+      <span class="gm-kpi-label">Deployed</span>
+    </div>
+    <div class="gm-kpi gm-kpi--yellow">
+      <span class="gm-kpi-value" id="kpiTotalTrays">--</span>
+      <span class="gm-kpi-label">Trays in Use</span>
+    </div>
+    <div class="gm-kpi gm-kpi--purple">
+      <span class="gm-kpi-value" id="kpiAvgDli">--</span>
+      <span class="gm-kpi-label">Avg DLI</span>
+    </div>
+  </div>
+
+  <!-- ===== MAIN CONTENT ===== -->
+  <div class="gm-container">
+
+    <!-- Groups V2 Panel (always visible, dark-themed) -->
+    <section id="groupsV2Panel" data-panel="groups-v2" data-card-prefix="GR" data-card-code="GV2">
+      <div class="panel-body" style="display:flex;flex-direction:column;gap:18px;">
+
+        <!-- ===== IDENTITY + ACTIONS ===== -->
+        <div class="gm-card" id="groupsV2PlanForm" style="display:flex;flex-direction:column;gap:16px;">
+          <div class="row row--wrap" style="gap:12px;align-items:flex-end;" id="groupsV2PlanControls">
+            <label class="tiny" style="display:flex;flex-direction:column;min-width:180px;">
+              Room
+              <select id="groupsV2RoomSelect"></select>
+            </label>
+            <label class="tiny" style="display:flex;flex-direction:column;min-width:160px;">
+              Zone
+              <select id="groupsV2ZoneSelect">
+                <option value="">(none)</option>
+              </select>
+            </label>
+            <label class="tiny" style="display:flex;flex-direction:column;min-width:200px;">
+              Group name
+              <input id="groupsV2ZoneName" type="text" placeholder="Propagation North - Bench A">
+            </label>
+            <div class="row" style="gap:8px;flex-wrap:wrap;">
+              <button id="groupsV2SaveGroup" type="button" class="primary">Save Group</button>
+              <button id="buildStockGroupsBtn" type="button" class="ghost" title="Batch-create identical groups with same lights, trays, and layout">Build Stock Groups</button>
+              <label class="tiny" style="display:flex;flex-direction:column;min-width:160px;">
+                Load group
+                <select id="groupsV2LoadGroup">
+                  <option value="">(none)</option>
+                </select>
+              </label>
+              <button id="groupsV2SaveAndDeploy" type="button" class="ghost" style="align-self:flex-end;">Deploy Group</button>
+              <button id="groupsV2HarvestBtn" type="button" class="ghost" style="display:none;align-self:flex-end;">Harvest</button>
+              <button id="groupsV2DeleteGroup" type="button" class="ghost" style="align-self:flex-end;">Delete selected group</button>
+              <button id="groupsV2PrintLabels" type="button" class="ghost" style="align-self:flex-end;" title="Download PDF of group labels (QR + name)">Print Labels</button>
+            </div>
+            <div id="groupsV2HarvestStrategyIndicator" style="display:none;padding:6px 12px;border-radius:8px;font-size:0.85rem;font-weight:600;margin-top:4px;"></div>
+          </div>
+
+          <!-- ===== PLAN SEARCH + SELECT ===== -->
+          <div class="row row--wrap" style="gap:12px;align-items:flex-start;">
+            <label class="tiny" style="display:flex;flex-direction:column;min-width:200px;">
+              Search plans
+              <select id="groupsV2PlanSearch" size="1">
+                <option value="">All plans</option>
+              </select>
+            </label>
+            <label class="tiny" style="display:flex;flex-direction:column;min-width:220px;">
+              Plan
+              <select id="groupsV2PlanSelect">
+                <option value="">(select plan)</option>
+              </select>
+            </label>
+            <button id="applyPlanToGroupBtn" type="button" class="primary" style="align-self:flex-end;">Apply to Current Plan</button>
+          </div>
+
+          <!-- ===== ANCHOR ===== -->
+          <div class="groupsV2-anchor" style="display:flex;flex-direction:column;gap:8px;">
+            <span class="tiny" style="font-weight:600;color:#f1f5f9;">Anchor</span>
+            <div id="groupsV2AnchorToggle" role="group" aria-label="Anchor mode" style="display:flex;gap:8px;flex-wrap:wrap;">
+              <button id="groupsV2SeedDateBtn" type="button" class="primary" aria-pressed="true" data-mode="seed" style="min-height:32px;padding:6px 12px;">Seed date</button>
+              <button id="groupsV2DpsBtn" type="button" class="ghost" aria-pressed="false" data-mode="dps" style="min-height:32px;padding:6px 12px;">DPS (Days Post Seeding)</button>
+            </div>
+            <label id="groupsV2SeedWrapper" class="tiny" style="display:flex;flex-direction:column;gap:4px;max-width:220px;">
+              <span>Seed date</span>
+              <input id="groupsV2SeedDate" type="date">
+            </label>
+            <label id="groupsV2DpsWrapper" class="tiny" style="display:none;flex-direction:column;gap:4px;max-width:220px;">
+              <span>Days post seeding</span>
+              <select id="groupsV2Dps" style="width:120px;">
+                <option value="1">1 day</option>
+                <option value="2">2 days</option>
+                <option value="3">3 days</option>
+                <option value="5">5 days</option>
+                <option value="7">7 days</option>
+                <option value="10">10 days</option>
+                <option value="14">14 days</option>
+                <option value="21">21 days</option>
+                <option value="30">30 days</option>
+                <option value="45">45 days</option>
+                <option value="60">60 days</option>
+              </select>
+            </label>
+          </div>
+
+          <!-- ===== SCHEDULE (Cycles) ===== -->
+          <div class="row row--wrap" style="gap:16px;align-items:flex-start;">
+            <div class="gm-cycle-box">
+              <div class="row row--between row--center">
+                <strong style="color:#f1f5f9;">Cycle 1</strong>
+                <button id="groupsV2AddCycle2Btn" type="button" class="ghost" style="font-size:11px;padding:4px 8px;min-height:24px;">+ Add Cycle 2</button>
+              </div>
+              <label style="display:flex;flex-direction:column;gap:4px;">
+                <span class="tiny">Start</span>
+                <input id="groupsV2Cycle1On" type="time" value="08:00">
+              </label>
+              <label style="display:flex;flex-direction:column;gap:4px;">
+                <span class="tiny">ON duration (h)</span>
+                <input id="groupsV2Cycle1Hours" type="number" min="0" max="24" step="0.25" value="12">
+              </label>
+              <div id="groupsV2Cycle1End" class="tiny text-muted">End: 20:00</div>
+            </div>
+            <div id="groupsV2Cycle2Container" class="gm-cycle-box" style="display:none;">
+              <div class="row row--between row--center">
+                <strong style="color:#f1f5f9;">Cycle 2</strong>
+                <button id="groupsV2RemoveCycle2Btn" type="button" class="ghost" style="font-size:11px;padding:4px 8px;min-height:24px;color:#ef4444 !important;">x Remove</button>
+              </div>
+              <label style="display:flex;flex-direction:column;gap:4px;">
+                <span class="tiny">Start</span>
+                <input id="groupsV2Cycle2On" type="time" value="20:00" readonly aria-readonly="true">
+              </label>
+              <label style="display:flex;flex-direction:column;gap:4px;">
+                <span class="tiny">ON duration (h)</span>
+                <input id="groupsV2Cycle2Hours" type="number" min="0" max="24" step="0.5" value="12" readonly aria-readonly="true">
+              </label>
+              <div id="groupsV2Cycle2End" class="tiny text-muted">End: 08:00</div>
+            </div>
+          </div>
+
+          <div id="groupsV2ScheduleSummary" class="tiny text-muted"></div>
+          <div id="groupsV2ScheduleSelect" style="display:none;"></div>
+
+          <!-- ===== TARGET TEMP / HUMIDITY ===== -->
+          <div class="gm-targets-box">
+            <div class="row row--wrap" style="gap:12px;">
+              <div class="tiny" style="display:flex;flex-direction:column;min-width:140px;">
+                <strong style="margin-bottom:4px;color:#10b981;">Target Temp (C)</strong>
+                <div id="groupsV2TargetTemp" class="target-readout">
+                  <span class="text-muted">--</span>
+                </div>
+                <span class="text-muted" style="font-size:10px;margin-top:2px;">From recipe</span>
+              </div>
+              <label class="tiny" style="display:flex;flex-direction:column;min-width:140px;">
+                <strong style="margin-bottom:4px;color:#10b981;">Target Humidity (%)</strong>
+                <input id="groupsV2TargetHumidity" type="number" min="0" max="100" step="1" placeholder="Enter RH %">
+              </label>
+            </div>
+          </div>
+
+          <!-- ===== GRADIENTS ===== -->
+          <div class="row row--wrap" style="gap:12px;">
+            <label class="tiny" style="display:flex;flex-direction:column;min-width:120px;">
+              PPFD delta (umol)
+              <input id="groupsV2GradientPpfd" type="number" step="1" value="0">
+            </label>
+            <label class="tiny" style="display:flex;flex-direction:column;min-width:120px;">
+              Blue delta (%)
+              <input id="groupsV2GradientBlue" type="number" step="0.5" value="0">
+            </label>
+            <label class="tiny" style="display:flex;flex-direction:column;min-width:120px;">
+              Temp delta (C)
+              <input id="groupsV2GradientTemp" type="number" step="0.5" value="0">
+            </label>
+            <label class="tiny" style="display:flex;flex-direction:column;min-width:120px;">
+              RH delta (%)
+              <input id="groupsV2GradientRh" type="number" step="0.5" value="0">
+            </label>
+          </div>
+
+          <!-- ===== PLAN PREVIEW ===== -->
+          <div id="groupsV2PlanPreview"></div>
+          <div id="groupsV2PlanCard" style="display:none;"></div>
+          <div id="groupsV2PlanDeck" style="display:none;"></div>
+        </div>
+
+        <!-- ===== EDITING INDICATOR ===== -->
+        <div id="groupsV2EditingIndicator" style="display:none;align-items:center;gap:8px;padding:8px 14px;border-radius:10px;font-size:0.85rem;">
+          <strong>Editing:</strong>
+          <span id="groupsV2EditingName"></span>
+          <button type="button" id="groupsV2ClearEditing" style="margin-left:auto;background:none;border:none;cursor:pointer;font-size:18px;line-height:1;" title="Clear editing">&times;</button>
+        </div>
+
+        <!-- ===== GROUP LIST ===== -->
+        <div class="gm-card" id="groupsV2GroupListSection" style="margin-top:0;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+            <h3 style="margin:0;border:none;padding:0;">Standard Groups</h3>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span id="groupsV2GroupCount" class="tiny text-muted"></span>
+              <button id="bulkEditGroupsBtn" type="button" class="ghost tiny" style="padding:4px 10px;font-size:11px;" title="Edit all groups that share a common prefix">Bulk Edit</button>
+            </div>
+          </div>
+          <div id="groupsV2GroupListBody"></div>
+        </div>
+
+        <!-- ===== LIGHT ASSIGNMENT ===== -->
+        <div class="gm-card">
+          <h3>Light Assignment</h3>
+          <div style="display:flex;flex-direction:column;gap:12px;">
+            <label class="tiny" style="display:flex;flex-direction:column;">
+              Available Lights (Not Yet Assigned)
+              <select id="groupsV2UnassignedLightsSelect" multiple size="5" style="min-height:120px;">
+                <option disabled>Loading...</option>
+              </select>
+              <span class="tiny text-muted" style="margin-top:4px;">Select light(s) from setup wizard or IoT devices</span>
+            </label>
+            <div class="row" style="gap:8px;flex-wrap:wrap;align-items:center;">
+              <button id="assignLightsToGroupBtn" type="button" class="primary">Assign Selected Light</button>
+              <span class="tiny text-muted">Assign the selected light to the current group</span>
+            </div>
+            <div id="lightInfoCard" style="display:none;padding:12px;border-radius:12px;">
+              <div id="lightInfoCardBody"></div>
+              <canvas id="lightInfoSpectrumCanvas" width="300" height="120" style="max-width:100%;margin-top:8px;"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== PLAN VS LIGHT COMPARISON ===== -->
+        <div id="groupsV2Comparison" style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px;display:none;">
+          <div class="gm-card" style="border: 2px solid rgba(56, 189, 248, 0.3);">
+            <h3 style="display:flex;align-items:center;gap:8px;">Plan Target</h3>
+            <div id="groupsV2PlanComparisonCard" class="tiny"></div>
+          </div>
+          <div class="gm-card" style="border: 2px solid rgba(167, 139, 250, 0.3);">
+            <h3 style="display:flex;align-items:center;gap:8px;">Light Capability</h3>
+            <div id="groupsV2LightComparisonCard" class="tiny"></div>
+          </div>
+        </div>
+
+        <!-- ===== ASSIGNED LIGHTS ===== -->
+        <div class="gm-card">
+          <div class="row row--between row--center" style="margin-bottom:12px;gap:8px;flex-wrap:wrap;">
+            <h3 style="margin:0;border:none;padding:0;">Assigned Lights</h3>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+              <select id="groupsV2AssignController" style="padding:6px 10px;font-size:13px;">
+                <option value="">Assign Controller...</option>
+              </select>
+              <button id="groupsV2SaveLightAssignments" type="button" class="primary tiny">Save Assigned Lights</button>
+              <button id="groupsV2TestGroupLights" type="button" class="primary tiny" style="background:linear-gradient(135deg, #f59e0b, #d97706) !important;">Test Assigned Lights</button>
+              <button id="groupsV2RunGroup" type="button" class="primary" style="background:linear-gradient(135deg, #10b981, #059669) !important;">Run Group</button>
+              <div id="groupsV2RunningIndicator" style="display:none;align-items:center;gap:6px;padding:4px 12px;color:#fff;border-radius:8px;font-size:13px;font-weight:600;">
+                <span style="display:inline-block;width:8px;height:8px;background:#fff;border-radius:50%;animation:pulse 1.5s ease-in-out infinite;"></span>
+                RUNNING
+              </div>
+              <div id="groupsV2TestingIndicator" style="display:none;align-items:center;gap:6px;padding:4px 12px;color:#fff;border-radius:8px;font-size:13px;font-weight:600;">
+                <span style="display:inline-block;width:8px;height:8px;background:#fff;border-radius:50%;animation:pulse 1.5s ease-in-out infinite;"></span>
+                TESTING
+              </div>
+              <button id="groupLightRemoveSelected" type="button" class="ghost danger tiny" disabled>Remove selected</button>
+            </div>
+          </div>
+          <div id="groupLightList"></div>
+        </div>
+
+        <!-- ===== SPECTRUM / SOLVER (hidden, populated dynamically) ===== -->
+        <div id="groupsV2SolverSection" style="display:none;"></div>
+        <div id="groupsV2LightCard" style="display:none;"></div>
+        <canvas id="groupsV2LightSpectrumCanvas" width="300" height="120" style="display:none;"></canvas>
+        <canvas id="groupsV2PlanSpectrumCanvas" width="300" height="120" style="display:none;"></canvas>
+        <div id="groupsV2LightColorBreakdown" style="display:none;"></div>
+        <div id="groupsV2PlanColorBreakdown" style="display:none;"></div>
+
+        <!-- Hidden elements for spectrum channel readouts -->
+        <span id="groupsV2PlanPpfd" style="display:none;"></span>
+        <span id="groupsV2PlanDli" style="display:none;"></span>
+        <span id="groupsV2PlanPhotoperiod" style="display:none;"></span>
+        <span id="groupsV2PlanTemp" style="display:none;"></span>
+        <span id="groupsV2PlanDaySlider" style="display:none;"></span>
+        <span id="groupsV2PlanDayLabel" style="display:none;"></span>
+        <span id="groupsV2PlanRed" style="display:none;"></span>
+        <span id="groupsV2PlanBlue" style="display:none;"></span>
+        <span id="groupsV2PlanGreen" style="display:none;"></span>
+        <span id="groupsV2PlanCyan" style="display:none;"></span>
+        <span id="groupsV2PlanYellow" style="display:none;"></span>
+        <span id="groupsV2PlanAmber" style="display:none;"></span>
+        <span id="groupsV2PlanDeepRed" style="display:none;"></span>
+        <span id="groupsV2PlanTrueGreen" style="display:none;"></span>
+        <span id="groupsV2PlanRd" style="display:none;"></span>
+        <span id="groupsV2PlanBl" style="display:none;"></span>
+        <span id="groupsV2PlanGn" style="display:none;"></span>
+        <span id="groupsV2PlanFr" style="display:none;"></span>
+        <span id="groupsV2PlanCw" style="display:none;"></span>
+        <span id="groupsV2PlanWw" style="display:none;"></span>
+        <span id="groupsV2LightRed" style="display:none;"></span>
+        <span id="groupsV2LightBlue" style="display:none;"></span>
+        <span id="groupsV2LightGreen" style="display:none;"></span>
+        <span id="groupsV2LightCyan" style="display:none;"></span>
+        <span id="groupsV2LightYellow" style="display:none;"></span>
+        <span id="groupsV2LightAmber" style="display:none;"></span>
+        <span id="groupsV2LightDeepRed" style="display:none;"></span>
+        <span id="groupsV2LightTrueGreen" style="display:none;"></span>
+        <span id="groupsV2SolverRd" style="display:none;"></span>
+        <span id="groupsV2SolverBl" style="display:none;"></span>
+        <span id="groupsV2SolverCw" style="display:none;"></span>
+        <span id="groupsV2SolverWw" style="display:none;"></span>
+        <span id="groupsV2SolverTargetR" style="display:none;"></span>
+        <span id="groupsV2SolverTargetG" style="display:none;"></span>
+        <span id="groupsV2SolverTargetB" style="display:none;"></span>
+        <span id="groupsV2SolverTargetFR" style="display:none;"></span>
+        <span id="groupsV2SolverAchievedR" style="display:none;"></span>
+        <span id="groupsV2SolverAchievedG" style="display:none;"></span>
+        <span id="groupsV2SolverAchievedB" style="display:none;"></span>
+        <span id="groupsV2SolverAchievedFR" style="display:none;"></span>
+        <span id="groupsV2SolverError" style="display:none;"></span>
+        <span id="groupsV2SplitEvenBtn" style="display:none;"></span>
+        <span id="groupsV2ResetRampsBtn" style="display:none;"></span>
+        <span id="groupsV2MaxLightBtn" style="display:none;"></span>
+        <button id="groupsV2NewGroup" type="button" style="display:none;"></button>
+        <button id="groupsV2SaveDraft" type="button" style="display:none;"></button>
+        <span id="groupsV2HoldDay" style="display:none;"></span>
+
+        <!-- ===== CALIBRATION ===== -->
+        <div class="gm-calibration-card">
+          <button id="btnOpenCalWizardFromGroups" type="button" class="primary" style="width:100%;">Open Calibration Wizard</button>
+          <p>Calibrate light output to match target spectrum</p>
+        </div>
+        <div id="calibrationPanel" style="display:none;"></div>
+
+      </div>
+    </section>
+
+  </div>
+
+  <!-- ===== KPI UPDATER + STUBS ===== -->
+  <script>
+    // Stub for setActivePanel (not needed in standalone view)
+    if (typeof window.setActivePanel !== 'function') {
+      window.setActivePanel = function() {};
+    }
+    // Stub for grLog
+    if (typeof window.grLog !== 'function') {
+      window.grLog = function() { console.log.apply(console, arguments); };
+    }
+
+    // KPI updater - runs on groups-updated event
+    function updateGrowKPIs() {
+      var groups = (window.STATE && window.STATE.groups) || [];
+      var total = groups.length;
+      var deployed = 0;
+      var trays = 0;
+      var dliSum = 0;
+      var dliCount = 0;
+
+      for (var i = 0; i < groups.length; i++) {
+        var g = groups[i];
+        if (g.status === 'deployed' || g.status === 'running' || g.active) deployed++;
+        if (g.trays) trays += parseInt(g.trays, 10) || 0;
+        var pc = g.planConfig || {};
+        if (pc.preview && pc.preview.dli) {
+          dliSum += parseFloat(pc.preview.dli) || 0;
+          dliCount++;
+        }
+      }
+
+      var el;
+      el = document.getElementById('kpiTotalGroups');
+      if (el) el.textContent = total;
+      el = document.getElementById('kpiDeployed');
+      if (el) el.textContent = deployed;
+      el = document.getElementById('kpiTotalTrays');
+      if (el) el.textContent = trays;
+      el = document.getElementById('kpiAvgDli');
+      if (el) el.textContent = dliCount > 0 ? (dliSum / dliCount).toFixed(1) : '--';
+    }
+
+    document.addEventListener('groups-updated', updateGrowKPIs);
+    // Also run after initial load
+    window.addEventListener('load', function() {
+      setTimeout(updateGrowKPIs, 2000);
+    });
+  </script>
+
+  <style>
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+  </style>
+
+  <!-- ===== WIZARD MODALS (extracted from LE-dashboard.html) ===== -->
+
+  <div id="calModal" class="cal-modal" aria-hidden="true">
+    <div class="cal-modal__backdrop" id="calModalBackdrop"></div>
+    <div class="cal-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="calModalTitle">
+      <button type="button" class="cal-modal__close" id="calModalClose" aria-label="Close">×</button>
+      <form id="calWizardForm" novalidate>
+        <p class="tiny" id="calModalProgress" aria-live="polite">Step 1 of 5</p>
+        <h2 id="calModalTitle" style="margin:0 0 12px">Calibration Wizard</h2>
+        <div id="calSteps">
+          <section class="cal-step" data-step="scope-type">
+            <p class="cal-question">What do you want to calibrate?</p>
+            <div class="cal-options" role="radiogroup" aria-label="Calibration scope">
+              <label class="chip-option"><input type="radio" name="calScopeType" value="lights" checked><span>Specific lights</span></label>
+              <label class="chip-option"><input type="radio" name="calScopeType" value="group"><span>Group</span></label>
+              <label class="chip-option"><input type="radio" name="calScopeType" value="location"><span>Location</span></label>
+            </div>
+            <p class="tiny" style="color:#64748b">Lights scope lets you hand-pick devices. Group uses the roster. Location uses Room / Zone assignments.</p>
+          </section>
+
+          <section class="cal-step" data-step="scope-detail">
+            <p class="cal-question">Select the fixtures to calibrate.</p>
+            <div id="calScopeLights" class="cal-scope-block" aria-live="polite"></div>
+            <div id="calScopeGroup" class="cal-scope-block" style="display:none">
+              <label class="row row--gap-xs"><span>Group</span><select id="calScopeGroupSelect"></select></label>
+              <p class="tiny" style="color:#475569">Lights inherit the current group roster. Offline lights are skipped automatically.</p>
+            </div>
+            <div id="calScopeLocation" class="cal-scope-block" style="display:none">
+              <div class="row row--gap-sm row--wrap">
+                <label class="row row--gap-xs"><span>Room</span><select id="calScopeRoom"></select></label>
+                <label class="row row--gap-xs"><span>Zone</span><select id="calScopeZone"></select></label>
+              </div>
+              <p class="tiny" style="color:#475569">Lights with matching Room/Zone assignments will be included.</p>
+            </div>
+            <p id="calScopeSummary" class="tiny" style="margin-top:8px;color:#0f172a"></p>
+          </section>
+
+          <section class="cal-step" data-step="target">
+            <p class="cal-question">Choose the target light baseline.</p>
+            <select id="calTargetSelect" style="min-width:240px"></select>
+            <label class="row row--gap-xs mt-sm"><input id="calTargetReconfirm" type="checkbox"><span>Include target in calibration (reconfirm baseline)</span></label>
+            <p id="calTargetNote" class="tiny" style="color:#b91c1c"></p>
+          </section>
+
+          <section class="cal-step" data-step="sequence">
+            <div class="cal-sequence" id="calSequenceStage">
+              <div class="cal-sequence__header">
+                <p class="cal-question" id="calSequenceTitle">Run the calibration patterns.</p>
+                <span class="tiny" id="calSequenceMeta"></span>
+              </div>
+              <p class="tiny" id="calSequenceDescription" style="color:#475569"></p>
+              <div class="cal-sequence__actions">
+                <button id="calSequenceSend" type="button" class="ghost">Send pattern</button>
+                <button id="calSequenceReset" type="button" class="ghost">Restore baseline</button>
+              </div>
+              <div class="cal-sequence__body">
+                <div class="cal-sequence__target">
+                  <h3 class="tiny" style="margin:0;color:#0f172a">Target reading</h3>
+                  <div id="calSequenceTarget"></div>
+                </div>
+                <div class="cal-sequence__lights" id="calSequenceLights" aria-live="polite"></div>
+              </div>
+              <div class="cal-sequence__footer">
+                <div id="calSequenceChecklist" class="cal-sequence__status" aria-live="polite"></div>
+                <div class="row row--gap-sm">
+                  <button id="calSequencePrevTest" type="button" class="ghost">Previous pattern</button>
+                  <button id="calSequenceNextTest" type="button" class="primary" disabled>Save & Next</button>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="cal-step" data-step="review">
+            <p class="cal-question">Review the calibration preview.</p>
+            <div id="calPreviewSummary" class="cal-preview-summary"></div>
+            <div id="calPreviewTable" class="cal-preview-table" role="region" aria-live="polite"></div>
+            <div id="calPreviewWarnings" class="cal-preview-warnings"></div>
+          </section>
+        </div>
+
+        <div class="row cal-modal__footer" style="justify-content:space-between;margin-top:18px">
+          <button id="calPrev" type="button" class="ghost">Back</button>
+          <div class="row row--gap-sm">
+            <button id="calDryRun" type="button" class="ghost" style="display:none">Recalculate</button>
+            <button id="calNext" type="button" class="primary">Next</button>
+            <button id="calApply" type="submit" class="primary" style="display:none">Apply Calibration</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <dialog id="bulkEditGroupModal" style="max-width:580px;width:92vw;border:none;border-radius:16px;box-shadow:0 8px 32px rgba(0,0,0,0.18);padding:0;">
+  <form method="dialog" style="padding:24px;display:flex;flex-direction:column;gap:16px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <h3 style="margin:0;font-size:1.15rem;">Bulk Edit Standard Groups</h3>
+      <button type="button" id="bulkEditGroupClose" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:#64748b;">&times;</button>
+    </div>
+    <p class="tiny" style="color:#64748b;margin:0;">Select a group family by its shared prefix, then change properties across all matching groups at once.</p>
+
+    <label class="tiny" style="display:flex;flex-direction:column;gap:4px;">
+      Group family
+      <select id="bulkEditPrefix" style="min-height:32px;border-radius:6px;border:1px solid #cbd5e1;">
+        <option value="">(select group family)</option>
+      </select>
+    </label>
+
+    <div id="bulkEditSummary" class="tiny" style="padding:8px 12px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;color:#0c4a6e;min-height:24px;"></div>
+
+    <p class="tiny" style="margin:0;color:#64748b;font-style:italic;">Only fill fields you want to change. Blank fields are left unchanged.</p>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <label class="tiny" style="display:flex;flex-direction:column;gap:4px;">
+        Trays / group
+        <input id="bulkEditTrays" type="number" min="0" max="200" placeholder="unchanged" style="min-height:32px;border-radius:6px;border:1px solid #cbd5e1;">
+      </label>
+      <label class="tiny" style="display:flex;flex-direction:column;gap:4px;">
+        Plants / group
+        <input id="bulkEditPlants" type="number" min="0" max="5000" placeholder="unchanged" style="min-height:32px;border-radius:6px;border:1px solid #cbd5e1;">
+      </label>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <label class="tiny" style="display:flex;flex-direction:column;gap:4px;">
+        Zone
+        <select id="bulkEditZone" style="min-height:32px;border-radius:6px;border:1px solid #cbd5e1;">
+          <option value="">(unchanged)</option>
+        </select>
+      </label>
+      <label class="tiny" style="display:flex;flex-direction:column;gap:4px;">
+        Status
+        <select id="bulkEditStatus" style="min-height:32px;border-radius:6px;border:1px solid #cbd5e1;">
+          <option value="">(unchanged)</option>
+          <option value="draft">Draft</option>
+          <option value="deployed">Deployed</option>
+        </select>
+      </label>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <label class="tiny" style="display:flex;flex-direction:column;gap:4px;">
+        Rename prefix to
+        <input id="bulkEditRenamePrefix" type="text" placeholder="unchanged" style="min-height:32px;border-radius:6px;border:1px solid #cbd5e1;">
+      </label>
+      <label class="tiny" style="display:flex;flex-direction:column;gap:4px;">
+        Crop
+        <input id="bulkEditCrop" type="text" placeholder="unchanged" style="min-height:32px;border-radius:6px;border:1px solid #cbd5e1;">
+      </label>
+    </div>
+
+    <label class="tiny" style="display:flex;flex-direction:column;gap:4px;">
+      Assign standard light
+      <select id="bulkEditStandardLight" style="min-height:32px;border-radius:6px;border:1px solid #cbd5e1;">
+        <option value="">(unchanged)</option>
+      </select>
+    </label>
+
+    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+      <input id="bulkEditClearLights" type="checkbox">
+      <span class="tiny">Remove all light assignments</span>
+    </label>
+
+    <div id="bulkEditPreview" style="background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:12px;min-height:40px;font-size:0.8rem;color:#78350f;display:none;"></div>
+
+    <div style="display:flex;gap:8px;justify-content:flex-end;">
+      <button type="button" id="bulkEditGroupCancel" class="ghost">Cancel</button>
+      <button type="button" id="bulkEditGroupApply" class="primary" style="background:linear-gradient(135deg,#8b5cf6,#6d28d9);min-width:140px;">Apply to All</button>
+    </div>
+  </form>
+</dialog>
+
+  <dialog id="buildStockGroupModal" style="max-width:540px;width:92vw;border:none;border-radius:16px;box-shadow:0 8px 32px rgba(0,0,0,0.18);padding:0;">
+  <form method="dialog" id="buildStockGroupForm" style="padding:24px;display:flex;flex-direction:column;gap:16px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <h3 style="margin:0;font-size:1.15rem;">Build Stock Groups</h3>
+      <button type="button" id="buildStockGroupClose" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:#64748b;">&times;</button>
+    </div>
+    <p class="tiny" style="color:#64748b;margin:0;">Batch-create groups that share the same light fixture, tray count, and layout. Each group maintains its own individual control, inventory, and QR codes.</p>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <label class="tiny" style="display:flex;flex-direction:column;gap:4px;">
+        Room
+        <select id="bsgRoom" style="min-height:32px;border-radius:6px;border:1px solid #cbd5e1;"><option value="">(select room)</option></select>
+      </label>
+      <label class="tiny" style="display:flex;flex-direction:column;gap:4px;">
+        Zone
+        <select id="bsgZone" style="min-height:32px;border-radius:6px;border:1px solid #cbd5e1;"><option value="">(select zone)</option></select>
+      </label>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <label class="tiny" style="display:flex;flex-direction:column;gap:4px;">
+        Group name prefix
+        <input id="bsgPrefix" type="text" placeholder="e.g. Bench" style="min-height:32px;border-radius:6px;border:1px solid #cbd5e1;" required>
+      </label>
+      <label class="tiny" style="display:flex;flex-direction:column;gap:4px;">
+        Number of groups
+        <input id="bsgCount" type="number" min="1" max="100" value="4" style="min-height:32px;border-radius:6px;border:1px solid #cbd5e1;" required>
+      </label>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <label class="tiny" style="display:flex;flex-direction:column;gap:4px;">
+        Trays / group
+        <input id="bsgTrays" type="number" min="1" max="200" value="4" style="min-height:32px;border-radius:6px;border:1px solid #cbd5e1;">
+      </label>
+      <label class="tiny" style="display:flex;flex-direction:column;gap:4px;">
+        Lights / group
+        <input id="bsgLightsPerGroup" type="number" min="1" max="20" value="1" style="min-height:32px;border-radius:6px;border:1px solid #cbd5e1;">
+      </label>
+    </div>
+
+    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+      <input id="bsgAutoAssign" type="checkbox" checked>
+      <span class="tiny">Auto-assign unassigned lights sequentially</span>
+    </label>
+
+    <label class="tiny" style="display:flex;flex-direction:column;gap:4px;">
+      Standard Light <span style="font-weight:400;color:#94a3b8;">(assign same light to every group)</span>
+      <select id="bsgStandardLight" style="min-height:32px;border-radius:6px;border:1px solid #cbd5e1;">
+        <option value="">(none — use auto-assign pool)</option>
+      </select>
+    </label>
+
+    <div id="bsgPreview" style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:12px;min-height:40px;font-size:0.8rem;color:#0c4a6e;"></div>
+
+    <div style="display:flex;gap:8px;justify-content:flex-end;">
+      <button type="button" id="buildStockGroupCancel" class="ghost">Cancel</button>
+      <button type="button" id="buildStockGroupCreate" class="primary" style="background:linear-gradient(135deg,#6366f1,#4f46e5);min-width:140px;">Create Groups</button>
+    </div>
+  </form>
+</dialog>
+
+    <div id="toasts" class="toast-container" aria-live="polite" aria-atomic="true"></div>
+
+</body>
+</html>

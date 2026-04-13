@@ -343,14 +343,30 @@
     .chart-card:hover { border-color: var(--border-active); }
 
     .sim-viewport {
-      background: #000;
+      background: linear-gradient(135deg, #020617 0%, #0a0e1a 40%, #0c1222 100%);
       border: 1px solid var(--border);
-      border-radius: 6px;
+      border-radius: 8px;
       width: 100%;
-      height: 500px;
+      height: 70vh;
+      min-height: 500px;
       position: relative;
       overflow: hidden;
+      cursor: grab;
     }
+    .sim-viewport:active { cursor: grabbing; }
+    .sim-viewport canvas { display: block; width: 100% !important; height: 100% !important; }
+    .sim-hud {
+      position: absolute; top: 12px; left: 14px; z-index: 10;
+      font: 700 0.6875rem/1.4 'SF Mono', monospace; color: rgba(148,163,184,0.7);
+      pointer-events: none; text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+    }
+    .sim-hud .regime-badge {
+      display: inline-block; padding: 2px 8px; border-radius: 4px;
+      font-size: 0.625rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; margin-top: 4px;
+    }
+    .sim-hud .regime-laminar { background: rgba(16,185,129,0.25); color: #6ee7b7; border: 1px solid rgba(16,185,129,0.3); }
+    .sim-hud .regime-transitional { background: rgba(245,158,11,0.25); color: #fcd34d; border: 1px solid rgba(245,158,11,0.3); }
+    .sim-hud .regime-turbulent { background: rgba(239,68,68,0.25); color: #fca5a5; border: 1px solid rgba(239,68,68,0.3); }
 
     .sim-controls {
       display: flex;
@@ -593,7 +609,7 @@
       header { flex-direction: column; gap: 0.5rem; }
       .gwen-sidebar { position: fixed; right: 0; top: 49px; bottom: 0; z-index: 200; width: 100vw; min-width: 100vw; }
       .gwen-sidebar.collapsed { margin-right: -100vw; }
-      .sim-viewport { height: 300px; }
+      .sim-viewport { height: 50vh; min-height: 350px; }
     }
 
     /* Edit Modal */
@@ -760,7 +776,9 @@
           <!-- SIMULATION -->
           <div class="tab-content" id="tab-simulation">
             <h3 class="section-title">Fluid Dynamics Simulation</h3>
-            <div class="sim-viewport" id="simViewport"></div>
+            <div class="sim-viewport" id="simViewport">
+              <div class="sim-hud" id="simHud"></div>
+            </div>
             <div class="sim-controls">
               <label>System: <select id="simSystemType">
                 <option value="nft">NFT (Nutrient Film)</option>
@@ -1450,52 +1468,122 @@
       } catch (err) { document.getElementById('chartLibrary').innerHTML = ''; }
     }
 
-    // ---- FLUID DYNAMICS (Three.js) ----
+    // ---- FLUID DYNAMICS (Three.js — Cinematic) ----
     var simScene, simCamera, simRenderer, simParticles, simAnimationId;
+    var simChannel, simWater, simPlants = [], simLights = [];
+    var simState = { flowRate: 2, length: 2, temp: 22, re: 0, regime: 'Laminar', velocity: 0, running: false };
+    var simMouseDown = false, simMouseX = 0, simMouseY = 0, simCamAngle = 0, simCamPitch = 0.35;
+    var simCamDist = 6, simAutoCam = true;
 
     function initSimulation() {
       var viewport = document.getElementById('simViewport');
       if (!viewport || simScene) return;
+
+      // --- Scene ---
       simScene = new THREE.Scene();
-      simScene.background = new THREE.Color(0x0a0e1a);
-      simCamera = new THREE.PerspectiveCamera(60, viewport.clientWidth / viewport.clientHeight, 0.1, 100);
-      simCamera.position.set(3, 2, 4);
+      simScene.fog = new THREE.FogExp2(0x020617, 0.04);
+
+      // --- Camera ---
+      simCamera = new THREE.PerspectiveCamera(50, viewport.clientWidth / viewport.clientHeight, 0.1, 200);
+      simCamera.position.set(5, 3.5, 6);
       simCamera.lookAt(0, 0, 0);
-      simRenderer = new THREE.WebGLRenderer({ antialias: true });
+
+      // --- Renderer ---
+      simRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
       simRenderer.setSize(viewport.clientWidth, viewport.clientHeight);
       simRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      simRenderer.toneMapping = THREE.ACESFilmicToneMapping;
+      simRenderer.toneMappingExposure = 1.2;
+      simRenderer.shadowMap.enabled = true;
+      simRenderer.shadowMap.type = THREE.PCFSoftShadowMap;
       viewport.appendChild(simRenderer.domElement);
-      // Channel
-      var channelGeo = new THREE.BoxGeometry(4, 0.15, 0.6);
-      var channelMat = new THREE.MeshBasicMaterial({ color: 0x1f2937, transparent: true, opacity: 0.6 });
-      simScene.add(new THREE.Mesh(channelGeo, channelMat));
-      var wireGeo = new THREE.EdgesGeometry(channelGeo);
-      simScene.add(new THREE.LineSegments(wireGeo, new THREE.LineBasicMaterial({ color: 0x3b82f6, transparent: true, opacity: 0.4 })));
-      var grid = new THREE.GridHelper(8, 20, 0x1f2937, 0x111827);
-      grid.position.y = -0.5;
+
+      // --- Lighting ---
+      var ambientLight = new THREE.AmbientLight(0x1a2744, 0.6);
+      simScene.add(ambientLight);
+
+      var mainLight = new THREE.DirectionalLight(0x6dd5fa, 0.9);
+      mainLight.position.set(5, 8, 4);
+      mainLight.castShadow = true;
+      mainLight.shadow.mapSize.width = 1024;
+      mainLight.shadow.mapSize.height = 1024;
+      mainLight.shadow.camera.near = 0.5;
+      mainLight.shadow.camera.far = 30;
+      mainLight.shadow.camera.left = -8;
+      mainLight.shadow.camera.right = 8;
+      mainLight.shadow.camera.top = 8;
+      mainLight.shadow.camera.bottom = -8;
+      simScene.add(mainLight);
+
+      var rimLight = new THREE.DirectionalLight(0x818cf8, 0.4);
+      rimLight.position.set(-4, 3, -5);
+      simScene.add(rimLight);
+
+      var underGlow = new THREE.PointLight(0x06b6d4, 0.8, 12, 2);
+      underGlow.position.set(0, -0.5, 0);
+      simScene.add(underGlow);
+      simLights.push(underGlow);
+
+      // Accent point lights along channel
+      [-2.5, 0, 2.5].forEach(function(x) {
+        var pl = new THREE.PointLight(0x22d3ee, 0.35, 5, 2);
+        pl.position.set(x, 1.2, 0);
+        simScene.add(pl);
+        simLights.push(pl);
+      });
+
+      // --- Ground plane ---
+      var groundGeo = new THREE.PlaneGeometry(40, 40);
+      var groundMat = new THREE.MeshStandardMaterial({ color: 0x080c16, roughness: 0.95, metalness: 0 });
+      var ground = new THREE.Mesh(groundGeo, groundMat);
+      ground.rotation.x = -Math.PI / 2;
+      ground.position.y = -1.2;
+      ground.receiveShadow = true;
+      simScene.add(ground);
+
+      // --- Grid ---
+      var grid = new THREE.GridHelper(30, 60, 0x0e1726, 0x0a1020);
+      grid.position.y = -1.19;
       simScene.add(grid);
-      // Particles
-      var pCount = 600;
-      var pGeo = new THREE.BufferGeometry();
-      var positions = new Float32Array(pCount * 3);
-      var colors = new Float32Array(pCount * 3);
-      for (var i = 0; i < pCount; i++) {
-        positions[i*3] = (Math.random()-0.5)*4;
-        positions[i*3+1] = (Math.random()-0.5)*0.12;
-        positions[i*3+2] = (Math.random()-0.5)*0.5;
-        var spd = Math.random();
-        colors[i*3] = 0.05+spd*0.9; colors[i*3+1] = 0.5+spd*0.35; colors[i*3+2] = 0.9;
-      }
-      pGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-      pGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-      simParticles = new THREE.Points(pGeo, new THREE.PointsMaterial({ size: 0.03, vertexColors: true, transparent: true, opacity: 0.8 }));
-      simScene.add(simParticles);
+
+      // --- NFT Channel (glass-like) ---
+      buildChannel();
+
+      // --- Plants (root obstructions) ---
+      buildPlants();
+
+      // --- Particles (flow) ---
+      buildParticles();
+
+      // --- Interactive controls ---
       ['simFlowRate','simLength','simTemp'].forEach(function(id) {
-        document.getElementById(id).addEventListener('input', function() {
+        var el = document.getElementById(id);
+        if (!el) return;
+        el.addEventListener('input', function() {
           document.getElementById(id+'Val').textContent = this.value;
+          simState[id === 'simFlowRate' ? 'flowRate' : id === 'simLength' ? 'length' : 'temp'] = parseFloat(this.value);
+          if (simState.running) computeFlowPhysics();
         });
       });
-      animateSim();
+
+      // --- Mouse orbit control ---
+      viewport.addEventListener('mousedown', function(e) { simMouseDown = true; simMouseX = e.clientX; simMouseY = e.clientY; simAutoCam = false; });
+      viewport.addEventListener('mousemove', function(e) {
+        if (!simMouseDown) return;
+        simCamAngle += (e.clientX - simMouseX) * 0.005;
+        simCamPitch = Math.max(-0.8, Math.min(1.2, simCamPitch + (e.clientY - simMouseY) * 0.005));
+        simMouseX = e.clientX; simMouseY = e.clientY;
+      });
+      viewport.addEventListener('mouseup', function() { simMouseDown = false; });
+      viewport.addEventListener('mouseleave', function() { simMouseDown = false; });
+      viewport.addEventListener('wheel', function(e) {
+        e.preventDefault();
+        simCamDist = Math.max(3, Math.min(15, simCamDist + e.deltaY * 0.01));
+        simAutoCam = false;
+      }, { passive: false });
+      viewport.addEventListener('dblclick', function() { simAutoCam = true; });
+
+      // --- Resize ---
       window.addEventListener('resize', function() {
         if (!simRenderer) return;
         var vp = document.getElementById('simViewport');
@@ -1504,31 +1592,196 @@
         simCamera.updateProjectionMatrix();
         simRenderer.setSize(vp.clientWidth, vp.clientHeight);
       });
+
+      // Auto-run initial simulation
+      runSimulation();
+      animateSim();
     }
 
-    function animateSim() {
-      simAnimationId = requestAnimationFrame(animateSim);
-      if (!simParticles) return;
-      var fr = parseFloat((document.getElementById('simFlowRate') || {}).value || 2);
-      var speed = fr * 0.002;
-      var pos = simParticles.geometry.attributes.position.array;
-      for (var i = 0; i < pos.length; i += 3) {
-        pos[i] += speed + (Math.random()-0.5)*0.002;
-        pos[i+1] += (Math.random()-0.5)*0.001;
-        if (pos[i] > 2) pos[i] = -2;
+    function buildChannel() {
+      // Remove old channel if rebuilding
+      if (simChannel) { simScene.remove(simChannel); }
+
+      var len = simState.length * 2.5; // visual scale
+      var group = new THREE.Group();
+
+      // Channel base (dark metal tray)
+      var baseGeo = new THREE.BoxGeometry(len + 0.4, 0.12, 1.4);
+      var baseMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.3, metalness: 0.8 });
+      var base = new THREE.Mesh(baseGeo, baseMat);
+      base.position.y = -0.36;
+      base.castShadow = true;
+      base.receiveShadow = true;
+      group.add(base);
+
+      // Channel walls (translucent glass)
+      var wallMat = new THREE.MeshPhysicalMaterial({
+        color: 0x3b82f6, transparent: true, opacity: 0.18,
+        roughness: 0.05, metalness: 0.1, clearcoat: 1.0, clearcoatRoughness: 0.1, side: THREE.DoubleSide
+      });
+
+      // Left wall
+      var wallGeo = new THREE.BoxGeometry(len, 0.6, 0.04);
+      var leftWall = new THREE.Mesh(wallGeo, wallMat);
+      leftWall.position.set(0, 0, -0.52);
+      group.add(leftWall);
+
+      // Right wall
+      var rightWall = new THREE.Mesh(wallGeo, wallMat);
+      rightWall.position.set(0, 0, 0.52);
+      group.add(rightWall);
+
+      // Bottom (water surface plane)
+      var bottomGeo = new THREE.PlaneGeometry(len, 1.0);
+      var bottomMat = new THREE.MeshPhysicalMaterial({
+        color: 0x0ea5e9, transparent: true, opacity: 0.25,
+        roughness: 0.0, metalness: 0.2, clearcoat: 0.8, side: THREE.DoubleSide
+      });
+      var bottom = new THREE.Mesh(bottomGeo, bottomMat);
+      bottom.rotation.x = -Math.PI / 2;
+      bottom.position.y = -0.29;
+      group.add(bottom);
+      simWater = bottom;
+
+      // Edge glow lines
+      var edgeMat = new THREE.LineBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.5 });
+      var edgePoints = [
+        new THREE.Vector3(-len/2, -0.3, -0.52), new THREE.Vector3(len/2, -0.3, -0.52),
+        new THREE.Vector3(len/2, -0.3, 0.52), new THREE.Vector3(-len/2, -0.3, 0.52),
+        new THREE.Vector3(-len/2, -0.3, -0.52)
+      ];
+      var edgeGeo = new THREE.BufferGeometry().setFromPoints(edgePoints);
+      group.add(new THREE.Line(edgeGeo, edgeMat));
+
+      // Top edge glow
+      var topEdge = [
+        new THREE.Vector3(-len/2, 0.3, -0.52), new THREE.Vector3(len/2, 0.3, -0.52),
+        new THREE.Vector3(len/2, 0.3, 0.52), new THREE.Vector3(-len/2, 0.3, 0.52),
+        new THREE.Vector3(-len/2, 0.3, -0.52)
+      ];
+      group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(topEdge), edgeMat));
+
+      // Inlet/outlet markers
+      var inletGeo = new THREE.CylinderGeometry(0.15, 0.15, 0.08, 16);
+      var inletMat = new THREE.MeshStandardMaterial({ color: 0x10b981, emissive: 0x10b981, emissiveIntensity: 0.6 });
+      var inlet = new THREE.Mesh(inletGeo, inletMat);
+      inlet.position.set(-len/2 - 0.1, -0.1, 0);
+      inlet.rotation.z = Math.PI / 2;
+      group.add(inlet);
+
+      var outletMat = new THREE.MeshStandardMaterial({ color: 0xf59e0b, emissive: 0xf59e0b, emissiveIntensity: 0.6 });
+      var outlet = new THREE.Mesh(inletGeo, outletMat);
+      outlet.position.set(len/2 + 0.1, -0.1, 0);
+      outlet.rotation.z = Math.PI / 2;
+      group.add(outlet);
+
+      // Slight tilt for NFT gravity
+      group.rotation.z = -0.015;
+      simScene.add(group);
+      simChannel = group;
+    }
+
+    function buildPlants() {
+      simPlants.forEach(function(p) { simScene.remove(p); });
+      simPlants = [];
+      var len = simState.length * 2.5;
+      var plantCount = Math.max(3, Math.floor(len / 1.2));
+      for (var i = 0; i < plantCount; i++) {
+        var pg = new THREE.Group();
+        // Root mass (icosahedron cluster)
+        var rootGeo = new THREE.IcosahedronGeometry(0.12 + Math.random() * 0.08, 1);
+        var rootMat = new THREE.MeshStandardMaterial({
+          color: 0xd4c8a0, transparent: true, opacity: 0.5,
+          roughness: 0.8, wireframe: true
+        });
+        var root = new THREE.Mesh(rootGeo, rootMat);
+        root.position.y = -0.1;
+        pg.add(root);
+
+        // Stem
+        var stemGeo = new THREE.CylinderGeometry(0.015, 0.02, 0.6 + Math.random() * 0.4, 6);
+        var stemMat = new THREE.MeshStandardMaterial({ color: 0x4ade80, roughness: 0.6 });
+        var stem = new THREE.Mesh(stemGeo, stemMat);
+        stem.position.y = 0.4;
+        pg.add(stem);
+
+        // Leaf cluster
+        for (var l = 0; l < 2 + Math.floor(Math.random() * 3); l++) {
+          var leafGeo = new THREE.PlaneGeometry(0.15 + Math.random() * 0.1, 0.08 + Math.random() * 0.06);
+          var leafMat = new THREE.MeshStandardMaterial({
+            color: new THREE.Color().setHSL(0.3 + Math.random() * 0.08, 0.7, 0.35 + Math.random() * 0.15),
+            side: THREE.DoubleSide, roughness: 0.5
+          });
+          var leaf = new THREE.Mesh(leafGeo, leafMat);
+          leaf.position.set((Math.random() - 0.5) * 0.12, 0.55 + Math.random() * 0.25, (Math.random() - 0.5) * 0.12);
+          leaf.rotation.set(Math.random() * 0.8 - 0.4, Math.random() * Math.PI, Math.random() * 0.3);
+          pg.add(leaf);
+        }
+
+        var x = -len / 2 + (i + 0.5) * (len / plantCount) + (Math.random() - 0.5) * 0.3;
+        var z = (Math.random() - 0.5) * 0.6;
+        pg.position.set(x, 0, z);
+        simScene.add(pg);
+        simPlants.push(pg);
       }
-      simParticles.geometry.attributes.position.needsUpdate = true;
-      var t = Date.now() * 0.0005;
-      simCamera.position.x = 3*Math.cos(t*0.1)+1;
-      simCamera.position.z = 3*Math.sin(t*0.1)+1;
-      simCamera.lookAt(0,0,0);
-      simRenderer.render(simScene, simCamera);
     }
 
-    function runSimulation() {
-      var flowRate = parseFloat(document.getElementById('simFlowRate').value) || 2;
-      var length = parseFloat(document.getElementById('simLength').value) || 2;
-      var temp = parseFloat(document.getElementById('simTemp').value) || 22;
+    function buildParticles() {
+      if (simParticles) simScene.remove(simParticles);
+      var len = simState.length * 2.5;
+      var pCount = 3000;
+      var pGeo = new THREE.BufferGeometry();
+      var positions = new Float32Array(pCount * 3);
+      var colors = new Float32Array(pCount * 3);
+      var sizes = new Float32Array(pCount);
+      var velocities = new Float32Array(pCount); // store per-particle speed variation
+
+      for (var i = 0; i < pCount; i++) {
+        positions[i*3]   = (Math.random() - 0.5) * len;
+        positions[i*3+1] = -0.3 + Math.random() * 0.2;
+        positions[i*3+2] = (Math.random() - 0.5) * 0.9;
+        var spd = 0.3 + Math.random() * 0.7;
+        colors[i*3]   = 0.05 + spd * 0.3;
+        colors[i*3+1] = 0.55 + spd * 0.35;
+        colors[i*3+2] = 0.85 + spd * 0.15;
+        sizes[i] = 0.03 + Math.random() * 0.04;
+        velocities[i] = 0.5 + Math.random() * 1.0;
+      }
+
+      pGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      pGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+      // Use sprite-like circular particles
+      var canvas = document.createElement('canvas');
+      canvas.width = 64; canvas.height = 64;
+      var ctx2 = canvas.getContext('2d');
+      var gradient = ctx2.createRadialGradient(32, 32, 0, 32, 32, 32);
+      gradient.addColorStop(0, 'rgba(56,189,248,1)');
+      gradient.addColorStop(0.3, 'rgba(6,182,212,0.7)');
+      gradient.addColorStop(0.7, 'rgba(6,182,212,0.2)');
+      gradient.addColorStop(1, 'rgba(6,182,212,0)');
+      ctx2.fillStyle = gradient;
+      ctx2.fillRect(0, 0, 64, 64);
+      var pTexture = new THREE.CanvasTexture(canvas);
+
+      simParticles = new THREE.Points(pGeo, new THREE.PointsMaterial({
+        size: 0.08,
+        map: pTexture,
+        vertexColors: true,
+        transparent: true,
+        opacity: 0.85,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        sizeAttenuation: true
+      }));
+      simParticles.userData.velocities = velocities;
+      simScene.add(simParticles);
+    }
+
+    function computeFlowPhysics() {
+      var flowRate = simState.flowRate;
+      var length = simState.length;
+      var temp = simState.temp;
       var width = 0.1, depth = 0.02;
       var velocity = (flowRate / 60000) / (width * depth);
       var kinVis = 1.004e-6 * Math.pow(20 / temp, 0.5);
@@ -1536,13 +1789,141 @@
       var re = velocity * dh / kinVis;
       var regime = re < 2300 ? 'Laminar' : re < 4000 ? 'Transitional' : 'Turbulent';
       var resTime = length / velocity;
+
+      simState.re = re;
+      simState.regime = regime;
+      simState.velocity = velocity;
+
+      // Update HUD
+      var regimeClass = regime === 'Laminar' ? 'regime-laminar' : regime === 'Transitional' ? 'regime-transitional' : 'regime-turbulent';
+      var hud = document.getElementById('simHud');
+      if (hud) {
+        hud.innerHTML =
+          'Re ' + Math.round(re).toLocaleString() + ' &middot; ' + velocity.toFixed(3) + ' m/s &middot; ' + resTime.toFixed(1) + 's residence<br>' +
+          '<span class="regime-badge ' + regimeClass + '">' + regime + '</span>';
+      }
+
+      // Update particle colors based on regime
+      if (simParticles) {
+        var cols = simParticles.geometry.attributes.color.array;
+        var count = cols.length / 3;
+        for (var i = 0; i < count; i++) {
+          var spd = simParticles.userData.velocities[i];
+          if (regime === 'Laminar') {
+            cols[i*3]   = 0.05 + spd * 0.15;
+            cols[i*3+1] = 0.55 + spd * 0.35;
+            cols[i*3+2] = 0.85 + spd * 0.15;
+          } else if (regime === 'Transitional') {
+            cols[i*3]   = 0.8 + spd * 0.15;
+            cols[i*3+1] = 0.65 + spd * 0.25;
+            cols[i*3+2] = 0.15;
+          } else {
+            cols[i*3]   = 0.85 + spd * 0.15;
+            cols[i*3+1] = 0.2 + spd * 0.15;
+            cols[i*3+2] = 0.15;
+          }
+        }
+        simParticles.geometry.attributes.color.needsUpdate = true;
+      }
+
+      // Update under-glow light color
+      if (simLights.length) {
+        var glowColor = regime === 'Laminar' ? 0x06b6d4 : regime === 'Transitional' ? 0xf59e0b : 0xef4444;
+        simLights[0].color.setHex(glowColor);
+      }
+
+      // Result cards
       document.getElementById('simResults').innerHTML =
-        '<div class="sim-result-card"><div class="sim-result-value">' + Math.round(re) + '</div><div class="sim-result-label">Reynolds #</div></div>' +
-        '<div class="sim-result-card"><div class="sim-result-value">' + regime + '</div><div class="sim-result-label">Flow Regime</div></div>' +
+        '<div class="sim-result-card"><div class="sim-result-value">' + Math.round(re).toLocaleString() + '</div><div class="sim-result-label">Reynolds #</div></div>' +
+        '<div class="sim-result-card"><div class="sim-result-value" style="color:' + (regime === 'Laminar' ? '#6ee7b7' : regime === 'Transitional' ? '#fcd34d' : '#fca5a5') + '">' + regime + '</div><div class="sim-result-label">Flow Regime</div></div>' +
         '<div class="sim-result-card"><div class="sim-result-value">' + velocity.toFixed(3) + '</div><div class="sim-result-label">Velocity (m/s)</div></div>' +
         '<div class="sim-result-card"><div class="sim-result-value">' + resTime.toFixed(1) + '</div><div class="sim-result-label">Residence (s)</div></div>' +
         '<div class="sim-result-card"><div class="sim-result-value">' + (dh*1000).toFixed(1) + '</div><div class="sim-result-label">D_h (mm)</div></div>' +
-        '<div class="sim-result-card"><div class="sim-result-value">' + temp + '</div><div class="sim-result-label">Temp (C)</div></div>';
+        '<div class="sim-result-card"><div class="sim-result-value">' + temp + '°C</div><div class="sim-result-label">Temperature</div></div>';
+    }
+
+    function animateSim() {
+      simAnimationId = requestAnimationFrame(animateSim);
+      if (!simParticles || !simRenderer) return;
+
+      var t = Date.now() * 0.001;
+      var fr = simState.flowRate;
+      var speed = fr * 0.003;
+      var len = simState.length * 2.5;
+      var halfLen = len / 2;
+      var isTurbulent = simState.regime === 'Turbulent';
+      var isTransitional = simState.regime === 'Transitional';
+
+      // Animate particles
+      var pos = simParticles.geometry.attributes.position.array;
+      var vels = simParticles.userData.velocities;
+      var pCount = pos.length / 3;
+      for (var i = 0; i < pCount; i++) {
+        var vi = vels[i];
+        // X: flow direction with per-particle speed
+        pos[i*3] += speed * vi;
+        // Y: gentle vertical oscillation
+        pos[i*3+1] += Math.sin(t * 2 + i * 0.1) * 0.0003;
+        // Z: lateral drift (more in turbulent flow)
+        var turbFactor = isTurbulent ? 0.004 : isTransitional ? 0.002 : 0.0005;
+        pos[i*3+2] += (Math.sin(t * 3 + i * 0.7) * turbFactor) * vi;
+
+        // Wrap around
+        if (pos[i*3] > halfLen) {
+          pos[i*3] = -halfLen;
+          pos[i*3+1] = -0.3 + Math.random() * 0.2;
+          pos[i*3+2] = (Math.random() - 0.5) * 0.9;
+        }
+
+        // Clamp Z to channel bounds
+        if (pos[i*3+2] > 0.45) pos[i*3+2] = 0.45;
+        if (pos[i*3+2] < -0.45) pos[i*3+2] = -0.45;
+      }
+      simParticles.geometry.attributes.position.needsUpdate = true;
+
+      // Gentle plant sway
+      simPlants.forEach(function(p, idx) {
+        p.rotation.z = Math.sin(t * 0.8 + idx * 1.5) * 0.04;
+        p.rotation.x = Math.sin(t * 0.6 + idx * 2.3) * 0.02;
+      });
+
+      // Water surface shimmer
+      if (simWater) {
+        simWater.material.opacity = 0.22 + Math.sin(t * 1.5) * 0.04;
+      }
+
+      // Accent lights pulse
+      simLights.forEach(function(l, idx) {
+        if (idx > 0) l.intensity = 0.3 + Math.sin(t * 1.2 + idx * 2.0) * 0.12;
+      });
+
+      // Camera
+      if (simAutoCam) {
+        simCamAngle += 0.002;
+      }
+      var cx = Math.cos(simCamAngle) * simCamDist * Math.cos(simCamPitch);
+      var cy = simCamDist * Math.sin(simCamPitch) + 1.0;
+      var cz = Math.sin(simCamAngle) * simCamDist * Math.cos(simCamPitch);
+      simCamera.position.set(cx, cy, cz);
+      simCamera.lookAt(0, -0.1, 0);
+
+      simRenderer.render(simScene, simCamera);
+    }
+
+    function runSimulation() {
+      simState.flowRate = parseFloat((document.getElementById('simFlowRate') || {}).value) || 2;
+      simState.length = parseFloat((document.getElementById('simLength') || {}).value) || 2;
+      simState.temp = parseFloat((document.getElementById('simTemp') || {}).value) || 22;
+      simState.running = true;
+
+      // Rebuild channel and plants when length changes
+      if (simScene) {
+        buildChannel();
+        buildPlants();
+        buildParticles();
+      }
+
+      computeFlowPhysics();
     }
 
     // ---- FORMULA EDITOR (KaTeX) ----

@@ -57,7 +57,7 @@ async function registerFarm() {
     `, [
       farmData.farmId,
       farmData.name,
-      farmData.contact?.email || 'peter@greenreachgreens.com',
+      farmData.contact?.email || 'greenreachfarms@gmail.com',
       'http://192.168.2.222:8091',
       'active',
       JSON.stringify(metadata),

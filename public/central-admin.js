@@ -13330,6 +13330,226 @@ async function loadCentralAccounting() {
     }
 }
 
+// ── Manual Expense Entry ──────────────────────────────────────────────
+
+async function submitManualExpense(event) {
+    event.preventDefault();
+    const statusEl = document.getElementById('expense-status');
+    statusEl.textContent = 'Submitting...';
+    statusEl.style.color = 'var(--text-secondary)';
+
+    const payload = {
+        account_code: document.getElementById('expense-account-code').value,
+        amount: parseFloat(document.getElementById('expense-amount').value),
+        txn_date: document.getElementById('expense-date').value,
+        vendor: document.getElementById('expense-vendor').value || undefined,
+        memo: document.getElementById('expense-memo').value || undefined
+    };
+
+    try {
+        const res = await authenticatedFetch(`${API_BASE}/api/accounting/expenses`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const data = res ? await res.json() : null;
+        if (data?.ok) {
+            statusEl.textContent = `Recorded: $${payload.amount.toFixed(2)} to ${data.entry.account_name} (Txn #${data.transaction_id})`;
+            statusEl.style.color = 'var(--accent-green)';
+            document.getElementById('manual-expense-form').reset();
+            document.getElementById('expense-date').value = new Date().toISOString().slice(0, 10);
+            // Refresh accounting view
+            loadCentralAccounting();
+        } else {
+            statusEl.textContent = `Error: ${data?.error || 'Unknown error'}`;
+            statusEl.style.color = 'var(--accent-red, #e53e3e)';
+        }
+    } catch (err) {
+        statusEl.textContent = `Error: ${err.message}`;
+        statusEl.style.color = 'var(--accent-red, #e53e3e)';
+    }
+}
+
+// Set default expense date to today
+document.addEventListener('DOMContentLoaded', () => {
+    const dateEl = document.getElementById('expense-date');
+    if (dateEl && !dateEl.value) dateEl.value = new Date().toISOString().slice(0, 10);
+    const reportFrom = document.getElementById('report-from');
+    const reportTo = document.getElementById('report-to');
+    if (reportFrom && !reportFrom.value) reportFrom.value = new Date(new Date().getFullYear(), 0, 1).toISOString().slice(0, 10);
+    if (reportTo && !reportTo.value) reportTo.value = new Date().toISOString().slice(0, 10);
+});
+
+// ── Financial Reports ──────────────────────────────────────────────
+
+async function generateReport(reportType) {
+    const outputEl = document.getElementById('financial-report-output');
+    outputEl.style.display = 'block';
+    outputEl.textContent = `Loading ${reportType}...`;
+
+    const from = document.getElementById('report-from')?.value || new Date(new Date().getFullYear(), 0, 1).toISOString().slice(0, 10);
+    const to = document.getElementById('report-to')?.value || new Date().toISOString().slice(0, 10);
+
+    try {
+        let url;
+        if (reportType === 'income-statement') {
+            url = `${API_BASE}/api/accounting/reports/income-statement?from=${from}&to=${to}`;
+        } else if (reportType === 'balance-sheet') {
+            url = `${API_BASE}/api/accounting/reports/balance-sheet?as_of=${to}`;
+        } else if (reportType === 'cash-flow') {
+            url = `${API_BASE}/api/accounting/reports/cash-flow?from=${from}&to=${to}`;
+        }
+
+        const res = await authenticatedFetch(url);
+        const data = res ? await res.json() : null;
+        if (!data?.ok) {
+            outputEl.textContent = `Error: ${data?.error || 'Failed to load report'}`;
+            return;
+        }
+
+        let output = '';
+        if (reportType === 'income-statement') {
+            output = `INCOME STATEMENT (P&L)\nPeriod: ${from} to ${to}\n${'='.repeat(60)}\n\n`;
+            output += 'REVENUE\n';
+            (data.revenue?.items || []).forEach(r => { output += `  ${r.account.padEnd(40)} $${r.net.toFixed(2)}\n`; });
+            output += `  ${''.padEnd(40)} ${'─'.repeat(12)}\n  Total Revenue${' '.repeat(26)} $${data.revenue?.total?.toFixed(2)}\n\n`;
+            output += 'COST OF GOODS SOLD\n';
+            (data.cost_of_goods_sold?.items || []).forEach(r => { output += `  ${r.account.padEnd(40)} $${r.net.toFixed(2)}\n`; });
+            output += `  ${''.padEnd(40)} ${'─'.repeat(12)}\n  Total COGS${' '.repeat(29)} $${data.cost_of_goods_sold?.total?.toFixed(2)}\n\n`;
+            output += `GROSS PROFIT${' '.repeat(28)} $${data.gross_profit?.toFixed(2)}\n\n`;
+            output += 'OPERATING EXPENSES\n';
+            (data.expenses?.items || []).forEach(r => { output += `  ${r.account.padEnd(40)} $${r.net.toFixed(2)}\n`; });
+            output += `  ${''.padEnd(40)} ${'─'.repeat(12)}\n  Total Expenses${' '.repeat(25)} $${data.expenses?.total?.toFixed(2)}\n\n`;
+            output += `${'═'.repeat(60)}\nNET INCOME${' '.repeat(30)} $${data.net_income?.toFixed(2)}\n`;
+        } else if (reportType === 'balance-sheet') {
+            output = `BALANCE SHEET\nAs of: ${to}\n${'='.repeat(60)}\n\n`;
+            output += 'ASSETS\n';
+            (data.assets?.items || []).forEach(r => { output += `  ${r.account.padEnd(40)} $${r.balance.toFixed(2)}\n`; });
+            output += `  ${''.padEnd(40)} ${'─'.repeat(12)}\n  Total Assets${' '.repeat(27)} $${data.assets?.total?.toFixed(2)}\n\n`;
+            output += 'LIABILITIES\n';
+            (data.liabilities?.items || []).forEach(r => { output += `  ${r.account.padEnd(40)} $${r.balance.toFixed(2)}\n`; });
+            output += `  ${''.padEnd(40)} ${'─'.repeat(12)}\n  Total Liabilities${' '.repeat(22)} $${data.liabilities?.total?.toFixed(2)}\n\n`;
+            output += 'EQUITY\n';
+            (data.equity?.items || []).forEach(r => { output += `  ${r.account.padEnd(40)} $${r.balance.toFixed(2)}\n`; });
+            output += `  ${''.padEnd(40)} ${'─'.repeat(12)}\n  Total Equity${' '.repeat(27)} $${data.equity?.total?.toFixed(2)}\n\n`;
+            output += `${'═'.repeat(60)}\nBalanced: ${data.balanced ? 'Yes (A = L + E)' : 'NO -- IMBALANCE DETECTED'}\n`;
+        } else if (reportType === 'cash-flow') {
+            output = `CASH FLOW STATEMENT\nPeriod: ${from} to ${to}\n${'='.repeat(60)}\n\n`;
+            output += 'OPERATING ACTIVITIES\n';
+            (data.operating_activities?.items || []).forEach(r => { output += `  ${r.account.padEnd(40)} $${r.net.toFixed(2)}\n`; });
+            output += `  ${''.padEnd(40)} ${'─'.repeat(12)}\n  Net Operating${' '.repeat(26)} $${data.operating_activities?.total?.toFixed(2)}\n\n`;
+            output += 'INVESTING ACTIVITIES\n';
+            (data.investing_activities?.items || []).forEach(r => { output += `  ${r.account.padEnd(40)} $${r.net.toFixed(2)}\n`; });
+            output += `  ${''.padEnd(40)} ${'─'.repeat(12)}\n  Net Investing${' '.repeat(26)} $${data.investing_activities?.total?.toFixed(2)}\n\n`;
+            output += 'FINANCING ACTIVITIES\n';
+            (data.financing_activities?.items || []).forEach(r => { output += `  ${r.account.padEnd(40)} $${r.net.toFixed(2)}\n`; });
+            output += `  ${''.padEnd(40)} ${'─'.repeat(12)}\n  Net Financing${' '.repeat(26)} $${data.financing_activities?.total?.toFixed(2)}\n\n`;
+            output += `${'═'.repeat(60)}\nNET CASH CHANGE${' '.repeat(25)} $${data.net_cash_change?.toFixed(2)}\n`;
+        }
+
+        outputEl.textContent = output;
+    } catch (err) {
+        outputEl.textContent = `Error: ${err.message}`;
+    }
+}
+
+// ── QuickBooks CSV Exports ──────────────────────────────────────────────
+
+async function downloadQBExport(exportType) {
+    const from = document.getElementById('report-from')?.value || new Date(new Date().getFullYear(), 0, 1).toISOString().slice(0, 10);
+    const to = document.getElementById('report-to')?.value || new Date().toISOString().slice(0, 10);
+
+    let url;
+    if (exportType === 'chart-of-accounts') {
+        url = `${API_BASE}/api/accounting/export/chart-of-accounts.csv`;
+    } else if (exportType === 'journal-entries') {
+        url = `${API_BASE}/api/accounting/export/journal-entries.csv?from=${from}&to=${to}`;
+    } else if (exportType === 'customers') {
+        url = `${API_BASE}/api/accounting/export/customers.csv`;
+    } else if (exportType === 'products') {
+        url = `${API_BASE}/api/accounting/export/products.csv`;
+    } else if (exportType === 'invoices') {
+        url = `${API_BASE}/api/accounting/export/invoices.csv?from=${from}&to=${to}`;
+    }
+
+    try {
+        const res = await authenticatedFetch(url);
+        if (res && res.ok) {
+            const blob = await res.blob();
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = `greenreach-${exportType}-${new Date().toISOString().slice(0, 10)}.csv`;
+            a.click();
+            URL.revokeObjectURL(a.href);
+        } else {
+            console.error(`[QB Export] Failed to download ${exportType}`);
+            alert(`Export failed: ${exportType}`);
+        }
+    } catch (err) {
+        console.error(`[QB Export] Error:`, err);
+        alert(`Export error: ${err.message}`);
+    }
+}
+
+// ── Bank Reconciliation ──────────────────────────────────────────────
+
+async function loadBankReconciliation() {
+    try {
+        const res = await authenticatedFetch(`${API_BASE}/api/accounting/bank-reconciliation/status`);
+        const data = res ? await res.json() : null;
+        if (data?.ok) {
+            const s = data.summary || {};
+            document.getElementById('recon-matched').textContent = Number(s.matched || 0);
+            document.getElementById('recon-unmatched').textContent = Number(s.unmatched || 0);
+            document.getElementById('recon-cleared').textContent = Number(s.cleared || 0);
+        }
+    } catch (err) {
+        console.warn('[Bank Recon] Load error:', err.message);
+    }
+}
+
+async function importBankStatement() {
+    const statusEl = document.getElementById('bank-import-status');
+    const csvText = document.getElementById('bank-csv-input')?.value?.trim();
+    if (!csvText) {
+        statusEl.textContent = 'Please paste CSV rows first.';
+        return;
+    }
+
+    statusEl.textContent = 'Importing...';
+
+    const entries = csvText.split('\n').filter(Boolean).map(line => {
+        const parts = line.split(',');
+        return {
+            date: (parts[0] || '').trim(),
+            description: (parts[1] || '').trim(),
+            amount: parseFloat((parts[2] || '0').trim()) || 0,
+            reference: (parts[3] || '').trim()
+        };
+    });
+
+    try {
+        const res = await authenticatedFetch(`${API_BASE}/api/accounting/bank-reconciliation/import`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ entries })
+        });
+        const data = res ? await res.json() : null;
+        if (data?.ok) {
+            statusEl.textContent = `Imported ${data.imported} entries. Auto-matched: ${data.auto_matched}. Unmatched: ${data.unmatched}.`;
+            statusEl.style.color = 'var(--accent-green)';
+            document.getElementById('bank-csv-input').value = '';
+            loadBankReconciliation();
+        } else {
+            statusEl.textContent = `Error: ${data?.error || 'Import failed'}`;
+            statusEl.style.color = 'var(--accent-red, #e53e3e)';
+        }
+    } catch (err) {
+        statusEl.textContent = `Error: ${err.message}`;
+        statusEl.style.color = 'var(--accent-red, #e53e3e)';
+    }
+}
+
 // ── Donations Dashboard ──────────────────────────────────────────────
 
 async function loadDonations() {

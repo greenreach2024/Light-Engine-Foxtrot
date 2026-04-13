@@ -251,6 +251,35 @@ function normalizeCropKey(value) {
     .trim();
 }
 
+function fuzzyLookupCropPrices(cropKey, priceMap) {
+  // Exact match first
+  const exact = priceMap.get(cropKey);
+  if (exact && exact.length > 0) return exact;
+
+  // Word-overlap match: split crop key into significant words (>3 chars)
+  // and find entries in priceMap that share a significant word
+  const words = cropKey.split(/\s+/).filter(w => w.length > 3);
+  // Skip overly generic words that would match too broadly
+  const genericWords = new Set(['organic', 'baby', 'pelleted', 'blend', 'leaf', 'mixed']);
+  const isMicrogreen = cropKey.includes('microgreen');
+
+  for (const word of words) {
+    if (genericWords.has(word)) continue;
+    const matches = [];
+    for (const [key, values] of priceMap) {
+      // Prevent microgreen prices from contaminating non-microgreen lookups
+      if (!isMicrogreen && key.includes('microgreen')) continue;
+      if (isMicrogreen && !key.includes('microgreen')) continue;
+      if (key.includes(word)) {
+        matches.push(...values);
+      }
+    }
+    if (matches.length > 0) return matches;
+  }
+
+  return [];
+}
+
 function percentile(sortedValues, p) {
   if (!Array.isArray(sortedValues) || sortedValues.length === 0) return 0;
   if (sortedValues.length === 1) return sortedValues[0];
@@ -306,13 +335,27 @@ function inferPricingFamily(name, category) {
     return 'large_tomatoes';
   }
 
-  if (/leafy|lettuce|kale|arugula|spinach|chard|greens|microgreen/.test(text)) {
-    return 'weight_crops';
+  if (/microgreen/.test(text)) return 'microgreens';
+
+  if (/lettuce|butterhead|buttercrunch|romaine|oakleaf|oak leaf|bibb|salad bowl|eazyleaf|little gem/.test(text)) {
+    return 'lettuce';
   }
 
-  if (/herb|basil|cilantro|parsley|mint|dill|oregano|thyme|rosemary/.test(text)) {
-    return 'weight_crops';
+  if (/kale|lacinato/.test(text)) return 'kale';
+
+  if (/arugula|rocket/.test(text)) return 'arugula';
+
+  if (/spinach/.test(text)) return 'spinach';
+
+  if (/chard/.test(text)) return 'chard';
+
+  if (/herb|basil|cilantro|parsley|mint|dill|oregano|thyme|rosemary|sage|tarragon|marjoram|chervil|sorrel|lovage/.test(text)) {
+    return 'herbs';
   }
+
+  if (/leafy|greens|mixed/.test(text)) return 'greens';
+
+  if (/sprout/.test(text)) return 'sprouts';
 
   return 'other';
 }
@@ -322,7 +365,7 @@ function inferPriceUnit(name, category, fallbackUnit) {
   if (family === 'berries') return 'pint';
   if (family === 'large_tomatoes') return 'unit';
 
-  if (family === 'cherry_tomatoes' || family === 'weight_crops') {
+  if (family === 'cherry_tomatoes' || family === 'lettuce' || family === 'kale' || family === 'arugula' || family === 'spinach' || family === 'chard' || family === 'herbs' || family === 'greens' || family === 'sprouts' || family === 'microgreens') {
     const normalizedFallback = String(fallbackUnit || '').toLowerCase();
     if (['lb', 'oz', 'g', 'kg'].includes(normalizedFallback)) {
       return normalizedFallback;
@@ -344,8 +387,8 @@ function mean(values) {
 }
 
 function getDefaultSkuFactor() {
-  const envValue = Number(process.env.WHOLESALE_DEFAULT_SKU_FACTOR || 0.65);
-  if (!Number.isFinite(envValue)) return 0.65;
+  const envValue = Number(process.env.WHOLESALE_DEFAULT_SKU_FACTOR || 0.75);
+  if (!Number.isFinite(envValue)) return 0.75;
   return Math.min(0.75, Math.max(0.5, envValue));
 }
 
@@ -564,12 +607,15 @@ function applyFormulaPricingToCatalogSkus(skus, pricingContext, discountProfile)
     const cropKey = normalizeCropKey(name);
     const family = inferPricingFamily(name, category);
 
-    const rawRetail = pricingContext.retailByCrop.get(cropKey) || pricingContext.retailByFamily.get(family) || [];
-    const retailStats = removePriceAnomalies(rawRetail);
+    const rawRetail = fuzzyLookupCropPrices(cropKey, pricingContext.retailByCrop);
+    const hasCropMatch = rawRetail.length > 0;
+    const effectiveRetail = hasCropMatch ? rawRetail : (pricingContext.retailByFamily.get(family) || []);
+    const retailStats = removePriceAnomalies(effectiveRetail);
     const retailAggregate = mean(retailStats.kept);
 
-    const rawWholesale = pricingContext.wholesaleByCrop.get(cropKey) || pricingContext.wholesaleByFamily.get(family) || [];
-    const wholesaleStats = removePriceAnomalies(rawWholesale);
+    const rawWholesale = fuzzyLookupCropPrices(cropKey, pricingContext.wholesaleByCrop);
+    const effectiveWholesale = rawWholesale.length > 0 ? rawWholesale : (pricingContext.wholesaleByFamily.get(family) || []);
+    const wholesaleStats = removePriceAnomalies(effectiveWholesale);
     const wholesaleFloor = wholesaleStats.kept.length
       ? percentile([...wholesaleStats.kept].sort((a, b) => a - b), 0.2)
       : 0;
@@ -1631,6 +1677,15 @@ router.get('/catalog', async (req, res, next) => {
           lastSync: req.app?.locals?.wholesaleNetworkLastSync || null,
           buyer_discount_rate: discountProfile.rate,
           buyer_rolling_average: discountProfile.rollingAverage,
+          buyer_order_count: discountProfile.orderCount,
+          window_days: discountProfile.windowDays,
+          sku_factor: getDefaultSkuFactor(),
+          volume_tiers: [
+            { min_avg: 750, rate: 0.02 },
+            { min_avg: 1500, rate: 0.04 },
+            { min_avg: 3000, rate: 0.06 },
+            { min_avg: 5000, rate: 0.08 }
+          ],
           pricing_formula: 'max(floor, max(floor, retail * sku_factor) * (1 - discount_rate))'
         }
       });
@@ -1964,6 +2019,20 @@ router.get('/catalog', async (req, res, next) => {
           step2: 'final = max(floor, base * (1 - discount_rate))',
           skuFactorDefault: getDefaultSkuFactor()
         }
+      },
+      meta: {
+        buyer_discount_rate: discountProfile.rate,
+        buyer_rolling_average: discountProfile.rollingAverage,
+        buyer_order_count: discountProfile.orderCount,
+        window_days: discountProfile.windowDays,
+        sku_factor: getDefaultSkuFactor(),
+        volume_tiers: [
+          { min_avg: 750, rate: 0.02 },
+          { min_avg: 1500, rate: 0.04 },
+          { min_avg: 3000, rate: 0.06 },
+          { min_avg: 5000, rate: 0.08 }
+        ],
+        pricing_formula: 'max(floor, max(floor, retail * sku_factor) * (1 - discount_rate))'
       }
     });
 

@@ -346,6 +346,10 @@
 .infotainment-tile--settings::before { background: linear-gradient(135deg, rgba(139, 92, 246, 0.08), transparent); }
 .infotainment-tile--settings:hover { border-color: rgba(139, 92, 246, 0.4); }
 
+.infotainment-tile--visualization { border-color: rgba(99, 102, 241, 0.2); }
+.infotainment-tile--visualization::before { background: linear-gradient(135deg, rgba(99, 102, 241, 0.08), transparent); }
+.infotainment-tile--visualization:hover { border-color: rgba(99, 102, 241, 0.4); }
+
 .infotainment-tile__icon {
   width: 48px;
   height: 48px;
@@ -355,6 +359,7 @@
 .infotainment-tile--operations .infotainment-tile__icon { color: var(--accent-blue); }
 .infotainment-tile--business .infotainment-tile__icon { color: var(--accent-yellow); }
 .infotainment-tile--settings .infotainment-tile__icon { color: var(--accent-purple); }
+.infotainment-tile--visualization .infotainment-tile__icon { color: #6366f1; }
 
 .infotainment-tile__label {
   font-size: 15px;
@@ -428,6 +433,9 @@
 
 .infotainment-sub-grid--settings .infotainment-sub-tile__icon { color: rgba(139, 92, 246, 0.7); }
 .infotainment-sub-grid--settings .infotainment-sub-tile:hover .infotainment-sub-tile__icon { color: var(--accent-purple); }
+
+.infotainment-sub-grid--visualization .infotainment-sub-tile__icon { color: rgba(99, 102, 241, 0.7); }
+.infotainment-sub-grid--visualization .infotainment-sub-tile:hover .infotainment-sub-tile__icon { color: #6366f1; }
 
 .infotainment-sub-tile__label {
   font-size: 14px;

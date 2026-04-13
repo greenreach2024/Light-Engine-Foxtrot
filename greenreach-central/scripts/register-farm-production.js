@@ -126,7 +126,7 @@ async function registerFarmInProduction() {
       'FARM-MKLOMAT3-A9D8',                                            // $1 farm_id
       'Big Green Farm',                                                 // $2 name
       'Peter Gilbert',                                                  // $3 contact_name
-      'peter@greenreachgreens.com',                                    // $4 email
+      'greenreachfarms@gmail.com',                                     // $4 email
       'http://192.168.2.222:8091',                                     // $5 api_url
       'free',                                                          // $6 plan_type
       'ae61e0c94acc6c2f6611f2864902dfe8085d18c6aa4b975b33a10b3d6a0e9b3b', // $7 api_key

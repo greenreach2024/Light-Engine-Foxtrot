@@ -3,15 +3,20 @@
  * Provides offline support and caching
  */
 
-const CACHE_VERSION = 'v1.0.8';
+const CACHE_VERSION = 'v1.0.9';
 const CACHE_NAME = `light-engine-${CACHE_VERSION}`;
 
 // Files to cache immediately on install - only actual files that exist
 const STATIC_CACHE = [
   '/LE-dashboard.html',
   '/manifest.json',
-  '/app.foxtrot.js',
   '/styles.foxtrot.css'
+];
+
+// Critical admin scripts must be network-first to avoid stale runtime errors.
+const CRITICAL_NETWORK_FIRST = [
+  '/app.foxtrot.js',
+  '/farm-admin.js'
 ];
 
 // API routes that should be network-first
@@ -85,6 +90,12 @@ self.addEventListener('fetch', (event) => {
   
   // API routes: Network first, cache fallback
   if (API_ROUTES.some(route => url.pathname.startsWith(route))) {
+    event.respondWith(networkFirstStrategy(request));
+    return;
+  }
+
+  // Critical scripts: always prefer network to avoid stale UI/runtime mismatches.
+  if (CRITICAL_NETWORK_FIRST.includes(url.pathname)) {
     event.respondWith(networkFirstStrategy(request));
     return;
   }

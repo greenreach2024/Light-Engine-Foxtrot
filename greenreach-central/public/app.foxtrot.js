@@ -16,6 +16,33 @@ function fetchWithFarmAuth(url, options = {}) {
   }
   return fetch(url, { ...options, headers });
 }
+function getFarmPin() {
+  try {
+    if (typeof window !== 'undefined' && typeof window.FARM_PIN === 'string' && window.FARM_PIN.trim()) {
+      return window.FARM_PIN.trim();
+    }
+    if (typeof window !== 'undefined' && typeof window.location === 'object') {
+      const qs = new URLSearchParams(window.location.search || '');
+      const qpin = (qs.get('pin') || '').trim();
+      if (qpin) return qpin;
+    }
+    if (typeof localStorage !== 'undefined') {
+      const lspin = (localStorage.getItem('gr.farmPin') || '').trim();
+      if (lspin) return lspin;
+    }
+  } catch (_) {}
+  return '';
+}
+
+function normalizeDataUrl(url) {
+  const raw = String(url || '').trim();
+  if (!raw) return raw;
+  if (/^\.?\/?data\//i.test(raw)) {
+    const normalized = raw.replace(/^\.\//, '');
+    return normalized.startsWith('/') ? normalized : `/${normalized}`;
+  }
+  return raw;
+}
 
 // Production hardening: silence browser console telemetry unless explicitly enabled.
 (function() {
@@ -1979,6 +2006,18 @@ function sanitizeDevicePayload(rawDevice = {}, overrides = {}) {
     telemetry,
     deviceData: cloneDeviceData(merged.deviceData || merged)
   };
+
+  // Correct type/category for known sensor models (SwitchBot WoIOSensor, MeterPlus, etc.)
+  const mdl = (payload.model || '').toLowerCase();
+  const nm = (payload.name || '').toLowerCase();
+  if (mdl.includes('sensor') || mdl.includes('meter') || mdl.includes('woio') || /^sen\s*\d/.test(nm)) {
+    if (!payload.type.includes('sensor') && !payload.type.includes('meter')) {
+      payload.type = 'sensor';
+    }
+    if (!payload.category || payload.category === 'Device' || payload.category === 'device') {
+      payload.category = 'environmental_sensor';
+    }
+  }
   if (payload.deviceData && typeof payload.deviceData === 'object' && 'credentials' in payload.deviceData) {
     delete payload.deviceData.credentials;
   }
@@ -3590,7 +3629,7 @@ window.runUniversalScan = async function() {
   try {
     let capabilityWarnings = [];
     try {
-      const capResp = await fetch('/discovery/capabilities');
+      const capResp = await fetchWithFarmAuth('/discovery/capabilities');
       if (capResp.ok) {
         const capData = await capResp.json();
         capabilityWarnings = Array.isArray(capData.warnings) ? capData.warnings : [];
@@ -3611,6 +3650,7 @@ window.runUniversalScan = async function() {
     const currentHost = (window?.location?.hostname || '').toLowerCase();
     const currentOrigin = window?.location?.origin || '';
     const isProductionHost = currentHost && !['localhost', '127.0.0.1'].includes(currentHost);
+    const isCloudHost = isProductionHost;
     const explicitLocalProbe = window.ENABLE_LOCAL_EDGE_PROBE === true || (new URLSearchParams(window.location.search).get('edgeLocal') === '1');
     const canProbeEdge = Boolean(window.EDGE_URL) || explicitLocalProbe;
     console.log('[UniversalScan] Fetching from:', discoveryEndpoint);
@@ -3659,7 +3699,7 @@ window.runUniversalScan = async function() {
               console.log('[UniversalScan] Edge found 0 devices - also trying cloud scan for SwitchBot');
               if (status) status.textContent = 'Local scan complete. Checking cloud for SwitchBot devices...';
               try {
-                const cloudResp = await fetch('/discovery/scan', {
+                const cloudResp = await fetchWithFarmAuth('/discovery/scan', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' }
                 });
@@ -3694,7 +3734,7 @@ window.runUniversalScan = async function() {
     }
 
     if (!response) {
-      response = await fetch(discoveryEndpoint, {
+      response = await fetchWithFarmAuth(discoveryEndpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' }
       });
@@ -3702,7 +3742,7 @@ window.runUniversalScan = async function() {
     
     if (!response.ok) {
       console.warn('[UniversalScan] Primary scan failed, trying fallback:', fallbackEndpoint);
-      response = await fetch(fallbackEndpoint, {
+      response = await fetchWithFarmAuth(fallbackEndpoint, {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' }
       });
@@ -6525,7 +6565,8 @@ function cloneFallback(value) {
 // Global JSON loader with graceful fallback
 async function loadJSON(url, fallbackValue = null) {
   try {
-    const resp = await fetchWithFarmAuth(url, { cache: 'no-store' });
+    const resolvedUrl = normalizeDataUrl(url);
+    const resp = await fetchWithFarmAuth(resolvedUrl, { cache: 'no-store' });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     return await resp.json();
   } catch (error) {
@@ -6664,24 +6705,8 @@ async function publishSchedulesDocument(doc) {
       : (doc && typeof doc === 'object' ? doc : { schedules: [] });
     // Attach farm PIN if available to satisfy PIN-guarded /sched
     const headers = { 'Content-Type': 'application/json' };
-    try {
-      const pin = (function getFarmPin() {
-        try {
-          if (typeof window !== 'undefined' && typeof window.FARM_PIN === 'string' && window.FARM_PIN.trim()) return window.FARM_PIN.trim();
-          if (typeof window !== 'undefined' && typeof window.location === 'object') {
-            const qs = new URLSearchParams(window.location.search || '');
-            const qpin = (qs.get('pin') || '').trim();
-            if (qpin) return qpin;
-          }
-          if (typeof localStorage !== 'undefined') {
-            const lspin = (localStorage.getItem('gr.farmPin') || '').trim();
-            if (lspin) return lspin;
-          }
-        } catch {}
-        return '';
-      })();
-      if (pin) headers['x-farm-pin'] = pin;
-    } catch {}
+    const pin = getFarmPin();
+    if (pin) headers['x-farm-pin'] = pin;
     const resp = await fetch('/sched', {
       method: 'POST',
       headers,
@@ -9532,7 +9557,7 @@ class DeviceManagerWindow {
   async runDiscovery() {
     if (this.statusEl) this.statusEl.textContent = 'Scanning local network, BLE hub, and MQTT broker…';
     try {
-      const resp = await fetch('/discovery/devices');
+      const resp = await fetchWithFarmAuth('/discovery/devices');
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       const body = await resp.json();
       this.discoveryRun = body;
@@ -11631,7 +11656,7 @@ class RoomWizard {
       console.warn('[WARN] Attempting to reload equipment database...');
       
       // Try to load the equipment database on-demand
-      fetch('./data/equipment-kb.json')
+      fetch('/data/equipment-kb.json')
         .then(r => r.json())
         .then(data => {
           if (data && Array.isArray(data.equipment)) {
@@ -11718,24 +11743,8 @@ class RoomWizard {
       });
     }
     // Re-render the category form and manufacturer search to update the UI
-    this.renderCurrentCategoryForm();
-    this.setupManufacturerSearch();
-  }
-
-  renderSelectedEquipment(category, selectedElementId) {
-    const selectedDiv = document.getElementById(selectedElementId);
-    if (!selectedDiv) return;
-    
-    const catId = this.getCurrentCategoryId();
-    if (!catId) return;
-    
-    const selectedEquipment = this.categoryProgress[catId]?.selectedEquipment?.filter(e => e.category === category) || [];
-    
-    if (selectedEquipment.length === 0) {
-      selectedDiv.innerHTML = `<div style="color: #64748b; font-size: 13px;">No ${category}s selected yet</div>`;
-      return;
-    }
-    
+          const pin = getFarmPin();
+          if (pin) headers['x-farm-pin'] = pin;
     // Clear and rebuild with event listeners
     selectedDiv.innerHTML = '';
     selectedEquipment.forEach(item => {
@@ -20507,7 +20516,7 @@ class DevicePairWizard {
               if (edgeDevices.length === 0) {
                 if (this.scanStatus) this.scanStatus.textContent = 'Local scan done. Checking cloud for SwitchBot...';
                 try {
-                  const cloudResp = await fetch('/discovery/scan', {
+                  const cloudResp = await fetchWithFarmAuth('/discovery/scan', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' }
                   });
                   if (cloudResp.ok) {
@@ -20530,10 +20539,10 @@ class DevicePairWizard {
       }
 
       if (!resp) {
-        resp = await fetch('/discovery/scan', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+        resp = await fetchWithFarmAuth('/discovery/scan', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
       }
       if (!resp.ok) {
-        resp = await fetch('/discovery/devices', { method: 'GET', headers: { 'Content-Type': 'application/json' } });
+        resp = await fetchWithFarmAuth('/discovery/devices', { method: 'GET', headers: { 'Content-Type': 'application/json' } });
       }
       if (!resp.ok) throw new Error('Scan failed');
       const data = await resp.json().catch(() => ({ devices: [] }));

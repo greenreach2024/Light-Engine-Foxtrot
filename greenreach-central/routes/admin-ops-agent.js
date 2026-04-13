@@ -873,7 +873,7 @@ export const ADMIN_TOOL_CATALOG = {
   },
 
   'get_aws_costs': {
-    description: 'Get AWS infrastructure costs from the accounting ledger (synced via Cost Explorer connector).',
+    description: 'Get cloud infrastructure costs from the accounting ledger. Platform migrated from AWS to GCP (Cloud Run + AlloyDB) in April 2026; queries all cloud billing sources.',
     category: 'read',
     required: [],
     optional: ['days'],
@@ -882,15 +882,25 @@ export const ADMIN_TOOL_CATALOG = {
         if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
         const days = parseInt(params.days, 10) || 30;
         const result = await dbQuery(`
-          SELECT t.txn_date, t.description, t.total_amount, t.currency
+          SELECT t.txn_date, t.description, t.total_amount, t.currency, s.source_key AS cloud_provider
           FROM accounting_transactions t
           JOIN accounting_sources s ON t.source_id = s.id
-          WHERE s.source_key = 'aws_cost_explorer'
+          WHERE s.source_key IN ('aws_cost_explorer', 'gcp_billing', 'cloud_run', 'google_cloud')
             AND t.txn_date >= CURRENT_DATE - $1::int
           ORDER BY t.txn_date DESC
         `, [days]);
         const total = result.rows.reduce((s, r) => s + Number(r.total_amount), 0);
-        return { ok: true, period_days: days, total: total.toFixed(2), entries: result.rows };
+        const migrationNote = 'Platform migrated from AWS to GCP (Cloud Run + AlloyDB) in April 2026. Historical AWS entries may exist; new costs are recorded under GCP sources.';
+        if (result.rows.length === 0) {
+          return {
+            ok: true,
+            period_days: days,
+            total: '0.00',
+            entries: [],
+            note: `No cloud billing entries found for the last ${days} days. ${migrationNote}`,
+          };
+        }
+        return { ok: true, period_days: days, total: total.toFixed(2), entries: result.rows, note: migrationNote };
       } catch (err) { return { ok: false, error: err.message }; }
     }
   },
@@ -2959,8 +2969,8 @@ export const ADMIN_TOOL_CATALOG = {
           methodology: 'Query farm_heartbeats for records with last_seen_at older than 24 hours',
           data_sources: ['farm_heartbeats table'],
           confidence_factors: ['Heartbeat freshness is a reliable connectivity indicator', 'Multiple stale farms increase concern'],
-          false_positive_risk: 'Medium -- EB instance restarts, deployment windows, or DNS issues can cause temporary staleness',
-          recommended_response: '1. Check EB environment health for affected farms. 2. Verify sync-service is running. 3. If persistent, investigate network or credential issues.',
+          false_positive_risk: 'Medium -- Cloud Run revision restarts, deployment windows, or DNS issues can cause temporary staleness',
+          recommended_response: '1. Check Cloud Run service health for affected farms (use get_cloud_run_logs). 2. Verify sync-service is running. 3. If persistent, investigate network or credential issues.',
           reference: 'Sharma et al. (2025) -- operational context in security decisions'
         },
         off_hours_activity: {
@@ -4231,7 +4241,7 @@ export const ADMIN_TOOL_CATALOG = {
   },
 
   'get_recent_changes_and_deploys': {
-    description: 'Get recent git commits and deployment history for the Light Engine codebase. Shows what changed recently that might affect inventory, payments, or POS functionality.',
+    description: 'Get recent git commits and Cloud Run deployment status for the GreenReach platform. Shows the latest revisions for both light-engine and greenreach-central services, recent git commits, files changed in the last commit, and current branch state. Platform runs on GCP Cloud Run (us-east1) — AWS/EB is fully deprecated.',
     category: 'read',
     required: [],
     optional: ['limit', 'path_filter'],
@@ -4307,23 +4317,29 @@ export const ADMIN_TOOL_CATALOG = {
           results.git_state = { error: e.message };
         }
 
-        // Cloud Run service status (if gcloud CLI available)
-        try {
-          const projectId = process.env.GCP_PROJECT || process.env.GOOGLE_CLOUD_PROJECT;
-          const region = process.env.GCP_REGION || 'us-east1';
-          if (!projectId) throw new Error('GCP_PROJECT not configured');
-          const crStatus = execSync(
-            `gcloud run services describe light-engine --project=${projectId} --region=${region} --format=json 2>/dev/null | head -c 4096`,
-            { encoding: 'utf8', timeout: 10000 }
-          );
-          const parsed = JSON.parse(crStatus);
-          results.cloud_run_le = {
-            status: parsed.status?.conditions?.find(c => c.type === 'Ready')?.status || 'Unknown',
-            url: parsed.status?.url || 'N/A',
-            revision: parsed.status?.latestReadyRevisionName || 'N/A'
-          };
-        } catch (e) {
-          results.cloud_run_le = { error: e.message };
+        // Cloud Run service status for both LE and Central
+        const projectId = process.env.GCP_PROJECT || process.env.GOOGLE_CLOUD_PROJECT;
+        const region = process.env.GCP_REGION || 'us-east1';
+        for (const svc of ['light-engine', 'greenreach-central']) {
+          try {
+            if (!projectId) throw new Error('GCP_PROJECT not configured');
+            const crStatus = execSync(
+              `gcloud run services describe ${svc} --project=${projectId} --region=${region} --format=json 2>/dev/null`,
+              { encoding: 'utf8', timeout: 10000 }
+            );
+            const parsed = JSON.parse(crStatus);
+            const ready = parsed.status?.conditions?.find(c => c.type === 'Ready');
+            results[`cloud_run_${svc.replace('-', '_')}`] = {
+              status: ready?.status || 'Unknown',
+              reason: ready?.reason || null,
+              url: parsed.status?.url || 'N/A',
+              latest_revision: parsed.status?.latestReadyRevisionName || 'N/A',
+              latest_created: parsed.status?.latestCreatedRevisionName || 'N/A',
+              serving_traffic: parsed.status?.traffic?.map(t => `${t.revisionName}: ${t.percent}%`).join(', ') || 'N/A'
+            };
+          } catch (e) {
+            results[`cloud_run_${svc.replace('-', '_')}`] = { error: e.message };
+          }
         }
 
         return { ok: true, ...results, checked_at: new Date().toISOString() };
@@ -4332,6 +4348,120 @@ export const ADMIN_TOOL_CATALOG = {
   },
 
   // -- Platform Diagnostics (F.A.Y.E. read-only) --
+
+  'get_cloud_run_logs': {
+    description: 'Stream recent Cloud Logging entries for the light-engine or greenreach-central Cloud Run service. Returns structured log entries filtered by severity. Use when diagnosing crashes, 5xx errors, slow starts, or unexpected behavior in production.',
+    category: 'read',
+    required: [],
+    optional: ['service', 'severity', 'minutes', 'limit'],
+    handler: async (params) => {
+      try {
+        const { execSync } = await import('child_process');
+        const svc = (params.service || 'greenreach-central').replace(/[^a-z0-9-]/g, '');
+        const severity = (params.severity || 'ERROR').toUpperCase();
+        const minutes = Math.min(parseInt(params.minutes, 10) || 60, 1440);
+        const limit = Math.min(parseInt(params.limit, 10) || 50, 200);
+        const validSeverities = ['DEBUG', 'INFO', 'NOTICE', 'WARNING', 'ERROR', 'CRITICAL', 'ALERT', 'EMERGENCY'];
+        if (!validSeverities.includes(severity)) {
+          return { ok: false, error: `Invalid severity. Use one of: ${validSeverities.join(', ')}` };
+        }
+        const projectId = process.env.GCP_PROJECT || process.env.GOOGLE_CLOUD_PROJECT || 'project-5d00790f-13a9-4637-a40';
+        const filter = [
+          `resource.type="cloud_run_revision"`,
+          `resource.labels.service_name="${svc}"`,
+          `severity>=${severity}`,
+          `timestamp>="${new Date(Date.now() - minutes * 60 * 1000).toISOString()}"`
+        ].join(' ');
+        const cmd = `gcloud logging read '${filter}' --project=${projectId} --limit=${limit} --format=json 2>/dev/null`;
+        const raw = execSync(cmd, { encoding: 'utf8', timeout: 20000 });
+        const entries = JSON.parse(raw || '[]');
+        const formatted = entries.map(e => ({
+          timestamp: e.timestamp,
+          severity: e.severity,
+          service: e.resource?.labels?.service_name,
+          revision: e.resource?.labels?.revision_name,
+          message: e.textPayload || (e.jsonPayload ? JSON.stringify(e.jsonPayload) : e.protoPayload?.status?.message || '(no message)'),
+          trace: e.trace || null
+        }));
+        return {
+          ok: true,
+          service: svc,
+          severity_filter: severity,
+          minutes_back: minutes,
+          entry_count: formatted.length,
+          entries: formatted,
+          note: formatted.length === 0 ? `No ${severity}+ log entries found in the last ${minutes} minutes for ${svc}.` : undefined
+        };
+      } catch (err) {
+        return { ok: false, error: err.message, note: 'Ensure gcloud CLI is available and the service account has roles/logging.viewer.' };
+      }
+    }
+  },
+
+  'get_gcp_billing_summary': {
+    description: 'Get real-time GCP infrastructure costs directly from the Cloud Billing API. Returns spend by service (Cloud Run, AlloyDB, Cloud Storage, Artifact Registry) for the specified number of days. More accurate than the accounting ledger — pulls directly from GCP. Requires billing API access on the service account.',
+    category: 'read',
+    required: [],
+    optional: ['days'],
+    handler: async (params) => {
+      try {
+        const { execSync } = await import('child_process');
+        const days = Math.min(parseInt(params.days, 10) || 30, 90);
+        const projectId = process.env.GCP_PROJECT || process.env.GOOGLE_CLOUD_PROJECT || 'project-5d00790f-13a9-4637-a40';
+        const startDate = new Date(Date.now() - days * 86400 * 1000).toISOString().split('T')[0];
+        // Pull billing data via gcloud billing (BigQuery export preferred, fallback to describe)
+        // Use gcloud services list approach to at least confirm active services
+        let billingData = null;
+        let source = null;
+        try {
+          // Try BigQuery billing export if configured
+          const bqDataset = process.env.GCP_BILLING_BQ_DATASET;
+          const bqTable = process.env.GCP_BILLING_BQ_TABLE || 'gcp_billing_export_v1';
+          if (bqDataset) {
+            const bqQuery = `SELECT service.description AS service, SUM(cost) AS total_cost, currency FROM \`${projectId}.${bqDataset}.${bqTable}\` WHERE DATE(usage_start_time) >= '${startDate}' AND project.id = '${projectId}' GROUP BY service, currency ORDER BY total_cost DESC`;
+            const bqResult = execSync(
+              `bq query --use_legacy_sql=false --format=json '${bqQuery}' 2>/dev/null`,
+              { encoding: 'utf8', timeout: 15000 }
+            );
+            billingData = JSON.parse(bqResult);
+            source = 'bigquery_billing_export';
+          }
+        } catch { /* BigQuery not configured, fall through */ }
+
+        if (!billingData) {
+          // Fallback: report current service configuration and note billing access gap
+          try {
+            const services = execSync(
+              `gcloud services list --enabled --project=${projectId} --format=json 2>/dev/null`,
+              { encoding: 'utf8', timeout: 10000 }
+            );
+            const svcList = JSON.parse(services || '[]').map(s => s.config?.name?.replace('.googleapis.com', '') || s.name);
+            return {
+              ok: true,
+              period_days: days,
+              source: 'service_list_only',
+              note: `GCP Billing API costs require BigQuery billing export. Set GCP_BILLING_BQ_DATASET env var pointing to your billing export dataset. Active services: ${svcList.slice(0, 10).join(', ')}.`,
+              active_services: svcList,
+              guidance: 'To enable: GCP Console > Billing > Billing export > BigQuery export. Then set GCP_BILLING_BQ_DATASET on this Cloud Run service.'
+            };
+          } catch (e2) {
+            return { ok: false, error: 'gcloud CLI unavailable or insufficient permissions', detail: e2.message };
+          }
+        }
+
+        const total = billingData.reduce((s, r) => s + Number(r.total_cost || 0), 0);
+        return {
+          ok: true,
+          period_days: days,
+          period_start: startDate,
+          source,
+          total_usd: total.toFixed(2),
+          by_service: billingData,
+          project_id: projectId
+        };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
 
   'get_data_freshness': {
     description: 'Check data freshness across all critical subsystems: environment sensors (temp, humidity, CO2), nutrient readings, inventory timestamps, sync telemetry, and heartbeats. Returns seconds-since-last-update for each data source with staleness thresholds. Use when investigating stale dashboard data, slow-updating sensors, or data pipeline delays.',
@@ -4621,7 +4751,7 @@ export const ADMIN_TOOL_CATALOG = {
   },
 
   'get_setup_checklist': {
-    description: 'Return a component-level setup completion checklist: database connectivity, SwitchBot sensor pairing, Square payment integration, TLS certificates, sync service, E.V.I.E. availability, credential vault, EB environment health, and feature flags. Each component shows pass/fail/unknown with detail. Use when diagnosing onboarding issues or verifying platform setup.',
+    description: 'Return a component-level setup completion checklist: database connectivity, SwitchBot sensor pairing, Square payment integration, TLS certificates, sync service, E.V.I.E. availability, credential vault, Cloud Run service health, and feature flags. Each component shows pass/fail/unknown with detail. Use when diagnosing onboarding issues or verifying platform setup.',
     category: 'read',
     required: [],
     optional: [],

@@ -10,6 +10,8 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { createRequire } from 'module';
 import { farmStore } from '../lib/farm-data-store.js';
+import { query } from '../config/database.js';
+import { writeJSON as gcsWriteJSON } from '../services/gcs-storage.js';
 
 const router = express.Router();
 
@@ -171,13 +173,55 @@ router.put('/', async (req, res) => {
 
     // Also write to baked-in file so flat-file fallback stays current
     try { fs.writeFileSync(PRICING_FILE, JSON.stringify(data, null, 2), 'utf8'); } catch { /* optional */ }
-    
-    console.log(`[crop-pricing] Updated ${crops.length} crop prices for farm ${fid || 'default'}`);
+
+    // Persist to GCS crop-pricing.json so all consumers see the update
+    try {
+      await gcsWriteJSON('data/crop-pricing.json', data);
+    } catch (gcsErr) {
+      console.warn('[crop-pricing] GCS crop-pricing.json write failed:', gcsErr.message);
+    }
+
+    // Push wholesale prices to farm_inventory so buyer portal reflects them
+    let wholesalePushed = 0;
+    for (const c of crops) {
+      const wp = Number(c.wholesalePrice || 0);
+      if (wp > 0 && c.crop) {
+        try {
+          await query(
+            `UPDATE farm_inventory
+                SET wholesale_price = $1, updated_at = NOW()
+              WHERE product_name ILIKE $2
+                AND status != 'inactive'`,
+            [wp, `%${c.crop}%`]
+          );
+          wholesalePushed++;
+        } catch (pushErr) {
+          console.warn(`[crop-pricing] farm_inventory wholesale push failed for ${c.crop}:`, pushErr.message);
+        }
+      }
+    }
+
+    // Record pricing history
+    for (const c of crops) {
+      const wp = Number(c.wholesalePrice || 0);
+      if (wp > 0 && c.crop) {
+        try {
+          await query(`
+            INSERT INTO pricing_history (crop, wholesale_price, offer_date, acceptance_rate, source)
+            VALUES ($1, $2, CURRENT_DATE, 1.0, 'crop_pricing_put')
+            ON CONFLICT DO NOTHING
+          `, [c.crop, wp]);
+        } catch { /* non-critical */ }
+      }
+    }
+
+    console.log(`[crop-pricing] Updated ${crops.length} crop prices for farm ${fid || 'default'}, wholesale pushed: ${wholesalePushed}`);
     
     res.json({
       ok: true,
       message: 'Pricing updated successfully',
-      crops: data.crops
+      crops: data.crops,
+      wholesalePushed
     });
   } catch (error) {
     console.error('[crop-pricing] Failed to update pricing:', error);
@@ -185,6 +229,68 @@ router.put('/', async (req, res) => {
       ok: false,
       error: 'failed_to_update_pricing'
     });
+  }
+});
+
+// ── Benchmark Configuration ─────────────────────────────────────────────
+
+const VALID_BENCHMARK_CATEGORIES = ['direct', 'mixed_greens', 'organic_mixed_greens', 'frozen', 'specialty'];
+
+/**
+ * GET /api/crop-pricing/benchmarks
+ * Returns all crop benchmark configs.
+ */
+router.get('/benchmarks', async (req, res) => {
+  try {
+    const result = await query(
+      'SELECT crop_name, benchmark_category, search_override, updated_by, updated_at FROM crop_benchmark_config ORDER BY crop_name'
+    );
+    res.json({ success: true, benchmarks: result.rows });
+  } catch (error) {
+    console.error('[crop-pricing] Benchmark list error:', error.message);
+    res.status(500).json({ success: false, error: 'Failed to load benchmarks' });
+  }
+});
+
+/**
+ * PUT /api/crop-pricing/benchmarks
+ * Upsert one or more benchmark configs.
+ * Body: { updates: [{ crop_name, benchmark_category, search_override? }] }
+ */
+router.put('/benchmarks', async (req, res) => {
+  try {
+    const { updates } = req.body;
+    if (!Array.isArray(updates) || updates.length === 0) {
+      return res.status(400).json({ success: false, error: 'updates array required' });
+    }
+
+    const results = [];
+    for (const u of updates) {
+      const crop = String(u.crop_name || '').trim();
+      const category = String(u.benchmark_category || 'direct').trim();
+      if (!crop) continue;
+      if (!VALID_BENCHMARK_CATEGORIES.includes(category)) {
+        results.push({ crop_name: crop, ok: false, error: `Invalid category: ${category}` });
+        continue;
+      }
+      const override = u.search_override ? String(u.search_override).trim().slice(0, 200) : null;
+      await query(
+        `INSERT INTO crop_benchmark_config (crop_name, benchmark_category, search_override, updated_by, updated_at)
+         VALUES ($1, $2, $3, 'admin', NOW())
+         ON CONFLICT (crop_name) DO UPDATE SET
+           benchmark_category = EXCLUDED.benchmark_category,
+           search_override = EXCLUDED.search_override,
+           updated_by = 'admin',
+           updated_at = NOW()`,
+        [crop, category, override]
+      );
+      results.push({ crop_name: crop, ok: true, benchmark_category: category });
+    }
+
+    res.json({ success: true, results });
+  } catch (error) {
+    console.error('[crop-pricing] Benchmark update error:', error.message);
+    res.status(500).json({ success: false, error: 'Failed to update benchmarks' });
   }
 });
 

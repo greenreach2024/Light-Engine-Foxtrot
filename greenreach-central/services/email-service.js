@@ -53,6 +53,12 @@ class EmailService {
     const fromAddress = from || `${FROM_NAME} <${FROM_EMAIL}>`;
     console.log(`[email] -> ${to} | ${subject}`);
 
+    // RFC 8058 List-Unsubscribe header for CAN-SPAM / CASL compliance
+    const unsubscribeUrl = `https://greenreachgreens.com/unsubscribe?email=${encodeURIComponent(to)}`;
+    const unsubscribeHeaders = {
+      'List-Unsubscribe': `<${unsubscribeUrl}>`,
+      'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click'
+    };
 
     // Google Workspace SMTP
     if (SMTP_ENABLED) {
@@ -60,9 +66,9 @@ class EmailService {
       if (transport) {
         try {
           const smtpFrom = `${FROM_NAME} <${SMTP_USER || FROM_EMAIL}>`;
-          const mailOpts = { from: smtpFrom, to, subject };
-          if (html) mailOpts.html = html;
-          if (text) mailOpts.text = text;
+          const mailOpts = { from: smtpFrom, to, subject, headers: unsubscribeHeaders };
+          if (html) mailOpts.html = html + `\n<p style="font-size:11px;color:#999;margin-top:30px;">${BUSINESS_ADDRESS}<br><a href="${unsubscribeUrl}" style="color:#999;">Unsubscribe</a></p>`;
+          if (text) mailOpts.text = text + `\n\n${BUSINESS_ADDRESS}\nUnsubscribe: ${unsubscribeUrl}`;
           if (cc) mailOpts.cc = cc;
           if (bcc) mailOpts.bcc = bcc;
           const result = await transport.sendMail(mailOpts);
@@ -133,6 +139,123 @@ class EmailService {
         `${BUSINESS_ADDRESS}`,
         'info@greenreachgreens.com | greenreachgreens.com'
       ].filter(Boolean).join('\n')
+    });
+  }
+
+  /**
+   * Send an invoice email to a buyer with line items and payment terms
+   */
+  async sendInvoiceEmail(buyerEmail, invoiceData) {
+    const {
+      invoice_number,
+      buyer_name,
+      items = [],
+      subtotal = 0,
+      tax_amount = 0,
+      total = 0,
+      due_date,
+      payment_terms = 'Due on receipt',
+      order_id
+    } = invoiceData;
+
+    const lineItems = items.map(it =>
+      `<tr><td style="padding:8px;border-bottom:1px solid #ddd;">${it.name || it.product_name || it.sku_id}</td>` +
+      `<td style="padding:8px;border-bottom:1px solid #ddd;text-align:center;">${it.quantity || it.qty}</td>` +
+      `<td style="padding:8px;border-bottom:1px solid #ddd;text-align:right;">$${Number(it.unit_price || 0).toFixed(2)}</td>` +
+      `<td style="padding:8px;border-bottom:1px solid #ddd;text-align:right;">$${Number(it.line_total || 0).toFixed(2)}</td></tr>`
+    ).join('');
+
+    const html = `
+      <h2 style="color:#2d3748;">Invoice ${invoice_number || order_id || ''}</h2>
+      <p>Hi ${buyer_name || 'there'},</p>
+      <p>Please find your invoice details below:</p>
+      <table style="width:100%;border-collapse:collapse;margin:16px 0;">
+        <thead>
+          <tr style="background:#f7fafc;">
+            <th style="padding:8px;text-align:left;border-bottom:2px solid #e2e8f0;">Item</th>
+            <th style="padding:8px;text-align:center;border-bottom:2px solid #e2e8f0;">Qty</th>
+            <th style="padding:8px;text-align:right;border-bottom:2px solid #e2e8f0;">Unit Price</th>
+            <th style="padding:8px;text-align:right;border-bottom:2px solid #e2e8f0;">Total</th>
+          </tr>
+        </thead>
+        <tbody>${lineItems}</tbody>
+        <tfoot>
+          <tr><td colspan="3" style="padding:8px;text-align:right;font-weight:bold;">Subtotal:</td><td style="padding:8px;text-align:right;">$${Number(subtotal).toFixed(2)}</td></tr>
+          <tr><td colspan="3" style="padding:8px;text-align:right;font-weight:bold;">Tax (HST):</td><td style="padding:8px;text-align:right;">$${Number(tax_amount).toFixed(2)}</td></tr>
+          <tr><td colspan="3" style="padding:8px;text-align:right;font-weight:bold;font-size:16px;">Total Due:</td><td style="padding:8px;text-align:right;font-weight:bold;font-size:16px;">$${Number(total).toFixed(2)} CAD</td></tr>
+        </tfoot>
+      </table>
+      <p><strong>Payment Terms:</strong> ${payment_terms}</p>
+      ${due_date ? `<p><strong>Due Date:</strong> ${due_date}</p>` : ''}
+      <p>If you have questions about this invoice, reply to this email or contact us at info@greenreachgreens.com.</p>
+      <p>-- GreenReach Farms</p>
+    `;
+
+    const textItems = items.map(it => `  - ${it.name || it.product_name} x${it.quantity || it.qty} @ $${Number(it.unit_price || 0).toFixed(2)} = $${Number(it.line_total || 0).toFixed(2)}`).join('\n');
+
+    return this.sendEmail({
+      to: buyerEmail,
+      subject: `Invoice ${invoice_number || order_id || ''} from GreenReach Farms`,
+      html,
+      text: `Invoice ${invoice_number || order_id || ''}\n\nItems:\n${textItems}\n\nSubtotal: $${Number(subtotal).toFixed(2)}\nTax: $${Number(tax_amount).toFixed(2)}\nTotal: $${Number(total).toFixed(2)} CAD\n\nPayment Terms: ${payment_terms}\n${due_date ? `Due Date: ${due_date}\n` : ''}-- GreenReach Farms\n${BUSINESS_ADDRESS}`
+    });
+  }
+
+  /**
+   * Send a payment failure alert to a buyer with retry instructions
+   */
+  async sendPaymentFailureEmail(buyerEmail, failureData) {
+    const {
+      order_id,
+      amount,
+      reason,
+      buyer_name
+    } = failureData;
+
+    const html = `
+      <h2 style="color:#c53030;">Payment Failed</h2>
+      <p>Hi ${buyer_name || 'there'},</p>
+      <p>We were unable to process your payment of <strong>$${Number(amount || 0).toFixed(2)} CAD</strong> for order <strong>#${String(order_id || '').substring(0, 8)}</strong>.</p>
+      ${reason ? `<p><strong>Reason:</strong> ${reason}</p>` : ''}
+      <p>Please update your payment method and try again through the wholesale portal, or contact us for assistance.</p>
+      <p>If you believe this is an error, please reply to this email or contact info@greenreachgreens.com.</p>
+      <p>-- GreenReach Farms</p>
+    `;
+
+    return this.sendEmail({
+      to: buyerEmail,
+      subject: `Payment Failed - Order #${String(order_id || '').substring(0, 8)}`,
+      html,
+      text: `Payment Failed\n\nWe were unable to process your payment of $${Number(amount || 0).toFixed(2)} CAD for order #${String(order_id || '').substring(0, 8)}.\n${reason ? `Reason: ${reason}\n` : ''}Please update your payment method and try again.\n\n-- GreenReach Farms\n${BUSINESS_ADDRESS}`
+    });
+  }
+
+  /**
+   * Send a refund confirmation email to a buyer
+   */
+  async sendRefundConfirmationEmail(buyerEmail, refundData) {
+    const {
+      order_id,
+      amount,
+      refund_id,
+      buyer_name
+    } = refundData;
+
+    const html = `
+      <h2 style="color:#2d3748;">Refund Processed</h2>
+      <p>Hi ${buyer_name || 'there'},</p>
+      <p>A refund of <strong>$${Number(amount || 0).toFixed(2)} CAD</strong> has been processed for order <strong>#${String(order_id || '').substring(0, 8)}</strong>.</p>
+      <p>The refund should appear in your account within 5-10 business days depending on your bank.</p>
+      ${refund_id ? `<p><strong>Refund Reference:</strong> ${refund_id}</p>` : ''}
+      <p>If you have questions, reply to this email or contact info@greenreachgreens.com.</p>
+      <p>-- GreenReach Farms</p>
+    `;
+
+    return this.sendEmail({
+      to: buyerEmail,
+      subject: `Refund Processed - Order #${String(order_id || '').substring(0, 8)}`,
+      html,
+      text: `Refund Processed\n\nA refund of $${Number(amount || 0).toFixed(2)} CAD has been processed for order #${String(order_id || '').substring(0, 8)}.\nThe refund should appear in your account within 5-10 business days.\n${refund_id ? `Refund Reference: ${refund_id}\n` : ''}\n-- GreenReach Farms\n${BUSINESS_ADDRESS}`
     });
   }
 }

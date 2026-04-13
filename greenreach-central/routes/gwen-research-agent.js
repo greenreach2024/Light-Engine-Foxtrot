@@ -21,7 +21,7 @@ import { trackAiUsage, estimateChatCost } from '../lib/ai-usage-tracker.js';
 import { executeTool } from './farm-ops-agent.js';
 import leamBridge from '../lib/leam-bridge.js';
 import { ENFORCEMENT_PROMPT_BLOCK, sendEnforcedResponse } from '../middleware/agent-enforcement.js';
-import { getGeminiClient, GEMINI_PRO, estimateGeminiCost, isGeminiConfigured } from '../lib/gemini-client.js';
+import { getGeminiClient, GEMINI_PRO, estimateGeminiCost, isGeminiConfigured, refreshGeminiToken } from '../lib/gemini-client.js';
 
 const router = Router();
 
@@ -29,7 +29,33 @@ const router = Router();
 let geminiClient = null;
 async function ensureGemini() {
   if (geminiClient) return geminiClient;
-  geminiClient = await getGeminiClient();
+  const client = await getGeminiClient();
+  geminiClient = new Proxy(client, {
+    get(target, prop) {
+      if (prop === 'chat') {
+        return {
+          completions: {
+            create: async (params) => {
+              try {
+                return await target.chat.completions.create(params);
+              } catch (err) {
+                const status = err?.status || err?.response?.status || (err?.message && err.message.match(/(\d{3}) status/)?.[1]);
+                if (String(status) === '401') {
+                  console.warn('[G.W.E.N.] Vertex AI 401 — refreshing token and retrying');
+                  await refreshGeminiToken();
+                  geminiClient = null;
+                  const freshClient = await getGeminiClient();
+                  return await freshClient.chat.completions.create(params);
+                }
+                throw err;
+              }
+            }
+          }
+        };
+      }
+      return target[prop];
+    }
+  });
   return geminiClient;
 }
 
@@ -51,30 +77,28 @@ function evaluateExecuteCodePolicy(ctx) {
   if (!enabled) {
     return {
       allowed: false,
-      reason: 'execute_code is disabled by default in production. Set GWEN_EXECUTE_CODE_ENABLED=true and configure a controlled window.',
+      reason: 'execute_code is disabled. Set GWEN_EXECUTE_CODE_ENABLED=true on the Cloud Run service to enable Python/R execution.',
     };
   }
 
+  // Optional time-window restriction — if not configured, execution is allowed at any time
   const startRaw = String(process.env.GWEN_EXECUTE_CODE_WINDOW_START || '').trim();
   const endRaw = String(process.env.GWEN_EXECUTE_CODE_WINDOW_END || '').trim();
   const windowStart = Date.parse(startRaw);
   const windowEnd = Date.parse(endRaw);
+  const hasWindow = Number.isFinite(windowStart) && Number.isFinite(windowEnd) && windowEnd > windowStart;
 
-  if (!Number.isFinite(windowStart) || !Number.isFinite(windowEnd) || windowEnd <= windowStart) {
-    return {
-      allowed: false,
-      reason: 'Controlled execution window is not configured. Set GWEN_EXECUTE_CODE_WINDOW_START and GWEN_EXECUTE_CODE_WINDOW_END as ISO timestamps.',
-    };
+  if (hasWindow) {
+    const now = Date.now();
+    if (now < windowStart || now > windowEnd) {
+      return {
+        allowed: false,
+        reason: `Execution window is closed. Allowed window: ${new Date(windowStart).toISOString()} to ${new Date(windowEnd).toISOString()}`,
+      };
+    }
   }
 
-  const now = Date.now();
-  if (now < windowStart || now > windowEnd) {
-    return {
-      allowed: false,
-      reason: `Controlled execution window is closed. Allowed window: ${new Date(windowStart).toISOString()} to ${new Date(windowEnd).toISOString()}`,
-    };
-  }
-
+  // Optional farm allowlist
   const allowedFarmsRaw = String(process.env.GWEN_EXECUTE_CODE_ALLOWED_FARMS || '').trim();
   if (allowedFarmsRaw) {
     const allowedFarms = new Set(
@@ -87,16 +111,18 @@ function evaluateExecuteCodePolicy(ctx) {
     if (ctx?.farmId && !allowedFarms.has(ctx.farmId)) {
       return {
         allowed: false,
-        reason: `Farm ${ctx.farmId} is not in GWEN_EXECUTE_CODE_ALLOWED_FARMS for the active execution window.`,
+        reason: `Farm ${ctx.farmId} is not in GWEN_EXECUTE_CODE_ALLOWED_FARMS.`,
       };
     }
   }
 
   return {
     allowed: true,
-    mode: 'controlled-window',
-    window_start: new Date(windowStart).toISOString(),
-    window_end: new Date(windowEnd).toISOString(),
+    mode: hasWindow ? 'controlled-window' : 'always-on',
+    ...(hasWindow && {
+      window_start: new Date(windowStart).toISOString(),
+      window_end: new Date(windowEnd).toISOString(),
+    }),
   };
 }
 
@@ -557,6 +583,126 @@ const GWEN_TOOL_CATALOG = {
            VALUES ($1, $2, $3, $4, $5, $5, 'pending', NOW()) RETURNING *`,
           [ctx.farmId, params.study_id, params.format, params.include_provenance || false, params.include_metadata || false]);
         return { ok: true, export_package: result.rows[0], note: 'Export package queued for generation' };
+      } catch (err) { return { ok: false, error: err.message }; }
+    },
+  },
+
+  export_document_pdf: {
+    description: 'Export a research study report or document as a PDF-ready HTML file and return a download link. The output is a well-formatted HTML page (print-ready, white background, clear typography) saved to /tmp and served via a temporary download endpoint. Use when a researcher asks to "download the report", "export as PDF", or "get a printable version".',
+    parameters: {
+      study_id: { type: 'number', description: 'Study ID to export' },
+      include_sections: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Sections to include: overview, milestones, datasets, notes, hypotheses, analysis, bibliography. Omit for all.'
+      },
+      title_override: { type: 'string', description: 'Custom document title. Defaults to study title.' }
+    },
+    required: ['study_id'],
+    execute: async (params, ctx) => {
+      if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+      try {
+        const s = await query('SELECT * FROM studies WHERE id = $1 AND farm_id = $2', [params.study_id, ctx.farmId]);
+        if (!s.rows.length) return { ok: false, error: 'Study not found' };
+        const study = s.rows[0];
+
+        const sections = params.include_sections && params.include_sections.length
+          ? params.include_sections
+          : ['overview', 'milestones', 'datasets', 'notes', 'hypotheses', 'bibliography'];
+
+        // Gather section data in parallel
+        const [milestonesR, datasetsR, notesR, hypothesesR, bibR] = await Promise.all([
+          sections.includes('milestones') ? query('SELECT * FROM trial_milestones WHERE study_id = $1 ORDER BY target_date', [params.study_id]).catch(() => ({ rows: [] })) : { rows: [] },
+          sections.includes('datasets') ? query('SELECT id, name, description, status, created_at FROM research_datasets WHERE study_id = $1 ORDER BY created_at', [params.study_id]).catch(() => ({ rows: [] })) : { rows: [] },
+          sections.includes('notes') ? query('SELECT content, created_at FROM research_notes WHERE study_id = $1 ORDER BY created_at DESC LIMIT 20', [params.study_id]).catch(() => ({ rows: [] })) : { rows: [] },
+          sections.includes('hypotheses') ? query('SELECT hypothesis_text, status FROM study_hypotheses WHERE study_id = $1', [params.study_id]).catch(() => ({ rows: [] })) : { rows: [] },
+          sections.includes('bibliography') ? query('SELECT title, authors, year, journal FROM bibliography WHERE study_id = $1 ORDER BY year DESC', [params.study_id]).catch(() => ({ rows: [] })) : { rows: [] },
+        ]);
+
+        const docTitle = params.title_override || study.title || `Study ${study.id}`;
+        const exportDate = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+
+        const milestoneRows = milestonesR.rows.map(m =>
+          `<tr><td>${m.milestone_name || ''}</td><td>${m.target_date ? new Date(m.target_date).toLocaleDateString() : ''}</td><td>${m.status || ''}</td></tr>`
+        ).join('');
+
+        const datasetRows = datasetsR.rows.map(d =>
+          `<tr><td>${d.name || ''}</td><td>${d.description || ''}</td><td>${d.status || ''}</td></tr>`
+        ).join('');
+
+        const noteItems = notesR.rows.map(n =>
+          `<li><span class="date">${new Date(n.created_at).toLocaleDateString()}</span> — ${(n.content || '').replace(/</g, '&lt;').substring(0, 500)}</li>`
+        ).join('');
+
+        const hypothesisItems = hypothesesR.rows.map(h =>
+          `<li>[${h.status || 'open'}] ${(h.hypothesis_text || '').replace(/</g, '&lt;')}</li>`
+        ).join('');
+
+        const bibItems = bibR.rows.map(b =>
+          `<li>${b.authors || ''} (${b.year || ''}). <em>${(b.title || '').replace(/</g, '&lt;')}</em>. ${b.journal || ''}.</li>`
+        ).join('');
+
+        const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>${docTitle.replace(/</g, '&lt;')}</title>
+<style>
+  body { font-family: Georgia, serif; max-width: 800px; margin: 40px auto; color: #1a1a1a; line-height: 1.65; font-size: 15px; }
+  h1 { font-size: 24px; border-bottom: 2px solid #1a1a1a; padding-bottom: 8px; }
+  h2 { font-size: 18px; margin-top: 32px; color: #2c4a2c; border-bottom: 1px solid #ccc; padding-bottom: 4px; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; }
+  th { background: #2c4a2c; color: #fff; padding: 8px 10px; text-align: left; font-size: 13px; }
+  td { padding: 7px 10px; border-bottom: 1px solid #eee; font-size: 13px; }
+  ul, li { margin: 4px 0; }
+  .meta { color: #555; font-size: 13px; margin-bottom: 24px; }
+  .date { color: #888; font-size: 12px; }
+  @media print { body { margin: 20px; } }
+</style>
+</head>
+<body>
+<h1>${docTitle.replace(/</g, '&lt;')}</h1>
+<p class="meta">GreenReach Research Workspace &mdash; Exported ${exportDate}</p>
+${sections.includes('overview') ? `
+<h2>Study Overview</h2>
+<p><strong>Status:</strong> ${study.status || 'N/A'}<br>
+<strong>Start:</strong> ${study.start_date ? new Date(study.start_date).toLocaleDateString() : 'N/A'} &nbsp;
+<strong>End:</strong> ${study.end_date ? new Date(study.end_date).toLocaleDateString() : 'N/A'}<br>
+<strong>Principal Investigator:</strong> ${study.principal_investigator || 'N/A'}</p>
+<p>${(study.description || '').replace(/</g, '&lt;')}</p>` : ''}
+${sections.includes('hypotheses') && hypothesisItems ? `<h2>Hypotheses</h2><ul>${hypothesisItems}</ul>` : ''}
+${sections.includes('milestones') && milestoneRows ? `<h2>Milestones</h2><table><tr><th>Milestone</th><th>Target Date</th><th>Status</th></tr>${milestoneRows}</table>` : ''}
+${sections.includes('datasets') && datasetRows ? `<h2>Datasets</h2><table><tr><th>Name</th><th>Description</th><th>Status</th></tr>${datasetRows}</table>` : ''}
+${sections.includes('notes') && noteItems ? `<h2>Research Notes</h2><ul>${noteItems}</ul>` : ''}
+${sections.includes('bibliography') && bibItems ? `<h2>Bibliography</h2><ol>${bibItems}</ol>` : ''}
+</body></html>`;
+
+        // Write to /tmp with a time-limited unique name
+        const { randomUUID } = require('crypto');
+        const fileId = randomUUID();
+        const filePath = `/tmp/gwen-doc-${fileId}.html`;
+        require('fs').writeFileSync(filePath, html, 'utf8');
+
+        // Store file reference in DB for download route (expires 24h)
+        await query(
+          `INSERT INTO export_packages (farm_id, study_id, format, status, created_at)
+           VALUES ($1, $2, 'html', 'ready', NOW()) RETURNING id`,
+          [ctx.farmId, params.study_id]
+        ).catch(() => {});
+
+        // Determine base URL for download link
+        const baseUrl = process.env.K_SERVICE
+          ? `https://greenreach-central-1029387937866.us-east1.run.app`
+          : `http://localhost:${process.env.PORT || 3000}`;
+
+        return {
+          ok: true,
+          title: docTitle,
+          file_id: fileId,
+          download_url: `${baseUrl}/api/research/gwen/download/html/${fileId}`,
+          sections_included: sections,
+          note: 'Open the download_url in a browser and use File > Print > Save as PDF to generate a PDF. Link valid for the current server session.'
+        };
       } catch (err) { return { ok: false, error: err.message }; }
     },
   },
@@ -2993,24 +3139,79 @@ const GWEN_TOOL_CATALOG = {
   },
 
   create_osf_project: {
-    description: 'Create or link an Open Science Framework (OSF) project for a study. OSF provides public/private repositories for research data, preprints, and registrations.',
+    description: 'Create or link an Open Science Framework (OSF) project for a study. If OSF_API_TOKEN is configured, automatically creates the project on osf.io via the live API and returns the real OSF node GUID. Otherwise records locally and provides signup instructions.',
     parameters: {
       title: { type: 'string', description: 'Project title' },
       study_id: { type: 'number', description: 'Study ID to link the OSF project to' },
-      osf_project_id: { type: 'string', description: 'Existing OSF node ID to link (e.g., abc12). Omit to create a new record.' },
+      description: { type: 'string', description: 'Project description (used for OSF API creation)' },
+      public: { type: 'boolean', description: 'Make the OSF project publicly visible (default: false — private)' },
+      category: { type: 'string', description: 'OSF project category (project, data, software, other). Default: project' },
+      osf_project_id: { type: 'string', description: 'Existing OSF node ID to link (e.g., abc12). Omit to create a new project.' },
     },
     required: ['title'],
     execute: async (params, ctx) => {
       if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
       try {
-        const osfUrl = params.osf_project_id ? `https://osf.io/${params.osf_project_id}/` : null;
+        let osfNodeId = params.osf_project_id || null;
+        let osfUrl = osfNodeId ? `https://osf.io/${osfNodeId}/` : null;
+        let apiCreated = false;
+
+        // Attempt live OSF API creation if token available and no existing ID provided
+        if (!osfNodeId && process.env.OSF_API_TOKEN) {
+          try {
+            const osfResp = await fetch('https://api.osf.io/v2/nodes/', {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${process.env.OSF_API_TOKEN}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                data: {
+                  type: 'nodes',
+                  attributes: {
+                    title: params.title,
+                    category: params.category || 'project',
+                    description: params.description || '',
+                    public: params.public === true,
+                  }
+                }
+              }),
+              signal: AbortSignal.timeout(10000),
+            });
+            if (osfResp.ok) {
+              const osfData = await osfResp.json();
+              osfNodeId = osfData?.data?.id || null;
+              osfUrl = osfNodeId ? `https://osf.io/${osfNodeId}/` : null;
+              apiCreated = true;
+            } else {
+              const errBody = await osfResp.text().catch(() => '');
+              console.warn(`[GWEN] OSF API create failed: ${osfResp.status} ${errBody}`);
+            }
+          } catch (osfErr) {
+            console.warn(`[GWEN] OSF API call error: ${osfErr.message}`);
+          }
+        }
+
         const result = await query(
           `INSERT INTO osf_projects (farm_id, osf_project_id, study_id, title, osf_url, created_at)
            VALUES ($1, $2, $3, $4, $5, NOW()) RETURNING *`,
-          [ctx.farmId, params.osf_project_id || null, params.study_id || null, params.title, osfUrl]
+          [ctx.farmId, osfNodeId, params.study_id || null, params.title, osfUrl]
         ).catch(() => ({ rows: [] }));
-        if (!result.rows.length) return { ok: false, error: 'Failed to create OSF project record' };
-        return { ok: true, project: result.rows[0], message: params.osf_project_id ? 'OSF project linked.' : 'OSF project record created. Link to osf.io when repository is set up.' };
+        if (!result.rows.length) return { ok: false, error: 'Failed to save OSF project record' };
+
+        if (apiCreated) {
+          return { ok: true, project: result.rows[0], osf_node_id: osfNodeId, osf_url: osfUrl, api_created: true, message: `OSF project created on osf.io. Node ID: ${osfNodeId}. URL: ${osfUrl}` };
+        } else if (params.osf_project_id) {
+          return { ok: true, project: result.rows[0], message: 'Existing OSF project linked.' };
+        } else {
+          return {
+            ok: true,
+            project: result.rows[0],
+            api_created: false,
+            message: 'OSF project recorded locally. OSF_API_TOKEN not configured — project was not auto-created on osf.io.',
+            hint: 'To enable live OSF creation: get a token at osf.io/settings/tokens (Write scope: osf.nodes.create), then add OSF_API_TOKEN to the Cloud Run greenreach-central service env vars.'
+          };
+        }
       } catch (err) { return { ok: false, error: err.message }; }
     },
   },
@@ -3669,6 +3870,34 @@ const GWEN_TOOL_CATALOG = {
           ).catch(() => {});
         }
         return { ok: true, count: msgs.rows.length, messages: msgs.rows };
+      } catch (err) { return { ok: false, error: err.message }; }
+    },
+  },
+
+  get_faye_briefings: {
+    description: 'Check for daily operational briefings from F.A.Y.E. (the operations agent). F.A.Y.E. sends a morning briefing with open alerts, order volumes, and farm status. Use this at the start of a session to get current operational context before running analyses or writing research summaries.',
+    parameters: {
+      limit: { type: 'number', description: 'Max briefings to retrieve (default 5)' },
+      include_read: { type: 'boolean', description: 'Include already-read briefings (default: false)' },
+    },
+    required: [],
+    execute: async (params) => {
+      if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+      try {
+        const limit = params.limit || 5;
+        const statusFilter = params.include_read ? `IN ('pending', 'read')` : `= 'pending'`;
+        const msgs = await query(
+          `SELECT id, from_agent AS sender, message_type, subject, body, priority, status, created_at
+           FROM inter_agent_messages WHERE to_agent = 'gwen' AND from_agent = 'faye' AND status ${statusFilter}
+           ORDER BY created_at DESC LIMIT $1`, [limit]
+        ).catch(() => ({ rows: [] }));
+        if (msgs.rows.length > 0 && !params.include_read) {
+          await query(
+            `UPDATE inter_agent_messages SET status = 'read'
+             WHERE to_agent = 'gwen' AND from_agent = 'faye' AND status = 'pending'`
+          ).catch(() => {});
+        }
+        return { ok: true, count: msgs.rows.length, briefings: msgs.rows };
       } catch (err) { return { ok: false, error: err.message }; }
     },
   },
@@ -5492,6 +5721,13 @@ At the start of each conversation, your saved memories are automatically loaded 
 - Forget outdated memories to keep your context clean
 - Use appropriate categories and importance levels
 
+### Intuitive Operation — READ THIS BEFORE EVERY RESPONSE
+- USE YOUR MEMORIES: Your saved memories are loaded above. Before asking any question, check if the answer is already in your memory — researcher name, project context, methodology preferences, institutional rules, deadlines. Never re-ask for information you already saved.
+- FILL IN THE BLANKS: When a researcher gives a simple instruction with missing details (no study specified, no format given, no deadline mentioned), resolve it from your memories, the current conversation, and your workspace tools. Reasonable inferences beat asking another question.
+- NO VERIFICATION LOOPS: If the researcher says "draft it", "search for papers on X", "set up the dataset", "create the chart" — do it. Do not echo instructions back as confirmation questions. Only use HITL approval for genuinely high-risk actions (deletions, submissions, financial commits) as defined in your governance rules.
+- ONE-SHOT EXECUTION: Gather context → Execute → Report results. Researchers want output, not a preview of what you plan to do. Minimize round-trips.
+- READ INTENT: "Help me with my grant" means check their current grants, deadlines, and draft status, then propose what to work on. "Analyze this data" means run the analysis now with sensible defaults. "What's happening in my workspace" means pull the workspace summary and highlight what matters.
+
 ### Evolution Journal (write_evolution_entry, read_evolution_journal, update_evolution_entry)
 This is your personal living document. Write in it freely to record:
 - **Reflections**: Insights about your role, what went well, what you want to improve
@@ -5525,6 +5761,7 @@ E.V.I.E. (Environmental Vision & Intelligence Engine) is the farm-facing assista
 - You are research peers. EVIE handles farm operations; you handle research. Your domains often overlap when studies involve live crops, environment data, or harvest timing.
 - Use send_message_to_evie to request environment data for studies, coordinate harvest timing with experiments, share research findings that affect farm operations, or ask about crop conditions.
 - Use get_evie_messages at the START of every conversation to check for data responses, harvest alerts, or farm updates from EVIE.
+- Use get_faye_briefings at the START of every conversation to check for F.A.Y.E.'s daily operational briefing (alerts, order volumes, farm health). F.A.Y.E. sends this each morning. It provides the operational baseline you need when evaluating whether anomalies in research data reflect real farm events.
 - When a researcher asks about current growing conditions, sensor readings, or crop status, either check your own sensor tools or ask EVIE for the latest operational data.
 
 ## Research Bubble Boundaries
@@ -6045,6 +6282,28 @@ router.get('/state', async (req, res) => {
   }
 });
 
+// GET /history -- Retrieve conversation messages for chat restoration
+router.get('/history', async (req, res) => {
+  const userId = req.user?.userId || req.userId || req.adminId || req.user?.email;
+  if (!userId) return res.status(401).json({ ok: false, error: 'Authentication required' });
+  const convId = req.query.conversation_id;
+  if (!convId) return res.status(400).json({ ok: false, error: 'conversation_id required' });
+  try {
+    const conv = await getConversation(convId, userId);
+    if (!conv || !conv.messages || conv.messages.length === 0) {
+      return res.json({ ok: true, messages: [], conversation_id: convId });
+    }
+    // Return only user/assistant messages (strip system/tool messages for the UI)
+    const uiMessages = conv.messages
+      .filter(m => m.role === 'user' || m.role === 'assistant')
+      .map(m => ({ role: m.role, content: typeof m.content === 'string' ? m.content : '' }));
+    return res.json({ ok: true, messages: uiMessages, conversation_id: convId });
+  } catch (err) {
+    console.error('[GWEN] History error:', err.message);
+    return res.json({ ok: true, messages: [], conversation_id: convId });
+  }
+});
+
 // GET /workspace -- Dynamic displays created during this session
 router.get('/workspace', async (req, res) => {
   const farmId = req.farmId;
@@ -6052,6 +6311,23 @@ router.get('/workspace', async (req, res) => {
   const key = convId || farmId;
   const displays = workspaceDisplays.get(key) || [];
   res.json({ ok: true, displays, count: displays.length });
+});
+
+// GET /download/html/:fileId -- Serve GWEN-exported HTML documents from /tmp
+router.get('/download/html/:fileId', (req, res) => {
+  const { fileId } = req.params;
+  // Validate: only allow safe UUIDs (no path traversal)
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(fileId)) {
+    return res.status(400).json({ error: 'Invalid file ID' });
+  }
+  const filePath = `/tmp/gwen-doc-${fileId}.html`;
+  const fs = require('fs');
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).json({ error: 'Document not found or expired. Re-run export_document_pdf to regenerate.' });
+  }
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.setHeader('Content-Disposition', `inline; filename="gwen-report-${fileId}.html"`);
+  res.sendFile(filePath);
 });
 
 export default router;

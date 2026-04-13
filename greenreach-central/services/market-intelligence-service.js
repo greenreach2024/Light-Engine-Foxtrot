@@ -12,21 +12,21 @@
 
 import logger from '../utils/logger.js';
 
-// Fallback seed prices — organic retail tier per-lb basis
-// Greens: organic clamshell pricing. Herbs: USDA AMS organic terminal market per-lb * 1.36 FX
+// Fallback seed prices — Canadian retail tier (Loblaws, Sobeys, Metro, Farm Boy)
+// Updated to reflect organic packaged produce pricing at Canadian grocers, April 2026
 const SEED_PRICES = {
-  'Basil':               { retailers: ['Whole Foods', 'Farm Boy', 'Sobeys', 'Metro', 'Loblaws'],   baseCAD: 32.64, unit: 'per_lb',   weightOz: 16 },
-  'Kale':                { retailers: ['Whole Foods', 'Farm Boy', 'Sobeys', 'Loblaws', 'Sprouts'], baseCAD: 6.11,  unit: 'per_bunch', weightOz: 8 },
-  'Lettuce (Romaine)':   { retailers: ['Whole Foods', 'Farm Boy', 'Sobeys', 'Metro', 'Loblaws'],   baseCAD: 6.11,  unit: 'per_head',  weightOz: 16 },
-  'Butterhead Lettuce':  { retailers: ['Whole Foods', 'Farm Boy', 'Sobeys', 'Metro', 'Loblaws'],   baseCAD: 8.15,  unit: 'per_head',  weightOz: 6 },
-  'Spinach':             { retailers: ['Whole Foods', 'Farm Boy', 'Sobeys', 'Metro', 'Loblaws'],   baseCAD: 6.79,  unit: 'per_5oz',   weightOz: 5 },
-  'Arugula':             { retailers: ['Whole Foods', 'Farm Boy', 'Sobeys', 'Metro'],              baseCAD: 6.79,  unit: 'per_5oz',   weightOz: 5 },
-  'Microgreens':         { retailers: ['Whole Foods', 'Farm Boy', 'Sobeys', 'Specialty Stores'],   baseCAD: 8.15,  unit: 'per_2oz',   weightOz: 2 },
-  'Cilantro':            { retailers: ['Whole Foods', 'Farm Boy', 'Sobeys', 'Metro', 'Loblaws'],   baseCAD: 20.40, unit: 'per_lb',    weightOz: 16 },
-  'Mint':                { retailers: ['Whole Foods', 'Farm Boy', 'Sobeys', 'Metro'],              baseCAD: 21.76, unit: 'per_lb',    weightOz: 16 },
-  'Thyme':               { retailers: ['Whole Foods', 'Farm Boy', 'Sobeys', 'Metro'],              baseCAD: 38.08, unit: 'per_lb',    weightOz: 16 },
-  'Bok Choy':            { retailers: ['Whole Foods', 'Farm Boy', 'Metro', 'T&T', 'Loblaws'],     baseCAD: 5.43,  unit: 'per_lb',    weightOz: 6 },
-  'Watercress':          { retailers: ['Whole Foods', 'Farm Boy', 'Sobeys'],                       baseCAD: 6.79,  unit: 'per_4oz',   weightOz: 4 },
+  'Basil':               { retailers: ['Loblaws', 'Farm Boy', 'Sobeys', 'Metro'],              baseCAD: 3.99,  unit: 'per_each',  weightOz: 1 },
+  'Kale':                { retailers: ['Loblaws', 'Farm Boy', 'Sobeys', 'Metro'],              baseCAD: 3.99,  unit: 'per_bunch', weightOz: 8 },
+  'Lettuce (Romaine)':   { retailers: ['Loblaws', 'Farm Boy', 'Sobeys', 'Metro'],              baseCAD: 3.99,  unit: 'per_head',  weightOz: 16 },
+  'Butterhead Lettuce':  { retailers: ['Loblaws', 'Farm Boy', 'Sobeys', 'Metro'],              baseCAD: 5.99,  unit: 'per_each',  weightOz: 5 },
+  'Spinach':             { retailers: ['Loblaws', 'Farm Boy', 'Sobeys', 'Metro'],              baseCAD: 5.49,  unit: 'per_5oz',   weightOz: 5 },
+  'Arugula':             { retailers: ['Loblaws', 'Farm Boy', 'Sobeys', 'Metro'],              baseCAD: 5.49,  unit: 'per_5oz',   weightOz: 5 },
+  'Microgreens':         { retailers: ['Loblaws', 'Farm Boy', 'Whole Foods'],                  baseCAD: 5.99,  unit: 'per_each',  weightOz: 2 },
+  'Cilantro':            { retailers: ['Loblaws', 'Farm Boy', 'Sobeys', 'Metro'],              baseCAD: 1.99,  unit: 'per_bunch', weightOz: 1 },
+  'Mint':                { retailers: ['Loblaws', 'Farm Boy', 'Sobeys', 'Metro'],              baseCAD: 2.99,  unit: 'per_each',  weightOz: 1 },
+  'Thyme':               { retailers: ['Loblaws', 'Farm Boy', 'Sobeys', 'Metro'],              baseCAD: 3.49,  unit: 'per_each',  weightOz: 1 },
+  'Bok Choy':            { retailers: ['Loblaws', 'Metro', 'T&T', 'Farm Boy'],                 baseCAD: 2.99,  unit: 'per_each',  weightOz: 6 },
+  'Watercress':          { retailers: ['Loblaws', 'Farm Boy', 'Sobeys'],                       baseCAD: 4.99,  unit: 'per_each',  weightOz: 4 },
 };
 
 /**
@@ -64,32 +64,56 @@ export async function recordPriceObservationsBatch(pool, observations) {
  */
 export async function refreshPriceTrends(pool) {
   try {
-    // Current average prices (last 7 days)
+    // Current average prices (last 7 days) — prefer per_lb observations over per_each
     const currentResult = await pool.query(`
-      SELECT product,
-             AVG(price_cad)         AS avg_price,
-             COUNT(DISTINCT retailer) AS retailer_count,
+      WITH product_units AS (
+        SELECT product, bool_or(unit = 'per_lb') AS has_per_lb
+        FROM market_price_observations
+        WHERE observed_at > NOW() - INTERVAL '7 days'
+        GROUP BY product
+      )
+      SELECT o.product,
+             AVG(o.price_cad)         AS avg_price,
+             COUNT(DISTINCT o.retailer) AS retailer_count,
              COUNT(*)               AS obs_count,
-             MAX(observed_at)       AS last_obs
-      FROM market_price_observations
-      WHERE observed_at > NOW() - INTERVAL '7 days'
-      GROUP BY product
+             MAX(o.observed_at)       AS last_obs
+      FROM market_price_observations o
+      JOIN product_units pu ON pu.product = o.product
+      WHERE o.observed_at > NOW() - INTERVAL '7 days'
+        AND (o.unit = 'per_lb' OR NOT pu.has_per_lb)
+      GROUP BY o.product
     `);
 
-    // 7-day-ago prices (8-14 days ago window)
+    // 7-day-ago prices (8-14 days ago window) — prefer per_lb
     const weekAgoResult = await pool.query(`
-      SELECT product, AVG(price_cad) AS avg_price
-      FROM market_price_observations
-      WHERE observed_at BETWEEN NOW() - INTERVAL '14 days' AND NOW() - INTERVAL '7 days'
-      GROUP BY product
+      WITH product_units AS (
+        SELECT product, bool_or(unit = 'per_lb') AS has_per_lb
+        FROM market_price_observations
+        WHERE observed_at BETWEEN NOW() - INTERVAL '14 days' AND NOW() - INTERVAL '7 days'
+        GROUP BY product
+      )
+      SELECT o.product, AVG(o.price_cad) AS avg_price
+      FROM market_price_observations o
+      JOIN product_units pu ON pu.product = o.product
+      WHERE o.observed_at BETWEEN NOW() - INTERVAL '14 days' AND NOW() - INTERVAL '7 days'
+        AND (o.unit = 'per_lb' OR NOT pu.has_per_lb)
+      GROUP BY o.product
     `);
 
-    // 30-day-ago prices (28-35 days ago window)
+    // 30-day-ago prices (28-35 days ago window) — prefer per_lb
     const monthAgoResult = await pool.query(`
-      SELECT product, AVG(price_cad) AS avg_price
-      FROM market_price_observations
-      WHERE observed_at BETWEEN NOW() - INTERVAL '35 days' AND NOW() - INTERVAL '28 days'
-      GROUP BY product
+      WITH product_units AS (
+        SELECT product, bool_or(unit = 'per_lb') AS has_per_lb
+        FROM market_price_observations
+        WHERE observed_at BETWEEN NOW() - INTERVAL '35 days' AND NOW() - INTERVAL '28 days'
+        GROUP BY product
+      )
+      SELECT o.product, AVG(o.price_cad) AS avg_price
+      FROM market_price_observations o
+      JOIN product_units pu ON pu.product = o.product
+      WHERE o.observed_at BETWEEN NOW() - INTERVAL '35 days' AND NOW() - INTERVAL '28 days'
+        AND (o.unit = 'per_lb' OR NOT pu.has_per_lb)
+      GROUP BY o.product
     `);
 
     const weekAgoMap = {};
@@ -167,12 +191,20 @@ export async function getMarketDataFromDB(pool) {
       return formatSeedDataAsMarketData();
     }
 
-    // Get recent observations for price range calculation
+    // Get recent observations for price range calculation — prefer per_lb
     const { rows: recentObs } = await pool.query(`
-      SELECT product, retailer, price_cad, observed_at
-      FROM market_price_observations
-      WHERE observed_at > NOW() - INTERVAL '14 days'
-      ORDER BY product, observed_at DESC
+      WITH product_units AS (
+        SELECT product, bool_or(unit = 'per_lb') AS has_per_lb
+        FROM market_price_observations
+        WHERE observed_at > NOW() - INTERVAL '14 days'
+        GROUP BY product
+      )
+      SELECT o.product, o.retailer, o.price_cad, o.observed_at
+      FROM market_price_observations o
+      JOIN product_units pu ON pu.product = o.product
+      WHERE o.observed_at > NOW() - INTERVAL '14 days'
+        AND (o.unit = 'per_lb' OR NOT pu.has_per_lb)
+      ORDER BY o.product, o.observed_at DESC
     `);
 
     const obsByProduct = {};

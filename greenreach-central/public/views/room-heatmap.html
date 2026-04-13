@@ -853,7 +853,7 @@
       <div class="status-label">Temperature</div>
       <div>
         <span class="status-value" id="currentTemp">--</span>
-        <span class="status-unit">°F</span>
+        <span class="status-unit">°C</span>
       </div>
       <div class="status-range" id="tempRange">Range: -- to --</div>
     </div>
@@ -1390,11 +1390,18 @@
       updateTimeDisplay();
 
       // Auto-refresh: pull fresh sensor data every 3 minutes
-      // Refreshes BOTH IoT device telemetry (primary) and env zone data (fallback)
+      // Refreshes BOTH env per-source data (primary) and IoT device telemetry (fallback)
       if (!STATE.refreshTimer) {
         STATE.refreshTimer = setInterval(async () => {
           try {
-            // Primary: refresh IoT device telemetry (same source farm-summary uses)
+            // Primary: refresh env data (per-device sources updated every 30s by sync loop)
+            const res = await fetchWithFarmAuth('/env?hours=24&t=' + Date.now(), { cache: 'no-store' });
+            if (res.ok) {
+              STATE.envData = await res.json();
+              STATE.envLastLoadedAt = Date.now();
+              console.log('[Heat Map] Auto-refresh: updated env data with', STATE.envData?.zones?.length, 'zones');
+            }
+            // Secondary: also refresh IoT device registry for fallback/name resolution
             const iotRes = await fetchWithFarmAuth('/data/iot-devices.json');
             if (iotRes.ok) {
               const iotRaw = await iotRes.json();
@@ -1408,13 +1415,6 @@
                   sensor.telemetry = freshDevice.telemetry;
                 }
               }
-              console.log('[Heat Map] Auto-refresh: updated telemetry from', STATE.iotDevicesAll.length, 'IoT devices');
-            }
-            // Secondary: also refresh env zone data for history/trends
-            const res = await fetchWithFarmAuth('/env?hours=24&t=' + Date.now(), { cache: 'no-store' });
-            if (res.ok) {
-              STATE.envData = await res.json();
-              STATE.envLastLoadedAt = Date.now();
             }
             renderHeatMap();
             updateTimeDisplay();
@@ -1559,19 +1559,34 @@
             type: placement.snapshot?.type,
             protocol: placement.snapshot?.protocol,
             category: placement.snapshot?.category,
+            model: placement.snapshot?.model,
             zone: placement.snapshot?.zone,
             room: placement.snapshot?.room,
-            telemetry: placement.snapshot?.telemetry
+            telemetry: placement.snapshot?.telemetry,
+            isEquipment: placement.isEquipment || placement.snapshot?.isEquipment || false
           }));
 
           console.log('[Heat Map] Loaded devices from room map:', STATE.iotDevices.length, 'positioned devices');
 
-          // Positive filter: Only include devices explicitly marked as sensors (matching Room Mapper)
+          // Positive filter: sensors are non-equipment devices matching sensor criteria
+          // Must match Room Mapper filter: SwitchBot WoIOSensor has type='device', category='Device', model='WoIOSensor'
           function isSensor(d) {
             if (!d) return false;
             const type = (d.type || '').toLowerCase();
+            const model = (d.model || '').toLowerCase();
+            const name = d.name || '';
             const category = (d.category || '').toLowerCase();
-            return type.includes('sensor') || category.includes('sensor');
+            // Explicit equipment → not a sensor
+            if (d.isEquipment) return false;
+            // Exclude hubs
+            if (type.includes('hub') || model.includes('hub')) return false;
+            // Match by type/category
+            if (type.includes('sensor') || type.includes('meter') || category.includes('sensor') || category.includes('meter')) return true;
+            // Match by model (WoIOSensor, etc.)
+            if (model.includes('sensor') || model.includes('meter') || model.includes('woio')) return true;
+            // Match by name pattern (Sen 1, Sen 2, etc.)
+            if (/^sen\s*\d/i.test(name)) return true;
+            return false;
           }
 
           // Filter: positioned, IS sensor, AND has valid sensor name (not "None" or null)
@@ -1602,9 +1617,19 @@
               const registrySensors = STATE.iotDevicesAll.filter(d => {
                 if (!d) return false;
                 const type = (d.type || '').toLowerCase();
+                const model = (d.model || '').toLowerCase();
+                const name = d.name || '';
                 const deviceType = (d.deviceData?.deviceType || d.telemetry?.deviceType || '').toLowerCase();
                 const category = (d.category || '').toLowerCase();
-                return type.includes('sensor') || deviceType.includes('sensor') || category.includes('sensor');
+                // Exclude hubs
+                if (type.includes('hub') || model.includes('hub')) return false;
+                // Match by type/category/deviceType
+                if (type.includes('sensor') || type.includes('meter') || deviceType.includes('sensor') || category.includes('sensor') || category.includes('meter')) return true;
+                // Match by model (WoIOSensor, etc.)
+                if (model.includes('sensor') || model.includes('meter') || model.includes('woio')) return true;
+                // Match by name pattern (Sen 1, Sen 2, etc.)
+                if (/^sen\s*\d/i.test(name)) return true;
+                return false;
               });
               console.log('[Heat Map] Found', registrySensors.length, 'sensors in IoT registry');
 
@@ -1805,9 +1830,32 @@
      * @returns {object|null} Live data {tempC, rh, vpd} or null
      */
     function getLiveSensorData(sensor) {
-      // ── PRIMARY: IoT device registry telemetry (real-time per-device) ──
-      // This is the same data source that farm-summary sensor cards use.
-      // The IoT registry is refreshed from the farm_data DB table.
+      // ── PRIMARY: /env per-device source data (freshest per-sensor readings) ──
+      // The env.json sources are updated every 30s by the SwitchBot sync loop.
+      // Each source stores the individual device reading, not the zone average.
+      if (STATE.envData?.zones && sensor?.deviceId) {
+        const allZones = STATE.envData.zones;
+        const deviceId = sensor.deviceId;
+        let devTempC = null, devRh = null;
+        for (const z of allZones) {
+          if (!z?.sensors) continue;
+          const tempSrc = z.sensors.tempC?.sources?.[deviceId];
+          const rhSrc = z.sensors.rh?.sources?.[deviceId];
+          if (tempSrc?.current != null) devTempC = Number(tempSrc.current);
+          if (rhSrc?.current != null) devRh = Number(rhSrc.current);
+          if (devTempC != null || devRh != null) break;
+        }
+        if (devTempC != null || devRh != null) {
+          let devVpd = null;
+          if (devTempC != null && devRh != null) {
+            const svp = 0.6108 * Math.exp((17.27 * devTempC) / (devTempC + 237.3));
+            devVpd = Math.max(0, svp * (1 - devRh / 100));
+          }
+          return { tempC: devTempC, rh: devRh, vpd: devVpd };
+        }
+      }
+
+      // ── FALLBACK 1: IoT device registry telemetry (may lag behind env) ──
       if (STATE.iotDevicesAll?.length > 0 && sensor?.deviceId) {
         const iotDevice = STATE.iotDevicesAll.find(d =>
           (d.id || d.deviceId) === sensor.deviceId
@@ -1843,12 +1891,14 @@
         }
       }
 
-      // ── FALLBACK: /env zone aggregate data ──
+      // ── FALLBACK 2: /env data — zone aggregate ──
       if (!STATE.envData?.zones) return null;
+      const allZones = STATE.envData.zones;
 
+      // ── Zone aggregate (last resort) ──
       let zoneId = sensor?.zone;
-      if (!zoneId && STATE.envData.zones.length === 1) {
-        zoneId = STATE.envData.zones[0].id;
+      if (!zoneId && allZones.length === 1) {
+        zoneId = allZones[0].id;
       }
       if (!zoneId) return null;
 
@@ -1856,7 +1906,7 @@
         zoneId = `zone-${zoneId}`;
       }
 
-      const zoneData = STATE.envData.zones.find(z => z.id === zoneId);
+      const zoneData = allZones.find(z => z.id === zoneId);
       if (!zoneData?.sensors) return null;
 
       const tempC = zoneData.sensors.tempC?.current;
@@ -1913,33 +1963,35 @@
      */
     function getSensorHistory(sensor, metric) {
       if (!STATE.envData?.zones) return [];
-      
-      let zoneId = sensor?.zone;
-      
-      // Smart fallback: If sensor has no zone but there's only ONE zone, use it
-      if (!zoneId && STATE.envData.zones.length === 1) {
-        zoneId = STATE.envData.zones[0].id;
+      const allZones = STATE.envData.zones;
+      const deviceId = sensor?.deviceId;
+      const metricKey = metric === 'temperature' ? 'tempC' : (metric === 'humidity' ? 'rh' : metric);
+
+      // ── Per-device history from /env sources (preferred) ──
+      if (deviceId) {
+        for (const z of allZones) {
+          const src = z?.sensors?.[metricKey]?.sources?.[deviceId];
+          if (src?.history && Array.isArray(src.history) && src.history.length > 0) {
+            return src.history.slice(-48);
+          }
+        }
       }
-      
+
+      // ── Zone-level history (fallback for sensors without per-device data) ──
+      let zoneId = sensor?.zone;
+      if (!zoneId && allZones.length === 1) {
+        zoneId = allZones[0].id;
+      }
       if (!zoneId) return [];
-      
-      // Handle different zone ID formats (see getLiveSensorData)
       if (typeof zoneId === 'number' || /^\d+$/.test(zoneId)) {
         zoneId = `zone-${zoneId}`;
       }
-      
-      const zoneData = STATE.envData.zones.find(z => z.id === zoneId);
-      
+      const zoneData = allZones.find(z => z.id === zoneId);
       if (!zoneData?.sensors) return [];
-      
-      const metricKey = metric === 'temperature' ? 'tempC' : (metric === 'humidity' ? 'rh' : metric);
       const history = zoneData.sensors[metricKey]?.history;
-      
-      // Return last 48 values (4 hours at 5-min intervals)
       if (Array.isArray(history) && history.length > 0) {
         return history.slice(-48);
       }
-      
       return [];
     }
 
@@ -2301,23 +2353,9 @@
         nameEl.textContent = `— ${metric.label}`;
       }
 
-      // Compute min/max labels when values exist; otherwise show placeholders
-      const values = [];
-      if (STATE.sensors && STATE.sensors.length > 0) {
-        for (const sensor of STATE.sensors) {
-          if (sensor.telemetry) {
-            let value;
-            if (STATE.currentMetric === 'temperature') {
-              value = sensor.telemetry.temperature;
-            } else if (STATE.currentMetric === 'humidity') {
-              value = sensor.telemetry.humidity;
-            } else if (STATE.currentMetric === 'vpd') {
-              value = sensor.telemetry.vpd;
-            }
-            if (value != null) values.push(value);
-          }
-        }
-      }
+      // Compute min/max labels from LIVE sensor readings (same source as heat map)
+      const liveReadings = getSensorReadingsForMetric(STATE.currentMetric);
+      const values = liveReadings.map(r => r.value).filter(v => v != null);
 
       if (values.length > 0) {
         // ── Adaptive legend range (matches renderHeatMap adaptive scaling) ──
@@ -2477,14 +2515,14 @@
           const x = sensor.x * cellSize + cellSize / 2;
           const y = sensor.y * cellSize + cellSize / 2;
           
-          // Sensor marker
+          // Sensor marker (larger)
           ctx.fillStyle = 'rgba(59, 130, 246, 0.8)';
           ctx.beginPath();
-          ctx.arc(x, y, 8, 0, Math.PI * 2);
+          ctx.arc(x, y, 12, 0, Math.PI * 2);
           ctx.fill();
           
           ctx.strokeStyle = 'white';
-          ctx.lineWidth = 2;
+          ctx.lineWidth = 2.5;
           ctx.stroke();
           
           // Sensor value - show live reading from the heat map data
@@ -2508,28 +2546,34 @@
           
           if (reading) {
             const unit = metricConfig ? metricConfig.unit : '';
-            ctx.fillStyle = 'white';
-            ctx.font = 'bold 11px sans-serif';
+            // Reading value with background pill for contrast
+            const readingText = `${reading}${unit}`;
+            ctx.font = 'bold 16px sans-serif';
             ctx.textAlign = 'center';
-            ctx.fillText(`${reading}${unit}`, x, y - 15);
+            const tw = ctx.measureText(readingText).width;
+            ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+            ctx.fillRect(x - tw / 2 - 6, y - 34, tw + 12, 22);
+            ctx.fillStyle = '#ffffff';
+            ctx.fillText(readingText, x, y - 17);
           }
           
           // Sensor name label below marker
           const sensorName = sensor.name || sensor.deviceId;
           if (sensorName) {
-            const shortName = sensorName.length > 12 ? sensorName.substring(0, 10) + '..' : sensorName;
-            const labelBg = sensor.estimated ? 'rgba(120, 80, 20, 0.85)' : 'rgba(15, 23, 42, 0.85)';
-            const labelH = sensor.estimated ? 26 : 14;
-            ctx.fillStyle = labelBg;
-            ctx.fillRect(x - 30, y + 12, 60, labelH);
-            ctx.fillStyle = '#e2e8f0';
-            ctx.font = 'bold 9px sans-serif';
+            const shortName = sensorName.length > 14 ? sensorName.substring(0, 12) + '..' : sensorName;
+            const labelBg = sensor.estimated ? 'rgba(120, 80, 20, 0.9)' : 'rgba(15, 23, 42, 0.9)';
+            ctx.font = 'bold 13px sans-serif';
             ctx.textAlign = 'center';
-            ctx.fillText(shortName, x, y + 22);
+            const nameW = ctx.measureText(shortName).width;
+            const labelH = sensor.estimated ? 36 : 20;
+            ctx.fillStyle = labelBg;
+            ctx.fillRect(x - nameW / 2 - 8, y + 16, nameW + 16, labelH);
+            ctx.fillStyle = '#e2e8f0';
+            ctx.fillText(shortName, x, y + 31);
             if (sensor.estimated) {
               ctx.fillStyle = '#fbbf24';
-              ctx.font = 'italic 8px sans-serif';
-              ctx.fillText('~ estimated', x, y + 34);
+              ctx.font = 'italic 11px sans-serif';
+              ctx.fillText('~ estimated', x, y + 46);
             }
           }
         }
@@ -2626,32 +2670,15 @@
         let source = 'none';
         const deviceId = sensor.deviceId;
 
-        // ── 1. IoT registry per-device telemetry (primary — real-time) ──
-        // Same data source as farm-summary sensor cards. Stored in farm_data
-        // DB table as data_type='devices', refreshed via iot-devices.json.
-        if (value == null && deviceId && iotById.has(deviceId)) {
-          const telVal = iotById.get(deviceId)?.telemetry?.[telemetryKey];
-          if (telVal != null && Number.isFinite(Number(telVal))) {
-            value = Number(telVal);
-            source = 'iot-registry';
-          }
-        }
-
-        // ── 2. Sensor's own telemetry snapshot (populated during loadData) ──
-        if (value == null && sensor.telemetry) {
-          const snapVal = sensor.telemetry[telemetryKey];
-          if (snapVal != null && Number.isFinite(Number(snapVal))) {
-            value = Number(snapVal);
-            source = 'sensor-telemetry';
-          }
-        }
-
-        // ── 3. /env zone aggregate (may be stale if SwitchBot polling is down) ──
-        if (value == null) {
-          // Try sources map first (per-device readings within a zone)
+        // ── 1. /env per-device sources (PRIMARY — freshest per-sensor data) ──
+        // The env.json per-source entries are written every 30s by the SwitchBot
+        // poll sync loop. Each sensor gets its own unique reading stored under
+        // zone.sensors.tempC.sources[deviceId].current. This is the most
+        // authoritative and freshest source of per-sensor data.
+        if (value == null && deviceId) {
           for (const z of zones) {
             const srcs = z?.sensors?.[metricKey]?.sources;
-            if (srcs && deviceId && Object.prototype.hasOwnProperty.call(srcs, deviceId)) {
+            if (srcs && Object.prototype.hasOwnProperty.call(srcs, deviceId)) {
               const srcVal = srcs[deviceId]?.current ?? srcs[deviceId]?.value;
               if (Number.isFinite(srcVal)) {
                 value = srcVal;
@@ -2661,6 +2688,30 @@
             }
           }
         }
+
+        // ── 2. IoT registry per-device telemetry (fallback — may lag) ──
+        // iot-devices.json telemetry is updated by the same sync loop but the
+        // file write is conditional on value changes. When readings don't change
+        // between polls the file stays stale while env.json sources are always
+        // fresh. Use this only when env sources have no data for this sensor.
+        if (value == null && deviceId && iotById.has(deviceId)) {
+          const telVal = iotById.get(deviceId)?.telemetry?.[telemetryKey];
+          if (telVal != null && Number.isFinite(Number(telVal))) {
+            value = Number(telVal);
+            source = 'iot-registry';
+          }
+        }
+
+        // ── 3. Sensor's own telemetry snapshot (populated during loadData) ──
+        if (value == null && sensor.telemetry) {
+          const snapVal = sensor.telemetry[telemetryKey];
+          if (snapVal != null && Number.isFinite(Number(snapVal))) {
+            value = Number(snapVal);
+            source = 'sensor-telemetry';
+          }
+        }
+
+        // ── 4. /env zone aggregate (last resort — averaged across sensors) ──
         if (value == null) {
           // Zone-level current value by zone assignment or grid position
           let zoneObj = null;

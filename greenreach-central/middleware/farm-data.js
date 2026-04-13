@@ -56,6 +56,7 @@ const FILE_TO_DATA_TYPE = {
   'light-setups.json': 'light_setups',
   'room-map.json': 'room_map',
   'switchbot-devices.json': 'switchbot_devices',
+  'device-meta.json': 'device_meta',
   'farm-settings.json': 'farm_settings',
 };
 
@@ -73,6 +74,7 @@ const EMPTY_DEFAULTS = {
   'light-setups.json': { lightSetups: [] },
   'room-map.json': { zones: [], devices: [] },
   'switchbot-devices.json': { devices: [], summary: null },
+  'device-meta.json': { devices: {}, lastUpdated: null, version: '1.0.0' },
   'farm-settings.json': {},
 };
 

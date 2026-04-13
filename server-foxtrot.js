@@ -23993,8 +23993,19 @@ app.use('/api/research', proxyCorsMiddleware, createProxyMiddleware({
     if (req.headers['authorization']) {
       proxyReq.setHeader('Authorization', req.headers['authorization']);
     }
-    if (req.headers['x-farm-id']) {
-      proxyReq.setHeader('X-Farm-ID', req.headers['x-farm-id']);
+    const apiKey = process.env.GREENREACH_API_KEY || process.env.WHOLESALE_FARM_API_KEY;
+    if (apiKey) {
+      proxyReq.setHeader('x-api-key', apiKey);
+    }
+    let farmId = req.headers['x-farm-id'];
+    if (!farmId && req.headers['authorization']?.startsWith('Bearer ')) {
+      try {
+        const payload = JSON.parse(Buffer.from(req.headers['authorization'].substring(7).split('.')[1], 'base64').toString());
+        farmId = payload.farmId || payload.farm_id;
+      } catch {}
+    }
+    if (farmId) {
+      proxyReq.setHeader('X-Farm-ID', farmId);
     }
   },
   onProxyRes(proxyRes, req) {
@@ -24046,12 +24057,22 @@ app.use('/api/assistant', proxyCorsMiddleware, createProxyMiddleware({
     if (req.headers['authorization']) {
       proxyReq.setHeader('Authorization', req.headers['authorization']);
     }
-    if (req.headers['x-farm-id']) {
-      proxyReq.setHeader('X-Farm-ID', req.headers['x-farm-id']);
-    }
+    // Always inject x-api-key + x-farm-id so Central can fall back to API-key auth
+    // (LE JWTs lack issuer/audience claims that Central requires)
     const apiKey = process.env.GREENREACH_API_KEY || process.env.WHOLESALE_FARM_API_KEY;
-    if (apiKey && !req.headers['authorization']) {
-      proxyReq.setHeader('Authorization', `Bearer ${apiKey}`);
+    if (apiKey) {
+      proxyReq.setHeader('x-api-key', apiKey);
+    }
+    // Extract farmId from LE JWT or headers
+    let farmId = req.headers['x-farm-id'];
+    if (!farmId && req.headers['authorization']?.startsWith('Bearer ')) {
+      try {
+        const payload = JSON.parse(Buffer.from(req.headers['authorization'].substring(7).split('.')[1], 'base64').toString());
+        farmId = payload.farmId || payload.farm_id;
+      } catch {}
+    }
+    if (farmId) {
+      proxyReq.setHeader('X-Farm-ID', farmId);
     }
   },
   onProxyRes(proxyRes, req) {
@@ -24097,16 +24118,23 @@ app.use('/api/admin/assistant', proxyCorsMiddleware, createProxyMiddleware({
   agent: keepAliveHttpsAgent,
   pathRewrite: (path) => (path.startsWith('/api/admin/assistant') ? path : `/api/admin/assistant${path}`),
   onProxyReq(proxyReq, req) {
-    console.log(`[-> evie-admin] ${req.method} ${req.originalUrl} -> central`);
+    console.log(`[-> faye-admin] ${req.method} ${req.originalUrl} -> central`);
     if (req.headers['authorization']) {
       proxyReq.setHeader('Authorization', req.headers['authorization']);
     }
-    if (req.headers['x-farm-id']) {
-      proxyReq.setHeader('X-Farm-ID', req.headers['x-farm-id']);
-    }
     const apiKey = process.env.GREENREACH_API_KEY || process.env.WHOLESALE_FARM_API_KEY;
-    if (apiKey && !req.headers['authorization']) {
-      proxyReq.setHeader('Authorization', `Bearer ${apiKey}`);
+    if (apiKey) {
+      proxyReq.setHeader('x-api-key', apiKey);
+    }
+    let farmId = req.headers['x-farm-id'];
+    if (!farmId && req.headers['authorization']?.startsWith('Bearer ')) {
+      try {
+        const payload = JSON.parse(Buffer.from(req.headers['authorization'].substring(7).split('.')[1], 'base64').toString());
+        farmId = payload.farmId || payload.farm_id;
+      } catch {}
+    }
+    if (farmId) {
+      proxyReq.setHeader('X-Farm-ID', farmId);
     }
   },
   onProxyRes(proxyRes, req) {
@@ -27725,28 +27753,33 @@ app.get('/discovery/devices', async (req, res) => {
       }
     }
     
-    // 2. Network scanning for WiFi/IP devices
-    try {
-      const networkDevices = await discoverNetworkDevices();
-      discoveredDevices.push(...networkDevices);
-    } catch (e) {
-      console.warn('Network device discovery failed:', e.message);
-    }
+    // 2-4. Local-only scans — skip in cloud mode (no LAN/BLE on Cloud Run)
+    if (process.env.DEPLOYMENT_MODE !== 'cloud') {
+      // 2. Network scanning for WiFi/IP devices
+      try {
+        const networkDevices = await discoverNetworkDevices();
+        discoveredDevices.push(...networkDevices);
+      } catch (e) {
+        console.warn('Network device discovery failed:', e.message);
+      }
 
-    // 3. MQTT device discovery (if configured)
-    try {
-      const mqttDevices = await discoverMQTTDevices();
-      discoveredDevices.push(...mqttDevices);
-    } catch (e) {
-      console.warn('MQTT device discovery failed:', e.message);
-    }
+      // 3. MQTT device discovery (if configured)
+      try {
+        const mqttDevices = await discoverMQTTDevices();
+        discoveredDevices.push(...mqttDevices);
+      } catch (e) {
+        console.warn('MQTT device discovery failed:', e.message);
+      }
 
-    // 4. BLE device discovery (if available)
-    try {
-      const bleDevices = await discoverBLEDevices();
-      discoveredDevices.push(...bleDevices);
-    } catch (e) {
-      console.warn('BLE device discovery failed:', e.message);
+      // 4. BLE device discovery (if available)
+      try {
+        const bleDevices = await discoverBLEDevices();
+        discoveredDevices.push(...bleDevices);
+      } catch (e) {
+        console.warn('BLE device discovery failed:', e.message);
+      }
+    } else {
+      console.log('[discovery/devices] Cloud mode — skipping local-only scans');
     }
     
     console.log(` Discovery complete: Found ${discoveredDevices.length} live devices`);
@@ -28257,9 +28290,10 @@ app.post('/discovery/scan', async (req, res) => {
     // Direct SwitchBot Cloud discovery
     if (ensureSwitchBotConfigured()) {
       try {
-        const sbDevices = await fetchSwitchBotDevices();
-        if (sbDevices?.body?.deviceList) {
-          sbDevices.body.deviceList.forEach(device => {
+        const sbResult = await fetchSwitchBotDevices();
+        const sbDeviceList = sbResult?.payload?.body?.deviceList || [];
+        const sbInfraredList = sbResult?.payload?.body?.infraredRemoteList || [];
+        [...sbDeviceList, ...sbInfraredList].forEach(device => {
             allDevices.push({
               name: device.deviceName || `SwitchBot ${device.deviceType}`,
               brand: 'SwitchBot',
@@ -28273,37 +28307,36 @@ app.post('/discovery/scan', async (req, res) => {
               deviceType: device.deviceType,
               comm_type: 'switchbot-cloud'
             });
-          });
-        }
+        });
       } catch (e) {
         console.warn('SwitchBot discovery failed:', e.message);
       }
     }
     
-    // Direct Kasa discovery attempt
-    try {
-      const kasaDevices = await discoverKasaDevicesDirect();
-      allDevices.push(...kasaDevices.map(d => ({
-        name: d.alias || d.name || 'Kasa Device',
-        brand: 'TP-Link Kasa',
-        model: d.model || d.type || 'Smart Plug',
-        ip: d.host || d.address || '—',
-        mac: d.deviceId || d.mac || '—',
-        protocol: 'Kasa WiFi',
-        confidence: 0.9,
-        category: 'Smart Plug',
-        deviceId: d.deviceId,
-        comm_type: 'kasa'
-      })));
-    } catch (e) {
-      console.warn('Kasa direct discovery failed:', e.message);
-    }
-
-    // Always run live network discovery stages
-    if (true) {
-      if (!allDevices.length) {
-        console.warn('Universal scan found 0 devices; attempting live network discovery fallback');
+    // Local-only discovery (Kasa, network, MQTT, BLE) — skip in cloud mode
+    // These require LAN/BLE access unavailable on Cloud Run and cause timeouts
+    const isCloudMode = process.env.DEPLOYMENT_MODE === 'cloud';
+    if (!isCloudMode) {
+      // Direct Kasa discovery attempt
+      try {
+        const kasaDevices = await discoverKasaDevicesDirect();
+        allDevices.push(...kasaDevices.map(d => ({
+          name: d.alias || d.name || 'Kasa Device',
+          brand: 'TP-Link Kasa',
+          model: d.model || d.type || 'Smart Plug',
+          ip: d.host || d.address || '—',
+          mac: d.deviceId || d.mac || '—',
+          protocol: 'Kasa WiFi',
+          confidence: 0.9,
+          category: 'Smart Plug',
+          deviceId: d.deviceId,
+          comm_type: 'kasa'
+        })));
+      } catch (e) {
+        console.warn('Kasa direct discovery failed:', e.message);
       }
+
+      // Live network discovery stages
       try {
         const networkDevices = await discoverNetworkDevices();
         allDevices.push(...networkDevices.map(d => ({
@@ -28354,6 +28387,8 @@ app.post('/discovery/scan', async (req, res) => {
       } catch (e) {
         console.warn('BLE device discovery failed:', e.message);
       }
+    } else {
+      console.log('[discovery/scan] Cloud mode — skipping local-only scans (Kasa, network, MQTT, BLE)');
     }
     
     console.log(` Universal scan complete: ${allDevices.length} devices found`);
