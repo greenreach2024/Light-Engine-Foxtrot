@@ -167,8 +167,8 @@ The following EB environments are DEPRECATED and will be terminated:
 
 | Date | Service | Revision | Commit | Notes |
 |------|---------|----------|--------|-------|
-| 2026-04-13 | greenreach-central | pending | pending | E.V.I.E. bulk alert tools (resolve_all_alerts, resolve_stale_alerts), 48h auto-cleanup, 3D viewer gap corrections |
-| 2026-04-13 | light-engine | pending | pending | Stale alert cleanup (LE system-alerts.json), synced 3D viewer fixes |
+| 2026-04-13 | greenreach-central | 00225-7wr | 48ed95fe | E.V.I.E. bulk alert tools (resolve_all_alerts, resolve_stale_alerts), 48h auto-cleanup, 3D viewer gap corrections |
+| 2026-04-13 | light-engine | 00143-glh | 48ed95fe | Stale alert cleanup (LE system-alerts.json), synced 3D viewer fixes |
 | 2026-04-11 | greenreach-central | 00092-ssg | pending | HYBRID phantom fix: cleanup strips auto from hybrid rows, backfill migration guard, tray enrichment filter |
 | 2026-04-11 | light-engine | 00052-8k2 | pending | Synced farm-inventory.html (effectiveLbs, enrichment filter), HYBRID phantom fix |
 | 2026-04-10 | greenreach-central | 00090-9f8 | e0b85130 | Phantom inventory elimination: replace recalculateAutoInventoryFromGroups with DELETE-only cleanup (4 call sites) |
