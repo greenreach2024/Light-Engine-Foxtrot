@@ -1186,10 +1186,25 @@
             if (zEntry && zEntry[cfg.key] != null) val = zEntry[cfg.key];
           }
 
-          // Tier 3: Fallback to any zone with data (original behavior)
-          if (val == null) {
-            const zoneVal = Object.values(S.zoneDataMap).find(d => d[cfg.key] != null);
-            if (zoneVal) val = zoneVal[cfg.key];
+          // Tier 2.5: Spatial zone match -- find which zone this sensor sits in by grid coords
+          if (val == null && map.zones && map.zones.length > 0) {
+            const hitZone = map.zones.find(z =>
+              dev.x >= (z.x1 || 0) && dev.x <= (z.x2 || 999) &&
+              dev.y >= (z.y1 || 0) && dev.y <= (z.y2 || 999)
+            );
+            if (hitZone) {
+              const zName = hitZone.name || hitZone.zone || '';
+              const zEntry = S.zoneDataMap[zName]
+                || S.zoneDataMap['zone-' + zName]
+                || S.zoneDataMap['Zone ' + zName]
+                || Object.values(S.zoneDataMap).find(d => d.name === zName || d.name === 'Zone ' + zName);
+              if (zEntry && zEntry[cfg.key] != null) val = zEntry[cfg.key];
+            }
+          }
+
+          // Tier 3: Fallback to average of all zone values (not just the first zone)
+          if (val == null && allVals.length > 0) {
+            val = allVals.reduce((a, b) => a + b, 0) / allVals.length;
           }
 
           if (val != null) {
@@ -1286,6 +1301,26 @@
             || S.zoneDataMap['zone-' + devZone]
             || Object.values(S.zoneDataMap).find(function(d) { return d.name === devZone || d.name === 'Zone ' + devZone; });
           if (zEntry && zEntry[cfg.key] != null) val = zEntry[cfg.key];
+        }
+        // Spatial zone match: find which zone this sensor sits in
+        if (val == null) {
+          var ud = sm.userData;
+          var roomId = ud.roomId || (ud.room ? ud.room.id : '');
+          var rMap = roomId ? S.roomMaps[roomId] : null;
+          if (rMap && rMap.zones && rMap.zones.length > 0) {
+            var hitZ = rMap.zones.find(function(z) {
+              return dev.x >= (z.x1 || 0) && dev.x <= (z.x2 || 999) &&
+                     dev.y >= (z.y1 || 0) && dev.y <= (z.y2 || 999);
+            });
+            if (hitZ) {
+              var zName2 = hitZ.name || hitZ.zone || '';
+              var zE2 = S.zoneDataMap[zName2]
+                || S.zoneDataMap['zone-' + zName2]
+                || S.zoneDataMap['Zone ' + zName2]
+                || Object.values(S.zoneDataMap).find(function(d2) { return d2.name === zName2 || d2.name === 'Zone ' + zName2; });
+              if (zE2 && zE2[cfg.key] != null) val = zE2[cfg.key];
+            }
+          }
         }
         // Fallback: average of all zone data
         if (val == null && allVals.length > 0) {
