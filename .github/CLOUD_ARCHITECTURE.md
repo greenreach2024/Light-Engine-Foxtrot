@@ -167,6 +167,8 @@ The following EB environments are DEPRECATED and will be terminated:
 
 | Date | Service | Revision | Commit | Notes |
 |------|---------|----------|--------|-------|
+| 2026-04-14 | greenreach-central | 00226-7zx | 9a20a4bd | Multi-unit bulk group updates, equipment partial name matching, 3D viewer on LE |
+| 2026-04-14 | light-engine | 00144-2bm | 9a20a4bd | 3D viewer now served from LE public/views/, synced farm-ops + assistant-chat |
 | 2026-04-13 | greenreach-central | 00225-7wr | 48ed95fe | E.V.I.E. bulk alert tools (resolve_all_alerts, resolve_stale_alerts), 48h auto-cleanup, 3D viewer gap corrections |
 | 2026-04-13 | light-engine | 00143-glh | 48ed95fe | Stale alert cleanup (LE system-alerts.json), synced 3D viewer fixes |
 | 2026-04-11 | greenreach-central | 00092-ssg | pending | HYBRID phantom fix: cleanup strips auto from hybrid rows, backfill migration guard, tray enrichment filter |
