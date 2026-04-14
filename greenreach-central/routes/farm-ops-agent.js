@@ -1666,7 +1666,7 @@ export const TOOL_CATALOG = {
 
   // -- Spatial Layout Optimizer -- Arrange equipment/groups in grid patterns --
   'optimize_layout': {
-    description: 'Spatially arrange equipment and/or groups in the room map into a grid pattern within zones. Supports configuring columns per side, walkway width, and spacing. Use for instructions like "arrange ZipGrow towers 3 wide per zone with a 2m walkway."',
+    description: 'Spatially arrange equipment and/or groups in the room map into a grid pattern across the room. Supports configuring columns per side, walkway width (center aisle), and spacing between units. Layout works at room level -- groups are distributed evenly regardless of zone assignment.',
     category: 'write',
     required: ['room_id'],
     optional: ['match_name', 'match_category', 'target', 'columns', 'walkway_m', 'spacing_m', 'farm_id'],
@@ -1688,126 +1688,121 @@ export const TOOL_CATALOG = {
 
       const roomMap = await farmStore.get(farm_id, 'room_map') || {};
       const gridSize = roomMap.gridSize || 30;
+      // Room dimensions in meters (default to gridSize when not set = 1 grid cell per meter)
+      const roomLength = roomMap.roomLength || gridSize;
+      const roomWidth = roomMap.roomWidth || gridSize;
       const zones = roomMap.zones || [];
-      if (!zones.length) return { ok: false, error: 'Room has no zones defined. Add zones first.' };
 
       const groups = await farmStore.get(farm_id, 'groups') || [];
       const beforeGroups = JSON.parse(JSON.stringify(groups));
       const beforeDevices = JSON.parse(JSON.stringify(roomMap.devices || []));
 
-      let totalPlaced = 0;
-      const placements = [];
-
-      for (const zone of zones) {
-        const zx1 = zone.x1 ?? 0;
-        const zy1 = zone.y1 ?? 0;
-        const zx2 = zone.x2 ?? gridSize;
-        const zy2 = zone.y2 ?? gridSize;
-        const zoneW = zx2 - zx1; // grid units in X
-        const zoneD = zy2 - zy1; // grid units in Y
-
-        // Collect items for this zone
-        let items = [];
-        if (layoutTarget === 'groups' || layoutTarget === 'both') {
-          const zoneName = zone.name || zone.zone || ('Zone ' + zone.zone);
-          const zoneIdx = String(zone.zone || zones.indexOf(zone) + 1);
-          const matched = groups.filter(g => {
-            const gz = String(g.zone ?? g.zoneId ?? '');
-            const gRoom = g.roomId || g.room || '';
-            const inRoom = gRoom === room.id || gRoom === room.name;
-            const inZone = gz === zoneIdx || gz === zoneName || gz === 'zone-' + zoneIdx;
-            if (!inRoom && !inZone) return false;
-            if (match_name && !(g.name || '').toLowerCase().includes(match_name.toLowerCase())) return false;
-            return true;
-          });
-          items.push(...matched.map(g => ({ type: 'group', ref: g })));
-        }
-        if (layoutTarget === 'equipment' || layoutTarget === 'both') {
-          const matched = (roomMap.devices || []).filter(d => {
-            const snap = d.snapshot || {};
-            const cat = (snap.category || snap.type || '').toLowerCase();
-            const nm = (snap.name || d.deviceId || '').toLowerCase();
-            if (match_category && cat !== match_category.toLowerCase()) return false;
-            if (match_name && !nm.includes(match_name.toLowerCase())) return false;
-            // Check if device is within this zone bounds
-            if (d.x >= zx1 && d.x <= zx2 && d.y >= zy1 && d.y <= zy2) return true;
-            return false;
-          });
-          items.push(...matched.map(d => ({ type: 'equipment', ref: d })));
-        }
-
-        if (!items.length) continue;
-
-        // Compute grid positions within zone
-        // If walkway > 0, split zone into left and right halves
-        const walkwayGrid = walkway > 0 ? Math.max(1, Math.round(walkway)) : 0;
-        const spacingGrid = Math.max(1, Math.round(spacing));
-        const usableW = zoneW - walkwayGrid;
-        const colsLeft = Math.min(columns, Math.ceil(usableW / (2 * spacingGrid)));
-        const colsRight = Math.min(columns, Math.floor(usableW / (2 * spacingGrid)));
-        const totalCols = walkwayGrid > 0 ? colsLeft + colsRight : columns;
-
-        // Build position list
-        const positions = [];
-        const leftStartX = zx1 + 1;
-        const rightStartX = walkwayGrid > 0
-          ? zx1 + colsLeft * spacingGrid + walkwayGrid
-          : zx1 + 1;
-
-        let row = 0;
-        let col = 0;
-        let onRight = false;
-
-        for (let i = 0; i < items.length; i++) {
-          let px, py;
-          if (walkwayGrid > 0) {
-            if (!onRight) {
-              px = leftStartX + col * spacingGrid;
-              py = zy1 + 1 + row * spacingGrid;
-              col++;
-              if (col >= colsLeft) { col = 0; onRight = true; }
-            } else {
-              px = rightStartX + col * spacingGrid;
-              py = zy1 + 1 + row * spacingGrid;
-              col++;
-              if (col >= colsRight) { col = 0; onRight = false; row++; }
-            }
-          } else {
-            px = zx1 + 1 + (i % totalCols) * spacingGrid;
-            py = zy1 + 1 + Math.floor(i / totalCols) * spacingGrid;
-          }
-
-          // Clamp to zone
-          px = Math.max(zx1, Math.min(zx2, px));
-          py = Math.max(zy1, Math.min(zy2, py));
-
-          positions.push({ x: Math.round(px), y: Math.round(py) });
-        }
-
-        // Apply positions
-        for (let i = 0; i < items.length; i++) {
-          const pos = positions[i] || positions[positions.length - 1];
-          const item = items[i];
-          if (item.type === 'group') {
-            item.ref.gridX = pos.x;
-            item.ref.gridY = pos.y;
-            item.ref.lastModified = new Date().toISOString();
-          } else {
-            item.ref.x = pos.x;
-            item.ref.y = pos.y;
-          }
-          placements.push({
-            type: item.type,
-            name: item.ref.name || item.ref.snapshot?.name || item.ref.deviceId || '?',
-            zone: zone.name || zone.zone,
-            x: pos.x, y: pos.y
-          });
-          totalPlaced++;
-        }
+      // Collect ALL matching items for the room (not per-zone)
+      let items = [];
+      if (layoutTarget === 'groups' || layoutTarget === 'both') {
+        const matched = groups.filter(g => {
+          const gRoom = g.roomId || g.room || '';
+          const inRoom = gRoom === room.id || gRoom === room.name || rooms.length === 1;
+          if (!inRoom) return false;
+          if (match_name && !(g.name || '').toLowerCase().includes(match_name.toLowerCase())) return false;
+          return true;
+        });
+        items.push(...matched.map(g => ({ type: 'group', ref: g })));
+      }
+      if (layoutTarget === 'equipment' || layoutTarget === 'both') {
+        const matched = (roomMap.devices || []).filter(d => {
+          const snap = d.snapshot || {};
+          const cat = (snap.category || snap.type || '').toLowerCase();
+          const nm = (snap.name || d.deviceId || '').toLowerCase();
+          if (match_category && cat !== match_category.toLowerCase()) return false;
+          if (match_name && !nm.includes(match_name.toLowerCase())) return false;
+          return true;
+        });
+        items.push(...matched.map(d => ({ type: 'equipment', ref: d })));
       }
 
-      if (totalPlaced === 0) {
-        return { ok: false, error: 'No matching items found in any zone. Check match_name/match_category and zone assignments.' };
+      if (!items.length) {
+        return { ok: false, error: 'No matching items found. Check match_name/match_category.' };
+      }
+
+      // Convert meters to grid cells
+      const m2gX = gridSize / roomLength;  // multiply meters by this to get grid X
+      const m2gY = gridSize / roomWidth;   // multiply meters by this to get grid Y
+
+      // Layout across the full room grid
+      const walkwayGrid = walkway > 0 ? Math.max(1, Math.round(walkway * m2gX)) : 0;
+      const spacingGridX = Math.max(1, Math.round(spacing * m2gX));
+      const spacingGridY = Math.max(1, Math.round(spacing * m2gY));
+
+      const roomGridW = gridSize;
+      const roomGridD = gridSize;
+      const margin = 1; // 1 grid cell margin from walls
+
+      // Build position grid: columns-left | walkway | columns-right
+      const positions = [];
+      const colsLeft = columns;
+      const colsRight = walkwayGrid > 0 ? columns : 0;
+      const totalCols = walkwayGrid > 0 ? colsLeft + colsRight : columns;
+
+      // Calculate starting X positions
+      // Center the layout in the room
+      const leftBlockW = colsLeft * spacingGridX;
+      const rightBlockW = colsRight * spacingGridX;
+      const totalLayoutW = leftBlockW + walkwayGrid + rightBlockW;
+      const layoutStartX = Math.max(margin, Math.floor((roomGridW - totalLayoutW) / 2));
+
+      const leftStartX = layoutStartX;
+      const rightStartX = walkwayGrid > 0
+        ? layoutStartX + leftBlockW + walkwayGrid
+        : layoutStartX;
+
+      let row = 0;
+      let col = 0;
+      let onRight = false;
+
+      for (let i = 0; i < items.length; i++) {
+        let px, py;
+        if (walkwayGrid > 0) {
+          if (!onRight) {
+            px = leftStartX + col * spacingGridX;
+            py = margin + row * spacingGridY;
+            col++;
+            if (col >= colsLeft) { col = 0; onRight = true; }
+          } else {
+            px = rightStartX + col * spacingGridX;
+            py = margin + row * spacingGridY;
+            col++;
+            if (col >= colsRight) { col = 0; onRight = false; row++; }
+          }
+        } else {
+          px = layoutStartX + (i % totalCols) * spacingGridX;
+          py = margin + Math.floor(i / totalCols) * spacingGridY;
+        }
+
+        // Clamp to room grid
+        px = Math.max(0, Math.min(gridSize - 1, Math.round(px)));
+        py = Math.max(0, Math.min(gridSize - 1, Math.round(py)));
+        positions.push({ x: px, y: py });
+      }
+
+      // Apply positions
+      const placements = [];
+      for (let i = 0; i < items.length; i++) {
+        const pos = positions[i] || positions[positions.length - 1];
+        const item = items[i];
+        if (item.type === 'group') {
+          item.ref.gridX = pos.x;
+          item.ref.gridY = pos.y;
+          item.ref.lastModified = new Date().toISOString();
+        } else {
+          item.ref.x = pos.x;
+          item.ref.y = pos.y;
+        }
+        placements.push({
+          type: item.type,
+          name: item.ref.name || item.ref.snapshot?.name || item.ref.deviceId || '?',
+          x: pos.x, y: pos.y
+        });
       }
 
       // Save
@@ -1820,6 +1815,7 @@ export const TOOL_CATALOG = {
       await farmStore.set(farm_id, 'groups', groups);
       writeJSON('groups.json', groups);
 
+      const totalPlaced = items.length;
       return {
         ok: true,
         placed: totalPlaced,
@@ -1827,7 +1823,7 @@ export const TOOL_CATALOG = {
         walkway_m: walkway,
         spacing_m: spacing,
         layout: placements.slice(0, 20), // First 20 for display
-        message: 'Arranged ' + totalPlaced + ' item(s) in grid pattern: ' + columns + ' columns' + (walkway > 0 ? ', ' + walkway + 'm walkway' : '') + ', ' + spacing + 'm spacing.',
+        message: 'Arranged ' + totalPlaced + ' item(s) across the room: ' + columns + ' columns' + (walkway > 0 ? ' per side, ' + walkway + 'm center walkway' : '') + ', ' + spacing + 'm spacing.',
         _undo_state: { farm_id, beforeGroups, beforeDevices, roomMapId: rid }
       };
     },
