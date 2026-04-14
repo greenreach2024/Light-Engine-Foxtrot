@@ -29,6 +29,26 @@ The farm runs entirely on Google Cloud Run. The Light Engine Cloud Run service I
 8. **AWS/EB is DEPRECATED.** Do not reference EB environments, use `eb deploy`, or use any `aws elasticbeanstalk` commands. All infrastructure is Google Cloud Run. See `.github/CLOUD_ARCHITECTURE.md`.
 9. **GCP Project**: `project-5d00790f-13a9-4637-a40`, region `us-east1`. Artifact Registry: `us-east1-docker.pkg.dev/project-5d00790f-13a9-4637-a40/greenreach`.
 
+### Recent Fixes (Apr 13, 2026)
+
+35. **E.V.I.E. Bulk Alert Clearing + Stale Alert Cleanup**
+    - Root cause: E.V.I.E. could only dismiss ONE alert at a time by exact ID (`dismiss_alert`). No bulk clear capability. Central had 4 stale environment alerts from March 21 (23 days old). LE had 14 ancient test alerts from December 2025.
+    - File: `greenreach-central/routes/farm-ops-agent.js` -- Added `resolve_all_alerts` tool (resolves ALL active alerts at once) and `resolve_stale_alerts` tool (resolves alerts older than N hours, default 24).
+    - File: `greenreach-central/routes/farm-ops-agent.js` -- Added staleness auto-cleanup in `syncSensorData()`: alerts older than 48 hours are auto-resolved during each sensor sync cycle, preventing indefinite accumulation.
+    - File: `greenreach-central/routes/assistant-chat.js` -- Added function schemas for both new tools. Both in `quick_confirm` trust tier.
+    - File: `greenreach-central/public/data/system-alerts.json` -- Resolved 4 stale March 21 environment alerts (env-temp-low/env-rh-low for zone-1 and zone-2).
+    - File: `public/data/system-alerts.json` -- Resolved 14 stale December 2025 test alerts (test-farm-001 offline, overselling-detected).
+    - F.A.Y.E. backend already had bulk resolve/acknowledge endpoints (`/alerts/resolve-all`, `/alerts/bulk-resolve`). No changes needed.
+    - Files changed: `farm-ops-agent.js`, `assistant-chat.js`, `system-alerts.json` (both Central and LE)
+
+36. **3D Farm Viewer Gap Corrections**
+    - File: `greenreach-central/public/views/3d-farm-viewer.html`
+    - **Cache busting**: Added `?t=Date.now()` to `groups.json`, `iot-devices.json`, and `crop-registry.json` fetches. Previously only `rooms.json` and `env` had cache busters, causing stale data display after deployments.
+    - **Zone overlay gaps**: Reduced zone geometry inset from 0.2m to 0.12m (`BoxGeometry(zw - 0.12, ...)`). Narrower visual gaps between adjacent zones while maintaining zone distinction. Heatmap gradients now cover more floor area.
+    - **Group placement**: Replaced fixed 2.5m grid spacing with dimension-aware spacing using actual persisted group dimensions (`cellW`, `cellD`). Groups no longer overlap when large or waste space when small.
+    - **Stale data indicator**: Added staleness detection -- if env data hasn't refreshed in >5 minutes, status bar shows warning with elapsed time in amber color.
+    - **Full data refresh**: Added 10-minute interval for full data reload (rooms, groups, devices, env). Previously only env data refreshed every 2 minutes; new sensors, rooms, or group changes required manual page reload.
+
 ### Recent Fixes (Apr 10, 2026)
 
 34. **Trait-Based Salad Mix System (deployed greenreach-central-00113-7r9, light-engine-00069-sqt)**

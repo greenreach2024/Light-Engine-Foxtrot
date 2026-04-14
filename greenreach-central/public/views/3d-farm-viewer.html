@@ -501,10 +501,10 @@
         status('Loading farm data...');
         const [roomsRes, groupsRes, iotRes, envRes, regRes] = await Promise.all([
           authFetch('/data/rooms.json?t=' + Date.now()),
-          authFetch('/data/groups.json'),
-          authFetch('/data/iot-devices.json'),
+          authFetch('/data/groups.json?t=' + Date.now()),
+          authFetch('/data/iot-devices.json?t=' + Date.now()),
           authFetch('/env?hours=24&t=' + Date.now(), { cache: 'no-store' }),
-          authFetch('/data/crop-registry.json'),
+          authFetch('/data/crop-registry.json?t=' + Date.now()),
         ]);
 
         if (roomsRes.ok) { const d = await roomsRes.json(); S.rooms = d.rooms || d || []; }
@@ -776,7 +776,7 @@
           const zColor = ZONE_PALETTE[zi % ZONE_PALETTE.length];
           const zoneId = String(zone.zone ?? zone.id ?? zone.name ?? ('z' + zi));
 
-          const zoneGeo = new THREE.BoxGeometry(zw - 0.2, 0.06, zd - 0.2);
+          const zoneGeo = new THREE.BoxGeometry(zw - 0.12, 0.06, zd - 0.12);
           const zoneMat = new THREE.MeshStandardMaterial({
             color: zColor, transparent: true, opacity: 0.15, roughness: 0.5, metalness: 0.1,
           });
@@ -799,7 +799,7 @@
           }
 
           // Zone border
-          const borderGeo = new THREE.EdgesGeometry(new THREE.BoxGeometry(zw - 0.2, 0.02, zd - 0.2));
+          const borderGeo = new THREE.EdgesGeometry(new THREE.BoxGeometry(zw - 0.12, 0.02, zd - 0.12));
           const borderMat = new THREE.LineBasicMaterial({ color: zColor, transparent: true, opacity: 0.35 });
           const border = new THREE.LineSegments(borderGeo, borderMat);
           border.position.set(zcx, 0.16, zcz);
@@ -822,9 +822,14 @@
           if (matched) {
             const zx1 = (matched.x1 ?? 0) + offsetX, zy1 = matched.y1 ?? 0;
             const zx2 = (matched.x2 ?? roomW) + offsetX, zy2 = matched.y2 ?? roomD;
-            const cols = Math.max(1, Math.floor(Math.abs(zx2 - zx1) / 2.5));
-            gx = Math.min(zx1, zx2) + 1.2 + (gi % cols) * 2.5;
-            gz = Math.min(zy1, zy2) + 1.2 + Math.floor(gi / cols) * 2.5;
+            const gDims0 = S.groupDimensions[group.id] || {};
+            const cellW = Math.max(2.0, (gDims0.length || 1.8) + 0.6);
+            const cellD = Math.max(2.0, (gDims0.width || 1.0) + 0.6);
+            const zoneW = Math.abs(zx2 - zx1);
+            const zoneD = Math.abs(zy2 - zy1);
+            const cols = Math.max(1, Math.floor((zoneW - 0.8) / cellW));
+            gx = Math.min(zx1, zx2) + 0.8 + (gi % cols) * cellW + cellW / 2;
+            gz = Math.min(zy1, zy2) + 0.8 + Math.floor(gi / cols) * cellD + cellD / 2;
           } else {
             gx = offsetX + 2 + (gi % 6) * 3;
             gz = 2 + Math.floor(gi / 6) * 3;
@@ -1100,15 +1105,43 @@
         const roomW = dims.length || map.roomLength || gridSize;
         const roomD = dims.width || map.roomWidth || gridSize;
         const points = [];
-        // Get sensor devices and their zone data values
+        // Map overlay key -> env sensor metric key for per-device source lookup
+        const envMetricKey = { temp: 'tempC', humidity: 'rh', co2: 'co2', vpd: 'vpd' }[cfg.key] || cfg.key;
+        const envZones = S.envData?.zones || [];
+
+        // Get sensor devices and their per-device env values
         devices.forEach(dev => {
           const cat = (dev.snapshot?.category || dev.snapshot?.type || '').toLowerCase();
           const isSensor = cat.includes('sensor') || cat.includes('temp') || cat.includes('humid') || cat.includes('environment');
           if (!isSensor) return;
-          // Find env value from zone data
-          const zoneVal = Object.values(S.zoneDataMap).find(d => d[cfg.key] != null);
-          if (zoneVal) {
-            points.push({ gx: dev.x / gridSize, gz: dev.y / gridSize, val: zoneVal[cfg.key] });
+          const devId = dev.deviceId || '';
+          let val = null;
+
+          // Tier 1: Per-device source from env zones (freshest, per-sensor data)
+          if (devId) {
+            for (const ez of envZones) {
+              const src = ez.sensors?.[envMetricKey]?.sources?.[devId];
+              if (src && src.current != null) { val = Number(src.current); break; }
+            }
+          }
+
+          // Tier 2: Match device zone assignment to zoneDataMap
+          if (val == null && dev.snapshot?.zone != null) {
+            const devZone = String(dev.snapshot.zone);
+            const zEntry = S.zoneDataMap[devZone]
+              || S.zoneDataMap['zone-' + devZone]
+              || Object.values(S.zoneDataMap).find(d => d.name === devZone || d.name === 'Zone ' + devZone);
+            if (zEntry && zEntry[cfg.key] != null) val = zEntry[cfg.key];
+          }
+
+          // Tier 3: Fallback to any zone with data (original behavior)
+          if (val == null) {
+            const zoneVal = Object.values(S.zoneDataMap).find(d => d[cfg.key] != null);
+            if (zoneVal) val = zoneVal[cfg.key];
+          }
+
+          if (val != null) {
+            points.push({ gx: dev.x / gridSize, gz: dev.y / gridSize, val });
           }
         });
         // If we have zone-level data but no sensor positions, spread values across zones
@@ -1787,12 +1820,14 @@
 
     // ---- Auto-refresh ----------------------------------------
     function startAutoRefresh() {
+      S.lastEnvUpdate = Date.now();
       setInterval(function() {
         authFetch('/env?hours=24&t=' + Date.now(), { cache: 'no-store' }).then(function(res) {
           if (res.ok) return res.json();
         }).then(function(data) {
           if (data) {
             S.envData = data;
+            S.lastEnvUpdate = Date.now();
             buildZoneDataMap();
             applyOverlay(S.overlay);
             renderFarmStats();
@@ -1800,6 +1835,16 @@
           }
         }).catch(function(){});
       }, 120000);
+      // Staleness check every 60s
+      setInterval(function() {
+        var age = Date.now() - (S.lastEnvUpdate || Date.now());
+        if (age > 300000) { // >5 min since last successful env update
+          var bar = document.getElementById('statusBar');
+          var mins = Math.round(age / 60000);
+          bar.textContent = 'Data may be stale (' + mins + ' min since last update)';
+          bar.style.color = '#f59e0b';
+        }
+      }, 60000);
     }
 
     // ---- Bootstrap -------------------------------------------
@@ -1808,6 +1853,8 @@
       bindEvents();
       loadAllData();
       startAutoRefresh();
+      // Full data refresh every 10 min (rooms, groups, devices)
+      setInterval(function() { loadAllData(); }, 600000);
     });
 
   })();

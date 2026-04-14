@@ -226,7 +226,7 @@ const TRUST_TIERS = {
   // AUTO: Execute immediately, notify after
   auto: new Set(['dismiss_alert', 'get_ai_pricing_recommendations', 'save_user_memory', 'escalate_to_faye', 'reply_to_faye', 'get_faye_directives', 'read_skill_file', 'get_gwen_messages', 'reply_to_gwen', 'ask_gwen']),
   // QUICK-CONFIRM: Execute with brief undo window
-  quick_confirm: new Set(['mark_harvest_complete', 'update_farm_profile', 'update_group_crop', 'create_room', 'create_zone', 'update_certifications', 'complete_setup', 'update_crop_price', 'add_inventory_item', 'update_manual_inventory', 'record_harvest', 'update_room_specs', 'apply_crop_environment', 'recommend_farm_layout', 'update_crop_description', 'add_salad_mix_inventory', 'update_equipment', 'update_group']),
+  quick_confirm: new Set(['resolve_all_alerts', 'resolve_stale_alerts', 'mark_harvest_complete', 'update_farm_profile', 'update_group_crop', 'create_room', 'create_zone', 'update_certifications', 'complete_setup', 'update_crop_price', 'add_inventory_item', 'update_manual_inventory', 'record_harvest', 'update_room_specs', 'apply_crop_environment', 'recommend_farm_layout', 'update_crop_description', 'add_salad_mix_inventory', 'update_equipment', 'update_group']),
   // CONFIRM: Ask before executing (default for write tools)
   confirm: new Set([
     'create_planting_assignment', 'update_order_status',
@@ -422,6 +422,33 @@ const GPT_TOOLS = [
           reason: { type: 'string', description: 'Why the alert is being dismissed' }
         },
         required: ['alert_id']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'resolve_all_alerts',
+      description: 'Resolve (clear) ALL active system alerts at once. Use when the operator wants a clean slate or says to clear all alerts.',
+      parameters: {
+        type: 'object',
+        properties: {
+          reason: { type: 'string', description: 'Why the alerts are being resolved' }
+        }
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'resolve_stale_alerts',
+      description: 'Resolve alerts older than a specified number of hours (default 24). Use to clear outdated warnings without affecting recent ones.',
+      parameters: {
+        type: 'object',
+        properties: {
+          older_than_hours: { type: 'number', description: 'Resolve alerts older than this many hours (default: 24)' },
+          reason: { type: 'string', description: 'Why the stale alerts are being resolved' }
+        }
       }
     }
   },

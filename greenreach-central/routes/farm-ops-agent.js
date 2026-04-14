@@ -301,6 +301,19 @@ function syncSensorData() {
         }
       } catch { /* nutrient check non-fatal */ }
 
+
+      // Auto-resolve stale alerts older than 48 hours to prevent indefinite accumulation
+      const staleCutoff = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+      for (const a of alertList) {
+        if (a.resolved || a.dismissed) continue;
+        if ((a.created_at || a.timestamp || '') < staleCutoff) {
+          a.resolved = true;
+          a.resolved_at = new Date().toISOString();
+          a.resolve_reason = 'Auto-resolved: stale (>48h)';
+          alertsChanged = true;
+        }
+      }
+
       // Keep only last 200 alerts, trim old resolved ones
       if (alertList.length > 200) {
         const active = alertList.filter(a => !a.resolved && !a.dismissed);
@@ -1024,6 +1037,48 @@ export const TOOL_CATALOG = {
       alert.dismiss_reason = previousState.dismiss_reason || undefined;
       writeJSON('system-alerts.json', alerts);
       return { ok: true, alert_id, undone: true };
+    }
+  },
+  'resolve_all_alerts': {
+    description: 'Resolve (clear) ALL active alerts at once. Use when the operator wants a clean slate.',
+    category: 'write',
+    required: [],
+    optional: ['reason'],
+    handler: async ({ reason }) => {
+      let alerts = readJSON('system-alerts.json', []);
+      alerts = Array.isArray(alerts) ? alerts : (alerts.alerts || []);
+      const active = alerts.filter(a => !a.resolved && !a.dismissed);
+      if (active.length === 0) return { ok: true, resolved_count: 0, message: 'No active alerts to resolve' };
+      const now = new Date().toISOString();
+      for (const a of active) {
+        a.resolved = true;
+        a.resolved_at = now;
+        a.resolve_reason = reason || 'Bulk-resolved by operator';
+      }
+      writeJSON('system-alerts.json', alerts);
+      return { ok: true, resolved_count: active.length, message: `${active.length} alert(s) resolved` };
+    }
+  },
+  'resolve_stale_alerts': {
+    description: 'Resolve alerts older than a given number of hours. Defaults to 24 hours. Good for clearing outdated warnings.',
+    category: 'write',
+    required: [],
+    optional: ['older_than_hours', 'reason'],
+    handler: async ({ older_than_hours, reason }) => {
+      const maxAge = (older_than_hours && Number.isFinite(Number(older_than_hours))) ? Number(older_than_hours) : 24;
+      let alerts = readJSON('system-alerts.json', []);
+      alerts = Array.isArray(alerts) ? alerts : (alerts.alerts || []);
+      const cutoff = new Date(Date.now() - maxAge * 60 * 60 * 1000).toISOString();
+      const stale = alerts.filter(a => !a.resolved && !a.dismissed && (a.created_at || a.timestamp || '' ) < cutoff);
+      if (stale.length === 0) return { ok: true, resolved_count: 0, message: `No active alerts older than ${maxAge} hours` };
+      const now = new Date().toISOString();
+      for (const a of stale) {
+        a.resolved = true;
+        a.resolved_at = now;
+        a.resolve_reason = reason || `Auto-resolved: older than ${maxAge} hours`;
+      }
+      writeJSON('system-alerts.json', alerts);
+      return { ok: true, resolved_count: stale.length, max_age_hours: maxAge, message: `${stale.length} stale alert(s) resolved` };
     }
   },
   'get_device_status': {
