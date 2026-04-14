@@ -247,6 +247,23 @@
     ::-webkit-scrollbar { width: 5px; }
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: rgba(99,102,241,0.2); border-radius: 3px; }
+
+    /* -- Edit mode ------------------------------------------- */
+    #viewer-container.edit-mode canvas { cursor: crosshair; }
+    #viewer-container.edit-mode canvas.dragging { cursor: grabbing; }
+    .edit-indicator {
+      position: absolute;
+      top: 56px; left: 12px;
+      background: rgba(239,68,68,0.15);
+      border: 1px solid rgba(239,68,68,0.4);
+      border-radius: 8px;
+      padding: 0.35rem 0.7rem;
+      font-size: 0.72rem;
+      color: #fca5a5;
+      z-index: 60;
+      display: none;
+    }
+    .edit-indicator.visible { display: block; }
   </style>
 </head>
 <body>
@@ -270,6 +287,8 @@
       <button id="btnTop" title="Top-down view">Top</button>
       <button id="btnAngle" title="Angled view">3D</button>
       <button id="btnReset" title="Reset camera">Reset</button>
+      <div class="sep"></div>
+      <button id="btnEdit" title="Edit mode: drag sensors and equipment to reposition">Edit</button>
     </div>
   </div>
 
@@ -297,6 +316,7 @@
       <div id="detailContent"></div>
     </div>
     <div class="status-bar" id="statusBar">Ready</div>
+    <div class="edit-indicator" id="editIndicator">EDIT MODE -- Drag sensors and equipment to reposition</div>
     <button class="gwen-fab" id="gwenFab" title="Ask GWEN about this view">G<div class="gwen-tooltip">Ask GWEN to analyze zone data</div></button>
   </div>
 
@@ -340,6 +360,11 @@
       hoveredZone: null,
       selectedZone: null,
       wallsVisible: true,
+      editMode: false,
+      dragTarget: null,
+      dragPlane: new THREE.Plane(new THREE.Vector3(0, 1, 0), 0),
+      dragOffset: new THREE.Vector3(),
+      isDragging: false,
       // Persisted dimensions keyed by group/room id
       groupDimensions: {},   // groupId -> { length, width, height, lightOrientation }
       roomDimensions: {},    // roomId  -> { length, width, height }
@@ -371,6 +396,21 @@
         if (!dims.length && map.roomLength) dims.length = map.roomLength;
         if (!dims.width && map.roomWidth) dims.width = map.roomWidth;
       }
+      // Hydrate group dimensions from group objects (server-persisted fallback)
+      S.groups.forEach(function(g) {
+        var gId = g.id || g.group_id;
+        if (!gId) return;
+        if (!S.groupDimensions[gId] && (g.length || g.width || g.height)) {
+          S.groupDimensions[gId] = {};
+        }
+        var gd = S.groupDimensions[gId];
+        if (gd) {
+          if (!gd.length && g.length) gd.length = g.length;
+          if (!gd.width && g.width) gd.width = g.width;
+          if (!gd.height && g.height) gd.height = g.height;
+          if (!gd.lightOrientation && g.lightOrientation) gd.lightOrientation = g.lightOrientation;
+        }
+      });
     }
     function saveGroupDimensions() {
       try { localStorage.setItem('farm3d_groupDims', JSON.stringify(S.groupDimensions)); } catch (e) {}
@@ -917,7 +957,7 @@
             const sY = dev.z != null ? dev.z : 1.2;
             sMesh.position.set(dx, sY, dz);
             sMesh.castShadow = true;
-            sMesh.userData = { type: 'sensor', device: dev, room, _pulse: true, _pulseOffset: di * 0.7 };
+            sMesh.userData = { type: 'sensor', device: dev, room, roomId: room.id, scaleX, scaleZ, offsetX, _pulse: true, _pulseOffset: di * 0.7 };
             S.scene.add(sMesh);
             S.meshes.sensors.push(sMesh);
 
@@ -1046,6 +1086,14 @@
         if (fm.material.emissive) fm.material.emissive.setHex(0x000000);
         fm.material.emissiveIntensity = 0;
         fm.material.needsUpdate = true;
+      });
+      // Reset sensor meshes to default yellow
+      S.meshes.sensors.forEach(function(sm) {
+        if (sm.userData.type === 'sensor') {
+          sm.material.color.setHex(0xfbbf24);
+          sm.material.emissive.setHex(0xfbbf24);
+          sm.material.emissiveIntensity = 0.5;
+        }
       });
 
       const legend = document.getElementById('dataLegend');
@@ -1211,6 +1259,43 @@
         fm.material.needsUpdate = true;
       });
 
+
+      // Color sensor spheres based on per-device readings
+      var envMetricKeyS = { temp: 'tempC', humidity: 'rh', co2: 'co2', vpd: 'vpd' }[cfg.key] || cfg.key;
+      var envZonesS = S.envData?.zones || [];
+      S.meshes.sensors.forEach(function(sm) {
+        if (sm.userData.type !== 'sensor') return;
+        var dev = sm.userData.device;
+        var devId = dev.deviceId || '';
+        var val = null;
+        // Per-device source lookup
+        if (devId) {
+          for (var i = 0; i < envZonesS.length; i++) {
+            var src = envZonesS[i].sensors?.[envMetricKeyS]?.sources?.[devId];
+            if (src && src.current != null) { val = Number(src.current); break; }
+          }
+        }
+        // Fallback: device zone assignment
+        if (val == null && dev.snapshot?.zone != null) {
+          var devZone = String(dev.snapshot.zone);
+          var zEntry = S.zoneDataMap[devZone]
+            || S.zoneDataMap['zone-' + devZone]
+            || Object.values(S.zoneDataMap).find(function(d) { return d.name === devZone || d.name === 'Zone ' + devZone; });
+          if (zEntry && zEntry[cfg.key] != null) val = zEntry[cfg.key];
+        }
+        // Fallback: average of all zone data
+        if (val == null && allVals.length > 0) {
+          val = allVals.reduce(function(a, b) { return a + b; }, 0) / allVals.length;
+        }
+        if (val != null) {
+          var t2 = Math.max(0, Math.min(1, (val - cfg.min) / (cfg.max - cfg.min)));
+          var c2 = multiLerp(cfg.colors, t2);
+          sm.material.color.setHex(c2);
+          sm.material.emissive.setHex(c2);
+          sm.material.emissiveIntensity = 0.6;
+        }
+      });
+
       // Show legend
       legend.classList.add('visible');
       document.getElementById('legendTitle').textContent = cfg.label;
@@ -1368,6 +1453,125 @@
     function vpdClass(v) { return v >= 0.8 && v <= 1.4 ? 'good' : v < 0.4 || v > 1.8 ? 'danger' : 'warn'; }
     function co2Class(v) { return v >= 400 && v <= 1200 ? 'good' : v > 1500 ? 'danger' : 'warn'; }
 
+
+    // ---- Edit Mode: Drag-and-drop ----------------------------
+    function toggleEditMode() {
+      S.editMode = !S.editMode;
+      var btn = document.getElementById('btnEdit');
+      btn.classList.toggle('active', S.editMode);
+      var indicator = document.getElementById('editIndicator');
+      indicator.classList.toggle('visible', S.editMode);
+      var container = document.getElementById('viewer-container');
+      container.classList.toggle('edit-mode', S.editMode);
+      if (!S.editMode && S.dragTarget) {
+        S.dragTarget = null;
+        S.isDragging = false;
+        S.controls.enabled = true;
+      }
+    }
+
+    function onPointerDown(e) {
+      if (!S.editMode) return;
+      var container = document.getElementById('viewer-container');
+      var rect = container.getBoundingClientRect();
+      S.mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      S.mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      S.raycaster.setFromCamera(S.mouse, S.camera);
+      var draggable = []
+        .concat(S.meshes.sensors.filter(function(m) { return m.userData.type === 'sensor'; }))
+        .concat(S.meshes.equipment.filter(function(m) { return m.userData.type === 'equipment'; }))
+        .concat(S.meshes.trays.filter(function(m) { return m.userData.type === 'group'; }));
+      var hits = S.raycaster.intersectObjects(draggable);
+      if (hits.length > 0) {
+        S.dragTarget = hits[0].object;
+        S.controls.enabled = false;
+        S.dragPlane.set(new THREE.Vector3(0, 1, 0), -S.dragTarget.position.y);
+        var intersection = new THREE.Vector3();
+        S.raycaster.ray.intersectPlane(S.dragPlane, intersection);
+        S.dragOffset.copy(S.dragTarget.position).sub(intersection);
+        S.isDragging = false;
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    }
+
+    function onPointerMove(e) {
+      if (!S.dragTarget) {
+        onMouseMove(e);
+        return;
+      }
+      var container = document.getElementById('viewer-container');
+      var rect = container.getBoundingClientRect();
+      S.mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      S.mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      S.raycaster.setFromCamera(S.mouse, S.camera);
+      var intersection = new THREE.Vector3();
+      if (S.raycaster.ray.intersectPlane(S.dragPlane, intersection)) {
+        S.dragTarget.position.x = intersection.x + S.dragOffset.x;
+        S.dragTarget.position.z = intersection.z + S.dragOffset.z;
+        S.isDragging = true;
+        document.getElementById('farmCanvas').classList.add('dragging');
+        var ud = S.dragTarget.userData;
+        document.getElementById('statusBar').textContent = (ud.device?.snapshot?.name || ud.group?.name || 'Object') + ' -- (' + S.dragTarget.position.x.toFixed(1) + ', ' + S.dragTarget.position.z.toFixed(1) + ')';
+      }
+    }
+
+    function onPointerUp(e) {
+      if (!S.dragTarget) return;
+      S.controls.enabled = true;
+      document.getElementById('farmCanvas').classList.remove('dragging');
+      if (S.isDragging) {
+        saveDragPosition(S.dragTarget);
+      }
+      S.dragTarget = null;
+      S.isDragging = false;
+    }
+
+    function saveDragPosition(mesh) {
+      var ud = mesh.userData;
+      if (ud.type === 'sensor' || ud.type === 'equipment') {
+        var dev = ud.device;
+        var scX = ud.scaleX || 1;
+        var scZ = ud.scaleZ || 1;
+        var offX = ud.offsetX || 0;
+        dev.x = Math.round((mesh.position.x - offX) / scX);
+        dev.y = Math.round(mesh.position.z / scZ);
+        if (dev.z != null || mesh.position.y > 0) dev.z = parseFloat(mesh.position.y.toFixed(1));
+        // Auto-detect zone from new grid position
+        var roomId = ud.roomId || (ud.room ? ud.room.id : '');
+        if (roomId && S.roomMaps[roomId]) {
+          var map = S.roomMaps[roomId];
+          var detectedZone = (map.zones || []).find(function(z) {
+            return dev.x >= (z.x1 || 0) && dev.x <= (z.x2 || 999) && dev.y >= (z.y1 || 0) && dev.y <= (z.y2 || 999);
+          });
+          if (detectedZone && dev.snapshot) {
+            dev.snapshot.zone = detectedZone.zone || detectedZone.name;
+          }
+          authFetch('/data/room-map-' + roomId + '.json', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(map)
+          }).then(function(resp) {
+            if (resp.ok) {
+              document.getElementById('statusBar').textContent = (dev.snapshot?.name || 'Device') + ' position saved';
+              document.getElementById('statusBar').style.color = '#4ade80';
+              setTimeout(function() { document.getElementById('statusBar').style.color = ''; }, 2000);
+            }
+          }).catch(function(err) {
+            console.error('[3D] Position save error:', err);
+            document.getElementById('statusBar').textContent = 'Position save failed';
+            document.getElementById('statusBar').style.color = '#f87171';
+            setTimeout(function() { document.getElementById('statusBar').style.color = ''; }, 2000);
+          });
+        }
+      } else if (ud.type === 'group') {
+        // For groups, show feedback. Full rebuild snaps to zone grid.
+        document.getElementById('statusBar').textContent = 'Group repositioned';
+        document.getElementById('statusBar').style.color = '#4ade80';
+        setTimeout(function() { document.getElementById('statusBar').style.color = ''; }, 2000);
+      }
+    }
+
     // ---- Click -> detail panel with editable dimensions ------
     function onClick(e) {
       const container = document.getElementById('viewer-container');
@@ -1487,6 +1691,7 @@
           const h = parseFloat(document.getElementById('dimH').value) || d.height;
           const ori = document.getElementById('lightOri').value;
           S.groupDimensions[gId] = { length: l, width: w, height: h, lightOrientation: ori };
+          g.length = l; g.width = w; g.height = h; g.lightOrientation = ori;
           saveGroupDimensions();
           try {
             const resp = await authFetch('/data/groups.json', {
@@ -1522,6 +1727,7 @@
               sg.lastModified = new Date().toISOString();
               const sgId = sg.id || sg.group_id;
               S.groupDimensions[sgId] = { length: l, width: w, height: h, lightOrientation: ori };
+              sg.length = l; sg.width = w; sg.height = h; sg.lightOrientation = ori;
               updated++;
             }
             saveGroupDimensions();
@@ -1910,8 +2116,12 @@
       });
 
       var canvas = document.getElementById('farmCanvas');
-      canvas.addEventListener('mousemove', onMouseMove);
-      canvas.addEventListener('click', onClick);
+      canvas.style.touchAction = 'none';
+      canvas.addEventListener('pointerdown', onPointerDown);
+      canvas.addEventListener('pointermove', onPointerMove);
+      canvas.addEventListener('pointerup', onPointerUp);
+      canvas.addEventListener('click', function(e) { if (!S.isDragging && !S.editMode) onClick(e); else if (S.editMode && !S.isDragging) onClick(e); });
+      document.getElementById('btnEdit').addEventListener('click', toggleEditMode);
       document.getElementById('detailClose').addEventListener('click', function() { document.getElementById('detailPanel').classList.remove('visible'); });
       document.getElementById('gwenFab').addEventListener('click', openGwenWithContext);
     }
