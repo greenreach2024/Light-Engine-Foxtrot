@@ -1564,7 +1564,8 @@
           content.innerHTML = html;
 
           // Save-one handler (name/cat/position for this device only)
-          document.getElementById('saveEqOne').addEventListener('click', () => {
+          document.getElementById('saveEqOne').addEventListener('click', async () => {
+            const btn = document.getElementById('saveEqOne');
             const newName = document.getElementById('eqName').value.trim() || devName;
             const newCat = document.getElementById('eqCat').value.trim() || devCat;
             const newX = parseInt(document.getElementById('eqPosX').value, 10);
@@ -1576,14 +1577,29 @@
             if (!isNaN(newX)) d.x = newX;
             if (!isNaN(newY)) d.y = newY;
             if (!isNaN(newZ)) d.z = newZ;
+            console.log('[3D] Save-one:', newName, newCat, 'room:', rId);
             if (rId && S.roomMaps[rId]) {
-              authFetch('/data/room-map-' + rId + '.json', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(S.roomMaps[rId])
-              }).catch(() => {});
+              try {
+                const resp = await authFetch('/data/room-map-' + rId + '.json', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(S.roomMaps[rId])
+                });
+                const result = await resp.json().catch(() => ({}));
+                if (!resp.ok || !result.success) {
+                  btn.textContent = 'Save Failed'; btn.style.background = '#dc2626';
+                  console.error('[3D] Save-one failed:', resp.status, result);
+                  setTimeout(() => { btn.textContent = identicalCount > 1 ? 'Update This One Only' : 'Save Equipment'; btn.style.background = ''; }, 3000);
+                  return;
+                }
+                console.log('[3D] Save-one OK:', result);
+              } catch (err) {
+                btn.textContent = 'Save Failed'; btn.style.background = '#dc2626';
+                console.error('[3D] Save-one error:', err);
+                setTimeout(() => { btn.textContent = identicalCount > 1 ? 'Update This One Only' : 'Save Equipment'; btn.style.background = ''; }, 3000);
+                return;
+              }
             }
-            const btn = document.getElementById('saveEqOne');
             btn.textContent = 'Saved'; btn.classList.add('saved');
             setTimeout(() => { btn.textContent = identicalCount > 1 ? 'Update This One Only' : 'Save Equipment'; btn.classList.remove('saved'); }, 1500);
             buildScene();
@@ -1592,9 +1608,10 @@
           // Bulk update handler (name + category across all identical devices)
           const bulkBtn = document.getElementById('saveEqAll');
           if (bulkBtn) {
-            bulkBtn.addEventListener('click', () => {
+            bulkBtn.addEventListener('click', async () => {
               const newName = document.getElementById('eqName').value.trim() || devName;
               const newCat = document.getElementById('eqCat').value.trim() || devCat;
+              console.log('[3D] Bulk update: renaming', devCat + '/' + devName, '->', newCat + '/' + newName);
               let updated = 0;
               const roomsToSave = new Set();
               for (const [rmId, map] of Object.entries(S.roomMaps)) {
@@ -1611,19 +1628,39 @@
                   }
                 }
               }
+              console.log('[3D] Bulk matched', updated, 'devices in', roomsToSave.size, 'room(s)');
+              let saveErrors = 0;
               for (const rmId of roomsToSave) {
-                authFetch('/data/room-map-' + rmId + '.json', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify(S.roomMaps[rmId])
-                }).catch(() => {});
+                try {
+                  const resp = await authFetch('/data/room-map-' + rmId + '.json', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(S.roomMaps[rmId])
+                  });
+                  const result = await resp.json().catch(() => ({}));
+                  if (!resp.ok || !result.success) {
+                    console.error('[3D] Bulk save failed for room', rmId, ':', resp.status, result);
+                    saveErrors++;
+                  } else {
+                    console.log('[3D] Bulk save OK for room', rmId, ':', result);
+                  }
+                } catch (err) {
+                  console.error('[3D] Bulk save error for room', rmId, ':', err);
+                  saveErrors++;
+                }
               }
-              bulkBtn.textContent = 'Updated ' + updated + ' unit' + (updated !== 1 ? 's' : '');
-              bulkBtn.classList.add('saved');
-              setTimeout(() => {
-                bulkBtn.textContent = 'Update All ' + identicalCount + ' ' + newName;
-                bulkBtn.classList.remove('saved');
-              }, 1500);
+              if (saveErrors > 0) {
+                bulkBtn.textContent = 'Save Failed (' + saveErrors + ' error' + (saveErrors > 1 ? 's' : '') + ')';
+                bulkBtn.style.background = '#dc2626';
+                setTimeout(() => { bulkBtn.textContent = 'Update All ' + identicalCount + ' ' + devName; bulkBtn.style.background = ''; }, 3000);
+              } else {
+                bulkBtn.textContent = 'Updated ' + updated + ' unit' + (updated !== 1 ? 's' : '');
+                bulkBtn.classList.add('saved');
+                setTimeout(() => {
+                  bulkBtn.textContent = 'Update All ' + identicalCount + ' ' + newName;
+                  bulkBtn.classList.remove('saved');
+                }, 1500);
+              }
               buildScene();
             });
           }
