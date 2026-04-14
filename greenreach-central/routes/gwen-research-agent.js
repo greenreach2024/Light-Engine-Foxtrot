@@ -6330,4 +6330,32 @@ router.get('/download/html/:fileId', (req, res) => {
   res.sendFile(filePath);
 });
 
+/**
+ * Direct query interface for inter-agent communication.
+ * Called by E.V.I.E. to ask G.W.E.N. a research question and get a synchronous response.
+ */
+export async function askGwenDirect(message, farmId, userId) {
+  if (!isGeminiConfigured()) {
+    return { ok: false, error: 'G.W.E.N. AI provider not configured.' };
+  }
+  try {
+    const memoryContext = await loadPersistentMemories(farmId);
+    const ctx = {
+      farmId,
+      userId,
+      conversationId: `evie-gwen-${Date.now()}`,
+      userRole: 'agent',
+      authMethod: 'internal',
+      actorEmail: null,
+      memoryContext,
+    };
+    const history = [{ role: 'user', content: `[Inter-agent query from E.V.I.E.] ${message}` }];
+    const result = await chatWithGemini(history, ctx);
+    return { ok: true, reply: result.reply, model: result.model };
+  } catch (err) {
+    console.error('[GWEN] Direct query from E.V.I.E. error:', err.message);
+    return { ok: false, error: 'G.W.E.N. is temporarily unavailable.' };
+  }
+}
+
 export default router;

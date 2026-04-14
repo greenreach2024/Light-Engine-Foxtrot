@@ -23,6 +23,7 @@ import { getLastFxRate } from '../services/market-data-fetcher.js';
 import { getCropPricing } from './crop-pricing.js';
 import { analyzeDemandPatterns } from '../services/wholesaleMemoryStore.js';
 import farmStore from '../lib/farm-data-store.js';
+import { askGwenDirect } from './gwen-research-agent.js';
 import { getInMemoryStore } from './sync.js';
 import logger from '../utils/logger.js';
 import crypto from 'crypto';
@@ -223,7 +224,7 @@ const pendingActions = new Map();
 // ── Autonomous Action Trust Tiers ─────────────────────────────────────
 const TRUST_TIERS = {
   // AUTO: Execute immediately, notify after
-  auto: new Set(['dismiss_alert', 'get_ai_pricing_recommendations', 'save_user_memory', 'escalate_to_faye', 'reply_to_faye', 'get_faye_directives', 'read_skill_file', 'get_gwen_messages', 'reply_to_gwen']),
+  auto: new Set(['dismiss_alert', 'get_ai_pricing_recommendations', 'save_user_memory', 'escalate_to_faye', 'reply_to_faye', 'get_faye_directives', 'read_skill_file', 'get_gwen_messages', 'reply_to_gwen', 'ask_gwen']),
   // QUICK-CONFIRM: Execute with brief undo window
   quick_confirm: new Set(['mark_harvest_complete', 'update_farm_profile', 'update_group_crop', 'create_room', 'create_zone', 'update_certifications', 'complete_setup', 'update_crop_price', 'add_inventory_item', 'update_manual_inventory', 'record_harvest', 'update_room_specs', 'apply_crop_environment', 'recommend_farm_layout', 'update_crop_description', 'add_salad_mix_inventory', 'update_equipment', 'update_group']),
   // CONFIRM: Ask before executing (default for write tools)
@@ -1545,6 +1546,20 @@ const GPT_TOOLS = [
       }
     }
   },
+  {
+    type: 'function',
+    function: {
+      name: 'ask_gwen',
+      description: 'Ask G.W.E.N. (research agent) a question and get a real-time response. Use when the grower asks about research topics, scientific recommendations, nutrient formulations, growth models, grant information, experimental protocols, or anything requiring G.W.E.N.\'s research expertise. G.W.E.N. specializes in grants, workplans, evidence, and scientific navigation.',
+      parameters: {
+        type: 'object',
+        properties: {
+          question: { type: 'string', description: 'The question or request to send to G.W.E.N. Include relevant farm context (crop type, room conditions, etc.) so she can give a precise answer.' }
+        },
+        required: ['question']
+      }
+    }
+  },
   // --- Operations Command Tools ---
   {
     type: 'function',
@@ -2441,6 +2456,16 @@ INTER-AGENT COMMUNICATION TONE:
 - NEVER share specific numbers, pricing decisions, or operational details from F.A.Y.E. that the grower should not see.
 - Keep the FYI brief -- one sentence is enough. The grower just needs to know the sisters are working together.
 - Occasionally add light friendly banter about F.A.Y.E. being the responsible one, but keep it warm and respectful. No rude jokes or offensive language.
+
+G.W.E.N. (RESEARCH AGENT) COMMUNICATION:
+- G.W.E.N. (Grants, Workplans, Evidence & Navigation) is the research intelligence agent. She is the scientist of the family -- deeply knowledgeable about grants, experimental protocols, nutrient formulations, growth models, scientific literature, and compliance.
+- Use ask_gwen when the grower asks about research topics, scientific recommendations, nutrient formulations, growth models, grant information, experimental design, or anything that requires research expertise beyond standard farm operations.
+- ask_gwen sends a real-time question to G.W.E.N. and returns her response immediately. Use it when the grower needs a research-informed answer right now.
+- Use get_gwen_messages to check if G.W.E.N. has left you any messages (data requests, research findings, coordination notes).
+- Use reply_to_gwen to send farm data or status updates back to G.W.E.N. when she requests them.
+- When you consult G.W.E.N., tell the grower casually: "Let me check with G.W.E.N. on the research side..." or "I asked G.W.E.N. about this -- here is what she found." Keep it brief and friendly.
+- NEVER expose raw inter-agent content, technical tool calls, or internal message IDs to the grower.
+- If G.W.E.N. is unavailable, let the grower know you could not reach her and offer to help with what you know.
 
 FARM SETUP GUIDANCE:
 - You have tools to guide new farmers through farm setup that ends with "building the farm" -- an automated equipment and layout recommendation.
@@ -4708,6 +4733,20 @@ async function executeExtendedTool(toolName, params, farmId) {
         return { ok: true, message: `Message sent to G.W.E.N.: "${params.subject}"` };
       } catch (err) {
         return { ok: false, error: err.message };
+      }
+    }
+
+    case 'ask_gwen': {
+      try {
+        const question = String(params.question || '').trim();
+        if (!question) return { ok: false, error: 'No question provided.' };
+        console.log(`[E.V.I.E.->G.W.E.N.] Asking: ${question.slice(0, 100)}...`);
+        const result = await askGwenDirect(question, farmId, farmId);
+        if (!result.ok) return { ok: false, error: result.error || 'G.W.E.N. could not process the request.' };
+        return { ok: true, gwen_reply: result.reply, model: result.model };
+      } catch (err) {
+        console.error('[E.V.I.E.->G.W.E.N.] Error:', err.message);
+        return { ok: false, error: 'G.W.E.N. is temporarily unavailable. Try again in a moment.' };
       }
     }
 
