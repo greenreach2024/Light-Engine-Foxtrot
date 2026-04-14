@@ -909,7 +909,8 @@
               roughness: 0.3, metalness: 0.3,
             });
             const sMesh = new THREE.Mesh(sGeo, sMat);
-            sMesh.position.set(dx, 1.2, dz);
+            const sY = dev.z != null ? dev.z : 1.2;
+            sMesh.position.set(dx, sY, dz);
             sMesh.castShadow = true;
             sMesh.userData = { type: 'sensor', device: dev, room, _pulse: true, _pulseOffset: di * 0.7 };
             S.scene.add(sMesh);
@@ -919,7 +920,7 @@
             const ringMat = new THREE.MeshBasicMaterial({ color: 0xfbbf24, transparent: true, opacity: 0.15, side: THREE.DoubleSide });
             const ring = new THREE.Mesh(ringGeo, ringMat);
             ring.rotation.x = -Math.PI / 2;
-            ring.position.set(dx, 0.18, dz);
+            ring.position.set(dx, 0.02, dz);
             S.scene.add(ring);
             S.meshes.sensors.push(ring);
           } else {
@@ -937,7 +938,8 @@
             }
             const eMat = new THREE.MeshStandardMaterial({ color: eColor, roughness: 0.6, metalness: 0.2 });
             const eMesh = new THREE.Mesh(eGeo, eMat);
-            const eY = isFan ? wallH - 0.5 : isZipgrow ? 1.0 : 0.4;
+            const defaultY = isFan ? wallH - 0.5 : isZipgrow ? 1.0 : 0.4;
+            const eY = dev.z != null ? dev.z : defaultY;
             eMesh.position.set(dx, eY, dz);
             eMesh.castShadow = true;
             eMesh.userData = { type: 'equipment', device: dev, room, roomId: room.id, scaleX, scaleZ, offsetX };
@@ -1534,7 +1536,7 @@
 
           html = '<h3>' + devName + '</h3>';
           html += '<div class="dp-label">Category</div><div class="dp-value">' + (devCat || '--') + '</div>';
-          html += '<div class="dp-label">Position</div><div class="dp-value">Grid (' + (d?.x ?? '--') + ', ' + (d?.y ?? '--') + ')</div>';
+          html += '<div class="dp-label">Position</div><div class="dp-value">Grid (' + (d?.x ?? '--') + ', ' + (d?.y ?? '--') + ', z=' + (d?.z != null ? d.z.toFixed(1) : 'auto') + ')</div>';
           if (identicalCount > 1) {
             html += '<div class="dp-label">Identical Units</div><div class="dp-value" style="color:#818cf8">' + identicalCount + ' x ' + devName + '</div>';
           }
@@ -1549,6 +1551,8 @@
           html += '<div class="dp-section"><div class="dp-label">Move Equipment</div>';
           html += '<div class="dp-input-row"><label>X</label><input type="number" step="1" min="0" id="eqPosX" value="' + (d?.x ?? 0) + '" style="flex:1">';
           html += '<label>Y</label><input type="number" step="1" min="0" id="eqPosY" value="' + (d?.y ?? 0) + '" style="flex:1"></div>';
+          const defaultZ = cat.includes('fan') ? (wallH - 0.5).toFixed(1) : cat.includes('zip') || cat.includes('tower') ? '1.0' : cat.includes('sensor') ? '1.2' : '0.4';
+          html += '<div class="dp-input-row"><label>Z (height m)</label><input type="number" step="0.1" min="0" id="eqPosZ" value="' + (d?.z != null ? d.z : defaultZ) + '" style="flex:1"></div>';
           html += '</div>';
 
           if (identicalCount > 1) {
@@ -1563,11 +1567,13 @@
             const newCat = document.getElementById('eqCat').value.trim() || devCat;
             const newX = parseInt(document.getElementById('eqPosX').value, 10);
             const newY = parseInt(document.getElementById('eqPosY').value, 10);
+            const newZ = parseFloat(document.getElementById('eqPosZ').value);
             if (!d.snapshot) d.snapshot = {};
             d.snapshot.name = newName;
             d.snapshot.category = newCat;
             if (!isNaN(newX)) d.x = newX;
             if (!isNaN(newY)) d.y = newY;
+            if (!isNaN(newZ)) d.z = newZ;
             if (rId && S.roomMaps[rId]) {
               authFetch('/data/room-map-' + rId + '.json', {
                 method: 'POST',

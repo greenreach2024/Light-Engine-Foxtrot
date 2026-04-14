@@ -6350,11 +6350,19 @@ router.get('/state', async (req, res) => {
               name: z.name,
               x: z.x, y: z.y, w: z.w, h: z.h,
               equipment: (z.equipment || []).map(function (eq) {
-                return { name: eq.name, type: eq.type || eq.category, x: eq.x, y: eq.y };
+                return { name: eq.name, type: eq.type || eq.category, x: eq.x, y: eq.y, z: eq.z };
               })
             };
           }),
-          placed_devices: mapDevices.length
+          placed_devices: mapDevices.length,
+          devices: mapDevices.map(function (dev) {
+            return {
+              id: dev.deviceId,
+              name: dev.snapshot && dev.snapshot.name || dev.deviceId,
+              category: dev.snapshot && dev.snapshot.category || dev.snapshot && dev.snapshot.type || 'unknown',
+              x: dev.x, y: dev.y, z: dev.z != null ? dev.z : null
+            };
+          })
         };
         spatial.rooms.push(roomSpatial);
         spatial.total_zones += mapZones.length;
