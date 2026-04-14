@@ -226,7 +226,7 @@ const TRUST_TIERS = {
   // AUTO: Execute immediately, notify after
   auto: new Set(['dismiss_alert', 'get_ai_pricing_recommendations', 'save_user_memory', 'escalate_to_faye', 'reply_to_faye', 'get_faye_directives', 'read_skill_file', 'get_gwen_messages', 'reply_to_gwen', 'ask_gwen']),
   // QUICK-CONFIRM: Execute with brief undo window
-  quick_confirm: new Set(['resolve_all_alerts', 'resolve_stale_alerts', 'mark_harvest_complete', 'update_farm_profile', 'update_group_crop', 'create_room', 'create_zone', 'update_certifications', 'complete_setup', 'update_crop_price', 'add_inventory_item', 'update_manual_inventory', 'record_harvest', 'update_room_specs', 'apply_crop_environment', 'recommend_farm_layout', 'update_crop_description', 'add_salad_mix_inventory', 'update_equipment', 'update_group']),
+  quick_confirm: new Set(['resolve_all_alerts', 'resolve_stale_alerts', 'mark_harvest_complete', 'update_farm_profile', 'update_group_crop', 'create_room', 'create_zone', 'update_certifications', 'complete_setup', 'update_crop_price', 'add_inventory_item', 'update_manual_inventory', 'record_harvest', 'update_room_specs', 'apply_crop_environment', 'recommend_farm_layout', 'update_crop_description', 'add_salad_mix_inventory', 'update_equipment', 'update_group', 'optimize_layout']),
   // CONFIRM: Ask before executing (default for write tools)
   confirm: new Set([
     'create_planting_assignment', 'update_order_status',
@@ -628,6 +628,26 @@ const GPT_TOOLS = [
           match_name: { type: 'string', description: 'For bulk: match groups whose name contains this string (e.g. "ZipGrow Standard")' },
           bulk: { type: 'boolean', description: 'Set to true to update ALL matching groups at once' }
         }
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+            name: 'optimize_layout',
+      description: 'Spatially arrange equipment and/or groups (ZipGrow towers, fans, etc.) into a grid layout within room zones. Accepts natural layout instructions parsed into columns, walkway width, and spacing. Example: "3 wide per zone with 2m walkway" becomes columns=3, walkway_m=2. WRITE operation.',
+      parameters: {
+        type: 'object',
+        properties: {
+          room_id: { type: 'string', description: 'Room ID to arrange layout in (required)' },
+          match_name: { type: 'string', description: 'Match groups/equipment whose name contains this string (e.g. "ZipGrow")' },
+          match_category: { type: 'string', description: 'Match equipment by category (e.g. "zipgrow", "fans")' },
+          target: { type: 'string', enum: ['groups', 'equipment', 'both'], description: 'What to arrange: "groups" (default), "equipment", or "both"' },
+          columns: { type: 'number', description: 'Number of columns per side if walkway, or total columns if no walkway (default 3)' },
+          walkway_m: { type: 'number', description: 'Width of central walkway in meters (0 = no walkway)' },
+          spacing_m: { type: 'number', description: 'Spacing between units in meters (default 0.8)' }
+        },
+        required: ['room_id']
       }
     }
   },
@@ -2534,6 +2554,7 @@ FARM BUILDING WORKFLOW:
 
 EQUIPMENT MANAGEMENT:
 - Equipment in the room map (fans, ZipGrow towers, dehumidifiers, lights, etc.) can be renamed, recategorized, and repositioned using update_equipment.
+- Use optimize_layout to spatially arrange groups/equipment into grid patterns within zones. Accepts columns, walkway width, and spacing. Example: user says "arrange ZipGrow 3 wide with a 2m walkway" -> optimize_layout with room_id, match_name="ZipGrow", columns=3, walkway_m=2. Works with general instructions -- no need to specify individual equipment IDs.
 - Grow groups (ZipGrow units, racks) can be updated using update_group -- rename, change tray count, assign crops, or update status.
 - For bulk equipment operations (e.g., "rename all fans to ZipGrow Tower"), use update_equipment with bulk=true, match_category, and/or match_name. Name matching is partial (contains), so match_name="ZipGrow" matches "ZipGrow Standard 30".
 - For bulk group operations (e.g., "set all ZipGrow units to active"), use update_group with bulk=true and match_name. Example: bulk=true, match_name="ZipGrow Standard", status="active" updates all 78 towers at once.

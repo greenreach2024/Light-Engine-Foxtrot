@@ -594,7 +594,24 @@
     // ---- Zone data map (merge env + groups) ------------------
     function buildZoneDataMap() {
       S.zoneDataMap = {};
-      const envZones = S.envData?.zones || [];
+      // Normalize env API: /env returns { ok, env: { scopes: {...} } }
+      // Convert zone-prefixed scopes to the zones array format
+      let envZones = S.envData?.zones || [];
+      if (envZones.length === 0 && S.envData?.env?.scopes) {
+        const scopes = S.envData.env.scopes;
+        envZones = Object.entries(scopes)
+          .filter(function(e) { return e[0].startsWith('zone'); })
+          .map(function(e) {
+            return {
+              id: e[0],
+              name: e[1].name || e[0].replace(/-/g, ' ').replace(/\b\w/g, function(c) { return c.toUpperCase(); }),
+              zone_id: e[0],
+              sensors: e[1].sensors || {},
+              updatedAt: e[1].updatedAt
+            };
+          });
+        if (!S.envData.zones) S.envData.zones = envZones;
+      }
 
       envZones.forEach(z => {
         const zId = String(z.id ?? z.zone_id ?? z.name ?? '');
@@ -641,7 +658,10 @@
       }
       for (const k of keys) {
         if (sensors[k] != null) {
-          if (typeof sensors[k] === 'object' && sensors[k].current != null) return Number(sensors[k].current);
+          if (typeof sensors[k] === 'object') {
+            if (sensors[k].current != null) return Number(sensors[k].current);
+            if (sensors[k].value != null) return Number(sensors[k].value);
+          }
           if (typeof sensors[k] === 'number') return sensors[k];
         }
       }
@@ -1198,7 +1218,7 @@
           if (devId) {
             for (const ez of envZones) {
               const src = ez.sensors?.[envMetricKey]?.sources?.[devId];
-              if (src && src.current != null) { val = Number(src.current); break; }
+              if (src && (src.current != null || src.value != null)) { val = Number(src.current ?? src.value); break; }
             }
           }
 
@@ -1316,7 +1336,7 @@
         if (devId) {
           for (var i = 0; i < envZonesS.length; i++) {
             var src = envZonesS[i].sensors?.[envMetricKeyS]?.sources?.[devId];
-            if (src && src.current != null) { val = Number(src.current); break; }
+            if (src && (src.current != null || src.value != null)) { val = Number(src.current ?? src.value); break; }
           }
         }
         // Fallback: device zone assignment
@@ -1522,10 +1542,10 @@
     function checkFloorCollision(mesh, newX, newZ) {
       var ud = mesh.userData;
       var roomId = ud.roomId || (ud.room ? ud.room.id : '');
-      // Get bounding half-sizes of the dragged mesh
+      // Get bounding half-sizes of the dragged mesh (min 0.3m)
       var bb = new THREE.Box3().setFromObject(mesh);
-      var hx = (bb.max.x - bb.min.x) / 2;
-      var hz = (bb.max.z - bb.min.z) / 2;
+      var hx = Math.max(0.3, (bb.max.x - bb.min.x) / 2);
+      var hz = Math.max(0.3, (bb.max.z - bb.min.z) / 2);
 
       // Check against all other floor-level equipment and group trays in the same room
       var floorMeshes = S.meshes.equipment.filter(function(m) {
@@ -1546,8 +1566,8 @@
       for (var i = 0; i < floorMeshes.length; i++) {
         var other = floorMeshes[i];
         var ob = new THREE.Box3().setFromObject(other);
-        var ohx = (ob.max.x - ob.min.x) / 2;
-        var ohz = (ob.max.z - ob.min.z) / 2;
+        var ohx = Math.max(0.3, (ob.max.x - ob.min.x) / 2);
+        var ohz = Math.max(0.3, (ob.max.z - ob.min.z) / 2);
         var ocx = (ob.max.x + ob.min.x) / 2;
         var ocz = (ob.max.z + ob.min.z) / 2;
         // AABB overlap test with small padding
@@ -1624,27 +1644,39 @@
           newX = Math.max(rOffX + margin, Math.min(rOffX + rW - margin, newX));
           newZ = Math.max(margin, Math.min(rD - margin, newZ));
         }
-        // Collision check for floor-level equipment/groups (skip ceiling fans)
+        // Collision check with sliding: try X+Z, then X only, then Z only
         var isFloor = S.dragTarget.position.y < 1.5;
-        if (isFloor && checkFloorCollision(S.dragTarget, newX, newZ)) {
-          // Blocked -- show red status but don't move
+        var collisionBlocked = false;
+        if (isFloor) {
+          var curX = S.dragTarget.position.x;
+          var curZ = S.dragTarget.position.z;
+          if (checkFloorCollision(S.dragTarget, newX, newZ)) {
+            if (!checkFloorCollision(S.dragTarget, newX, curZ)) {
+              newZ = curZ; // slide along X axis
+            } else if (!checkFloorCollision(S.dragTarget, curX, newZ)) {
+              newX = curX; // slide along Z axis
+            } else {
+              collisionBlocked = true;
+            }
+          }
+        }
+        if (collisionBlocked) {
           document.getElementById('statusBar').textContent = 'Blocked -- overlaps another object';
           document.getElementById('statusBar').style.color = '#f87171';
         } else {
           S.dragTarget.position.x = newX;
           S.dragTarget.position.z = newZ;
-          // Move fan arrow pivot to match fan position
           var tud = S.dragTarget.userData;
           if (tud._arrowPivot) {
             tud._arrowPivot.position.x = newX;
             tud._arrowPivot.position.z = newZ;
           }
           document.getElementById('statusBar').style.color = '';
+          var dName = (S.dragTarget.userData.device?.snapshot?.name || S.dragTarget.userData.group?.name || 'Object');
+          document.getElementById('statusBar').textContent = dName + ' -- (' + newX.toFixed(1) + ', ' + newZ.toFixed(1) + ')';
         }
         S.isDragging = true;
         document.getElementById('farmCanvas').classList.add('dragging');
-        var ud = S.dragTarget.userData;
-        document.getElementById('statusBar').textContent = (ud.device?.snapshot?.name || ud.group?.name || 'Object') + ' -- (' + S.dragTarget.position.x.toFixed(1) + ', ' + S.dragTarget.position.z.toFixed(1) + ')';
       }
     }
 
@@ -1912,10 +1944,57 @@
             html += '</div>';
           }
         }
+        // Editable zone placement and dimensions
+        const rId = ud.room?.id || '';
+        html += '<div class="dp-section"><div class="dp-label">Zone Name</div>';
+        html += '<div class="dp-input-row"><input type="text" id="zoneName" value="' + (z.name || z.zone || '') + '" style="flex:1"></div></div>';
+        html += '<div class="dp-section"><div class="dp-label">Zone Bounds (grid units)</div>';
+        html += '<div class="dp-input-row"><label>X1</label><input type="number" step="1" min="0" id="zoneX1" value="' + (z.x1 ?? 0) + '" style="width:55px">';
+        html += '<label>Y1</label><input type="number" step="1" min="0" id="zoneY1" value="' + (z.y1 ?? 0) + '" style="width:55px"></div>';
+        html += '<div class="dp-input-row"><label>X2</label><input type="number" step="1" min="0" id="zoneX2" value="' + (z.x2 ?? 0) + '" style="width:55px">';
+        html += '<label>Y2</label><input type="number" step="1" min="0" id="zoneY2" value="' + (z.y2 ?? 0) + '" style="width:55px"></div>';
+        html += '</div>';
+        html += '<button class="dp-save-btn" id="saveZone">Save Zone</button>';
+
         content.innerHTML = html;
         requestAnimationFrame(() => {
           if (data?.tempHistory.length > 2) drawSparkline('sparkTemp', data.tempHistory, '#818cf8');
           if (data?.humidityHistory.length > 2) drawSparkline('sparkHum', data.humidityHistory, '#06b6d4');
+        });
+
+        // Zone save handler
+        document.getElementById('saveZone').addEventListener('click', async function() {
+          var btn = document.getElementById('saveZone');
+          var newName = document.getElementById('zoneName').value.trim();
+          var newX1 = parseInt(document.getElementById('zoneX1').value, 10);
+          var newY1 = parseInt(document.getElementById('zoneY1').value, 10);
+          var newX2 = parseInt(document.getElementById('zoneX2').value, 10);
+          var newY2 = parseInt(document.getElementById('zoneY2').value, 10);
+          if (newName) { z.name = newName; z.zone = newName; }
+          if (!isNaN(newX1)) z.x1 = newX1;
+          if (!isNaN(newY1)) z.y1 = newY1;
+          if (!isNaN(newX2)) z.x2 = newX2;
+          if (!isNaN(newY2)) z.y2 = newY2;
+          if (rId && S.roomMaps[rId]) {
+            try {
+              var resp = await authFetch('/data/room-map-' + rId + '.json', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(S.roomMaps[rId])
+              });
+              if (resp.ok) {
+                btn.textContent = 'Saved'; btn.classList.add('saved');
+              } else {
+                btn.textContent = 'Save Failed'; btn.style.background = '#dc2626';
+              }
+            } catch (err) {
+              btn.textContent = 'Save Failed'; btn.style.background = '#dc2626';
+              console.error('[3D] Zone save error:', err);
+            }
+            setTimeout(function() { btn.textContent = 'Save Zone'; btn.classList.remove('saved'); btn.style.background = ''; }, 1500);
+            buildScene();
+            renderFarmStats();
+          }
         });
 
       } else if (ud.type === 'room') {

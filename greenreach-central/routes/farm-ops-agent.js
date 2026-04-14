@@ -1664,6 +1664,188 @@ export const TOOL_CATALOG = {
     }
   },
 
+  // -- Spatial Layout Optimizer -- Arrange equipment/groups in grid patterns --
+  'optimize_layout': {
+    description: 'Spatially arrange equipment and/or groups in the room map into a grid pattern within zones. Supports configuring columns per side, walkway width, and spacing. Use for instructions like "arrange ZipGrow towers 3 wide per zone with a 2m walkway."',
+    category: 'write',
+    required: ['room_id'],
+    optional: ['match_name', 'match_category', 'target', 'columns', 'walkway_m', 'spacing_m', 'farm_id'],
+    undoable: true,
+    handler: async (params) => {
+      const farm_id = params.farm_id || process.env.FARM_ID || 'default';
+      const { room_id, match_name, match_category, target } = params;
+      const columns = parseInt(params.columns, 10) || 3;
+      const walkway = parseFloat(params.walkway_m) || 0;
+      const spacing = parseFloat(params.spacing_m) || 0.8;
+      const layoutTarget = target || 'groups'; // 'groups', 'equipment', or 'both'
+
+      if (!room_id) return { ok: false, error: 'room_id is required.' };
+
+      // Load rooms and room-map
+      const rooms = await farmStore.get(farm_id, 'rooms') || [];
+      const room = resolveRoom(rooms, room_id);
+      if (!room) return { ok: false, error: `Room "${room_id}" not found.` };
+
+      const roomMap = await farmStore.get(farm_id, 'room_map') || {};
+      const gridSize = roomMap.gridSize || 30;
+      const zones = roomMap.zones || [];
+      if (!zones.length) return { ok: false, error: 'Room has no zones defined. Add zones first.' };
+
+      const groups = await farmStore.get(farm_id, 'groups') || [];
+      const beforeGroups = JSON.parse(JSON.stringify(groups));
+      const beforeDevices = JSON.parse(JSON.stringify(roomMap.devices || []));
+
+      let totalPlaced = 0;
+      const placements = [];
+
+      for (const zone of zones) {
+        const zx1 = zone.x1 ?? 0;
+        const zy1 = zone.y1 ?? 0;
+        const zx2 = zone.x2 ?? gridSize;
+        const zy2 = zone.y2 ?? gridSize;
+        const zoneW = zx2 - zx1; // grid units in X
+        const zoneD = zy2 - zy1; // grid units in Y
+
+        // Collect items for this zone
+        let items = [];
+        if (layoutTarget === 'groups' || layoutTarget === 'both') {
+          const zoneName = zone.name || zone.zone || ('Zone ' + zone.zone);
+          const zoneIdx = String(zone.zone || zones.indexOf(zone) + 1);
+          const matched = groups.filter(g => {
+            const gz = String(g.zone ?? g.zoneId ?? '');
+            const gRoom = g.roomId || g.room || '';
+            const inRoom = gRoom === room.id || gRoom === room.name;
+            const inZone = gz === zoneIdx || gz === zoneName || gz === 'zone-' + zoneIdx;
+            if (!inRoom && !inZone) return false;
+            if (match_name && !(g.name || '').toLowerCase().includes(match_name.toLowerCase())) return false;
+            return true;
+          });
+          items.push(...matched.map(g => ({ type: 'group', ref: g })));
+        }
+        if (layoutTarget === 'equipment' || layoutTarget === 'both') {
+          const matched = (roomMap.devices || []).filter(d => {
+            const snap = d.snapshot || {};
+            const cat = (snap.category || snap.type || '').toLowerCase();
+            const nm = (snap.name || d.deviceId || '').toLowerCase();
+            if (match_category && cat !== match_category.toLowerCase()) return false;
+            if (match_name && !nm.includes(match_name.toLowerCase())) return false;
+            // Check if device is within this zone bounds
+            if (d.x >= zx1 && d.x <= zx2 && d.y >= zy1 && d.y <= zy2) return true;
+            return false;
+          });
+          items.push(...matched.map(d => ({ type: 'equipment', ref: d })));
+        }
+
+        if (!items.length) continue;
+
+        // Compute grid positions within zone
+        // If walkway > 0, split zone into left and right halves
+        const walkwayGrid = walkway > 0 ? Math.max(1, Math.round(walkway)) : 0;
+        const spacingGrid = Math.max(1, Math.round(spacing));
+        const usableW = zoneW - walkwayGrid;
+        const colsLeft = Math.min(columns, Math.ceil(usableW / (2 * spacingGrid)));
+        const colsRight = Math.min(columns, Math.floor(usableW / (2 * spacingGrid)));
+        const totalCols = walkwayGrid > 0 ? colsLeft + colsRight : columns;
+
+        // Build position list
+        const positions = [];
+        const leftStartX = zx1 + 1;
+        const rightStartX = walkwayGrid > 0
+          ? zx1 + colsLeft * spacingGrid + walkwayGrid
+          : zx1 + 1;
+
+        let row = 0;
+        let col = 0;
+        let onRight = false;
+
+        for (let i = 0; i < items.length; i++) {
+          let px, py;
+          if (walkwayGrid > 0) {
+            if (!onRight) {
+              px = leftStartX + col * spacingGrid;
+              py = zy1 + 1 + row * spacingGrid;
+              col++;
+              if (col >= colsLeft) { col = 0; onRight = true; }
+            } else {
+              px = rightStartX + col * spacingGrid;
+              py = zy1 + 1 + row * spacingGrid;
+              col++;
+              if (col >= colsRight) { col = 0; onRight = false; row++; }
+            }
+          } else {
+            px = zx1 + 1 + (i % totalCols) * spacingGrid;
+            py = zy1 + 1 + Math.floor(i / totalCols) * spacingGrid;
+          }
+
+          // Clamp to zone
+          px = Math.max(zx1, Math.min(zx2, px));
+          py = Math.max(zy1, Math.min(zy2, py));
+
+          positions.push({ x: Math.round(px), y: Math.round(py) });
+        }
+
+        // Apply positions
+        for (let i = 0; i < items.length; i++) {
+          const pos = positions[i] || positions[positions.length - 1];
+          const item = items[i];
+          if (item.type === 'group') {
+            item.ref.gridX = pos.x;
+            item.ref.gridY = pos.y;
+            item.ref.lastModified = new Date().toISOString();
+          } else {
+            item.ref.x = pos.x;
+            item.ref.y = pos.y;
+          }
+          placements.push({
+            type: item.type,
+            name: item.ref.name || item.ref.snapshot?.name || item.ref.deviceId || '?',
+            zone: zone.name || zone.zone,
+            x: pos.x, y: pos.y
+          });
+          totalPlaced++;
+        }
+      }
+
+      if (totalPlaced === 0) {
+        return { ok: false, error: 'No matching items found in any zone. Check match_name/match_category and zone assignments.' };
+      }
+
+      // Save
+      roomMap.lastUpdated = new Date().toISOString();
+      await farmStore.set(farm_id, 'room_map', roomMap);
+      const rid = roomMap.roomId || room_id || 'default';
+      writeJSON('room-map-' + rid + '.json', roomMap);
+      writeJSON('room-map.json', roomMap);
+
+      await farmStore.set(farm_id, 'groups', groups);
+      writeJSON('groups.json', groups);
+
+      return {
+        ok: true,
+        placed: totalPlaced,
+        columns,
+        walkway_m: walkway,
+        spacing_m: spacing,
+        layout: placements.slice(0, 20), // First 20 for display
+        message: 'Arranged ' + totalPlaced + ' item(s) in grid pattern: ' + columns + ' columns' + (walkway > 0 ? ', ' + walkway + 'm walkway' : '') + ', ' + spacing + 'm spacing.',
+        _undo_state: { farm_id, beforeGroups, beforeDevices, roomMapId: rid }
+      };
+    },
+    undoHandler: async (params, state) => {
+      if (!state) return { ok: false, error: 'No undo state' };
+      const farm_id = state.farm_id || process.env.FARM_ID || 'default';
+      const roomMap = await farmStore.get(farm_id, 'room_map') || {};
+      roomMap.devices = state.beforeDevices;
+      roomMap.lastUpdated = new Date().toISOString();
+      await farmStore.set(farm_id, 'room_map', roomMap);
+      writeJSON('room-map-' + state.roomMapId + '.json', roomMap);
+      writeJSON('room-map.json', roomMap);
+      await farmStore.set(farm_id, 'groups', state.beforeGroups);
+      writeJSON('groups.json', state.beforeGroups);
+      return { ok: true, undone: true, message: 'Layout changes reverted.' };
+    }
+  },
+
   'scan_devices': {
     description: 'Unified device discovery scan. Supports wireless (SwitchBot, Light Engine, LEAM BLE/network), wired (bus channel scan), or all modes. Returns a normalized discovery result with asset_kind, source, registration_state, and a discovery_session_id for follow-up actions.',
     category: 'read',
