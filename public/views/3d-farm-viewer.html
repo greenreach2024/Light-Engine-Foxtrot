@@ -422,10 +422,10 @@
       S.controls.minDistance = 4;
       S.controls.maxDistance = 80;
 
-      // Cinematic three-point lighting
-      S.scene.add(new THREE.AmbientLight(0x334155, 0.4));
+      // Cinematic three-point lighting (brightened for detail visibility)
+      S.scene.add(new THREE.AmbientLight(0x94a3b8, 0.7));
 
-      const keyLight = new THREE.DirectionalLight(0xdbeafe, 0.9);
+      const keyLight = new THREE.DirectionalLight(0xf1f5f9, 1.2);
       keyLight.position.set(25, 40, 15);
       keyLight.castShadow = true;
       keyLight.shadow.mapSize.set(2048, 2048);
@@ -436,18 +436,18 @@
       keyLight.shadow.bias = -0.0005;
       S.scene.add(keyLight);
 
-      const fillLight = new THREE.DirectionalLight(0x818cf8, 0.25);
+      const fillLight = new THREE.DirectionalLight(0xa5b4fc, 0.5);
       fillLight.position.set(-18, 25, -12);
       S.scene.add(fillLight);
 
-      const rimLight = new THREE.DirectionalLight(0x6366f1, 0.15);
+      const rimLight = new THREE.DirectionalLight(0x818cf8, 0.3);
       rimLight.position.set(0, 5, -30);
       S.scene.add(rimLight);
 
       // Ground
       const ground = new THREE.Mesh(
         new THREE.PlaneGeometry(120, 120),
-        new THREE.MeshStandardMaterial({ color: 0x080c18, roughness: 1, metalness: 0 })
+        new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 1, metalness: 0 })
       );
       ground.rotation.x = -Math.PI / 2;
       ground.position.y = -0.05;
@@ -641,7 +641,7 @@
 
         // Floor
         const floorGeo = new THREE.BoxGeometry(roomW, 0.12, roomD);
-        const floorMat = new THREE.MeshStandardMaterial({ color: 0x151d2e, roughness: 0.85, metalness: 0.05 });
+        const floorMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.75, metalness: 0.05 });
         const floor = new THREE.Mesh(floorGeo, floorMat);
         floor.position.set(cx, 0, cz);
         floor.receiveShadow = true;
@@ -734,8 +734,8 @@
         S.scene.add(edges);
         S.meshes.walls.push(edges);
 
-        // Room label
-        makeLabel(room.name || room.id, cx, wallH + 0.6, cz, { size: 18, color: '#94a3b8', opacity: 0.7 });
+        // Room label (small, tucked in top-left corner to stay out of the way)
+        makeLabel(room.name || room.id, offsetX + 1.5, wallH + 0.3, 0.4, { size: 10, color: '#64748b', opacity: 0.5 });
 
         // Dimension label (small, bottom corner)
         const dimStr = roomW + 'L x ' + roomD + 'W x ' + wallH + 'H';
