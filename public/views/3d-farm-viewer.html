@@ -1397,14 +1397,48 @@
         const crop = g.crop || g.recipe || 'Unknown';
         const d = ud.dims;
         const gId = g.id;
-        let html = '<h3>' + (g.name || g.id) + '</h3>';
-        html += '<div class="dp-label">Crop</div><div class="dp-value">' + crop + '</div>';
-        html += '<div class="dp-label">Status</div><div class="dp-value" style="text-transform:capitalize">' + (g.status || 'active') + '</div>';
+        const gName = g.name || g.id;
+
+        // Find similar groups by stripping trailing number from name (e.g. "ZipGrow Standard 30" -> "ZipGrow Standard")
+        const nameBase = gName.replace(/\s*\d+\s*$/, '').trim();
+        const similarGroups = S.groups.filter(sg => {
+          const sn = (sg.name || sg.id || '');
+          return sn.replace(/\s*\d+\s*$/, '').trim() === nameBase;
+        });
+        const similarCount = similarGroups.length;
+
+        // Build crop dropdown options from crop registry
+        const cropKeys = Object.keys(S.cropRegistry || {});
+        let cropOptions = '<option value="">-- Select Crop --</option>';
+        cropKeys.forEach(c => {
+          cropOptions += '<option value="' + c + '"' + (crop === c ? ' selected' : '') + '>' + c + '</option>';
+        });
+        if (crop !== 'Unknown' && !cropKeys.includes(crop)) {
+          cropOptions += '<option value="' + crop + '" selected>' + crop + '</option>';
+        }
+
+        let html = '<h3>' + gName + '</h3>';
         html += '<div class="dp-label">Location</div><div class="dp-value">' + (g.room || g.roomId || '--') + ' / ' + (g.zone || '--') + '</div>';
         html += '<div class="dp-grid">';
         html += '<div class="dp-metric"><div class="metric-val">' + (g.trays || 0) + '</div><div class="metric-lbl">Trays</div></div>';
         html += '<div class="dp-metric"><div class="metric-val">' + (g.plants || 0) + '</div><div class="metric-lbl">Plants</div></div>';
         html += '</div>';
+        if (similarCount > 1) {
+          html += '<div class="dp-label">Similar Units</div><div class="dp-value" style="color:#818cf8">' + similarCount + ' x ' + nameBase + '</div>';
+        }
+
+        // Editable crop + status
+        html += '<div class="dp-section"><div class="dp-label">Crop Assignment</div>';
+        html += '<div class="dp-input-row"><select id="grpCrop" style="flex:1">' + cropOptions + '</select></div></div>';
+
+        html += '<div class="dp-section"><div class="dp-label">Status</div>';
+        html += '<div class="dp-input-row"><select id="grpStatus" style="flex:1">';
+        const statuses = ['draft', 'active', 'growing', 'harvesting', 'idle', 'completed'];
+        const curStatus = (g.status || 'draft').toLowerCase();
+        statuses.forEach(st => {
+          html += '<option value="' + st + '"' + (curStatus === st ? ' selected' : '') + '>' + st.charAt(0).toUpperCase() + st.slice(1) + '</option>';
+        });
+        html += '</select></div></div>';
 
         // Editable dimensions
         html += '<div class="dp-section"><div class="dp-label">Equipment Dimensions</div>';
@@ -1429,23 +1463,87 @@
           html += '</div>';
         }
 
-        html += '<button class="dp-save-btn" id="saveDims">Save Dimensions</button>';
+        if (similarCount > 1) {
+          html += '<button class="dp-save-btn" id="saveGrpAll" style="background:#6366f1">Update All ' + similarCount + ' ' + nameBase + '</button>';
+        }
+        html += '<button class="dp-save-btn" id="saveGrpOne" style="margin-top:0.3rem">' + (similarCount > 1 ? 'Update This One Only' : 'Save Changes') + '</button>';
         content.innerHTML = html;
 
-        document.getElementById('saveDims').addEventListener('click', () => {
+        // Save handler for single group
+        function applyGroupEdits(target) {
+          const newCrop = document.getElementById('grpCrop').value;
+          const newStatus = document.getElementById('grpStatus').value;
+          if (newCrop) target.crop = newCrop;
+          if (newStatus) target.status = newStatus;
+          target.lastModified = new Date().toISOString();
+        }
+
+        document.getElementById('saveGrpOne').addEventListener('click', async () => {
+          const btn = document.getElementById('saveGrpOne');
+          applyGroupEdits(g);
+          // Also save dimensions
           const l = parseFloat(document.getElementById('dimL').value) || d.length;
           const w = parseFloat(document.getElementById('dimW').value) || d.width;
           const h = parseFloat(document.getElementById('dimH').value) || d.height;
           const ori = document.getElementById('lightOri').value;
           S.groupDimensions[gId] = { length: l, width: w, height: h, lightOrientation: ori };
           saveGroupDimensions();
-          const btn = document.getElementById('saveDims');
-          btn.textContent = 'Saved';
-          btn.classList.add('saved');
-          setTimeout(() => { btn.textContent = 'Save Dimensions'; btn.classList.remove('saved'); }, 1500);
+          try {
+            const resp = await authFetch('/data/groups.json', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(S.groups)
+            });
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            btn.textContent = 'Saved'; btn.classList.add('saved');
+          } catch (err) {
+            console.error('[3D] Group save error:', err);
+            btn.textContent = 'Save Failed'; btn.style.background = '#dc2626';
+          }
+          setTimeout(() => { btn.textContent = similarCount > 1 ? 'Update This One Only' : 'Save Changes'; btn.classList.remove('saved'); btn.style.background = ''; }, 1500);
           buildScene();
           renderFarmStats();
         });
+
+        // Bulk update handler for all similar groups
+        const bulkGrpBtn = document.getElementById('saveGrpAll');
+        if (bulkGrpBtn) {
+          bulkGrpBtn.addEventListener('click', async () => {
+            const newCrop = document.getElementById('grpCrop').value;
+            const newStatus = document.getElementById('grpStatus').value;
+            const l = parseFloat(document.getElementById('dimL').value) || d.length;
+            const w = parseFloat(document.getElementById('dimW').value) || d.width;
+            const h = parseFloat(document.getElementById('dimH').value) || d.height;
+            const ori = document.getElementById('lightOri').value;
+            let updated = 0;
+            for (const sg of similarGroups) {
+              if (newCrop) sg.crop = newCrop;
+              if (newStatus) sg.status = newStatus;
+              sg.lastModified = new Date().toISOString();
+              const sgId = sg.id || sg.group_id;
+              S.groupDimensions[sgId] = { length: l, width: w, height: h, lightOrientation: ori };
+              updated++;
+            }
+            saveGroupDimensions();
+            try {
+              const resp = await authFetch('/data/groups.json', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(S.groups)
+              });
+              if (!resp.ok) throw new Error('HTTP ' + resp.status);
+              bulkGrpBtn.textContent = 'Updated ' + updated + ' unit' + (updated !== 1 ? 's' : '');
+              bulkGrpBtn.classList.add('saved');
+            } catch (err) {
+              console.error('[3D] Bulk group save error:', err);
+              bulkGrpBtn.textContent = 'Save Failed';
+              bulkGrpBtn.style.background = '#dc2626';
+            }
+            setTimeout(() => { bulkGrpBtn.textContent = 'Update All ' + similarCount + ' ' + nameBase; bulkGrpBtn.classList.remove('saved'); bulkGrpBtn.style.background = ''; }, 2000);
+            buildScene();
+            renderFarmStats();
+          });
+        }
 
       } else if (ud.type === 'zone') {
         const z = ud.zone;
