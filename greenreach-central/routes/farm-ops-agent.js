@@ -1421,6 +1421,187 @@ export const TOOL_CATALOG = {
       return { ok: false, error: `Device ${id} not found for undo` };
     }
   },
+
+  // ── Equipment Management (room-map devices) ──────────────────────────
+  'update_equipment': {
+    description: 'Update equipment in the 3D room map — rename, change category, reposition, or bulk-rename all matching equipment. Equipment includes fans, ZipGrow towers, lights, dehumidifiers, etc. mapped in the room layout. Use "bulk" mode to rename all identical devices at once (e.g., rename all 20 fans to "ZipGrow Tower").',
+    category: 'write',
+    required: [],
+    optional: ['room_id', 'device_id', 'name', 'category', 'x', 'y', 'z', 'match_name', 'match_category', 'bulk'],
+    undoable: true,
+    handler: async (params) => {
+      const { room_id, device_id, name, category, x, y, z, match_name, match_category, bulk } = params;
+
+      // Load rooms to resolve room_id
+      const rooms = readJSON('rooms.json', {});
+      const roomList = rooms.rooms || (Array.isArray(rooms) ? rooms : Object.values(rooms).filter(r => r && typeof r === 'object'));
+      let targetRooms = [];
+
+      if (room_id) {
+        const resolved = resolveRoom(roomList, room_id);
+        if (!resolved) return { ok: false, error: `Room "${room_id}" not found.` };
+        targetRooms = [resolved.id || resolved.room_id];
+      } else {
+        targetRooms = roomList.map(r => r.id || r.room_id).filter(Boolean);
+      }
+
+      if (!name && !category && x == null && y == null && z == null) {
+        return { ok: false, error: 'No updates specified. Provide at least one of: name, category, x, y, z.' };
+      }
+
+      const isBulk = bulk === true || bulk === 'true';
+      let totalUpdated = 0;
+      const undoSnapshots = {};
+      const roomSummaries = [];
+
+      for (const rid of targetRooms) {
+        const roomMap = readJSON(`room-map-${rid}.json`, null);
+        if (!roomMap?.devices?.length) continue;
+
+        const beforeDevices = JSON.parse(JSON.stringify(roomMap.devices));
+        let roomUpdated = 0;
+
+        for (const dev of roomMap.devices) {
+          const snap = dev.snapshot || {};
+          const devCat = snap.category || snap.type || '';
+          const devName = snap.name || dev.deviceId || '';
+
+          let isMatch = false;
+          if (device_id && dev.deviceId === device_id) {
+            isMatch = true;
+          } else if (isBulk) {
+            // Bulk mode: match by category and/or name
+            const catMatch = !match_category || devCat.toLowerCase() === match_category.toLowerCase();
+            const nameMatch = !match_name || devName.toLowerCase() === match_name.toLowerCase();
+            isMatch = catMatch && nameMatch && (match_category || match_name);
+          } else if (!device_id && !isBulk) {
+            // Single mode without device_id: try matching by current name/category
+            if (match_category && devCat.toLowerCase() === match_category.toLowerCase()) {
+              if (!match_name || devName.toLowerCase() === match_name.toLowerCase()) {
+                isMatch = true;
+              }
+            }
+          }
+
+          if (!isMatch) continue;
+
+          if (!dev.snapshot) dev.snapshot = {};
+          if (name) dev.snapshot.name = name;
+          if (category) dev.snapshot.category = category;
+          if (x != null) dev.x = parseInt(String(x), 10);
+          if (y != null) dev.y = parseInt(String(y), 10);
+          if (z != null) dev.z = parseFloat(String(z));
+          roomUpdated++;
+
+          // In single-device mode (non-bulk), stop after first match
+          if (!isBulk && device_id) break;
+        }
+
+        if (roomUpdated > 0) {
+          roomMap.lastUpdated = new Date().toISOString();
+          writeJSON(`room-map-${rid}.json`, roomMap);
+          undoSnapshots[rid] = beforeDevices;
+          totalUpdated += roomUpdated;
+          roomSummaries.push(`${rid}: ${roomUpdated} device(s)`);
+        }
+      }
+
+      if (totalUpdated === 0) {
+        const hint = device_id ? `device_id "${device_id}"` : `match_category="${match_category || ''}" match_name="${match_name || ''}"`;
+        return { ok: false, error: `No matching equipment found for ${hint}. Use get_room_status to list devices.` };
+      }
+
+      const changes = [];
+      if (name) changes.push(`name -> "${name}"`);
+      if (category) changes.push(`category -> "${category}"`);
+      if (x != null) changes.push(`x -> ${x}`);
+      if (y != null) changes.push(`y -> ${y}`);
+      if (z != null) changes.push(`z -> ${z}`);
+
+      return {
+        ok: true,
+        updated: totalUpdated,
+        changes,
+        rooms: roomSummaries,
+        message: `Updated ${totalUpdated} equipment device(s): ${changes.join(', ')}`,
+        _undo_state: { undoSnapshots }
+      };
+    },
+    undoHandler: async (params, state) => {
+      if (!state?.undoSnapshots) return { ok: false, error: 'No undo state available' };
+      for (const [rid, devices] of Object.entries(state.undoSnapshots)) {
+        const roomMap = readJSON(`room-map-${rid}.json`, null);
+        if (roomMap) {
+          roomMap.devices = devices;
+          roomMap.lastUpdated = new Date().toISOString();
+          writeJSON(`room-map-${rid}.json`, roomMap);
+        }
+      }
+      return { ok: true, undone: true, message: `Reverted equipment in ${Object.keys(state.undoSnapshots).length} room(s)` };
+    }
+  },
+
+  'update_group': {
+    description: 'Update a grow group (ZipGrow tower, rack, etc.) — rename, change tray count, assign crop, or update status. Groups are equipment units that hold plants.',
+    category: 'write',
+    required: ['group_id'],
+    optional: ['name', 'trays', 'crop', 'recipe', 'status', 'farm_id'],
+    undoable: true,
+    handler: async (params) => {
+      const farm_id = params.farm_id || process.env.FARM_ID || 'default';
+      const groups = await farmStore.get(farm_id, 'groups') || [];
+
+      // Find group by ID or name (fuzzy)
+      let target = groups.find(g => (g.id || g.group_id) === params.group_id);
+      if (!target) {
+        const lower = String(params.group_id).toLowerCase();
+        target = groups.find(g => (g.name || '').toLowerCase().includes(lower));
+      }
+      if (!target) {
+        const names = groups.slice(0, 10).map(g => g.name || g.id).join(', ');
+        return { ok: false, error: `Group "${params.group_id}" not found. Available: ${names}${groups.length > 10 ? '...' : ''}` };
+      }
+
+      const previousState = { ...target };
+      const changes = [];
+
+      if (params.name != null) { target.name = params.name; changes.push(`name -> "${params.name}"`); }
+      if (params.trays != null) { target.trays = parseInt(String(params.trays), 10); changes.push(`trays -> ${target.trays}`); }
+      if (params.crop != null) { target.crop = params.crop; changes.push(`crop -> "${params.crop}"`); }
+      if (params.recipe != null) { target.recipe = params.recipe; changes.push(`recipe -> "${params.recipe}"`); }
+      if (params.status != null) { target.status = params.status; changes.push(`status -> "${params.status}"`); }
+
+      if (changes.length === 0) return { ok: true, message: 'No changes specified.', group_id: target.id };
+
+      target.lastModified = new Date().toISOString();
+      await farmStore.set(farm_id, 'groups', groups);
+
+      // Also update local JSON for consistency
+      writeJSON('groups.json', groups);
+
+      return {
+        ok: true,
+        group_id: target.id || target.group_id,
+        group_name: target.name,
+        changes,
+        message: `Updated group "${target.name}": ${changes.join(', ')}`,
+        _undo_state: { farm_id, group_id: target.id || target.group_id, previousState }
+      };
+    },
+    undoHandler: async (params, state) => {
+      if (!state?.group_id) return { ok: false, error: 'No undo state' };
+      const groups = await farmStore.get(state.farm_id, 'groups') || [];
+      const idx = groups.findIndex(g => (g.id || g.group_id) === state.group_id);
+      if (idx >= 0) {
+        groups[idx] = state.previousState;
+        await farmStore.set(state.farm_id, 'groups', groups);
+        writeJSON('groups.json', groups);
+        return { ok: true, undone: true, message: `Reverted group "${state.group_id}"` };
+      }
+      return { ok: false, error: `Group ${state.group_id} not found for undo` };
+    }
+  },
+
   'scan_devices': {
     description: 'Unified device discovery scan. Supports wireless (SwitchBot, Light Engine, LEAM BLE/network), wired (bus channel scan), or all modes. Returns a normalized discovery result with asset_kind, source, registration_state, and a discovery_session_id for follow-up actions.',
     category: 'read',

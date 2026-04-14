@@ -225,7 +225,7 @@ const TRUST_TIERS = {
   // AUTO: Execute immediately, notify after
   auto: new Set(['dismiss_alert', 'get_ai_pricing_recommendations', 'save_user_memory', 'escalate_to_faye', 'reply_to_faye', 'get_faye_directives', 'read_skill_file', 'get_gwen_messages', 'reply_to_gwen']),
   // QUICK-CONFIRM: Execute with brief undo window
-  quick_confirm: new Set(['mark_harvest_complete', 'update_farm_profile', 'update_group_crop', 'create_room', 'create_zone', 'update_certifications', 'complete_setup', 'update_crop_price', 'add_inventory_item', 'update_manual_inventory', 'record_harvest', 'update_room_specs', 'apply_crop_environment', 'recommend_farm_layout', 'update_crop_description', 'add_salad_mix_inventory']),
+  quick_confirm: new Set(['mark_harvest_complete', 'update_farm_profile', 'update_group_crop', 'create_room', 'create_zone', 'update_certifications', 'complete_setup', 'update_crop_price', 'add_inventory_item', 'update_manual_inventory', 'record_harvest', 'update_room_specs', 'apply_crop_environment', 'recommend_farm_layout', 'update_crop_description', 'add_salad_mix_inventory', 'update_equipment', 'update_group']),
   // CONFIRM: Ask before executing (default for write tools)
   confirm: new Set([
     'create_planting_assignment', 'update_order_status',
@@ -558,6 +558,47 @@ const GPT_TOOLS = [
           status: { type: 'string', description: 'New status: online, offline, maintenance' }
         },
         required: ['device_id']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'update_equipment',
+      description: 'Update equipment in the 3D room map — rename, change category, reposition, or bulk-rename all matching equipment. Equipment includes fans, ZipGrow towers, lights, dehumidifiers, etc. Use bulk mode to rename all identical devices at once (e.g. rename all 20 fans to ZipGrow Tower). WRITE operation.',
+      parameters: {
+        type: 'object',
+        properties: {
+          room_id: { type: 'string', description: 'Room ID to target. Omit to search all rooms.' },
+          device_id: { type: 'string', description: 'Specific equipment device ID in the room map (e.g. "room-3xxjln-fans-0")' },
+          name: { type: 'string', description: 'New equipment name (e.g. "ZipGrow Tower")' },
+          category: { type: 'string', description: 'New equipment category (e.g. "zipgrow", "fans", "dehumidifier")' },
+          x: { type: 'number', description: 'New X grid position' },
+          y: { type: 'number', description: 'New Y grid position' },
+          z: { type: 'number', description: 'New Z height in meters' },
+          match_name: { type: 'string', description: 'For bulk: match equipment with this current name (e.g. "Unknown Device")' },
+          match_category: { type: 'string', description: 'For bulk: match equipment with this current category (e.g. "fans")' },
+          bulk: { type: 'boolean', description: 'Set to true to update ALL matching equipment, not just the first match' }
+        }
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'update_group',
+      description: 'Update a grow group (ZipGrow tower, rack, growing unit) — rename, change tray count, assign crop, or update status. Groups are the physical growing units that hold plants. WRITE operation.',
+      parameters: {
+        type: 'object',
+        properties: {
+          group_id: { type: 'string', description: 'Group ID or name to update (e.g. "ZipGrow Standard 1" or full ID)' },
+          name: { type: 'string', description: 'New group name' },
+          trays: { type: 'number', description: 'New tray count' },
+          crop: { type: 'string', description: 'Crop to assign to this group' },
+          recipe: { type: 'string', description: 'Growing recipe/plan name' },
+          status: { type: 'string', description: 'New status: draft, active, harvesting, idle' }
+        },
+        required: ['group_id']
       }
     }
   },
@@ -2014,6 +2055,8 @@ async function buildSystemPrompt(farmId) {
         farmContext += `  Unassigned: ${deviceResult.unassigned_devices.map(d => d.name || d.id).join(', ')}\n`;
       }
       farmContext += `Use update_device to move devices between zones. Use get_device_status for full details.\n`;
+      farmContext += `Use update_equipment to rename/recategorize equipment in the room map (fans, ZipGrow towers, etc.). Use bulk=true with match_name/match_category to rename all matching devices at once.\n`;
+      farmContext += `Use update_group to modify grow groups (ZipGrow units) -- rename, change tray count, assign crops, or update status.\n`;
     }
   } catch { /* non-fatal */ }
 
@@ -2435,6 +2478,13 @@ FARM BUILDING WORKFLOW:
 - Present the layout recommendation naturally. Example: "Based on your 3x4m room with 2.7m ceilings growing Genovese Basil, here is what I recommend: 4 LED panels (200W each), 2 circulation fans at opposite corners, 1 dehumidifier rated for 50 pints/day..."
 - If the farmer wants to adjust, re-run with different parameters. The layout is recalculated each time.
 - Environment targets (temperature, humidity, VPD, EC, pH) come FROM the crop recipe -- the farmer NEVER needs to set these manually. This is a core design principle.
+
+EQUIPMENT MANAGEMENT:
+- Equipment in the room map (fans, ZipGrow towers, dehumidifiers, lights, etc.) can be renamed, recategorized, and repositioned using update_equipment.
+- Grow groups (ZipGrow units, racks) can be updated using update_group -- rename, change tray count, assign crops, or update status.
+- For bulk operations (e.g., "rename all fans to ZipGrow Tower"), use update_equipment with bulk=true, match_category, and match_name.
+- Equipment and grow groups are different things: equipment refers to physical devices in the room-map layout (3D viewer); groups are logical growing units that hold plants and are tracked for crop assignments.
+- When the user says "update my ZipGrow units" or "rename the fans", use update_equipment for room-map devices or update_group for grow groups depending on context.
 
 SETUP ORCHESTRATOR (ADVANCED):
 - You also have access to get_setup_progress and get_setup_guidance for deeper, phase-by-phase farm configuration intelligence.
