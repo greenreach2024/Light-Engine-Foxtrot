@@ -1512,11 +1512,11 @@ export const TOOL_CATALOG = {
           isMatch = true;
         } else if (isBulk) {
           const catMatch = !match_category || devCat.toLowerCase() === match_category.toLowerCase();
-          const nameMatch = !match_name || devName.toLowerCase() === match_name.toLowerCase();
+          const nameMatch = !match_name || devName.toLowerCase().includes(match_name.toLowerCase());
           isMatch = catMatch && nameMatch && (match_category || match_name);
         } else if (!device_id && !isBulk) {
           if (match_category && devCat.toLowerCase() === match_category.toLowerCase()) {
-            if (!match_name || devName.toLowerCase() === match_name.toLowerCase()) {
+            if (!match_name || devName.toLowerCase().includes(match_name.toLowerCase())) {
               isMatch = true;
             }
           }
@@ -1577,63 +1577,90 @@ export const TOOL_CATALOG = {
   },
 
   'update_group': {
-    description: 'Update a grow group (ZipGrow tower, rack, etc.) — rename, change tray count, assign crop, or update status. Groups are equipment units that hold plants.',
+    description: 'Update grow groups (ZipGrow towers, racks, etc.) — rename, change tray count, assign crop, or update status. Groups are growing units that hold plants. Supports single-group updates by group_id, or bulk updates with match_name to update ALL groups whose name contains the match string (e.g. match_name="ZipGrow Standard" updates ZipGrow Standard 1 through 78).',
     category: 'write',
-    required: ['group_id'],
-    optional: ['name', 'trays', 'crop', 'recipe', 'status', 'farm_id'],
+    required: [],
+    optional: ['group_id', 'name', 'trays', 'crop', 'recipe', 'status', 'farm_id', 'match_name', 'bulk'],
     undoable: true,
     handler: async (params) => {
       const farm_id = params.farm_id || process.env.FARM_ID || 'default';
       const groups = await farmStore.get(farm_id, 'groups') || [];
+      const isBulk = params.bulk === true || params.bulk === 'true';
 
-      // Find group by ID or name (fuzzy)
-      let target = groups.find(g => (g.id || g.group_id) === params.group_id);
-      if (!target) {
-        const lower = String(params.group_id).toLowerCase();
-        target = groups.find(g => (g.name || '').toLowerCase().includes(lower));
-      }
-      if (!target) {
-        const names = groups.slice(0, 10).map(g => g.name || g.id).join(', ');
-        return { ok: false, error: `Group "${params.group_id}" not found. Available: ${names}${groups.length > 10 ? '...' : ''}` };
+      if (!params.group_id && !isBulk) {
+        return { ok: false, error: 'Provide group_id for single update, or use bulk=true with match_name for multi-unit updates.' };
       }
 
-      const previousState = { ...target };
+      let targets = [];
+      const beforeStates = [];
+
+      if (isBulk && params.match_name) {
+        // Bulk mode: match all groups whose name contains match_name
+        const lower = params.match_name.toLowerCase();
+        targets = groups.filter(g => (g.name || '').toLowerCase().includes(lower));
+        if (targets.length === 0) {
+          const sample = groups.slice(0, 10).map(g => g.name || g.id).join(', ');
+          return { ok: false, error: `No groups match "${params.match_name}". Available: ${sample}${groups.length > 10 ? '...' : ''}` };
+        }
+      } else {
+        // Single mode: find by ID or name
+        let target = groups.find(g => (g.id || g.group_id) === params.group_id);
+        if (!target) {
+          const lower = String(params.group_id).toLowerCase();
+          target = groups.find(g => (g.name || '').toLowerCase().includes(lower));
+        }
+        if (!target) {
+          const names = groups.slice(0, 10).map(g => g.name || g.id).join(', ');
+          return { ok: false, error: `Group "${params.group_id}" not found. Available: ${names}${groups.length > 10 ? '...' : ''}` };
+        }
+        targets = [target];
+      }
+
       const changes = [];
+      if (params.crop != null) changes.push(`crop -> "${params.crop}"`);
+      if (params.recipe != null) changes.push(`recipe -> "${params.recipe}"`);
+      if (params.status != null) changes.push(`status -> "${params.status}"`);
+      if (params.trays != null) changes.push(`trays -> ${params.trays}`);
+      if (params.name != null && !isBulk) changes.push(`name -> "${params.name}"`);
 
-      if (params.name != null) { target.name = params.name; changes.push(`name -> "${params.name}"`); }
-      if (params.trays != null) { target.trays = parseInt(String(params.trays), 10); changes.push(`trays -> ${target.trays}`); }
-      if (params.crop != null) { target.crop = params.crop; changes.push(`crop -> "${params.crop}"`); }
-      if (params.recipe != null) { target.recipe = params.recipe; changes.push(`recipe -> "${params.recipe}"`); }
-      if (params.status != null) { target.status = params.status; changes.push(`status -> "${params.status}"`); }
+      if (changes.length === 0 && !(params.name != null && isBulk)) {
+        return { ok: true, message: 'No changes specified.', matched: targets.length };
+      }
 
-      if (changes.length === 0) return { ok: true, message: 'No changes specified.', group_id: target.id };
+      for (const t of targets) {
+        beforeStates.push({ id: t.id || t.group_id, state: { ...t } });
+        if (params.name != null && !isBulk) t.name = params.name;
+        if (params.trays != null) t.trays = parseInt(String(params.trays), 10);
+        if (params.crop != null) t.crop = params.crop;
+        if (params.recipe != null) t.recipe = params.recipe;
+        if (params.status != null) t.status = params.status;
+        t.lastModified = new Date().toISOString();
+      }
 
-      target.lastModified = new Date().toISOString();
       await farmStore.set(farm_id, 'groups', groups);
-
-      // Also update local JSON for consistency
       writeJSON('groups.json', groups);
 
+      const label = targets.length === 1 ? `group "${targets[0].name}"` : `${targets.length} groups`;
       return {
         ok: true,
-        group_id: target.id || target.group_id,
-        group_name: target.name,
+        updated: targets.length,
+        group_names: targets.map(t => t.name),
         changes,
-        message: `Updated group "${target.name}": ${changes.join(', ')}`,
-        _undo_state: { farm_id, group_id: target.id || target.group_id, previousState }
+        message: `Updated ${label}: ${changes.join(', ')}`,
+        _undo_state: { farm_id, beforeStates }
       };
     },
     undoHandler: async (params, state) => {
-      if (!state?.group_id) return { ok: false, error: 'No undo state' };
+      if (!state?.beforeStates?.length) return { ok: false, error: 'No undo state' };
       const groups = await farmStore.get(state.farm_id, 'groups') || [];
-      const idx = groups.findIndex(g => (g.id || g.group_id) === state.group_id);
-      if (idx >= 0) {
-        groups[idx] = state.previousState;
-        await farmStore.set(state.farm_id, 'groups', groups);
-        writeJSON('groups.json', groups);
-        return { ok: true, undone: true, message: `Reverted group "${state.group_id}"` };
+      let restored = 0;
+      for (const bs of state.beforeStates) {
+        const idx = groups.findIndex(g => (g.id || g.group_id) === bs.id);
+        if (idx >= 0) { groups[idx] = bs.state; restored++; }
       }
-      return { ok: false, error: `Group ${state.group_id} not found for undo` };
+      await farmStore.set(state.farm_id, 'groups', groups);
+      writeJSON('groups.json', groups);
+      return { ok: true, undone: true, message: `Reverted ${restored} group(s)` };
     }
   },
 

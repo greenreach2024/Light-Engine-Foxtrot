@@ -29,6 +29,17 @@ The farm runs entirely on Google Cloud Run. The Light Engine Cloud Run service I
 8. **AWS/EB is DEPRECATED.** Do not reference EB environments, use `eb deploy`, or use any `aws elasticbeanstalk` commands. All infrastructure is Google Cloud Run. See `.github/CLOUD_ARCHITECTURE.md`.
 9. **GCP Project**: `project-5d00790f-13a9-4637-a40`, region `us-east1`. Artifact Registry: `us-east1-docker.pkg.dev/project-5d00790f-13a9-4637-a40/greenreach`.
 
+### Recent Fixes (Apr 14, 2026)
+
+37. **Multi-Unit Equipment/Group Bulk Updates + 3D Viewer LE Visibility**
+    - Root cause (visibility): `3d-farm-viewer.html` existed only in `greenreach-central/public/views/` but LE-farm-admin.html links to `/views/3d-farm-viewer.html`. Users on the LE URL got 404 for the 3D viewer.
+    - Fix: Copied `3d-farm-viewer.html` to `public/views/` so LE can serve it. Like other E.V.I.E. files, must be kept in sync between both locations.
+    - Root cause (ZipGrow bulk): `update_group` only supported single-group updates by `group_id`. ZipGrow units are groups (78 of them: "ZipGrow Standard 1" through "ZipGrow Standard 78"), so multi-unit changes were impossible.
+    - Fix: Added `bulk=true` + `match_name` support to `update_group`. Partial name matching (contains). Example: `bulk=true, match_name="ZipGrow Standard", crop="Genovese Basil"` updates all 78 towers at once.
+    - Root cause (equipment matching): `update_equipment` bulk mode used exact name equality (`===`). "ZipGrow Standard" would NOT match "ZipGrow Standard 30".
+    - Fix: Changed to partial matching (`includes()`) for both bulk and non-bulk paths. "ZipGrow" now matches "ZipGrow Standard 30", "ZipGrow Tower 5", etc.
+    - Files changed: `greenreach-central/routes/farm-ops-agent.js` (update_group bulk handler, update_equipment name matching), `greenreach-central/routes/assistant-chat.js` (update_group schema + system prompt), `public/views/3d-farm-viewer.html` (new copy from Central)
+
 ### Recent Fixes (Apr 13, 2026)
 
 35. **E.V.I.E. Bulk Alert Clearing + Stale Alert Cleanup**

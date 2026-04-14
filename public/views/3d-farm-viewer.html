@@ -1,0 +1,1863 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>3D Farm Viewer - Light Engine</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #0f172a;
+      color: #f1f5f9;
+      overflow: hidden;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* -- Header ------------------------------------------------ */
+    .header {
+      background: rgba(0,0,0,0.6);
+      padding: 0.5rem 1.25rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid rgba(148,163,184,0.12);
+      backdrop-filter: blur(12px);
+      z-index: 100;
+      flex-shrink: 0;
+    }
+    .header-left { display: flex; align-items: center; gap: 1rem; }
+    .header h1 { font-size: 1.1rem; font-weight: 700; letter-spacing: -0.3px; white-space: nowrap; }
+    .header h1 em { font-style: normal; color: #818cf8; }
+    .breadcrumb { display: flex; align-items: center; gap: 0.4rem; color: #64748b; font-size: 0.72rem; }
+    .breadcrumb a { color: #64748b; text-decoration: none; }
+    .breadcrumb a:hover { color: #e2e8f0; }
+
+    /* -- Toolbar ----------------------------------------------- */
+    .toolbar { display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; }
+    .toolbar button, .toolbar select {
+      background: rgba(30,41,59,0.85);
+      color: #cbd5e1;
+      border: 1px solid rgba(99,102,241,0.2);
+      padding: 0.3rem 0.65rem;
+      border-radius: 6px;
+      font-size: 0.72rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+    .toolbar button:hover { background: rgba(99,102,241,0.12); border-color: rgba(99,102,241,0.4); }
+    .toolbar button.active { background: rgba(99,102,241,0.22); border-color: #818cf8; color: #e0e7ff; }
+    .toolbar select { outline: none; }
+    .toolbar .sep { width: 1px; height: 18px; background: rgba(148,163,184,0.15); margin: 0 0.15rem; }
+
+    /* -- Canvas container -------------------------------------- */
+    #viewer-container { flex: 1; position: relative; overflow: hidden; }
+    #viewer-container canvas { display: block; }
+
+    /* -- Data Legend (gradient bar) ----------------------------- */
+    .data-legend {
+      position: absolute;
+      bottom: 16px; left: 50%; transform: translateX(-50%);
+      background: rgba(15,23,42,0.92);
+      border: 1px solid rgba(99,102,241,0.2);
+      border-radius: 10px;
+      padding: 0.6rem 1.2rem;
+      z-index: 60;
+      backdrop-filter: blur(10px);
+      display: none;
+      align-items: center;
+      gap: 0.75rem;
+      min-width: 340px;
+    }
+    .data-legend.visible { display: flex; }
+    .data-legend .legend-title { font-size: 0.72rem; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap; }
+    .data-legend .gradient-bar { flex: 1; height: 12px; border-radius: 4px; min-width: 140px; }
+    .data-legend .range-labels { display: flex; justify-content: space-between; font-size: 0.68rem; color: #94a3b8; margin-top: 2px; }
+
+    /* -- Zone Info HUD (bottom-left) --------------------------- */
+    .zone-hud {
+      position: absolute;
+      bottom: 16px; left: 16px;
+      background: rgba(15,23,42,0.92);
+      border: 1px solid rgba(99,102,241,0.2);
+      border-radius: 12px;
+      padding: 0.8rem 1rem;
+      z-index: 60;
+      backdrop-filter: blur(10px);
+      min-width: 200px; max-width: 280px;
+      opacity: 0; transform: translateY(10px);
+      transition: opacity 0.25s, transform 0.25s;
+      pointer-events: none;
+    }
+    .zone-hud.visible { opacity: 1; transform: translateY(0); pointer-events: auto; }
+    .zone-hud h4 { font-size: 0.85rem; font-weight: 600; color: #c7d2fe; margin-bottom: 0.4rem; }
+    .zone-hud .hud-row { display: flex; justify-content: space-between; align-items: center; padding: 0.25rem 0; border-bottom: 1px solid rgba(148,163,184,0.06); font-size: 0.78rem; }
+    .zone-hud .hud-row:last-child { border-bottom: none; }
+    .zone-hud .hud-label { color: #64748b; }
+    .zone-hud .hud-value { color: #e2e8f0; font-weight: 600; }
+    .zone-hud .hud-value.good { color: #4ade80; }
+    .zone-hud .hud-value.warn { color: #fbbf24; }
+    .zone-hud .hud-value.danger { color: #f87171; }
+
+    /* -- Farm stats bar (top-right) ---------------------------- */
+    .farm-stats { position: absolute; top: 12px; right: 12px; display: flex; gap: 0.5rem; z-index: 60; }
+    .stat-chip {
+      background: rgba(15,23,42,0.88);
+      border: 1px solid rgba(99,102,241,0.15);
+      border-radius: 8px;
+      padding: 0.4rem 0.75rem;
+      backdrop-filter: blur(8px);
+      text-align: center; min-width: 72px;
+    }
+    .stat-chip .chip-value { font-size: 1.05rem; font-weight: 700; color: #e2e8f0; line-height: 1.2; }
+    .stat-chip .chip-label { font-size: 0.6rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.4px; }
+
+    /* -- Detail panel (right side) ----------------------------- */
+    .detail-panel {
+      position: absolute;
+      top: 56px; right: 12px;
+      width: 310px;
+      max-height: calc(100% - 80px);
+      overflow-y: auto;
+      background: rgba(15,23,42,0.94);
+      border: 1px solid rgba(99,102,241,0.2);
+      border-radius: 12px;
+      backdrop-filter: blur(12px);
+      padding: 1rem;
+      z-index: 55;
+      opacity: 0; pointer-events: none;
+      transform: translateX(15px);
+      transition: all 0.25s ease;
+    }
+    .detail-panel.visible { opacity: 1; pointer-events: auto; transform: translateX(0); }
+    .detail-panel .close-btn { position: absolute; top: 6px; right: 8px; background: none; border: none; color: #475569; font-size: 1rem; cursor: pointer; }
+    .detail-panel .close-btn:hover { color: #e2e8f0; }
+    .detail-panel h3 { font-size: 0.9rem; font-weight: 600; color: #c7d2fe; margin-bottom: 0.6rem; }
+    .detail-panel .dp-section { margin-top: 0.6rem; }
+    .detail-panel .dp-label { font-size: 0.65rem; color: #475569; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.15rem; }
+    .detail-panel .dp-value { font-size: 0.85rem; color: #e2e8f0; }
+    .detail-panel .dp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-top: 0.5rem; }
+    .detail-panel .dp-metric { background: rgba(99,102,241,0.06); border-radius: 8px; padding: 0.5rem; text-align: center; }
+    .detail-panel .dp-metric .metric-val { font-size: 1.1rem; font-weight: 700; color: #e2e8f0; }
+    .detail-panel .dp-metric .metric-lbl { font-size: 0.62rem; color: #64748b; text-transform: uppercase; }
+    .detail-panel .dp-sparkline { margin-top: 0.5rem; }
+    .detail-panel .dp-sparkline canvas { width: 100%; height: 40px; border-radius: 6px; background: rgba(0,0,0,0.2); }
+
+    /* -- Inline editable fields -------------------------------- */
+    .dp-input-row { display: flex; align-items: center; gap: 0.35rem; margin-top: 0.3rem; }
+    .dp-input-row label { font-size: 0.68rem; color: #64748b; min-width: 20px; }
+    .dp-input-row input, .dp-input-row select {
+      background: rgba(30,41,59,0.9);
+      border: 1px solid rgba(99,102,241,0.2);
+      color: #e2e8f0;
+      padding: 0.25rem 0.4rem;
+      border-radius: 5px;
+      font-size: 0.78rem;
+      width: 60px;
+      outline: none;
+    }
+    .dp-input-row input:focus, .dp-input-row select:focus { border-color: #818cf8; }
+    .dp-input-row select { width: auto; }
+    .dp-input-row .unit { font-size: 0.62rem; color: #475569; }
+    .dp-save-btn {
+      margin-top: 0.5rem;
+      background: rgba(99,102,241,0.15);
+      border: 1px solid rgba(99,102,241,0.3);
+      color: #c7d2fe;
+      padding: 0.3rem 0.7rem;
+      border-radius: 6px;
+      font-size: 0.72rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .dp-save-btn:hover { background: rgba(99,102,241,0.25); border-color: #818cf8; }
+    .dp-save-btn.saved { background: rgba(34,197,94,0.15); border-color: rgba(34,197,94,0.3); color: #86efac; }
+
+    /* -- GWEN assist button ------------------------------------ */
+    .gwen-fab {
+      position: absolute;
+      bottom: 16px; right: 16px;
+      width: 44px; height: 44px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      border: 2px solid rgba(255,255,255,0.15);
+      color: #fff; font-size: 1.1rem;
+      cursor: pointer; z-index: 70;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 4px 20px rgba(99,102,241,0.3);
+      transition: all 0.2s;
+    }
+    .gwen-fab:hover { transform: scale(1.1); box-shadow: 0 6px 28px rgba(99,102,241,0.45); }
+    .gwen-fab .gwen-tooltip {
+      position: absolute; bottom: 52px; right: 0;
+      background: rgba(15,23,42,0.95);
+      border: 1px solid rgba(99,102,241,0.3);
+      border-radius: 8px;
+      padding: 0.4rem 0.7rem;
+      font-size: 0.72rem; white-space: nowrap;
+      opacity: 0; transition: opacity 0.2s;
+      pointer-events: none; color: #c7d2fe;
+    }
+    .gwen-fab:hover .gwen-tooltip { opacity: 1; }
+
+    /* -- Loading overlay --------------------------------------- */
+    .loading-overlay {
+      position: absolute; inset: 0;
+      background: rgba(15,23,42,0.96);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      z-index: 200; transition: opacity 0.6s;
+    }
+    .loading-overlay.done { opacity: 0; pointer-events: none; }
+    .loading-spinner { width: 44px; height: 44px; border: 3px solid rgba(99,102,241,0.15); border-top-color: #818cf8; border-radius: 50%; animation: spin 0.7s linear infinite; }
+    .loading-text { margin-top: 0.8rem; color: #64748b; font-size: 0.82rem; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* -- Tooltip ----------------------------------------------- */
+    .hover-tip {
+      position: absolute;
+      background: rgba(15,23,42,0.94);
+      border: 1px solid rgba(99,102,241,0.25);
+      border-radius: 8px;
+      padding: 0.4rem 0.65rem;
+      font-size: 0.74rem;
+      pointer-events: none; z-index: 80;
+      transform: translate(-50%, -115%);
+      white-space: nowrap;
+      opacity: 0; transition: opacity 0.12s;
+    }
+    .hover-tip.visible { opacity: 1; }
+    .hover-tip .ht-title { font-weight: 600; color: #c7d2fe; }
+    .hover-tip .ht-sub { color: #64748b; font-size: 0.66rem; margin-top: 1px; }
+
+    /* -- Status bar -------------------------------------------- */
+    .status-bar {
+      position: absolute;
+      bottom: 16px; right: 68px;
+      background: rgba(15,23,42,0.8);
+      border: 1px solid rgba(148,163,184,0.08);
+      border-radius: 6px;
+      padding: 0.25rem 0.6rem;
+      font-size: 0.62rem; color: #475569; z-index: 55;
+    }
+
+    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(99,102,241,0.2); border-radius: 3px; }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <div class="header-left">
+      <div class="breadcrumb"><a href="/LE-farm-admin.html">Farm</a><span>/</span><span>3D Viewer</span></div>
+      <h1>3D <em>Farm Viewer</em></h1>
+    </div>
+    <div class="toolbar">
+      <select id="roomSelect" title="Room filter"><option value="__all">All Rooms</option></select>
+      <div class="sep"></div>
+      <button data-overlay="none" class="active">Off</button>
+      <button data-overlay="temperature">Temp</button>
+      <button data-overlay="humidity">Humidity</button>
+      <button data-overlay="co2">CO2</button>
+      <button data-overlay="vpd">VPD</button>
+      <div class="sep"></div>
+      <button id="btnWalls" class="active" title="Toggle walls and ceiling">Walls</button>
+      <div class="sep"></div>
+      <button id="btnTop" title="Top-down view">Top</button>
+      <button id="btnAngle" title="Angled view">3D</button>
+      <button id="btnReset" title="Reset camera">Reset</button>
+    </div>
+  </div>
+
+  <div id="viewer-container">
+    <canvas id="farmCanvas"></canvas>
+    <div class="loading-overlay" id="loadingOverlay">
+      <div class="loading-spinner"></div>
+      <div class="loading-text">Loading farm environment...</div>
+    </div>
+    <div class="hover-tip" id="hoverTip">
+      <div class="ht-title" id="htTitle"></div>
+      <div class="ht-sub" id="htSub"></div>
+    </div>
+    <div class="farm-stats" id="farmStats"></div>
+    <div class="zone-hud" id="zoneHud"></div>
+    <div class="data-legend" id="dataLegend">
+      <div class="legend-title" id="legendTitle">Temperature</div>
+      <div style="flex:1">
+        <div class="gradient-bar" id="legendGradient"></div>
+        <div class="range-labels"><span id="legendMin">15C</span><span id="legendMax">35C</span></div>
+      </div>
+    </div>
+    <div class="detail-panel" id="detailPanel">
+      <button class="close-btn" id="detailClose">&#10005;</button>
+      <div id="detailContent"></div>
+    </div>
+    <div class="status-bar" id="statusBar">Ready</div>
+    <button class="gwen-fab" id="gwenFab" title="Ask GWEN about this view">G<div class="gwen-tooltip">Ask GWEN to analyze zone data</div></button>
+  </div>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+
+  <script type="module">
+  import * as THREE from 'three';
+  import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+  (function() {
+    'use strict';
+
+    function authFetch(url, opts = {}) {
+      const token = localStorage.getItem('token');
+      const h = Object.assign({}, opts.headers || {});
+      if (token) h['Authorization'] = 'Bearer ' + token;
+      if (!h['Content-Type'] && opts.body) h['Content-Type'] = 'application/json';
+      return fetch(url, Object.assign({}, opts, { headers: h }));
+    }
+
+    // ---- State -----------------------------------------------
+    const S = {
+      rooms: [], groups: [], roomMaps: {}, envData: null,
+      iotDevices: [], cropRegistry: {},
+      overlay: 'none', roomFilter: '__all',
+      scene: null, camera: null, renderer: null, controls: null,
+      raycaster: new THREE.Raycaster(), mouse: new THREE.Vector2(),
+      clock: new THREE.Clock(),
+      meshes: { floors: [], zones: [], trays: [], sensors: [], equipment: [], walls: [], ceilings: [], labels: [] },
+      zoneMeshMap: {},
+      zoneDataMap: {},
+      floorMeshMap: {},    // roomId -> floor mesh (for overlay fallback)
+      particleSystems: [],
+      hoveredZone: null,
+      selectedZone: null,
+      wallsVisible: true,
+      // Persisted dimensions keyed by group/room id
+      groupDimensions: {},   // groupId -> { length, width, height, lightOrientation }
+      roomDimensions: {},    // roomId  -> { length, width, height }
+    };
+
+    const ZONE_PALETTE = [0x6366f1, 0x8b5cf6, 0x3b82f6, 0x06b6d4, 0x10b981, 0xf59e0b, 0xef4444, 0xec4899, 0x14b8a6, 0xa855f7];
+    const STATUS_COLOR = { active: 0x22c55e, growing: 0x22c55e, deployed: 0x22c55e, planned: 0x3b82f6, draft: 0x475569, completed: 0xf59e0b, archived: 0x334155 };
+
+    const OVERLAY_CFG = {
+      temperature: { min: 15, max: 35, unit: '\u00b0C', label: 'Temperature', colors: [0x3b82f6, 0x22c55e, 0xf59e0b, 0xef4444], key: 'temp' },
+      humidity:    { min: 20, max: 95, unit: '%',   label: 'Relative Humidity', colors: [0xf59e0b, 0x22c55e, 0x3b82f6, 0x6366f1], key: 'humidity' },
+      co2:         { min: 300, max: 1800, unit: 'ppm', label: 'CO\u2082 Concentration', colors: [0x22c55e, 0xf59e0b, 0xef4444, 0x7f1d1d], key: 'co2' },
+      vpd:         { min: 0.2, max: 2.0, unit: 'kPa', label: 'Vapor Pressure Deficit', colors: [0x3b82f6, 0x22c55e, 0xf59e0b, 0xef4444], key: 'vpd' },
+    };
+
+    // ---- Persistence helpers ---------------------------------
+    function loadPersistedDimensions() {
+      try {
+        const gd = localStorage.getItem('farm3d_groupDims');
+        if (gd) S.groupDimensions = JSON.parse(gd);
+        const rd = localStorage.getItem('farm3d_roomDims');
+        if (rd) S.roomDimensions = JSON.parse(rd);
+      } catch (e) {}
+      // Hydrate from server room-map data (ceilingHeight, roomLength, roomWidth)
+      for (const [rId, map] of Object.entries(S.roomMaps)) {
+        if (!S.roomDimensions[rId]) S.roomDimensions[rId] = {};
+        const dims = S.roomDimensions[rId];
+        if (!dims.height && map.ceilingHeight) dims.height = map.ceilingHeight;
+        if (!dims.length && map.roomLength) dims.length = map.roomLength;
+        if (!dims.width && map.roomWidth) dims.width = map.roomWidth;
+      }
+    }
+    function saveGroupDimensions() {
+      try { localStorage.setItem('farm3d_groupDims', JSON.stringify(S.groupDimensions)); } catch (e) {}
+    }
+    function saveRoomDimensions() {
+      try { localStorage.setItem('farm3d_roomDims', JSON.stringify(S.roomDimensions)); } catch (e) {}
+      // Also persist ceiling height + dimensions to server via room-map
+      try {
+        for (const [rId, dims] of Object.entries(S.roomDimensions)) {
+          const map = S.roomMaps[rId];
+          if (!map) continue;
+          map.roomLength = dims.length;
+          map.roomWidth = dims.width;
+          map.ceilingHeight = dims.height;
+          authFetch('/data/room-map-' + rId + '.json', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(map)
+          }).catch(() => {});
+        }
+      } catch (e) { console.warn('[3D] Failed to persist room dimensions to server:', e.message); }
+    }
+
+    // ---- Init Three.js ---------------------------------------
+    function initScene() {
+      const container = document.getElementById('viewer-container');
+      const canvas = document.getElementById('farmCanvas');
+      const w = container.clientWidth, h = container.clientHeight;
+
+      S.scene = new THREE.Scene();
+      S.scene.background = new THREE.Color(0x0a0f1e);
+      S.scene.fog = new THREE.FogExp2(0x0a0f1e, 0.012);
+
+      S.camera = new THREE.PerspectiveCamera(45, w / h, 0.1, 400);
+      S.camera.position.set(0, 24, 28);
+
+      S.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+      S.renderer.setSize(w, h);
+      S.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      S.renderer.shadowMap.enabled = true;
+      S.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      S.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      S.renderer.toneMappingExposure = 1.1;
+
+      S.controls = new OrbitControls(S.camera, canvas);
+      S.controls.enableDamping = true;
+      S.controls.dampingFactor = 0.06;
+      S.controls.maxPolarAngle = Math.PI / 2.1;
+      S.controls.minDistance = 4;
+      S.controls.maxDistance = 80;
+
+      // Cinematic three-point lighting (brightened for detail visibility)
+      S.scene.add(new THREE.AmbientLight(0x94a3b8, 0.7));
+
+      const keyLight = new THREE.DirectionalLight(0xf1f5f9, 1.2);
+      keyLight.position.set(25, 40, 15);
+      keyLight.castShadow = true;
+      keyLight.shadow.mapSize.set(2048, 2048);
+      keyLight.shadow.camera.left = -50;
+      keyLight.shadow.camera.right = 50;
+      keyLight.shadow.camera.top = 50;
+      keyLight.shadow.camera.bottom = -50;
+      keyLight.shadow.bias = -0.0005;
+      S.scene.add(keyLight);
+
+      const fillLight = new THREE.DirectionalLight(0xa5b4fc, 0.5);
+      fillLight.position.set(-18, 25, -12);
+      S.scene.add(fillLight);
+
+      const rimLight = new THREE.DirectionalLight(0x818cf8, 0.3);
+      rimLight.position.set(0, 5, -30);
+      S.scene.add(rimLight);
+
+      // Ground
+      const ground = new THREE.Mesh(
+        new THREE.PlaneGeometry(120, 120),
+        new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 1, metalness: 0 })
+      );
+      ground.rotation.x = -Math.PI / 2;
+      ground.position.y = -0.05;
+      ground.receiveShadow = true;
+      S.scene.add(ground);
+
+      const grid = new THREE.GridHelper(60, 60, 0x131a2e, 0x131a2e);
+      grid.position.y = 0.01;
+      grid.material.transparent = true;
+      grid.material.opacity = 0.4;
+      S.scene.add(grid);
+
+      window.addEventListener('resize', () => {
+        const w2 = container.clientWidth, h2 = container.clientHeight;
+        S.camera.aspect = w2 / h2;
+        S.camera.updateProjectionMatrix();
+        S.renderer.setSize(w2, h2);
+      });
+
+      animate();
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+      S.controls.update();
+      const t = S.clock.getElapsedTime();
+      const dt = S.clock.getDelta();
+
+      S.meshes.sensors.forEach(m => {
+        if (m.userData._pulse) {
+          m.scale.setScalar(1 + 0.15 * Math.sin(t * 2 + m.userData._pulseOffset));
+        }
+      });
+
+      S.particleSystems.forEach(ps => {
+        const pos = ps.geometry.attributes.position.array;
+        for (let i = 1; i < pos.length; i += 3) {
+          pos[i] += ps.userData.speed * dt;
+          if (pos[i] > ps.userData.ceiling) pos[i] = ps.userData.floor;
+        }
+        ps.geometry.attributes.position.needsUpdate = true;
+      });
+
+      S.renderer.render(S.scene, S.camera);
+    }
+
+    // ---- Data Loading ----------------------------------------
+    async function loadAllData() {
+      const status = (msg) => { const el = document.getElementById('statusBar'); if (el) el.textContent = msg; };
+      try {
+        status('Loading farm data...');
+        const [roomsRes, groupsRes, iotRes, envRes, regRes] = await Promise.all([
+          authFetch('/data/rooms.json?t=' + Date.now()),
+          authFetch('/data/groups.json?t=' + Date.now()),
+          authFetch('/data/iot-devices.json?t=' + Date.now()),
+          authFetch('/env?hours=24&t=' + Date.now(), { cache: 'no-store' }),
+          authFetch('/data/crop-registry.json?t=' + Date.now()),
+        ]);
+
+        if (roomsRes.ok) { const d = await roomsRes.json(); S.rooms = d.rooms || d || []; }
+        if (groupsRes.ok) { const d = await groupsRes.json(); S.groups = Array.isArray(d) ? d : (d.groups || []); }
+        if (iotRes.ok) { const d = await iotRes.json(); S.iotDevices = Array.isArray(d) ? d : (d.devices || []); }
+        if (envRes.ok) { S.envData = await envRes.json(); }
+        if (regRes.ok) { const d = await regRes.json(); S.cropRegistry = d.crops || d || {}; }
+
+        status('Loading room layouts...');
+        for (const room of S.rooms) {
+          try {
+            let res = await authFetch('/data/room-map-' + room.id + '.json?t=' + Date.now());
+            if (!res.ok) res = await authFetch('/data/room-map.json?t=' + Date.now());
+            if (res.ok) S.roomMaps[room.id] = await res.json();
+          } catch (e) {}
+        }
+        if (S.rooms.length === 0) {
+          try {
+            const res = await authFetch('/data/room-map.json?t=' + Date.now());
+            if (res.ok) {
+              const data = await res.json();
+              const rid = data.roomId || 'default-room';
+              S.roomMaps[rid] = data;
+              S.rooms = [{ id: rid, name: data.name || 'Farm', zones: [] }];
+            }
+          } catch (e) {}
+        }
+
+        loadPersistedDimensions();
+        buildZoneDataMap();
+        populateRoomDropdown();
+        buildScene();
+        renderFarmStats();
+        status(S.rooms.length + ' room' + (S.rooms.length !== 1 ? 's' : '') + ' -- ' + S.groups.length + ' growing groups -- updated ' + new Date().toLocaleTimeString());
+      } catch (err) {
+        console.error('[3D Viewer]', err);
+        status('Error loading farm data');
+      } finally {
+        document.getElementById('loadingOverlay')?.classList.add('done');
+      }
+    }
+
+    // ---- Zone data map (merge env + groups) ------------------
+    function buildZoneDataMap() {
+      S.zoneDataMap = {};
+      const envZones = S.envData?.zones || [];
+
+      envZones.forEach(z => {
+        const zId = String(z.id ?? z.zone_id ?? z.name ?? '');
+        const sensors = z.sensors || {};
+        S.zoneDataMap[zId] = {
+          name: z.name || zId,
+          temp: getVal(sensors, 'tempC', 'temp', 'temperature_c'),
+          humidity: getVal(sensors, 'rh', 'humidity', 'humidity_pct'),
+          co2: getVal(sensors, 'co2', 'co2_ppm'),
+          vpd: getVal(sensors, 'vpd', 'vpd_kpa'),
+          tempHistory: getHistory(sensors, 'tempC', 'temp', 'temperature_c'),
+          humidityHistory: getHistory(sensors, 'rh', 'humidity', 'humidity_pct'),
+          co2History: getHistory(sensors, 'co2', 'co2_ppm'),
+          vpdHistory: getHistory(sensors, 'vpd', 'vpd_kpa'),
+          groups: [],
+        };
+      });
+
+      S.groups.forEach(g => {
+        const zId = String(g.zone ?? g.zoneId ?? '');
+        let entry = S.zoneDataMap[zId];
+        if (!entry) {
+          // Try matching by name
+          const key = Object.keys(S.zoneDataMap).find(k => S.zoneDataMap[k].name === zId || k === zId);
+          if (key) entry = S.zoneDataMap[key];
+        }
+        if (!entry) {
+          // Try matching zone name embedded in zoneId (e.g., "room-3xxjln-zZone 1" -> "Zone 1")
+          const zoneName = zId.replace(/^.*-z/, '');
+          const key = Object.keys(S.zoneDataMap).find(k => S.zoneDataMap[k].name === zoneName);
+          if (key) entry = S.zoneDataMap[key];
+        }
+        if (entry) entry.groups.push(g);
+      });
+    }
+
+    function getVal(sensors, ...keys) {
+      if (Array.isArray(sensors)) {
+        for (const s of sensors) {
+          const r = s.readings || s;
+          for (const k of keys) { if (r[k] != null) return Number(r[k]); }
+        }
+        return null;
+      }
+      for (const k of keys) {
+        if (sensors[k] != null) {
+          if (typeof sensors[k] === 'object' && sensors[k].current != null) return Number(sensors[k].current);
+          if (typeof sensors[k] === 'number') return sensors[k];
+        }
+      }
+      return null;
+    }
+
+    function getHistory(sensors, ...keys) {
+      if (Array.isArray(sensors)) return [];
+      for (const k of keys) {
+        if (sensors[k]?.history && Array.isArray(sensors[k].history)) return sensors[k].history;
+      }
+      return [];
+    }
+
+    // ---- Build 3D Scene --------------------------------------
+    function buildScene() {
+      // Clear all meshes
+      ['floors','zones','trays','sensors','equipment','walls','ceilings','labels'].forEach(k => {
+        (S.meshes[k] || []).forEach(m => { S.scene.remove(m); disposeMesh(m); });
+        S.meshes[k] = [];
+      });
+      S.particleSystems.forEach(ps => { S.scene.remove(ps); ps.geometry.dispose(); ps.material.dispose(); });
+      S.particleSystems.length = 0;
+      S.zoneMeshMap = {};
+      S.floorMeshMap = {};
+
+      const visible = S.roomFilter === '__all' ? S.rooms : S.rooms.filter(r => r.id === S.roomFilter);
+      let offsetX = 0;
+
+      visible.forEach((room) => {
+        const map = S.roomMaps[room.id];
+        const gridSize = map?.gridSize || 20;
+
+        // Use persisted room dimensions or fallback to grid-based
+        const dims = S.roomDimensions[room.id] || {};
+        const roomW = dims.length || gridSize;
+        const roomD = dims.width  || gridSize;
+        const wallH = dims.height || 3.5;
+
+        const cx = offsetX + roomW / 2, cz = roomD / 2;
+
+        // Floor
+        const floorGeo = new THREE.BoxGeometry(roomW, 0.12, roomD);
+        const floorMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.75, metalness: 0.05 });
+        const floor = new THREE.Mesh(floorGeo, floorMat);
+        floor.position.set(cx, 0, cz);
+        floor.receiveShadow = true;
+        floor.userData = { type: 'room', room, roomW, roomD, wallH };
+        S.scene.add(floor);
+        S.meshes.floors.push(floor);
+        S.floorMeshMap[room.id] = floor;
+
+        // Walls (4) + ceiling -- togglable, glass-like see-through
+        const wallMat = new THREE.MeshPhysicalMaterial({
+          color: 0xc8d6e5, transparent: true, opacity: 0.08,
+          roughness: 0.05, metalness: 0.1, transmission: 0.92,
+          thickness: 0.1, side: THREE.DoubleSide,
+          depthWrite: false,
+        });
+        const ceilMat = new THREE.MeshPhysicalMaterial({
+          color: 0xdbeafe, transparent: true, opacity: 0.06,
+          roughness: 0.05, metalness: 0.1, transmission: 0.95,
+          thickness: 0.05, side: THREE.DoubleSide,
+          depthWrite: false,
+        });
+
+        // front, back, left, right
+        const wallDefs = [
+          { w: roomW, d: 0.06, x: cx, z: 0 },
+          { w: roomW, d: 0.06, x: cx, z: roomD },
+          { w: 0.06, d: roomD, x: offsetX, z: cz },
+          { w: 0.06, d: roomD, x: offsetX + roomW, z: cz },
+        ];
+        wallDefs.forEach(wd => {
+          const geo = new THREE.BoxGeometry(wd.w, wallH, wd.d);
+          const wall = new THREE.Mesh(geo, wallMat.clone());
+          wall.position.set(wd.x, wallH / 2, wd.z);
+          wall.visible = S.wallsVisible;
+          wall.userData = { type: 'wall', room };
+          S.scene.add(wall);
+          S.meshes.walls.push(wall);
+          // Wireframe overlay for structural framing effect
+          const wireGeo = new THREE.EdgesGeometry(geo);
+          const wireMat = new THREE.LineBasicMaterial({ color: 0x6366f1, transparent: true, opacity: 0.12 });
+          const wire = new THREE.LineSegments(wireGeo, wireMat);
+          wire.position.copy(wall.position);
+          wire.visible = S.wallsVisible;
+          S.scene.add(wire);
+          S.meshes.walls.push(wire);
+        });
+
+        // Ceiling
+        const ceilGeo = new THREE.BoxGeometry(roomW, 0.04, roomD);
+        const ceil = new THREE.Mesh(ceilGeo, ceilMat.clone());
+        ceil.position.set(cx, wallH, cz);
+        ceil.visible = S.wallsVisible;
+        ceil.userData = { type: 'ceiling', room };
+        S.scene.add(ceil);
+        S.meshes.ceilings.push(ceil);
+        // Ceiling wireframe grid (structural framing)
+        const ceilWireGeo = new THREE.EdgesGeometry(ceilGeo);
+        const ceilWireMat = new THREE.LineBasicMaterial({ color: 0x6366f1, transparent: true, opacity: 0.1 });
+        const ceilWire = new THREE.LineSegments(ceilWireGeo, ceilWireMat);
+        ceilWire.position.copy(ceil.position);
+        ceilWire.visible = S.wallsVisible;
+        S.scene.add(ceilWire);
+        S.meshes.ceilings.push(ceilWire);
+        // Ceiling support grid lines
+        const gridDiv = Math.max(2, Math.floor(roomW / 3));
+        for (let gi = 1; gi < gridDiv; gi++) {
+          const gx = offsetX + (roomW / gridDiv) * gi;
+          const pts = [new THREE.Vector3(gx, wallH, 0), new THREE.Vector3(gx, wallH, roomD)];
+          const gLine = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: 0x475569, transparent: true, opacity: 0.08 }));
+          gLine.visible = S.wallsVisible;
+          S.scene.add(gLine);
+          S.meshes.ceilings.push(gLine);
+        }
+        const gridDivZ = Math.max(2, Math.floor(roomD / 3));
+        for (let gi = 1; gi < gridDivZ; gi++) {
+          const gz = (roomD / gridDivZ) * gi;
+          const pts = [new THREE.Vector3(offsetX, wallH, gz), new THREE.Vector3(offsetX + roomW, wallH, gz)];
+          const gLine = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: 0x475569, transparent: true, opacity: 0.08 }));
+          gLine.visible = S.wallsVisible;
+          S.scene.add(gLine);
+          S.meshes.ceilings.push(gLine);
+        }
+
+        // Wall edge glow (main structural outline)
+        const edgeGeo = new THREE.EdgesGeometry(new THREE.BoxGeometry(roomW, wallH, roomD));
+        const edgeMat = new THREE.LineBasicMaterial({ color: 0x6366f1, transparent: true, opacity: 0.25 });
+        const edges = new THREE.LineSegments(edgeGeo, edgeMat);
+        edges.position.set(cx, wallH / 2, cz);
+        edges.visible = S.wallsVisible;
+        S.scene.add(edges);
+        S.meshes.walls.push(edges);
+
+        // Room label (small, tucked in top-left corner to stay out of the way)
+        makeLabel(room.name || room.id, offsetX + 1.5, wallH + 0.3, 0.4, { size: 10, color: '#64748b', opacity: 0.5 });
+
+        // Dimension label (small, bottom corner)
+        const dimStr = roomW + 'L x ' + roomD + 'W x ' + wallH + 'H';
+        makeLabel(dimStr, offsetX + 1.5, 0.3, 0.4, { size: 8, color: '#475569', opacity: 0.5 });
+
+        // Build zones from env data if room-map doesn't have explicit zone boundaries
+        const mapZones = map?.zones || [];
+        const roomZoneNames = room.zones || [];
+        let zones = [];
+
+        if (mapZones.length > 0) {
+          zones = mapZones;
+        } else if (roomZoneNames.length > 0) {
+          // Synthesize zone rectangles from room zone name list
+          const nz = roomZoneNames.length;
+          const zoneW = roomW / nz;
+          roomZoneNames.forEach((zName, zi) => {
+            zones.push({
+              zone: zName, name: zName,
+              x1: zi * zoneW, y1: 0,
+              x2: (zi + 1) * zoneW, y2: roomD,
+            });
+          });
+        } else {
+          // Single zone covering entire room
+          zones.push({
+            zone: room.name || room.id,
+            name: room.name || room.id,
+            x1: 0, y1: 0, x2: roomW, y2: roomD,
+          });
+        }
+
+        zones.forEach((zone, zi) => {
+          const x1 = (zone.x1 ?? 0) + offsetX, y1 = zone.y1 ?? 0;
+          const x2 = (zone.x2 ?? roomW) + offsetX, y2 = zone.y2 ?? roomD;
+          const zw = Math.abs(x2 - x1), zd = Math.abs(y2 - y1);
+          const zcx = (x1 + x2) / 2, zcz = (y1 + y2) / 2;
+          const zColor = ZONE_PALETTE[zi % ZONE_PALETTE.length];
+          const zoneId = String(zone.zone ?? zone.id ?? zone.name ?? ('z' + zi));
+
+          const zoneGeo = new THREE.BoxGeometry(zw - 0.12, 0.06, zd - 0.12);
+          const zoneMat = new THREE.MeshStandardMaterial({
+            color: zColor, transparent: true, opacity: 0.15, roughness: 0.5, metalness: 0.1,
+          });
+          const zoneMesh = new THREE.Mesh(zoneGeo, zoneMat);
+          zoneMesh.position.set(zcx, 0.15, zcz);
+          zoneMesh.receiveShadow = true;
+          zoneMesh.userData = { type: 'zone', zone, room, zoneId, baseColor: zColor, baseOpacity: 0.15 };
+          S.scene.add(zoneMesh);
+          S.meshes.zones.push(zoneMesh);
+          S.zoneMeshMap[zoneId] = zoneMesh;
+
+          // Also map by variant keys for overlay matching
+          // env data zone names like "Zone 1" vs room zone refs
+          const envKey = Object.keys(S.zoneDataMap).find(k =>
+            k === zoneId || S.zoneDataMap[k].name === zoneId ||
+            k === String(zone.name) || S.zoneDataMap[k].name === String(zone.name)
+          );
+          if (envKey && envKey !== zoneId) {
+            S.zoneMeshMap[envKey] = zoneMesh;
+          }
+
+          // Zone border
+          const borderGeo = new THREE.EdgesGeometry(new THREE.BoxGeometry(zw - 0.12, 0.02, zd - 0.12));
+          const borderMat = new THREE.LineBasicMaterial({ color: zColor, transparent: true, opacity: 0.35 });
+          const border = new THREE.LineSegments(borderGeo, borderMat);
+          border.position.set(zcx, 0.16, zcz);
+          S.scene.add(border);
+          S.meshes.zones.push(border);
+
+          makeLabel(String(zone.name || ('Zone ' + (zi + 1))), x1 + 1.2, 0.4, y1 + 0.6, { size: 10, color: '#64748b', opacity: 0.6 });
+        });
+
+        // Growing groups
+        const roomGroups = S.groups.filter(g => {
+          const gr = g.roomId || g.room || '';
+          return gr === room.id || gr === room.name || (S.rooms.length === 1);
+        });
+
+        roomGroups.forEach((group, gi) => {
+          const gZone = String(group.zone ?? group.zoneId ?? '');
+          const matched = zones.find(z => String(z.zone) === gZone || String(z.name) === gZone || String(z.id) === gZone || gZone.endsWith(String(z.zone)) || gZone.endsWith(String(z.name)));
+          let gx, gz;
+          if (matched) {
+            const zx1 = (matched.x1 ?? 0) + offsetX, zy1 = matched.y1 ?? 0;
+            const zx2 = (matched.x2 ?? roomW) + offsetX, zy2 = matched.y2 ?? roomD;
+            const gDims0 = S.groupDimensions[group.id] || {};
+            const cellW = Math.max(2.0, (gDims0.length || 1.8) + 0.6);
+            const cellD = Math.max(2.0, (gDims0.width || 1.0) + 0.6);
+            const zoneW = Math.abs(zx2 - zx1);
+            const zoneD = Math.abs(zy2 - zy1);
+            const cols = Math.max(1, Math.floor((zoneW - 0.8) / cellW));
+            gx = Math.min(zx1, zx2) + 0.8 + (gi % cols) * cellW + cellW / 2;
+            gz = Math.min(zy1, zy2) + 0.8 + Math.floor(gi / cols) * cellD + cellD / 2;
+          } else {
+            gx = offsetX + 2 + (gi % 6) * 3;
+            gz = 2 + Math.floor(gi / 6) * 3;
+          }
+
+          const gStatus = (group.status || 'active').toLowerCase();
+          const trayCount = Math.max(1, Math.min(Number(group.trays) || 1, 20));
+          const color = STATUS_COLOR[gStatus] || 0x22c55e;
+
+          // Use persisted dimensions if available
+          const gDims = S.groupDimensions[group.id] || {};
+          const gLength = gDims.length || Math.min(trayCount, 4) * 0.45;
+          const gWidth  = gDims.width  || Math.ceil(trayCount / 4) * 0.45;
+          const gHeight = gDims.height || 0.3;
+          const lightOri = gDims.lightOrientation || 'out-of-canopy';
+
+          const trayGeo = new THREE.BoxGeometry(gLength, gHeight, gWidth);
+          const trayMat = new THREE.MeshStandardMaterial({ color, roughness: 0.5, metalness: 0.15 });
+          const tray = new THREE.Mesh(trayGeo, trayMat);
+          tray.position.set(gx, gHeight / 2 + 0.12, gz);
+          tray.castShadow = true;
+          tray.receiveShadow = true;
+          tray.userData = { type: 'group', group, room, dims: { length: gLength, width: gWidth, height: gHeight }, lightOrientation: lightOri };
+          S.scene.add(tray);
+          S.meshes.trays.push(tray);
+
+          // Active indicator strip on top
+          if (gStatus === 'active' || gStatus === 'growing') {
+            const indicGeo = new THREE.BoxGeometry(gLength, 0.04, gWidth);
+            const indicMat = new THREE.MeshStandardMaterial({ color: 0x4ade80, emissive: 0x4ade80, emissiveIntensity: 0.3 });
+            const indic = new THREE.Mesh(indicGeo, indicMat);
+            indic.position.set(gx, gHeight + 0.14, gz);
+            S.scene.add(indic);
+            S.meshes.trays.push(indic);
+          }
+
+          // Light bar representation
+          if (group.lights?.length) {
+            const lightY = lightOri === 'intercanopy'
+              ? gHeight / 2 + 0.12   // at canopy level
+              : gHeight + 0.35;       // above canopy
+            const lightGeo = new THREE.BoxGeometry(gLength * 0.8, 0.04, 0.12);
+            const lightColor = lightOri === 'intercanopy' ? 0xfbbf24 : 0xa78bfa;
+            const lightMat = new THREE.MeshStandardMaterial({
+              color: lightColor, emissive: lightColor, emissiveIntensity: 0.6,
+              transparent: true, opacity: 0.85,
+            });
+            const lightBar = new THREE.Mesh(lightGeo, lightMat);
+            lightBar.position.set(gx, lightY, gz);
+            lightBar.userData = { type: 'light', group, orientation: lightOri };
+            S.scene.add(lightBar);
+            S.meshes.equipment.push(lightBar);
+
+            // Light cone (downward glow)
+            const coneH = lightOri === 'intercanopy' ? 0.3 : 0.5;
+            const coneGeo = new THREE.ConeGeometry(gLength * 0.3, coneH, 6, 1, true);
+            const coneMat = new THREE.MeshBasicMaterial({
+              color: lightColor, transparent: true, opacity: 0.06, side: THREE.DoubleSide
+            });
+            const cone = new THREE.Mesh(coneGeo, coneMat);
+            cone.position.set(gx, lightY - coneH / 2, gz);
+            cone.rotation.x = Math.PI;
+            S.scene.add(cone);
+            S.meshes.equipment.push(cone);
+          }
+        });
+
+        // Devices (sensors + equipment from room-map)
+        const devices = map?.devices || [];
+        const scaleX = roomW / gridSize;
+        const scaleZ = roomD / gridSize;
+        devices.forEach((dev, di) => {
+          const dx = dev.x * scaleX + offsetX;
+          const dz = dev.y * scaleZ;
+          const cat = (dev.snapshot?.category || dev.snapshot?.type || '').toLowerCase();
+          const isSensor = cat.includes('sensor') || cat.includes('temp') || cat.includes('humid') || cat.includes('environment');
+
+          if (isSensor) {
+            const sGeo = new THREE.SphereGeometry(0.22, 20, 20);
+            const sMat = new THREE.MeshStandardMaterial({
+              color: 0xfbbf24, emissive: 0xfbbf24, emissiveIntensity: 0.5,
+              roughness: 0.3, metalness: 0.3,
+            });
+            const sMesh = new THREE.Mesh(sGeo, sMat);
+            const sY = dev.z != null ? dev.z : 1.2;
+            sMesh.position.set(dx, sY, dz);
+            sMesh.castShadow = true;
+            sMesh.userData = { type: 'sensor', device: dev, room, _pulse: true, _pulseOffset: di * 0.7 };
+            S.scene.add(sMesh);
+            S.meshes.sensors.push(sMesh);
+
+            const ringGeo = new THREE.RingGeometry(0.35, 0.4, 24);
+            const ringMat = new THREE.MeshBasicMaterial({ color: 0xfbbf24, transparent: true, opacity: 0.15, side: THREE.DoubleSide });
+            const ring = new THREE.Mesh(ringGeo, ringMat);
+            ring.rotation.x = -Math.PI / 2;
+            ring.position.set(dx, 0.02, dz);
+            S.scene.add(ring);
+            S.meshes.sensors.push(ring);
+          } else {
+            const isFan = cat.includes('fan');
+            const isZipgrow = cat.includes('zip') || cat.includes('tower') || cat.includes('vertical');
+            let eGeo, eColor = 0x475569;
+            if (isFan) {
+              eGeo = new THREE.CylinderGeometry(0.35, 0.35, 0.18, 16);
+              eColor = 0x64748b;
+            } else if (isZipgrow) {
+              eGeo = new THREE.BoxGeometry(0.3, 1.8, 0.3);
+              eColor = 0x22c55e;
+            } else {
+              eGeo = new THREE.BoxGeometry(0.6, 0.6, 0.6);
+            }
+            const eMat = new THREE.MeshStandardMaterial({ color: eColor, roughness: 0.6, metalness: 0.2 });
+            const eMesh = new THREE.Mesh(eGeo, eMat);
+            const defaultY = isFan ? wallH - 0.5 : isZipgrow ? 1.0 : 0.4;
+            const eY = dev.z != null ? dev.z : defaultY;
+            eMesh.position.set(dx, eY, dz);
+            eMesh.castShadow = true;
+            eMesh.userData = { type: 'equipment', device: dev, room, roomId: room.id, scaleX, scaleZ, offsetX };
+            S.scene.add(eMesh);
+            S.meshes.equipment.push(eMesh);
+          }
+        });
+
+        addParticles(cx, cz, roomW, roomD);
+        offsetX += roomW + 4;
+      });
+
+      // Center camera
+      if (visible.length > 0) {
+        const totalW = offsetX - 4;
+        const firstDims = S.roomDimensions[visible[0].id] || {};
+        const totalD = firstDims.width || S.roomMaps[visible[0].id]?.gridSize || 20;
+        const cx = totalW / 2, cz = totalD / 2;
+        S.controls.target.set(cx, 1, cz);
+        S.camera.position.set(cx - 8, 18, cz + 22);
+        S.controls.update();
+      }
+
+      applyOverlay(S.overlay);
+    }
+
+    // ---- Particles -------------------------------------------
+    function addParticles(cx, cz, w, d) {
+      const count = 60;
+      const positions = new Float32Array(count * 3);
+      for (let i = 0; i < count; i++) {
+        positions[i * 3] = cx + (Math.random() - 0.5) * w;
+        positions[i * 3 + 1] = 0.5 + Math.random() * 2.5;
+        positions[i * 3 + 2] = cz + (Math.random() - 0.5) * d;
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      const mat = new THREE.PointsMaterial({ color: 0x818cf8, size: 0.04, transparent: true, opacity: 0.3, sizeAttenuation: true });
+      const points = new THREE.Points(geo, mat);
+      points.userData = { speed: 0.08, ceiling: 3.2, floor: 0.3 };
+      S.scene.add(points);
+      S.particleSystems.push(points);
+    }
+
+    // ---- Labels (canvas sprite) ------------------------------
+    function makeLabel(text, x, y, z, opts = {}) {
+      const size = opts.size || 14;
+      const color = opts.color || '#94a3b8';
+      const opacity = opts.opacity ?? 1;
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      const font = (size * 4) + 'px -apple-system, BlinkMacSystemFont, sans-serif';
+      ctx.font = font;
+      const tw = ctx.measureText(text).width + 16;
+      const th = size * 5;
+      canvas.width = tw; canvas.height = th;
+      ctx.font = font;
+      ctx.fillStyle = color;
+      ctx.globalAlpha = opacity;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(text, tw / 2, th / 2);
+
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.minFilter = THREE.LinearFilter;
+      const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false, opacity });
+      const sprite = new THREE.Sprite(mat);
+      sprite.position.set(x, y, z);
+      const sc = size * 0.06;
+      sprite.scale.set(sc * (tw / th), sc, 1);
+      sprite.userData = { type: 'label' };
+      S.scene.add(sprite);
+      S.meshes.labels.push(sprite);
+    }
+
+    function disposeMesh(m) {
+      if (m.geometry) m.geometry.dispose();
+      if (m.material) { if (m.material.map) m.material.map.dispose(); m.material.dispose(); }
+    }
+
+    // ---- Overlay system (FIXED: applies to both zones AND floor) ----
+    function applyOverlay(type) {
+      S.overlay = type;
+
+      // Reset zone meshes
+      S.meshes.zones.forEach(m => {
+        if (m.isMesh && m.userData.type === 'zone') {
+          m.material.color.setHex(m.userData.baseColor);
+          m.material.opacity = m.userData.baseOpacity;
+          if (m.material.emissive) m.material.emissive.setHex(0x000000);
+          m.material.emissiveIntensity = 0;
+        }
+      });
+      // Reset floor meshes (dispose gradient textures from previous overlay)
+      Object.values(S.floorMeshMap).forEach(fm => {
+        if (fm.material.map) { fm.material.map.dispose(); fm.material.map = null; }
+        fm.material.color.setHex(0x151d2e);
+        fm.material.opacity = 0.92;
+        if (fm.material.emissive) fm.material.emissive.setHex(0x000000);
+        fm.material.emissiveIntensity = 0;
+        fm.material.needsUpdate = true;
+      });
+
+      const legend = document.getElementById('dataLegend');
+      if (type === 'none') {
+        legend.classList.remove('visible');
+        return;
+      }
+
+      const cfg = OVERLAY_CFG[type];
+      if (!cfg) { legend.classList.remove('visible'); return; }
+
+      // Collect all env data values for this metric (for fallback coloring)
+      const allVals = Object.values(S.zoneDataMap).map(d => d[cfg.key]).filter(v => v != null);
+      const hasData = allVals.length > 0;
+
+      if (!hasData) {
+        // No env data at all -- show legend but leave scene neutral
+        legend.classList.add('visible');
+        document.getElementById('legendTitle').textContent = cfg.label + ' (no data)';
+        document.getElementById('legendMin').textContent = cfg.min + cfg.unit;
+        document.getElementById('legendMax').textContent = cfg.max + cfg.unit;
+        const gradBar = document.getElementById('legendGradient');
+        gradBar.style.background = 'linear-gradient(to right, #334155, #475569)';
+        return;
+      }
+
+      // Apply gradient heatmap to floor planes using canvas textures
+      // Collect sensor positions + values per room for spatial interpolation
+      const roomSensorData = {}; // roomId -> [{x, z, val}]
+      Object.entries(S.zoneDataMap).forEach(([zId, data]) => {
+        const val = data[cfg.key];
+        if (val == null) return;
+        // Color zone meshes too
+        const t = Math.max(0, Math.min(1, (val - cfg.min) / (cfg.max - cfg.min)));
+        const color = multiLerp(cfg.colors, t);
+        let mesh = S.zoneMeshMap[zId];
+        if (!mesh) {
+          mesh = S.meshes.zones.find(m => m.isMesh && m.userData.type === 'zone' &&
+            (m.userData.zoneId === zId || String(m.userData.zone?.name) === data.name || String(m.userData.zone?.zone) === data.name)
+          );
+        }
+        if (mesh) {
+          mesh.material.color.setHex(color);
+          mesh.material.opacity = 0.45;
+          mesh.material.emissive = new THREE.Color(color);
+          mesh.material.emissiveIntensity = 0.12;
+        }
+      });
+
+      // Build per-room sensor value points from devices + env data
+      S.rooms.forEach(room => {
+        const map = S.roomMaps[room.id];
+        if (!map) return;
+        const devices = map.devices || [];
+        const gridSize = map.gridSize || 20;
+        const dims = S.roomDimensions[room.id] || {};
+        const roomW = dims.length || map.roomLength || gridSize;
+        const roomD = dims.width || map.roomWidth || gridSize;
+        const points = [];
+        // Map overlay key -> env sensor metric key for per-device source lookup
+        const envMetricKey = { temp: 'tempC', humidity: 'rh', co2: 'co2', vpd: 'vpd' }[cfg.key] || cfg.key;
+        const envZones = S.envData?.zones || [];
+
+        // Get sensor devices and their per-device env values
+        devices.forEach(dev => {
+          const cat = (dev.snapshot?.category || dev.snapshot?.type || '').toLowerCase();
+          const isSensor = cat.includes('sensor') || cat.includes('temp') || cat.includes('humid') || cat.includes('environment');
+          if (!isSensor) return;
+          const devId = dev.deviceId || '';
+          let val = null;
+
+          // Tier 1: Per-device source from env zones (freshest, per-sensor data)
+          if (devId) {
+            for (const ez of envZones) {
+              const src = ez.sensors?.[envMetricKey]?.sources?.[devId];
+              if (src && src.current != null) { val = Number(src.current); break; }
+            }
+          }
+
+          // Tier 2: Match device zone assignment to zoneDataMap
+          if (val == null && dev.snapshot?.zone != null) {
+            const devZone = String(dev.snapshot.zone);
+            const zEntry = S.zoneDataMap[devZone]
+              || S.zoneDataMap['zone-' + devZone]
+              || Object.values(S.zoneDataMap).find(d => d.name === devZone || d.name === 'Zone ' + devZone);
+            if (zEntry && zEntry[cfg.key] != null) val = zEntry[cfg.key];
+          }
+
+          // Tier 3: Fallback to any zone with data (original behavior)
+          if (val == null) {
+            const zoneVal = Object.values(S.zoneDataMap).find(d => d[cfg.key] != null);
+            if (zoneVal) val = zoneVal[cfg.key];
+          }
+
+          if (val != null) {
+            points.push({ gx: dev.x / gridSize, gz: dev.y / gridSize, val });
+          }
+        });
+        // If we have zone-level data but no sensor positions, spread values across zones
+        if (points.length === 0) {
+          const zones = map.zones || [];
+          zones.forEach((z, zi) => {
+            const zName = z.name || z.zone || ('Zone ' + (zi + 1));
+            const zData = Object.values(S.zoneDataMap).find(d => d.name === zName);
+            if (zData && zData[cfg.key] != null) {
+              const cx = ((z.x1 || 0) + (z.x2 || roomW)) / 2 / roomW;
+              const cz = ((z.y1 || 0) + (z.y2 || roomD)) / 2 / roomD;
+              points.push({ gx: cx, gz: cz, val: zData[cfg.key] });
+            }
+          });
+        }
+        // Fallback: use average across all zone data
+        if (points.length === 0 && allVals.length > 0) {
+          const avg = allVals.reduce((a, b) => a + b, 0) / allVals.length;
+          points.push({ gx: 0.5, gz: 0.5, val: avg });
+        }
+        if (points.length > 0) {
+          roomSensorData[room.id] = { points, roomW, roomD };
+        }
+      });
+
+      // Generate gradient texture per floor
+      Object.entries(S.floorMeshMap).forEach(([roomId, fm]) => {
+        const sd = roomSensorData[roomId];
+        if (!sd) return;
+        const res = 64; // texture resolution
+        const canvas = document.createElement('canvas');
+        canvas.width = res; canvas.height = res;
+        const ctx = canvas.getContext('2d');
+        const imgData = ctx.createImageData(res, res);
+        for (let py = 0; py < res; py++) {
+          for (let px = 0; px < res; px++) {
+            const fx = px / (res - 1); // 0..1 across room width
+            const fz = py / (res - 1); // 0..1 across room depth
+            // Inverse-distance weighted interpolation
+            let wSum = 0, vSum = 0;
+            sd.points.forEach(p => {
+              const dx = fx - p.gx, dz = fz - p.gz;
+              const dist = Math.sqrt(dx * dx + dz * dz) + 0.001;
+              const w = 1 / (dist * dist);
+              wSum += w;
+              vSum += w * p.val;
+            });
+            const val = wSum > 0 ? vSum / wSum : allVals[0];
+            const t = Math.max(0, Math.min(1, (val - cfg.min) / (cfg.max - cfg.min)));
+            const c = multiLerp(cfg.colors, t);
+            const idx = (py * res + px) * 4;
+            imgData.data[idx] = (c >> 16) & 0xff;
+            imgData.data[idx + 1] = (c >> 8) & 0xff;
+            imgData.data[idx + 2] = c & 0xff;
+            imgData.data[idx + 3] = 180; // semi-transparent
+          }
+        }
+        ctx.putImageData(imgData, 0, 0);
+        const tex = new THREE.CanvasTexture(canvas);
+        tex.magFilter = THREE.LinearFilter;
+        tex.minFilter = THREE.LinearFilter;
+        fm.material.map = tex;
+        fm.material.color.setHex(0xffffff);
+        fm.material.emissive = new THREE.Color(0x000000);
+        fm.material.emissiveIntensity = 0;
+        fm.material.opacity = 0.85;
+        fm.material.needsUpdate = true;
+      });
+
+      // Show legend
+      legend.classList.add('visible');
+      document.getElementById('legendTitle').textContent = cfg.label;
+      document.getElementById('legendMin').textContent = cfg.min + cfg.unit;
+      document.getElementById('legendMax').textContent = cfg.max + cfg.unit;
+      const gradBar = document.getElementById('legendGradient');
+      const stops = cfg.colors.map((c, i) => {
+        const pct = (i / (cfg.colors.length - 1)) * 100;
+        return '#' + c.toString(16).padStart(6, '0') + ' ' + pct + '%';
+      });
+      gradBar.style.background = 'linear-gradient(to right, ' + stops.join(', ') + ')';
+
+      // Also show current values on legend
+      if (allVals.length > 0) {
+        const avg = allVals.reduce((a, b) => a + b, 0) / allVals.length;
+        document.getElementById('legendTitle').textContent = cfg.label + ' (avg: ' + avg.toFixed(1) + cfg.unit + ')';
+      }
+    }
+
+    function multiLerp(colors, t) {
+      const n = colors.length - 1;
+      const i = Math.min(Math.floor(t * n), n - 1);
+      const lt = (t * n) - i;
+      return lerpColor(colors[i], colors[i + 1], lt);
+    }
+    function lerpColor(c1, c2, t) {
+      const r1 = (c1 >> 16) & 0xff, g1 = (c1 >> 8) & 0xff, b1 = c1 & 0xff;
+      const r2 = (c2 >> 16) & 0xff, g2 = (c2 >> 8) & 0xff, b2 = c2 & 0xff;
+      return (Math.round(r1 + (r2 - r1) * t) << 16) | (Math.round(g1 + (g2 - g1) * t) << 8) | Math.round(b1 + (b2 - b1) * t);
+    }
+
+    // ---- Farm stats ------------------------------------------
+    function renderFarmStats() {
+      const el = document.getElementById('farmStats');
+      const activeGroups = S.groups.filter(g => ['active', 'growing', 'deployed'].includes((g.status || '').toLowerCase()));
+      const totalTrays = activeGroups.reduce((s, g) => s + (Number(g.trays) || 0), 0);
+
+      let avgTemp = null, avgHumidity = null, avgVpd = null;
+      const vals = Object.values(S.zoneDataMap);
+      if (vals.length > 0) {
+        const temps = vals.map(v => v.temp).filter(v => v != null);
+        const hums = vals.map(v => v.humidity).filter(v => v != null);
+        const vpds = vals.map(v => v.vpd).filter(v => v != null);
+        if (temps.length) avgTemp = (temps.reduce((a, b) => a + b, 0) / temps.length).toFixed(1);
+        if (hums.length) avgHumidity = Math.round(hums.reduce((a, b) => a + b, 0) / hums.length);
+        if (vpds.length) avgVpd = (vpds.reduce((a, b) => a + b, 0) / vpds.length).toFixed(2);
+      }
+
+      let html = '';
+      if (avgTemp != null) html += '<div class="stat-chip"><div class="chip-value">' + avgTemp + '\u00b0C</div><div class="chip-label">Avg Temp</div></div>';
+      if (avgHumidity != null) html += '<div class="stat-chip"><div class="chip-value">' + avgHumidity + '%</div><div class="chip-label">Avg RH</div></div>';
+      if (avgVpd != null) html += '<div class="stat-chip"><div class="chip-value">' + avgVpd + '</div><div class="chip-label">VPD kPa</div></div>';
+      html += '<div class="stat-chip"><div class="chip-value">' + activeGroups.length + '</div><div class="chip-label">Active Groups</div></div>';
+      html += '<div class="stat-chip"><div class="chip-value">' + totalTrays + '</div><div class="chip-label">Trays</div></div>';
+      el.innerHTML = html;
+    }
+
+    // ---- Interaction -----------------------------------------
+    function onMouseMove(e) {
+      const container = document.getElementById('viewer-container');
+      const rect = container.getBoundingClientRect();
+      S.mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      S.mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+      S.raycaster.setFromCamera(S.mouse, S.camera);
+      const targets = [
+        ...S.meshes.trays.filter(m => m.userData.type === 'group'),
+        ...S.meshes.sensors.filter(m => m.userData.type === 'sensor'),
+        ...S.meshes.equipment.filter(m => m.userData.type === 'equipment' || m.userData.type === 'light'),
+        ...S.meshes.zones.filter(m => m.isMesh && m.userData.type === 'zone'),
+      ];
+      const hits = S.raycaster.intersectObjects(targets);
+      const tip = document.getElementById('hoverTip');
+      const hud = document.getElementById('zoneHud');
+
+      if (hits.length > 0) {
+        const ud = hits[0].object.userData;
+        let title = '', sub = '';
+
+        if (ud.type === 'group') {
+          const g = ud.group;
+          title = g.name || g.crop || g.recipe || 'Group';
+          const d = ud.dims;
+          sub = d.length.toFixed(1) + 'L x ' + d.width.toFixed(1) + 'W x ' + d.height.toFixed(1) + 'H | ' + (g.trays || 0) + ' trays';
+        } else if (ud.type === 'sensor') {
+          title = ud.device.snapshot?.name || 'Sensor';
+          const zData = findSensorZoneData(ud.device);
+          sub = zData ? (zData.temp?.toFixed(1) ?? '--') + '\u00b0C | ' + Math.round(zData.humidity ?? 0) + '% RH' : 'No data';
+        } else if (ud.type === 'equipment') {
+          title = ud.device?.snapshot?.name || 'Equipment';
+          sub = ud.device?.snapshot?.category || '';
+        } else if (ud.type === 'light') {
+          title = (ud.group?.lights?.[0]?.name) || 'Light';
+          sub = ud.orientation === 'intercanopy' ? 'Inter-canopy' : 'Out-of-canopy';
+        } else if (ud.type === 'zone') {
+          title = ud.zone.name || ('Zone ' + ud.zone.zone);
+          const zData = S.zoneDataMap[ud.zoneId] || findZoneDataByName(ud.zone.name || ud.zone.zone);
+          sub = zData ? (zData.temp?.toFixed(1) ?? '--') + '\u00b0C | ' + Math.round(zData.humidity ?? 0) + '% | VPD ' + (zData.vpd?.toFixed(2) ?? '--') : '';
+          if (S.hoveredZone !== ud.zoneId) { S.hoveredZone = ud.zoneId; showZoneHud(ud.zoneId, ud.zone); }
+        }
+
+        document.getElementById('htTitle').textContent = title;
+        document.getElementById('htSub').textContent = sub;
+        tip.style.left = e.clientX + 'px';
+        tip.style.top = (e.clientY - rect.top) + 'px';
+        tip.classList.add('visible');
+        document.body.style.cursor = 'pointer';
+        if (ud.type !== 'zone' && S.hoveredZone) { S.hoveredZone = null; hud.classList.remove('visible'); }
+      } else {
+        tip.classList.remove('visible');
+        document.body.style.cursor = 'default';
+        if (S.hoveredZone) { S.hoveredZone = null; hud.classList.remove('visible'); }
+      }
+    }
+
+    function findSensorZoneData(device) {
+      const zone = String(device.snapshot?.zone ?? '');
+      return S.zoneDataMap[zone] || findZoneDataByName(zone) || Object.values(S.zoneDataMap)[0] || null;
+    }
+
+    function findZoneDataByName(name) {
+      const n = String(name);
+      return Object.values(S.zoneDataMap).find(d => d.name === n) || null;
+    }
+
+    function showZoneHud(zoneId, zone) {
+      const hud = document.getElementById('zoneHud');
+      const data = S.zoneDataMap[zoneId] || findZoneDataByName(zone.name || zone.zone);
+      const zName = zone.name || ('Zone ' + zone.zone);
+
+      let html = '<h4>' + zName + '</h4>';
+      if (data) {
+        const rows = [];
+        if (data.temp != null) rows.push({ label: 'Temperature', value: data.temp.toFixed(1) + '\u00b0C', cls: tempClass(data.temp) });
+        if (data.humidity != null) rows.push({ label: 'Humidity', value: Math.round(data.humidity) + '%', cls: humidityClass(data.humidity) });
+        if (data.vpd != null) rows.push({ label: 'VPD', value: data.vpd.toFixed(2) + ' kPa', cls: vpdClass(data.vpd) });
+        if (data.co2 != null) rows.push({ label: 'CO\u2082', value: Math.round(data.co2) + ' ppm', cls: co2Class(data.co2) });
+        rows.forEach(r => {
+          html += '<div class="hud-row"><span class="hud-label">' + r.label + '</span><span class="hud-value ' + r.cls + '">' + r.value + '</span></div>';
+        });
+        if (data.groups.length > 0) {
+          html += '<div class="hud-row"><span class="hud-label">Groups</span><span class="hud-value">' + data.groups.length + '</span></div>';
+          const tt = data.groups.reduce((s, g) => s + (Number(g.trays) || 0), 0);
+          html += '<div class="hud-row"><span class="hud-label">Total Trays</span><span class="hud-value">' + tt + '</span></div>';
+        }
+      } else {
+        html += '<div class="hud-row"><span class="hud-label">No sensor data</span></div>';
+      }
+      hud.innerHTML = html;
+      hud.classList.add('visible');
+    }
+
+    function tempClass(v) { return v >= 18 && v <= 28 ? 'good' : v < 15 || v > 32 ? 'danger' : 'warn'; }
+    function humidityClass(v) { return v >= 50 && v <= 75 ? 'good' : v < 30 || v > 90 ? 'danger' : 'warn'; }
+    function vpdClass(v) { return v >= 0.8 && v <= 1.4 ? 'good' : v < 0.4 || v > 1.8 ? 'danger' : 'warn'; }
+    function co2Class(v) { return v >= 400 && v <= 1200 ? 'good' : v > 1500 ? 'danger' : 'warn'; }
+
+    // ---- Click -> detail panel with editable dimensions ------
+    function onClick(e) {
+      const container = document.getElementById('viewer-container');
+      const rect = container.getBoundingClientRect();
+      S.mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      S.mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+      S.raycaster.setFromCamera(S.mouse, S.camera);
+      const targets = [
+        ...S.meshes.floors,
+        ...S.meshes.trays.filter(m => m.userData.type === 'group'),
+        ...S.meshes.sensors.filter(m => m.userData.type === 'sensor'),
+        ...S.meshes.equipment.filter(m => m.userData.type === 'equipment' || m.userData.type === 'light'),
+        ...S.meshes.zones.filter(m => m.isMesh && m.userData.type === 'zone'),
+      ];
+      const hits = S.raycaster.intersectObjects(targets);
+      if (hits.length > 0) showDetailPanel(hits[0].object.userData);
+    }
+
+    function showDetailPanel(ud) {
+      const panel = document.getElementById('detailPanel');
+      const content = document.getElementById('detailContent');
+      panel.classList.add('visible');
+
+      if (ud.type === 'group') {
+        const g = ud.group;
+        const crop = g.crop || g.recipe || 'Unknown';
+        const d = ud.dims;
+        const gId = g.id;
+        let html = '<h3>' + (g.name || g.id) + '</h3>';
+        html += '<div class="dp-label">Crop</div><div class="dp-value">' + crop + '</div>';
+        html += '<div class="dp-label">Status</div><div class="dp-value" style="text-transform:capitalize">' + (g.status || 'active') + '</div>';
+        html += '<div class="dp-label">Location</div><div class="dp-value">' + (g.room || g.roomId || '--') + ' / ' + (g.zone || '--') + '</div>';
+        html += '<div class="dp-grid">';
+        html += '<div class="dp-metric"><div class="metric-val">' + (g.trays || 0) + '</div><div class="metric-lbl">Trays</div></div>';
+        html += '<div class="dp-metric"><div class="metric-val">' + (g.plants || 0) + '</div><div class="metric-lbl">Plants</div></div>';
+        html += '</div>';
+
+        // Editable dimensions
+        html += '<div class="dp-section"><div class="dp-label">Equipment Dimensions</div>';
+        html += '<div class="dp-input-row"><label>L</label><input type="number" step="0.1" min="0.1" id="dimL" value="' + d.length.toFixed(1) + '"><span class="unit">m</span>';
+        html += '<label>W</label><input type="number" step="0.1" min="0.1" id="dimW" value="' + d.width.toFixed(1) + '"><span class="unit">m</span>';
+        html += '<label>H</label><input type="number" step="0.1" min="0.1" id="dimH" value="' + d.height.toFixed(1) + '"><span class="unit">m</span></div>';
+        html += '</div>';
+
+        // Light orientation
+        html += '<div class="dp-section"><div class="dp-label">Light Orientation</div>';
+        html += '<div class="dp-input-row">';
+        html += '<select id="lightOri">';
+        html += '<option value="out-of-canopy"' + (ud.lightOrientation === 'out-of-canopy' ? ' selected' : '') + '>Out-of-canopy</option>';
+        html += '<option value="intercanopy"' + (ud.lightOrientation === 'intercanopy' ? ' selected' : '') + '>Inter-canopy</option>';
+        html += '</select></div></div>';
+
+        if (g.lights?.length) {
+          html += '<div class="dp-section"><div class="dp-label">Lighting</div>';
+          g.lights.forEach(l => {
+            html += '<div style="margin-top:4px;font-size:0.78rem;color:#94a3b8">' + (l.name || 'Light') + ' -- ' + (l.ppfd || '--') + ' PPFD | ' + (l.spectrum || '--') + '</div>';
+          });
+          html += '</div>';
+        }
+
+        html += '<button class="dp-save-btn" id="saveDims">Save Dimensions</button>';
+        content.innerHTML = html;
+
+        document.getElementById('saveDims').addEventListener('click', () => {
+          const l = parseFloat(document.getElementById('dimL').value) || d.length;
+          const w = parseFloat(document.getElementById('dimW').value) || d.width;
+          const h = parseFloat(document.getElementById('dimH').value) || d.height;
+          const ori = document.getElementById('lightOri').value;
+          S.groupDimensions[gId] = { length: l, width: w, height: h, lightOrientation: ori };
+          saveGroupDimensions();
+          const btn = document.getElementById('saveDims');
+          btn.textContent = 'Saved';
+          btn.classList.add('saved');
+          setTimeout(() => { btn.textContent = 'Save Dimensions'; btn.classList.remove('saved'); }, 1500);
+          buildScene();
+          renderFarmStats();
+        });
+
+      } else if (ud.type === 'zone') {
+        const z = ud.zone;
+        const data = S.zoneDataMap[ud.zoneId] || findZoneDataByName(z.name || z.zone);
+        const zName = z.name || ('Zone ' + z.zone);
+        let html = '<h3>' + zName + '</h3>';
+        html += '<div class="dp-label">Room</div><div class="dp-value">' + (ud.room?.name || '--') + '</div>';
+
+        if (data) {
+          html += '<div class="dp-grid">';
+          if (data.temp != null) html += '<div class="dp-metric"><div class="metric-val">' + data.temp.toFixed(1) + '\u00b0</div><div class="metric-lbl">Temp</div></div>';
+          if (data.humidity != null) html += '<div class="dp-metric"><div class="metric-val">' + Math.round(data.humidity) + '%</div><div class="metric-lbl">RH</div></div>';
+          if (data.vpd != null) html += '<div class="dp-metric"><div class="metric-val">' + data.vpd.toFixed(2) + '</div><div class="metric-lbl">VPD kPa</div></div>';
+          if (data.co2 != null) html += '<div class="dp-metric"><div class="metric-val">' + Math.round(data.co2) + '</div><div class="metric-lbl">CO2 ppm</div></div>';
+          html += '</div>';
+
+          if (data.tempHistory.length > 2) {
+            html += '<div class="dp-section"><div class="dp-label">Temperature (24h)</div><div class="dp-sparkline"><canvas id="sparkTemp" width="260" height="40"></canvas></div></div>';
+          }
+          if (data.humidityHistory.length > 2) {
+            html += '<div class="dp-section"><div class="dp-label">Humidity (24h)</div><div class="dp-sparkline"><canvas id="sparkHum" width="260" height="40"></canvas></div></div>';
+          }
+          if (data.groups.length > 0) {
+            html += '<div class="dp-section"><div class="dp-label">Growing Groups (' + data.groups.length + ')</div>';
+            data.groups.forEach(g => {
+              html += '<div style="margin-top:4px;padding:5px 7px;background:rgba(99,102,241,0.06);border-radius:6px;font-size:0.78rem;"><strong>' + (g.name || g.id) + '</strong><br><span style="color:#64748b">' + (g.crop || g.recipe || '--') + ' | ' + (g.trays || 0) + ' trays | ' + (g.status || 'active') + '</span></div>';
+            });
+            html += '</div>';
+          }
+        }
+        content.innerHTML = html;
+        requestAnimationFrame(() => {
+          if (data?.tempHistory.length > 2) drawSparkline('sparkTemp', data.tempHistory, '#818cf8');
+          if (data?.humidityHistory.length > 2) drawSparkline('sparkHum', data.humidityHistory, '#06b6d4');
+        });
+
+      } else if (ud.type === 'room') {
+        const r = ud.room;
+        const rId = r.id;
+        const dims = S.roomDimensions[rId] || {};
+        const map = S.roomMaps[rId];
+        const gs = map?.gridSize || 20;
+        const rL = dims.length || gs;
+        const rW = dims.width  || gs;
+        const rH = dims.height || 3.5;
+        const roomGroups = S.groups.filter(g => (g.roomId || g.room) === r.id || (g.roomId || g.room) === r.name);
+
+        let html = '<h3>' + (r.name || r.id) + '</h3>';
+        html += '<div class="dp-grid">';
+        html += '<div class="dp-metric"><div class="metric-val">' + (r.zones || []).length + '</div><div class="metric-lbl">Zones</div></div>';
+        html += '<div class="dp-metric"><div class="metric-val">' + roomGroups.length + '</div><div class="metric-lbl">Groups</div></div>';
+        html += '<div class="dp-metric"><div class="metric-val">' + roomGroups.reduce((s, g) => s + (Number(g.trays) || 0), 0) + '</div><div class="metric-lbl">Trays</div></div>';
+        html += '</div>';
+
+        // Editable room dimensions
+        html += '<div class="dp-section"><div class="dp-label">Room Dimensions</div>';
+        html += '<div class="dp-input-row"><label>L</label><input type="number" step="0.5" min="1" id="roomL" value="' + rL + '"><span class="unit">m</span>';
+        html += '<label>W</label><input type="number" step="0.5" min="1" id="roomW" value="' + rW + '"><span class="unit">m</span>';
+        html += '<label>H</label><input type="number" step="0.1" min="1" id="roomH" value="' + rH + '"><span class="unit">m</span></div>';
+        html += '</div>';
+        html += '<button class="dp-save-btn" id="saveRoom">Save Room Dimensions</button>';
+        content.innerHTML = html;
+
+        document.getElementById('saveRoom').addEventListener('click', () => {
+          const l = parseFloat(document.getElementById('roomL').value) || rL;
+          const w = parseFloat(document.getElementById('roomW').value) || rW;
+          const h = parseFloat(document.getElementById('roomH').value) || rH;
+          S.roomDimensions[rId] = { length: l, width: w, height: h };
+          saveRoomDimensions();
+          const btn = document.getElementById('saveRoom');
+          btn.textContent = 'Saved';
+          btn.classList.add('saved');
+          setTimeout(() => { btn.textContent = 'Save Room Dimensions'; btn.classList.remove('saved'); }, 1500);
+          buildScene();
+          renderFarmStats();
+        });
+
+      } else if (ud.type === 'sensor') {
+        const d = ud.device;
+        const zData = findSensorZoneData(d);
+        let html = '<h3>' + (d.snapshot?.name || d.deviceId || 'Sensor') + '</h3>';
+        html += '<div class="dp-label">Category</div><div class="dp-value">' + (d.snapshot?.category || 'environmental') + '</div>';
+        html += '<div class="dp-label">Position</div><div class="dp-value">Grid (' + d.x + ', ' + d.y + ')</div>';
+        if (zData) {
+          html += '<div class="dp-grid">';
+          if (zData.temp != null) html += '<div class="dp-metric"><div class="metric-val">' + zData.temp.toFixed(1) + '\u00b0</div><div class="metric-lbl">Temp</div></div>';
+          if (zData.humidity != null) html += '<div class="dp-metric"><div class="metric-val">' + Math.round(zData.humidity) + '%</div><div class="metric-lbl">RH</div></div>';
+          if (zData.vpd != null) html += '<div class="dp-metric"><div class="metric-val">' + zData.vpd.toFixed(2) + '</div><div class="metric-lbl">VPD</div></div>';
+          if (zData.co2 != null) html += '<div class="dp-metric"><div class="metric-val">' + Math.round(zData.co2) + '</div><div class="metric-lbl">CO2</div></div>';
+          html += '</div>';
+        }
+        content.innerHTML = html;
+
+      } else if (ud.type === 'equipment' || ud.type === 'light') {
+        const d = ud.device;
+        let html = '';
+        if (ud.type === 'light') {
+          html = '<h3>' + ((ud.group?.lights?.[0]?.name) || 'Light') + '</h3>';
+          html += '<div class="dp-label">Orientation</div><div class="dp-value" style="text-transform:capitalize">' + (ud.orientation === 'intercanopy' ? 'Inter-canopy' : 'Out-of-canopy') + '</div>';
+          html += '<div class="dp-label">Group</div><div class="dp-value">' + (ud.group?.name || '--') + '</div>';
+          if (ud.group?.lights?.[0]) {
+            const l = ud.group.lights[0];
+            html += '<div class="dp-grid">';
+            if (l.ppfd) html += '<div class="dp-metric"><div class="metric-val">' + l.ppfd + '</div><div class="metric-lbl">PPFD</div></div>';
+            if (l.ppf) html += '<div class="dp-metric"><div class="metric-val">' + l.ppf + '</div><div class="metric-lbl">PPF</div></div>';
+            html += '</div>';
+            if (l.spectrum) html += '<div class="dp-label">Spectrum</div><div class="dp-value">' + l.spectrum + '</div>';
+          }
+        } else {
+          const devName = d?.snapshot?.name || d?.deviceId || 'Equipment';
+          const devCat = d?.snapshot?.category || d?.snapshot?.type || '';
+          const rId = ud.roomId || ud.room?.id || '';
+          // Count identical equipment (same category + name) for bulk update
+          const allDevices = Object.values(S.roomMaps).flatMap(m => m?.devices || []);
+          const identicalDevices = allDevices.filter(od => {
+            const oName = od?.snapshot?.name || od?.deviceId || '';
+            const oCat = od?.snapshot?.category || od?.snapshot?.type || '';
+            return oCat === devCat && oName === devName;
+          });
+          const identicalCount = identicalDevices.length;
+
+          html = '<h3>' + devName + '</h3>';
+          html += '<div class="dp-label">Category</div><div class="dp-value">' + (devCat || '--') + '</div>';
+          html += '<div class="dp-label">Position</div><div class="dp-value">Grid (' + (d?.x ?? '--') + ', ' + (d?.y ?? '--') + ', z=' + (d?.z != null ? d.z.toFixed(1) : 'auto') + ')</div>';
+          if (identicalCount > 1) {
+            html += '<div class="dp-label">Identical Units</div><div class="dp-value" style="color:#818cf8">' + identicalCount + ' x ' + devName + '</div>';
+          }
+
+          // Editable equipment fields
+          html += '<div class="dp-section"><div class="dp-label">Equipment Details</div>';
+          html += '<div class="dp-input-row"><label>Name</label><input type="text" id="eqName" value="' + devName + '" style="flex:1"></div>';
+          html += '<div class="dp-input-row"><label>Cat</label><input type="text" id="eqCat" value="' + devCat + '" style="flex:1"></div>';
+          html += '</div>';
+
+          // Position editing
+          html += '<div class="dp-section"><div class="dp-label">Move Equipment</div>';
+          html += '<div class="dp-input-row"><label>X</label><input type="number" step="1" min="0" id="eqPosX" value="' + (d?.x ?? 0) + '" style="flex:1">';
+          html += '<label>Y</label><input type="number" step="1" min="0" id="eqPosY" value="' + (d?.y ?? 0) + '" style="flex:1"></div>';
+          const catLow = devCat.toLowerCase();
+          const rmDims = S.roomDimensions[rId] || {};
+          const defaultZ = catLow.includes('fan') ? ((rmDims.height || 3.5) - 0.5).toFixed(1) : catLow.includes('zip') || catLow.includes('tower') ? '1.0' : catLow.includes('sensor') ? '1.2' : '0.4';
+          html += '<div class="dp-input-row"><label>Z (height m)</label><input type="number" step="0.1" min="0" id="eqPosZ" value="' + (d?.z != null ? d.z : defaultZ) + '" style="flex:1"></div>';
+          html += '</div>';
+
+          if (identicalCount > 1) {
+            html += '<button class="dp-save-btn" id="saveEqAll">Update All ' + identicalCount + ' ' + devName + '</button>';
+          }
+          html += '<button class="dp-save-btn" id="saveEqOne" style="margin-top:0.3rem">' + (identicalCount > 1 ? 'Update This One Only' : 'Save Equipment') + '</button>';
+          content.innerHTML = html;
+
+          // Save-one handler (name/cat/position for this device only)
+          document.getElementById('saveEqOne').addEventListener('click', async () => {
+            const btn = document.getElementById('saveEqOne');
+            const newName = document.getElementById('eqName').value.trim() || devName;
+            const newCat = document.getElementById('eqCat').value.trim() || devCat;
+            const newX = parseInt(document.getElementById('eqPosX').value, 10);
+            const newY = parseInt(document.getElementById('eqPosY').value, 10);
+            const newZ = parseFloat(document.getElementById('eqPosZ').value);
+            if (!d.snapshot) d.snapshot = {};
+            d.snapshot.name = newName;
+            d.snapshot.category = newCat;
+            if (!isNaN(newX)) d.x = newX;
+            if (!isNaN(newY)) d.y = newY;
+            if (!isNaN(newZ)) d.z = newZ;
+            console.log('[3D] Save-one:', newName, newCat, 'room:', rId);
+            if (!rId || !S.roomMaps[rId]) {
+              btn.textContent = 'Save Failed (no room)'; btn.style.background = '#dc2626';
+              console.error('[3D] Save-one: no room context, rId=', rId);
+              setTimeout(() => { btn.textContent = identicalCount > 1 ? 'Update This One Only' : 'Save Equipment'; btn.style.background = ''; }, 3000);
+              return;
+            }
+            try {
+                const resp = await authFetch('/data/room-map-' + rId + '.json', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(S.roomMaps[rId])
+                });
+                const result = await resp.json().catch(() => ({}));
+                if (!resp.ok || !result.success) {
+                  btn.textContent = 'Save Failed'; btn.style.background = '#dc2626';
+                  console.error('[3D] Save-one failed:', resp.status, result);
+                  setTimeout(() => { btn.textContent = identicalCount > 1 ? 'Update This One Only' : 'Save Equipment'; btn.style.background = ''; }, 3000);
+                  return;
+                }
+                console.log('[3D] Save-one OK:', result);
+              } catch (err) {
+                btn.textContent = 'Save Failed'; btn.style.background = '#dc2626';
+                console.error('[3D] Save-one error:', err);
+                setTimeout(() => { btn.textContent = identicalCount > 1 ? 'Update This One Only' : 'Save Equipment'; btn.style.background = ''; }, 3000);
+                return;
+            }
+            btn.textContent = 'Saved'; btn.classList.add('saved');
+            setTimeout(() => { btn.textContent = identicalCount > 1 ? 'Update This One Only' : 'Save Equipment'; btn.classList.remove('saved'); }, 1500);
+            buildScene();
+          });
+
+          // Bulk update handler (name + category across all identical devices)
+          const bulkBtn = document.getElementById('saveEqAll');
+          if (bulkBtn) {
+            bulkBtn.addEventListener('click', async () => {
+              const newName = document.getElementById('eqName').value.trim() || devName;
+              const newCat = document.getElementById('eqCat').value.trim() || devCat;
+              console.log('[3D] Bulk update: renaming', devCat + '/' + devName, '->', newCat + '/' + newName);
+              let updated = 0;
+              const roomsToSave = new Set();
+              for (const [rmId, map] of Object.entries(S.roomMaps)) {
+                if (!map?.devices) continue;
+                for (const od of map.devices) {
+                  const oName = od?.snapshot?.name || od?.deviceId || '';
+                  const oCat = od?.snapshot?.category || od?.snapshot?.type || '';
+                  if (oCat === devCat && oName === devName) {
+                    if (!od.snapshot) od.snapshot = {};
+                    od.snapshot.name = newName;
+                    od.snapshot.category = newCat;
+                    updated++;
+                    roomsToSave.add(rmId);
+                  }
+                }
+              }
+              console.log('[3D] Bulk matched', updated, 'devices in', roomsToSave.size, 'room(s)');
+              let saveErrors = 0;
+              for (const rmId of roomsToSave) {
+                try {
+                  const resp = await authFetch('/data/room-map-' + rmId + '.json', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(S.roomMaps[rmId])
+                  });
+                  const result = await resp.json().catch(() => ({}));
+                  if (!resp.ok || !result.success) {
+                    console.error('[3D] Bulk save failed for room', rmId, ':', resp.status, result);
+                    saveErrors++;
+                  } else {
+                    console.log('[3D] Bulk save OK for room', rmId, ':', result);
+                  }
+                } catch (err) {
+                  console.error('[3D] Bulk save error for room', rmId, ':', err);
+                  saveErrors++;
+                }
+              }
+              if (saveErrors > 0) {
+                bulkBtn.textContent = 'Save Failed (' + saveErrors + ' error' + (saveErrors > 1 ? 's' : '') + ')';
+                bulkBtn.style.background = '#dc2626';
+                setTimeout(() => { bulkBtn.textContent = 'Update All ' + identicalCount + ' ' + devName; bulkBtn.style.background = ''; }, 3000);
+              } else {
+                bulkBtn.textContent = 'Updated ' + updated + ' unit' + (updated !== 1 ? 's' : '');
+                bulkBtn.classList.add('saved');
+                setTimeout(() => {
+                  bulkBtn.textContent = 'Update All ' + identicalCount + ' ' + newName;
+                  bulkBtn.classList.remove('saved');
+                }, 1500);
+              }
+              buildScene();
+            });
+          }
+          return;
+        }
+        content.innerHTML = html;
+      }
+    }
+
+    // ---- Sparkline -------------------------------------------
+    function drawSparkline(canvasId, data, color) {
+      const canvas = document.getElementById(canvasId);
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      const w = canvas.width, h = canvas.height;
+      ctx.clearRect(0, 0, w, h);
+      const valid = data.filter(v => v != null && !isNaN(v));
+      if (valid.length < 2) return;
+      const min = Math.min(...valid), max = Math.max(...valid);
+      const range = max - min || 1;
+      const step = w / (valid.length - 1);
+      const grad = ctx.createLinearGradient(0, 0, 0, h);
+      grad.addColorStop(0, color + '30');
+      grad.addColorStop(1, color + '05');
+      ctx.beginPath();
+      ctx.moveTo(0, h);
+      valid.forEach((v, i) => { const x = i * step; const y = h - ((v - min) / range) * (h - 4) - 2; ctx.lineTo(x, y); });
+      ctx.lineTo(w, h); ctx.closePath();
+      ctx.fillStyle = grad; ctx.fill();
+      ctx.beginPath();
+      valid.forEach((v, i) => { const x = i * step; const y = h - ((v - min) / range) * (h - 4) - 2; i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); });
+      ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.stroke();
+      const lastY = h - ((valid[valid.length - 1] - min) / range) * (h - 4) - 2;
+      ctx.beginPath(); ctx.arc(w - 1, lastY, 2.5, 0, Math.PI * 2); ctx.fillStyle = color; ctx.fill();
+    }
+
+    // ---- Camera presets --------------------------------------
+    function animateTo(target, duration) {
+      duration = duration || 600;
+      const start = { x: S.camera.position.x, y: S.camera.position.y, z: S.camera.position.z };
+      const t0 = performance.now();
+      function step(now) {
+        const p = Math.min(1, (now - t0) / duration);
+        const e = 1 - Math.pow(1 - p, 3);
+        S.camera.position.x = start.x + (target.x - start.x) * e;
+        S.camera.position.y = start.y + (target.y - start.y) * e;
+        S.camera.position.z = start.z + (target.z - start.z) * e;
+        if (p < 1) requestAnimationFrame(step);
+      }
+      requestAnimationFrame(step);
+    }
+
+    function populateRoomDropdown() {
+      const sel = document.getElementById('roomSelect');
+      sel.innerHTML = '<option value="__all">All Rooms</option>';
+      S.rooms.forEach(r => {
+        const opt = document.createElement('option');
+        opt.value = r.id;
+        opt.textContent = r.name || r.id;
+        sel.appendChild(opt);
+      });
+    }
+
+    // ---- Toggle walls/ceiling --------------------------------
+    function toggleWalls() {
+      S.wallsVisible = !S.wallsVisible;
+      S.meshes.walls.forEach(m => { m.visible = S.wallsVisible; });
+      S.meshes.ceilings.forEach(m => { m.visible = S.wallsVisible; });
+      const btn = document.getElementById('btnWalls');
+      btn.classList.toggle('active', S.wallsVisible);
+    }
+
+    // ---- GWEN integration ------------------------------------
+    function openGwenWithContext() {
+      const envSummary = {};
+      Object.entries(S.zoneDataMap).forEach(function(entry) {
+        var id = entry[0], data = entry[1];
+        envSummary[data.name || id] = {
+          temp: data.temp, humidity: data.humidity, vpd: data.vpd, co2: data.co2,
+          groups: data.groups.map(function(g) { return { name: g.name, crop: g.crop || g.recipe, trays: g.trays, status: g.status }; }),
+        };
+      });
+      var prompt = 'I am looking at the 3D Farm Viewer. Here is the current environment snapshot:\n' + JSON.stringify(envSummary, null, 2) + '\n\nCan you analyze the current growing conditions and suggest any adjustments?';
+      window.parent?.postMessage({ type: 'gwen-query', prompt: prompt }, '*');
+      if (navigator.clipboard) navigator.clipboard.writeText(prompt).catch(function(){});
+    }
+
+    // ---- Events ----------------------------------------------
+    function bindEvents() {
+      document.querySelectorAll('.toolbar button[data-overlay]').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          document.querySelectorAll('.toolbar button[data-overlay]').forEach(function(b) { b.classList.remove('active'); });
+          btn.classList.add('active');
+          applyOverlay(btn.dataset.overlay);
+        });
+      });
+
+      document.getElementById('btnWalls').addEventListener('click', toggleWalls);
+      document.getElementById('btnTop').addEventListener('click', function() { var t = S.controls.target; animateTo({ x: t.x, y: 35, z: t.z + 0.1 }); });
+      document.getElementById('btnAngle').addEventListener('click', function() { var t = S.controls.target; animateTo({ x: t.x - 10, y: 16, z: t.z + 18 }); });
+      document.getElementById('btnReset').addEventListener('click', function() {
+        var totalW = Object.values(S.roomMaps).reduce(function(s, m) { return s + (m.gridSize || 20); }, 0) || 20;
+        var cx = totalW / 2, cz = 10;
+        S.controls.target.set(cx, 1, cz);
+        animateTo({ x: cx - 8, y: 18, z: cz + 22 });
+      });
+
+      document.getElementById('roomSelect').addEventListener('change', function(e) {
+        S.roomFilter = e.target.value;
+        buildScene();
+        renderFarmStats();
+      });
+
+      var canvas = document.getElementById('farmCanvas');
+      canvas.addEventListener('mousemove', onMouseMove);
+      canvas.addEventListener('click', onClick);
+      document.getElementById('detailClose').addEventListener('click', function() { document.getElementById('detailPanel').classList.remove('visible'); });
+      document.getElementById('gwenFab').addEventListener('click', openGwenWithContext);
+    }
+
+    // ---- Auto-refresh ----------------------------------------
+    function startAutoRefresh() {
+      S.lastEnvUpdate = Date.now();
+      setInterval(function() {
+        authFetch('/env?hours=24&t=' + Date.now(), { cache: 'no-store' }).then(function(res) {
+          if (res.ok) return res.json();
+        }).then(function(data) {
+          if (data) {
+            S.envData = data;
+            S.lastEnvUpdate = Date.now();
+            buildZoneDataMap();
+            applyOverlay(S.overlay);
+            renderFarmStats();
+            document.getElementById('statusBar').textContent = 'Updated ' + new Date().toLocaleTimeString();
+          }
+        }).catch(function(){});
+      }, 120000);
+      // Staleness check every 60s
+      setInterval(function() {
+        var age = Date.now() - (S.lastEnvUpdate || Date.now());
+        if (age > 300000) { // >5 min since last successful env update
+          var bar = document.getElementById('statusBar');
+          var mins = Math.round(age / 60000);
+          bar.textContent = 'Data may be stale (' + mins + ' min since last update)';
+          bar.style.color = '#f59e0b';
+        }
+      }, 60000);
+    }
+
+    // ---- Bootstrap -------------------------------------------
+    document.addEventListener('DOMContentLoaded', function() {
+      initScene();
+      bindEvents();
+      loadAllData();
+      startAutoRefresh();
+      // Full data refresh every 10 min (rooms, groups, devices)
+      setInterval(function() { loadAllData(); }, 600000);
+    });
+
+  })();
+  </script>
+</body>
+</html>

@@ -615,18 +615,19 @@ const GPT_TOOLS = [
     type: 'function',
     function: {
       name: 'update_group',
-      description: 'Update a grow group (ZipGrow tower, rack, growing unit) — rename, change tray count, assign crop, or update status. Groups are the physical growing units that hold plants. WRITE operation.',
+      description: 'Update grow groups (ZipGrow towers, racks, growing units) — rename, change tray count, assign crop, or update status. Supports single-group update by group_id, or BULK update with bulk=true + match_name to update ALL groups whose name contains the match (e.g. match_name="ZipGrow Standard" updates all 78 towers at once). WRITE operation.',
       parameters: {
         type: 'object',
         properties: {
-          group_id: { type: 'string', description: 'Group ID or name to update (e.g. "ZipGrow Standard 1" or full ID)' },
-          name: { type: 'string', description: 'New group name' },
-          trays: { type: 'number', description: 'New tray count' },
-          crop: { type: 'string', description: 'Crop to assign to this group' },
-          recipe: { type: 'string', description: 'Growing recipe/plan name' },
-          status: { type: 'string', description: 'New status: draft, active, harvesting, idle' }
-        },
-        required: ['group_id']
+          group_id: { type: 'string', description: 'Group ID or name to update for single mode (e.g. "ZipGrow Standard 1" or full ID)' },
+          name: { type: 'string', description: 'New group name (single mode only)' },
+          trays: { type: 'number', description: 'New tray count for matched group(s)' },
+          crop: { type: 'string', description: 'Crop to assign to matched group(s)' },
+          recipe: { type: 'string', description: 'Growing recipe/plan name for matched group(s)' },
+          status: { type: 'string', description: 'New status for matched group(s): draft, active, harvesting, idle' },
+          match_name: { type: 'string', description: 'For bulk: match groups whose name contains this string (e.g. "ZipGrow Standard")' },
+          bulk: { type: 'boolean', description: 'Set to true to update ALL matching groups at once' }
+        }
       }
     }
   },
@@ -2097,8 +2098,8 @@ async function buildSystemPrompt(farmId) {
         farmContext += `  Unassigned: ${deviceResult.unassigned_devices.map(d => d.name || d.id).join(', ')}\n`;
       }
       farmContext += `Use update_device to move devices between zones. Use get_device_status for full details.\n`;
-      farmContext += `Use update_equipment to rename/recategorize equipment in the room map (fans, ZipGrow towers, etc.). Use bulk=true with match_name/match_category to rename all matching devices at once.\n`;
-      farmContext += `Use update_group to modify grow groups (ZipGrow units) -- rename, change tray count, assign crops, or update status.\n`;
+      farmContext += `Use update_equipment to rename/recategorize equipment in the room map (fans, ZipGrow towers, etc.). Use bulk=true with match_name/match_category to update all matching devices at once. Name matching is partial (contains).\n`;
+      farmContext += `Use update_group to modify grow groups (ZipGrow units) -- rename, change tray count, assign crops, or update status. Use bulk=true with match_name to update ALL matching groups at once (e.g. match_name="ZipGrow Standard" updates all 78 towers).\n`;
     }
   } catch { /* non-fatal */ }
 
@@ -2534,9 +2535,10 @@ FARM BUILDING WORKFLOW:
 EQUIPMENT MANAGEMENT:
 - Equipment in the room map (fans, ZipGrow towers, dehumidifiers, lights, etc.) can be renamed, recategorized, and repositioned using update_equipment.
 - Grow groups (ZipGrow units, racks) can be updated using update_group -- rename, change tray count, assign crops, or update status.
-- For bulk operations (e.g., "rename all fans to ZipGrow Tower"), use update_equipment with bulk=true, match_category, and match_name.
+- For bulk equipment operations (e.g., "rename all fans to ZipGrow Tower"), use update_equipment with bulk=true, match_category, and/or match_name. Name matching is partial (contains), so match_name="ZipGrow" matches "ZipGrow Standard 30".
+- For bulk group operations (e.g., "set all ZipGrow units to active"), use update_group with bulk=true and match_name. Example: bulk=true, match_name="ZipGrow Standard", status="active" updates all 78 towers at once.
 - Equipment and grow groups are different things: equipment refers to physical devices in the room-map layout (3D viewer); groups are logical growing units that hold plants and are tracked for crop assignments.
-- When the user says "update my ZipGrow units" or "rename the fans", use update_equipment for room-map devices or update_group for grow groups depending on context.
+- When the user says "update my ZipGrow units" or "change all ZipGrow status", use update_group with bulk=true and match_name. When they say "rename the fans" or "recategorize equipment", use update_equipment with bulk=true.
 
 SETUP ORCHESTRATOR (ADVANCED):
 - You also have access to get_setup_progress and get_setup_guidance for deeper, phase-by-phase farm configuration intelligence.
