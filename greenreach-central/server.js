@@ -1330,6 +1330,37 @@ async function syncFarmData(options = {}) {
       logger.info(`[${syncLabel}] In-memory: room_map for ${[...aliasFarmIds].join(', ')}`);
     }
 
+    // Per-room map files: fetch room-map-{roomId}.json for each known room
+    // Room Mapper saves per-room files but SYNC_DATA_FILES only has room-map.json (legacy).
+    // This ensures Central has zone geometry, equipment placements, and x/y/z coordinates.
+    if (!store.room_maps) store.room_maps = new Map();
+    const roomsForMapSync = fetched['rooms.json']
+      ? (Array.isArray(fetched['rooms.json']) ? fetched['rooms.json'] : (fetched['rooms.json'].rooms || []))
+      : [];
+    const perRoomMaps = {};
+    for (const rm of roomsForMapSync) {
+      const rmId = rm.id || rm.room_id;
+      if (!rmId) continue;
+      const mapFile = `room-map-${rmId}.json`;
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 8000);
+        const res = await fetch(`${edgeUrl}/data/${mapFile}`, { headers: leProxyHeaders(), signal: controller.signal });
+        clearTimeout(timeout);
+        if (res.ok) {
+          const mapData = await res.json();
+          perRoomMaps[rmId] = mapData;
+          logger.info(`[${syncLabel}] Fetched per-room map: ${mapFile} (${(mapData.zones || []).length} zones, ${(mapData.devices || []).length} devices)`);
+        }
+      } catch (err) {
+        logger.warn(`[${syncLabel}] Could not fetch ${mapFile}: ${err.message}`);
+      }
+    }
+    if (Object.keys(perRoomMaps).length > 0) {
+      for (const fid of aliasFarmIds) store.room_maps.set(fid, perRoomMaps);
+      logger.info(`[${syncLabel}] In-memory: ${Object.keys(perRoomMaps).length} per-room map(s) for ${[...aliasFarmIds].join(', ')}`);
+    }
+
     // Farm profile: store farm.json as farm_profile for admin API
     if (farmData && (farmData.name || farmData.farmName || farmData.farmId)) {
       if (!store.farm_profile) store.farm_profile = new Map();
@@ -1504,6 +1535,12 @@ async function syncFarmData(options = {}) {
           } else {
             logger.info(`[${syncLabel}] DB: Skipping room_map upsert — DB already has ${existingRoomMap.devices.length} device(s) for ${farmId} (browser is authoritative)`);
           }
+        }
+
+        // Per-room maps: store all per-room maps as a single JSON object keyed by roomId
+        if (Object.keys(perRoomMaps).length > 0) {
+          await upsertFarmData('room_maps', perRoomMaps);
+          logger.info(`[${syncLabel}] DB: ${Object.keys(perRoomMaps).length} per-room map(s) for ${farmId}`);
         }
 
         const lightSetups = resolve('light-setups.json', 'light-setups.json');

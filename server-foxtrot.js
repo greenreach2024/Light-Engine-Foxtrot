@@ -30842,10 +30842,117 @@ function syncZonesToRoomsJson(roomMapBody, baseName) {
     const roomsPath = path.join(DATA_DIR, 'rooms.json');
     fs.writeFileSync(roomsPath, JSON.stringify(roomsData, null, 2));
     console.log(`[zone-rooms-sync] Updated rooms.json: room ${targetRoomId} now has ${zoneNames.length} zone(s): ${zoneNames.join(', ')}`);
+
+    // Cascade zone removals to groups.json and iot-devices.json
+    const removedZones = existingZones.filter(z => !zoneNames.includes(z));
+    if (removedZones.length > 0) {
+      const fallbackZone = zoneNames[0] || 'Unassigned';
+      console.log(`[zone-cascade] ${removedZones.length} zone(s) removed: ${removedZones.join(', ')}. Fallback zone: "${fallbackZone}"`);
+
+      // Cascade to groups.json: reassign groups from deleted zones
+      try {
+        const groupsPath = path.join(DATA_DIR, 'groups.json');
+        if (fs.existsSync(groupsPath)) {
+          const groupsRaw = JSON.parse(fs.readFileSync(groupsPath, 'utf8'));
+          const groups = Array.isArray(groupsRaw) ? groupsRaw : (groupsRaw.groups || []);
+          let groupsChanged = 0;
+          const roomName = room.name || targetRoomId;
+          for (const g of groups) {
+            const gRoom = g.room || g.roomName || '';
+            const gZone = g.zone || '';
+            if (gRoom === roomName && removedZones.includes(gZone)) {
+              g.zone = fallbackZone;
+              groupsChanged++;
+            }
+          }
+          if (groupsChanged > 0) {
+            const groupsPayload = Array.isArray(groupsRaw) ? groups : { ...groupsRaw, groups };
+            fs.writeFileSync(groupsPath, JSON.stringify(groupsPayload, null, 2));
+            console.log(`[zone-cascade] Reassigned ${groupsChanged} group(s) from removed zones to "${fallbackZone}"`);
+          }
+        }
+      } catch (groupErr) {
+        console.warn('[zone-cascade] Failed to cascade zone removal to groups.json:', groupErr.message);
+      }
+
+      // Cascade to iot-devices.json: clear zone for devices in deleted zones
+      try {
+        const iotPath = path.join(DATA_DIR, 'iot-devices.json');
+        if (fs.existsSync(iotPath)) {
+          const iotRaw = JSON.parse(fs.readFileSync(iotPath, 'utf8'));
+          const devices = Array.isArray(iotRaw) ? iotRaw : (iotRaw.devices || []);
+          let devicesChanged = 0;
+          for (const d of devices) {
+            const dZone = d.zone || '';
+            if (removedZones.includes(dZone) || removedZones.some(rz => dZone === rz || dZone === `Zone ${rz}`)) {
+              d.zone = fallbackZone;
+              devicesChanged++;
+            }
+          }
+          if (devicesChanged > 0) {
+            const iotPayload = Array.isArray(iotRaw) ? devices : { ...iotRaw, devices };
+            fs.writeFileSync(iotPath, JSON.stringify(iotPayload, null, 2));
+            console.log(`[zone-cascade] Reassigned ${devicesChanged} device(s) from removed zones to "${fallbackZone}"`);
+          }
+        }
+      } catch (iotErr) {
+        console.warn('[zone-cascade] Failed to cascade zone removal to iot-devices.json:', iotErr.message);
+      }
+    }
   } catch (error) {
     console.error('[zone-rooms-sync] Error syncing zones to rooms.json:', error.message);
   }
 }
+
+// Reconcile orphaned room-map files: scan for room-map-*.json files
+// that have no matching entry in rooms.json and register them.
+// Runs once on startup to fix historical gaps.
+function reconcileRoomMaps() {
+  try {
+    const files = fs.readdirSync(DATA_DIR).filter(f => /^room-map-(.+)\.json$/.test(f) && f !== 'room-map.json');
+    if (files.length === 0) return;
+
+    const roomsData = readJSON('rooms.json', { rooms: [] });
+    if (!Array.isArray(roomsData.rooms)) roomsData.rooms = [];
+    const knownIds = new Set(roomsData.rooms.map(r => String(r.id || r.room_id)));
+    let added = 0;
+
+    for (const file of files) {
+      const match = file.match(/^room-map-(.+)\.json$/);
+      if (!match) continue;
+      const roomId = match[1];
+      if (knownIds.has(roomId)) continue;
+
+      try {
+        const mapData = JSON.parse(fs.readFileSync(path.join(DATA_DIR, file), 'utf8'));
+        const zoneNames = (mapData.zones || [])
+          .map(z => z.name || (z.zone != null ? `Zone ${z.zone}` : null))
+          .filter(Boolean);
+        roomsData.rooms.push({
+          id: roomId,
+          name: mapData.name || roomId,
+          zones: zoneNames
+        });
+        knownIds.add(roomId);
+        added++;
+        console.log(`[room-reconcile] Registered orphaned room "${mapData.name || roomId}" (${roomId}) with ${zoneNames.length} zone(s)`);
+      } catch (err) {
+        console.warn(`[room-reconcile] Failed to read ${file}:`, err.message);
+      }
+    }
+
+    if (added > 0) {
+      const roomsPath = path.join(DATA_DIR, 'rooms.json');
+      fs.writeFileSync(roomsPath, JSON.stringify(roomsData, null, 2));
+      console.log(`[room-reconcile] Added ${added} orphaned room(s) to rooms.json`);
+    }
+  } catch (error) {
+    console.warn('[room-reconcile] Error:', error.message);
+  }
+}
+
+// Run reconciliation on startup
+reconcileRoomMaps();
 
 // Sync zone assignments from room-map.json to iot-devices.json
 // This ensures devices discovered and mapped in the Room Mapper get proper zone assignments

@@ -23,6 +23,7 @@ import { getLastFxRate } from '../services/market-data-fetcher.js';
 import { getCropPricing } from './crop-pricing.js';
 import { analyzeDemandPatterns } from '../services/wholesaleMemoryStore.js';
 import farmStore from '../lib/farm-data-store.js';
+import { getInMemoryStore } from './sync.js';
 import logger from '../utils/logger.js';
 import crypto from 'crypto';
 import fs from 'fs';
@@ -44,6 +45,39 @@ function readJSON(filename, fallback) {
     if (fs.existsSync(filePath)) return JSON.parse(fs.readFileSync(filePath, 'utf8'));
   } catch { /* non-fatal */ }
   return fallback;
+}
+
+// Write data back to Light Engine via POST /data/{filename}
+// Room Mapper is the source of truth on LE — GWEN must sync changes back.
+async function writeToLE(filename, data) {
+  try {
+    let url = process.env.FARM_EDGE_URL;
+    if (!url) {
+      const farmData = readJSON('farm.json', {});
+      if (!farmData.url) { logger.warn('[GWEN->LE] No Light Engine URL configured'); return false; }
+      url = farmData.url;
+    }
+    const headers = { 'Content-Type': 'application/json', 'Accept': 'application/json' };
+    const farmId = process.env.FARM_ID;
+    if (farmId) headers['X-Farm-ID'] = farmId;
+    const apiKey = process.env.GREENREACH_API_KEY;
+    if (apiKey) headers['X-API-Key'] = apiKey;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
+    const res = await fetch(`${url}/data/${filename}`, {
+      method: 'POST', headers, body: JSON.stringify(data), signal: controller.signal
+    });
+    clearTimeout(timeout);
+    if (res.ok) {
+      logger.info(`[GWEN->LE] Wrote ${filename} to Light Engine`);
+      return true;
+    }
+    logger.warn(`[GWEN->LE] Failed to write ${filename}: ${res.status}`);
+    return false;
+  } catch (err) {
+    logger.warn(`[GWEN->LE] Error writing ${filename}:`, err.message);
+    return false;
+  }
 }
 
 // Load crop-utils for name resolution (alias/planId → canonical)
@@ -3795,12 +3829,16 @@ async function executeExtendedTool(toolName, params, farmId) {
         if (!name) return { ok: false, error: 'Room name is required' };
         // Get existing rooms from farmStore and append
         const existing = await farmStore.get(farmId, 'rooms') || [];
+        // Use Room Mapper compatible format: id (not room_id), zones array
+        const roomId = `room-${Math.random().toString(36).substr(2, 6)}`;
         const newRoom = {
-          room_id: `room-${Date.now()}`,
+          id: roomId,
+          room_id: roomId,
           farm_id: farmId,
           name,
           type: type || 'grow',
-          capacity: capacity || null
+          capacity: capacity || null,
+          zones: []
         };
         existing.push(newRoom);
         await farmStore.set(farmId, 'rooms', existing);
@@ -3811,8 +3849,11 @@ async function executeExtendedTool(toolName, params, farmId) {
               'INSERT INTO rooms (farm_id, name, type, capacity, created_at, updated_at) VALUES ($1, $2, $3, $4, NOW(), NOW()) ON CONFLICT DO NOTHING',
               [farmId, name, type || 'grow', capacity || null]
             );
-          } catch { /* non-fatal — farmStore is source of truth */ }
+          } catch { /* non-fatal -- farmStore is source of truth */ }
         }
+        // Write back to LE rooms.json so Room Mapper, 3D Viewer, and Heatmap see it
+        const leRooms = existing.map(r => ({ id: r.id || r.room_id, name: r.name, zones: r.zones || [], type: r.type }));
+        writeToLE('rooms.json', { rooms: leRooms }).catch(() => {});
         return { ok: true, room: newRoom, message: `Room "${name}" created`, total_rooms: existing.length };
       } catch (err) {
         return { ok: false, error: err.message };
@@ -3833,12 +3874,15 @@ async function executeExtendedTool(toolName, params, farmId) {
         const { room_id, name, capacity } = params;
         if (!room_id || !name) return { ok: false, error: 'room_id and name are required' };
         const rooms = await farmStore.get(farmId, 'rooms') || [];
-        const room = rooms.find(r => r.room_id === room_id) || rooms.find(r => r.name?.toLowerCase() === room_id?.toLowerCase());
+        const room = rooms.find(r => (r.id || r.room_id) === room_id) || rooms.find(r => r.room_id === room_id) || rooms.find(r => r.name?.toLowerCase() === room_id?.toLowerCase());
         if (!room) return { ok: false, error: `Room ${room_id} not found. Use list_rooms to see available rooms.` };
         if (!room.zones) room.zones = [];
         const newZone = { id: `zone-${room.zones.length + 1}`, name, capacity: capacity || null };
         room.zones.push(newZone);
         await farmStore.set(farmId, 'rooms', rooms);
+        // Write back to LE rooms.json so zone changes propagate to Room Mapper, 3D Viewer, Heatmap
+        const leRooms = rooms.map(r => ({ id: r.id || r.room_id, name: r.name, zones: Array.isArray(r.zones) ? r.zones.map(z => typeof z === 'string' ? z : z.name) : [], type: r.type }));
+        writeToLE('rooms.json', { rooms: leRooms }).catch(() => {});
         return { ok: true, zone: newZone, room_name: room.name, message: `Zone "${name}" added to ${room.name}`, total_zones: room.zones.length };
       } catch (err) {
         return { ok: false, error: err.message };
@@ -6153,7 +6197,14 @@ router.get('/state', async (req, res) => {
     for (var ri = 0; ri < roomList.length; ri++) {
       var rm = roomList[ri];
       var rmId = rm.id || rm.room_id;
-      var roomMap = readJSON('room-map-' + rmId + '.json', null);
+      // Try in-memory store first (populated by syncFarmData from LE), then flat file fallback
+      var roomMap = null;
+      try {
+        const memStore = getInMemoryStore();
+        const allMaps = (memStore.room_maps && memStore.room_maps.get(farmId)) || {};
+        roomMap = allMaps[rmId] || null;
+      } catch (_) { /* fall through */ }
+      if (!roomMap) roomMap = readJSON('room-map-' + rmId + '.json', null);
       if (!roomMap) continue;
       var zoneArr = roomMap.zones || [];
       for (var zi = 0; zi < zoneArr.length; zi++) {
@@ -6280,6 +6331,39 @@ router.get('/state', async (req, res) => {
       proactiveMessage = recommendations[0].title;
     }
 
+    // Spatial data from room maps (zone geometry, equipment placements, x/y/z coordinates)
+    // Room Mapper is the source of truth for spatial layout. This data flows:
+    //   LE room-map-{roomId}.json -> syncFarmData() -> in-memory store.room_maps
+    var spatial = { rooms: [], equipment_count: 0, total_zones: 0 };
+    try {
+      const memStore = getInMemoryStore();
+      const perRoomMaps = (memStore.room_maps && memStore.room_maps.get(farmId)) || {};
+      for (const [rmId, mapData] of Object.entries(perRoomMaps)) {
+        const mapZones = mapData.zones || [];
+        const mapDevices = mapData.devices || [];
+        const roomSpatial = {
+          room_id: rmId,
+          name: mapData.name || rmId,
+          grid: { width: mapData.gridWidth || mapData.width, height: mapData.gridHeight || mapData.height, cell_size: mapData.cellSize },
+          zones: mapZones.map(function (z) {
+            return {
+              name: z.name,
+              x: z.x, y: z.y, w: z.w, h: z.h,
+              equipment: (z.equipment || []).map(function (eq) {
+                return { name: eq.name, type: eq.type || eq.category, x: eq.x, y: eq.y };
+              })
+            };
+          }),
+          placed_devices: mapDevices.length
+        };
+        spatial.rooms.push(roomSpatial);
+        spatial.total_zones += mapZones.length;
+        spatial.equipment_count += mapDevices.length;
+      }
+    } catch (spatialErr) {
+      logger.warn('[E.V.I.E. State] Spatial data load failed:', spatialErr.message);
+    }
+
     return res.json({
       ok: true,
       alerts: alertItems.length,
@@ -6290,6 +6374,7 @@ router.get('/state', async (req, res) => {
       risks: risks,
       recommendations: recommendations,
       insights: insights,
+      spatial: spatial,
       farm_name: farmName,
       farm_location: farmLocation,
       proactive_message: proactiveMessage,

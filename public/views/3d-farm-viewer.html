@@ -363,12 +363,35 @@
         const rd = localStorage.getItem('farm3d_roomDims');
         if (rd) S.roomDimensions = JSON.parse(rd);
       } catch (e) {}
+      // Hydrate from server room-map data (ceilingHeight, roomLength, roomWidth)
+      for (const [rId, map] of Object.entries(S.roomMaps)) {
+        if (!S.roomDimensions[rId]) S.roomDimensions[rId] = {};
+        const dims = S.roomDimensions[rId];
+        if (!dims.height && map.ceilingHeight) dims.height = map.ceilingHeight;
+        if (!dims.length && map.roomLength) dims.length = map.roomLength;
+        if (!dims.width && map.roomWidth) dims.width = map.roomWidth;
+      }
     }
     function saveGroupDimensions() {
       try { localStorage.setItem('farm3d_groupDims', JSON.stringify(S.groupDimensions)); } catch (e) {}
     }
     function saveRoomDimensions() {
       try { localStorage.setItem('farm3d_roomDims', JSON.stringify(S.roomDimensions)); } catch (e) {}
+      // Also persist ceiling height + dimensions to server via room-map
+      try {
+        for (const [rId, dims] of Object.entries(S.roomDimensions)) {
+          const map = S.roomMaps[rId];
+          if (!map) continue;
+          map.roomLength = dims.length;
+          map.roomWidth = dims.width;
+          map.ceilingHeight = dims.height;
+          authFetch('/data/room-map-' + rId + '.json', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(map)
+          }).catch(() => {});
+        }
+      } catch (e) { console.warn('[3D] Failed to persist room dimensions to server:', e.message); }
     }
 
     // ---- Init Three.js ---------------------------------------
@@ -627,24 +650,26 @@
         S.meshes.floors.push(floor);
         S.floorMeshMap[room.id] = floor;
 
-        // Walls (4) + ceiling -- togglable, see-through
+        // Walls (4) + ceiling -- togglable, glass-like see-through
         const wallMat = new THREE.MeshPhysicalMaterial({
-          color: 0x94a3b8, transparent: true, opacity: 0.06,
-          roughness: 0.1, metalness: 0, transmission: 0.7,
-          side: THREE.DoubleSide,
+          color: 0xc8d6e5, transparent: true, opacity: 0.08,
+          roughness: 0.05, metalness: 0.1, transmission: 0.92,
+          thickness: 0.1, side: THREE.DoubleSide,
+          depthWrite: false,
         });
         const ceilMat = new THREE.MeshPhysicalMaterial({
-          color: 0x94a3b8, transparent: true, opacity: 0.04,
-          roughness: 0.1, metalness: 0, transmission: 0.8,
-          side: THREE.DoubleSide,
+          color: 0xdbeafe, transparent: true, opacity: 0.06,
+          roughness: 0.05, metalness: 0.1, transmission: 0.95,
+          thickness: 0.05, side: THREE.DoubleSide,
+          depthWrite: false,
         });
 
         // front, back, left, right
         const wallDefs = [
-          { w: roomW, d: 0.08, x: cx, z: 0 },
-          { w: roomW, d: 0.08, x: cx, z: roomD },
-          { w: 0.08, d: roomD, x: offsetX, z: cz },
-          { w: 0.08, d: roomD, x: offsetX + roomW, z: cz },
+          { w: roomW, d: 0.06, x: cx, z: 0 },
+          { w: roomW, d: 0.06, x: cx, z: roomD },
+          { w: 0.06, d: roomD, x: offsetX, z: cz },
+          { w: 0.06, d: roomD, x: offsetX + roomW, z: cz },
         ];
         wallDefs.forEach(wd => {
           const geo = new THREE.BoxGeometry(wd.w, wallH, wd.d);
@@ -654,20 +679,55 @@
           wall.userData = { type: 'wall', room };
           S.scene.add(wall);
           S.meshes.walls.push(wall);
+          // Wireframe overlay for structural framing effect
+          const wireGeo = new THREE.EdgesGeometry(geo);
+          const wireMat = new THREE.LineBasicMaterial({ color: 0x6366f1, transparent: true, opacity: 0.12 });
+          const wire = new THREE.LineSegments(wireGeo, wireMat);
+          wire.position.copy(wall.position);
+          wire.visible = S.wallsVisible;
+          S.scene.add(wire);
+          S.meshes.walls.push(wire);
         });
 
         // Ceiling
-        const ceilGeo = new THREE.BoxGeometry(roomW, 0.06, roomD);
+        const ceilGeo = new THREE.BoxGeometry(roomW, 0.04, roomD);
         const ceil = new THREE.Mesh(ceilGeo, ceilMat.clone());
         ceil.position.set(cx, wallH, cz);
         ceil.visible = S.wallsVisible;
         ceil.userData = { type: 'ceiling', room };
         S.scene.add(ceil);
         S.meshes.ceilings.push(ceil);
+        // Ceiling wireframe grid (structural framing)
+        const ceilWireGeo = new THREE.EdgesGeometry(ceilGeo);
+        const ceilWireMat = new THREE.LineBasicMaterial({ color: 0x6366f1, transparent: true, opacity: 0.1 });
+        const ceilWire = new THREE.LineSegments(ceilWireGeo, ceilWireMat);
+        ceilWire.position.copy(ceil.position);
+        ceilWire.visible = S.wallsVisible;
+        S.scene.add(ceilWire);
+        S.meshes.ceilings.push(ceilWire);
+        // Ceiling support grid lines
+        const gridDiv = Math.max(2, Math.floor(roomW / 3));
+        for (let gi = 1; gi < gridDiv; gi++) {
+          const gx = offsetX + (roomW / gridDiv) * gi;
+          const pts = [new THREE.Vector3(gx, wallH, 0), new THREE.Vector3(gx, wallH, roomD)];
+          const gLine = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: 0x475569, transparent: true, opacity: 0.08 }));
+          gLine.visible = S.wallsVisible;
+          S.scene.add(gLine);
+          S.meshes.ceilings.push(gLine);
+        }
+        const gridDivZ = Math.max(2, Math.floor(roomD / 3));
+        for (let gi = 1; gi < gridDivZ; gi++) {
+          const gz = (roomD / gridDivZ) * gi;
+          const pts = [new THREE.Vector3(offsetX, wallH, gz), new THREE.Vector3(offsetX + roomW, wallH, gz)];
+          const gLine = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: 0x475569, transparent: true, opacity: 0.08 }));
+          gLine.visible = S.wallsVisible;
+          S.scene.add(gLine);
+          S.meshes.ceilings.push(gLine);
+        }
 
-        // Wall edge glow
+        // Wall edge glow (main structural outline)
         const edgeGeo = new THREE.EdgesGeometry(new THREE.BoxGeometry(roomW, wallH, roomD));
-        const edgeMat = new THREE.LineBasicMaterial({ color: 0x6366f1, transparent: true, opacity: 0.2 });
+        const edgeMat = new THREE.LineBasicMaterial({ color: 0x6366f1, transparent: true, opacity: 0.25 });
         const edges = new THREE.LineSegments(edgeGeo, edgeMat);
         edges.position.set(cx, wallH / 2, cz);
         edges.visible = S.wallsVisible;
@@ -1372,9 +1432,76 @@
             if (l.spectrum) html += '<div class="dp-label">Spectrum</div><div class="dp-value">' + l.spectrum + '</div>';
           }
         } else {
-          html = '<h3>' + (d?.snapshot?.name || d?.deviceId || 'Equipment') + '</h3>';
-          html += '<div class="dp-label">Category</div><div class="dp-value">' + (d?.snapshot?.category || '--') + '</div>';
+          const devName = d?.snapshot?.name || d?.deviceId || 'Equipment';
+          const devCat = d?.snapshot?.category || d?.snapshot?.type || '';
+          // Count identical equipment (same category + name) for bulk update
+          const allDevices = Object.values(S.roomMaps).flatMap(m => m?.devices || []);
+          const identicalDevices = allDevices.filter(od => {
+            const oName = od?.snapshot?.name || od?.deviceId || '';
+            const oCat = od?.snapshot?.category || od?.snapshot?.type || '';
+            return oCat === devCat && oName === devName;
+          });
+          const identicalCount = identicalDevices.length;
+
+          html = '<h3>' + devName + '</h3>';
+          html += '<div class="dp-label">Category</div><div class="dp-value">' + (devCat || '--') + '</div>';
           html += '<div class="dp-label">Position</div><div class="dp-value">Grid (' + (d?.x ?? '--') + ', ' + (d?.y ?? '--') + ')</div>';
+          if (identicalCount > 1) {
+            html += '<div class="dp-label">Identical Units</div><div class="dp-value" style="color:#818cf8">' + identicalCount + ' x ' + devName + '</div>';
+          }
+
+          // Editable equipment fields
+          html += '<div class="dp-section"><div class="dp-label">Equipment Details</div>';
+          html += '<div class="dp-input-row"><label>Name</label><input type="text" id="eqName" value="' + devName + '" style="flex:1"></div>';
+          html += '<div class="dp-input-row"><label>Cat</label><input type="text" id="eqCat" value="' + devCat + '" style="flex:1"></div>';
+          html += '</div>';
+
+          if (identicalCount > 1) {
+            html += '<button class="dp-save-btn" id="saveEqAll">Update All ' + identicalCount + ' ' + devName + '</button>';
+          } else {
+            html += '<button class="dp-save-btn" id="saveEqOne">Save Equipment</button>';
+          }
+          content.innerHTML = html;
+
+          // Bulk update handler
+          const saveBtn = document.getElementById('saveEqAll') || document.getElementById('saveEqOne');
+          saveBtn.addEventListener('click', () => {
+            const newName = document.getElementById('eqName').value.trim() || devName;
+            const newCat = document.getElementById('eqCat').value.trim() || devCat;
+            // Update all identical devices across all room maps
+            let updated = 0;
+            const roomsToSave = new Set();
+            for (const [rId, map] of Object.entries(S.roomMaps)) {
+              if (!map?.devices) continue;
+              for (const od of map.devices) {
+                const oName = od?.snapshot?.name || od?.deviceId || '';
+                const oCat = od?.snapshot?.category || od?.snapshot?.type || '';
+                if (oCat === devCat && oName === devName) {
+                  if (!od.snapshot) od.snapshot = {};
+                  od.snapshot.name = newName;
+                  od.snapshot.category = newCat;
+                  updated++;
+                  roomsToSave.add(rId);
+                }
+              }
+            }
+            // Persist updated room maps to server
+            for (const rId of roomsToSave) {
+              authFetch('/data/room-map-' + rId + '.json', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(S.roomMaps[rId])
+              }).catch(() => {});
+            }
+            saveBtn.textContent = 'Updated ' + updated + ' unit' + (updated !== 1 ? 's' : '');
+            saveBtn.classList.add('saved');
+            setTimeout(() => {
+              saveBtn.textContent = identicalCount > 1 ? 'Update All ' + identicalCount + ' ' + newName : 'Save Equipment';
+              saveBtn.classList.remove('saved');
+            }, 1500);
+            buildScene();
+          });
+          return; // skip content.innerHTML = html below (already set)
         }
         content.innerHTML = html;
       }
