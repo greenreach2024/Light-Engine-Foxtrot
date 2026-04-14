@@ -1427,89 +1427,70 @@ export const TOOL_CATALOG = {
     description: 'Update equipment in the 3D room map — rename, change category, reposition, or bulk-rename all matching equipment. Equipment includes fans, ZipGrow towers, lights, dehumidifiers, etc. mapped in the room layout. Use "bulk" mode to rename all identical devices at once (e.g., rename all 20 fans to "ZipGrow Tower").',
     category: 'write',
     required: [],
-    optional: ['room_id', 'device_id', 'name', 'category', 'x', 'y', 'z', 'match_name', 'match_category', 'bulk'],
+    optional: ['room_id', 'device_id', 'name', 'category', 'x', 'y', 'z', 'match_name', 'match_category', 'bulk', 'farm_id'],
     undoable: true,
     handler: async (params) => {
       const { room_id, device_id, name, category, x, y, z, match_name, match_category, bulk } = params;
-
-      // Load rooms to resolve room_id
-      const rooms = readJSON('rooms.json', {});
-      const roomList = rooms.rooms || (Array.isArray(rooms) ? rooms : Object.values(rooms).filter(r => r && typeof r === 'object'));
-      let targetRooms = [];
-
-      if (room_id) {
-        const resolved = resolveRoom(roomList, room_id);
-        if (!resolved) return { ok: false, error: `Room "${room_id}" not found.` };
-        targetRooms = [resolved.id || resolved.room_id];
-      } else {
-        targetRooms = roomList.map(r => r.id || r.room_id).filter(Boolean);
-      }
+      const farm_id = params.farm_id || process.env.FARM_ID || 'default';
 
       if (!name && !category && x == null && y == null && z == null) {
         return { ok: false, error: 'No updates specified. Provide at least one of: name, category, x, y, z.' };
       }
 
+      // Load room_map from DB (single canonical store — same data the 3D viewer uses)
+      const roomMap = await farmStore.get(farm_id, 'room_map') || { zones: [], devices: [] };
+      if (!roomMap.devices?.length) {
+        return { ok: false, error: 'No devices found in room map. Use the Room Mapper to add equipment first.' };
+      }
+
       const isBulk = bulk === true || bulk === 'true';
+      const beforeDevices = JSON.parse(JSON.stringify(roomMap.devices));
       let totalUpdated = 0;
-      const undoSnapshots = {};
-      const roomSummaries = [];
 
-      for (const rid of targetRooms) {
-        const roomMap = readJSON(`room-map-${rid}.json`, null);
-        if (!roomMap?.devices?.length) continue;
+      for (const dev of roomMap.devices) {
+        const snap = dev.snapshot || {};
+        const devCat = snap.category || snap.type || '';
+        const devName = snap.name || dev.deviceId || '';
 
-        const beforeDevices = JSON.parse(JSON.stringify(roomMap.devices));
-        let roomUpdated = 0;
-
-        for (const dev of roomMap.devices) {
-          const snap = dev.snapshot || {};
-          const devCat = snap.category || snap.type || '';
-          const devName = snap.name || dev.deviceId || '';
-
-          let isMatch = false;
-          if (device_id && dev.deviceId === device_id) {
-            isMatch = true;
-          } else if (isBulk) {
-            // Bulk mode: match by category and/or name
-            const catMatch = !match_category || devCat.toLowerCase() === match_category.toLowerCase();
-            const nameMatch = !match_name || devName.toLowerCase() === match_name.toLowerCase();
-            isMatch = catMatch && nameMatch && (match_category || match_name);
-          } else if (!device_id && !isBulk) {
-            // Single mode without device_id: try matching by current name/category
-            if (match_category && devCat.toLowerCase() === match_category.toLowerCase()) {
-              if (!match_name || devName.toLowerCase() === match_name.toLowerCase()) {
-                isMatch = true;
-              }
+        let isMatch = false;
+        if (device_id && dev.deviceId === device_id) {
+          isMatch = true;
+        } else if (isBulk) {
+          const catMatch = !match_category || devCat.toLowerCase() === match_category.toLowerCase();
+          const nameMatch = !match_name || devName.toLowerCase() === match_name.toLowerCase();
+          isMatch = catMatch && nameMatch && (match_category || match_name);
+        } else if (!device_id && !isBulk) {
+          if (match_category && devCat.toLowerCase() === match_category.toLowerCase()) {
+            if (!match_name || devName.toLowerCase() === match_name.toLowerCase()) {
+              isMatch = true;
             }
           }
-
-          if (!isMatch) continue;
-
-          if (!dev.snapshot) dev.snapshot = {};
-          if (name) dev.snapshot.name = name;
-          if (category) dev.snapshot.category = category;
-          if (x != null) dev.x = parseInt(String(x), 10);
-          if (y != null) dev.y = parseInt(String(y), 10);
-          if (z != null) dev.z = parseFloat(String(z));
-          roomUpdated++;
-
-          // In single-device mode (non-bulk), stop after first match
-          if (!isBulk && device_id) break;
         }
 
-        if (roomUpdated > 0) {
-          roomMap.lastUpdated = new Date().toISOString();
-          writeJSON(`room-map-${rid}.json`, roomMap);
-          undoSnapshots[rid] = beforeDevices;
-          totalUpdated += roomUpdated;
-          roomSummaries.push(`${rid}: ${roomUpdated} device(s)`);
-        }
+        if (!isMatch) continue;
+
+        if (!dev.snapshot) dev.snapshot = {};
+        if (name) dev.snapshot.name = name;
+        if (category) dev.snapshot.category = category;
+        if (x != null) dev.x = parseInt(String(x), 10);
+        if (y != null) dev.y = parseInt(String(y), 10);
+        if (z != null) dev.z = parseFloat(String(z));
+        totalUpdated++;
+
+        if (!isBulk && device_id) break;
       }
 
       if (totalUpdated === 0) {
         const hint = device_id ? `device_id "${device_id}"` : `match_category="${match_category || ''}" match_name="${match_name || ''}"`;
         return { ok: false, error: `No matching equipment found for ${hint}. Use get_room_status to list devices.` };
       }
+
+      roomMap.lastUpdated = new Date().toISOString();
+      await farmStore.set(farm_id, 'room_map', roomMap);
+      // Also update local files for backward compatibility
+      const rid = roomMap.roomId || room_id || 'default';
+      writeJSON(`room-map-${rid}.json`, roomMap);
+      writeJSON('room-map.json', roomMap);
 
       const changes = [];
       if (name) changes.push(`name -> "${name}"`);
@@ -1522,22 +1503,21 @@ export const TOOL_CATALOG = {
         ok: true,
         updated: totalUpdated,
         changes,
-        rooms: roomSummaries,
         message: `Updated ${totalUpdated} equipment device(s): ${changes.join(', ')}`,
-        _undo_state: { undoSnapshots }
+        _undo_state: { farm_id, beforeDevices }
       };
     },
     undoHandler: async (params, state) => {
-      if (!state?.undoSnapshots) return { ok: false, error: 'No undo state available' };
-      for (const [rid, devices] of Object.entries(state.undoSnapshots)) {
-        const roomMap = readJSON(`room-map-${rid}.json`, null);
-        if (roomMap) {
-          roomMap.devices = devices;
-          roomMap.lastUpdated = new Date().toISOString();
-          writeJSON(`room-map-${rid}.json`, roomMap);
-        }
-      }
-      return { ok: true, undone: true, message: `Reverted equipment in ${Object.keys(state.undoSnapshots).length} room(s)` };
+      if (!state?.beforeDevices) return { ok: false, error: 'No undo state available' };
+      const farm_id = state.farm_id || process.env.FARM_ID || 'default';
+      const roomMap = await farmStore.get(farm_id, 'room_map') || { zones: [], devices: [] };
+      roomMap.devices = state.beforeDevices;
+      roomMap.lastUpdated = new Date().toISOString();
+      await farmStore.set(farm_id, 'room_map', roomMap);
+      const rid = roomMap.roomId || 'default';
+      writeJSON(`room-map-${rid}.json`, roomMap);
+      writeJSON('room-map.json', roomMap);
+      return { ok: true, undone: true, message: 'Equipment changes reverted.' };
     }
   },
 

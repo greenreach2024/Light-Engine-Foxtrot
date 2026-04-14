@@ -500,7 +500,7 @@
       try {
         status('Loading farm data...');
         const [roomsRes, groupsRes, iotRes, envRes, regRes] = await Promise.all([
-          authFetch('/data/rooms.json'),
+          authFetch('/data/rooms.json?t=' + Date.now()),
           authFetch('/data/groups.json'),
           authFetch('/data/iot-devices.json'),
           authFetch('/env?hours=24&t=' + Date.now(), { cache: 'no-store' }),
@@ -516,14 +516,14 @@
         status('Loading room layouts...');
         for (const room of S.rooms) {
           try {
-            let res = await authFetch('/data/room-map-' + room.id + '.json');
-            if (!res.ok) res = await authFetch('/data/room-map.json');
+            let res = await authFetch('/data/room-map-' + room.id + '.json?t=' + Date.now());
+            if (!res.ok) res = await authFetch('/data/room-map.json?t=' + Date.now());
             if (res.ok) S.roomMaps[room.id] = await res.json();
           } catch (e) {}
         }
         if (S.rooms.length === 0) {
           try {
-            const res = await authFetch('/data/room-map.json');
+            const res = await authFetch('/data/room-map.json?t=' + Date.now());
             if (res.ok) {
               const data = await res.json();
               const rid = data.roomId || 'default-room';
@@ -1578,8 +1578,13 @@
             if (!isNaN(newY)) d.y = newY;
             if (!isNaN(newZ)) d.z = newZ;
             console.log('[3D] Save-one:', newName, newCat, 'room:', rId);
-            if (rId && S.roomMaps[rId]) {
-              try {
+            if (!rId || !S.roomMaps[rId]) {
+              btn.textContent = 'Save Failed (no room)'; btn.style.background = '#dc2626';
+              console.error('[3D] Save-one: no room context, rId=', rId);
+              setTimeout(() => { btn.textContent = identicalCount > 1 ? 'Update This One Only' : 'Save Equipment'; btn.style.background = ''; }, 3000);
+              return;
+            }
+            try {
                 const resp = await authFetch('/data/room-map-' + rId + '.json', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
@@ -1598,7 +1603,6 @@
                 console.error('[3D] Save-one error:', err);
                 setTimeout(() => { btn.textContent = identicalCount > 1 ? 'Update This One Only' : 'Save Equipment'; btn.style.background = ''; }, 3000);
                 return;
-              }
             }
             btn.textContent = 'Saved'; btn.classList.add('saved');
             setTimeout(() => { btn.textContent = identicalCount > 1 ? 'Update This One Only' : 'Save Equipment'; btn.classList.remove('saved'); }, 1500);
