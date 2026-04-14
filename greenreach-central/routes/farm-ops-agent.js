@@ -1815,6 +1815,20 @@ export const TOOL_CATALOG = {
       await farmStore.set(farm_id, 'groups', groups);
       writeJSON('groups.json', groups);
 
+      // Write updated groups back to LE so the LE->Central sync picks up
+      // spatial positions (gridX, gridY) instead of overwriting with stale data.
+      const leUrl = process.env.FARM_EDGE_URL || process.env.LE_API_URL || '';
+      if (leUrl) {
+        const apiKey = process.env.GREENREACH_API_KEY || '';
+        const headers = { 'Content-Type': 'application/json' };
+        if (farm_id) headers['X-Farm-ID'] = farm_id;
+        if (apiKey) headers['X-API-Key'] = apiKey;
+        fetch(leUrl + '/data/groups.json', {
+          method: 'POST', headers, body: JSON.stringify({ groups }),
+          signal: AbortSignal.timeout(8000)
+        }).catch(e => console.warn('[optimize_layout] LE write-back failed:', e.message));
+      }
+
       const totalPlaced = items.length;
       return {
         ok: true,

@@ -1276,7 +1276,26 @@ async function syncFarmData(options = {}) {
     if (fetched['groups.json']) {
       const raw = fetched['groups.json'];
       const groupsList = Array.isArray(raw) ? raw : (raw.groups || []);
-      for (const fid of aliasFarmIds) store.groups.set(fid, groupsList);
+      // Preserve spatial layout data (gridX, gridY) set by optimize_layout tool.
+      // The LE flat file may not have these; merge from existing in-memory/DB data.
+      for (const fid of aliasFarmIds) {
+        const prev = store.groups?.get?.(fid);
+        if (Array.isArray(prev) && prev.length > 0) {
+          const posMap = new Map();
+          for (const g of prev) {
+            if (g.id && (g.gridX != null || g.gridY != null)) {
+              posMap.set(g.id, { gridX: g.gridX, gridY: g.gridY });
+            }
+          }
+          if (posMap.size > 0) {
+            for (const g of groupsList) {
+              const pos = posMap.get(g.id);
+              if (pos) { g.gridX = pos.gridX; g.gridY = pos.gridY; }
+            }
+          }
+        }
+        store.groups.set(fid, groupsList);
+      }
       logger.info(`[${syncLabel}] In-memory: ${groupsList.length} groups for ${[...aliasFarmIds].join(', ')}`);
     }
 
@@ -1422,7 +1441,37 @@ async function syncFarmData(options = {}) {
         if (telemetry) { await upsertFarmData('telemetry', telemetry); logger.info(`[${syncLabel}] DB: telemetry for ${farmId}`); }
 
         const groups = resolve('groups.json', 'groups.json', r => Array.isArray(r) ? r : (r.groups || []));
-        if (groups) { await upsertFarmData('groups', groups); logger.info(`[${syncLabel}] DB: ${groups.length} groups for ${farmId}`); }
+        if (groups) {
+          // Preserve spatial layout positions (gridX, gridY) from existing DB
+          // record. optimize_layout saves these; sync from LE must not clobber.
+          try {
+            const existResult = await dbQuery(
+              'SELECT data FROM farm_data WHERE farm_id = $1 AND data_type = $2',
+              [farmId, 'groups']
+            );
+            if (existResult?.rows?.[0]?.data) {
+              const existData = existResult.rows[0].data;
+              const existArr = Array.isArray(existData) ? existData : (existData.groups || []);
+              const posMap = new Map();
+              for (const g of existArr) {
+                if (g.id && (g.gridX != null || g.gridY != null)) {
+                  posMap.set(g.id, { gridX: g.gridX, gridY: g.gridY });
+                }
+              }
+              if (posMap.size > 0) {
+                for (const g of groups) {
+                  const pos = posMap.get(g.id);
+                  if (pos) { g.gridX = pos.gridX; g.gridY = pos.gridY; }
+                }
+                logger.info(`[${syncLabel}] Preserved layout positions for ${posMap.size} groups`);
+              }
+            }
+          } catch (mergeErr) {
+            logger.warn(`[${syncLabel}] Failed to merge group positions:`, mergeErr.message);
+          }
+          await upsertFarmData('groups', groups);
+          logger.info(`[${syncLabel}] DB: ${groups.length} groups for ${farmId}`);
+        }
 
         // Delete-only cleanup: remove auto-inventory rows for crops no longer
         // in growth groups. Does NOT call recalculateAutoInventoryFromGroups()

@@ -5371,6 +5371,7 @@ app.get('/env', async (req, res) => {
         
         acc[sensorKey] = {
           current: sensorData.value,
+          sources: sensorData.sources || {},
           unit: sensorData.unit || null,
           observedAt: sensorData.observedAt || null,
           history: limitedHistory,
@@ -24607,6 +24608,31 @@ app.get('/data/groups.json', (req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Cache-Control', 'no-cache');
   return res.json({ groups });
+});
+
+// POST /data/groups.json -- write-back from Central optimize_layout tool.
+// Saves updated groups (with gridX, gridY layout positions) to LE flat file
+// so subsequent LE->Central syncs preserve those positions.
+app.post('/data/groups.json', (req, res) => {
+  setCors(req, res);
+  const body = req.body || {};
+  const incoming = Array.isArray(body) ? body : (body.groups || null);
+  if (!Array.isArray(incoming)) {
+    return res.status(400).json({ ok: false, error: 'Expected { groups: [...] } or array.' });
+  }
+  // Merge: preserve existing fields, overlay gridX/gridY from incoming
+  const existing = loadGroupsFile();
+  const incomingMap = new Map();
+  for (const g of incoming) { if (g.id) incomingMap.set(g.id, g); }
+  const merged = existing.map(g => {
+    const inc = incomingMap.get(g.id);
+    if (inc) return { ...g, gridX: inc.gridX, gridY: inc.gridY };
+    return g;
+  });
+  if (saveGroupsFile(merged)) {
+    return res.json({ ok: true, updated: merged.length });
+  }
+  return res.status(500).json({ ok: false, error: 'Failed to save groups.' });
 });
 
 app.get('/data/ctrl-map.json', (req, res, next) => {
