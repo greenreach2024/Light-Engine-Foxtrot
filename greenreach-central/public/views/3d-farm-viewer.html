@@ -320,7 +320,7 @@
       <div id="detailContent"></div>
     </div>
     <div class="status-bar" id="statusBar">Ready</div>
-    <div class="edit-indicator" id="editIndicator">EDIT MODE -- Drag sensors and equipment to reposition</div>
+    <div class="edit-indicator" id="editIndicator">EDIT MODE -- Drag sensors, equipment, and zones to reposition</div>
     <button class="gwen-fab" id="gwenFab" title="Ask GWEN about this view">G<div class="gwen-tooltip">Ask GWEN to analyze zone data</div></button>
   </div>
 
@@ -802,7 +802,7 @@
         makeLabel(room.name || room.id, offsetX + 1.5, wallH + 0.3, 0.4, { size: 10, color: '#64748b', opacity: 0.5 });
 
         // Dimension label (small, bottom corner)
-        const dimStr = roomW + 'L x ' + roomD + 'W x ' + wallH + 'H';
+        const dimStr = Number(roomW).toFixed(1) + 'm L x ' + Number(roomD).toFixed(1) + 'm W x ' + Number(wallH).toFixed(1) + 'm H';
         makeLabel(dimStr, offsetX + 1.5, 0.3, 0.4, { size: 8, color: '#475569', opacity: 0.5 });
 
         // Build zones from env data if room-map doesn't have explicit zone boundaries
@@ -832,9 +832,13 @@
           });
         }
 
+        // Scale: convert grid cells to meters
+        const zScaleX = roomW / gridSize;
+        const zScaleZ = roomD / gridSize;
+
         zones.forEach((zone, zi) => {
-          const x1 = (zone.x1 ?? 0) + offsetX, y1 = zone.y1 ?? 0;
-          const x2 = (zone.x2 ?? roomW) + offsetX, y2 = zone.y2 ?? roomD;
+          const x1 = (zone.x1 ?? 0) * zScaleX + offsetX, y1 = (zone.y1 ?? 0) * zScaleZ;
+          const x2 = (zone.x2 ?? gridSize) * zScaleX + offsetX, y2 = (zone.y2 ?? gridSize) * zScaleZ;
           const zw = Math.abs(x2 - x1), zd = Math.abs(y2 - y1);
           const zcx = (x1 + x2) / 2, zcz = (y1 + y2) / 2;
           const zColor = ZONE_PALETTE[zi % ZONE_PALETTE.length];
@@ -847,7 +851,7 @@
           const zoneMesh = new THREE.Mesh(zoneGeo, zoneMat);
           zoneMesh.position.set(zcx, 0.15, zcz);
           zoneMesh.receiveShadow = true;
-          zoneMesh.userData = { type: 'zone', zone, room, zoneId, baseColor: zColor, baseOpacity: 0.15 };
+          zoneMesh.userData = { type: 'zone', zone, room, zoneId, baseColor: zColor, baseOpacity: 0.15, offsetX, gridSize, zScaleX, zScaleZ, roomW, roomD };
           S.scene.add(zoneMesh);
           S.meshes.zones.push(zoneMesh);
           S.zoneMeshMap[zoneId] = zoneMesh;
@@ -870,7 +874,9 @@
           S.scene.add(border);
           S.meshes.zones.push(border);
 
-          makeLabel(String(zone.name || ('Zone ' + (zi + 1))), x1 + 1.2, 0.4, y1 + 0.6, { size: 10, color: '#64748b', opacity: 0.6 });
+          const zLabelW = Math.abs(x2 - x1 - (offsetX ? 0 : 0)).toFixed(1);
+          const zLabelD = Math.abs(y2 - y1).toFixed(1);
+          makeLabel(String(zone.name || ('Zone ' + (zi + 1))) + ' (' + zLabelW + 'm x ' + zLabelD + 'm)', x1 + 1.2, 0.4, y1 + 0.6, { size: 10, color: '#64748b', opacity: 0.6 });
         });
 
         // Growing groups
@@ -1463,7 +1469,7 @@
           const g = ud.group;
           title = g.name || g.crop || g.recipe || 'Group';
           const d = ud.dims;
-          sub = d.length.toFixed(1) + 'L x ' + d.width.toFixed(1) + 'W x ' + d.height.toFixed(1) + 'H | ' + (g.trays || 0) + ' trays';
+          sub = d.length.toFixed(1) + 'm L x ' + d.width.toFixed(1) + 'm W x ' + d.height.toFixed(1) + 'm H | ' + (g.trays || 0) + ' trays';
         } else if (ud.type === 'sensor') {
           title = ud.device.snapshot?.name || 'Sensor';
           const zData = findSensorZoneData(ud.device);
@@ -1476,8 +1482,10 @@
           sub = ud.orientation === 'intercanopy' ? 'Inter-canopy' : 'Out-of-canopy';
         } else if (ud.type === 'zone') {
           title = ud.zone.name || ('Zone ' + ud.zone.zone);
+          const zHovW = ud.zScaleX ? Math.abs(((ud.zone.x2 ?? 0) - (ud.zone.x1 ?? 0)) * ud.zScaleX).toFixed(1) : '?';
+          const zHovD = ud.zScaleZ ? Math.abs(((ud.zone.y2 ?? 0) - (ud.zone.y1 ?? 0)) * ud.zScaleZ).toFixed(1) : '?';
           const zData = S.zoneDataMap[ud.zoneId] || findZoneDataByName(ud.zone.name || ud.zone.zone);
-          sub = zData ? (zData.temp?.toFixed(1) ?? '--') + '\u00b0C | ' + Math.round(zData.humidity ?? 0) + '% | VPD ' + (zData.vpd?.toFixed(2) ?? '--') : '';
+          sub = zHovW + 'm x ' + zHovD + 'm' + (zData ? ' | ' + (zData.temp?.toFixed(1) ?? '--') + '\u00b0C | ' + Math.round(zData.humidity ?? 0) + '% | VPD ' + (zData.vpd?.toFixed(2) ?? '--') : '');
           if (S.hoveredZone !== ud.zoneId) { S.hoveredZone = ud.zoneId; showZoneHud(ud.zoneId, ud.zone); }
         }
 
@@ -1603,6 +1611,7 @@
       S.mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
       S.raycaster.setFromCamera(S.mouse, S.camera);
       var draggable = []
+        .concat(S.meshes.zones.filter(function(m) { return m.isMesh && m.userData.type === 'zone'; }))
         .concat(S.meshes.sensors.filter(function(m) { return m.userData.type === 'sensor'; }))
         .concat(S.meshes.equipment.filter(function(m) { return m.userData.type === 'equipment'; }))
         .concat(S.meshes.trays.filter(function(m) { return m.userData.type === 'group'; }));
@@ -1640,12 +1649,21 @@
         var rW = ud.roomW;
         var rD = ud.roomD;
         if (rW != null && rD != null) {
-          var margin = 0.2;
-          newX = Math.max(rOffX + margin, Math.min(rOffX + rW - margin, newX));
-          newZ = Math.max(margin, Math.min(rD - margin, newZ));
+          if (ud.type === 'zone') {
+            // Zone drag: clamp so entire zone stays inside room
+            var zbb = new THREE.Box3().setFromObject(S.dragTarget);
+            var zhx = (zbb.max.x - zbb.min.x) / 2;
+            var zhz = (zbb.max.z - zbb.min.z) / 2;
+            newX = Math.max(rOffX + zhx, Math.min(rOffX + rW - zhx, newX));
+            newZ = Math.max(zhz, Math.min(rD - zhz, newZ));
+          } else {
+            var margin = 0.2;
+            newX = Math.max(rOffX + margin, Math.min(rOffX + rW - margin, newX));
+            newZ = Math.max(margin, Math.min(rD - margin, newZ));
+          }
         }
         // Collision check with sliding: try X+Z, then X only, then Z only
-        var isFloor = S.dragTarget.position.y < 1.5;
+        var isFloor = S.dragTarget.position.y < 1.5 && ud.type !== 'zone';
         var collisionBlocked = false;
         if (isFloor) {
           var curX = S.dragTarget.position.x;
@@ -1672,8 +1690,10 @@
             tud._arrowPivot.position.z = newZ;
           }
           document.getElementById('statusBar').style.color = '';
-          var dName = (S.dragTarget.userData.device?.snapshot?.name || S.dragTarget.userData.group?.name || 'Object');
-          document.getElementById('statusBar').textContent = dName + ' -- (' + newX.toFixed(1) + ', ' + newZ.toFixed(1) + ')';
+          var dName = S.dragTarget.userData.type === 'zone'
+            ? (S.dragTarget.userData.zone?.name || 'Zone')
+            : (S.dragTarget.userData.device?.snapshot?.name || S.dragTarget.userData.group?.name || 'Object');
+          document.getElementById('statusBar').textContent = dName + ' -- (' + newX.toFixed(1) + 'm, ' + newZ.toFixed(1) + 'm)';
         }
         S.isDragging = true;
         document.getElementById('farmCanvas').classList.add('dragging');
@@ -1727,6 +1747,42 @@
             document.getElementById('statusBar').style.color = '#f87171';
             setTimeout(function() { document.getElementById('statusBar').style.color = ''; }, 2000);
           });
+        }
+      } else if (ud.type === 'zone') {
+        // Zone drag: convert new center back to grid bounds and save
+        var zone = ud.zone;
+        var zGridSz = ud.gridSize || 20;
+        var zSX = ud.zScaleX || 1;
+        var zSZ = ud.zScaleZ || 1;
+        var zOff = ud.offsetX || 0;
+        var origW = (zone.x2 ?? 0) - (zone.x1 ?? 0);
+        var origH = (zone.y2 ?? 0) - (zone.y1 ?? 0);
+        var newCGx = (mesh.position.x - zOff) / zSX;
+        var newCGz = mesh.position.z / zSZ;
+        var nx1 = Math.round(newCGx - origW / 2);
+        var ny1 = Math.round(newCGz - origH / 2);
+        var nx2 = nx1 + origW;
+        var ny2 = ny1 + origH;
+        // Clamp to room grid
+        if (nx1 < 0) { nx2 -= nx1; nx1 = 0; }
+        if (ny1 < 0) { ny2 -= ny1; ny1 = 0; }
+        if (nx2 > zGridSz) { nx1 -= (nx2 - zGridSz); nx2 = zGridSz; }
+        if (ny2 > zGridSz) { ny1 -= (ny2 - zGridSz); ny2 = zGridSz; }
+        nx1 = Math.max(0, nx1); ny1 = Math.max(0, ny1);
+        zone.x1 = nx1; zone.y1 = ny1; zone.x2 = nx2; zone.y2 = ny2;
+        var zRId = ud.room?.id;
+        if (zRId && S.roomMaps[zRId]) {
+          authFetch('/data/room-map-' + zRId + '.json', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(S.roomMaps[zRId])
+          }).then(function(resp) {
+            if (resp.ok) {
+              document.getElementById('statusBar').textContent = (zone.name || 'Zone') + ' position saved';
+              document.getElementById('statusBar').style.color = '#4ade80';
+              setTimeout(function() { document.getElementById('statusBar').style.color = ''; }, 2000);
+            }
+          }).catch(function(err) { console.error('[3D] Zone save error:', err); });
+          buildScene();
         }
       } else if (ud.type === 'group') {
         // For groups, show feedback. Full rebuild snaps to zone grid.
@@ -1948,11 +2004,20 @@
         const rId = ud.room?.id || '';
         html += '<div class="dp-section"><div class="dp-label">Zone Name</div>';
         html += '<div class="dp-input-row"><input type="text" id="zoneName" value="' + (z.name || z.zone || '') + '" style="flex:1"></div></div>';
-        html += '<div class="dp-section"><div class="dp-label">Zone Bounds (grid units)</div>';
-        html += '<div class="dp-input-row"><label>X1</label><input type="number" step="1" min="0" id="zoneX1" value="' + (z.x1 ?? 0) + '" style="width:55px">';
-        html += '<label>Y1</label><input type="number" step="1" min="0" id="zoneY1" value="' + (z.y1 ?? 0) + '" style="width:55px"></div>';
-        html += '<div class="dp-input-row"><label>X2</label><input type="number" step="1" min="0" id="zoneX2" value="' + (z.x2 ?? 0) + '" style="width:55px">';
-        html += '<label>Y2</label><input type="number" step="1" min="0" id="zoneY2" value="' + (z.y2 ?? 0) + '" style="width:55px"></div>';
+        const zMap = S.roomMaps[rId];
+        const zGridSize = zMap?.gridSize || 20;
+        const zDims = S.roomDimensions[rId] || {};
+        const zRoomL = zDims.length || zGridSize;
+        const zRoomW = zDims.width || zGridSize;
+        const zmX1 = ((z.x1 ?? 0) * zRoomL / zGridSize).toFixed(1);
+        const zmY1 = ((z.y1 ?? 0) * zRoomW / zGridSize).toFixed(1);
+        const zmX2 = ((z.x2 ?? zGridSize) * zRoomL / zGridSize).toFixed(1);
+        const zmY2 = ((z.y2 ?? zGridSize) * zRoomW / zGridSize).toFixed(1);
+        html += '<div class="dp-section"><div class="dp-label">Zone Bounds (meters)</div>';
+        html += '<div class="dp-input-row"><label>X1</label><input type="number" step="0.1" min="0" max="' + zRoomL + '" id="zoneX1" value="' + zmX1 + '" style="width:55px"><span class="unit">m</span>';
+        html += '<label>Y1</label><input type="number" step="0.1" min="0" max="' + zRoomW + '" id="zoneY1" value="' + zmY1 + '" style="width:55px"><span class="unit">m</span></div>';
+        html += '<div class="dp-input-row"><label>X2</label><input type="number" step="0.1" min="0" max="' + zRoomL + '" id="zoneX2" value="' + zmX2 + '" style="width:55px"><span class="unit">m</span>';
+        html += '<label>Y2</label><input type="number" step="0.1" min="0" max="' + zRoomW + '" id="zoneY2" value="' + zmY2 + '" style="width:55px"><span class="unit">m</span></div>';
         html += '</div>';
         html += '<button class="dp-save-btn" id="saveZone">Save Zone</button>';
 
@@ -1966,10 +2031,21 @@
         document.getElementById('saveZone').addEventListener('click', async function() {
           var btn = document.getElementById('saveZone');
           var newName = document.getElementById('zoneName').value.trim();
-          var newX1 = parseInt(document.getElementById('zoneX1').value, 10);
-          var newY1 = parseInt(document.getElementById('zoneY1').value, 10);
-          var newX2 = parseInt(document.getElementById('zoneX2').value, 10);
-          var newY2 = parseInt(document.getElementById('zoneY2').value, 10);
+          // Convert meters back to grid cells
+          var zSaveMap = S.roomMaps[rId];
+          var zSaveGrid = zSaveMap?.gridSize || 20;
+          var zSaveDims = S.roomDimensions[rId] || {};
+          var zSaveRL = zSaveDims.length || zSaveGrid;
+          var zSaveRW = zSaveDims.width || zSaveGrid;
+          var newX1 = Math.round(parseFloat(document.getElementById('zoneX1').value) * zSaveGrid / zSaveRL);
+          var newY1 = Math.round(parseFloat(document.getElementById('zoneY1').value) * zSaveGrid / zSaveRW);
+          var newX2 = Math.round(parseFloat(document.getElementById('zoneX2').value) * zSaveGrid / zSaveRL);
+          var newY2 = Math.round(parseFloat(document.getElementById('zoneY2').value) * zSaveGrid / zSaveRW);
+          // Clamp to room bounds
+          newX1 = Math.max(0, Math.min(zSaveGrid, newX1));
+          newY1 = Math.max(0, Math.min(zSaveGrid, newY1));
+          newX2 = Math.max(0, Math.min(zSaveGrid, newX2));
+          newY2 = Math.max(0, Math.min(zSaveGrid, newY2));
           if (newName) { z.name = newName; z.zone = newName; }
           if (!isNaN(newX1)) z.x1 = newX1;
           if (!isNaN(newY1)) z.y1 = newY1;
@@ -2041,9 +2117,15 @@
       } else if (ud.type === 'sensor') {
         const d = ud.device;
         const zData = findSensorZoneData(d);
+        const sRoomId = ud.roomId || (ud.room ? ud.room.id : '');
+        const sMap = S.roomMaps[sRoomId];
+        const sGridSz = sMap?.gridSize || 20;
+        const sDims = S.roomDimensions[sRoomId] || {};
+        const sRL = sDims.length || sGridSz;
+        const sRW = sDims.width || sGridSz;
         let html = '<h3>' + (d.snapshot?.name || d.deviceId || 'Sensor') + '</h3>';
         html += '<div class="dp-label">Category</div><div class="dp-value">' + (d.snapshot?.category || 'environmental') + '</div>';
-        html += '<div class="dp-label">Position</div><div class="dp-value">Grid (' + d.x + ', ' + d.y + ')</div>';
+        html += '<div class="dp-label">Position</div><div class="dp-value">' + (d.x * sRL / sGridSz).toFixed(1) + 'm x ' + (d.y * sRW / sGridSz).toFixed(1) + 'm' + (d.z != null ? ' (h: ' + d.z.toFixed(1) + 'm)' : '') + '</div>';
         if (zData) {
           html += '<div class="dp-grid">';
           if (zData.temp != null) html += '<div class="dp-metric"><div class="metric-val">' + zData.temp.toFixed(1) + '\u00b0</div><div class="metric-lbl">Temp</div></div>';
@@ -2084,7 +2166,12 @@
 
           html = '<h3>' + devName + '</h3>';
           html += '<div class="dp-label">Category</div><div class="dp-value">' + (devCat || '--') + '</div>';
-          html += '<div class="dp-label">Position</div><div class="dp-value">Grid (' + (d?.x ?? '--') + ', ' + (d?.y ?? '--') + ', z=' + (d?.z != null ? d.z.toFixed(1) : 'auto') + ')</div>';
+          const eMap = S.roomMaps[rId];
+          const eGridSz = eMap?.gridSize || 20;
+          const eDims = S.roomDimensions[rId] || {};
+          const eRL = eDims.length || eGridSz;
+          const eRW = eDims.width || eGridSz;
+          html += '<div class="dp-label">Position</div><div class="dp-value">' + (d?.x != null ? (d.x * eRL / eGridSz).toFixed(1) + 'm' : '--') + ' x ' + (d?.y != null ? (d.y * eRW / eGridSz).toFixed(1) + 'm' : '--') + (d?.z != null ? ' (h: ' + d.z.toFixed(1) + 'm)' : '') + '</div>';
           if (identicalCount > 1) {
             html += '<div class="dp-label">Identical Units</div><div class="dp-value" style="color:#818cf8">' + identicalCount + ' x ' + devName + '</div>';
           }
@@ -2097,8 +2184,8 @@
 
           // Position editing
           html += '<div class="dp-section"><div class="dp-label">Move Equipment</div>';
-          html += '<div class="dp-input-row"><label>X</label><input type="number" step="1" min="0" id="eqPosX" value="' + (d?.x ?? 0) + '" style="flex:1">';
-          html += '<label>Y</label><input type="number" step="1" min="0" id="eqPosY" value="' + (d?.y ?? 0) + '" style="flex:1"></div>';
+          html += '<div class="dp-input-row"><label>X</label><input type="number" step="0.1" min="0" max="' + eRL + '" id="eqPosX" value="' + (d?.x != null ? (d.x * eRL / eGridSz).toFixed(1) : '0') + '" style="flex:1"><span class="unit">m</span>';
+          html += '<label>Y</label><input type="number" step="0.1" min="0" max="' + eRW + '" id="eqPosY" value="' + (d?.y != null ? (d.y * eRW / eGridSz).toFixed(1) : '0') + '" style="flex:1"><span class="unit">m</span></div>';
           const catLow = devCat.toLowerCase();
           const rmDims = S.roomDimensions[rId] || {};
           const defaultZ = catLow.includes('fan') ? ((rmDims.height || 3.5) - 0.5).toFixed(1) : catLow.includes('zip') || catLow.includes('tower') ? '1.0' : catLow.includes('sensor') ? '1.2' : '0.4';
@@ -2155,8 +2242,8 @@
             const btn = document.getElementById('saveEqOne');
             const newName = document.getElementById('eqName').value.trim() || devName;
             const newCat = document.getElementById('eqCat').value.trim() || devCat;
-            const newX = parseInt(document.getElementById('eqPosX').value, 10);
-            const newY = parseInt(document.getElementById('eqPosY').value, 10);
+            const newX = Math.round(parseFloat(document.getElementById('eqPosX').value) * eGridSz / eRL);
+            const newY = Math.round(parseFloat(document.getElementById('eqPosY').value) * eGridSz / eRW);
             const newZ = parseFloat(document.getElementById('eqPosZ').value);
             if (!d.snapshot) d.snapshot = {};
             d.snapshot.name = newName;

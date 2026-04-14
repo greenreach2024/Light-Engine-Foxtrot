@@ -226,7 +226,7 @@ const TRUST_TIERS = {
   // AUTO: Execute immediately, notify after
   auto: new Set(['dismiss_alert', 'get_ai_pricing_recommendations', 'save_user_memory', 'escalate_to_faye', 'reply_to_faye', 'get_faye_directives', 'read_skill_file', 'get_gwen_messages', 'reply_to_gwen', 'ask_gwen']),
   // QUICK-CONFIRM: Execute with brief undo window
-  quick_confirm: new Set(['resolve_all_alerts', 'resolve_stale_alerts', 'mark_harvest_complete', 'update_farm_profile', 'update_group_crop', 'create_room', 'create_zone', 'update_certifications', 'complete_setup', 'update_crop_price', 'add_inventory_item', 'update_manual_inventory', 'record_harvest', 'update_room_specs', 'apply_crop_environment', 'recommend_farm_layout', 'update_crop_description', 'add_salad_mix_inventory', 'update_equipment', 'update_group', 'optimize_layout']),
+  quick_confirm: new Set(['resolve_all_alerts', 'resolve_stale_alerts', 'mark_harvest_complete', 'update_farm_profile', 'update_group_crop', 'create_room', 'create_zone', 'update_certifications', 'complete_setup', 'update_crop_price', 'add_inventory_item', 'update_manual_inventory', 'record_harvest', 'update_room_specs', 'apply_crop_environment', 'recommend_farm_layout', 'update_crop_description', 'add_salad_mix_inventory', 'update_equipment', 'update_group', 'optimize_layout', 'update_zone', 'add_equipment', 'remove_equipment']),
   // CONFIRM: Ask before executing (default for write tools)
   confirm: new Set([
     'create_planting_assignment', 'update_order_status',
@@ -1963,6 +1963,64 @@ const GPT_TOOLS = [
         required: ['query']
       }
     }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'update_zone',
+      description: 'Update a zone in the room map. Resize (bounds in meters), rename, or reposition zones within the room. Bounds are automatically clamped to room dimensions.',
+      parameters: {
+        type: 'object',
+        required: ['room_id', 'zone_name'],
+        properties: {
+          room_id: { type: 'string', description: 'Room ID or name' },
+          zone_name: { type: 'string', description: 'Current zone name (partial match supported)' },
+          new_name: { type: 'string', description: 'New name for the zone' },
+          x1_m: { type: 'number', description: 'New X1 bound in meters from room origin' },
+          y1_m: { type: 'number', description: 'New Y1 bound in meters from room origin' },
+          x2_m: { type: 'number', description: 'New X2 bound in meters from room origin' },
+          y2_m: { type: 'number', description: 'New Y2 bound in meters from room origin' }
+        }
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'add_equipment',
+      description: 'Add new equipment to the room map (fans, lights, sensors, ZipGrow towers, dehumidifiers, etc.). Position in meters. Use count for multiple identical items.',
+      parameters: {
+        type: 'object',
+        required: ['room_id', 'name', 'category'],
+        properties: {
+          room_id: { type: 'string', description: 'Room ID or name' },
+          name: { type: 'string', description: 'Equipment name (e.g., "Circulation Fan", "ZipGrow Tower")' },
+          category: { type: 'string', description: 'Equipment category: fans, lights, sensors, zipgrow, dehumidifier, controller, pump, etc.' },
+          x_m: { type: 'number', description: 'X position in meters from room origin' },
+          y_m: { type: 'number', description: 'Y position in meters from room origin' },
+          z_m: { type: 'number', description: 'Height in meters (default: auto based on category)' },
+          zone: { type: 'string', description: 'Zone assignment (name or number)' },
+          count: { type: 'integer', description: 'Number of identical units to add (default: 1, max: 100)' }
+        }
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'remove_equipment',
+      description: 'Remove equipment from the room map. By single device_id or bulk by name/category match.',
+      parameters: {
+        type: 'object',
+        properties: {
+          device_id: { type: 'string', description: 'Specific device ID to remove' },
+          match_name: { type: 'string', description: 'Remove all devices whose name contains this string (case-insensitive)' },
+          match_category: { type: 'string', description: 'Remove all devices with this exact category' },
+          bulk: { type: 'boolean', description: 'Set true for bulk removal by match_name/match_category' },
+          room_id: { type: 'string', description: 'Room context for the operation' }
+        }
+      }
+    }
   }
 ];
 
@@ -2555,6 +2613,9 @@ FARM BUILDING WORKFLOW:
 EQUIPMENT MANAGEMENT:
 - Equipment in the room map (fans, ZipGrow towers, dehumidifiers, lights, etc.) can be renamed, recategorized, and repositioned using update_equipment.
 - Use optimize_layout to spatially arrange groups/equipment into grid patterns within zones. Accepts columns, walkway width, and spacing. Example: user says "arrange ZipGrow 3 wide with a 2m walkway" -> optimize_layout with room_id, match_name="ZipGrow", columns=3, walkway_m=2. Works with general instructions -- no need to specify individual equipment IDs.
+- Use update_zone to resize, rename, or move zone boundaries. Bounds are in meters -- the system converts to grid units automatically. Example: user says "make Zone 1 wider" -> update_zone(room_id, zone_name="Zone 1", x2_m=8.0).
+- Use add_equipment to place new devices in the room map (fans, sensors, ZipGrow towers, lights, etc.). Position in meters. Use count for multiple identical units.
+- Use remove_equipment to delete devices from the room map by device_id or by matching name/category in bulk.
 - Grow groups (ZipGrow units, racks) can be updated using update_group -- rename, change tray count, assign crops, or update status.
 - For bulk equipment operations (e.g., "rename all fans to ZipGrow Tower"), use update_equipment with bulk=true, match_category, and/or match_name. Name matching is partial (contains), so match_name="ZipGrow" matches "ZipGrow Standard 30".
 - For bulk group operations (e.g., "set all ZipGrow units to active"), use update_group with bulk=true and match_name. Example: bulk=true, match_name="ZipGrow Standard", status="active" updates all 78 towers at once.
