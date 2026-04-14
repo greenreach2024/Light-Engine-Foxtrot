@@ -991,9 +991,34 @@
             const eY = dev.z != null ? dev.z : defaultY;
             eMesh.position.set(dx, eY, dz);
             eMesh.castShadow = true;
-            eMesh.userData = { type: 'equipment', device: dev, room, roomId: room.id, scaleX, scaleZ, offsetX, roomW, roomD };
+            eMesh.userData = { type: 'equipment', device: dev, room, roomId: room.id, scaleX, scaleZ, offsetX, roomW, roomD, isFan, isZipgrow };
             S.scene.add(eMesh);
             S.meshes.equipment.push(eMesh);
+
+            // Fan airflow direction arrow
+            if (isFan) {
+              const airDir = dev.airflowDir != null ? dev.airflowDir : 0; // degrees, 0 = +Z
+              const arrowLen = 0.55;
+              const arrowGeo = new THREE.ConeGeometry(0.1, arrowLen, 8);
+              const arrowMat = new THREE.MeshStandardMaterial({ color: 0x38bdf8, emissive: 0x38bdf8, emissiveIntensity: 0.4, transparent: true, opacity: 0.85 });
+              const arrow = new THREE.Mesh(arrowGeo, arrowMat);
+              // Cone points along +Y by default; rotate to point along +Z then apply user direction
+              arrow.rotation.x = Math.PI / 2;
+              const radDir = (airDir * Math.PI) / 180;
+              // Position arrow at edge of fan cylinder, pointing outward
+              arrow.position.set(Math.sin(radDir) * 0.5, 0, Math.cos(radDir) * 0.5);
+              // Create a pivot group so we can rotate the arrow around the fan center
+              const arrowPivot = new THREE.Group();
+              arrowPivot.rotation.y = radDir;
+              arrowPivot.position.copy(eMesh.position);
+              // Reset arrow position relative to pivot
+              arrow.position.set(0, 0, 0.5);
+              arrowPivot.add(arrow);
+              arrowPivot.userData = { type: 'fanArrow', parentMesh: eMesh, device: dev };
+              S.scene.add(arrowPivot);
+              S.meshes.equipment.push(arrowPivot);
+              eMesh.userData._arrowPivot = arrowPivot;
+            }
           }
         });
 
@@ -1493,6 +1518,47 @@
     function co2Class(v) { return v >= 400 && v <= 1200 ? 'good' : v > 1500 ? 'danger' : 'warn'; }
 
 
+    // ---- Collision detection for floor equipment --------------
+    function checkFloorCollision(mesh, newX, newZ) {
+      var ud = mesh.userData;
+      var roomId = ud.roomId || (ud.room ? ud.room.id : '');
+      // Get bounding half-sizes of the dragged mesh
+      var bb = new THREE.Box3().setFromObject(mesh);
+      var hx = (bb.max.x - bb.min.x) / 2;
+      var hz = (bb.max.z - bb.min.z) / 2;
+
+      // Check against all other floor-level equipment and group trays in the same room
+      var floorMeshes = S.meshes.equipment.filter(function(m) {
+        if (m === mesh) return false;
+        if (!m.userData) return false;
+        // Only block against floor-level items (Y < 1.5), skip ceiling fans
+        if (m.userData.type === 'fanArrow') return false;
+        if (m.position && m.position.y > 1.5) return false;
+        var mRoom = m.userData.roomId || (m.userData.room ? m.userData.room.id : '');
+        return mRoom === roomId;
+      }).concat(S.meshes.trays.filter(function(m) {
+        if (m === mesh) return false;
+        if (!m.userData || m.userData.type !== 'group') return false;
+        var mRoom = m.userData.roomId || (m.userData.room ? m.userData.room.id : '');
+        return mRoom === roomId;
+      }));
+
+      for (var i = 0; i < floorMeshes.length; i++) {
+        var other = floorMeshes[i];
+        var ob = new THREE.Box3().setFromObject(other);
+        var ohx = (ob.max.x - ob.min.x) / 2;
+        var ohz = (ob.max.z - ob.min.z) / 2;
+        var ocx = (ob.max.x + ob.min.x) / 2;
+        var ocz = (ob.max.z + ob.min.z) / 2;
+        // AABB overlap test with small padding
+        var pad = 0.05;
+        if (Math.abs(newX - ocx) < (hx + ohx + pad) && Math.abs(newZ - ocz) < (hz + ohz + pad)) {
+          return true; // collision
+        }
+      }
+      return false;
+    }
+
     // ---- Edit Mode: Drag-and-drop ----------------------------
     function toggleEditMode() {
       S.editMode = !S.editMode;
@@ -1558,8 +1624,23 @@
           newX = Math.max(rOffX + margin, Math.min(rOffX + rW - margin, newX));
           newZ = Math.max(margin, Math.min(rD - margin, newZ));
         }
-        S.dragTarget.position.x = newX;
-        S.dragTarget.position.z = newZ;
+        // Collision check for floor-level equipment/groups (skip ceiling fans)
+        var isFloor = S.dragTarget.position.y < 1.5;
+        if (isFloor && checkFloorCollision(S.dragTarget, newX, newZ)) {
+          // Blocked -- show red status but don't move
+          document.getElementById('statusBar').textContent = 'Blocked -- overlaps another object';
+          document.getElementById('statusBar').style.color = '#f87171';
+        } else {
+          S.dragTarget.position.x = newX;
+          S.dragTarget.position.z = newZ;
+          // Move fan arrow pivot to match fan position
+          var tud = S.dragTarget.userData;
+          if (tud._arrowPivot) {
+            tud._arrowPivot.position.x = newX;
+            tud._arrowPivot.position.z = newZ;
+          }
+          document.getElementById('statusBar').style.color = '';
+        }
         S.isDragging = true;
         document.getElementById('farmCanvas').classList.add('dragging');
         var ud = S.dragTarget.userData;
@@ -1945,11 +2026,50 @@
           html += '<div class="dp-input-row"><label>Z (height m)</label><input type="number" step="0.1" min="0" id="eqPosZ" value="' + (d?.z != null ? d.z : defaultZ) + '" style="flex:1"></div>';
           html += '</div>';
 
+          // Fan airflow direction control
+          if (catLow.includes('fan')) {
+            const curDir = d?.airflowDir != null ? d.airflowDir : 0;
+            html += '<div class="dp-section"><div class="dp-label">Airflow Direction</div>';
+            html += '<div class="dp-input-row" style="flex-wrap:wrap;gap:0.25rem">';
+            html += '<button class="dp-save-btn" data-fandir="0" style="margin:0;padding:0.25rem 0.5rem;font-size:0.68rem">N</button>';
+            html += '<button class="dp-save-btn" data-fandir="45" style="margin:0;padding:0.25rem 0.5rem;font-size:0.68rem">NE</button>';
+            html += '<button class="dp-save-btn" data-fandir="90" style="margin:0;padding:0.25rem 0.5rem;font-size:0.68rem">E</button>';
+            html += '<button class="dp-save-btn" data-fandir="135" style="margin:0;padding:0.25rem 0.5rem;font-size:0.68rem">SE</button>';
+            html += '<button class="dp-save-btn" data-fandir="180" style="margin:0;padding:0.25rem 0.5rem;font-size:0.68rem">S</button>';
+            html += '<button class="dp-save-btn" data-fandir="225" style="margin:0;padding:0.25rem 0.5rem;font-size:0.68rem">SW</button>';
+            html += '<button class="dp-save-btn" data-fandir="270" style="margin:0;padding:0.25rem 0.5rem;font-size:0.68rem">W</button>';
+            html += '<button class="dp-save-btn" data-fandir="315" style="margin:0;padding:0.25rem 0.5rem;font-size:0.68rem">NW</button>';
+            html += '</div>';
+            html += '<div class="dp-input-row"><label>Deg</label><input type="number" step="15" min="0" max="345" id="eqFanDir" value="' + curDir + '" style="flex:1"><span class="unit">deg</span></div>';
+            html += '<div class="dp-value" style="font-size:0.68rem;color:#64748b;margin-top:0.2rem">0=N, 90=E, 180=S, 270=W</div>';
+            html += '</div>';
+          }
+
           if (identicalCount > 1) {
             html += '<button class="dp-save-btn" id="saveEqAll">Update All ' + identicalCount + ' ' + devName + '</button>';
           }
           html += '<button class="dp-save-btn" id="saveEqOne" style="margin-top:0.3rem">' + (identicalCount > 1 ? 'Update This One Only' : 'Save Equipment') + '</button>';
           content.innerHTML = html;
+
+          // Fan direction button handlers
+          document.querySelectorAll('[data-fandir]').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+              var dirField = document.getElementById('eqFanDir');
+              if (dirField) dirField.value = btn.dataset.fandir;
+              // Live preview: rotate the arrow in scene
+              var fanMesh = S.meshes.equipment.find(function(m) { return m.userData.device === d && m.userData.isFan; });
+              if (fanMesh && fanMesh.userData._arrowPivot) {
+                fanMesh.userData._arrowPivot.rotation.y = (parseInt(btn.dataset.fandir, 10) * Math.PI) / 180;
+              }
+              // Highlight active button
+              document.querySelectorAll('[data-fandir]').forEach(function(b) { b.classList.remove('active'); });
+              btn.classList.add('active');
+            });
+          });
+          // Highlight current direction button
+          var curDirVal = String(d?.airflowDir != null ? d.airflowDir : 0);
+          var curBtn = document.querySelector('[data-fandir="' + curDirVal + '"]');
+          if (curBtn) curBtn.classList.add('active');
 
           // Save-one handler (name/cat/position for this device only)
           document.getElementById('saveEqOne').addEventListener('click', async () => {
@@ -1965,6 +2085,11 @@
             if (!isNaN(newX)) d.x = newX;
             if (!isNaN(newY)) d.y = newY;
             if (!isNaN(newZ)) d.z = newZ;
+            // Save fan airflow direction
+            var fanDirField = document.getElementById('eqFanDir');
+            if (fanDirField) {
+              d.airflowDir = parseInt(fanDirField.value, 10) || 0;
+            }
             console.log('[3D] Save-one:', newName, newCat, 'room:', rId);
             if (!rId || !S.roomMaps[rId]) {
               btn.textContent = 'Save Failed (no room)'; btn.style.background = '#dc2626';
