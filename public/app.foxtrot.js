@@ -4007,27 +4007,27 @@ async function showDeviceSignInForm(device, deviceIndex) {
   
   if (protocol === 'switchbot') {
     formHTML = `
-      <div style="background: white; border-radius: 8px; padding: 24px; max-width: 500px; width: 90%;">
-        <h3 style="margin: 0 0 16px 0; color: #1e293b;">Sign In to SwitchBot</h3>
-        <p style="margin: 0 0 16px 0; color: #64748b; font-size: 14px;">
+      <div style="background: var(--bg-card); border: 1px solid var(--gr-border); border-radius: 12px; padding: 24px; max-width: 500px; width: 90%; box-shadow: 0 20px 40px rgba(2,6,23,0.35); color: var(--text-primary);">
+        <h3 style="margin: 0 0 16px 0; color: var(--text-primary);">Sign In to SwitchBot</h3>
+        <p style="margin: 0 0 16px 0; color: var(--text-secondary); font-size: 14px;">
           Enter your SwitchBot API credentials to add <strong>${escapeHtml(device.name)}</strong>
         </p>
         
         <div style="margin-bottom: 16px;">
-          <label style="display: block; margin-bottom: 4px; font-size: 13px; font-weight: 600; color: #475569;">API Token</label>
+             <label style="display: block; margin-bottom: 4px; font-size: 13px; font-weight: 600; color: var(--text-secondary);">API Token</label>
           <input type="text" id="deviceSignInToken" placeholder="Your SwitchBot API token" 
-                 style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 4px; font-size: 14px;">
+               style="width:100%;padding:10px;border:1px solid rgba(148,163,184,0.28);border-radius:4px;font-size:14px;background:rgba(15,23,42,0.92);color:var(--text-primary);">
         </div>
         
         <div style="margin-bottom: 24px;">
-          <label style="display: block; margin-bottom: 4px; font-size: 13px; font-weight: 600; color: #475569;">API Secret</label>
+             <label style="display: block; margin-bottom: 4px; font-size: 13px; font-weight: 600; color: var(--text-secondary);">API Secret</label>
           <input type="password" id="deviceSignInSecret" placeholder="Your SwitchBot API secret" 
-                 style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 4px; font-size: 14px;">
+               style="width:100%;padding:10px;border:1px solid rgba(148,163,184,0.28);border-radius:4px;font-size:14px;background:rgba(15,23,42,0.92);color:var(--text-primary);">
         </div>
         
         <div style="display: flex; gap: 8px; justify-content: flex-end;">
           <button onclick="closeDeviceSignInModal()" 
-                  style="padding: 10px 20px; background: #e2e8f0; color: #475569; border: none; border-radius: 4px; font-size: 14px; font-weight: 600; cursor: pointer;">
+              style="padding:10px 20px;background:rgba(30,41,59,0.96);color:var(--text-primary);border:1px solid rgba(148,163,184,0.2);border-radius:4px;font-size:14px;font-weight:600;cursor:pointer;">
             Cancel
           </button>
           <button onclick="submitDeviceSignIn(${deviceIndex}, 'switchbot')" 
@@ -4039,27 +4039,27 @@ async function showDeviceSignInForm(device, deviceIndex) {
     `;
   } else if (protocol === 'kasa' || protocol === 'tplink') {
     formHTML = `
-      <div style="background: white; border-radius: 8px; padding: 24px; max-width: 500px; width: 90%;">
-        <h3 style="margin: 0 0 16px 0; color: #1e293b;">Sign In to TP-Link Kasa</h3>
-        <p style="margin: 0 0 16px 0; color: #64748b; font-size: 14px;">
+      <div style="background: var(--bg-card); border: 1px solid var(--gr-border); border-radius: 12px; padding: 24px; max-width: 500px; width: 90%; box-shadow: 0 20px 40px rgba(2,6,23,0.35); color: var(--text-primary);">
+        <h3 style="margin: 0 0 16px 0; color: var(--text-primary);">Sign In to TP-Link Kasa</h3>
+        <p style="margin: 0 0 16px 0; color: var(--text-secondary); font-size: 14px;">
           Enter your Kasa account credentials to add <strong>${escapeHtml(device.name)}</strong>
         </p>
         
         <div style="margin-bottom: 16px;">
-          <label style="display: block; margin-bottom: 4px; font-size: 13px; font-weight: 600; color: #475569;">Email</label>
+             <label style="display: block; margin-bottom: 4px; font-size: 13px; font-weight: 600; color: var(--text-secondary);">Email</label>
           <input type="email" id="deviceSignInEmail" placeholder="your@email.com" 
-                 style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 4px; font-size: 14px;">
+               style="width:100%;padding:10px;border:1px solid rgba(148,163,184,0.28);border-radius:4px;font-size:14px;background:rgba(15,23,42,0.92);color:var(--text-primary);">
         </div>
         
         <div style="margin-bottom: 24px;">
-          <label style="display: block; margin-bottom: 4px; font-size: 13px; font-weight: 600; color: #475569;">Password</label>
+             <label style="display: block; margin-bottom: 4px; font-size: 13px; font-weight: 600; color: var(--text-secondary);">Password</label>
           <input type="password" id="deviceSignInPassword" placeholder="Your password" 
-                 style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 4px; font-size: 14px;">
+               style="width:100%;padding:10px;border:1px solid rgba(148,163,184,0.28);border-radius:4px;font-size:14px;background:rgba(15,23,42,0.92);color:var(--text-primary);">
         </div>
         
         <div style="display: flex; gap: 8px; justify-content: flex-end;">
           <button onclick="closeDeviceSignInModal()" 
-                  style="padding: 10px 20px; background: #e2e8f0; color: #475569; border: none; border-radius: 4px; font-size: 14px; font-weight: 600; cursor: pointer;">
+              style="padding:10px 20px;background:rgba(30,41,59,0.96);color:var(--text-primary);border:1px solid rgba(148,163,184,0.2);border-radius:4px;font-size:14px;font-weight:600;cursor:pointer;">
             Cancel
           </button>
           <button onclick="submitDeviceSignIn(${deviceIndex}, 'kasa')" 
@@ -8762,10 +8762,10 @@ class FarmWizard {
     
     const modalContent = `
       <div id="brandingModalBackdrop" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center">
-        <div style="background:white;border-radius:12px;padding:24px;max-width:500px;margin:20px;box-shadow:0 20px 40px rgba(0,0,0,0.2)" onclick="event.stopPropagation()">
+        <div style="background:var(--bg-card);border:1px solid var(--gr-border);border-radius:12px;padding:24px;max-width:500px;margin:20px;box-shadow:0 20px 40px rgba(2,6,23,0.35);color:var(--text-primary)" onclick="event.stopPropagation()">
           <div style="display:flex;align-items:center;margin-bottom:16px">
             <h3 style="margin:0;flex:1"> Live Branding Preview</h3>
-            <button id="closeBrandingModal" style="background:none;border:none;font-size:24px;cursor:pointer;color:#666">&times;</button>
+            <button id="closeBrandingModal" style="background:none;border:none;font-size:24px;cursor:pointer;color:var(--text-secondary)">&times;</button>
           </div>
           
           <div style="border:1px solid var(--gr-border);border-radius:8px;padding:20px;background:var(--gr-bg);margin-bottom:16px">
@@ -8854,17 +8854,17 @@ class FarmWizard {
     
     const wizardContent = `
       <div id="brandingWizardBackdrop" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:10001;display:flex;align-items:center;justify-content:center">
-        <div style="background:white;border-radius:12px;padding:24px;max-width:600px;width:90%;margin:20px;box-shadow:0 20px 40px rgba(0,0,0,0.2);max-height:80vh;overflow-y:auto" onclick="event.stopPropagation()">
+        <div style="background:var(--bg-card);border:1px solid var(--gr-border);border-radius:12px;padding:24px;max-width:600px;width:90%;margin:20px;box-shadow:0 20px 40px rgba(2,6,23,0.35);max-height:80vh;overflow-y:auto;color:var(--text-primary)" onclick="event.stopPropagation()">
           <div style="display:flex;align-items:center;margin-bottom:20px">
             <h3 style="margin:0;flex:1"> ${farmName} Branding Editor</h3>
-            ${website ? `<div id="autoExtractionStatus" style="padding:6px 12px;margin-right:8px;background:#f3f4f6;color:#6b7280;border:1px solid #d1d5db;border-radius:4px;font-size:12px"> Auto-extracting...</div>` : ''}
-            <button id="closeBrandingWizard" style="background:none;border:none;font-size:24px;cursor:pointer;color:#666">&times;</button>
+            ${website ? `<div id="autoExtractionStatus" style="padding:6px 12px;margin-right:8px;background:rgba(15,23,42,0.55);color:var(--text-secondary);border:1px solid rgba(148,163,184,0.2);border-radius:4px;font-size:12px"> Auto-extracting...</div>` : ''}
+            <button id="closeBrandingWizard" style="background:none;border:none;font-size:24px;cursor:pointer;color:var(--text-secondary)">&times;</button>
           </div>
           
           <!-- Live Preview Section -->
           <div id="brandingLivePreview" style="border:2px solid var(--gr-border);border-radius:8px;padding:16px;margin-bottom:20px;background:var(--gr-bg)">
             <div style="font-weight:600;margin-bottom:8px;color:var(--gr-primary)">Live Preview</div>
-            <div style="display:flex;align-items:center;padding:12px;background:white;border-radius:6px;border:1px solid var(--gr-border)">
+            <div style="display:flex;align-items:center;padding:12px;background:rgba(15,23,42,0.42);border-radius:6px;border:1px solid var(--gr-border)">
               <img id="previewLogo" style="width:32px;height:32px;margin-right:12px;border-radius:4px;display:none">
               <div>
                 <div id="previewFarmName" style="font-size:18px;font-weight:600;color:var(--gr-text)">${farmName}</div>
@@ -8878,11 +8878,11 @@ class FarmWizard {
             <h4 style="margin:0 0 12px;color:var(--gr-text)">Farm Details</h4>
             <div style="margin-bottom:12px">
               <label style="display:block;margin-bottom:4px;font-size:12px;color:var(--medium)">Farm Name</label>
-              <input type="text" id="farmNameInput" value="${farmName}" placeholder="Your Farm Name" style="width:100%;padding:8px;border:1px solid var(--gr-border);border-radius:4px">
+              <input type="text" id="farmNameInput" value="${farmName}" placeholder="Your Farm Name" style="width:100%;padding:8px;border:1px solid rgba(148,163,184,0.28);border-radius:4px;background:rgba(15,23,42,0.92);color:var(--text-primary)">
             </div>
             <div>
               <label style="display:block;margin-bottom:4px;font-size:12px;color:var(--medium)">Tagline</label>
-              <input type="text" id="taglineInput" value="${currentBranding.tagline || 'Growing with technology'}" placeholder="Farm tagline or motto" style="width:100%;padding:8px;border:1px solid var(--gr-border);border-radius:4px">
+              <input type="text" id="taglineInput" value="${currentBranding.tagline || 'Growing with technology'}" placeholder="Farm tagline or motto" style="width:100%;padding:8px;border:1px solid rgba(148,163,184,0.28);border-radius:4px;background:rgba(15,23,42,0.92);color:var(--text-primary)">
             </div>
           </div>
           
@@ -13942,14 +13942,14 @@ function renderRooms() {
         ? planSummaries.map(renderPlanSummaryLine).join('<br>')
         : '—';
       
-      return `<div class="card" style="margin-top:8px">
+      return `<div class="card" style="margin-top:8px;background:linear-gradient(180deg, rgba(30,41,59,0.94) 0%, rgba(15,23,42,0.9) 100%);border:1px solid rgba(148,163,184,0.18);box-shadow:0 16px 32px rgba(2,6,23,0.22);">
         <div class="row" style="justify-content:space-between;align-items:center">
           <div>
-            <h3 style="margin:0">${name}</h3>
-            <div class="tiny" style="color:#475569"><b>Equipment:</b> ${equipmentSummary}</div>
-            <div class="tiny" style="margin:4px 0;display:flex;align-items:center;gap:6px;flex-wrap:wrap"><b style="color:#475569">Zones:</b> ${zoneHtml}</div>
-            <div class="tiny" style="color:#475569"><b>Plans:</b> ${planSummaryHtml}</div>
-            ${numLights > 0 ? `<div class="tiny" style="color:#64748b">Lights: ${numLights} (${lightsList})</div>` : ''}
+            <h3 style="margin:0;color:var(--text-primary)">${name}</h3>
+            <div class="tiny" style="color:var(--text-secondary)"><b>Equipment:</b> ${equipmentSummary}</div>
+            <div class="tiny" style="margin:4px 0;display:flex;align-items:center;gap:6px;flex-wrap:wrap;color:var(--text-secondary)"><b style="color:var(--text-secondary)">Zones:</b> ${zoneHtml}</div>
+            <div class="tiny" style="color:var(--text-secondary)"><b>Plans:</b> ${planSummaryHtml}</div>
+            ${numLights > 0 ? `<div class="tiny" style="color:var(--text-secondary)">Lights: ${numLights} (${lightsList})</div>` : ''}
           </div>
           <div class="row" style="gap:6px">
             <button type="button" class="ghost" data-action="edit-room" data-room-id="${roomId}">Edit</button>
@@ -14036,11 +14036,11 @@ function renderLightSetups() {
       const controlMethod = room.controlMethod || room.control || '—';
       
       return `
-        <div class="card" style="margin-bottom: 16px; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px;">
+        <div class="card" style="margin-bottom:16px;border:1px solid rgba(148,163,184,0.18);border-radius:12px;padding:16px;background:linear-gradient(180deg, rgba(30,41,59,0.94) 0%, rgba(15,23,42,0.9) 100%);box-shadow:0 16px 32px rgba(2,6,23,0.22);">
           <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 12px;">
             <div>
-              <h3 style="margin: 0 0 4px 0; color: #1e293b; font-size: 18px;">${escapeHtml(room.name || 'Unnamed Room')}</h3>
-              <div class="tiny" style="color: #64748b;">Room ID: ${escapeHtml(room.id || 'N/A')}</div>
+              <h3 style="margin:0 0 4px 0;color:var(--text-primary);font-size:18px;">${escapeHtml(room.name || 'Unnamed Room')}</h3>
+              <div class="tiny" style="color:var(--text-secondary);">Room ID: ${escapeHtml(room.id || 'N/A')}</div>
             </div>
             <div style="display: flex; gap: 8px;">
               <button type="button" class="ghost small" onclick="editRoom('${escapeHtml(room.id)}')">
@@ -14048,24 +14048,24 @@ function renderLightSetups() {
               </button>
             </div>
           </div>
-          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; padding: 12px; background: #f8fafc; border-radius: 6px;">
+          <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:12px;padding:12px;background:rgba(15,23,42,0.42);border:1px solid rgba(148,163,184,0.14);border-radius:10px;">
             <div>
-              <div class="tiny" style="color: #64748b; margin-bottom: 4px;">Fixtures</div>
-              <div style="font-weight: 600; color: #1e293b;">${totalFixtures} total</div>
-              <div class="tiny" style="color: #475569; margin-top: 2px;">${fixturesList}</div>
+              <div class="tiny" style="color:var(--text-secondary);margin-bottom:4px;">Fixtures</div>
+              <div style="font-weight:600;color:var(--text-primary);">${totalFixtures} total</div>
+              <div class="tiny" style="color:var(--text-secondary);margin-top:2px;">${fixturesList}</div>
             </div>
             <div>
-              <div class="tiny" style="color: #64748b; margin-bottom: 4px;">Zones</div>
-              <div style="font-weight: 600; color: #1e293b;">${escapeHtml(zones)}</div>
+              <div class="tiny" style="color:var(--text-secondary);margin-bottom:4px;">Zones</div>
+              <div style="font-weight:600;color:var(--text-primary);">${escapeHtml(zones)}</div>
             </div>
             <div>
-              <div class="tiny" style="color: #64748b; margin-bottom: 4px;">Control Method</div>
-              <div style="font-weight: 600; color: #1e293b;">${escapeHtml(controlMethod)}</div>
+              <div class="tiny" style="color:var(--text-secondary);margin-bottom:4px;">Control Method</div>
+              <div style="font-weight:600;color:var(--text-primary);">${escapeHtml(controlMethod)}</div>
             </div>
             ${room.layout ? `
             <div>
-              <div class="tiny" style="color: #64748b; margin-bottom: 4px;">Layout</div>
-              <div style="font-weight: 600; color: #1e293b;">${escapeHtml(room.layout)}</div>
+              <div class="tiny" style="color:var(--text-secondary);margin-bottom:4px;">Layout</div>
+              <div style="font-weight:600;color:var(--text-primary);">${escapeHtml(room.layout)}</div>
             </div>
             ` : ''}
           </div>
@@ -14151,12 +14151,12 @@ function renderLightSetupSummary() {
     const lightsList = Object.keys(room.lights).length ? Object.entries(room.lights).map(([k,v]) => `${escapeHtml(k)} ×${v}`).join(', ') : '—';
     const name = escapeHtml(room.name || room.id);
     const roomId = escapeHtml(room.id);
-    return `<div class="card" style="margin-top:8px">
+    return `<div class="card" style="margin-top:8px;background:linear-gradient(180deg, rgba(30,41,59,0.94) 0%, rgba(15,23,42,0.9) 100%);border:1px solid rgba(148,163,184,0.18);box-shadow:0 16px 32px rgba(2,6,23,0.22);">
       <div class="row" style="justify-content:space-between;align-items:center">
         <div>
-          <h3 style="margin:0">${name}</h3>
-          <div class="tiny" style="color:#475569">Zones: ${zones} • Controls: ${controls}</div>
-          <div class="tiny" style="color:#475569">Lights: ${room.totalLights} (${lightsList})</div>
+          <h3 style="margin:0;color:var(--text-primary)">${name}</h3>
+          <div class="tiny" style="color:var(--text-secondary)">Zones: ${zones} • Controls: ${controls}</div>
+          <div class="tiny" style="color:var(--text-secondary)">Lights: ${room.totalLights} (${lightsList})</div>
         </div>
         <div class="row" style="gap:6px">
           <button type="button" class="ghost" data-action="edit-room" data-room-id="${roomId}">Edit</button>
@@ -14534,7 +14534,7 @@ function renderControllerAssignments() {
     <div class="table-container" style="overflow-x: auto;">
       <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
         <thead>
-          <tr style="background: #f8fafc; border-bottom: 2px solid #e2e8f0;">
+          <tr style="background: rgba(15,23,42,0.72); border-bottom: 1px solid rgba(148,163,184,0.2);">
             <th style="text-align: left; padding: 12px 8px; font-weight: 600;">Type</th>
             <th style="text-align: left; padding: 12px 8px; font-weight: 600;">Make</th>
             <th style="text-align: left; padding: 12px 8px; font-weight: 600;">Model</th>
@@ -14562,7 +14562,7 @@ function renderControllerAssignments() {
               <td style="padding: 12px 8px;">${item.room}</td>
               <td style="padding: 12px 8px;">${item.zone}</td>
               <td style="padding: 12px 8px;">
-                <code style="background: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-family: 'Monaco', monospace; font-size: 12px;">${item.uniqueId}</code>
+                <code style="background: rgba(15,23,42,0.78); color: var(--text-primary); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(148,163,184,0.16); font-family: 'Monaco', monospace; font-size: 12px;">${item.uniqueId}</code>
               </td>
               <td style="padding: 12px 8px;">
                 <span class="chip tiny" style="background: #ecfdf5; color: #059669;">${item.controlMethod}</span>
@@ -14574,7 +14574,7 @@ function renderControllerAssignments() {
                 }
               </td>
               <td style="padding: 12px 8px;">
-                <select class="controller-select" data-equipment-index="${index}" style="padding: 4px 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px;">
+                <select class="controller-select" data-equipment-index="${index}" style="padding:4px 8px;border:1px solid rgba(148,163,184,0.28);border-radius:4px;font-size:13px;background:rgba(15,23,42,0.92);color:var(--text-primary);">
                   <option value="">Select Controller...</option>
                   <option value="hub-001">Main Hub (HUB-001)</option>
                   <option value="controller-001">Zone Controller 1 (CTRL-001)</option>
@@ -14591,7 +14591,7 @@ function renderControllerAssignments() {
       </table>
     </div>
     
-    <div style="margin-top: 16px; padding: 12px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;">
+    <div style="margin-top:16px;padding:12px;background:rgba(15,23,42,0.42);border-radius:8px;border:1px solid rgba(148,163,184,0.16);">
       <div class="row" style="justify-content: space-between; align-items: center;">
         <div>
           <strong>${equipment.length}</strong> equipment item${equipment.length !== 1 ? 's' : ''} requiring controller assignment
@@ -14649,16 +14649,16 @@ function editControllerAssignment(index) {
         <div class="modal-body">
           <div class="form-group">
             <label>Equipment Details</label>
-            <div style="background: #f8fafc; padding: 16px; border-radius: 8px; margin-bottom: 16px;">
+            <div style="background: rgba(15,23,42,0.42); padding: 16px; border-radius: 8px; margin-bottom: 16px; border: 1px solid rgba(148,163,184,0.14);">
               <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 14px;">
                 <div><strong>Type:</strong> ${item.type}</div>
                 <div><strong>Make:</strong> ${item.make}</div>
                 <div><strong>Model:</strong> ${item.model}</div>
                 <div><strong>Room:</strong> 
-                  <select id="editRoomDropdown" style="width: 90%; padding: 4px 8px; border-radius: 4px;">${roomOptions}</select>
+                  <select id="editRoomDropdown" style="width:90%;padding:4px 8px;border-radius:4px;background:rgba(15,23,42,0.92);color:var(--text-primary);border:1px solid rgba(148,163,184,0.28);">${roomOptions}</select>
                 </div>
                 <div><strong>Zone:</strong> 
-                  <select id="editZoneDropdown" style="width: 90%; padding: 4px 8px; border-radius: 4px;">${zoneOptions}</select>
+                  <select id="editZoneDropdown" style="width:90%;padding:4px 8px;border-radius:4px;background:rgba(15,23,42,0.92);color:var(--text-primary);border:1px solid rgba(148,163,184,0.28);">${zoneOptions}</select>
                 </div>
                 <div><strong>Control:</strong> ${item.controlMethod}</div>
                 ${item.serial ? `<div><strong>Serial:</strong> ${item.serial}</div>` : ''}
@@ -14670,7 +14670,7 @@ function editControllerAssignment(index) {
           
           <div class="form-group">
             <label for="assignedController">Assign Controller</label>
-            <select id="assignedController" style="width: 100%; padding: 12px; border: 1px solid #d1d5db; border-radius: 8px;">
+            <select id="assignedController" style="width:100%;padding:12px;border:1px solid rgba(148,163,184,0.28);border-radius:8px;background:rgba(15,23,42,0.92);color:var(--text-primary);">
               <option value="">Select Controller...</option>
               <option value="hub-001" ${item.controller === 'hub-001' ? 'selected' : ''}>Main Hub (HUB-001)</option>
               <option value="controller-001" ${item.controller === 'controller-001' ? 'selected' : ''}>Zone Controller 1 (CTRL-001)</option>
