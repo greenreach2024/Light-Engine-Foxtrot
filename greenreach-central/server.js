@@ -459,10 +459,18 @@ app.get('/data/room-map.json', async (req, res) => {
 
 app.get('/data/room-map-:roomId.json', async (req, res) => {
   const fid = farmStore.farmIdFromReq(req);
-  // Room-specific suffix is deprecated; all room maps now stored as farm-scoped room_map
-  // The data includes roomId field to identify which room the map is for
+  const roomId = String(req.params.roomId || '');
+  const perRoomMaps = await farmStore.get(fid, 'room_maps');
+  if (perRoomMaps && typeof perRoomMaps === 'object' && !Array.isArray(perRoomMaps) && perRoomMaps[roomId]) {
+    return res.json(perRoomMaps[roomId]);
+  }
   const payload = await farmStore.get(fid, 'room_map') || { zones: [], devices: [] };
-  return res.json(payload);
+  if (payload && typeof payload === 'object' && !Array.isArray(payload)) {
+    if (!payload.roomId || String(payload.roomId) === roomId) {
+      return res.json(payload);
+    }
+  }
+  return res.json({ roomId, zones: [], devices: [] });
 });
 
 app.post('/data/room-map.json', async (req, res) => {
@@ -485,9 +493,28 @@ app.post('/data/room-map-:roomId.json', async (req, res) => {
     return res.status(401).json({ success: false, error: 'Not authenticated' });
   }
   try {
-    // Normalize: store as room_map regardless of roomId suffix (data contains roomId field)
-    await farmStore.set(fid, 'room_map', req.body);
-    return res.json({ success: true, dataType: 'room_map', farmId: fid, roomId: req.params.roomId });
+    const roomId = String(req.params.roomId || '');
+    const payload = (req.body && typeof req.body === 'object' && !Array.isArray(req.body))
+      ? { ...req.body, roomId: req.body.roomId || roomId }
+      : { roomId, zones: [], devices: [] };
+    const existingPerRoomMaps = await farmStore.get(fid, 'room_maps');
+    const perRoomMaps = (existingPerRoomMaps && typeof existingPerRoomMaps === 'object' && !Array.isArray(existingPerRoomMaps))
+      ? { ...existingPerRoomMaps }
+      : {};
+    perRoomMaps[roomId] = payload;
+    await farmStore.set(fid, 'room_maps', perRoomMaps);
+
+    const legacyRoomMap = await farmStore.get(fid, 'room_map');
+    const canUpdateLegacyRoomMap = !legacyRoomMap ||
+      typeof legacyRoomMap !== 'object' ||
+      Array.isArray(legacyRoomMap) ||
+      !legacyRoomMap.roomId ||
+      String(legacyRoomMap.roomId) === roomId;
+    if (canUpdateLegacyRoomMap) {
+      await farmStore.set(fid, 'room_map', payload);
+    }
+
+    return res.json({ success: true, dataType: 'room_maps', farmId: fid, roomId });
   } catch (err) {
     logger.error('[Room Map] Save failed:', err.message);
     return res.status(500).json({ success: false, error: err.message });

@@ -101,6 +101,154 @@ function resolveRoomId(roomList, roomIdOrName) {
   return r ? (r.id || r.room_id) : null;
 }
 
+export function inferRoomDimensionsMeters(room = {}, roomMap = {}) {
+  const toNum = (v) => {
+    const n = parseFloat(v);
+    return Number.isFinite(n) ? n : null;
+  };
+
+  const explicitLength = toNum(room.length_m) ?? toNum(room.length) ?? toNum(room.dimensions?.length) ?? toNum(roomMap.roomLength);
+  const explicitWidth = toNum(room.width_m) ?? toNum(room.width) ?? toNum(room.dimensions?.width) ?? toNum(roomMap.roomWidth);
+
+  const gridSize = toNum(roomMap.gridSize) ?? 30;
+  const rawCellSize = toNum(roomMap.cellSize) ?? toNum(room.cellSize) ?? toNum(room.dimensions?.cellSize);
+  const metersPerCell = rawCellSize != null ? (rawCellSize > 10 ? rawCellSize / 100 : rawCellSize) : null;
+
+  let length = explicitLength;
+  let width = explicitWidth;
+  let source = (length != null || width != null) ? 'saved-dimensions' : 'grid-fallback';
+
+  if ((length == null || width == null) && metersPerCell != null) {
+    const zones = Array.isArray(roomMap.zones) ? roomMap.zones : [];
+    const zoneMaxX = zones.length ? Math.max(...zones.map(z => toNum(z.x2) ?? 0)) + 1 : gridSize;
+    const zoneMaxY = zones.length ? Math.max(...zones.map(z => toNum(z.y2) ?? 0)) + 1 : gridSize;
+
+    if (length == null) length = +(zoneMaxX * metersPerCell).toFixed(2);
+    if (width == null) width = +(zoneMaxY * metersPerCell).toFixed(2);
+    source = 'grid-cell-inference';
+  }
+
+  if (length == null) length = gridSize;
+  if (width == null) width = gridSize;
+
+  return {
+    length_m: length,
+    width_m: width,
+    source,
+    meters_per_cell: metersPerCell
+  };
+}
+
+export function calculateOptimalLayoutColumns({
+  itemCount,
+  roomGridW,
+  roomGridD,
+  margin = 2,
+  walkwayGrid = 0,
+  maxFootprintX = 1,
+  maxFootprintY = 1
+}) {
+  const totalItems = Math.max(1, parseInt(itemCount, 10) || 1);
+  const availW = Math.max(1, roomGridW - 2 * margin - walkwayGrid);
+  const availD = Math.max(1, roomGridD - 2 * margin);
+
+  let bestCols = 1;
+  let bestScore = Number.NEGATIVE_INFINITY;
+
+  for (let cols = 1; cols <= totalItems; cols++) {
+    const effectiveCols = walkwayGrid > 0 ? cols * 2 : cols;
+    const rows = Math.ceil(totalItems / effectiveCols);
+    const cellW = effectiveCols > 0 ? Math.floor(availW / effectiveCols) : availW;
+    const cellD = rows > 0 ? Math.floor(availD / rows) : availD;
+
+    if (cellW < maxFootprintX || cellD < maxFootprintY) continue;
+
+    const emptySlots = (effectiveCols * rows) - totalItems;
+    const balancePenalty = Math.abs(cellW - cellD);
+    const score = (Math.min(cellW, cellD) * 100) - (balancePenalty * 10) - emptySlots;
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestCols = cols;
+    }
+  }
+
+  return bestCols;
+}
+
+function estimateLightWatts(light = {}) {
+  const direct = [light.wattage, light.watts, light.power_w, light.powerWatts]
+    .map(v => parseFloat(v))
+    .find(v => Number.isFinite(v) && v > 0);
+  if (direct) return direct;
+
+  const text = [light.name, light.deviceName, light.id].filter(Boolean).join(' ');
+  const match = text.match(/(\d+(?:\.\d+)?)\s*w\b/i);
+  if (match) {
+    const parsed = parseFloat(match[1]);
+    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  }
+
+  const ppf = parseFloat(light.ppf);
+  if (Number.isFinite(ppf) && ppf > 0) {
+    return +(ppf / 2.7).toFixed(1);
+  }
+
+  return 0;
+}
+
+export function deriveScientificLayoutDefaults({
+  itemCount,
+  roomLength,
+  roomWidth,
+  maxFootprintLengthM = 0.5,
+  maxFootprintWidthM = 0.5,
+  plantSites = 0,
+  totalLightWatts = 0
+}) {
+  const towerCount = Math.max(1, parseInt(itemCount, 10) || 1);
+  const areaM2 = Math.max(1, (parseFloat(roomLength) || 1) * (parseFloat(roomWidth) || 1));
+  const plantDensity = plantSites > 0 ? plantSites / areaM2 : towerCount / areaM2;
+  const lightDensity = totalLightWatts > 0 ? totalLightWatts / areaM2 : 0;
+
+  const highLoad = lightDensity >= 120 || plantDensity >= 10 || towerCount >= 24;
+  const moderateLoad = highLoad || lightDensity >= 60 || plantDensity >= 6 || towerCount >= 10;
+
+  const walkway_m = roomWidth >= 4
+    ? (highLoad ? 1.2 : 0.9)
+    : (roomWidth >= 2.8 ? 0.8 : 0);
+
+  const wall_clearance_m = +(Math.max(
+    0.3,
+    moderateLoad ? 0.4 : 0.3,
+    maxFootprintWidthM * 0.4
+  )).toFixed(2);
+
+  const airflow_gap_m = +(Math.max(
+    0.45,
+    moderateLoad ? 0.55 : 0.45,
+    highLoad ? 0.65 : 0,
+    maxFootprintWidthM * 0.35
+  )).toFixed(2);
+
+  const rationale = [
+    walkway_m > 0 ? `central service aisle ${walkway_m}m for access` : 'compact access profile',
+    `${airflow_gap_m}m minimum airflow gap`,
+    `${wall_clearance_m}m wall clearance`,
+    plantSites > 0 ? `${plantDensity.toFixed(1)} plant sites/m²` : null,
+    totalLightWatts > 0 ? `${lightDensity.toFixed(1)} W/m² light load` : null
+  ].filter(Boolean);
+
+  return {
+    walkway_m,
+    airflow_gap_m,
+    wall_clearance_m,
+    plant_density_sites_m2: +plantDensity.toFixed(2),
+    light_density_w_m2: +lightDensity.toFixed(2),
+    rationale
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Sensor data sync — keeps env-cache.json and device-meta.json fresh
 // ---------------------------------------------------------------------------
@@ -1576,6 +1724,108 @@ export const TOOL_CATALOG = {
     }
   },
 
+  'align_equipment_to_walls': {
+    description: 'Pin matching room-map equipment to the east wall, west wall, or both outer walls while preserving lane positions. Use this for wall-mounting circulation fans without changing their y/z placement.',
+    category: 'write',
+    required: ['room_id'],
+    optional: ['match_name', 'match_category', 'wall_mode', 'farm_id'],
+    undoable: true,
+    handler: async (params) => {
+      const farm_id = params.farm_id || process.env.FARM_ID || 'default';
+      const { room_id, match_name, match_category } = params;
+      const wallMode = String(params.wall_mode || 'outer').toLowerCase();
+
+      if (!room_id) return { ok: false, error: 'room_id is required.' };
+      if (!['outer', 'east', 'west'].includes(wallMode)) {
+        return { ok: false, error: 'wall_mode must be one of: outer, east, west.' };
+      }
+
+      const rooms = await farmStore.get(farm_id, 'rooms') || [];
+      const room = resolveRoom(rooms, room_id);
+      if (!room) return { ok: false, error: `Room "${room_id}" not found.` };
+
+      const roomMap = await farmStore.get(farm_id, 'room_map') || { zones: [], devices: [] };
+      if (!Array.isArray(roomMap.devices) || roomMap.devices.length === 0) {
+        return { ok: false, error: 'No devices found in room map. Use the Room Mapper to add equipment first.' };
+      }
+
+      const beforeDevices = JSON.parse(JSON.stringify(roomMap.devices));
+      const maxX = Math.max(0, (roomMap.gridSize || 30) - 1);
+      const midpoint = maxX / 2;
+      const matched = roomMap.devices.filter(dev => {
+        const snap = dev.snapshot || {};
+        const devCat = String(snap.category || snap.type || '').toLowerCase();
+        const devName = String(snap.name || dev.deviceId || '').toLowerCase();
+          const devText = [devCat, devName, String(dev.deviceId || '').toLowerCase()].join(' ');
+          const normalizedCategory = String(match_category || '').toLowerCase();
+          const normalizedName = String(match_name || '').toLowerCase();
+        if (match_category && devCat !== String(match_category).toLowerCase()) return false;
+          if (match_name && !devText.includes(normalizedName)) {
+            const singularName = normalizedName.endsWith('s') ? normalizedName.slice(0, -1) : normalizedName;
+            const pluralName = normalizedName.endsWith('s') ? normalizedName : `${normalizedName}s`;
+            const matchesAlias = (singularName && devText.includes(singularName)) || (pluralName && devText.includes(pluralName));
+            if (!matchesAlias) return false;
+          }
+          if (match_category && normalizedCategory && !devText.includes(normalizedCategory)) return false;
+        return Boolean(match_name || match_category);
+      });
+
+      if (matched.length === 0) {
+        return { ok: false, error: `No matching equipment found for match_category="${match_category || ''}" match_name="${match_name || ''}".` };
+      }
+
+      const placements = [];
+      for (let index = 0; index < matched.length; index++) {
+        const dev = matched[index];
+        const currentX = Number.isFinite(Number(dev.x)) ? Number(dev.x) : midpoint;
+        if (wallMode === 'east') {
+          dev.x = maxX;
+        } else if (wallMode === 'west') {
+          dev.x = 0;
+        } else {
+          dev.x = currentX <= midpoint ? 0 : maxX;
+        }
+        placements.push({
+          device_id: dev.deviceId,
+          x: dev.x,
+          y: dev.y,
+          z: dev.z
+        });
+      }
+
+      roomMap.lastUpdated = new Date().toISOString();
+      await farmStore.set(farm_id, 'room_map', roomMap);
+      const rid = roomMap.roomId || room_id || 'default';
+      writeJSON(`room-map-${rid}.json`, roomMap);
+      writeJSON('room-map.json', roomMap);
+
+      const wallLabel = wallMode === 'outer'
+        ? 'east and west walls'
+        : `${wallMode} wall`;
+
+      return {
+        ok: true,
+        updated: matched.length,
+        wall_mode: wallMode,
+        placements: placements.slice(0, 20),
+        message: `Pinned ${matched.length} equipment device(s) to the ${wallLabel}.`,
+        _undo_state: { farm_id, beforeDevices }
+      };
+    },
+    undoHandler: async (params, state) => {
+      if (!state?.beforeDevices) return { ok: false, error: 'No undo state available' };
+      const farm_id = state.farm_id || process.env.FARM_ID || 'default';
+      const roomMap = await farmStore.get(farm_id, 'room_map') || { zones: [], devices: [] };
+      roomMap.devices = state.beforeDevices;
+      roomMap.lastUpdated = new Date().toISOString();
+      await farmStore.set(farm_id, 'room_map', roomMap);
+      const rid = roomMap.roomId || params.room_id || 'default';
+      writeJSON(`room-map-${rid}.json`, roomMap);
+      writeJSON('room-map.json', roomMap);
+      return { ok: true, undone: true, message: 'Equipment wall alignment reverted.' };
+    }
+  },
+
   'update_group': {
     description: 'Update grow groups (ZipGrow towers, racks, etc.) — rename, change tray count, assign crop, or update status. Groups are growing units that hold plants. Supports single-group updates by group_id, or bulk updates with match_name to update ALL groups whose name contains the match string (e.g. match_name="ZipGrow Standard" updates ZipGrow Standard 1 through 78).',
     category: 'write',
@@ -1666,17 +1916,22 @@ export const TOOL_CATALOG = {
 
   // -- Spatial Layout Optimizer -- Arrange equipment/groups in grid patterns --
   'optimize_layout': {
-    description: 'Spatially arrange equipment and/or groups in the room map into a grid pattern across the room. Supports configuring columns per side, walkway width (center aisle), and spacing between units. Layout works at room level -- groups are distributed evenly regardless of zone assignment.',
+    description: 'Spatially arrange equipment and/or groups across the room area. No separate room dimensions are required when the room already exists: the tool uses the room map and infers the footprint automatically. When columns and spacing_m are omitted, it auto-computes the best-fit grid and spreads items evenly across the available space.',
     category: 'write',
     required: ['room_id'],
-    optional: ['match_name', 'match_category', 'target', 'columns', 'walkway_m', 'spacing_m', 'farm_id'],
+    optional: ['match_name', 'match_category', 'target', 'columns', 'walkway_m', 'spacing_m', 'edge_alignment', 'wall_clearance_m', 'farm_id'],
     undoable: true,
     handler: async (params) => {
       const farm_id = params.farm_id || process.env.FARM_ID || 'default';
       const { room_id, match_name, match_category, target } = params;
-      const columns = parseInt(params.columns, 10) || 3;
-      const walkway = parseFloat(params.walkway_m) || 0;
-      const spacing = parseFloat(params.spacing_m) || 0.8;
+      const requestedColumns = parseInt(params.columns, 10);
+      const explicitWalkway = params.walkway_m != null;
+      let walkway = explicitWalkway ? (parseFloat(params.walkway_m) || 0) : 0;
+      const explicitSpacing = params.spacing_m != null;
+      let spacing = parseFloat(params.spacing_m) || 0.8;
+      const edgeAlignment = String(params.edge_alignment || 'center').toLowerCase() === 'walls' ? 'walls' : 'center';
+      const explicitWallClearance = params.wall_clearance_m != null;
+      let wallClearance = explicitWallClearance ? Math.max(0, parseFloat(params.wall_clearance_m) || 0) : 0;
       const layoutTarget = target || 'groups'; // 'groups', 'equipment', or 'both'
 
       if (!room_id) return { ok: false, error: 'room_id is required.' };
@@ -1688,23 +1943,34 @@ export const TOOL_CATALOG = {
 
       const roomMap = await farmStore.get(farm_id, 'room_map') || {};
       const gridSize = roomMap.gridSize || 30;
-      // Room dimensions in meters (default to gridSize when not set = 1 grid cell per meter)
-      const roomLength = roomMap.roomLength || gridSize;
-      const roomWidth = roomMap.roomWidth || gridSize;
+      const inferredRoom = inferRoomDimensionsMeters(room, roomMap);
+      const roomLength = inferredRoom.length_m || gridSize;
+      const roomWidth = inferredRoom.width_m || gridSize;
       const zones = roomMap.zones || [];
 
-      const groups = await farmStore.get(farm_id, 'groups') || [];
+      const groupsStore = await farmStore.get(farm_id, 'groups') || [];
+      const groups = Array.isArray(groupsStore) ? groupsStore : (groupsStore.groups || []);
       const beforeGroups = JSON.parse(JSON.stringify(groups));
       const beforeDevices = JSON.parse(JSON.stringify(roomMap.devices || []));
 
       // Collect ALL matching items for the room (not per-zone)
       let items = [];
       if (layoutTarget === 'groups' || layoutTarget === 'both') {
+        const normalizedMatch = String(match_name || '').toLowerCase();
+        const towerAlias = /tower/.test(normalizedMatch);
         const matched = groups.filter(g => {
           const gRoom = g.roomId || g.room || '';
           const inRoom = gRoom === room.id || gRoom === room.name || rooms.length === 1;
           if (!inRoom) return false;
-          if (match_name && !(g.name || '').toLowerCase().includes(match_name.toLowerCase())) return false;
+          if (match_name) {
+            const groupText = [
+              g.name || '',
+              g.id || '',
+              ...(Array.isArray(g.lights) ? g.lights.map(l => `${l.vendor || ''} ${l.name || ''}`) : [])
+            ].join(' ').toLowerCase();
+            const aliasMatch = towerAlias && /zip\s*grow|zipgrow/.test(groupText);
+            if (!groupText.includes(normalizedMatch) && !aliasMatch) return false;
+          }
           return true;
         });
         items.push(...matched.map(g => ({ type: 'group', ref: g })));
@@ -1729,14 +1995,94 @@ export const TOOL_CATALOG = {
       const m2gX = gridSize / roomLength;  // multiply meters by this to get grid X
       const m2gY = gridSize / roomWidth;   // multiply meters by this to get grid Y
 
+      // Determine the largest item footprint (in grid cells) and basic science inputs
+      let maxFootprintX = 1;
+      let maxFootprintY = 1;
+      let maxFootprintLengthM = 0.5;
+      let maxFootprintWidthM = 0.5;
+      let plantSites = 0;
+      let totalLightWatts = 0;
+
+      for (const item of items) {
+        const r = item.ref;
+        const itemL = parseFloat(r.length) || (r.snapshot?.length) || 0;
+        const itemW = parseFloat(r.width) || (r.snapshot?.width) || 0;
+        const trays = Number(r.trays) || Number(r.trayCount) || 0;
+        const plants = Number(r.plants) || Number(r.plantSites) || Number(r.plant_locations) || 0;
+        const itemText = [
+          r.name || '',
+          r.id || '',
+          ...(Array.isArray(r.lights) ? r.lights.map(l => `${l.vendor || ''} ${l.name || ''}`) : [])
+        ].join(' ').toLowerCase();
+        const isVerticalTower = /zip\s*grow|zipgrow|tower|vertical/.test(itemText);
+        const defaultL = isVerticalTower ? 0.25 : (trays > 0 ? Math.min(trays, 4) * 0.45 : 0.5);
+        const defaultW = isVerticalTower ? 0.25 : (trays > 0 ? Math.ceil(trays / 4) * 0.45 : 0.5);
+        const fL = itemL > 0 ? itemL : defaultL;
+        const fW = itemW > 0 ? itemW : defaultW;
+        const fpX = Math.ceil(fL * m2gX);
+        const fpY = Math.ceil(fW * m2gY);
+        if (fpX > maxFootprintX) maxFootprintX = fpX;
+        if (fpY > maxFootprintY) maxFootprintY = fpY;
+        if (fL > maxFootprintLengthM) maxFootprintLengthM = fL;
+        if (fW > maxFootprintWidthM) maxFootprintWidthM = fW;
+
+        plantSites += plants > 0 ? plants : trays;
+        const lights = Array.isArray(r.lights) ? r.lights : [];
+        totalLightWatts += lights.reduce((sum, light) => sum + estimateLightWatts(light), 0);
+      }
+
+      const scientificDefaults = deriveScientificLayoutDefaults({
+        itemCount: items.length,
+        roomLength,
+        roomWidth,
+        maxFootprintLengthM,
+        maxFootprintWidthM,
+        plantSites,
+        totalLightWatts
+      });
+
+      if (!explicitWalkway) walkway = scientificDefaults.walkway_m;
+      if (!explicitSpacing) spacing = scientificDefaults.airflow_gap_m;
+      if (!explicitWallClearance) wallClearance = scientificDefaults.wall_clearance_m;
+
       // Layout across the full room grid
       const walkwayGrid = walkway > 0 ? Math.max(1, Math.round(walkway * m2gX)) : 0;
-      const spacingGridX = Math.max(1, Math.round(spacing * m2gX));
-      const spacingGridY = Math.max(1, Math.round(spacing * m2gY));
 
       const roomGridW = gridSize;
       const roomGridD = gridSize;
-      const margin = 1; // 1 grid cell margin from walls
+      const margin = Math.max(1, Math.round(wallClearance * Math.min(m2gX, m2gY))); // airflow clearance from walls
+      const autoSelectedColumns = !Number.isFinite(requestedColumns) || requestedColumns <= 0;
+      const columns = autoSelectedColumns
+        ? calculateOptimalLayoutColumns({
+            itemCount: items.length,
+            roomGridW,
+            roomGridD,
+            margin,
+            walkwayGrid,
+            maxFootprintX: maxFootprintX + 1,
+            maxFootprintY: maxFootprintY + 1
+          })
+        : requestedColumns;
+
+      // Auto-calculate spacing to fill available room area when spacing_m not specified
+      // Spacing must be >= item footprint to prevent overlap
+      let spacingGridX, spacingGridY;
+      if (explicitSpacing) {
+        spacingGridX = Math.max(maxFootprintX + 1, Math.round(spacing * m2gX));
+        spacingGridY = Math.max(maxFootprintY + 1, Math.round(spacing * m2gY));
+      } else {
+        // Determine effective columns (both sides if walkway)
+        const effectiveCols = walkwayGrid > 0 ? columns * 2 : columns;
+        const totalRows = Math.ceil(items.length / effectiveCols);
+        const availW = roomGridW - 2 * margin - walkwayGrid;
+        const availD = roomGridD - 2 * margin;
+        const autoX = effectiveCols > 1 ? Math.floor(availW / effectiveCols) : Math.floor(availW / 2);
+        const autoY = totalRows > 1 ? Math.floor(availD / totalRows) : Math.floor(availD / 2);
+        const minGapX = Math.max(maxFootprintX + 1, Math.round(spacing * m2gX));
+        const minGapY = Math.max(maxFootprintY + 1, Math.round(spacing * m2gY));
+        spacingGridX = Math.max(minGapX, autoX);
+        spacingGridY = Math.max(minGapY, autoY);
+      }
 
       // Build position grid: columns-left | walkway | columns-right
       const positions = [];
@@ -1745,16 +2091,31 @@ export const TOOL_CATALOG = {
       const totalCols = walkwayGrid > 0 ? colsLeft + colsRight : columns;
 
       // Calculate starting X positions
-      // Center the layout in the room
       const leftBlockW = colsLeft * spacingGridX;
       const rightBlockW = colsRight * spacingGridX;
       const totalLayoutW = leftBlockW + walkwayGrid + rightBlockW;
-      const layoutStartX = Math.max(margin, Math.floor((roomGridW - totalLayoutW) / 2));
+      const centeredStartX = Math.max(margin, Math.floor((roomGridW - totalLayoutW) / 2));
+      let layoutStartX = centeredStartX;
+      let leftStartX = centeredStartX;
+      let rightStartX = walkwayGrid > 0
+        ? centeredStartX + leftBlockW + walkwayGrid
+        : centeredStartX;
 
-      const leftStartX = layoutStartX;
-      const rightStartX = walkwayGrid > 0
-        ? layoutStartX + leftBlockW + walkwayGrid
-        : layoutStartX;
+      if (edgeAlignment === 'walls') {
+        if (walkwayGrid > 0 && colsRight > 0) {
+          const leftWallStart = margin;
+          const rightWallStart = roomGridW - margin - rightBlockW;
+          const wallGap = rightWallStart - (leftWallStart + leftBlockW);
+          if (wallGap >= walkwayGrid) {
+            leftStartX = leftWallStart;
+            rightStartX = rightWallStart;
+          }
+        } else {
+          layoutStartX = margin;
+          leftStartX = margin;
+          rightStartX = margin;
+        }
+      }
 
       let row = 0;
       let col = 0;
@@ -1830,14 +2191,34 @@ export const TOOL_CATALOG = {
       }
 
       const totalPlaced = items.length;
+      const actualSpacingX = (spacingGridX / m2gX).toFixed(1);
+      const actualSpacingY = (spacingGridY / m2gY).toFixed(1);
+      const footprintX_m = (maxFootprintX / m2gX).toFixed(1);
+      const footprintY_m = (maxFootprintY / m2gY).toFixed(1);
+      const layoutLabel = autoSelectedColumns ? `auto-optimized ${columns}-column layout` : `${columns} columns`;
       return {
         ok: true,
         placed: totalPlaced,
         columns,
+        auto_selected_columns: autoSelectedColumns,
         walkway_m: walkway,
-        spacing_m: spacing,
+        spacing_m: explicitSpacing ? spacing : null,
+        edge_alignment: edgeAlignment,
+        wall_clearance_m: wallClearance,
+        actual_spacing: { x_m: parseFloat(actualSpacingX), y_m: parseFloat(actualSpacingY) },
+        item_footprint: { length_m: parseFloat(footprintX_m), width_m: parseFloat(footprintY_m) },
+        science_basis: {
+          plant_sites: plantSites,
+          total_light_watts: totalLightWatts,
+          plant_density_sites_m2: scientificDefaults.plant_density_sites_m2,
+          light_density_w_m2: scientificDefaults.light_density_w_m2,
+          walkway_m: scientificDefaults.walkway_m,
+          airflow_gap_m: scientificDefaults.airflow_gap_m,
+          wall_clearance_m: wallClearance,
+          rationale: scientificDefaults.rationale
+        },
         layout: placements.slice(0, 20), // First 20 for display
-        message: 'Arranged ' + totalPlaced + ' item(s) across the room: ' + columns + ' columns' + (walkway > 0 ? ' per side, ' + walkway + 'm center walkway' : '') + ', ' + spacing + 'm spacing.',
+        message: 'Arranged ' + totalPlaced + ' item(s) across the room using ' + layoutLabel + (walkway > 0 ? ' with a ' + walkway + 'm center walkway' : '') + (edgeAlignment === 'walls' ? ', aligned toward the east and west walls' : '') + (explicitSpacing ? ', ' + spacing + 'm spacing' : ', auto-spaced ' + actualSpacingX + 'm x ' + actualSpacingY + 'm to fill room') + '. Science basis: ' + scientificDefaults.rationale.join('; ') + '. Item footprint: ' + footprintX_m + 'm x ' + footprintY_m + 'm (no overlap).',
         _undo_state: { farm_id, beforeGroups, beforeDevices, roomMapId: rid }
       };
     },
@@ -2495,6 +2876,96 @@ export const TOOL_CATALOG = {
         }
       }
       return { ok: true, readings, count: readings.length, updated_at: envCache.meta?.updatedAt || null };
+    }
+  },
+  'get_environment_snapshot': {
+    description: 'Get a concise farm-hand snapshot of the growing environment — readings, drift versus targets, active alerts, and the next priority actions. Use this first for setup, tuning, and maintenance questions.',
+    category: 'read',
+    required: [],
+    optional: ['room_id'],
+    handler: async ({ room_id }) => {
+      const envCache = readJSON('env-cache.json', {});
+      const targetRanges = readJSON('target-ranges.json', {});
+      const zt = targetRanges.zones || {};
+      const dt = targetRanges.defaults || {};
+      let alerts = readJSON('system-alerts.json', []);
+      alerts = (Array.isArray(alerts) ? alerts : (alerts.alerts || [])).filter(a => !a.resolved && !a.dismissed);
+
+      const zones = [];
+      const priorities = [];
+      let outOfRangeCount = 0;
+
+      for (const [rid, data] of Object.entries(envCache)) {
+        if (rid === 'meta') continue;
+        if (room_id && rid !== room_id) continue;
+        const zoneEntries = data?.zones || {};
+
+        for (const [zid, zdata] of Object.entries(zoneEntries)) {
+          const targets = zt[zid] || dt;
+          const tempMid = targets.temp_min != null && targets.temp_max != null ? (targets.temp_min + targets.temp_max) / 2 : null;
+          const rhMid = targets.rh_min != null && targets.rh_max != null ? (targets.rh_min + targets.rh_max) / 2 : null;
+          const tempStatus = zdata.temperature >= targets.temp_min && zdata.temperature <= targets.temp_max ? 'ok' : zdata.temperature < targets.temp_min ? 'low' : 'high';
+          const humidityStatus = zdata.humidity >= targets.rh_min && zdata.humidity <= targets.rh_max ? 'ok' : zdata.humidity < targets.rh_min ? 'low' : 'high';
+          const issues = [];
+
+          if (tempStatus !== 'ok') {
+            outOfRangeCount++;
+            issues.push(`temperature ${tempStatus}`);
+            priorities.push(tempStatus === 'low'
+              ? `Warm ${zid} toward ${targets.temp_min}-${targets.temp_max}°C.`
+              : `Cool ${zid} toward ${targets.temp_min}-${targets.temp_max}°C.`);
+          }
+          if (humidityStatus !== 'ok') {
+            outOfRangeCount++;
+            issues.push(`humidity ${humidityStatus}`);
+            priorities.push(humidityStatus === 'low'
+              ? `Raise humidity in ${zid} toward ${targets.rh_min}-${targets.rh_max}%.`
+              : `Lower humidity in ${zid} toward ${targets.rh_min}-${targets.rh_max}%.`);
+          }
+
+          zones.push({
+            room_id: rid,
+            zone_id: zid,
+            temperature: zdata.temperature,
+            humidity: zdata.humidity,
+            sensor_count: zdata.sensor_count,
+            battery: zdata.avg_battery,
+            targets: { temp_min: targets.temp_min, temp_max: targets.temp_max, rh_min: targets.rh_min, rh_max: targets.rh_max },
+            drift: {
+              temp_c_from_mid: tempMid != null && zdata.temperature != null ? +(zdata.temperature - tempMid).toFixed(1) : null,
+              rh_pct_from_mid: rhMid != null && zdata.humidity != null ? +(zdata.humidity - rhMid).toFixed(1) : null
+            },
+            status: issues.length ? issues.join(', ') : 'stable'
+          });
+        }
+      }
+
+      const severityRank = { critical: 3, high: 2, warning: 1, medium: 1, low: 0 };
+      const topAlerts = alerts
+        .sort((a, b) => (severityRank[b.severity] || 0) - (severityRank[a.severity] || 0))
+        .slice(0, 5)
+        .map(a => ({ severity: a.severity || 'warning', message: a.message || a.title || 'Alert active' }));
+
+      const uniquePriorities = [...new Set(priorities)].slice(0, 5);
+      const overall_status = topAlerts.some(a => a.severity === 'critical' || a.severity === 'high')
+        ? 'critical'
+        : outOfRangeCount > 0
+          ? 'attention'
+          : 'stable';
+
+      return {
+        ok: true,
+        overall_status,
+        updated_at: envCache.meta?.updatedAt || null,
+        zone_count: zones.length,
+        out_of_range_count: outOfRangeCount,
+        zones,
+        alerts: topAlerts,
+        priorities: uniquePriorities,
+        summary: overall_status === 'stable'
+          ? 'Environment is broadly in range. Focus on routine monitoring and consistency.'
+          : `Environment needs attention in ${outOfRangeCount} condition(s). Start with the listed priorities.`
+      };
     }
   },
   'set_light_schedule': {

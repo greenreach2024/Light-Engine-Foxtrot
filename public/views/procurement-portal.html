@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Procurement Portal | Light Engine</title>
+  <script src="/auth-guard.js"></script>
   <link rel="stylesheet" href="/styles/le-dashboard-theme.css?v=2025-12-20-01">
   <link rel="stylesheet" href="/styles/nav-color-palette.css">
   <style>
@@ -480,7 +481,7 @@
     <button class="nav-tab active" onclick="switchTab('catalog', this)">Catalog</button>
     <button class="nav-tab" onclick="switchTab('orders', this)">My Orders</button>
     <button class="nav-tab" onclick="switchTab('inventory', this)">Supply Inventory</button>
-    <button class="nav-tab" onclick="switchTab('admin', this)">Admin</button>
+    <button class="nav-tab" onclick="switchTab('suppliers', this)">Suppliers</button>
   </div>
 
   <div class="container">
@@ -526,18 +527,17 @@
     </div>
 
     <!-- ═══════════════════════════════════ -->
-    <!-- ADMIN TAB -->
+    <!-- SUPPLIERS TAB -->
     <!-- ═══════════════════════════════════ -->
-    <div class="tab-panel" id="panel-admin">
-      <h2 style="font-size:1.3rem;color:#e2e8f0;margin-bottom:1.5rem;">Admin Dashboard</h2>
-      <div class="stats-row" id="adminStats"></div>
+    <div class="tab-panel" id="panel-suppliers">
+      <h2 style="font-size:1.3rem;color:#e2e8f0;margin-bottom:0.5rem;">Supplier Directory</h2>
+      <div class="card" style="margin-bottom:1.5rem;">
+        <div style="font-size:0.95rem;color:#e2e8f0;font-weight:600;">Farm ordering only</div>
+        <div style="font-size:0.85rem;color:#94a3b8;margin-top:0.35rem;">Catalog and supplier management stays in Central admin. This portal only supports authenticated farm ordering and invoice requests.</div>
+      </div>
       <div style="margin-bottom:1.5rem;">
         <h3 style="font-size:1rem;color:#94a3b8;margin-bottom:0.75rem;">Supplier Overview</h3>
         <div id="supplierList"></div>
-      </div>
-      <div>
-        <h3 style="font-size:1rem;color:#94a3b8;margin-bottom:0.75rem;">Commission Report</h3>
-        <div id="commissionReport"></div>
       </div>
     </div>
   </div>
@@ -578,11 +578,11 @@
         <div class="form-group"><label>ZIP/Postal Code</label><input type="text" id="shipZip"></div>
         <div class="form-group">
           <label>Payment Method</label>
-          <select id="paymentMethod">
-            <option value="invoice">Invoice (Net 30)</option>
-            <option value="square">Square</option>
-            <option value="stripe">Stripe</option>
-          </select>
+          <input type="hidden" id="paymentMethod" value="invoice">
+          <div class="card" style="padding:0.9rem;">
+            <div style="font-size:0.95rem;color:#e2e8f0;font-weight:600;">Invoice Request</div>
+            <div style="font-size:0.8rem;color:#94a3b8;margin-top:0.35rem;">Orders are submitted as invoice requests. Online Square and Stripe checkout are not available in this portal.</div>
+          </div>
         </div>
       </div>
       <div class="form-group">
@@ -609,17 +609,73 @@ let suppliers = [];
 let cart = [];
 let activeCategory = null;
 let farmInfo = {};
+let currentUserRole = 'public';
 
 // ═════════════════════════════════════════════
 // Init
 // ═════════════════════════════════════════════
 (async function init() {
+  setCurrentUserRole();
   await loadFarmInfo();
   await loadCatalog();
   await loadSuppliers();
   loadCartFromStorage();
   updateCartUI();
 })();
+
+function getStoredToken() {
+  return sessionStorage.getItem('token') ||
+    localStorage.getItem('token') ||
+    sessionStorage.getItem('auth_token') ||
+    localStorage.getItem('auth_token') ||
+    localStorage.getItem('admin_token');
+}
+
+function decodeJwtPayload(token) {
+  if (!token || token.split('.').length !== 3) return null;
+  try {
+    return JSON.parse(atob(token.split('.')[1]));
+  } catch (error) {
+    return null;
+  }
+}
+
+function getCurrentUserRole() {
+  const payload = decodeJwtPayload(getStoredToken());
+  if (payload?.role) return payload.role;
+
+  try {
+    const session = JSON.parse(sessionStorage.getItem('farm_admin_session') || localStorage.getItem('farm_admin_session') || 'null');
+    return session?.role || 'public';
+  } catch (error) {
+    return 'public';
+  }
+}
+
+function setCurrentUserRole() {
+  currentUserRole = getCurrentUserRole();
+}
+
+function canManageProcurement() {
+  return currentUserRole === 'manager' || currentUserRole === 'admin';
+}
+
+async function apiFetch(path, options = {}) {
+  const response = await fetch(`${API}${path}`, options);
+  if (response.status === 401) {
+    throw new Error('auth_required');
+  }
+  if (response.status === 403) {
+    throw new Error('forbidden');
+  }
+  return response;
+}
+
+function renderAuthRequired(containerId, message = 'Sign in to the farm portal to use procurement.') {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  container.innerHTML = `<div class="empty-state">${message}</div>`;
+}
 
 async function loadFarmInfo() {
   try {
@@ -636,7 +692,7 @@ async function loadFarmInfo() {
 // ═════════════════════════════════════════════
 async function loadCatalog() {
   try {
-    const r = await fetch(`${API}/catalog?limit=100`);
+    const r = await apiFetch('/catalog?limit=100');
     const data = await r.json();
     if (data.ok) {
       catalog.products = data.products;
@@ -645,6 +701,10 @@ async function loadCatalog() {
       renderProducts(catalog.products);
     }
   } catch (e) {
+    if (e.message === 'auth_required') {
+      renderAuthRequired('productGrid');
+      return;
+    }
     document.getElementById('productGrid').innerHTML = '<div class="empty-state">Failed to load catalog</div>';
   }
 }
@@ -923,7 +983,7 @@ async function placeOrder() {
       notes: document.getElementById('orderNotes').value
     };
 
-    const r = await fetch(`${API}/orders`, {
+    const r = await apiFetch('/orders', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -943,7 +1003,13 @@ async function placeOrder() {
       showToast(data.error || 'Order failed', true);
     }
   } catch (e) {
-    showToast('Order failed: ' + e.message, true);
+    if (e.message === 'auth_required') {
+      showToast('Sign in to the farm portal before placing procurement orders.', true);
+    } else if (e.message === 'forbidden') {
+      showToast('Your role cannot place procurement orders.', true);
+    } else {
+      showToast('Order failed: ' + e.message, true);
+    }
   } finally {
     btn.disabled = false;
     btn.textContent = 'Place Order';
@@ -960,7 +1026,7 @@ async function loadOrders() {
   container.style.display = 'block';
 
   try {
-    const r = await fetch(`${API}/orders`);
+    const r = await apiFetch('/orders');
     const data = await r.json();
 
     if (!data.ok || !data.orders.length) {
@@ -995,6 +1061,10 @@ async function loadOrders() {
       </table>
     `;
   } catch (e) {
+    if (e.message === 'auth_required') {
+      renderAuthRequired('ordersContainer');
+      return;
+    }
     container.innerHTML = '<div class="empty-state">Failed to load orders</div>';
   }
 }
@@ -1006,7 +1076,7 @@ async function viewOrder(orderId) {
   detail.style.display = 'block';
 
   try {
-    const r = await fetch(`${API}/orders/${orderId}`);
+    const r = await apiFetch(`/orders/${orderId}`);
     const data = await r.json();
     if (!data.ok) { detail.innerHTML = '<div class="empty-state">Order not found</div>'; return; }
 
@@ -1028,7 +1098,7 @@ async function viewOrder(orderId) {
         <div style="display:flex;gap:0.5rem;">
           <span class="status-pill status-${o.status}" style="font-size:0.8rem;padding:4px 14px;">${o.status.replace(/_/g, ' ')}</span>
           <button class="btn btn-outline btn-sm" onclick="loadOrders()">← Back</button>
-          ${o.status === 'confirmed' || o.status === 'shipped' ? `<button class="btn btn-success btn-sm" onclick="receiveOrder('${o.orderId}')">✓ Mark Received</button>` : ''}
+          ${canManageProcurement() && (o.status === 'confirmed' || o.status === 'shipped') ? `<button class="btn btn-success btn-sm" onclick="receiveOrder('${o.orderId}')">Mark Received</button>` : ''}
         </div>
       </div>
       <div class="card" style="margin-bottom:1rem;">
@@ -1081,6 +1151,10 @@ async function viewOrder(orderId) {
       ` : ''}
     `;
   } catch (e) {
+    if (e.message === 'auth_required') {
+      detail.innerHTML = '<div class="empty-state">Sign in to view procurement orders.</div>';
+      return;
+    }
     detail.innerHTML = '<div class="empty-state">Failed to load order</div>';
   }
 }
@@ -1088,7 +1162,7 @@ async function viewOrder(orderId) {
 async function receiveOrder(orderId) {
   if (!confirm('Mark all items in this order as received? This will update your supply inventory.')) return;
   try {
-    const r = await fetch(`${API}/orders/${orderId}/receive`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    const r = await apiFetch(`/orders/${orderId}/receive`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
     const data = await r.json();
     if (data.ok) {
       showToast(`${data.received} item(s) received, inventory updated`);
@@ -1097,7 +1171,13 @@ async function receiveOrder(orderId) {
       showToast(data.error || 'Failed', true);
     }
   } catch (e) {
-    showToast('Failed to update', true);
+    if (e.message === 'forbidden') {
+      showToast('Manager or admin access is required to receive procurement orders.', true);
+    } else if (e.message === 'auth_required') {
+      showToast('Sign in to manage procurement receipts.', true);
+    } else {
+      showToast('Failed to update', true);
+    }
   }
 }
 
@@ -1107,7 +1187,7 @@ async function receiveOrder(orderId) {
 async function loadSupplyInventory() {
   const container = document.getElementById('supplyInventoryContainer');
   try {
-    const r = await fetch(`${API}/inventory`);
+    const r = await apiFetch('/inventory');
     const data = await r.json();
     if (!data.ok || !data.supplies.length) {
       container.innerHTML = '<div class="empty-state">No supply inventory yet<div style="font-size:0.85rem;margin-top:0.25rem;">Supplies will appear here once orders are received</div></div>';
@@ -1142,6 +1222,10 @@ async function loadSupplyInventory() {
       </table>
     `;
   } catch (e) {
+    if (e.message === 'auth_required') {
+      renderAuthRequired('supplyInventoryContainer');
+      return;
+    }
     container.innerHTML = '<div class="empty-state">Failed to load inventory</div>';
   }
 }
@@ -1151,32 +1235,14 @@ async function loadSupplyInventory() {
 // ═════════════════════════════════════════════
 async function loadSuppliers() {
   try {
-    const r = await fetch(`${API}/suppliers`);
+    const r = await apiFetch('/suppliers');
     const data = await r.json();
     if (data.ok) suppliers = data.suppliers;
   } catch (e) {}
 }
 
-async function loadAdmin() {
-  // Stats
+async function loadSuppliersPanel() {
   try {
-    const [ordersR, commR] = await Promise.all([
-      fetch(`${API}/orders`),
-      fetch(`${API}/commission-report`)
-    ]);
-    const ordersData = await ordersR.json();
-    const commData = await commR.json();
-
-    if (ordersData.ok) {
-      document.getElementById('adminStats').innerHTML = `
-        <div class="stat-card"><div class="stat-value">${ordersData.total}</div><div class="stat-label">Total Orders</div></div>
-        <div class="stat-card"><div class="stat-value">$${(commData.grandTotal || 0).toFixed(0)}</div><div class="stat-label">Total Sales</div></div>
-        <div class="stat-card"><div class="stat-value">$${(commData.grandCommission || 0).toFixed(0)}</div><div class="stat-label">Commission Earned</div></div>
-        <div class="stat-card"><div class="stat-value">${catalog.products.length}</div><div class="stat-label">Catalog Products</div></div>
-      `;
-    }
-
-    // Supplier list
     document.getElementById('supplierList').innerHTML = suppliers.map(s => `
       <div class="card" style="margin-bottom:0.5rem;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem;">
         <div>
@@ -1189,35 +1255,12 @@ async function loadAdmin() {
         </div>
       </div>
     `).join('');
-
-    // Commission report
-    if (commData.ok && commData.suppliers.length) {
-      document.getElementById('commissionReport').innerHTML = `
-        <table class="orders-table">
-          <thead><tr><th>Supplier</th><th>Orders</th><th>Sales</th><th>Commission</th></tr></thead>
-          <tbody>
-            ${commData.suppliers.map(s => `
-              <tr>
-                <td style="font-weight:500;color:#e2e8f0;">${s.supplierName}</td>
-                <td>${s.orderCount}</td>
-                <td style="color:#4ade80;">$${s.totalSales.toFixed(2)}</td>
-                <td style="color:#60a5fa;font-weight:600;">$${s.totalCommission.toFixed(2)}</td>
-              </tr>
-            `).join('')}
-            <tr style="border-top:2px solid rgba(255,255,255,0.1);">
-              <td style="font-weight:700;">Total</td>
-              <td>${commData.orderCount}</td>
-              <td style="color:#4ade80;font-weight:700;">$${commData.grandTotal.toFixed(2)}</td>
-              <td style="color:#60a5fa;font-weight:700;">$${commData.grandCommission.toFixed(2)}</td>
-            </tr>
-          </tbody>
-        </table>
-      `;
-    } else {
-      document.getElementById('commissionReport').innerHTML = '<div class="empty-state" style="padding:1rem;">No commission data yet</div>';
-    }
   } catch (e) {
-    document.getElementById('adminStats').innerHTML = '<div class="empty-state">Failed to load admin data</div>';
+    if (e.message === 'auth_required') {
+      renderAuthRequired('supplierList');
+      return;
+    }
+    document.getElementById('supplierList').innerHTML = '<div class="empty-state">Failed to load suppliers</div>';
   }
 }
 
@@ -1233,7 +1276,7 @@ function switchTab(tab, btn) {
   // Lazy-load tab data
   if (tab === 'orders') loadOrders();
   if (tab === 'inventory') loadSupplyInventory();
-  if (tab === 'admin') loadAdmin();
+  if (tab === 'suppliers') loadSuppliersPanel();
 }
 
 // ═════════════════════════════════════════════

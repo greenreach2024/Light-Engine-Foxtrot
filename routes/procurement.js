@@ -27,6 +27,7 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { fileURLToPath } from 'url';
+import { farmAuthMiddleware, requireRole } from '../lib/farm-auth.js';
 
 const router = express.Router();
 
@@ -39,6 +40,9 @@ const SUPPLIERS_FILE = path.join(DATA_DIR, 'procurement-suppliers.json');
 const ORDERS_FILE    = path.join(DATA_DIR, 'procurement-orders.json');
 const UNITS_FILE     = path.join(DATA_DIR, 'procurement-units.json');
 const FARM_FILE      = path.join(DATA_DIR, 'farm.json');
+const SUPPORTED_PAYMENT_METHODS = new Set(['invoice']);
+const ADMIN_ROLES = ['admin'];
+const MANAGER_ROLES = ['manager', 'admin'];
 
 // ─── Helpers ───────────────────────────────────────────
 
@@ -69,8 +73,33 @@ function getFarmInfo() {
   return farm || { farmId: 'unknown', name: 'Unknown Farm' };
 }
 
+export function getProcurementFarmContext(req, fallbackFarm = getFarmInfo()) {
+  const farmId = req?.farm_id || fallbackFarm?.farmId || 'unknown';
+  return {
+    farmId,
+    farmInfo: {
+      ...fallbackFarm,
+      farmId
+    }
+  };
+}
+
+export function findScopedOrderIndex(orders, orderId, farmId) {
+  return (orders || []).findIndex(order => order.orderId === orderId && order.farmId === farmId);
+}
+
+export function normalizeProcurementPaymentMethod(paymentMethod) {
+  const normalized = typeof paymentMethod === 'string'
+    ? paymentMethod.trim().toLowerCase()
+    : 'invoice';
+
+  return SUPPORTED_PAYMENT_METHODS.has(normalized) ? normalized : null;
+}
+
 // In-memory carts by farmId (persists only during server lifetime)
 const farmCarts = new Map();
+
+router.use(farmAuthMiddleware);
 
 // ─── Email integration helper (for non-API suppliers) ──
 
@@ -347,8 +376,8 @@ router.get('/units', (req, res) => {
  * Retrieve saved cart for the farm
  */
 router.get('/cart', (req, res) => {
-  const farmInfo = getFarmInfo();
-  const cart = farmCarts.get(farmInfo.farmId) || { items: [], updatedAt: null };
+  const { farmId } = getProcurementFarmContext(req);
+  const cart = farmCarts.get(farmId) || { items: [], updatedAt: null };
   res.json({ ok: true, cart });
 });
 
@@ -359,7 +388,7 @@ router.get('/cart', (req, res) => {
  */
 router.put('/cart', (req, res) => {
   try {
-    const farmInfo = getFarmInfo();
+    const { farmId } = getProcurementFarmContext(req);
     const { items } = req.body;
     if (!Array.isArray(items)) {
       return res.status(400).json({ ok: false, error: 'items_must_be_array' });
@@ -396,7 +425,7 @@ router.put('/cart', (req, res) => {
       updatedAt: new Date().toISOString()
     };
 
-    farmCarts.set(farmInfo.farmId, cart);
+    farmCarts.set(farmId, cart);
     res.json({ ok: true, cart });
   } catch (error) {
     res.status(500).json({ ok: false, error: 'cart_error' });
@@ -421,7 +450,7 @@ router.put('/cart', (req, res) => {
  */
 router.post('/orders', async (req, res) => {
   try {
-    const farmInfo = getFarmInfo();
+    const { farmId, farmInfo } = getProcurementFarmContext(req);
     const catalog = readJSON(CATALOG_FILE);
     const suppliersData = readJSON(SUPPLIERS_FILE);
     const ordersData = readJSON(ORDERS_FILE) || { orders: [] };
@@ -434,6 +463,15 @@ router.post('/orders', async (req, res) => {
 
     if (!items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ ok: false, error: 'items_required' });
+    }
+
+    const normalizedPaymentMethod = normalizeProcurementPaymentMethod(paymentMethod);
+    if (!normalizedPaymentMethod) {
+      return res.status(400).json({
+        ok: false,
+        error: 'unsupported_payment_method',
+        supportedPaymentMethods: Array.from(SUPPORTED_PAYMENT_METHODS)
+      });
     }
 
     // Build order line items
@@ -468,7 +506,7 @@ router.post('/orders', async (req, res) => {
     const orderId = generateOrderId();
     const order = {
       orderId,
-      farmId: farmInfo.farmId,
+      farmId,
       farmName: farmInfo.name || farmInfo.farmName,
       items: orderItems,
       shippingAddress: shippingAddress || {
@@ -478,7 +516,7 @@ router.post('/orders', async (req, res) => {
         zip: farmInfo.postalCode || ''
       },
       subtotal: orderItems.reduce((s, i) => s + i.lineTotal, 0),
-      paymentMethod: paymentMethod || 'invoice',
+      paymentMethod: normalizedPaymentMethod,
       paymentStatus: 'pending',
       notes: notes || '',
       requestedDeliveryDate: requestedDeliveryDate || null,
@@ -525,7 +563,7 @@ router.post('/orders', async (req, res) => {
     writeJSON(ORDERS_FILE, ordersData);
 
     // Clear cart after successful order
-    farmCarts.delete(farmInfo.farmId);
+    farmCarts.delete(farmId);
 
     console.log(`[Procurement] Order ${orderId} placed – ${orderItems.length} items, $${order.subtotal.toFixed(2)}, ${Object.keys(supplierGroups).length} supplier(s)`);
 
@@ -552,11 +590,11 @@ router.post('/orders', async (req, res) => {
  */
 router.get('/orders', (req, res) => {
   try {
-    const farmInfo = getFarmInfo();
+    const { farmId } = getProcurementFarmContext(req);
     const ordersData = readJSON(ORDERS_FILE) || { orders: [] };
     const { status, limit, offset } = req.query;
 
-    let orders = ordersData.orders.filter(o => o.farmId === farmInfo.farmId);
+    let orders = ordersData.orders.filter(o => o.farmId === farmId);
 
     if (status) {
       orders = orders.filter(o => o.status === status);
@@ -594,8 +632,9 @@ router.get('/orders', (req, res) => {
  */
 router.get('/orders/:orderId', (req, res) => {
   try {
+    const { farmId } = getProcurementFarmContext(req);
     const ordersData = readJSON(ORDERS_FILE) || { orders: [] };
-    const order = ordersData.orders.find(o => o.orderId === req.params.orderId);
+    const order = ordersData.orders.find(o => o.orderId === req.params.orderId && o.farmId === farmId);
     if (!order) return res.status(404).json({ ok: false, error: 'order_not_found' });
 
     // Enrich with supplier names
@@ -618,10 +657,11 @@ router.get('/orders/:orderId', (req, res) => {
  * Update order or line item status (admin/webhook)
  * Body: { status, lineId?, trackingNumber?, carrier?, notes? }
  */
-router.patch('/orders/:orderId/status', (req, res) => {
+router.patch('/orders/:orderId/status', requireRole(ADMIN_ROLES), (req, res) => {
   try {
+    const { farmId } = getProcurementFarmContext(req);
     const ordersData = readJSON(ORDERS_FILE) || { orders: [] };
-    const orderIdx = ordersData.orders.findIndex(o => o.orderId === req.params.orderId);
+    const orderIdx = findScopedOrderIndex(ordersData.orders, req.params.orderId, farmId);
     if (orderIdx === -1) return res.status(404).json({ ok: false, error: 'order_not_found' });
 
     const order = ordersData.orders[orderIdx];
@@ -666,10 +706,11 @@ router.patch('/orders/:orderId/status', (req, res) => {
  * Mark items as received and update farm inventory
  * Body: { items: [{ lineId, quantityReceived? }] }
  */
-router.post('/orders/:orderId/receive', (req, res) => {
+router.post('/orders/:orderId/receive', requireRole(MANAGER_ROLES), (req, res) => {
   try {
+    const { farmId } = getProcurementFarmContext(req);
     const ordersData = readJSON(ORDERS_FILE) || { orders: [] };
-    const orderIdx = ordersData.orders.findIndex(o => o.orderId === req.params.orderId);
+    const orderIdx = findScopedOrderIndex(ordersData.orders, req.params.orderId, farmId);
     if (orderIdx === -1) return res.status(404).json({ ok: false, error: 'order_not_found' });
 
     const order = ordersData.orders[orderIdx];
@@ -753,8 +794,9 @@ router.post('/orders/:orderId/receive', (req, res) => {
  */
 router.post('/orders/:orderId/return', (req, res) => {
   try {
+    const { farmId } = getProcurementFarmContext(req);
     const ordersData = readJSON(ORDERS_FILE) || { orders: [] };
-    const orderIdx = ordersData.orders.findIndex(o => o.orderId === req.params.orderId);
+    const orderIdx = findScopedOrderIndex(ordersData.orders, req.params.orderId, farmId);
     if (orderIdx === -1) return res.status(404).json({ ok: false, error: 'order_not_found' });
 
     const order = ordersData.orders[orderIdx];
@@ -893,12 +935,13 @@ router.get('/inventory', (req, res) => {
  * GET /commission-report
  * Admin: Generate commission report
  */
-router.get('/commission-report', (req, res) => {
+router.get('/commission-report', requireRole(ADMIN_ROLES), (req, res) => {
   try {
+    const { farmId } = getProcurementFarmContext(req);
     const ordersData = readJSON(ORDERS_FILE) || { orders: [] };
     const { from, to } = req.query;
 
-    let orders = ordersData.orders;
+    let orders = ordersData.orders.filter(order => order.farmId === farmId);
 
     if (from) orders = orders.filter(o => new Date(o.createdAt) >= new Date(from));
     if (to) orders = orders.filter(o => new Date(o.createdAt) <= new Date(to));
@@ -945,7 +988,7 @@ router.get('/commission-report', (req, res) => {
  * Admin: Add or update a product in the catalog
  * Body: { product: { sku, name, description, ... } }
  */
-router.put('/catalog/product', (req, res) => {
+router.put('/catalog/product', requireRole(ADMIN_ROLES), (req, res) => {
   try {
     const { product } = req.body;
     if (!product || !product.sku || !product.name) {
@@ -978,7 +1021,7 @@ router.put('/catalog/product', (req, res) => {
  * DELETE /catalog/product/:sku
  * Admin: Remove a product from the catalog
  */
-router.delete('/catalog/product/:sku', (req, res) => {
+router.delete('/catalog/product/:sku', requireRole(ADMIN_ROLES), (req, res) => {
   try {
     const catalog = readJSON(CATALOG_FILE);
     if (!catalog) return res.status(500).json({ ok: false, error: 'catalog_unavailable' });
@@ -1002,7 +1045,7 @@ router.delete('/catalog/product/:sku', (req, res) => {
  * PUT /suppliers/:supplierId
  * Admin: Update supplier details
  */
-router.put('/suppliers/:supplierId', (req, res) => {
+router.put('/suppliers/:supplierId', requireRole(ADMIN_ROLES), (req, res) => {
   try {
     const data = readJSON(SUPPLIERS_FILE);
     if (!data) return res.status(500).json({ ok: false, error: 'suppliers_unavailable' });
@@ -1068,7 +1111,7 @@ const SUPPLY_LINKAGE = {
  *   source: { type: 'tray_seeding' | 'doser' | 'harvest' | 'manual', refId? }
  * }
  */
-router.post('/inventory/deplete', (req, res) => {
+router.post('/inventory/deplete', requireRole(MANAGER_ROLES), (req, res) => {
   try {
     const { activity, items, source } = req.body;
     if (!items || !Array.isArray(items) || items.length === 0) {
@@ -1172,7 +1215,7 @@ router.post('/inventory/deplete', (req, res) => {
  *   doserId?: string
  * }
  */
-router.post('/inventory/record-dosing', (req, res) => {
+router.post('/inventory/record-dosing', requireRole(MANAGER_ROLES), (req, res) => {
   try {
     const { nutrientType, volumeMl, roomId, doserId } = req.body;
     if (!nutrientType || !volumeMl) {
@@ -1257,7 +1300,7 @@ router.post('/inventory/record-dosing', (req, res) => {
  *   trayIds?: string[]
  * }
  */
-router.post('/inventory/record-seeding', (req, res) => {
+router.post('/inventory/record-seeding', requireRole(MANAGER_ROLES), (req, res) => {
   try {
     const { cropName, seedSku, mediaSku, trayCount = 1, seedsPerTray, mediaVolumePerTray, roomId, groupId, trayIds } = req.body;
     if (!cropName) {
@@ -1336,7 +1379,7 @@ router.post('/inventory/record-seeding', (req, res) => {
  *   cropName?: string
  * }
  */
-router.post('/inventory/record-packaging', (req, res) => {
+router.post('/inventory/record-packaging', requireRole(MANAGER_ROLES), (req, res) => {
   try {
     const { items, harvestId, cropName } = req.body;
     if (!items || !Array.isArray(items) || items.length === 0) {
@@ -1437,7 +1480,7 @@ router.get('/inventory/usage-summary', (req, res) => {
  * Set minimum stock level for auto-reorder alerts
  * Body: { minStockLevel: number }
  */
-router.put('/inventory/:sku/min-stock', (req, res) => {
+router.put('/inventory/:sku/min-stock', requireRole(MANAGER_ROLES), (req, res) => {
   try {
     const inventory = readJSON(SUPPLY_INVENTORY_FILE) || { lastUpdated: null, supplies: [] };
     const supply = inventory.supplies.find(s => s.sku === req.params.sku);

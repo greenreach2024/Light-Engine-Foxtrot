@@ -98,6 +98,7 @@ import mqtt from 'mqtt';
 import { exec } from 'child_process';
 import axios from 'axios';
 import SyncServiceClass from './services/sync-service.js';
+import { NutrientStore, NutrientMqttSubscriber } from './services/nutrient-mqtt.js';
 
 // =====================================================
 // Controller Restriction Middleware
@@ -374,6 +375,10 @@ if (AUDIT_LOG_ENABLED) {
 // Initialize sync services (will be started after DB is ready)
 let syncService = null;
 let wholesaleService = null;
+
+// Nutrient MQTT subscriber and local store (Atlas dosing system)
+const nutrientStore = new NutrientStore({ dataDir: path.join(process.cwd(), 'public', 'data', 'automation') });
+let nutrientSubscriber = null;
 
 // Metrics tracking for monitoring
 const metrics = {
@@ -16839,8 +16844,14 @@ function deriveMixState(fallbackDoc, targetRatio) {
 
 function deriveDosingState(fallbackDoc, targets) {
   const fallback = fallbackDoc?.dosing && typeof fallbackDoc.dosing === 'object' ? fallbackDoc.dosing : null;
-  const history = Array.isArray(fallback?.history) ? fallback.history.slice(-50) : null;
-  if (!fallback && (!targets || !targets.dosing)) return null;
+  const cachedHistory = Array.isArray(fallback?.history) ? fallback.history : [];
+  // Merge MQTT-received dosing events from nutrient store
+  const mqttHistory = nutrientStore ? nutrientStore.getDosingHistory(50) : [];
+  const combined = [...cachedHistory, ...mqttHistory]
+    .sort((a, b) => new Date(a.timestamp || 0) - new Date(b.timestamp || 0))
+    .slice(-50);
+  const history = combined.length > 0 ? combined : null;
+  if (!fallback && (!targets || !targets.dosing) && !history) return null;
   return {
     history,
     averageDailyVolumeMl: toNumberOrNull(fallback?.averageDailyVolumeMl),
@@ -16996,22 +17007,23 @@ async function refreshNutrientAutomation({ force = false, reason = 'interval' } 
     let backendError = null;
     let backendStatus = null;
     try {
-      const response = await fetchPythonBackend(`/api/env/latest?scope=${encodeURIComponent(NUTRIENT_BACKEND_SCOPE)}`);
-      if (response && response.ok) {
-        backendStatus = response.status;
-        const payload = await response.json();
-        backendTelemetry = normalizeBackendNutrientTelemetry(payload);
-      } else if (response) {
-        backendStatus = response.status;
-        let errorBody = null;
-        try {
-          errorBody = await response.json();
-        } catch {}
-        const err = new Error(errorBody?.error || `Python backend HTTP ${response.status}`);
-        err.status = response.status;
-        backendError = err;
+      // Read live telemetry from nutrient MQTT store (replaces deprecated Python backend)
+      const storeLatest = nutrientStore.getLatest(NUTRIENT_SCOPE_ID);
+      if (storeLatest && storeLatest.sensors && !storeLatest.stale) {
+        backendStatus = 200;
+        backendTelemetry = normalizeBackendNutrientTelemetry({
+          scope: NUTRIENT_BACKEND_SCOPE,
+          sensors: {
+            ph: storeLatest.sensors.ph ? { value: storeLatest.sensors.ph.value, unit: storeLatest.sensors.ph.unit, observedAt: storeLatest.sensors.ph.observedAt } : null,
+            ec: storeLatest.sensors.ec ? { value: storeLatest.sensors.ec.value, unit: storeLatest.sensors.ec.unit, observedAt: storeLatest.sensors.ec.observedAt } : null,
+            temperature: storeLatest.sensors.temperature ? { value: storeLatest.sensors.temperature.value, unit: storeLatest.sensors.temperature.unit, observedAt: storeLatest.sensors.temperature.observedAt } : null
+          },
+          observedAt: storeLatest.updatedAt
+        });
+      } else if (storeLatest && storeLatest.stale) {
+        backendError = new Error('nutrient-data-stale');
       } else {
-        backendError = new Error('python-backend-unavailable');
+        backendError = new Error('no-nutrient-data-available');
       }
     } catch (error) {
       backendError = error;
@@ -17034,6 +17046,7 @@ async function refreshNutrientAutomation({ force = false, reason = 'interval' } 
       pollReason: reason,
       backendStatus,
       backendOnline: Boolean(backendTelemetry),
+      mqttConnected: nutrientSubscriber ? nutrientSubscriber.isConnected() : false,
       fallbackUsed: Boolean(backendError) && Boolean(fallbackTelemetry),
       failure: backendError ? { message: backendError.message || 'backend-error', status: backendError.status || null } : null
     };
@@ -17055,6 +17068,17 @@ async function refreshNutrientAutomation({ force = false, reason = 'interval' } 
     };
 
     updateNutrientDashboardSnapshot(fallbackDoc, snapshot);
+
+    // Sync nutrient data to Central (non-blocking)
+    if (snapshot.ok && syncServiceInstance) {
+      try {
+        const storeSnapshot = nutrientStore.getSnapshot();
+        syncServiceInstance.syncNutrients({
+          telemetry: { tanks: storeSnapshot.tanks },
+          dosingHistory: storeSnapshot.dosingHistory
+        }).catch(() => {});
+      } catch {}
+    }
 
     nutrientAutomationState.snapshot = snapshot;
     nutrientAutomationState.lastPoll = Date.now();
@@ -17473,18 +17497,10 @@ app.post('/data/nutrient-dashboard', async (req, res) => {
 app.get('/api/nutrients/scopes', async (req, res) => {
   try {
     setCors(req, res);
-    
-    const response = await fetchPythonBackend('/api/env/scopes');
-    
-    if (!response || !response.ok) {
-      return res.status(503).json({
-        ok: false,
-        error: 'Python backend unavailable'
-      });
-    }
-    
-    const data = await response.json();
-    res.json(data);
+    const scopes = nutrientStore.getScopes();
+    // Always include the configured scope even if no data yet
+    if (!scopes.includes(NUTRIENT_SCOPE_ID)) scopes.push(NUTRIENT_SCOPE_ID);
+    res.json({ ok: true, scopes });
   } catch (error) {
     res.status(500).json({ ok: false, error: error.message });
   }
@@ -17495,23 +17511,11 @@ app.get('/api/nutrients/latest/:scope', async (req, res) => {
   try {
     setCors(req, res);
     const scope = decodeURIComponent(req.params.scope);
-    
-    const response = await fetchPythonBackend(`/api/env/latest?scope=${encodeURIComponent(scope)}`);
-    
-    if (!response) {
-      return res.status(503).json({
-        ok: false,
-        error: 'Python backend unavailable'
-      });
+    const latest = nutrientStore.getLatest(scope);
+    if (!latest) {
+      return res.status(404).json({ ok: false, error: 'no-data-for-scope' });
     }
-    
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-      return res.status(response.status).json(errorData);
-    }
-    
-    const data = await response.json();
-    res.json(data);
+    res.json({ ok: true, ...latest });
   } catch (error) {
     res.status(500).json({ ok: false, error: error.message });
   }
@@ -17523,21 +17527,9 @@ app.get('/api/nutrients/history/:scope/:sensor', async (req, res) => {
     setCors(req, res);
     const scope = decodeURIComponent(req.params.scope);
     const sensor = decodeURIComponent(req.params.sensor);
-    const limit = req.query.limit || 50;
-    
-    const response = await fetchPythonBackend(
-      `/api/env/history?scope=${encodeURIComponent(scope)}&sensor=${encodeURIComponent(sensor)}&limit=${limit}`
-    );
-    
-    if (!response || !response.ok) {
-      return res.status(503).json({
-        ok: false,
-        error: 'Python backend unavailable'
-      });
-    }
-    
-    const data = await response.json();
-    res.json(data);
+    const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 200);
+    const history = nutrientStore.getHistory(scope, sensor, limit);
+    res.json({ ok: true, scope, sensor, count: history.length, history });
   } catch (error) {
     res.status(500).json({ ok: false, error: error.message });
   }
@@ -17548,30 +17540,24 @@ app.post('/api/nutrients/ingest', async (req, res) => {
   try {
     setCors(req, res);
     const payload = req.body;
-    
-    // Validate payload
-    if (!payload.scope || !payload.sensors) {
+
+    if (!payload || !payload.scope || !payload.sensors) {
       return res.status(400).json({
         ok: false,
         error: 'Payload must include scope and sensors'
       });
     }
-    
-    const response = await fetchPythonBackend('/api/env/ingest', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+
+    const tankId = payload.scope;
+    const sensors = payload.sensors;
+    nutrientStore.updateTelemetry(tankId, {
+      ph: sensors.ph?.value ?? sensors.ph,
+      ec: sensors.ec?.value ?? sensors.ec,
+      temperature: sensors.temperature?.value ?? sensors.temperature,
+      timestamp: payload.timestamp || new Date().toISOString()
     });
-    
-    if (!response || !response.ok) {
-      return res.status(503).json({
-        ok: false,
-        error: 'Python backend unavailable'
-      });
-    }
-    
-    const data = await response.json();
-    res.json(data);
+
+    res.json({ ok: true, scope: tankId, ingested: true });
   } catch (error) {
     res.status(500).json({ ok: false, error: error.message });
   }
@@ -31711,22 +31697,31 @@ function setupLiveSensorSync() {
         console.log('[sensor-sync] Updated env.json with live sensor data');
       }
 
+      // Push per-device readings to preEnvStore so in-memory snapshot
+      // carries device-ID-keyed sources (needed by heatmap Tier 1 lookup
+      // when the zones fallback path is used instead of file-based zones).
       for (const zone of envData.zones) {
         if (!zone?.id || !zone.sensors) continue;
-
         const scopeId = zone.id;
-        const tempReading = zone.sensors.tempC?.current;
-        const rhReading = zone.sensors.rh?.current;
-        const vpdReading = zone.sensors.vpd?.current;
-
-        if (Number.isFinite(tempReading)) {
-          preEnvStore.updateSensor(scopeId, 'tempC', { value: tempReading });
-        }
-        if (Number.isFinite(rhReading)) {
-          preEnvStore.updateSensor(scopeId, 'rh', { value: rhReading });
-        }
-        if (Number.isFinite(vpdReading)) {
-          preEnvStore.updateSensor(scopeId, 'vpd', { value: vpdReading });
+        for (const [metric, bucket] of Object.entries(zone.sensors)) {
+          if (bucket?.sources && Object.keys(bucket.sources).length > 0) {
+            // Per-device sources available — push each with its deviceId
+            for (const [devId, src] of Object.entries(bucket.sources)) {
+              const val = src?.current;
+              if (Number.isFinite(val)) {
+                preEnvStore.updateSensor(scopeId, metric, {
+                  value: val,
+                  meta: { sensorId: devId, name: src.name || devId }
+                });
+              }
+            }
+          } else {
+            // No per-device sources — fall back to zone-level value
+            const val = bucket?.current;
+            if (Number.isFinite(val)) {
+              preEnvStore.updateSensor(scopeId, metric, { value: val });
+            }
+          }
         }
       }
 
@@ -32204,6 +32199,28 @@ function startOrderSyncPolling() {
     // Start syncing live sensor data from iot-devices.json to env.json zones
     try { setupLiveSensorSync(); } catch (error) {
       console.warn('[sensor-sync] Failed to start:', error?.message || error);
+    }
+    // Start nutrient MQTT subscriber (Atlas dosing system)
+    try {
+      if (DEFAULT_NUTRIENT_MQTT_URL) {
+        nutrientSubscriber = new NutrientMqttSubscriber({
+          brokerUrl: DEFAULT_NUTRIENT_MQTT_URL,
+          store: nutrientStore,
+          scopeId: NUTRIENT_SCOPE_ID
+        });
+        nutrientSubscriber.start();
+        // Pipe telemetry from MQTT into env store for dashboard integration
+        nutrientStore.on('telemetry', ({ tankId, reading }) => {
+          pushTelemetryToEnvStore({
+            ph: reading.ph != null ? { value: reading.ph, unit: 'pH', observedAt: reading.observedAt } : null,
+            ec: reading.ec != null ? { value: reading.ec, unit: 'mS/cm', observedAt: reading.observedAt } : null,
+            temperature: reading.temperature != null ? { value: reading.temperature, unit: '\u00B0C', observedAt: reading.observedAt } : null
+          }, NUTRIENT_BACKEND_SCOPE);
+        });
+        console.log('[nutrient-mqtt] Atlas dosing subscriber started');
+      }
+    } catch (error) {
+      console.warn('[nutrient-mqtt] Failed to start:', error?.message || error);
     }
     // Start periodic order sync with Central (catches missed notifications)
     try { startOrderSyncPolling(); } catch (error) {

@@ -368,6 +368,285 @@
       border: 1px solid rgba(59, 130, 246, 0.2);
     }
 
+    .zone-card {
+      display: block;
+      padding: 0;
+      overflow: hidden;
+    }
+
+    .zone-card-header {
+      width: 100%;
+      border: 0;
+      background: transparent;
+      color: inherit;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.85rem 0.9rem;
+      cursor: pointer;
+      text-align: left;
+    }
+
+    .zone-card-header:hover {
+      background: rgba(59, 130, 246, 0.08);
+    }
+
+    .zone-card-title {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+      min-width: 0;
+    }
+
+    .zone-card-name {
+      color: #f8fafc;
+      font-weight: 700;
+    }
+
+    .zone-card-meta {
+      color: #94a3b8;
+      font-size: 0.72rem;
+      font-weight: 500;
+    }
+
+    .zone-card-badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem;
+      justify-content: flex-end;
+      margin-left: 0.75rem;
+    }
+
+    .zone-card-badge {
+      padding: 0.18rem 0.48rem;
+      border-radius: 999px;
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid rgba(148, 163, 184, 0.25);
+      color: #cbd5e1;
+      white-space: nowrap;
+    }
+
+    .zone-card-badge.groups {
+      color: #86efac;
+      border-color: rgba(34, 197, 94, 0.35);
+    }
+
+    .zone-card-badge.equipment {
+      color: #d8b4fe;
+      border-color: rgba(168, 85, 247, 0.35);
+    }
+
+    .zone-card-badge.sensors {
+      color: #7dd3fc;
+      border-color: rgba(56, 189, 248, 0.35);
+    }
+
+    .zone-card-body {
+      padding: 0 0.9rem 0.9rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.65rem;
+      border-top: 1px solid rgba(59, 130, 246, 0.18);
+      background: rgba(2, 6, 23, 0.16);
+    }
+
+    .zone-card-empty {
+      padding-top: 0.8rem;
+      color: #94a3b8;
+      font-size: 0.76rem;
+    }
+
+    .zone-collection {
+      margin-top: 0.7rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+
+    .zone-collection-title {
+      color: #e2e8f0;
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .zone-entry,
+    .zone-family {
+      border-radius: 12px;
+      border: 1px solid rgba(59, 130, 246, 0.16);
+      background: rgba(15, 23, 42, 0.46);
+      overflow: hidden;
+    }
+
+    .zone-entry-button,
+    .zone-family-header {
+      width: 100%;
+      border: 0;
+      background: transparent;
+      color: inherit;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+      padding: 0.6rem 0.7rem;
+      cursor: pointer;
+      text-align: left;
+    }
+
+    .zone-entry-button:hover,
+    .zone-family-header:hover {
+      background: rgba(59, 130, 246, 0.08);
+    }
+
+    .zone-entry-main {
+      display: flex;
+      align-items: center;
+      gap: 0.55rem;
+      min-width: 0;
+    }
+
+    .zone-entry-icon {
+      width: 1.1rem;
+      text-align: center;
+      font-size: 0.95rem;
+      flex-shrink: 0;
+    }
+
+    .zone-entry-copy {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0.12rem;
+    }
+
+    .zone-entry-name {
+      color: #f8fafc;
+      font-size: 0.78rem;
+      font-weight: 600;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .zone-entry-subtitle {
+      color: #94a3b8;
+      font-size: 0.68rem;
+      font-weight: 500;
+    }
+
+    .zone-entry-count {
+      color: #cbd5e1;
+      font-size: 0.68rem;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .zone-family-body {
+      padding: 0 0.45rem 0.45rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+
+    .group-family {
+      border-radius: 14px;
+      border: 1px solid rgba(34, 197, 94, 0.22);
+      background: rgba(15, 23, 42, 0.55);
+      overflow: hidden;
+      margin-bottom: 0.5rem;
+    }
+
+    .group-family-header {
+      width: 100%;
+      border: 0;
+      background: transparent;
+      color: inherit;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.65rem;
+      padding: 0.7rem 0.8rem;
+      cursor: pointer;
+      text-align: left;
+    }
+
+    .group-family-header:hover {
+      background: rgba(34, 197, 94, 0.08);
+    }
+
+    .group-family-title {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      min-width: 0;
+      flex: 1;
+    }
+
+    .group-family-body {
+      padding: 0 0.55rem 0.55rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+
+    .group-member {
+      width: 100%;
+      border: 1px solid rgba(34, 197, 94, 0.18);
+      border-radius: 12px;
+      background: rgba(15, 23, 42, 0.42);
+      color: #f1f5f9;
+      padding: 0.6rem 0.7rem;
+      cursor: pointer;
+      text-align: left;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .group-member:hover {
+      background: rgba(34, 197, 94, 0.1);
+      border-color: rgba(34, 197, 94, 0.32);
+    }
+
+    .group-member.active {
+      border-color: rgba(34, 197, 94, 0.55);
+      box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.3);
+      background: rgba(34, 197, 94, 0.16);
+    }
+
+    .group-member-copy {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0.12rem;
+    }
+
+    .group-member-name {
+      color: #f8fafc;
+      font-size: 0.8rem;
+      font-weight: 700;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .group-member-meta {
+      color: #94a3b8;
+      font-size: 0.68rem;
+    }
+
+    .group-member-state {
+      color: #bbf7d0;
+      font-size: 0.68rem;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
     .details-empty {
       text-align: center;
       color: #94a3b8;
@@ -537,6 +816,10 @@
               <div class="tool-icon">▢</div>
               <div class="tool-label">Draw Zone</div>
             </div>
+            <div class="tool-item" data-tool="group" onclick="selectTool('group')">
+              <div class="tool-icon">▥</div>
+              <div class="tool-label">Place Group</div>
+            </div>
           </div>
         </div>
 
@@ -556,6 +839,15 @@
           <div class="device-list" id="equipmentList">
             <div style="text-align: center; padding: 20px; color: #94a3b8;">
               Loading equipment...
+            </div>
+          </div>
+        </div>
+
+        <div class="tool-section">
+          <h3>Growing Groups</h3>
+          <div class="device-list" id="groupList">
+            <div style="text-align: center; padding: 20px; color: #94a3b8;">
+              Loading groups...
             </div>
           </div>
         </div>
@@ -582,6 +874,10 @@
           <div class="legend-item">
             <span class="legend-icon equipment">■</span>
             <span>Equipment (HVAC, Dehumidifier)</span>
+          </div>
+          <div class="legend-item">
+            <span class="legend-icon controller" style="color: #22c55e;">▥</span>
+            <span>Growing Group / Multi-Unit</span>
           </div>
           <div class="legend-item">
             <span class="legend-icon controller">◆</span>
@@ -621,6 +917,7 @@
         <div class="stats-bar">
           <strong>Grid:</strong> <span id="gridInfo">20×15 cells</span> | 
           <strong>Devices:</strong> <span id="deviceCount">0</span> | 
+          <strong>Groups:</strong> <span id="groupCount">0</span> | 
           <strong>Zones:</strong> <span id="zoneCount">0</span>
         </div>
       </div>
@@ -663,7 +960,9 @@
       devices: [],
       iotDevices: [],
       equipment: [],
+      groups: [],
       placedDevices: [],
+      placedGroups: [],
       zones: [],
       selectedItem: null,
       isDragging: false,
@@ -672,7 +971,11 @@
       zoneDrag: null, // { zone, edge: 'left'|'right'|'top'|'bottom'|'inside', startX, startY }
       zoneStart: null,
       rooms: [],
-      currentRoomId: null
+      currentRoomId: null,
+      pendingGroupId: null,
+      groupLibraryOpen: {},
+      zonePanelOpen: {},
+      zoneCollectionOpen: {}
     };
 
     const SELECT_HINT_KEY = 'roomMapper.selectHintDismissed';
@@ -692,6 +995,7 @@
       sensor: '#38bdf8',
       light: '#f59e0b',
       equipment: '#a855f7',
+      group: '#22c55e',
       plug: '#22c55e',
       switch: '#22c55e',
       default: '#e2e8f0'
@@ -715,6 +1019,7 @@
       await loadRooms();
       await loadIoTDevices();
       await loadEquipment();
+      await loadGroups();
       await loadExistingMap();
       setupEventListeners();
       draw();
@@ -893,7 +1198,9 @@
         
         // Clear map for new room
         STATE.placedDevices = [];
+        STATE.placedGroups = [];
         STATE.zones = [];
+        renderGroupList();
         draw();
 
         alert(`Room "${roomName}" created successfully! Now place devices and zones, then click Save Map.`);
@@ -915,7 +1222,7 @@
       console.log("[Room Mapper] Changing room from", STATE.currentRoomId, "to", newRoomId);
       
       // Ask to save current room if there are unsaved changes
-      if (STATE.placedDevices.length > 0 || STATE.zones.length > 0) {
+      if (STATE.placedDevices.length > 0 || STATE.placedGroups.length > 0 || STATE.zones.length > 0) {
         const shouldSave = confirm('Save current room layout before switching?');
         if (shouldSave) {
           await saveMap();
@@ -930,16 +1237,19 @@
       
       // Clear current map
       STATE.placedDevices = [];
+      STATE.placedGroups = [];
       STATE.zones = [];
       STATE.selectedItem = null;
       document.getElementById('detailsContent').innerHTML = '<div class="details-empty">Click on a device or zone<br>to view details</div>';
       
       // Load map for new room
+      await loadGroups();
       await loadExistingMap();
       
       // Refresh displays
       renderDeviceList();
       renderEquipmentList();
+      renderGroupList();
       updateZoneList();
       draw();
       updateStats();
@@ -1148,6 +1458,246 @@
       }
     }
 
+    function normalizeGroupsPayload(payload) {
+      if (Array.isArray(payload)) return payload;
+      if (Array.isArray(payload?.groups)) return payload.groups;
+      return [];
+    }
+
+    function getCurrentRoomContext() {
+      const room = STATE.rooms.find(r => (r.id || r.name) === STATE.currentRoomId) || null;
+      return {
+        room,
+        roomId: room ? (room.id || room.name) : STATE.currentRoomId,
+        roomName: room ? (room.name || room.location || '') : ''
+      };
+    }
+
+    function normalizeZoneNumber(value) {
+      if (value == null) return null;
+      if (typeof value === 'number' && !Number.isNaN(value)) return value;
+      const match = String(value).match(/(\d+)/);
+      return match ? Number(match[1]) : null;
+    }
+
+    function deriveGroupFamilyName(name) {
+      const raw = String(name || 'Group').trim();
+      return raw.replace(/\s+\d+$/, '').trim() || raw;
+    }
+
+    function getGroupDisplayName(group) {
+      return group?.name || group?.id || 'Unnamed Group';
+    }
+
+    function getGroupSubtitle(group) {
+      const parts = [];
+      if (group?.trays != null) parts.push(group.trays + ' trays');
+      if (group?.crop) parts.push(group.crop);
+      if (group?.status) parts.push(group.status);
+      return parts.join(' • ') || 'No crop assigned';
+    }
+
+    function getPlacedObjectLabel(item) {
+      if (item?.group) return getGroupDisplayName(item.group);
+      const device = item?.device || {};
+      return device.name || (device.vendor && device.model ? `${device.vendor} ${device.model}` : '') || device.model || device.category || 'Unknown';
+    }
+
+    function getPlacedObjectSubtitle(item) {
+      if (item?.group) return getGroupSubtitle(item.group);
+      const device = item?.device || {};
+      const parts = [];
+      if (item?.isEquipment) {
+        if (device.category) parts.push(device.category);
+        if (device.model) parts.push(device.model);
+      } else {
+        if (device.type) parts.push(device.type);
+        if (device.protocol) parts.push(device.protocol);
+      }
+      return parts.join(' • ') || 'Mapped object';
+    }
+
+    function isPlacedObjectInZone(item, zone) {
+      if (!item || !zone) return false;
+      return item.x >= zone.x1 && item.x <= zone.x2 && item.y >= zone.y1 && item.y <= zone.y2;
+    }
+
+    function getZoneContents(zone) {
+      return {
+        sensors: STATE.placedDevices.filter(item => !item.isEquipment && isPlacedObjectInZone(item, zone)),
+        equipment: STATE.placedDevices.filter(item => item.isEquipment && isPlacedObjectInZone(item, zone)),
+        groups: STATE.placedGroups.filter(item => isPlacedObjectInZone(item, zone))
+      };
+    }
+
+    function findPlacedObject(px, py, x, y) {
+      const exactDevice = STATE.placedDevices.find(item => item.x === x && item.y === y);
+      if (exactDevice) return exactDevice;
+      const exactGroup = STATE.placedGroups.find(item => item.x === x && item.y === y);
+      if (exactGroup) return exactGroup;
+
+      let best = null;
+      let bestDist = Infinity;
+      const candidates = STATE.placedDevices.concat(STATE.placedGroups);
+      for (const item of candidates) {
+        const cx = item.x * STATE.cellSize + STATE.cellSize / 2;
+        const cy = item.y * STATE.cellSize + STATE.cellSize / 2;
+        const dist = Math.hypot(cx - px, cy - py);
+        if (dist < bestDist) {
+          best = item;
+          bestDist = dist;
+        }
+      }
+      return bestDist <= STATE.cellSize * 0.8 ? best : null;
+    }
+
+    async function loadGroups() {
+      try {
+        const response = await fetchWithFarmAuth('/data/groups.json', { cache: 'no-store' });
+        if (!response.ok) throw new Error('Failed to load groups.json');
+        const payload = await response.json();
+        STATE.groups = normalizeGroupsPayload(payload);
+        renderGroupList();
+      } catch (error) {
+        console.error('[Room Mapper] Failed to load groups:', error);
+        STATE.groups = [];
+        document.getElementById('groupList').innerHTML = '<div style="text-align: center; padding: 20px; color: #ef4444;">Failed to load groups</div>';
+      }
+    }
+
+    function getGroupsForCurrentRoom() {
+      const { roomId, roomName } = getCurrentRoomContext();
+      return STATE.groups.filter(group => {
+        if (roomId && group.roomId === roomId) return true;
+        if (roomName && group.room === roomName) return true;
+        return false;
+      });
+    }
+
+    function getGroupColor(group) {
+      const status = String(group?.status || '').toLowerCase();
+      if (status === 'active') return '#22c55e';
+      if (status === 'draft') return '#10b981';
+      if (status === 'harvested') return '#f59e0b';
+      return '#4ade80';
+    }
+
+    function buildPlacedGroup(group, x, y) {
+      return {
+        groupId: group.id,
+        group,
+        x,
+        y,
+        icon: '▥'
+      };
+    }
+
+    function restoreGroupsFromSource() {
+      const roomGroups = getGroupsForCurrentRoom();
+      roomGroups.forEach(group => {
+        if (STATE.placedGroups.some(item => item.groupId === group.id)) return;
+        if (group.gridX == null || group.gridY == null) return;
+        STATE.placedGroups.push(buildPlacedGroup(
+          group,
+          Math.max(0, Math.min(Number(group.gridX), STATE.gridSize - 1)),
+          Math.max(0, Math.min(Number(group.gridY), Math.floor(STATE.gridSize * 0.75) - 1))
+        ));
+      });
+    }
+
+    function renderGroupList() {
+      const list = document.getElementById('groupList');
+      if (!list) return;
+
+      const roomGroups = getGroupsForCurrentRoom();
+      if (!roomGroups.length) {
+        list.innerHTML = '<div style="text-align: center; padding: 20px; color: #94a3b8;">No grow groups found</div>';
+        return;
+      }
+
+      const families = new Map();
+      roomGroups.forEach(group => {
+        const family = deriveGroupFamilyName(getGroupDisplayName(group));
+        if (!families.has(family)) families.set(family, []);
+        families.get(family).push(group);
+      });
+
+      list.innerHTML = '';
+      Array.from(families.entries()).sort((a, b) => a[0].localeCompare(b[0])).forEach(([family, members]) => {
+        const expanded = !!STATE.groupLibraryOpen[family];
+        const familyCard = document.createElement('div');
+        familyCard.className = 'group-family';
+
+        const header = document.createElement('button');
+        header.type = 'button';
+        header.className = 'group-family-header';
+        header.innerHTML = `
+          <div class="group-family-title">
+            <span class="zone-entry-icon" style="color:#86efac;">${expanded ? '▼' : '▶'}</span>
+            <div class="group-member-copy">
+              <div class="group-member-name">${family}</div>
+              <div class="group-member-meta">${members.length} unit${members.length !== 1 ? 's' : ''}</div>
+            </div>
+          </div>
+          <span class="group-member-state">${expanded ? 'Hide' : 'Show'}</span>
+        `;
+        header.addEventListener('click', () => {
+          STATE.groupLibraryOpen[family] = !expanded;
+          renderGroupList();
+        });
+        familyCard.appendChild(header);
+
+        if (expanded) {
+          const body = document.createElement('div');
+          body.className = 'group-family-body';
+          members.sort((a, b) => getGroupDisplayName(a).localeCompare(getGroupDisplayName(b))).forEach(group => {
+            const member = document.createElement('button');
+            member.type = 'button';
+            member.className = 'group-member' + (STATE.pendingGroupId === group.id ? ' active' : '');
+            const alreadyPlaced = STATE.placedGroups.some(item => item.groupId === group.id);
+            member.innerHTML = `
+              <div class="group-member-copy">
+                <div class="group-member-name">${getGroupDisplayName(group)}</div>
+                <div class="group-member-meta">${getGroupSubtitle(group)}</div>
+              </div>
+              <span class="group-member-state">${alreadyPlaced ? 'Placed' : 'Ready'}</span>
+            `;
+            member.addEventListener('click', () => selectGroupTemplate(group.id));
+            body.appendChild(member);
+          });
+          familyCard.appendChild(body);
+        }
+
+        list.appendChild(familyCard);
+      });
+    }
+
+    window.selectGroupTemplate = function(groupId) {
+      STATE.pendingGroupId = groupId;
+      selectTool('group');
+      renderGroupList();
+    }
+
+    function placeSelectedGroupAt(x, y) {
+      if (!STATE.pendingGroupId) return;
+      const group = getGroupsForCurrentRoom().find(item => item.id === STATE.pendingGroupId);
+      if (!group) return;
+      const existing = STATE.placedGroups.find(item => item.groupId === group.id);
+      if (existing) {
+        existing.x = x;
+        existing.y = y;
+        showDetails(existing);
+      } else {
+        const placedGroup = buildPlacedGroup(group, x, y);
+        STATE.placedGroups.push(placedGroup);
+        showDetails(placedGroup);
+      }
+      renderGroupList();
+      updateZoneList();
+      draw();
+      updateStats();
+    }
+
     function renderDeviceList() {
       const list = document.getElementById('deviceList');
       console.log("[Room Mapper] renderDeviceList - Sensor count:", STATE.iotDevices.length, "List element:", list);
@@ -1295,6 +1845,7 @@
         });
         
         renderDeviceList();
+        updateZoneList();
         draw();
         updateStats();
         showDetails(STATE.placedDevices[STATE.placedDevices.length - 1]);
@@ -1327,6 +1878,7 @@
         
         console.log('[Room Mapper] Equipment placed successfully at center:', centerX, centerY);
         renderEquipmentList();
+        updateZoneList();
         draw();
         updateStats();
         showDetails(STATE.placedDevices[STATE.placedDevices.length - 1]);
@@ -1347,7 +1899,7 @@
       });
       document.querySelector(`[data-tool="${tool}"]`)?.classList.add('active');
       
-      STATE.canvas.style.cursor = tool === 'zone' ? 'crosshair' : 'default';
+      STATE.canvas.style.cursor = (tool === 'zone' || tool === 'group') ? 'crosshair' : 'default';
       maybeShowSelectHint();
     }
 
@@ -1359,26 +1911,11 @@
       console.log("[Room Mapper] Mouse down - Tool:", STATE.currentTool, "Position:", x, y);
       
       if (STATE.currentTool === 'select') {
-        // 1) Hit test for device: prefer exact cell match, then nearest within tolerance
-        let device = STATE.placedDevices.find(d => d.x === x && d.y === y) || null;
-        if (!device && STATE.placedDevices.length) {
-          let best = null;
-          let bestDist = Infinity;
-          for (const d of STATE.placedDevices) {
-            const cx = d.x * STATE.cellSize + STATE.cellSize / 2;
-            const cy = d.y * STATE.cellSize + STATE.cellSize / 2;
-            const dx = cx - px;
-            const dy = cy - py;
-            const dist = Math.hypot(dx, dy);
-            if (dist < bestDist) { best = d; bestDist = dist; }
-          }
-          // Accept if within 0.8 cell diagonal (~0.8 * cellSize) for easier grabbing
-          if (bestDist <= STATE.cellSize * 0.8) device = best;
-        }
-        if (device) {
+        const placeable = findPlacedObject(px, py, x, y);
+        if (placeable) {
           STATE.isDragging = true;
           STATE.dragMode = 'device';
-          STATE.draggedItem = device;
+          STATE.draggedItem = placeable;
           return;
         }
 
@@ -1392,6 +1929,8 @@
         }
       } else if (STATE.currentTool === 'zone') {
         STATE.zoneStart = { x, y };
+      } else if (STATE.currentTool === 'group') {
+        placeSelectedGroupAt(x, y);
       }
     }
 
@@ -1484,10 +2023,10 @@
       
     const { x, y } = getCanvasEventPosition(e);
       
-      // Check for device click
-      const device = STATE.placedDevices.find(d => d.x === x && d.y === y);
-      if (device) {
-        showDetails(device);
+      const { px, py } = getCanvasEventPosition(e);
+      const placeable = findPlacedObject(px, py, x, y);
+      if (placeable) {
+        showDetails(placeable);
         return;
       }
       
@@ -1613,6 +2152,28 @@
           ctx.fillText(`Z${device.device.zone}`, x, y - 20);
         }
       });
+
+      STATE.placedGroups.forEach(placedGroup => {
+        const x = placedGroup.x * STATE.cellSize + STATE.cellSize / 2;
+        const y = placedGroup.y * STATE.cellSize + STATE.cellSize / 2;
+        const size = Math.max(18, Math.round(STATE.cellSize * 0.7));
+        const color = getGroupColor(placedGroup.group);
+        ctx.fillStyle = color + 'cc';
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.roundRect(x - size / 2, y - size / 2, size, size, 8);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = '#052e16';
+        ctx.font = 'bold 12px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(String(placedGroup.group?.trays || 'G'), x, y);
+        ctx.font = 'bold 12px sans-serif';
+        ctx.fillStyle = '#bbf7d0';
+        ctx.fillText(getGroupDisplayName(placedGroup.group), x, y + Math.round(size * 0.9));
+      });
     }
 
     function updateCursorForHover(e) {
@@ -1623,18 +2184,8 @@
       }
     const { px, py } = getCanvasEventPosition(e);
 
-      // Check device hover first
-      const nearest = (() => {
-        let best = null, bestDist = Infinity;
-        for (const d of STATE.placedDevices) {
-          const cx = d.x * STATE.cellSize + STATE.cellSize / 2;
-          const cy = d.y * STATE.cellSize + STATE.cellSize / 2;
-          const dist = Math.hypot(cx - px, cy - py);
-          if (dist < bestDist) { best = d; bestDist = dist; }
-        }
-        return { d: best, dist: bestDist };
-      })();
-      if (nearest.d && nearest.dist <= STATE.cellSize * 0.8) {
+      const nearest = findPlacedObject(px, py, -1, -1);
+      if (nearest) {
         STATE.canvas.style.cursor = 'grab';
         return;
       }
@@ -1656,7 +2207,42 @@
       STATE.selectedItem = item;
       const content = document.getElementById('detailsContent');
       
-      if (item.device) {
+      if (item.group) {
+        const group = item.group;
+        const html = `
+          <div class="details-content">
+            <div style="text-align: center; font-size: 32px; margin-bottom: 10px; color: ${getGroupColor(group)};">▥</div>
+            <div class="detail-row">
+              <span class="detail-label">Group</span>
+              <span class="detail-value">${getGroupDisplayName(group)}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Trays</span>
+              <span class="detail-value">${group.trays ?? '—'}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Crop</span>
+              <span class="detail-value">${group.crop || 'Unassigned'}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Status</span>
+              <span class="detail-value">${group.status || 'draft'}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Zone</span>
+              <span class="detail-value">${group.zone || 'Unmapped'}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Position</span>
+              <span class="detail-value">(${item.x}, ${item.y})</span>
+            </div>
+            <div class="action-buttons">
+              <button class="btn btn-danger" onclick="removeGroup('${group.id.replace(/'/g, '&#39;')}')">Remove</button>
+            </div>
+          </div>
+        `;
+        content.innerHTML = html;
+      } else if (item.device) {
         const device = item.device;
         
         // Check if this is equipment (not a sensor)
@@ -1801,6 +2387,17 @@
       STATE.selectedItem = null;
       document.getElementById('detailsContent').innerHTML = '<div class="details-empty">Click on a device or zone<br>to view details</div>';
       renderDeviceList();
+      updateZoneList();
+      draw();
+      updateStats();
+    }
+
+    window.removeGroup = function(groupId) {
+      STATE.placedGroups = STATE.placedGroups.filter(group => group.groupId !== groupId);
+      STATE.selectedItem = null;
+      document.getElementById('detailsContent').innerHTML = '<div class="details-empty">Click on a device or zone<br>to view details</div>';
+      renderGroupList();
+      updateZoneList();
       draw();
       updateStats();
     }
@@ -1846,21 +2443,151 @@
       
       list.innerHTML = '';
       STATE.zones.forEach(zone => {
+        const { sensors, equipment, groups } = getZoneContents(zone);
+        const zoneOpen = !!STATE.zonePanelOpen[zone.zone];
         const item = document.createElement('div');
-        item.className = 'zone-item';
+        item.className = 'zone-item zone-card';
         item.style.background = zone.color + '20';
         item.style.borderLeft = `4px solid ${zone.color}`;
-        item.innerHTML = `
-          <span>${zone.name}</span>
-          <span style="font-size: 11px; font-weight: 400;">${(zone.x2 - zone.x1 + 1) * (zone.y2 - zone.y1 + 1)} cells</span>
+
+        const header = document.createElement('button');
+        header.type = 'button';
+        header.className = 'zone-card-header';
+        header.innerHTML = `
+          <div class="zone-card-title">
+            <span class="zone-card-name">${zoneOpen ? '▼' : '▶'} ${zone.name}</span>
+            <span class="zone-card-meta">${(zone.x2 - zone.x1 + 1) * (zone.y2 - zone.y1 + 1)} cells</span>
+          </div>
+          <div class="zone-card-badges">
+            <span class="zone-card-badge groups">${groups.length} groups</span>
+            <span class="zone-card-badge equipment">${equipment.length} equipment</span>
+            <span class="zone-card-badge sensors">${sensors.length} sensors</span>
+          </div>
         `;
-        item.addEventListener('click', () => showDetails(zone));
+        header.addEventListener('click', () => {
+          STATE.zonePanelOpen[zone.zone] = !zoneOpen;
+          showDetails(zone);
+          updateZoneList();
+        });
+        item.appendChild(header);
+
+        if (zoneOpen) {
+          const body = document.createElement('div');
+          body.className = 'zone-card-body';
+
+          const renderCollection = (title, entries, familyResolver, forceCollapse) => {
+            if (!entries.length) return;
+            const section = document.createElement('div');
+            section.className = 'zone-collection';
+            section.innerHTML = `<div class="zone-collection-title">${title}</div>`;
+
+            const families = new Map();
+            entries.forEach(entry => {
+              const family = familyResolver ? familyResolver(entry) : getPlacedObjectLabel(entry);
+              if (!families.has(family)) families.set(family, []);
+              families.get(family).push(entry);
+            });
+
+            Array.from(families.entries()).sort((a, b) => a[0].localeCompare(b[0])).forEach(([family, members]) => {
+              const stateKey = `${zone.zone}:${title}:${family}`;
+              const isCollapsible = forceCollapse || members.length > 1;
+              const isOpen = !!STATE.zoneCollectionOpen[stateKey];
+
+              if (!isCollapsible) {
+                const single = members[0];
+                const row = document.createElement('div');
+                row.className = 'zone-entry';
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'zone-entry-button';
+                button.innerHTML = `
+                  <div class="zone-entry-main">
+                    <span class="zone-entry-icon" style="color:${single.group ? getGroupColor(single.group) : (single.isEquipment ? '#d8b4fe' : '#7dd3fc')};">${single.group ? '▥' : (single.isEquipment ? '■' : '◍')}</span>
+                    <div class="zone-entry-copy">
+                      <span class="zone-entry-name">${getPlacedObjectLabel(single)}</span>
+                      <span class="zone-entry-subtitle">${getPlacedObjectSubtitle(single)}</span>
+                    </div>
+                  </div>
+                `;
+                button.addEventListener('click', () => showDetails(single));
+                row.appendChild(button);
+                section.appendChild(row);
+                return;
+              }
+
+              const familyCard = document.createElement('div');
+              familyCard.className = 'zone-family';
+              const familyHeader = document.createElement('button');
+              familyHeader.type = 'button';
+              familyHeader.className = 'zone-family-header';
+              familyHeader.innerHTML = `
+                <div class="zone-entry-main">
+                  <span class="zone-entry-icon" style="color:${title === 'Growing Groups' ? '#86efac' : '#d8b4fe'};">${isOpen ? '▼' : '▶'}</span>
+                  <div class="zone-entry-copy">
+                    <span class="zone-entry-name">${family}</span>
+                    <span class="zone-entry-subtitle">${members.length} item${members.length !== 1 ? 's' : ''}</span>
+                  </div>
+                </div>
+                <span class="zone-entry-count">${isOpen ? 'Hide' : 'Show'}</span>
+              `;
+              familyHeader.addEventListener('click', () => {
+                STATE.zoneCollectionOpen[stateKey] = !isOpen;
+                updateZoneList();
+              });
+              familyCard.appendChild(familyHeader);
+
+              if (isOpen) {
+                const familyBody = document.createElement('div');
+                familyBody.className = 'zone-family-body';
+                members.forEach(member => {
+                  const row = document.createElement('div');
+                  row.className = 'zone-entry';
+                  const button = document.createElement('button');
+                  button.type = 'button';
+                  button.className = 'zone-entry-button';
+                  button.innerHTML = `
+                    <div class="zone-entry-main">
+                      <span class="zone-entry-icon" style="color:${member.group ? getGroupColor(member.group) : (member.isEquipment ? '#d8b4fe' : '#7dd3fc')};">${member.group ? '▥' : (member.isEquipment ? '■' : '◍')}</span>
+                      <div class="zone-entry-copy">
+                        <span class="zone-entry-name">${getPlacedObjectLabel(member)}</span>
+                        <span class="zone-entry-subtitle">${getPlacedObjectSubtitle(member)}</span>
+                      </div>
+                    </div>
+                  `;
+                  button.addEventListener('click', () => showDetails(member));
+                  row.appendChild(button);
+                  familyBody.appendChild(row);
+                });
+                familyCard.appendChild(familyBody);
+              }
+
+              section.appendChild(familyCard);
+            });
+
+            body.appendChild(section);
+          };
+
+          renderCollection('Growing Groups', groups, entry => deriveGroupFamilyName(getPlacedObjectLabel(entry)), true);
+          renderCollection('Equipment', equipment, entry => getPlacedObjectLabel(entry), false);
+          renderCollection('Sensors', sensors, null, false);
+
+          if (!groups.length && !equipment.length && !sensors.length) {
+            const empty = document.createElement('div');
+            empty.className = 'zone-card-empty';
+            empty.textContent = 'No mapped objects in this zone yet.';
+            body.appendChild(empty);
+          }
+
+          item.appendChild(body);
+        }
+
         list.appendChild(item);
       });
     }
 
     function updateStats() {
       document.getElementById('deviceCount').textContent = STATE.placedDevices.length;
+      document.getElementById('groupCount').textContent = STATE.placedGroups.length;
       document.getElementById('zoneCount').textContent = STATE.zones.length;
     }
 
@@ -1955,6 +2682,52 @@
         }
       } catch (err) {
         console.warn('[Room Mapper] Failed to update iot-devices.json:', err.message);
+      }
+    }
+
+    async function updateGroupsWithPlacements(roomId, roomName) {
+      try {
+        const response = await fetchWithFarmAuth('/data/groups.json', { cache: 'no-store' });
+        if (!response.ok) return;
+        const rawPayload = await response.json();
+        const groups = normalizeGroupsPayload(rawPayload);
+        if (!groups.length) return;
+
+        const placementMap = new Map(STATE.placedGroups.map(item => [item.groupId, item]));
+        let updated = 0;
+
+        groups.forEach(group => {
+          const isCurrentRoom = (roomId && group.roomId === roomId) || (roomName && group.room === roomName);
+          if (!isCurrentRoom) return;
+          const placed = placementMap.get(group.id);
+          if (!placed) return;
+
+          group.gridX = placed.x;
+          group.gridY = placed.y;
+          const zone = STATE.zones.find(entry => isPlacedObjectInZone(placed, entry));
+          const zoneNum = normalizeZoneNumber(zone?.zone);
+          if (zoneNum != null) {
+            group.zone = `Zone ${zoneNum}`;
+            if (group.roomId) group.zoneId = `${group.roomId}-zZone ${zoneNum}`;
+          }
+          updated += 1;
+        });
+
+        if (!updated) return;
+
+        const payload = Array.isArray(rawPayload) ? groups : { ...rawPayload, groups };
+        const saveResponse = await fetchWithFarmAuth('/data/groups.json', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (saveResponse.ok) {
+          STATE.groups = groups;
+          renderGroupList();
+          console.log(`[Room Mapper] ✅ Updated groups.json with ${updated} grow group placement(s)`);
+        }
+      } catch (error) {
+        console.warn('[Room Mapper] Failed to update groups.json with placements:', error.message);
       }
     }
 
@@ -2216,13 +2989,29 @@
         STATE.placedDevices.map(serializePlacedDevice)
       );
 
+      const serializedGroups = STATE.placedGroups.map(placedGroup => ({
+        groupId: placedGroup.groupId,
+        x: placedGroup.x,
+        y: placedGroup.y,
+        snapshot: {
+          name: getGroupDisplayName(placedGroup.group),
+          trays: placedGroup.group?.trays ?? null,
+          crop: placedGroup.group?.crop || '',
+          status: placedGroup.group?.status || '',
+          zone: placedGroup.group?.zone || null,
+          roomId: placedGroup.group?.roomId || STATE.currentRoomId,
+          room: roomName
+        }
+      }));
+
       const mapData = {
         roomId: STATE.currentRoomId,
         name: roomName,
         gridSize: STATE.gridSize,
         cellSize: STATE.cellSize,
-        version: 2,
+        version: 3,
         devices: serializedDevices,
+        groups: serializedGroups,
         zones: STATE.zones,
         lastUpdated: new Date().toISOString()
       };
@@ -2243,6 +3032,7 @@
           
           // Also update iot-devices.json with zone/location from placements
           await updateIotDevicesWithPlacements(mapData.devices, roomName);
+          await updateGroupsWithPlacements(STATE.currentRoomId, roomName);
           
           alert(`Map saved successfully for room: ${roomName}`);
           
@@ -2397,9 +3187,12 @@
         console.log(`[Room Mapper] ✅ Auto-placed ${autoPlaced} sensors from zone assignments`);
       }
 
+      restoreGroupsFromSource();
+
       updateZoneList();
       renderDeviceList();
       renderEquipmentList();
+      renderGroupList();
       draw();
       updateStats();
     }
@@ -2410,6 +3203,9 @@
       }
       if (!STATE.equipment.length) {
         await loadEquipment();
+      }
+      if (!STATE.groups.length) {
+        await loadGroups();
       }
 
       STATE.gridSize = mapData.gridSize || 20;
@@ -2423,6 +3219,7 @@
       
       // Restore placed devices
       STATE.placedDevices = [];
+      STATE.placedGroups = [];
       let sensorCount = 0, equipCount = 0;
       if (mapData.devices) {
         for (const devicePos of mapData.devices) {
@@ -2481,6 +3278,24 @@
           if (isEquipment) equipCount++; else sensorCount++;
         }
       }
+
+      if (Array.isArray(mapData.groups)) {
+        mapData.groups.forEach(groupPos => {
+          const sourceGroup = getGroupsForCurrentRoom().find(group => group.id === groupPos.groupId);
+          const snapshot = groupPos.snapshot || {};
+          const group = sourceGroup || {
+            id: groupPos.groupId,
+            name: snapshot.name || groupPos.groupId,
+            trays: snapshot.trays ?? null,
+            crop: snapshot.crop || '',
+            status: snapshot.status || '',
+            zone: snapshot.zone || null,
+            roomId: snapshot.roomId || STATE.currentRoomId,
+            room: snapshot.room || getCurrentRoomContext().roomName
+          };
+          STATE.placedGroups.push(buildPlacedGroup(group, groupPos.x, groupPos.y));
+        });
+      }
       
       console.log(`[Room Mapper] Restored ${sensorCount} sensors and ${equipCount} equipment from saved map`);
 
@@ -2530,9 +3345,12 @@
         }
       }
 
+      restoreGroupsFromSource();
+
       updateZoneList();
       renderDeviceList();
       renderEquipmentList();
+      renderGroupList();
       draw();
       updateStats();
     }
@@ -2541,12 +3359,14 @@
       if (!confirm('Are you sure you want to clear the entire map?')) return;
       
       STATE.placedDevices = [];
+      STATE.placedGroups = [];
       STATE.zones = [];
       STATE.selectedItem = null;
       
       document.getElementById('detailsContent').innerHTML = '<div class="details-empty">Click on a device or zone<br>to view details</div>';
       
       renderDeviceList();
+      renderGroupList();
       updateZoneList();
       draw();
       updateStats();

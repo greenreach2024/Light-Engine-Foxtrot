@@ -560,6 +560,36 @@ export default class SyncService extends EventEmitter {
   }
   
   /**
+   * Sync nutrient telemetry (pH, EC, temperature, dosing) to Central
+   * Called externally from server-foxtrot.js nutrient automation cycle
+   */
+  async syncNutrients(nutrientSnapshot) {
+    try {
+      if (!nutrientSnapshot) return false;
+      console.log('[sync-service] Syncing nutrient data...');
+
+      const response = await this.apiRequest('POST', '/api/sync/nutrients', {
+        farmId: this.config.farmId,
+        telemetry: nutrientSnapshot.telemetry || {},
+        dosingHistory: nutrientSnapshot.dosingHistory || [],
+        timestamp: new Date().toISOString()
+      });
+
+      if (response.ok) {
+        console.log('[sync-service] Nutrient data synced successfully');
+        this.emit('nutrients_synced', nutrientSnapshot);
+        return true;
+      } else {
+        throw new Error(`Nutrient sync failed: ${response.status}`);
+      }
+    } catch (error) {
+      console.error('[sync-service] Nutrient sync error:', error.message);
+      this.emit('sync_error', { type: 'nutrients', error });
+      return false;
+    }
+  }
+
+  /**
    * Send alert to Central immediately
    */
   async sendAlert(alert) {

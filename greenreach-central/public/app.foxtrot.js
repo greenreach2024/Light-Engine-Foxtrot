@@ -2145,14 +2145,17 @@ function buildInfoGrid(entries, options = {}) {
   const columns = options.columns || 2;
   const grid = document.createElement('div');
   grid.style.cssText = `margin-top:${options.compact ? '6px' : '10px'};display:grid;grid-template-columns:repeat(${columns}, minmax(0, 1fr));gap:${options.compact ? '6px' : '10px'};`; 
+  const cellStyle = options.cellStyle || 'background:#f1f5f9;border:1px solid #e2e8f0;border-radius:6px;padding:8px;display:flex;flex-direction:column;gap:2px;';
+  const labelStyle = options.labelStyle || 'font-size:10px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;color:#475569;';
+  const valueStyle = options.valueStyle || 'font-size:12px;color:#0f172a;font-weight:500;word-break:break-word;';
   items.forEach(entry => {
     const cell = document.createElement('div');
-    cell.style.cssText = 'background:#f1f5f9;border:1px solid #e2e8f0;border-radius:6px;padding:8px;display:flex;flex-direction:column;gap:2px;';
+    cell.style.cssText = cellStyle;
     const label = document.createElement('span');
-    label.style.cssText = 'font-size:10px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;color:#475569;';
+    label.style.cssText = labelStyle;
     label.textContent = entry.label;
     const valueEl = document.createElement('span');
-    valueEl.style.cssText = 'font-size:12px;color:#0f172a;font-weight:500;word-break:break-word;';
+    valueEl.style.cssText = valueStyle;
     valueEl.textContent = entry.value;
     cell.appendChild(label);
     cell.appendChild(valueEl);
@@ -2462,12 +2465,18 @@ function buildSwitchbotSnapshot(device) {
     { label: 'VPD', value: formatSwitchbotVpd(device) }
   ];
   const entries = isPlug ? [...common, ...plugEntries] : isSensor ? [...common, ...sensorEntries] : [...common];
-  const grid = buildInfoGrid(entries, { columns: isPlug ? 3 : (entries.length > 2 ? 3 : 2), compact: true });
+  const grid = buildInfoGrid(entries, {
+    columns: isPlug ? 3 : (entries.length > 2 ? 3 : 2),
+    compact: true,
+    cellStyle: 'background:#ffffff;border:1px solid #cbd5e1;border-radius:8px;padding:8px;display:flex;flex-direction:column;gap:2px;box-shadow:inset 0 1px 0 rgba(255,255,255,0.7);',
+    labelStyle: 'font-size:10px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:#64748b;',
+    valueStyle: 'font-size:12px;color:#0f172a;font-weight:600;word-break:break-word;'
+  });
   if (!grid) return null;
   const wrapper = document.createElement('div');
   wrapper.style.cssText = 'margin-top:8px;display:flex;flex-direction:column;gap:6px;';
   const heading = document.createElement('span');
-  heading.style.cssText = 'font-size:10px;font-weight:600;color:#1d4ed8;letter-spacing:0.04em;text-transform:uppercase;';
+  heading.style.cssText = 'font-size:10px;font-weight:700;color:#166534;letter-spacing:0.04em;text-transform:uppercase;';
   heading.textContent = 'SwitchBot Snapshot';
   wrapper.appendChild(heading);
   wrapper.appendChild(grid);
@@ -2606,20 +2615,20 @@ function createDeviceEntryElement(device) {
   
   // Category-specific colors
   const categoryColors = {
-    'sensor': { bg: '#f0fdf4', border: '#86efac', icon: '' },
-    'plug': { bg: '#fef3c7', border: '#fcd34d', icon: '🔌' },
-    'controller': { bg: '#e0e7ff', border: '#a5b4fc', icon: '🎛' },
-    'device': { bg: '#f8fafc', border: '#e2e8f0', icon: '📱' }
+    'sensor': { bg: '#ffffff', border: '#4ade80', accent: '#166534', icon: '' },
+    'plug': { bg: '#ffffff', border: '#f59e0b', accent: '#92400e', icon: '🔌' },
+    'controller': { bg: '#ffffff', border: '#818cf8', accent: '#3730a3', icon: '🎛' },
+    'device': { bg: '#ffffff', border: '#cbd5e1', accent: '#334155', icon: '📱' }
   };
   
   const colors = categoryColors[deviceCategory] || categoryColors['device'];
-  entry.style.cssText = `background:${colors.bg};border:1px solid ${colors.border};border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:10px;min-height:200px;max-width:100%;box-sizing:border-box;`;
+  entry.style.cssText = `background:${colors.bg};border:1px solid ${colors.border};border-left:4px solid ${colors.border};border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:10px;min-height:200px;max-width:100%;box-sizing:border-box;box-shadow:0 8px 24px rgba(15,23,42,0.08);`;
 
   const info = document.createElement('div');
   info.style.cssText = 'flex:1;min-width:0;';
 
   const name = document.createElement('div');
-  name.style.cssText = 'font-weight:600;color:#0f172a;margin-bottom:4px;font-size:14px;display:flex;align-items:center;gap:6px;';
+  name.style.cssText = `font-weight:700;color:${colors.accent || '#0f172a'};margin-bottom:4px;font-size:14px;display:flex;align-items:center;gap:6px;`;
   
   // Add category icon
   const categoryIcon = document.createElement('span');
@@ -2639,10 +2648,10 @@ function createDeviceEntryElement(device) {
   // Add category badge
   const categoryBadge = document.createElement('span');
   const categoryBadgeColors = {
-    'sensor': { bg: '#d1fae5', color: '#065f46' },
+    'sensor': { bg: '#dcfce7', color: '#166534' },
     'plug': { bg: '#fef3c7', color: '#92400e' },
-    'controller': { bg: '#dbeafe', color: '#1e40af' },
-    'device': { bg: '#e5e7eb', color: '#374151' }
+    'controller': { bg: '#e0e7ff', color: '#3730a3' },
+    'device': { bg: '#e2e8f0', color: '#334155' }
   };
   const catColors = categoryBadgeColors[deviceCategory] || categoryBadgeColors['device'];
   categoryBadge.style.cssText = `background:${catColors.bg};color:${catColors.color};padding:2px 6px;border-radius:999px;font-weight:600;letter-spacing:0.03em;text-transform:uppercase;`;

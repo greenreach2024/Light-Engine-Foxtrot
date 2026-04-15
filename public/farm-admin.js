@@ -4709,7 +4709,7 @@ function printPackingSlip(orderId) {
 async function notifyCentralOfStatusChange(orderId, newStatus) {
     try {
         // Get farm info to determine Central URL
-        const farmPath = `${API_BASE}/api/data/farm.json`;
+        const farmPath = '/data/farm.json';
         let centralUrl = window.API_BASE || window.location.origin; // Cloud or same-origin
         let farmId = 'light-engine-demo'; // Default farm ID
         
@@ -4882,7 +4882,7 @@ async function saveTrackingNumbers(trackingData) {
 async function notifyCentralOfTrackingNumber(orderId, trackingNumber) {
     try {
         // Get farm info to determine Central URL
-        const farmPath = `${API_BASE}/api/data/farm.json`;
+        const farmPath = '/data/farm.json';
         let centralUrl = window.API_BASE || window.location.origin; // Cloud or same-origin
         let farmId = 'light-engine-demo';
         

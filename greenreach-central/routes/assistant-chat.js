@@ -15,7 +15,7 @@ import { Router } from 'express';
 import { getGeminiClient, GEMINI_FLASH, estimateGeminiCost, isGeminiConfigured, refreshGeminiToken } from '../lib/gemini-client.js';
 import { query, isDatabaseAvailable, getDatabase } from '../config/database.js';
 import { trackAiUsage, estimateChatCost } from '../lib/ai-usage-tracker.js';
-import { TOOL_CATALOG, executeTool } from './farm-ops-agent.js';
+import { TOOL_CATALOG, executeTool, inferRoomDimensionsMeters } from './farm-ops-agent.js';
 import leamBridge from '../lib/leam-bridge.js';
 import { getLatestAnalyses } from '../services/market-analysis-agent.js';
 import { getMarketDataAsync } from './market-intelligence.js';
@@ -226,7 +226,7 @@ const TRUST_TIERS = {
   // AUTO: Execute immediately, notify after
   auto: new Set(['dismiss_alert', 'get_ai_pricing_recommendations', 'save_user_memory', 'escalate_to_faye', 'reply_to_faye', 'get_faye_directives', 'read_skill_file', 'get_gwen_messages', 'reply_to_gwen', 'ask_gwen']),
   // QUICK-CONFIRM: Execute with brief undo window
-  quick_confirm: new Set(['resolve_all_alerts', 'resolve_stale_alerts', 'mark_harvest_complete', 'update_farm_profile', 'update_group_crop', 'create_room', 'create_zone', 'update_certifications', 'complete_setup', 'update_crop_price', 'add_inventory_item', 'update_manual_inventory', 'record_harvest', 'update_room_specs', 'apply_crop_environment', 'recommend_farm_layout', 'update_crop_description', 'add_salad_mix_inventory', 'update_equipment', 'update_group', 'optimize_layout', 'update_zone', 'add_equipment', 'remove_equipment']),
+  quick_confirm: new Set(['resolve_all_alerts', 'resolve_stale_alerts', 'mark_harvest_complete', 'update_farm_profile', 'update_group_crop', 'create_room', 'create_zone', 'update_certifications', 'complete_setup', 'update_crop_price', 'add_inventory_item', 'update_manual_inventory', 'record_harvest', 'update_room_specs', 'apply_crop_environment', 'recommend_farm_layout', 'update_crop_description', 'add_salad_mix_inventory', 'update_equipment', 'align_equipment_to_walls', 'update_group', 'optimize_layout', 'update_zone', 'add_equipment', 'remove_equipment']),
   // CONFIRM: Ask before executing (default for write tools)
   confirm: new Set([
     'create_planting_assignment', 'update_order_status',
@@ -614,6 +614,23 @@ const GPT_TOOLS = [
   {
     type: 'function',
     function: {
+      name: 'align_equipment_to_walls',
+      description: 'Pin matching room-map equipment to a room wall while preserving its current lane positions. Use this for wall-mounting fans or other equipment to the east wall, west wall, or both outer walls. WRITE operation.',
+      parameters: {
+        type: 'object',
+        properties: {
+          room_id: { type: 'string', description: 'Room ID to target (required).' },
+          match_name: { type: 'string', description: 'Match equipment whose name contains this string (for example "fan").' },
+          match_category: { type: 'string', description: 'Match equipment by category (for example "fans").' },
+          wall_mode: { type: 'string', enum: ['outer', 'east', 'west'], description: 'Which wall(s) to pin the equipment to. Use "outer" for east and west walls based on the current side of each device.' }
+        },
+        required: ['room_id']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
       name: 'update_group',
       description: 'Update grow groups (ZipGrow towers, racks, growing units) — rename, change tray count, assign crop, or update status. Supports single-group update by group_id, or BULK update with bulk=true + match_name to update ALL groups whose name contains the match (e.g. match_name="ZipGrow Standard" updates all 78 towers at once). WRITE operation.',
       parameters: {
@@ -635,7 +652,7 @@ const GPT_TOOLS = [
     type: 'function',
     function: {
             name: 'optimize_layout',
-      description: 'Spatially arrange equipment and/or groups (ZipGrow towers, fans, etc.) into a grid layout within room zones. Accepts natural layout instructions parsed into columns, walkway width, and spacing. Example: "3 wide per zone with 2m walkway" becomes columns=3, walkway_m=2. WRITE operation.',
+      description: 'Spatially arrange equipment and/or groups (ZipGrow towers, fans, etc.) across the full room area. If the room already exists, no separate dimensions are needed: the system uses the room map and infers the footprint automatically. Do NOT ask the user for room measurements before using this tool. WRITE operation.',
       parameters: {
         type: 'object',
         properties: {
@@ -643,9 +660,11 @@ const GPT_TOOLS = [
           match_name: { type: 'string', description: 'Match groups/equipment whose name contains this string (e.g. "ZipGrow")' },
           match_category: { type: 'string', description: 'Match equipment by category (e.g. "zipgrow", "fans")' },
           target: { type: 'string', enum: ['groups', 'equipment', 'both'], description: 'What to arrange: "groups" (default), "equipment", or "both"' },
-          columns: { type: 'number', description: 'Number of columns per side if walkway, or total columns if no walkway (default 3)' },
+          columns: { type: 'number', description: 'Optional. Number of columns per side if walkway, or total columns if no walkway. Omit to auto-compute the best fit.' },
           walkway_m: { type: 'number', description: 'Width of central walkway in meters (0 = no walkway)' },
-          spacing_m: { type: 'number', description: 'Spacing between units in meters (default 0.8)' }
+          spacing_m: { type: 'number', description: 'ONLY set if user requests a specific gap distance. When omitted, items auto-spread to fill the room evenly.' },
+          edge_alignment: { type: 'string', enum: ['center', 'walls'], description: 'Optional. Use "walls" to bias the layout toward the east and west walls instead of centering it.' },
+          wall_clearance_m: { type: 'number', description: 'Optional wall clearance in meters. Use a smaller value when the user explicitly wants towers closer to the walls.' }
         },
         required: ['room_id']
       }
@@ -1089,6 +1108,19 @@ const GPT_TOOLS = [
         type: 'object',
         properties: {
           zone_id: { type: 'string', description: 'Optional zone ID to filter (e.g. "zone-1"). Omit for all zones.' }
+        }
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_environment_snapshot',
+      description: 'Get a concise farm-hand summary of the growing environment — current drift, active alerts, and next priority actions. Use this first for setup, tuning, and maintenance asks.',
+      parameters: {
+        type: 'object',
+        properties: {
+          room_id: { type: 'string', description: 'Optional room ID to filter (e.g. "room-3xxjln"). Omit for whole farm.' }
         }
       }
     }
@@ -2142,8 +2174,16 @@ async function buildSystemPrompt(farmId) {
   // Inject valid zones and capacity from groups data
   try {
     const groups = await farmStore.get(farmId, 'groups') || [];
+    const roomMap = await farmStore.get(farmId, 'room_map') || {};
+    const rooms = await farmStore.get(farmId, 'rooms') || [];
     const zones = [...new Set(groups.map(g => g.zone).filter(Boolean))];
     const roomNames = [...new Set(groups.map(g => g.room).filter(Boolean))];
+    const activeRoomName = roomNames[0] || roomMap.name || 'Main Grow Room';
+    const activeRoom = rooms.find(r => (r.id || r.room_id) === roomMap.roomId || r.name === activeRoomName) || rooms[0] || {};
+    const inferredRoom = inferRoomDimensionsMeters(activeRoom, roomMap);
+    if (inferredRoom.length_m && inferredRoom.width_m) {
+      farmContext += `Room footprint available: ${activeRoomName} is approximately ${inferredRoom.length_m}m x ${inferredRoom.width_m}m (${inferredRoom.source}).\n`;
+    }
     if (zones.length > 0) {
       farmContext += `Valid zones: ${zones.join(', ')} (in ${roomNames.join(', ') || 'Main Grow Room'})\n`;
       farmContext += `Total grow positions: ${groups.length} groups across ${zones.length} zone(s)\n`;
@@ -2304,6 +2344,18 @@ SELF-RESOLUTION:
 - If a crop name looks like an ID, alias, or abbreviation, resolve it yourself using get_crop_info — do NOT ask the user "which crop do you mean?" if the lookup returns exactly one match.
 - Every crop in the system has aliases and plan IDs. Use the tools to resolve names before reporting errors.
 - If a planting request omits the harvest date, the system will auto-calculate it from the crop's growth recipe. You do not need to ask.
+- If the user asks about your identity, capabilities, or criticizes your performance, answer that direct question plainly first. Do NOT continue the previous layout/tool discussion unless the user asks you to.
+- For layout requests, inspect the existing room map and use optimize_layout or room tools directly. If the room already exists, never ask for length and width first; the room grid is enough to proceed.
+- Never defend an arbitrary default like "3 columns." If the user wants the space used well, compute the arrangement from the room map, inferred footprint, and item count.
+- If the user says things like "use the entire space," "equal spacing on all four sides," or "review the dimensions and update the grid," that is an execution request. Run the layout tool with the existing room data instead of asking another question.
+- When the request mentions ZipGrow towers and spacing or layout, optimize the tower layout immediately using the Main Grow Room or the active room in context.
+- For grow-room design, airflow, access, or science-based layout questions, use G.W.E.N. or the research-backed skill context when available, then act using the farm tools.
+
+FARM-HAND PRIORITY:
+- Your primary role is to be a useful farm hand for this specific farm.
+- Help the grower establish, stabilize, and maintain temperature, humidity, airflow, light, nutrient balance, and daily routines.
+- When the user asks for planning or environment support, begin with the real farm state and a concrete recommended action plan.
+- Prefer diagnosis plus action over generic education.
 
 BEHAVIORAL GUIDELINES -- HOW TO COMMUNICATE:
 Your operating formula for every response: Reassure, Anchor, Reduce, Ask one thing, Recommend.
@@ -2612,7 +2664,7 @@ FARM BUILDING WORKFLOW:
 
 EQUIPMENT MANAGEMENT:
 - Equipment in the room map (fans, ZipGrow towers, dehumidifiers, lights, etc.) can be renamed, recategorized, and repositioned using update_equipment.
-- Use optimize_layout to spatially arrange groups/equipment into grid patterns within zones. Accepts columns, walkway width, and spacing. Example: user says "arrange ZipGrow 3 wide with a 2m walkway" -> optimize_layout with room_id, match_name="ZipGrow", columns=3, walkway_m=2. Works with general instructions -- no need to specify individual equipment IDs.
+- Use optimize_layout to arrange groups/equipment across the room. Items auto-spread to fill the available space by default. Do NOT pass spacing_m unless the user asks for a specific gap distance. Just pass room_id, match_name, columns, and walkway_m. Example: "spread out the ZipGrows 3 wide with a 2m walkway" -> optimize_layout(room_id, match_name="ZipGrow", columns=3, walkway_m=2). The tool distributes items evenly across the room grid.
 - Use update_zone to resize, rename, or move zone boundaries. Bounds are in meters -- the system converts to grid units automatically. Example: user says "make Zone 1 wider" -> update_zone(room_id, zone_name="Zone 1", x2_m=8.0).
 - Use add_equipment to place new devices in the room map (fans, sensors, ZipGrow towers, lights, etc.). Position in meters. Use count for multiple identical units.
 - Use remove_equipment to delete devices from the room map by device_id or by matching name/category in bulk.
@@ -6048,6 +6100,435 @@ function checkRateLimit(farmId) {
   return entry.count <= RATE_LIMIT_MAX;
 }
 
+function extractReasoningTerms(message = '') {
+  return [...new Set(
+    String(message || '')
+      .toLowerCase()
+      .match(/[a-z][a-z0-9-]{2,}/g) || []
+  )].filter(term => !new Set([
+    'the', 'and', 'for', 'with', 'from', 'that', 'this', 'what', 'when', 'where', 'which',
+    'would', 'could', 'should', 'have', 'has', 'had', 'been', 'were', 'they', 'them', 'their',
+    'about', 'into', 'than', 'then', 'just', 'your', 'does', 'dont', 'easily', 'found', 'answer',
+    'evie', 'gwen', 'skill', 'chat', 'history', 'reasoning', 'review'
+  ]).has(term));
+}
+
+export function shouldUseDeliberativeSupport(message = '', history = []) {
+  const msg = String(message || '').toLowerCase();
+  const wordCount = msg.split(/\s+/).filter(Boolean).length;
+  const criticism = /(no\s+reason|does not review|doesn't review|review\s+chat\s+history|review\s+with\s+gwen|bullshit|painful|lazy|shallow|hallucinat|made\s+up|easily\s+found)/i.test(msg);
+  const analysisAsk = /(^|\b)(why|how|what|review|analy[sz]e|diagnos|explain|compare|think|reason|figure\s+out|look\s+into|investigate)(\b|\?)/i.test(msg);
+  const farmReasoning = /(grow\s*room|layout|spacing|tower|zipgrow|environment|humidity|temperature|airflow|climate|crop|recipe|harvest|inventory|device|sensor|alert)/i.test(msg);
+  const hasHistory = Array.isArray(history) && history.filter(entry => entry?.role !== 'system').length > 1;
+  return criticism || (analysisAsk && wordCount >= 5) || (farmReasoning && hasHistory && wordCount >= 6);
+}
+
+export function buildRelevantHistoryReview(history = [], userMessage = '', limit = 8) {
+  const entries = (history || []).filter(entry => entry && entry.role !== 'system' && entry.content);
+  if (entries.length === 0) return '';
+
+  const terms = extractReasoningTerms(userMessage);
+  const recentEntries = entries.slice(-12).map((entry, index) => {
+    const content = String(entry.content || '').trim();
+    const lower = content.toLowerCase();
+    const termHits = terms.reduce((count, term) => count + (lower.includes(term) ? 1 : 0), 0);
+    const recency = index / 100;
+    return { entry, content, score: termHits + recency };
+  });
+
+  const selected = recentEntries
+    .sort((a, b) => b.score - a.score)
+    .slice(0, Math.max(3, limit))
+    .sort((a, b) => entries.indexOf(a.entry) - entries.indexOf(b.entry));
+
+  return selected
+    .map(({ entry, content }) => `${entry.role}: ${content.slice(0, 240)}`)
+    .join('\n');
+}
+
+function selectRelevantSkillName(message = '') {
+  const msg = String(message || '').toLowerCase();
+  if (/(environment|temperature|humidity|vpd|co2|airflow|climate|grow\s*room|layout|spacing|tower|zipgrow|dehumid|hvac|fan)/i.test(msg)) {
+    return 'environmental-management-control';
+  }
+  if (/(label|packing\s+slip|sfcr|lot|traceability|audit)/i.test(msg)) {
+    return 'lot-code-traceability';
+  }
+  return null;
+}
+
+export function shouldRequestGwenReview(message = '') {
+  const msg = String(message || '').toLowerCase();
+  return /(research|science|evidence|best\s+practice|layout|spacing|zipgrow|tower|airflow|climate|environment|compare|diagnos|why)/i.test(msg);
+}
+
+async function buildDeliberativeSupportContext(farmId, userMessage, history = []) {
+  const blocks = [];
+
+  const relevantHistory = buildRelevantHistoryReview(history, userMessage);
+  if (relevantHistory) {
+    blocks.push('RELEVANT RECENT CHAT HISTORY:\n' + relevantHistory);
+  }
+
+  const skillName = selectRelevantSkillName(userMessage);
+  if (skillName) {
+    try {
+      const skill = await executeExtendedTool('read_skill_file', { skill_name: skillName }, farmId);
+      const skillText = skill?.content || skill?.text || skill?.message;
+      if (skill?.ok && skillText) {
+        blocks.push(`APPLICABLE SKILL (${skillName}):\n` + String(skillText).slice(0, 2200));
+      }
+    } catch {}
+  }
+
+  if (shouldRequestGwenReview(userMessage)) {
+    try {
+      const gwen = await askGwenDirect(
+        `Review this farmer request and provide a concise grounded answer aid. Focus on the facts that should change E.V.I.E.'s reply, not generic advice. Farmer request: ${String(userMessage || '').slice(0, 1200)}`,
+        farmId,
+        `evie-review-${farmId}`
+      );
+      if (gwen?.ok && gwen.reply) {
+        blocks.push('GWEN REVIEW:\n' + String(gwen.reply).slice(0, 1800));
+      }
+    } catch {}
+  }
+
+  return blocks.join('\n\n');
+}
+
+export function shouldForceGroundedRewrite(message = '', draftReply = '', toolCalls = []) {
+  if ((toolCalls || []).length > 0) return false;
+  const msg = String(message || '').toLowerCase();
+  const reply = String(draftReply || '').trim();
+  if (!reply) return true;
+  const criticism = /(reason|review|history|gwen|skill|bullshit|painful|wrong|hallucinat|easily\s+found)/i.test(msg);
+  const groundedReply = /(reviewed\s+the\s+(prior|recent|relevant)\s+.*(history|conversation)|reviewed\s+.*gwen|gwen\s+note|skill\s+context|support\s+context)/i.test(reply);
+  const shallowReply = reply.length < 140
+    || /(i\s+(do not|don't)\s+have|i\s+need\s+more|could you clarify|please clarify|not sure|maybe|might|perhaps)/i.test(reply)
+    || /let me know if you'd like/i.test(reply);
+  return criticism && shallowReply && !groundedReply;
+}
+
+async function rewriteWithGrounding({ farmId, userMessage, draftReply, systemPrompt, supportContext }) {
+  try {
+    const completion = await (await ensureGemini()).chat.completions.create({
+      model: MODEL,
+      messages: [
+        {
+          role: 'system',
+          content: `${systemPrompt}\n\nGROUNDING REVIEW:\nYou are reviewing a draft answer from E.V.I.E. If the draft is shallow, evasive, or ignores relevant chat history, skill context, or GWEN review, rewrite it so it answers directly and concretely. Do not hedge. Do not ask unnecessary follow-up questions. Return only the final reply.`
+        },
+        {
+          role: 'user',
+          content: `Farmer message:\n${userMessage}\n\nSupport context:\n${supportContext || 'None'}\n\nDraft reply:\n${draftReply}`
+        }
+      ],
+      temperature: 0.2,
+      max_tokens: 700
+    });
+    return completion.choices[0]?.message?.content?.trim() || draftReply;
+  } catch {
+    return draftReply;
+  }
+}
+
+export function shouldHandleDirectLayoutRequest(message = '') {
+  const msg = String(message || '').toLowerCase();
+  const layoutIntent = /(optimi[sz]e|spacing|space\b|space\s+out|spread\s+out|spread|arrange|layout|reposition|use\s+the\s+entire\s+space|equal\s+spacing|evenly\s+across|grid\s+arrangement)/i.test(msg);
+  const zipgrowTarget = /(zipgrow|zip\s*grow|tower|towers)/i.test(msg);
+  return layoutIntent && zipgrowTarget;
+}
+
+function hasRecentLayoutContext(history = []) {
+  return (history || []).slice(-6).some(entry => {
+    const content = String(entry?.content || '').toLowerCase();
+    return /(zipgrow|zip\s*grow|tower|towers|layout|spacing|walkway|aisle|airflow|groups?\s+of|rows?\s+of|east|west|wall|walls|fan|fans)/i.test(content);
+  });
+}
+
+function getRecentLayoutContextText(history = []) {
+  return (history || [])
+    .slice(-6)
+    .map(entry => String(entry?.content || '').trim())
+    .filter(content => /(zipgrow|zip\s*grow|tower|towers|layout|spacing|walkway|aisle|airflow|groups?\s+of|rows?\s+of|east|west|wall|walls|fan|fans)/i.test(content))
+    .join('\n');
+}
+
+export function shouldHandleDirectLayoutFollowup(message = '', history = []) {
+  const msg = String(message || '').toLowerCase();
+  const followupIntent = /(walkway|aisle|access|airflow|rows?|left|right|east|west|wall|walls|wider|narrower|closer|further|spread|tighter|pin|align|aligned|fan|fans|even\s+rows|even\s+spacing)/i.test(msg);
+  return followupIntent && hasRecentLayoutContext(history);
+}
+
+export function shouldHandleDirectFanFollowup(message = '', history = []) {
+  const msg = String(message || '').toLowerCase();
+  const fanIntent = /(fan|fans)/i.test(msg) && /(east|west|wall|walls|pin|align|aligned|mount|mounted|those\s+walls|outer)/i.test(msg);
+  return fanIntent && hasRecentLayoutContext(history);
+}
+
+export function buildDirectLayoutPlan(message = '', roomId = '', contextText = '') {
+  const msg = String(message || '');
+  const combined = [String(contextText || '').trim(), msg].filter(Boolean).join('\n');
+  const lower = msg.toLowerCase();
+  const combinedLower = combined.toLowerCase();
+  const wordToNumber = {
+    one: 1, two: 2, three: 3, four: 4, five: 5,
+    six: 6, seven: 7, eight: 8, nine: 9, ten: 10
+  };
+  const parseCount = (value) => {
+    const raw = String(value || '').toLowerCase();
+    const numeric = parseInt(raw, 10);
+    if (Number.isFinite(numeric)) return numeric;
+    return wordToNumber[raw] || null;
+  };
+  const mentionsTower = /\btowers?\b/i.test(combined);
+  const plan = {
+    room_id: roomId,
+    match_name: (/zip\s*grow/i.test(combined) || mentionsTower) ? 'ZipGrow' : undefined,
+    target: 'groups'
+  };
+
+  const colsMatch = combined.match(/(\d+)\s*(?:columns?|colou?ms?|wide)/i)
+    || combined.match(/\b(one|two|three|four|five|six|seven|eight|nine|ten)\s*(?:columns?|wide)\b/i)
+    || combined.match(/groups?\s+of\s+(\d+|one|two|three|four|five|six|seven|eight|nine|ten)/i)
+    || combined.match(/rows?\s+of\s+(\d+|one|two|three|four|five|six|seven|eight|nine|ten)/i);
+  if (colsMatch) {
+    const cols = parseCount(colsMatch[1]);
+    if (Number.isFinite(cols) && cols > 0) plan.columns = cols;
+  }
+
+  const walkwayMatch = msg.match(/(\d+(?:\.\d+)?)\s*(?:m|meter|metre)s?\s*(?:center\s*)?walkway/i);
+  if (walkwayMatch) {
+    const walkway = parseFloat(walkwayMatch[1]);
+    if (Number.isFinite(walkway) && walkway >= 0) plan.walkway_m = walkway;
+  }
+
+  const spacingMatch = msg.match(/(\d+(?:\.\d+)?)\s*(?:m|meter|metre)s?\s*spacing/i);
+  if (spacingMatch) {
+    const spacing = parseFloat(spacingMatch[1]);
+    if (Number.isFinite(spacing) && spacing > 0) plan.spacing_m = spacing;
+  }
+
+  const wallClearanceMatch = msg.match(/(\d+(?:\.\d+)?)\s*(?:m|meter|metre)s?\s*(?:from|off)\s+the\s+walls?/i);
+  if (wallClearanceMatch) {
+    const wallClearance = parseFloat(wallClearanceMatch[1]);
+    if (Number.isFinite(wallClearance) && wallClearance >= 0) plan.wall_clearance_m = wallClearance;
+  }
+
+  if (!plan.walkway_m && (/left\s+and\s+right/i.test(combined) || /wider\s+(?:walkway|aisle)/i.test(msg) || /more\s+access|ease\s+of\s+access|easier\s+access/i.test(msg))) {
+    plan.walkway_m = 1.2;
+  }
+
+  if (!plan.spacing_m && (/more\s+airflow|better\s+airflow|increase\s+airflow|more\s+space\s+between|spread\s+them\s+out|further\s+apart/i.test(msg))) {
+    plan.spacing_m = 0.8;
+  }
+
+  if (/increase\s+the\s+spacing\s+between\s+the\s+groups|increase\s+spacing\s+between\s+groups|more\s+space\s+between\s+the\s+groups|wider\s+gaps?\s+between\s+the\s+groups/i.test(combinedLower)) {
+    plan.spacing_m = Math.max(plan.spacing_m || 0, 1.0);
+  }
+
+  if (!plan.spacing_m && (/tighter|closer\s+together|more\s+compact|denser/i.test(msg))) {
+    plan.spacing_m = 0.55;
+  }
+
+  if (/narrower\s+(?:walkway|aisle)|reduce\s+(?:walkway|aisle)/i.test(msg)) {
+    plan.walkway_m = 0.9;
+  }
+
+  if (/east\s+and\s+west\s+walls|west\s+and\s+east\s+walls|outer\s+walls|toward\s+the\s+walls|towards\s+the\s+walls|closer\s+to\s+the\s+east\s+and\s+west\s+walls/i.test(combinedLower)) {
+    plan.edge_alignment = 'walls';
+    if (!Number.isFinite(plan.wall_clearance_m)) plan.wall_clearance_m = 0.2;
+  }
+
+  if (/entire\s+space|equal\s+spacing|all\s+four\s+sides/i.test(lower)) {
+    delete plan.spacing_m;
+  }
+
+  if (!plan.columns && /even\s+rows/i.test(msg)) {
+    plan.columns = 3;
+  }
+
+  return plan;
+}
+
+function buildDirectFanAlignmentPlan(message = '', roomId = '', contextText = '') {
+  const combined = [String(contextText || '').trim(), String(message || '').trim()].filter(Boolean).join('\n').toLowerCase();
+  const plan = {
+    room_id: roomId,
+    match_name: 'fan'
+  };
+
+  if (/east\s+wall/.test(combined) && !/west\s+wall/.test(combined)) {
+    plan.wall_mode = 'east';
+  } else if (/west\s+wall/.test(combined) && !/east\s+wall/.test(combined)) {
+    plan.wall_mode = 'west';
+  } else {
+    plan.wall_mode = 'outer';
+  }
+
+  return plan;
+}
+
+async function resolveLayoutRoomId(farmId, message = '') {
+  const roomMap = await farmStore.get(farmId, 'room_map') || {};
+  const rooms = await farmStore.get(farmId, 'rooms') || [];
+  const groupsRaw = await farmStore.get(farmId, 'groups') || [];
+  const groups = Array.isArray(groupsRaw) ? groupsRaw : (groupsRaw.groups || []);
+  const msg = String(message || '').toLowerCase();
+
+  const roomList = Array.isArray(rooms) ? rooms : (rooms.rooms || []);
+  const namedMatch = roomList.find(r => {
+    const name = String(r.name || r.label || '').toLowerCase();
+    return name && msg.includes(name);
+  });
+
+  return namedMatch?.id
+    || roomMap.roomId
+    || groups.find(g => g.roomId)?.roomId
+    || roomList[0]?.id
+    || null;
+}
+
+async function maybeHandleDirectLayoutRequest({ message, farmId, convId, history }) {
+  const wantsLayoutUpdate = shouldHandleDirectLayoutRequest(message) || shouldHandleDirectLayoutFollowup(message, history);
+  const wantsFanAlignment = shouldHandleDirectFanFollowup(message, history);
+  if (!wantsLayoutUpdate && !wantsFanAlignment) return null;
+
+  const roomId = await resolveLayoutRoomId(farmId, message);
+  if (!roomId) return null;
+
+  const layoutContextText = getRecentLayoutContextText(history);
+  const toolCalls = [];
+  let layoutResult = null;
+  let layoutPlan = null;
+
+  if (wantsLayoutUpdate) {
+    layoutPlan = buildDirectLayoutPlan(message, roomId, layoutContextText);
+    layoutResult = await executeExtendedTool('optimize_layout', layoutPlan, farmId);
+
+    if (layoutResult?.ok === false && /No matching items found/i.test(String(layoutResult?.error || ''))) {
+      const retryPlans = [
+        { ...layoutPlan, match_name: 'ZipGrow', target: 'groups' },
+        { ...layoutPlan, target: 'groups' },
+        { ...layoutPlan, match_name: 'ZipGrow', target: 'both' }
+      ];
+
+      for (const retryPlan of retryPlans) {
+        layoutResult = await executeExtendedTool('optimize_layout', retryPlan, farmId);
+        if (layoutResult?.ok !== false) {
+          layoutPlan = retryPlan;
+          break;
+        }
+      }
+    }
+
+    toolCalls.push({ tool: 'optimize_layout', params: layoutPlan, success: layoutResult?.ok !== false });
+  }
+
+  let fanResult = null;
+  let fanPlan = null;
+  if (wantsFanAlignment) {
+    fanPlan = buildDirectFanAlignmentPlan(message, roomId, layoutContextText);
+    fanResult = await executeExtendedTool('align_equipment_to_walls', fanPlan, farmId);
+    toolCalls.push({ tool: 'align_equipment_to_walls', params: fanPlan, success: fanResult?.ok !== false });
+  }
+
+  const layoutOk = !wantsLayoutUpdate || layoutResult?.ok !== false;
+  const fanOk = !wantsFanAlignment || fanResult?.ok !== false;
+  const ok = layoutOk && fanOk;
+  let gwenNote = '';
+  if (layoutOk && /(science|research|airflow|access|light|efficient|optimi[sz]e|spacing)/i.test(String(message || ''))) {
+    try {
+      const gwen = await askGwenDirect(
+        'The farmer asked for a science-based tower distribution in the grow room. In 1-2 short sentences, explain the layout priorities for airflow, ease of access, and even canopy lighting in vertical leafy-greens production.',
+        farmId,
+        `evie-layout-direct-${farmId}`
+      );
+      if (gwen?.ok && gwen.reply) {
+        gwenNote = ' Research basis: ' + String(gwen.reply).replace(/\s+/g, ' ').trim();
+      }
+    } catch {}
+  }
+
+  const replyParts = [];
+  if (layoutOk && layoutResult?.message) {
+    replyParts.push(`${layoutResult.message} I reviewed the grow room and updated the ZipGrow tower spacing.`);
+  } else if (wantsLayoutUpdate) {
+    replyParts.push(`I reviewed the grow room layout, but the ZipGrow update did not complete: ${layoutResult?.error || 'unknown error'}`);
+  }
+
+  if (fanOk && fanResult?.message) {
+    replyParts.push(fanResult.message);
+  } else if (wantsFanAlignment) {
+    replyParts.push(`I could not pin the fans to the requested walls: ${fanResult?.error || 'unknown error'}`);
+  }
+
+  const replyText = `${replyParts.join(' ')}${gwenNote}`.trim();
+
+  const updatedHistory = [
+    ...(history || []),
+    { role: 'user', content: message },
+    { role: 'assistant', content: replyText }
+  ];
+  await upsertConversation(convId, updatedHistory, farmId);
+
+  return {
+    ok: true,
+    reply: replyText,
+    conversation_id: convId,
+    tool_calls: toolCalls,
+    model: MODEL
+  };
+}
+
+export function shouldEnterFarmHandMode(message = '') {
+  const msg = String(message || '').toLowerCase();
+  return /(farm\s*plan|planning|growing\s+environment|grow\s+environment|establish|maintain|dial\s+in|stabilize|set\s*up.*(room|zone|environment)|temperature|humidity|vpd|co2|airflow|climate|hvac|dehumid|fan|target\s*ranges|environmental|grow\s*room)/i.test(msg);
+}
+
+async function buildFarmHandPrefetchContext(farmId, userMessage) {
+  const blocks = [];
+  try {
+    const snapshot = await executeTool('get_environment_snapshot', {});
+    if (snapshot?.ok) {
+      blocks.push('FARM-HAND SNAPSHOT:\n' + JSON.stringify(snapshot).slice(0, 3500));
+    }
+  } catch {}
+
+  try {
+    const devices = await executeTool('get_device_status', {});
+    if (devices?.ok) {
+      blocks.push('DEVICE STATUS:\n' + JSON.stringify({ total_devices: devices.total_devices, assigned: devices.assigned, unassigned: devices.unassigned }).slice(0, 1200));
+    }
+  } catch {}
+
+  if (/(environment|temperature|humidity|vpd|airflow|climate|maintain|establish|dial in|layout|spacing|tower|zipgrow|access)/i.test(String(userMessage || ''))) {
+    try {
+      const skill = await executeExtendedTool('read_skill_file', { skill_name: 'environmental-management-control' }, farmId);
+      const skillText = skill?.content || skill?.text || skill?.skill || skill?.message;
+      if (skillText) {
+        blocks.push('ENVIRONMENT CONTROL REFERENCE:\n' + String(skillText).slice(0, 3500));
+      }
+    } catch {}
+  }
+
+  if (/(layout|spacing|tower|zipgrow|airflow|access|walkway|science|optimi[sz]e)/i.test(String(userMessage || ''))) {
+    try {
+      const gwen = await askGwenDirect(
+        'Provide concise research-backed guidance for arranging vertical grow towers in an indoor leafy-greens room. Focus on airflow lanes, access aisles, wall clearance, and even light distribution. Keep it practical and brief.',
+        farmId,
+        `evie-layout-${farmId}`
+      );
+      if (gwen?.ok && gwen.reply) {
+        blocks.push('GWEN RESEARCH NOTE:\n' + String(gwen.reply).slice(0, 1800));
+      }
+    } catch {}
+  }
+
+  return blocks.join('\n\n');
+}
+
 router.post('/chat', async (req, res) => {
   if (!isGeminiConfigured()) {
     return res.status(503).json({
@@ -6133,10 +6614,24 @@ router.post('/chat', async (req, res) => {
     }
   }
 
+  const existing = await getConversation(convId, farmId);
+  const history = existing ? [...existing.messages] : [];
+  const deliberativeSupport = shouldUseDeliberativeSupport(sanitizedMessage, history)
+    ? await buildDeliberativeSupportContext(farmId, sanitizedMessage, history)
+    : '';
+
+  const directLayoutResponse = await maybeHandleDirectLayoutRequest({
+    message: sanitizedMessage,
+    farmId,
+    convId,
+    history
+  });
+  if (directLayoutResponse) {
+    return sendEnforcedResponse(res, directLayoutResponse, { hadToolData: true, agent: 'evie' });
+  }
+
   try {
     // Build conversation
-    const existing = await getConversation(convId, farmId);
-    const history = existing ? [...existing.messages] : [];
 
     // Build system prompt (only on first message or every 5 messages to save tokens)
     let systemPrompt;
@@ -6154,6 +6649,18 @@ router.post('/chat', async (req, res) => {
       systemPrompt += '\n\nCURRENT PAGE CONTEXT: The farmer is on the Setup Wizard page right now. They are going through first-time farm setup. Be especially helpful and proactive about guiding them through each step. Use get_onboarding_status and get_setup_progress to check what is done and what remains. Offer to walk them through setup conversationally.';
     } else if (page_context) {
       systemPrompt += '\nCurrent page: ' + page_context;
+    }
+
+    const farmHandMode = shouldEnterFarmHandMode(sanitizedMessage);
+    if (farmHandMode) {
+      systemPrompt += '\n\nFARM-HAND MODE:\nYou are acting as a practical farm hand for this grower. Your first job is to help them establish and maintain the growing environment. Start from the actual farm state, not generic advice. Use the live environment snapshot, targets, device status, and alerts to recommend the next concrete steps. For environment questions, do NOT ask broad clarification questions if the current farm data already lets you diagnose the problem or propose a sensible plan. Your answer should be operational: what is in range, what is drifting, what to adjust next, and what you recommend doing now.';
+      const farmHandContext = await buildFarmHandPrefetchContext(farmId, sanitizedMessage);
+      if (farmHandContext) {
+        systemPrompt += '\n\n' + farmHandContext;
+      }
+    }
+    if (deliberativeSupport) {
+      systemPrompt += '\n\nDELIBERATE RESPONSE MODE:\nBefore answering, review the support context below. If the farmer is criticizing your reasoning or asking for an explanation, address that directly and concretely. If the answer is in chat history, skill context, or GWEN review, use it instead of giving a generic response. Do not ignore prior conversation context.\n\n' + deliberativeSupport;
     }
     // Assemble messages
     const messages = [
@@ -6279,7 +6786,16 @@ router.post('/chat', async (req, res) => {
       assistantMessage = completion.choices[0].message;
     }
 
-    const replyText = assistantMessage.content || 'I processed your request but have nothing to add.';
+    let replyText = assistantMessage.content || 'I processed your request but have nothing to add.';
+    if (shouldForceGroundedRewrite(sanitizedMessage, replyText, toolCallResults)) {
+      replyText = await rewriteWithGrounding({
+        farmId,
+        userMessage: sanitizedMessage,
+        draftReply: replyText,
+        systemPrompt,
+        supportContext: deliberativeSupport
+      });
+    }
 
     // Track AI usage
     trackAiUsage({

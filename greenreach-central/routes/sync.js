@@ -2101,4 +2101,82 @@ export async function startSensorCleanupScheduler() {
   handle.unref();
 }
 
+/**
+ * POST /api/sync/nutrients
+ * Sync nutrient telemetry (pH, EC, temperature) and dosing event data from LE
+ */
+router.post('/nutrients', authenticateFarm, async (req, res) => {
+  try {
+    const { farmId } = req;
+    const { telemetry, dosingHistory, timestamp } = req.body;
+
+    if (!telemetry && !dosingHistory) {
+      return res.status(400).json({
+        success: false,
+        error: 'Nutrient data required (telemetry or dosingHistory)'
+      });
+    }
+
+    const nutrientData = {
+      telemetry: telemetry || {},
+      dosingHistory: Array.isArray(dosingHistory) ? dosingHistory : [],
+      timestamp: timestamp || new Date().toISOString()
+    };
+
+    logger.info(`[Sync] Syncing nutrient data for farm ${farmId}`);
+
+    if (await isDatabaseAvailable()) {
+      await query(
+        `INSERT INTO farm_data (farm_id, data_type, data, updated_at)
+         VALUES ($1, $2, $3, NOW())
+         ON CONFLICT (farm_id, data_type)
+         DO UPDATE SET data = $3, updated_at = NOW()`,
+        [farmId, 'nutrients', JSON.stringify(nutrientData)]
+      );
+
+      // Insert pH/EC/temp as sensor_readings for timeseries
+      try {
+        const tanks = telemetry?.tanks || {};
+        for (const [tankId, tankData] of Object.entries(tanks)) {
+          const sensors = tankData?.sensors || {};
+          for (const [sensorType, reading] of Object.entries(sensors)) {
+            const val = typeof reading === 'object' ? reading.value : reading;
+            const unit = typeof reading === 'object' ? (reading.unit || 'unknown') : 'unknown';
+            if (val !== null && val !== undefined && !isNaN(Number(val))) {
+              await query(
+                `INSERT INTO sensor_readings (farm_id, zone_id, sensor_type, value, unit, recorded_at)
+                 VALUES ($1, $2, $3, $4, $5, $6)
+                 ON CONFLICT (farm_id, zone_id, sensor_type, recorded_at) DO NOTHING`,
+                [farmId, tankId, sensorType, Number(val), unit, nutrientData.timestamp]
+              ).catch(() => {});
+            }
+          }
+        }
+      } catch (tsErr) {
+        logger.warn(`[Sync] Nutrient timeseries insert error:`, tsErr.message);
+      }
+
+      logger.info(`[Sync] Stored nutrient data in database for farm ${farmId}`);
+    } else {
+      if (!inMemoryStore.nutrients) inMemoryStore.nutrients = new Map();
+      inMemoryStore.nutrients.set(farmId, nutrientData);
+      logger.info(`[Sync] Stored nutrient data in memory for farm ${farmId}`);
+    }
+
+    res.json({
+      success: true,
+      message: 'Synced nutrient data',
+      farmId,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    logger.error('[Sync] Error syncing nutrient data:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to sync nutrient data',
+      message: error.message
+    });
+  }
+});
+
 export default router;
