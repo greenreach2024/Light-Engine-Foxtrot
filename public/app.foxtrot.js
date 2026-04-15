@@ -2708,17 +2708,17 @@ function createDeviceEntryElement(device) {
   // Add zone assignment dropdown for SwitchBot sensors (all sensor types, not just WoIOSensor)
   if (isSwitchbotSensor) {
     const zoneSection = document.createElement('div');
-    zoneSection.style.cssText = 'margin-top:10px;padding:8px;background:var(--bg-secondary, rgba(15,23,42,0.04));border:1px solid var(--border, var(--gr-border, #bae6fd));border-radius:6px;';
+    zoneSection.style.cssText = 'margin-top:10px;padding:8px;background:rgba(15,23,42,0.78);border:1px solid rgba(125,211,252,0.24);border-radius:8px;';
     
     const zoneLabel = document.createElement('label');
-    zoneLabel.style.cssText = 'display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-secondary, #0c4a6e);font-weight:600;';
+    zoneLabel.style.cssText = 'display:flex;align-items:center;gap:8px;font-size:12px;color:#bae6fd;font-weight:600;';
     
     const labelText = document.createElement('span');
     labelText.textContent = 'Zone:';
     zoneLabel.appendChild(labelText);
     
     const zoneSelect = document.createElement('select');
-    zoneSelect.style.cssText = 'padding:4px 8px;border:1px solid var(--border, #0ea5e9);border-radius:4px;background:var(--bg-card, var(--gr-surface, #ffffff));color:var(--text-primary, var(--gr-text, #0f172a));font-size:12px;font-weight:500;cursor:pointer;';
+    zoneSelect.style.cssText = 'padding:4px 8px;border:1px solid rgba(56,189,248,0.4);border-radius:4px;background:rgba(15,23,42,0.92);color:#e2e8f0;font-size:12px;font-weight:500;cursor:pointer;';
     zoneSelect.dataset.deviceId = device.id;
     
     // Add unassigned option
