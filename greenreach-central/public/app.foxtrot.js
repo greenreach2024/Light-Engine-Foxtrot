@@ -2468,9 +2468,9 @@ function buildSwitchbotSnapshot(device) {
   const grid = buildInfoGrid(entries, {
     columns: isPlug ? 3 : (entries.length > 2 ? 3 : 2),
     compact: true,
-    cellStyle: 'background:#ffffff;border:1px solid #cbd5e1;border-radius:8px;padding:8px;display:flex;flex-direction:column;gap:2px;box-shadow:inset 0 1px 0 rgba(255,255,255,0.7);',
-    labelStyle: 'font-size:10px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:#64748b;',
-    valueStyle: 'font-size:12px;color:#0f172a;font-weight:600;word-break:break-word;'
+    cellStyle: 'background:var(--bg-secondary, rgba(15,23,42,0.04));border:1px solid var(--border, var(--gr-border, #cbd5e1));border-radius:8px;padding:8px;display:flex;flex-direction:column;gap:2px;box-shadow:inset 0 1px 0 rgba(255,255,255,0.08);',
+    labelStyle: 'font-size:10px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:var(--text-secondary, #64748b);',
+    valueStyle: 'font-size:12px;color:var(--text-primary, var(--gr-text, #0f172a));font-weight:600;word-break:break-word;'
   });
   if (!grid) return null;
   const wrapper = document.createElement('div');
@@ -2607,7 +2607,7 @@ function updateDeviceRecord(device, options = {}) {
 
 function createDeviceEntryElement(device) {
   const entry = document.createElement('div');
-  entry.className = 'iot-device-entry';
+  entry.className = `iot-device-entry iot-device-entry--${getDeviceCategory(device)}`;
   entry.dataset.deviceId = device.id;
   
   // Get device category for styling
@@ -2615,20 +2615,21 @@ function createDeviceEntryElement(device) {
   
   // Category-specific colors
   const categoryColors = {
-    'sensor': { bg: '#ffffff', border: '#4ade80', accent: '#166534', icon: '' },
-    'plug': { bg: '#ffffff', border: '#f59e0b', accent: '#92400e', icon: '🔌' },
-    'controller': { bg: '#ffffff', border: '#818cf8', accent: '#3730a3', icon: '🎛' },
-    'device': { bg: '#ffffff', border: '#cbd5e1', accent: '#334155', icon: '📱' }
+    'sensor': { border: '#4ade80', accent: '#86efac', icon: '' },
+    'plug': { border: '#f59e0b', accent: '#fbbf24', icon: '🔌' },
+    'controller': { border: '#818cf8', accent: '#a5b4fc', icon: '🎛' },
+    'device': { border: '#94a3b8', accent: '#cbd5e1', icon: '📱' }
   };
   
   const colors = categoryColors[deviceCategory] || categoryColors['device'];
-  entry.style.cssText = `background:${colors.bg};border:1px solid ${colors.border};border-left:4px solid ${colors.border};border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:10px;min-height:200px;max-width:100%;box-sizing:border-box;box-shadow:0 8px 24px rgba(15,23,42,0.08);`;
+  entry.style.setProperty('--iot-device-accent', colors.border);
+  entry.style.setProperty('--iot-device-title', colors.accent);
 
   const info = document.createElement('div');
   info.style.cssText = 'flex:1;min-width:0;';
 
   const name = document.createElement('div');
-  name.style.cssText = `font-weight:700;color:${colors.accent || '#0f172a'};margin-bottom:4px;font-size:14px;display:flex;align-items:center;gap:6px;`;
+  name.style.cssText = 'font-weight:700;color:var(--iot-device-title, var(--text-primary, var(--gr-text, #0f172a)));margin-bottom:4px;font-size:14px;display:flex;align-items:center;gap:6px;';
   
   // Add category icon
   const categoryIcon = document.createElement('span');
@@ -2707,17 +2708,17 @@ function createDeviceEntryElement(device) {
   // Add zone assignment dropdown for SwitchBot sensors (all sensor types, not just WoIOSensor)
   if (isSwitchbotSensor) {
     const zoneSection = document.createElement('div');
-    zoneSection.style.cssText = 'margin-top:10px;padding:8px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:6px;';
+    zoneSection.style.cssText = 'margin-top:10px;padding:8px;background:var(--bg-secondary, rgba(15,23,42,0.04));border:1px solid var(--border, var(--gr-border, #bae6fd));border-radius:6px;';
     
     const zoneLabel = document.createElement('label');
-    zoneLabel.style.cssText = 'display:flex;align-items:center;gap:8px;font-size:12px;color:#0c4a6e;font-weight:600;';
+    zoneLabel.style.cssText = 'display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-secondary, #0c4a6e);font-weight:600;';
     
     const labelText = document.createElement('span');
     labelText.textContent = 'Zone:';
     zoneLabel.appendChild(labelText);
     
     const zoneSelect = document.createElement('select');
-    zoneSelect.style.cssText = 'padding:4px 8px;border:1px solid #0ea5e9;border-radius:4px;background:white;color:#0f172a;font-size:12px;font-weight:500;cursor:pointer;';
+    zoneSelect.style.cssText = 'padding:4px 8px;border:1px solid var(--border, #0ea5e9);border-radius:4px;background:var(--bg-card, var(--gr-surface, #ffffff));color:var(--text-primary, var(--gr-text, #0f172a));font-size:12px;font-weight:500;cursor:pointer;';
     zoneSelect.dataset.deviceId = device.id;
     
     // Add unassigned option
@@ -3115,19 +3116,19 @@ function renderIoTDeviceCards(devices) {
     console.log('[renderIoTDeviceCards] Rendering vendor:', vendor, 'with', byVendor[vendor].length, 'devices');
     const card = document.createElement('section');
     card.className = 'iot-vendor-card';
-    card.style.cssText = 'background:white;border:1px solid #e5e7eb;border-radius:8px;padding:16px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.1);';
+    card.className = 'iot-vendor-card';
 
     const header = document.createElement('h3');
-    header.style.cssText = 'margin:0 0 12px 0;text-transform:capitalize;color:#1e293b;font-size:16px;font-weight:600;border-bottom:2px solid #e5e7eb;padding-bottom:8px;display:flex;align-items:center;gap:8px;';
+    header.className = 'iot-vendor-card__title';
     header.textContent = `${vendor === 'unknown' ? 'Unknown' : vendor} Devices`;
     const badge = document.createElement('span');
-    badge.style.cssText = 'background:#dbeafe;color:#1e40af;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;';
+    badge.className = 'iot-vendor-card__count';
     badge.textContent = byVendor[vendor].length;
     header.appendChild(badge);
     card.appendChild(header);
 
     const container = document.createElement('div');
-    container.style.cssText = 'display:grid;grid-template-columns:repeat(2,1fr);gap:12px;';
+    container.className = 'iot-vendor-card__grid';
     byVendor[vendor].forEach(device => {
       console.log('[renderIoTDeviceCards] Creating entry for device:', device.id);
       const entry = createDeviceEntryElement(device);
