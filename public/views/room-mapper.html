@@ -2164,43 +2164,84 @@
         }
         return null;
       };
+
+      const serializePlacedDevice = (placedDevice) => {
+        const detectedZone = (placedDevice.x != null && placedDevice.y != null)
+          ? findZoneForPosition(placedDevice.x, placedDevice.y)
+          : null;
+        const finalZone = detectedZone !== null ? detectedZone : (placedDevice.device?.zone ?? null);
+
+        console.log(`[Room Mapper Save] Device ${placedDevice.deviceId} at (${placedDevice.x}, ${placedDevice.y}):`, {
+          detectedZone,
+          deviceZone: placedDevice.device?.zone,
+          finalZone,
+          availableZones: STATE.zones.map(z => `zone ${z.zone}: (${z.x1},${z.y1})-(${z.x2},${z.y2})`)
+        });
+
+        return {
+          deviceId: placedDevice.deviceId,
+          x: placedDevice.x,
+          y: placedDevice.y,
+          isEquipment: placedDevice.isEquipment || false,
+          snapshot: {
+            name: placedDevice.device?.name || null,
+            type: placedDevice.device?.type || null,
+            model: placedDevice.device?.model || null,
+            protocol: placedDevice.device?.protocol || null,
+            category: placedDevice.device?.category || null,
+            zone: finalZone,
+            room: roomName,
+            icon: placedDevice.icon || null,
+            isEquipment: placedDevice.isEquipment || false
+          }
+        };
+      };
+
+      const preserveMissingSavedSensors = async (devices) => {
+        const fileName = `room-map-${STATE.currentRoomId}.json`;
+        try {
+          const existingResponse = await fetchWithFarmAuth(`/data/${fileName}`, { cache: 'no-store' });
+          if (!existingResponse.ok) {
+            return devices;
+          }
+
+          const existingMap = await existingResponse.json();
+          const mergedDevices = [...devices];
+          const currentDeviceIds = new Set(devices.map(device => device.deviceId));
+          const knownSensorIds = new Set(STATE.iotDevices.map(device => device.id));
+          let preservedCount = 0;
+
+          for (const savedDevice of Array.isArray(existingMap.devices) ? existingMap.devices : []) {
+            if (savedDevice?.isEquipment) continue;
+            if (!savedDevice?.deviceId || currentDeviceIds.has(savedDevice.deviceId)) continue;
+            if (knownSensorIds.size > 0 && !knownSensorIds.has(savedDevice.deviceId)) continue;
+            mergedDevices.push(savedDevice);
+            currentDeviceIds.add(savedDevice.deviceId);
+            preservedCount += 1;
+          }
+
+          if (preservedCount > 0) {
+            console.warn(`[Room Mapper Save] Preserved ${preservedCount} existing sensor placement(s) that were missing from STATE.placedDevices.`);
+          }
+
+          return mergedDevices;
+        } catch (preserveError) {
+          console.warn('[Room Mapper Save] Failed to preserve existing sensor placements before save:', preserveError);
+          return devices;
+        }
+      };
       
+      const serializedDevices = await preserveMissingSavedSensors(
+        STATE.placedDevices.map(serializePlacedDevice)
+      );
+
       const mapData = {
         roomId: STATE.currentRoomId,
         name: roomName,
         gridSize: STATE.gridSize,
         cellSize: STATE.cellSize,
         version: 2,
-        devices: STATE.placedDevices.map(d => {
-          // Detect zone from position if device is inside a zone boundary
-          const detectedZone = (d.x != null && d.y != null) ? findZoneForPosition(d.x, d.y) : null;
-          const finalZone = detectedZone !== null ? detectedZone : (d.device?.zone ?? null);
-          
-          console.log(`[Room Mapper Save] Device ${d.deviceId} at (${d.x}, ${d.y}):`, {
-            detectedZone,
-            deviceZone: d.device?.zone,
-            finalZone,
-            availableZones: STATE.zones.map(z => `zone ${z.zone}: (${z.x1},${z.y1})-(${z.x2},${z.y2})`)
-          });
-          
-          return {
-            deviceId: d.deviceId,
-            x: d.x,
-            y: d.y,
-            isEquipment: d.isEquipment || false,
-            snapshot: {
-              name: d.device?.name || null,
-              type: d.device?.type || null,
-              model: d.device?.model || null,
-              protocol: d.device?.protocol || null,
-              category: d.device?.category || null,
-              zone: finalZone,
-              room: roomName,
-              icon: d.icon || null,
-              isEquipment: d.isEquipment || false
-            }
-          };
-        }),
+        devices: serializedDevices,
         zones: STATE.zones,
         lastUpdated: new Date().toISOString()
       };

@@ -321,6 +321,18 @@
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
 }
 
+.infotainment-tile:focus,
+.infotainment-tile:focus-visible {
+  outline: none;
+  border-color: rgba(148, 163, 184, 0.38);
+  box-shadow: 0 0 0 2px rgba(15, 23, 42, 0.92), 0 0 0 4px rgba(148, 163, 184, 0.22), 0 10px 28px rgba(0, 0, 0, 0.3);
+}
+
+.infotainment-tile:focus::before,
+.infotainment-tile:focus-visible::before {
+  opacity: 1;
+}
+
 .infotainment-tile:hover::before {
   opacity: 1;
 }
@@ -333,22 +345,32 @@
 .infotainment-tile--growing { border-color: rgba(16, 185, 129, 0.2); }
 .infotainment-tile--growing::before { background: linear-gradient(135deg, rgba(16, 185, 129, 0.08), transparent); }
 .infotainment-tile--growing:hover { border-color: rgba(16, 185, 129, 0.4); }
+.infotainment-tile--growing:focus,
+.infotainment-tile--growing:focus-visible { border-color: rgba(16, 185, 129, 0.42); box-shadow: 0 0 0 2px rgba(15, 23, 42, 0.92), 0 0 0 4px rgba(16, 185, 129, 0.18), 0 10px 28px rgba(0, 0, 0, 0.3); }
 
 .infotainment-tile--operations { border-color: rgba(59, 130, 246, 0.2); }
 .infotainment-tile--operations::before { background: linear-gradient(135deg, rgba(59, 130, 246, 0.08), transparent); }
 .infotainment-tile--operations:hover { border-color: rgba(59, 130, 246, 0.4); }
+.infotainment-tile--operations:focus,
+.infotainment-tile--operations:focus-visible { border-color: rgba(59, 130, 246, 0.42); box-shadow: 0 0 0 2px rgba(15, 23, 42, 0.92), 0 0 0 4px rgba(59, 130, 246, 0.18), 0 10px 28px rgba(0, 0, 0, 0.3); }
 
 .infotainment-tile--business { border-color: rgba(245, 158, 11, 0.2); }
 .infotainment-tile--business::before { background: linear-gradient(135deg, rgba(245, 158, 11, 0.08), transparent); }
 .infotainment-tile--business:hover { border-color: rgba(245, 158, 11, 0.4); }
+.infotainment-tile--business:focus,
+.infotainment-tile--business:focus-visible { border-color: rgba(245, 158, 11, 0.42); box-shadow: 0 0 0 2px rgba(15, 23, 42, 0.92), 0 0 0 4px rgba(245, 158, 11, 0.18), 0 10px 28px rgba(0, 0, 0, 0.3); }
 
 .infotainment-tile--settings { border-color: rgba(139, 92, 246, 0.2); }
 .infotainment-tile--settings::before { background: linear-gradient(135deg, rgba(139, 92, 246, 0.08), transparent); }
 .infotainment-tile--settings:hover { border-color: rgba(139, 92, 246, 0.4); }
+.infotainment-tile--settings:focus,
+.infotainment-tile--settings:focus-visible { border-color: rgba(139, 92, 246, 0.42); box-shadow: 0 0 0 2px rgba(15, 23, 42, 0.92), 0 0 0 4px rgba(139, 92, 246, 0.18), 0 10px 28px rgba(0, 0, 0, 0.3); }
 
 .infotainment-tile--visualization { border-color: rgba(99, 102, 241, 0.2); }
 .infotainment-tile--visualization::before { background: linear-gradient(135deg, rgba(99, 102, 241, 0.08), transparent); }
 .infotainment-tile--visualization:hover { border-color: rgba(99, 102, 241, 0.4); }
+.infotainment-tile--visualization:focus,
+.infotainment-tile--visualization:focus-visible { border-color: rgba(99, 102, 241, 0.42); box-shadow: 0 0 0 2px rgba(15, 23, 42, 0.92), 0 0 0 4px rgba(99, 102, 241, 0.18), 0 10px 28px rgba(0, 0, 0, 0.3); }
 
 .infotainment-tile__icon {
   width: 48px;

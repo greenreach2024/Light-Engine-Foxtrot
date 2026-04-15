@@ -54,6 +54,7 @@
     }
     .toolbar button:hover { background: rgba(99,102,241,0.12); border-color: rgba(99,102,241,0.4); }
     .toolbar button.active { background: rgba(99,102,241,0.22); border-color: #818cf8; color: #e0e7ff; }
+    .toolbar button:disabled { opacity: 0.72; cursor: wait; }
     .toolbar select { outline: none; }
     .toolbar .sep { width: 1px; height: 18px; background: rgba(148,163,184,0.15); margin: 0 0.15rem; }
 
@@ -291,6 +292,7 @@
       <button id="btnTop" title="Top-down view">Top</button>
       <button id="btnAngle" title="Angled view">3D</button>
       <button id="btnReset" title="Reset camera">Reset</button>
+      <button id="btnRefresh" title="Reload rooms, groups, sensors, and heatmap data">Refresh</button>
       <div class="sep"></div>
       <button id="btnEdit" title="Edit mode: drag sensors and equipment to reposition">Edit</button>
     </div>
@@ -320,7 +322,7 @@
       <div id="detailContent"></div>
     </div>
     <div class="status-bar" id="statusBar">Ready</div>
-    <div class="edit-indicator" id="editIndicator">EDIT MODE -- Drag sensors, equipment, and zones to reposition</div>
+    <div class="edit-indicator" id="editIndicator">EDIT MODE -- Drag sensors, equipment, and zones to reposition. Shift-click equipment, sensors, or groups to multi-select.</div>
     <button class="gwen-fab" id="gwenFab" title="Ask GWEN about this view">G<div class="gwen-tooltip">Ask GWEN to analyze zone data</div></button>
   </div>
 
@@ -360,15 +362,21 @@
       zoneMeshMap: {},
       zoneDataMap: {},
       floorMeshMap: {},    // roomId -> floor mesh (for overlay fallback)
+      heatmapOverlays: [],   // dedicated overlay plane meshes for heatmap
       particleSystems: [],
       hoveredZone: null,
       selectedZone: null,
+      selectedMeshes: [],
       wallsVisible: true,
       editMode: false,
       dragTarget: null,
+      dragSelection: [],
       dragPlane: new THREE.Plane(new THREE.Vector3(0, 1, 0), 0),
       dragOffset: new THREE.Vector3(),
       isDragging: false,
+      isLoadingData: false,
+      lastFullRefresh: 0,
+      lastStructureSignature: '',
       // Persisted dimensions keyed by group/room id
       groupDimensions: {},   // groupId -> { length, width, height, lightOrientation }
       roomDimensions: {},    // roomId  -> { length, width, height }
@@ -378,13 +386,36 @@
     const STATUS_COLOR = { active: 0x22c55e, growing: 0x22c55e, deployed: 0x22c55e, planned: 0x3b82f6, draft: 0x475569, completed: 0xf59e0b, archived: 0x334155 };
 
     const OVERLAY_CFG = {
-      temperature: { min: 15, max: 35, unit: '\u00b0C', label: 'Temperature', colors: [0x3b82f6, 0x22c55e, 0xf59e0b, 0xef4444], key: 'temp' },
-      humidity:    { min: 20, max: 95, unit: '%',   label: 'Relative Humidity', colors: [0xf59e0b, 0x22c55e, 0x3b82f6, 0x6366f1], key: 'humidity' },
-      co2:         { min: 300, max: 1800, unit: 'ppm', label: 'CO\u2082 Concentration', colors: [0x22c55e, 0xf59e0b, 0xef4444, 0x7f1d1d], key: 'co2' },
-      vpd:         { min: 0.2, max: 2.0, unit: 'kPa', label: 'Vapor Pressure Deficit', colors: [0x3b82f6, 0x22c55e, 0xf59e0b, 0xef4444], key: 'vpd' },
+      temperature: { min: 15, max: 35, unit: '\u00b0C', label: 'Temperature', colors: [0x1d4ed8, 0x06b6d4, 0x22c55e, 0xf59e0b, 0xef4444], key: 'temp' },
+      humidity:    { min: 20, max: 95, unit: '%',   label: 'Relative Humidity', colors: [0x1d4ed8, 0x06b6d4, 0x22c55e, 0xfacc15, 0xef4444], key: 'humidity' },
+      co2:         { min: 300, max: 1800, unit: 'ppm', label: 'CO\u2082 Concentration', colors: [0x22c55e, 0xfacc15, 0xf59e0b, 0xef4444, 0x7f1d1d], key: 'co2' },
+      vpd:         { min: 0.2, max: 2.0, unit: 'kPa', label: 'Vapor Pressure Deficit', colors: [0x1d4ed8, 0x06b6d4, 0x22c55e, 0xf59e0b, 0xef4444], key: 'vpd' },
     };
 
     // ---- Persistence helpers ---------------------------------
+    function getGroupKey(group) {
+      return group?.id || group?.group_id || group?.name || null;
+    }
+
+    function getSavedGroupDimensions(group) {
+      const gKey = getGroupKey(group);
+      const stored = gKey ? (S.groupDimensions[gKey] || {}) : {};
+      const pickNumber = function() {
+        for (const value of arguments) {
+          const num = Number(value);
+          if (Number.isFinite(num) && num > 0) return num;
+        }
+        return null;
+      };
+      return {
+        key: gKey,
+        length: pickNumber(stored.length, group?.length),
+        width: pickNumber(stored.width, group?.width),
+        height: pickNumber(stored.height, group?.height),
+        lightOrientation: stored.lightOrientation || group?.lightOrientation || 'out-of-canopy'
+      };
+    }
+
     function loadPersistedDimensions() {
       try {
         const gd = localStorage.getItem('farm3d_groupDims');
@@ -401,24 +432,56 @@
         if (!dims.width && map.roomWidth) dims.width = map.roomWidth;
       }
       // Hydrate group dimensions from group objects (server-persisted fallback)
+      // Keep browser-saved values authoritative and only backfill missing fields from the server.
       S.groups.forEach(function(g) {
-        var gId = g.id || g.group_id;
+        var gId = getGroupKey(g);
         if (!gId) return;
-        if (!S.groupDimensions[gId] && (g.length || g.width || g.height)) {
-          S.groupDimensions[gId] = {};
-        }
-        var gd = S.groupDimensions[gId];
-        if (gd) {
-          if (!gd.length && g.length) gd.length = g.length;
-          if (!gd.width && g.width) gd.width = g.width;
-          if (!gd.height && g.height) gd.height = g.height;
-          if (!gd.lightOrientation && g.lightOrientation) gd.lightOrientation = g.lightOrientation;
-        }
+        var gd = S.groupDimensions[gId] || {};
+        var localLength = Number(gd.length);
+        var localWidth = Number(gd.width);
+        var localHeight = Number(gd.height);
+        var groupLength = Number(g.length);
+        var groupWidth = Number(g.width);
+        var groupHeight = Number(g.height);
+        S.groupDimensions[gId] = {
+          length: (Number.isFinite(localLength) && localLength > 0) ? localLength : ((Number.isFinite(groupLength) && groupLength > 0) ? groupLength : undefined),
+          width: (Number.isFinite(localWidth) && localWidth > 0) ? localWidth : ((Number.isFinite(groupWidth) && groupWidth > 0) ? groupWidth : undefined),
+          height: (Number.isFinite(localHeight) && localHeight > 0) ? localHeight : ((Number.isFinite(groupHeight) && groupHeight > 0) ? groupHeight : undefined),
+          lightOrientation: gd.lightOrientation || g.lightOrientation
+        };
       });
     }
     function saveGroupDimensions() {
       try { localStorage.setItem('farm3d_groupDims', JSON.stringify(S.groupDimensions)); } catch (e) {}
     }
+
+    async function persistGroupsData(groups) {
+      const payload = { groups: Array.isArray(groups) ? groups : [] };
+      let lastError = null;
+
+      try {
+        const resp = await authFetch('/groups', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (resp.ok) return true;
+        lastError = new Error('HTTP ' + resp.status + ' via /groups');
+      } catch (err) {
+        lastError = err;
+      }
+
+      const fallbackResp = await authFetch('/data/groups.json', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (!fallbackResp.ok) {
+        throw lastError || new Error('HTTP ' + fallbackResp.status + ' via /data/groups.json');
+      }
+      return true;
+    }
+
     function saveRoomDimensions() {
       try { localStorage.setItem('farm3d_roomDims', JSON.stringify(S.roomDimensions)); } catch (e) {}
       // Also persist ceiling height + dimensions to server via room-map
@@ -539,10 +602,23 @@
     }
 
     // ---- Data Loading ----------------------------------------
-    async function loadAllData() {
+    function setRefreshButtonState(isLoading) {
+      var btn = document.getElementById('btnRefresh');
+      if (!btn) return;
+      btn.disabled = !!isLoading;
+      btn.textContent = isLoading ? 'Refreshing...' : 'Refresh';
+    }
+
+    async function loadAllData(opts) {
+      opts = opts || {};
+      if (S.isLoadingData) return false;
+      S.isLoadingData = true;
       const status = (msg) => { const el = document.getElementById('statusBar'); if (el) el.textContent = msg; };
       try {
-        status('Loading farm data...');
+        setRefreshButtonState(true);
+        if (!opts.silent) {
+          status(opts.reason === 'manual' ? 'Refreshing viewer data...' : 'Loading farm data...');
+        }
         const [roomsRes, groupsRes, iotRes, envRes, regRes] = await Promise.all([
           authFetch('/data/rooms.json?t=' + Date.now()),
           authFetch('/data/groups.json?t=' + Date.now()),
@@ -551,6 +627,7 @@
           authFetch('/data/crop-registry.json?t=' + Date.now()),
         ]);
 
+        S.roomMaps = {};
         if (roomsRes.ok) { const d = await roomsRes.json(); S.rooms = d.rooms || d || []; }
         if (groupsRes.ok) { const d = await groupsRes.json(); S.groups = Array.isArray(d) ? d : (d.groups || []); }
         if (iotRes.ok) { const d = await iotRes.json(); S.iotDevices = Array.isArray(d) ? d : (d.devices || []); }
@@ -577,18 +654,143 @@
           } catch (e) {}
         }
 
+        const structureSignature = JSON.stringify({
+          rooms: S.rooms,
+          groups: S.groups,
+          roomMaps: S.roomMaps,
+          iotDevices: S.iotDevices,
+          cropRegistry: S.cropRegistry
+        });
+        const structureChanged = structureSignature !== S.lastStructureSignature;
+
         loadPersistedDimensions();
+        injectIoTSensorsIntoRoomMaps();
         buildZoneDataMap();
         populateRoomDropdown();
-        buildScene();
+        if (structureChanged || !opts.skipRebuildIfUnchanged) {
+          buildScene();
+        }
         renderFarmStats();
-        status(S.rooms.length + ' room' + (S.rooms.length !== 1 ? 's' : '') + ' -- ' + S.groups.length + ' growing groups -- updated ' + new Date().toLocaleTimeString());
+        S.lastFullRefresh = Date.now();
+        S.lastStructureSignature = structureSignature;
+        if (!opts.silent || structureChanged) {
+          status(
+            S.rooms.length + ' room' + (S.rooms.length !== 1 ? 's' : '') +
+            ' -- ' + S.groups.length + ' growing groups -- updated ' + new Date().toLocaleTimeString() +
+            (structureChanged && opts.reason === 'auto' ? ' -- synced EVIE changes' : '')
+          );
+        }
+        return true;
       } catch (err) {
         console.error('[3D Viewer]', err);
         status('Error loading farm data');
+        return false;
       } finally {
+        S.isLoadingData = false;
+        setRefreshButtonState(false);
         document.getElementById('loadingOverlay')?.classList.add('done');
       }
+    }
+
+    // ---- Inject IoT sensor devices into room maps -----------
+    // IoT sensors from iot-devices.json have real deviceIds matching
+    // env zone per-device sources, but are not in the room-map devices
+    // array. Inject them so the heatmap IDW can use distinct values.
+    function injectIoTSensorsIntoRoomMaps() {
+      if (!S.iotDevices || S.iotDevices.length === 0) return;
+      const iotById = new Map((S.iotDevices || []).map(d => [d.deviceId, d]));
+      const envZones = S.envData?.zones || [];
+
+      function findEnvZoneForMapZone(mapZone) {
+        const zoneName = String(mapZone?.name || mapZone?.zone || '').trim();
+        const zoneId = String(mapZone?.id || mapZone?.zone || '').trim();
+        return envZones.find(function(z) {
+          const envId = String(z?.id || z?.zone_id || z?.zone || '').trim();
+          const envName = String(z?.name || z?.zone || '').trim();
+          return envId === zoneId || envId === zoneName || envName === zoneName || envName === ('Zone ' + zoneId);
+        });
+      }
+
+      function getZoneSourceIds(envZone) {
+        const ids = new Set();
+        ['tempC', 'rh', 'co2'].forEach(function(metricKey) {
+          const srcs = envZone?.sensors?.[metricKey]?.sources;
+          if (!srcs || typeof srcs !== 'object') return;
+          Object.keys(srcs).forEach(function(id) {
+            if (id) ids.add(id);
+          });
+        });
+        return Array.from(ids);
+      }
+
+      Object.values(S.roomMaps).forEach(function(map) {
+        if (!map) return;
+        if (!Array.isArray(map.devices)) map.devices = [];
+        const existingSensorIds = new Set(map.devices.map(function(dev) {
+          return dev?.deviceId || dev?.snapshot?.deviceId || dev?.id;
+        }).filter(Boolean));
+
+        map.devices.forEach(function(dev) {
+          const id = dev.deviceId || dev.snapshot?.deviceId;
+          const live = id ? iotById.get(id) : null;
+          if (!live) return;
+          dev.deviceId = live.deviceId || dev.deviceId;
+          dev.name = live.name || dev.name;
+          dev.telemetry = Object.assign({}, live.telemetry || {}, dev.telemetry || {});
+          const liveType = (live.type || live.deviceData?.deviceType || live.snapshot?.type || '').toLowerCase();
+          const liveName = (live.name || dev.name || dev.snapshot?.name || '').toLowerCase();
+          const looksLikeSensor = liveType.includes('sensor') || liveType.includes('woio') || /^sen\b/.test(liveName) || liveName.includes('sensor');
+          dev.snapshot = Object.assign({}, live.snapshot || {}, dev.snapshot || {}, {
+            deviceId: live.deviceId || dev.deviceId || dev.snapshot?.deviceId,
+            name: live.name || dev.name || dev.snapshot?.name,
+            category: looksLikeSensor ? 'sensor' : (dev.snapshot?.category || live.snapshot?.category || dev.snapshot?.type || 'device'),
+            type: live.deviceData?.deviceType || live.type || dev.snapshot?.type || 'device'
+          });
+        });
+
+        const zones = Array.isArray(map.zones) ? map.zones : [];
+        zones.forEach(function(mapZone) {
+          const envZone = findEnvZoneForMapZone(mapZone);
+          if (!envZone) return;
+          const sourceIds = getZoneSourceIds(envZone).filter(function(id) { return !existingSensorIds.has(id); });
+          if (!sourceIds.length) return;
+
+          const zoneX1 = Number(mapZone.x1 ?? 0);
+          const zoneX2 = Number(mapZone.x2 ?? map.gridSize ?? 20);
+          const zoneY1 = Number(mapZone.y1 ?? 0);
+          const zoneY2 = Number(mapZone.y2 ?? map.gridSize ?? 20);
+          const zoneW = Math.max(1, zoneX2 - zoneX1);
+          const zoneD = Math.max(1, zoneY2 - zoneY1);
+          const cols = Math.min(2, sourceIds.length);
+          const rows = Math.ceil(sourceIds.length / cols);
+
+          sourceIds.forEach(function(deviceId, index) {
+            const live = iotById.get(deviceId) || {};
+            const col = index % cols;
+            const row = Math.floor(index / cols);
+            const x = zoneX1 + zoneW * ((col + 1) / (cols + 1));
+            const y = zoneY1 + zoneD * ((row + 1) / (rows + 1));
+            const syntheticDev = {
+              id: deviceId,
+              deviceId: deviceId,
+              name: live.name || 'Sensor ' + (index + 1),
+              x: x,
+              y: y,
+              z: 1.2,
+              telemetry: Object.assign({}, live.telemetry || {}),
+              snapshot: Object.assign({}, live.snapshot || {}, {
+                deviceId: deviceId,
+                name: live.name || 'Sensor ' + (index + 1),
+                category: 'sensor',
+                type: live.deviceData?.deviceType || live.type || 'woiosensor',
+                zone: String(envZone.id || envZone.zone || envZone.name || mapZone.zone || mapZone.name || '')
+              })
+            };
+            map.devices.push(syntheticDev);
+            existingSensorIds.add(deviceId);
+          });
+        });
+      });
     }
 
     // ---- Zone data map (merge env + groups) ------------------
@@ -676,8 +878,47 @@
       return [];
     }
 
+    function inferGroupSystemType(group) {
+      const txt = [
+        group?.system,
+        group?.systemType,
+        group?.type,
+        group?.category,
+        group?.name,
+        group?.notes,
+        group?.layoutType,
+      ].filter(Boolean).join(' ').toLowerCase();
+      if (/zipgrow|vertical|tower/.test(txt)) return 'zipgrow';
+      if (/multi\s*-?\s*level|rack|racking|shelf/.test(txt)) return 'rack';
+      if (/nft|channel|gully|raft/.test(txt)) return 'channel';
+      return 'tray';
+    }
+
+    function formatGroupSystemLabel(type) {
+      if (type === 'zipgrow') return 'ZipGrow tower';
+      if (type === 'rack') return 'Multi-level rack';
+      if (type === 'channel') return 'Channel/NFT line';
+      return 'Tray bench';
+    }
+
+    function getGroupRackLevels(group, gHeight, trayCount) {
+      const explicit = Number(group?.levels ?? group?.tiers ?? group?.shelves);
+      if (Number.isFinite(explicit) && explicit > 0) return Math.max(2, Math.min(8, Math.round(explicit)));
+      const byHeight = Math.round(Math.max(gHeight, 0.5) / 0.55);
+      const byCapacity = Math.ceil(Math.max(1, trayCount) / 4);
+      return Math.max(2, Math.min(8, Math.max(byHeight, byCapacity)));
+    }
+
+    function getGroupAirflowNote(type, rackLevels) {
+      if (type === 'zipgrow') return 'Vertical draft with side lane circulation';
+      if (type === 'rack') return 'Cross-flow through ' + Math.max(2, Number(rackLevels) || 2) + ' canopy levels';
+      if (type === 'channel') return 'Inline channel flow with edge circulation';
+      return 'Open canopy mixing around bench perimeter';
+    }
+
     // ---- Build 3D Scene --------------------------------------
     function buildScene() {
+      if (S.selectedMeshes.length) clearSelection({ silent: true });
       // Clear all meshes
       ['floors','zones','trays','sensors','equipment','walls','ceilings','labels'].forEach(k => {
         (S.meshes[k] || []).forEach(m => { S.scene.remove(m); disposeMesh(m); });
@@ -902,7 +1143,7 @@
             // Auto-layout: scale zone bounds from grid to meters
             const zx1 = (matched.x1 ?? 0) * zScaleX + offsetX, zy1 = (matched.y1 ?? 0) * zScaleZ;
             const zx2 = (matched.x2 ?? gridSize) * zScaleX + offsetX, zy2 = (matched.y2 ?? gridSize) * zScaleZ;
-            const gDims0 = S.groupDimensions[group.id] || {};
+            const gDims0 = getSavedGroupDimensions(group);
             const cellW = Math.max(2.0, (gDims0.length || 1.8) + 0.6);
             const cellD = Math.max(2.0, (gDims0.width || 1.0) + 0.6);
             const zoneW = Math.abs(zx2 - zx1);
@@ -922,22 +1163,149 @@
           const trayCount = Math.max(1, Math.min(Number(group.trays) || 1, 20));
           const color = STATUS_COLOR[gStatus] || 0x22c55e;
 
-          // Use persisted dimensions if available
-          const gDims = S.groupDimensions[group.id] || {};
+          // Use saved dimensions first, then the group's persisted server values, then defaults.
+          const gDims = getSavedGroupDimensions(group);
           const gLength = gDims.length || Math.min(trayCount, 4) * 0.45;
           const gWidth  = gDims.width  || Math.ceil(trayCount / 4) * 0.45;
           const gHeight = gDims.height || 0.3;
           const lightOri = gDims.lightOrientation || 'out-of-canopy';
 
+          const systemType = inferGroupSystemType(group);
+          const rackLevels = getGroupRackLevels(group, gHeight, trayCount);
+          const frameMat = new THREE.MeshStandardMaterial({ color: 0x38bdf8, roughness: 0.35, metalness: 0.35, transparent: true, opacity: 0.75 });
+          const growMat = new THREE.MeshStandardMaterial({ color: 0x34d399, roughness: 0.5, metalness: 0.2, transparent: true, opacity: 0.82 });
+          const detailMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.45, metalness: 0.25, transparent: true, opacity: 0.7 });
+
           const trayGeo = new THREE.BoxGeometry(gLength, gHeight, gWidth);
-          const trayMat = new THREE.MeshStandardMaterial({ color, roughness: 0.5, metalness: 0.15 });
+          const trayMat = new THREE.MeshStandardMaterial({ color, roughness: 0.5, metalness: 0.15, transparent: true, opacity: 0.18 });
           const tray = new THREE.Mesh(trayGeo, trayMat);
           tray.position.set(gx, gHeight / 2 + 0.12, gz);
           tray.castShadow = true;
           tray.receiveShadow = true;
-          tray.userData = { type: 'group', group, room, roomId: room.id, offsetX, roomW, roomD, dims: { length: gLength, width: gWidth, height: gHeight }, lightOrientation: lightOri };
+          tray.userData = {
+            type: 'group',
+            group,
+            room,
+            roomId: room.id,
+            offsetX,
+            zScaleX,
+            zScaleZ,
+            roomW,
+            roomD,
+            dims: { length: gLength, width: gWidth, height: gHeight },
+            lightOrientation: lightOri,
+            systemType,
+            rackLevels,
+          };
           S.scene.add(tray);
           S.meshes.trays.push(tray);
+
+          const addDetailMesh = function(mesh) {
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            mesh.userData = {
+              type: 'group-detail',
+              group,
+              room,
+              roomId: room.id,
+              systemType,
+              rackLevels,
+            };
+            S.scene.add(mesh);
+            S.meshes.trays.push(mesh);
+          };
+
+          if (systemType === 'zipgrow') {
+            const towerCount = Math.max(2, Math.min(8, Math.round(gLength / 0.34)));
+            const towerH = Math.max(0.6, gHeight * 0.95);
+            for (let ti = 0; ti < towerCount; ti++) {
+              const tx = gx - gLength / 2 + (ti + 0.5) * (gLength / towerCount);
+              const tz = gz + (ti % 2 === 0 ? -1 : 1) * Math.max(0.12, gWidth * 0.22);
+              const tower = new THREE.Mesh(new THREE.BoxGeometry(0.09, towerH, 0.16), growMat);
+              tower.position.set(tx, 0.12 + towerH / 2, tz);
+              addDetailMesh(tower);
+            }
+            const topRail = new THREE.Mesh(new THREE.BoxGeometry(gLength * 0.94, 0.05, 0.08), frameMat);
+            topRail.position.set(gx, 0.12 + towerH, gz);
+            addDetailMesh(topRail);
+            const baseRail = new THREE.Mesh(new THREE.BoxGeometry(gLength * 0.94, 0.05, 0.08), detailMat);
+            baseRail.position.set(gx, 0.16, gz);
+            addDetailMesh(baseRail);
+            const sideOffset = Math.max(0.14, gWidth * 0.36);
+            const sideRailA = new THREE.Mesh(new THREE.BoxGeometry(gLength * 0.92, 0.035, 0.04), frameMat);
+            sideRailA.position.set(gx, 0.12 + towerH * 0.5, gz - sideOffset);
+            addDetailMesh(sideRailA);
+            const sideRailB = sideRailA.clone();
+            sideRailB.position.z = gz + sideOffset;
+            addDetailMesh(sideRailB);
+          } else if (systemType === 'rack') {
+            const postW = 0.06;
+            const halfL = gLength * 0.46;
+            const halfW = gWidth * 0.46;
+            const postH = Math.max(0.7, gHeight);
+            [[-halfL, -halfW], [halfL, -halfW], [-halfL, halfW], [halfL, halfW]].forEach(function(p) {
+              const post = new THREE.Mesh(new THREE.BoxGeometry(postW, postH, postW), frameMat);
+              post.position.set(gx + p[0], 0.12 + postH / 2, gz + p[1]);
+              addDetailMesh(post);
+            });
+            for (let li = 0; li < rackLevels; li++) {
+              const ly = rackLevels === 1 ? 0.35 : (0.2 + (li * (postH - 0.2) / Math.max(1, rackLevels - 1)));
+              const shelf = new THREE.Mesh(new THREE.BoxGeometry(gLength * 0.93, 0.035, gWidth * 0.93), growMat);
+              shelf.position.set(gx, 0.12 + ly, gz);
+              addDetailMesh(shelf);
+              if (li < rackLevels - 1) {
+                const airflowGap = new THREE.Mesh(new THREE.BoxGeometry(gLength * 0.9, 0.008, 0.035), frameMat);
+                airflowGap.position.set(gx, 0.12 + ly + 0.07, gz);
+                addDetailMesh(airflowGap);
+              }
+            }
+          } else if (systemType === 'channel') {
+            const channelCount = Math.max(2, Math.min(8, Math.round(gWidth / 0.16)));
+            for (let ci = 0; ci < channelCount; ci++) {
+              const czOff = -gWidth / 2 + (ci + 0.5) * (gWidth / channelCount);
+              const ch = new THREE.Mesh(new THREE.BoxGeometry(gLength * 0.92, 0.07, 0.08), growMat);
+              ch.position.set(gx, 0.24, gz + czOff);
+              addDetailMesh(ch);
+            }
+            const manifold = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.22, gWidth * 0.94), detailMat);
+            manifold.position.set(gx - gLength * 0.44, 0.2, gz);
+            addDetailMesh(manifold);
+          } else {
+            const benchTop = new THREE.Mesh(new THREE.BoxGeometry(gLength * 0.94, 0.06, gWidth * 0.94), growMat);
+            benchTop.position.set(gx, 0.22, gz);
+            addDetailMesh(benchTop);
+            const rows = Math.max(1, Math.min(4, Math.ceil(trayCount / 4)));
+            const cols = Math.max(1, Math.min(4, Math.ceil(trayCount / rows)));
+            for (let ri = 1; ri < rows; ri++) {
+              const divider = new THREE.Mesh(new THREE.BoxGeometry(gLength * 0.9, 0.012, 0.02), detailMat);
+              divider.position.set(gx, 0.26, gz - gWidth * 0.45 + (ri * gWidth * 0.9 / rows));
+              addDetailMesh(divider);
+            }
+            for (let ci = 1; ci < cols; ci++) {
+              const divider = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.012, gWidth * 0.88), detailMat);
+              divider.position.set(gx - gLength * 0.45 + (ci * gLength * 0.9 / cols), 0.26, gz);
+              addDetailMesh(divider);
+            }
+          }
+
+          // Climate-aware markers: temperature probe, humidity probe, and airflow vector.
+          const tempProbe = new THREE.Mesh(new THREE.SphereGeometry(0.05, 10, 10), new THREE.MeshStandardMaterial({ color: 0xf87171, emissive: 0xf87171, emissiveIntensity: 0.35 }));
+          tempProbe.position.set(gx - gLength * 0.34, 0.12 + Math.min(1.5, Math.max(0.45, gHeight * 0.75)), gz - gWidth * 0.3);
+          addDetailMesh(tempProbe);
+
+          const rhProbe = new THREE.Mesh(new THREE.SphereGeometry(0.05, 10, 10), new THREE.MeshStandardMaterial({ color: 0x38bdf8, emissive: 0x38bdf8, emissiveIntensity: 0.35 }));
+          rhProbe.position.set(gx + gLength * 0.34, 0.12 + Math.min(1.5, Math.max(0.45, gHeight * 0.75)), gz + gWidth * 0.3);
+          addDetailMesh(rhProbe);
+
+          const airflowLen = Math.max(0.26, gWidth * 0.48);
+          const airflowStem = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.035, airflowLen), new THREE.MeshStandardMaterial({ color: 0x60a5fa, emissive: 0x60a5fa, emissiveIntensity: 0.25, transparent: true, opacity: 0.9 }));
+          airflowStem.position.set(gx, 0.12 + Math.max(0.3, gHeight * 0.52), gz);
+          addDetailMesh(airflowStem);
+
+          const airflowHead = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.13, 8), new THREE.MeshStandardMaterial({ color: 0x60a5fa, emissive: 0x60a5fa, emissiveIntensity: 0.35, transparent: true, opacity: 0.9 }));
+          airflowHead.rotation.x = Math.PI / 2;
+          airflowHead.position.set(gx, 0.12 + Math.max(0.3, gHeight * 0.52), gz + airflowLen * 0.5 + 0.06);
+          addDetailMesh(airflowHead);
 
           // Active indicator strip on top
           if (gStatus === 'active' || gStatus === 'growing') {
@@ -988,7 +1356,7 @@
           const dx = dev.x * scaleX + offsetX;
           const dz = dev.y * scaleZ;
           const cat = (dev.snapshot?.category || dev.snapshot?.type || '').toLowerCase();
-          const isSensor = cat.includes('sensor') || cat.includes('temp') || cat.includes('humid') || cat.includes('environment');
+          const isSensor = isSensorLikeDevice(dev);
 
           if (isSensor) {
             const sGeo = new THREE.SphereGeometry(0.22, 20, 20);
@@ -1133,9 +1501,104 @@
       if (m.material) { if (m.material.map) m.material.map.dispose(); m.material.dispose(); }
     }
 
+    function getDeviceIdCandidates(deviceLike) {
+      const ids = new Set();
+      const addId = (value) => {
+        if (value == null) return;
+        const raw = String(value).trim();
+        if (!raw) return;
+        ids.add(raw);
+        ids.add(raw.toUpperCase());
+        ids.add(raw.toLowerCase());
+      };
+      if (typeof deviceLike === 'string') {
+        addId(deviceLike);
+      } else if (deviceLike && typeof deviceLike === 'object') {
+        addId(deviceLike.deviceId);
+        addId(deviceLike.id);
+        addId(deviceLike.snapshot?.deviceId);
+        addId(deviceLike.telemetry?.deviceId);
+        addId(deviceLike.telemetry?.mac);
+        addId(deviceLike.mac);
+      }
+      return Array.from(ids);
+    }
+
+    function getMetricSourceForDevice(zones, metricKey, deviceLike) {
+      const ids = getDeviceIdCandidates(deviceLike);
+      if (!ids.length) return null;
+      for (const z of zones || []) {
+        const srcs = z?.sensors?.[metricKey]?.sources;
+        if (!srcs || typeof srcs !== 'object') continue;
+        for (const id of ids) {
+          if (srcs[id]) return srcs[id];
+        }
+        for (const src of Object.values(srcs)) {
+          const srcIds = getDeviceIdCandidates(src);
+          if (srcIds.some(id => ids.includes(id))) return src;
+        }
+      }
+      return null;
+    }
+
+    function getOverlayMetricForDevice(dev, metricKey) {
+      const devId = dev.deviceId || dev.snapshot?.deviceId || '';
+      const zones = S.envData?.zones || [];
+      const iotById = new Map((S.iotDevices || []).map(d => [d.deviceId, d]));
+      const toNum = (v) => {
+        const n = Number(v);
+        return Number.isFinite(n) ? n : null;
+      };
+
+      if (metricKey === 'vpd') {
+        const tempSrc = getMetricSourceForDevice(zones, 'tempC', dev);
+        const rhSrc = getMetricSourceForDevice(zones, 'rh', dev);
+        let temp = toNum(tempSrc?.current ?? tempSrc?.value);
+        let rh = toNum(rhSrc?.current ?? rhSrc?.value);
+        const tel = dev.telemetry || iotById.get(devId)?.telemetry || {};
+        if (temp == null) temp = toNum(tel.tempC ?? tel.temperature);
+        if (rh == null) rh = toNum(tel.rh ?? tel.humidity);
+        if (temp != null && rh != null) {
+          const svp = 0.6108 * Math.exp((17.27 * temp) / (temp + 237.3));
+          return { value: svp * (1 - rh / 100), source: 'computed-vpd' };
+        }
+      }
+
+      const envMetricKey = { temp: 'tempC', humidity: 'rh', co2: 'co2', vpd: 'vpd' }[metricKey] || metricKey;
+      const src = getMetricSourceForDevice(zones, envMetricKey, dev);
+      const envVal = src ? toNum(src.current ?? src.value) : null;
+      if (envVal != null) return { value: envVal, source: 'env-sources' };
+
+      const tel = dev.telemetry || iotById.get(devId)?.telemetry || {};
+      const keys = envMetricKey === 'tempC' ? ['tempC', 'temperature']
+        : envMetricKey === 'rh' ? ['rh', 'humidity']
+        : [envMetricKey];
+      for (const k of keys) {
+        const v = toNum(tel[k]);
+        if (v != null) return { value: v, source: 'iot-registry' };
+      }
+
+      return { value: null, source: 'none' };
+    }
+
+    function isSensorLikeDevice(dev) {
+      const cat = (dev.snapshot?.category || dev.snapshot?.type || '').toLowerCase();
+      const type = (dev.type || dev.deviceData?.deviceType || '').toLowerCase();
+      const name = (dev.name || dev.snapshot?.name || '').toLowerCase();
+      if (cat.includes('sensor') || cat.includes('temp') || cat.includes('humid') || cat.includes('environment')) return true;
+      if (type.includes('sensor') || type.includes('woio')) return true;
+      if (/^sen\b/.test(name) || name.includes('sensor')) return true;
+      const devId = dev.deviceId || dev.snapshot?.deviceId || '';
+      if (devId && (S.envData?.zones || []).some(function(z) {
+        return !!(z?.sensors?.tempC?.sources?.[devId] || z?.sensors?.rh?.sources?.[devId] || z?.sensors?.co2?.sources?.[devId]);
+      })) return true;
+      return false;
+    }
+
     // ---- Overlay system (FIXED: applies to both zones AND floor) ----
     function applyOverlay(type) {
       S.overlay = type;
+      console.log('[heatmap] applyOverlay called, type=' + type);
 
       // Reset zone meshes
       S.meshes.zones.forEach(m => {
@@ -1143,7 +1606,7 @@
           m.material.color.setHex(m.userData.baseColor);
           m.material.opacity = m.userData.baseOpacity;
           if (m.material.emissive) m.material.emissive.setHex(0x000000);
-          m.material.emissiveIntensity = 0;
+          m.material.emissiveIntensity = 0; m.material.visible = true;
         }
       });
       // Reset floor meshes (dispose gradient textures from previous overlay)
@@ -1155,6 +1618,9 @@
         fm.material.emissiveIntensity = 0;
         fm.material.needsUpdate = true;
       });
+      // Remove previous heatmap overlay planes
+      S.heatmapOverlays.forEach(function(m) { S.scene.remove(m); if (m.geometry) m.geometry.dispose(); if (m.material) { if (m.material.map) m.material.map.dispose(); m.material.dispose(); } });
+      S.heatmapOverlays = [];
       // Reset sensor meshes to default yellow
       S.meshes.sensors.forEach(function(sm) {
         if (sm.userData.type === 'sensor') {
@@ -1173,8 +1639,20 @@
       const cfg = OVERLAY_CFG[type];
       if (!cfg) { legend.classList.remove('visible'); return; }
 
-      // Collect all env data values for this metric (for fallback coloring)
-      const allVals = Object.values(S.zoneDataMap).map(d => d[cfg.key]).filter(v => v != null);
+      // Collect live per-device values first so real sensor spread drives the scale.
+      const liveValsForScale = [];
+      S.rooms.forEach(function(room) {
+        const map = S.roomMaps[room.id];
+        const devices = map?.devices || [];
+        devices.forEach(function(dev) {
+          if (!isSensorLikeDevice(dev)) return;
+          const exact = getOverlayMetricForDevice(dev, cfg.key);
+          if (exact.value != null) liveValsForScale.push(Number(exact.value));
+        });
+      });
+      const allVals = liveValsForScale.length
+        ? liveValsForScale
+        : Object.values(S.zoneDataMap).map(d => d[cfg.key]).filter(v => v != null);
       const hasData = allVals.length > 0;
 
       // Auto-scale: collect per-device source values for tighter data range
@@ -1191,8 +1669,9 @@
           });
         }
       });
+      console.log('[heatmap] zoneVals=' + JSON.stringify(allVals) + ' perDeviceVals=' + JSON.stringify(perDeviceVals));
       // Merge zone averages + per-device values for full range
-      const allDataVals = [...allVals, ...perDeviceVals];
+      const allDataVals = perDeviceVals.length ? perDeviceVals : allVals;
       let scaleMin = cfg.min, scaleMax = cfg.max;
       if (allDataVals.length >= 2) {
         const dataMin = Math.min(...allDataVals);
@@ -1208,6 +1687,9 @@
           if (scaleMax - scaleMin < 0.1) { scaleMin -= 0.5; scaleMax += 0.5; }
         }
       }
+
+      console.log('[heatmap] scaleMin=' + scaleMin.toFixed(2) + ' scaleMax=' + scaleMax.toFixed(2) + ' hasData=' + hasData);
+
 
       if (!hasData) {
         // No env data at all -- show legend but leave scene neutral
@@ -1237,9 +1719,9 @@
         }
         if (mesh) {
           mesh.material.color.setHex(color);
-          mesh.material.opacity = 0.45;
+          mesh.material.visible = false;
           mesh.material.emissive = new THREE.Color(color);
-          mesh.material.emissiveIntensity = 0.12;
+          mesh.material.emissiveIntensity = 0.03;
         }
       });
 
@@ -1257,139 +1739,97 @@
         const envMetricKey = { temp: 'tempC', humidity: 'rh', co2: 'co2', vpd: 'vpd' }[cfg.key] || cfg.key;
         const envZones = S.envData?.zones || [];
 
-        // Get sensor devices and their per-device env values
+        // Get sensor devices using only real positioned sensor readings
         devices.forEach(dev => {
           const cat = (dev.snapshot?.category || dev.snapshot?.type || '').toLowerCase();
-          const isSensor = cat.includes('sensor') || cat.includes('temp') || cat.includes('humid') || cat.includes('environment');
+          const isSensor = isSensorLikeDevice(dev);
           if (!isSensor) return;
-          const devId = dev.deviceId || '';
-          let val = null;
 
-          // Tier 1: Per-device source from env zones (freshest, per-sensor data)
-          if (devId) {
-            for (const ez of envZones) {
-              const src = ez.sensors?.[envMetricKey]?.sources?.[devId];
-              if (src && (src.current != null || src.value != null)) { val = Number(src.current ?? src.value); break; }
-            }
-          }
-
-          // Tier 2: Match device zone assignment to zoneDataMap
-          if (val == null && dev.snapshot?.zone != null) {
-            const devZone = String(dev.snapshot.zone);
-            const zEntry = S.zoneDataMap[devZone]
-              || S.zoneDataMap['zone-' + devZone]
-              || Object.values(S.zoneDataMap).find(d => d.name === devZone || d.name === 'Zone ' + devZone);
-            if (zEntry && zEntry[cfg.key] != null) val = zEntry[cfg.key];
-          }
-
-          // Tier 2.5: Spatial zone match -- find which zone this sensor sits in by grid coords
-          if (val == null && map.zones && map.zones.length > 0) {
-            const hitZone = map.zones.find(z =>
-              dev.x >= (z.x1 || 0) && dev.x <= (z.x2 || 999) &&
-              dev.y >= (z.y1 || 0) && dev.y <= (z.y2 || 999)
-            );
-            if (hitZone) {
-              const zName = hitZone.name || hitZone.zone || '';
-              const zEntry = S.zoneDataMap[zName]
-                || S.zoneDataMap['zone-' + zName]
-                || S.zoneDataMap['Zone ' + zName]
-                || Object.values(S.zoneDataMap).find(d => d.name === zName || d.name === 'Zone ' + zName);
-              if (zEntry && zEntry[cfg.key] != null) val = zEntry[cfg.key];
-            }
-          }
-
-          // Tier 3: Fallback to average of all zone values (not just the first zone)
-          if (val == null && allVals.length > 0) {
-            val = allVals.reduce((a, b) => a + b, 0) / allVals.length;
-          }
-
-          if (val != null) {
-            points.push({ gx: dev.x / gridSize, gz: dev.y / gridSize, val });
+          const exact = getOverlayMetricForDevice(dev, cfg.key);
+          const val = exact.value;
+          if (val != null && Number.isFinite(Number(dev.x)) && Number.isFinite(Number(dev.y))) {
+            points.push({ gx: dev.x / gridSize, gz: dev.y / gridSize, val, source: exact.source || 'env-sources' });
           }
         });
-        // If we have zone-level data but no sensor positions, spread values across zones
-        if (points.length === 0) {
-          const zones = map.zones || [];
-          zones.forEach((z, zi) => {
-            const zName = z.name || z.zone || ('Zone ' + (zi + 1));
-            const zData = Object.values(S.zoneDataMap).find(d => d.name === zName);
-            if (zData && zData[cfg.key] != null) {
-              const cx = ((z.x1 || 0) + (z.x2 || roomW)) / 2 / roomW;
-              const cz = ((z.y1 || 0) + (z.y2 || roomD)) / 2 / roomD;
-              points.push({ gx: cx, gz: cz, val: zData[cfg.key] });
-            }
-          });
-        }
-        // Fallback: use average across all zone data
-        if (points.length === 0 && allVals.length > 0) {
-          const avg = allVals.reduce((a, b) => a + b, 0) / allVals.length;
-          points.push({ gx: 0.5, gz: 0.5, val: avg });
-        }
+        // Real-only rule: do not invent zone-center or room-average points.
         if (points.length > 0) {
           roomSensorData[room.id] = { points, roomW, roomD };
         }
       });
 
-      // Generate gradient texture per floor
+      console.log('[heatmap] roomSensorData:', Object.entries(roomSensorData).map(function(e) { var pts = e[1].points; return e[0] + ':' + pts.length + 'pts vals=[' + pts.map(function(p){return p.val.toFixed(1)+'@('+p.gx.toFixed(2)+','+p.gz.toFixed(2)+')'}).join(',') + ']'; }));
+      // Generate heatmap overlay as a dedicated PlaneGeometry with MeshBasicMaterial
+      // (MeshBasicMaterial ignores scene lighting = vivid, predictable colors)
       Object.entries(S.floorMeshMap).forEach(([roomId, fm]) => {
         const sd = roomSensorData[roomId];
         if (!sd) return;
-        const res = 64; // texture resolution
-        const canvas = document.createElement('canvas');
+        const pointVals = sd.points.map(p => Number(p.val)).filter(v => Number.isFinite(v));
+        const localMin = pointVals.length ? Math.min(...pointVals) : scaleMin;
+        const localMax = pointVals.length ? Math.max(...pointVals) : scaleMax;
+        const localPad = Math.max((localMax - localMin) * 0.04, cfg.key === 'humidity' ? 0.35 : 0.01);
+        const renderMin = localMin - localPad;
+        const renderMax = localMax + localPad;
+        const res = 128;
+        const canvas = document.createElement("canvas");
         canvas.width = res; canvas.height = res;
-        const ctx = canvas.getContext('2d');
+        const ctx = canvas.getContext("2d");
         const imgData = ctx.createImageData(res, res);
         for (let py = 0; py < res; py++) {
           for (let px = 0; px < res; px++) {
-            const fx = px / (res - 1); // 0..1 across room width
-            const fz = py / (res - 1); // 0..1 across room depth
-            // Inverse-distance weighted interpolation
+            const fx = px / (res - 1);
+            const fz = py / (res - 1);
             let wSum = 0, vSum = 0;
-            sd.points.forEach(p => {
-              const dx = fx - p.gx, dz = fz - p.gz;
-              const dist = Math.sqrt(dx * dx + dz * dz) + 0.001;
-              const w = 1 / (dist * dist);
-              wSum += w;
-              vSum += w * p.val;
-            });
+            sd.points
+              .map(p => {
+                const dx = fx - p.gx, dz = fz - p.gz;
+                return { p, dist: Math.sqrt(dx * dx + dz * dz) + 0.001 };
+              })
+              .sort((a, b) => a.dist - b.dist)
+              .slice(0, Math.min(3, sd.points.length))
+              .forEach(({ p, dist }) => {
+                const w = 1 / Math.pow(dist, 6);
+                wSum += w; vSum += w * p.val;
+              });
             const val = wSum > 0 ? vSum / wSum : allVals[0];
-            const t = Math.max(0, Math.min(1, (val - scaleMin) / (scaleMax - scaleMin)));
+            const t = Math.max(0, Math.min(1, (val - renderMin) / Math.max(0.001, (renderMax - renderMin))));
             const c = multiLerp(cfg.colors, t);
             const idx = (py * res + px) * 4;
-            imgData.data[idx] = (c >> 16) & 0xff;
+            imgData.data[idx]     = (c >> 16) & 0xff;
             imgData.data[idx + 1] = (c >> 8) & 0xff;
             imgData.data[idx + 2] = c & 0xff;
-            imgData.data[idx + 3] = 180; // semi-transparent
+            imgData.data[idx + 3] = 255;
           }
         }
         ctx.putImageData(imgData, 0, 0);
+        var px0 = imgData.data.slice(0,4), pxMid = imgData.data.slice(res*res*2, res*res*2+4), pxEnd = imgData.data.slice(-4);
+        console.log("[heatmap] canvas pixels: corner=[" + Array.from(px0) + "] mid=[" + Array.from(pxMid) + "] end=[" + Array.from(pxEnd) + "]");
         const tex = new THREE.CanvasTexture(canvas);
         tex.magFilter = THREE.LinearFilter;
         tex.minFilter = THREE.LinearFilter;
-        fm.material.map = tex;
-        fm.material.color.setHex(0xffffff);
-        fm.material.emissive = new THREE.Color(0x000000);
-        fm.material.emissiveIntensity = 0;
-        fm.material.opacity = 0.85;
-        fm.material.needsUpdate = true;
+        // Dedicated overlay plane: PlaneGeometry + MeshBasicMaterial (no lighting dependency)
+        const ud = fm.userData;
+        const roomW = ud.roomW || 20, roomD = ud.roomD || 20;
+        const overlayGeo = new THREE.PlaneGeometry(roomW, roomD);
+        const overlayMat = new THREE.MeshBasicMaterial({
+          map: tex, transparent: true, opacity: 0.96,
+          side: THREE.DoubleSide, depthWrite: false
+        });
+        const overlayMesh = new THREE.Mesh(overlayGeo, overlayMat);
+        // Position just above floor top surface (floor center Y=0, height=0.12, top=0.06)
+        overlayMesh.rotation.x = -Math.PI / 2;
+        overlayMesh.position.set(fm.position.x, 0.07, fm.position.z);
+        overlayMesh.renderOrder = 1;
+        S.scene.add(overlayMesh);
+        S.heatmapOverlays.push(overlayMesh);
+        console.log("[heatmap] Overlay plane added for " + roomId + " at Y=0.07, " + sd.points.length + " pts, size=" + roomW + "x" + roomD);
       });
-
-
       // Color sensor spheres based on per-device readings
-      var envMetricKeyS = { temp: 'tempC', humidity: 'rh', co2: 'co2', vpd: 'vpd' }[cfg.key] || cfg.key;
-      var envZonesS = S.envData?.zones || [];
       S.meshes.sensors.forEach(function(sm) {
         if (sm.userData.type !== 'sensor') return;
         var dev = sm.userData.device;
-        var devId = dev.deviceId || '';
         var val = null;
-        // Per-device source lookup
-        if (devId) {
-          for (var i = 0; i < envZonesS.length; i++) {
-            var src = envZonesS[i].sensors?.[envMetricKeyS]?.sources?.[devId];
-            if (src && (src.current != null || src.value != null)) { val = Number(src.current ?? src.value); break; }
-          }
-        }
+        var exactReading = getOverlayMetricForDevice(dev, cfg.key);
+        if (exactReading && exactReading.value != null) val = Number(exactReading.value);
         // Fallback: device zone assignment
         if (val == null && dev.snapshot?.zone != null) {
           var devZone = String(dev.snapshot.zone);
@@ -1418,10 +1858,6 @@
             }
           }
         }
-        // Fallback: average of all zone data
-        if (val == null && allVals.length > 0) {
-          val = allVals.reduce(function(a, b) { return a + b; }, 0) / allVals.length;
-        }
         if (val != null) {
           var t2 = Math.max(0, Math.min(1, (val - scaleMin) / (scaleMax - scaleMin)));
           var c2 = multiLerp(cfg.colors, t2);
@@ -1449,6 +1885,7 @@
         const isAutoScaled = (scaleMin !== cfg.min || scaleMax !== cfg.max);
         document.getElementById('legendTitle').textContent = cfg.label + ' (avg: ' + avg.toFixed(1) + cfg.unit + (isAutoScaled ? ', zoomed' : '') + ')';
       }
+      refreshSelectionVisuals();
     }
 
     function multiLerp(colors, t) {
@@ -1515,11 +1952,15 @@
           const g = ud.group;
           title = g.name || g.crop || g.recipe || 'Group';
           const d = ud.dims;
-          sub = d.length.toFixed(1) + 'm L x ' + d.width.toFixed(1) + 'm W x ' + d.height.toFixed(1) + 'm H | ' + (g.trays || 0) + ' trays';
+          const sysType = ud.systemType || inferGroupSystemType(g);
+          const sysLabel = formatGroupSystemLabel(sysType);
+          const flowNote = getGroupAirflowNote(sysType, ud.rackLevels || 0);
+          sub = d.length.toFixed(1) + 'm L x ' + d.width.toFixed(1) + 'm W x ' + d.height.toFixed(1) + 'm H | ' + (g.trays || 0) + ' trays | ' + sysLabel + ' | ' + flowNote;
         } else if (ud.type === 'sensor') {
           title = ud.device.snapshot?.name || 'Sensor';
-          const zData = findSensorZoneData(ud.device);
-          sub = zData ? (zData.temp?.toFixed(1) ?? '--') + '\u00b0C | ' + Math.round(zData.humidity ?? 0) + '% RH' : 'No data';
+          const devReadings = getPerDeviceReadings(ud.device);
+          const zData = devReadings || findSensorZoneData(ud.device);
+          sub = zData ? ((zData.temp != null ? zData.temp.toFixed(1) : '--') + '°C | ' + (zData.humidity != null ? Math.round(zData.humidity) : '--') + '% RH') : 'No data';
         } else if (ud.type === 'equipment') {
           title = ud.device?.snapshot?.name || 'Equipment';
           sub = ud.device?.snapshot?.category || '';
@@ -1551,7 +1992,25 @@
 
     function findSensorZoneData(device) {
       const zone = String(device.snapshot?.zone ?? '');
-      return S.zoneDataMap[zone] || findZoneDataByName(zone) || Object.values(S.zoneDataMap)[0] || null;
+      return S.zoneDataMap[zone]
+        || S.zoneDataMap['zone-' + zone]
+        || findZoneDataByName(zone)
+        || findZoneDataByName('Zone ' + zone)
+        || Object.values(S.zoneDataMap)[0] || null;
+    }
+
+    // Get per-device sensor readings from env API (not zone averages)
+    function getPerDeviceReadings(deviceLike) {
+      var envZones = S.envData?.zones || [];
+      var result = {};
+      var metricMap = { tempC: 'temp', rh: 'humidity', co2: 'co2', vpd: 'vpd' };
+      Object.keys(metricMap).forEach(function(envKey) {
+        var src = getMetricSourceForDevice(envZones, envKey, deviceLike);
+        if (src && (src.current != null || src.value != null)) {
+          result[metricMap[envKey]] = Number(src.current ?? src.value);
+        }
+      });
+      return Object.keys(result).length > 0 ? result : null;
     }
 
     function findZoneDataByName(name) {
@@ -1593,7 +2052,7 @@
 
 
     // ---- Collision detection for floor equipment --------------
-    function checkFloorCollision(mesh, newX, newZ) {
+    function checkFloorCollision(mesh, newX, newZ, ignoreSet) {
       var ud = mesh.userData;
       var roomId = ud.roomId || (ud.room ? ud.room.id : '');
       // Get bounding half-sizes of the dragged mesh (min 0.3m)
@@ -1619,6 +2078,7 @@
 
       for (var i = 0; i < floorMeshes.length; i++) {
         var other = floorMeshes[i];
+        if (ignoreSet && ignoreSet.has(other)) continue;
         var ob = new THREE.Box3().setFromObject(other);
         var ohx = Math.max(0.3, (ob.max.x - ob.min.x) / 2);
         var ohz = Math.max(0.3, (ob.max.z - ob.min.z) / 2);
@@ -1633,6 +2093,259 @@
       return false;
     }
 
+    function isSelectableMesh(mesh) {
+      if (!mesh || !mesh.userData) return false;
+      return mesh.userData.type === 'sensor' || mesh.userData.type === 'equipment' || mesh.userData.type === 'group';
+    }
+
+    function getMeshRoomId(mesh) {
+      if (!mesh || !mesh.userData) return '';
+      return mesh.userData.roomId || (mesh.userData.room ? mesh.userData.room.id : '');
+    }
+
+    function getSelectionKey(mesh) {
+      if (!isSelectableMesh(mesh)) return '';
+      var ud = mesh.userData;
+      if (ud.type === 'group') return 'group:' + (getGroupKey(ud.group) || '');
+      var dev = ud.device || {};
+      return ud.type + ':' + (dev.deviceId || dev.id || dev.snapshot?.deviceId || dev.snapshot?.name || dev.name || 'unknown');
+    }
+
+    function isMeshSelected(mesh) {
+      var key = getSelectionKey(mesh);
+      return !!key && S.selectedMeshes.some(function(selectedMesh) { return getSelectionKey(selectedMesh) === key; });
+    }
+
+    function canJoinSelection(mesh) {
+      if (!isSelectableMesh(mesh)) return false;
+      if (S.selectedMeshes.length === 0) return true;
+      var first = S.selectedMeshes[0];
+      return first && first.userData && first.userData.type === mesh.userData.type && getMeshRoomId(first) === getMeshRoomId(mesh);
+    }
+
+    function applyMeshSelectionState(mesh, isSelected) {
+      if (!mesh || !mesh.scale) return;
+      if (!mesh.userData._baseScale) {
+        mesh.userData._baseScale = { x: mesh.scale.x, y: mesh.scale.y, z: mesh.scale.z };
+      }
+      var base = mesh.userData._baseScale;
+      var mult = isSelected ? 1.08 : 1;
+      mesh.scale.set(base.x * mult, base.y * mult, base.z * mult);
+    }
+
+    function refreshSelectionVisuals() {
+      var selectableMeshes = []
+        .concat(S.meshes.sensors.filter(isSelectableMesh))
+        .concat(S.meshes.equipment.filter(isSelectableMesh))
+        .concat(S.meshes.trays.filter(function(mesh) { return mesh.userData && mesh.userData.type === 'group'; }));
+      selectableMeshes.forEach(function(mesh) {
+        applyMeshSelectionState(mesh, isMeshSelected(mesh));
+      });
+    }
+
+    function setSelection(meshes, opts) {
+      opts = opts || {};
+      S.selectedMeshes = (meshes || []).filter(function(mesh, index, arr) {
+        return isSelectableMesh(mesh) && arr.findIndex(function(other) { return getSelectionKey(other) === getSelectionKey(mesh); }) === index;
+      });
+      refreshSelectionVisuals();
+      if (!opts.silent && S.editMode) {
+        var bar = document.getElementById('statusBar');
+        if (bar) {
+          if (S.selectedMeshes.length > 1) {
+            bar.style.color = '';
+            bar.textContent = S.selectedMeshes.length + ' ' + S.selectedMeshes[0].userData.type + ' items selected -- drag any selected item to move as a group';
+          } else if (S.selectedMeshes.length === 1) {
+            bar.style.color = '';
+            bar.textContent = 'Selected 1 ' + S.selectedMeshes[0].userData.type;
+          }
+        }
+      }
+    }
+
+    function clearSelection(opts) {
+      opts = opts || {};
+      S.selectedMeshes = [];
+      refreshSelectionVisuals();
+      if (!opts.silent) {
+        var bar = document.getElementById('statusBar');
+        if (bar && S.editMode) {
+          bar.style.color = '';
+          bar.textContent = 'Selection cleared';
+        }
+      }
+    }
+
+    function toggleSelection(mesh) {
+      if (!isSelectableMesh(mesh)) return;
+      if (!canJoinSelection(mesh)) {
+        setSelection([mesh]);
+        return;
+      }
+      var key = getSelectionKey(mesh);
+      if (isMeshSelected(mesh)) {
+        setSelection(S.selectedMeshes.filter(function(selectedMesh) { return getSelectionKey(selectedMesh) !== key; }));
+      } else {
+        setSelection(S.selectedMeshes.concat(mesh));
+      }
+    }
+
+    function getDragFollowerMeshes(mesh) {
+      var followers = [];
+      if (!mesh || !mesh.userData) return followers;
+      if (mesh.userData.type === 'group') {
+        var gKey = getGroupKey(mesh.userData.group);
+        S.meshes.trays.forEach(function(other) {
+          if (other !== mesh && other.userData && other.userData.type === 'group-detail' && getGroupKey(other.userData.group) === gKey) {
+            followers.push(other);
+          }
+        });
+      }
+      if (mesh.userData._arrowPivot) followers.push(mesh.userData._arrowPivot);
+      return followers;
+    }
+
+    function createDragSelectionEntries(meshes) {
+      return (meshes || []).map(function(mesh) {
+        return {
+          mesh: mesh,
+          startX: mesh.position.x,
+          startZ: mesh.position.z,
+          followers: getDragFollowerMeshes(mesh).map(function(follower) {
+            return { mesh: follower, startX: follower.position.x, startZ: follower.position.z };
+          })
+        };
+      });
+    }
+
+    function clampDragPosition(mesh, newX, newZ) {
+      var ud = mesh.userData || {};
+      var rOffX = ud.offsetX || 0;
+      var rW = ud.roomW;
+      var rD = ud.roomD;
+      if (rW == null || rD == null) return { x: newX, z: newZ };
+      if (ud.type === 'zone') {
+        var zbb = new THREE.Box3().setFromObject(mesh);
+        var zhx = (zbb.max.x - zbb.min.x) / 2;
+        var zhz = (zbb.max.z - zbb.min.z) / 2;
+        return {
+          x: Math.max(rOffX + zhx, Math.min(rOffX + rW - zhx, newX)),
+          z: Math.max(zhz, Math.min(rD - zhz, newZ))
+        };
+      }
+      var margin = 0.2;
+      return {
+        x: Math.max(rOffX + margin, Math.min(rOffX + rW - margin, newX)),
+        z: Math.max(margin, Math.min(rD - margin, newZ))
+      };
+    }
+
+    function isGroupedDragPlacementValid(mesh, newX, newZ, ignoreSet) {
+      var clamped = clampDragPosition(mesh, newX, newZ);
+      if (Math.abs(clamped.x - newX) > 0.001 || Math.abs(clamped.z - newZ) > 0.001) return false;
+      if (mesh.position.y < 1.5 && mesh.userData.type !== 'zone' && checkFloorCollision(mesh, newX, newZ, ignoreSet)) return false;
+      return true;
+    }
+
+    function applyDragEntryPositions(entries, deltaX, deltaZ) {
+      entries.forEach(function(entry) {
+        entry.mesh.position.x = entry.startX + deltaX;
+        entry.mesh.position.z = entry.startZ + deltaZ;
+        entry.followers.forEach(function(follower) {
+          follower.mesh.position.x = follower.startX + deltaX;
+          follower.mesh.position.z = follower.startZ + deltaZ;
+        });
+      });
+    }
+
+    async function saveDragSelection(meshes) {
+      var moved = (meshes || []).filter(isSelectableMesh);
+      if (moved.length === 0) return;
+      var roomIdsToSave = new Set();
+      var groupsChanged = false;
+
+      moved.forEach(function(mesh) {
+        var ud = mesh.userData;
+        if (ud.type === 'sensor' || ud.type === 'equipment') {
+          var dev = ud.device;
+          var scX = ud.scaleX || 1;
+          var scZ = ud.scaleZ || 1;
+          var offX = ud.offsetX || 0;
+          dev.x = Math.round((mesh.position.x - offX) / scX);
+          dev.y = Math.round(mesh.position.z / scZ);
+          if (dev.z != null || mesh.position.y > 0) dev.z = parseFloat(mesh.position.y.toFixed(1));
+          var roomId = getMeshRoomId(mesh);
+          if (roomId && S.roomMaps[roomId]) {
+            var map = S.roomMaps[roomId];
+            var detectedZone = (map.zones || []).find(function(z) {
+              return dev.x >= (z.x1 || 0) && dev.x <= (z.x2 || 999) && dev.y >= (z.y1 || 0) && dev.y <= (z.y2 || 999);
+            });
+            if (detectedZone && dev.snapshot) {
+              dev.snapshot.zone = detectedZone.zone || detectedZone.name;
+            }
+            roomIdsToSave.add(roomId);
+          }
+        } else if (ud.type === 'group') {
+          var group = ud.group;
+          var gScX = ud.zScaleX || ud.scaleX || 1;
+          var gScZ = ud.zScaleZ || ud.scaleZ || 1;
+          var gOffX = ud.offsetX || 0;
+          group.gridX = Math.max(0, Math.round((mesh.position.x - gOffX) / gScX));
+          group.gridY = Math.max(0, Math.round(mesh.position.z / gScZ));
+          group.lastModified = new Date().toISOString();
+          var gRoomId = getMeshRoomId(mesh);
+          if (gRoomId && S.roomMaps[gRoomId]) {
+            var gMap = S.roomMaps[gRoomId];
+            var gDetectedZone = (gMap.zones || []).find(function(z) {
+              return group.gridX >= (z.x1 || 0) && group.gridX <= (z.x2 || 999) && group.gridY >= (z.y1 || 0) && group.gridY <= (z.y2 || 999);
+            });
+            if (gDetectedZone) group.zone = String(gDetectedZone.zone || gDetectedZone.name || group.zone || '');
+          }
+          groupsChanged = true;
+        }
+      });
+
+      var saveFailed = false;
+      for (const roomId of roomIdsToSave) {
+        try {
+          var roomResp = await authFetch('/data/room-map-' + roomId + '.json', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(S.roomMaps[roomId])
+          });
+          if (!roomResp.ok) saveFailed = true;
+        } catch (err) {
+          console.error('[3D] Multi-drag room save error:', err);
+          saveFailed = true;
+        }
+      }
+
+      if (groupsChanged) {
+        try {
+          var groupsResp = await authFetch('/data/groups.json', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(S.groups)
+          });
+          if (!groupsResp.ok) saveFailed = true;
+        } catch (err) {
+          console.error('[3D] Multi-drag group save error:', err);
+          saveFailed = true;
+        }
+      }
+
+      var bar = document.getElementById('statusBar');
+      if (saveFailed) {
+        bar.textContent = 'Grouped move save failed';
+        bar.style.color = '#f87171';
+      } else {
+        bar.textContent = moved.length + ' items moved and saved';
+        bar.style.color = '#4ade80';
+      }
+      setTimeout(function() { bar.style.color = ''; }, 2000);
+      if (groupsChanged) buildScene();
+    }
+
     // ---- Edit Mode: Drag-and-drop ----------------------------
     function toggleEditMode() {
       S.editMode = !S.editMode;
@@ -1642,15 +2355,20 @@
       indicator.classList.toggle('visible', S.editMode);
       var container = document.getElementById('viewer-container');
       container.classList.toggle('edit-mode', S.editMode);
-      if (!S.editMode && S.dragTarget) {
-        S.dragTarget = null;
-        S.isDragging = false;
-        S.controls.enabled = true;
+      if (!S.editMode) {
+        clearSelection({ silent: true });
+        if (S.dragTarget) {
+          S.dragTarget = null;
+          S.dragSelection = [];
+          S.isDragging = false;
+          S.controls.enabled = true;
+        }
       }
     }
 
     function onPointerDown(e) {
       if (!S.editMode) return;
+      if (e.shiftKey || e.metaKey || e.ctrlKey) return;
       var container = document.getElementById('viewer-container');
       var rect = container.getBoundingClientRect();
       S.mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
@@ -1663,7 +2381,14 @@
         .concat(S.meshes.trays.filter(function(m) { return m.userData.type === 'group'; }));
       var hits = S.raycaster.intersectObjects(draggable);
       if (hits.length > 0) {
-        S.dragTarget = hits[0].object;
+        var hitMesh = hits[0].object;
+        if (isSelectableMesh(hitMesh) && !isMeshSelected(hitMesh)) {
+          setSelection([hitMesh], { silent: true });
+        }
+        S.dragTarget = hitMesh;
+        S.dragSelection = isSelectableMesh(hitMesh) && isMeshSelected(hitMesh) && S.selectedMeshes.length > 1
+          ? createDragSelectionEntries(S.selectedMeshes)
+          : createDragSelectionEntries([hitMesh]);
         S.controls.enabled = false;
         S.dragPlane.set(new THREE.Vector3(0, 1, 0), -S.dragTarget.position.y);
         var intersection = new THREE.Vector3();
@@ -1689,25 +2414,32 @@
       if (S.raycaster.ray.intersectPlane(S.dragPlane, intersection)) {
         var newX = intersection.x + S.dragOffset.x;
         var newZ = intersection.z + S.dragOffset.z;
+        var dragEntries = S.dragSelection && S.dragSelection.length ? S.dragSelection : createDragSelectionEntries([S.dragTarget]);
+        if (dragEntries.length > 1 && isSelectableMesh(S.dragTarget)) {
+          var anchorEntry = dragEntries.find(function(entry) { return entry.mesh === S.dragTarget; }) || dragEntries[0];
+          var deltaX = newX - anchorEntry.startX;
+          var deltaZ = newZ - anchorEntry.startZ;
+          var ignoreSet = new Set(dragEntries.map(function(entry) { return entry.mesh; }));
+          var blocked = dragEntries.some(function(entry) {
+            return !isGroupedDragPlacementValid(entry.mesh, entry.startX + deltaX, entry.startZ + deltaZ, ignoreSet);
+          });
+          if (blocked) {
+            document.getElementById('statusBar').textContent = 'Blocked -- grouped move would overlap or leave the room';
+            document.getElementById('statusBar').style.color = '#f87171';
+          } else {
+            applyDragEntryPositions(dragEntries, deltaX, deltaZ);
+            document.getElementById('statusBar').style.color = '';
+            document.getElementById('statusBar').textContent = dragEntries.length + ' items moving as a group';
+            S.isDragging = true;
+            document.getElementById('farmCanvas').classList.add('dragging');
+          }
+          return;
+        }
         // Clamp to room footprint
         var ud = S.dragTarget.userData;
-        var rOffX = ud.offsetX || 0;
-        var rW = ud.roomW;
-        var rD = ud.roomD;
-        if (rW != null && rD != null) {
-          if (ud.type === 'zone') {
-            // Zone drag: clamp so entire zone stays inside room
-            var zbb = new THREE.Box3().setFromObject(S.dragTarget);
-            var zhx = (zbb.max.x - zbb.min.x) / 2;
-            var zhz = (zbb.max.z - zbb.min.z) / 2;
-            newX = Math.max(rOffX + zhx, Math.min(rOffX + rW - zhx, newX));
-            newZ = Math.max(zhz, Math.min(rD - zhz, newZ));
-          } else {
-            var margin = 0.2;
-            newX = Math.max(rOffX + margin, Math.min(rOffX + rW - margin, newX));
-            newZ = Math.max(margin, Math.min(rD - margin, newZ));
-          }
-        }
+        var clamped = clampDragPosition(S.dragTarget, newX, newZ);
+        newX = clamped.x;
+        newZ = clamped.z;
         // Collision check with sliding: try X+Z, then X only, then Z only
         var isFloor = S.dragTarget.position.y < 1.5 && ud.type !== 'zone';
         var collisionBlocked = false;
@@ -1751,9 +2483,14 @@
       S.controls.enabled = true;
       document.getElementById('farmCanvas').classList.remove('dragging');
       if (S.isDragging) {
-        saveDragPosition(S.dragTarget);
+        if (S.dragSelection && S.dragSelection.length > 1 && isSelectableMesh(S.dragTarget)) {
+          saveDragSelection(S.dragSelection.map(function(entry) { return entry.mesh; }));
+        } else {
+          saveDragPosition(S.dragTarget);
+        }
       }
       S.dragTarget = null;
+      S.dragSelection = [];
       S.isDragging = false;
     }
 
@@ -1831,10 +2568,47 @@
           buildScene();
         }
       } else if (ud.type === 'group') {
-        // For groups, show feedback. Full rebuild snaps to zone grid.
-        document.getElementById('statusBar').textContent = 'Group repositioned';
-        document.getElementById('statusBar').style.color = '#4ade80';
-        setTimeout(function() { document.getElementById('statusBar').style.color = ''; }, 2000);
+        // Convert world position back to grid coordinates and persist
+        var group = ud.group;
+        var gScX = ud.zScaleX || ud.scaleX || 1;
+        var gScZ = ud.zScaleZ || ud.scaleZ || 1;
+        var gOffX = ud.offsetX || 0;
+        var newGridX = Math.round((mesh.position.x - gOffX) / gScX);
+        var newGridZ = Math.round(mesh.position.z / gScZ);
+        group.gridX = Math.max(0, newGridX);
+        group.gridY = Math.max(0, newGridZ);
+        group.lastModified = new Date().toISOString();
+
+        // Auto-detect zone from new grid position
+        var gRoomId = ud.roomId || (ud.room ? ud.room.id : '');
+        if (gRoomId && S.roomMaps[gRoomId]) {
+          var gMap = S.roomMaps[gRoomId];
+          var gDetectedZone = (gMap.zones || []).find(function(z) {
+            return group.gridX >= (z.x1 || 0) && group.gridX <= (z.x2 || 999) &&
+                   group.gridY >= (z.y1 || 0) && group.gridY <= (z.y2 || 999);
+          });
+          if (gDetectedZone) {
+            group.zone = String(gDetectedZone.zone || gDetectedZone.name || group.zone || '');
+          }
+        }
+
+        // Save all groups (captures all previously moved groups too)
+        authFetch('/data/groups.json', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(S.groups)
+        }).then(function(resp) {
+          if (resp.ok) {
+            document.getElementById('statusBar').textContent = (group.name || 'Group') + ' position saved (' + group.gridX + ', ' + group.gridY + ')';
+            document.getElementById('statusBar').style.color = '#4ade80';
+            setTimeout(function() { document.getElementById('statusBar').style.color = ''; }, 2000);
+          }
+        }).catch(function(err) {
+          console.error('[3D] Group position save error:', err);
+          document.getElementById('statusBar').textContent = 'Position save failed';
+          document.getElementById('statusBar').style.color = '#f87171';
+          setTimeout(function() { document.getElementById('statusBar').style.color = ''; }, 2000);
+        });
       }
     }
 
@@ -1854,6 +2628,26 @@
         ...S.meshes.zones.filter(m => m.isMesh && m.userData.type === 'zone'),
       ];
       const hits = S.raycaster.intersectObjects(targets);
+      if (S.editMode) {
+        if (hits.length === 0) {
+          clearSelection({ silent: true });
+          document.getElementById('detailPanel').classList.remove('visible');
+          return;
+        }
+        var hitMesh = hits[0].object;
+        if (isSelectableMesh(hitMesh)) {
+          if (e.shiftKey || e.metaKey || e.ctrlKey) {
+            toggleSelection(hitMesh);
+            return;
+          }
+          if (!isMeshSelected(hitMesh) || S.selectedMeshes.length > 1) {
+            setSelection([hitMesh], { silent: true });
+          }
+          showDetailPanel(hitMesh.userData);
+          return;
+        }
+        clearSelection({ silent: true });
+      }
       if (hits.length > 0) showDetailPanel(hits[0].object.userData);
     }
 
@@ -1896,6 +2690,11 @@
         if (similarCount > 1) {
           html += '<div class="dp-label">Similar Units</div><div class="dp-value" style="color:#818cf8">' + similarCount + ' x ' + nameBase + '</div>';
         }
+
+        const systemType = ud.systemType || inferGroupSystemType(g);
+        const systemLabel = formatGroupSystemLabel(systemType);
+        const airflowNote = getGroupAirflowNote(systemType, ud.rackLevels || getGroupRackLevels(g, d.height, Number(g.trays) || 1));
+        html += '<div class="dp-label">System Profile</div><div class="dp-value">' + systemLabel + ' | ' + airflowNote + '</div>';
 
         // Editable crop + status
         html += '<div class="dp-section"><div class="dp-label">Crop Assignment</div>';
@@ -1960,12 +2759,7 @@
           g.length = l; g.width = w; g.height = h; g.lightOrientation = ori;
           saveGroupDimensions();
           try {
-            const resp = await authFetch('/data/groups.json', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(S.groups)
-            });
-            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            await persistGroupsData(S.groups);
             btn.textContent = 'Saved'; btn.classList.add('saved');
           } catch (err) {
             console.error('[3D] Group save error:', err);
@@ -1991,19 +2785,14 @@
               if (newCrop) sg.crop = newCrop;
               if (newStatus) sg.status = newStatus;
               sg.lastModified = new Date().toISOString();
-              const sgId = sg.id || sg.group_id;
-              S.groupDimensions[sgId] = { length: l, width: w, height: h, lightOrientation: ori };
+              const sgId = getGroupKey(sg);
+              if (sgId) S.groupDimensions[sgId] = { length: l, width: w, height: h, lightOrientation: ori };
               sg.length = l; sg.width = w; sg.height = h; sg.lightOrientation = ori;
               updated++;
             }
             saveGroupDimensions();
             try {
-              const resp = await authFetch('/data/groups.json', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(S.groups)
-              });
-              if (!resp.ok) throw new Error('HTTP ' + resp.status);
+              await persistGroupsData(S.groups);
               bulkGrpBtn.textContent = 'Updated ' + updated + ' unit' + (updated !== 1 ? 's' : '');
               bulkGrpBtn.classList.add('saved');
             } catch (err) {
@@ -2162,7 +2951,7 @@
 
       } else if (ud.type === 'sensor') {
         const d = ud.device;
-        const zData = findSensorZoneData(d);
+        const zData = getPerDeviceReadings(d) || findSensorZoneData(d);
         const sRoomId = ud.roomId || (ud.room ? ud.room.id : '');
         const sMap = S.roomMaps[sRoomId];
         const sGridSz = sMap?.gridSize || 20;
@@ -2496,11 +3285,21 @@
         S.controls.target.set(cx, 1, cz);
         animateTo({ x: cx - 8, y: 18, z: cz + 22 });
       });
+      document.getElementById('btnRefresh').addEventListener('click', function() {
+        loadAllData({ reason: 'manual', skipRebuildIfUnchanged: false });
+      });
 
       document.getElementById('roomSelect').addEventListener('change', function(e) {
         S.roomFilter = e.target.value;
         buildScene();
         renderFarmStats();
+      });
+
+      document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+          clearSelection({ silent: true });
+          document.getElementById('detailPanel').classList.remove('visible');
+        }
       });
 
       var canvas = document.getElementById('farmCanvas');
@@ -2531,6 +3330,18 @@
           }
         }).catch(function(){});
       }, 120000);
+      setInterval(function() {
+        if (document.hidden || S.editMode || S.isDragging || S.isLoadingData) return;
+        loadAllData({ reason: 'auto', silent: true, skipRebuildIfUnchanged: true });
+      }, 30000);
+      document.addEventListener('visibilitychange', function() {
+        if (document.hidden || S.editMode || S.isLoadingData) return;
+        loadAllData({ reason: 'visible', silent: true, skipRebuildIfUnchanged: true });
+      });
+      window.addEventListener('focus', function() {
+        if (S.editMode || S.isLoadingData) return;
+        loadAllData({ reason: 'focus', silent: true, skipRebuildIfUnchanged: true });
+      });
       // Staleness check every 60s
       setInterval(function() {
         var age = Date.now() - (S.lastEnvUpdate || Date.now());
@@ -2547,10 +3358,8 @@
     document.addEventListener('DOMContentLoaded', function() {
       initScene();
       bindEvents();
-      loadAllData();
+      loadAllData({ reason: 'initial', skipRebuildIfUnchanged: false });
       startAutoRefresh();
-      // Full data refresh every 10 min (rooms, groups, devices)
-      setInterval(function() { loadAllData(); }, 600000);
     });
 
   })();

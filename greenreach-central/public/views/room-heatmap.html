@@ -1821,6 +1821,45 @@
       console.log('[Heat Map] Selected room:', select.value, '(', selectedRoom?.name, ')');
     }
 
+    function getSensorIdCandidates(sensor) {
+      const ids = new Set();
+      const addId = (value) => {
+        if (value == null) return;
+        const raw = String(value).trim();
+        if (!raw) return;
+        ids.add(raw);
+        ids.add(raw.toUpperCase());
+        ids.add(raw.toLowerCase());
+      };
+      addId(sensor?.deviceId);
+      addId(sensor?.id);
+      addId(sensor?.telemetry?.deviceId);
+      addId(sensor?.telemetry?.mac);
+      return Array.from(ids);
+    }
+
+    function getEnvSourceForSensor(zones, metricKey, sensor) {
+      const ids = getSensorIdCandidates(sensor);
+      if (!ids.length) return null;
+      for (const z of zones || []) {
+        const srcs = z?.sensors?.[metricKey]?.sources;
+        if (!srcs || typeof srcs !== 'object') continue;
+        for (const id of ids) {
+          if (srcs[id]) return srcs[id];
+        }
+        for (const src of Object.values(srcs)) {
+          const srcId = src?.deviceId || src?.id || src?.mac || src?.name;
+          if (srcId != null) {
+            const raw = String(srcId).trim();
+            if (ids.includes(raw) || ids.includes(raw.toUpperCase()) || ids.includes(raw.toLowerCase())) {
+              return src;
+            }
+          }
+        }
+      }
+      return null;
+    }
+
     /**
      * Get live sensor data — prefers IoT device telemetry from the farm_data
      * table (same source as farm-summary sensor cards), falls back to /env
@@ -1835,16 +1874,10 @@
       // Each source stores the individual device reading, not the zone average.
       if (STATE.envData?.zones && sensor?.deviceId) {
         const allZones = STATE.envData.zones;
-        const deviceId = sensor.deviceId;
-        let devTempC = null, devRh = null;
-        for (const z of allZones) {
-          if (!z?.sensors) continue;
-          const tempSrc = z.sensors.tempC?.sources?.[deviceId];
-          const rhSrc = z.sensors.rh?.sources?.[deviceId];
-          if (tempSrc?.current != null) devTempC = Number(tempSrc.current);
-          if (rhSrc?.current != null) devRh = Number(rhSrc.current);
-          if (devTempC != null || devRh != null) break;
-        }
+        const tempSrc = getEnvSourceForSensor(allZones, 'tempC', sensor);
+        const rhSrc = getEnvSourceForSensor(allZones, 'rh', sensor);
+        let devTempC = tempSrc?.current != null ? Number(tempSrc.current) : (tempSrc?.value != null ? Number(tempSrc.value) : null);
+        let devRh = rhSrc?.current != null ? Number(rhSrc.current) : (rhSrc?.value != null ? Number(rhSrc.value) : null);
         if (devTempC != null || devRh != null) {
           let devVpd = null;
           if (devTempC != null && devRh != null) {
@@ -1969,11 +2002,9 @@
 
       // ── Per-device history from /env sources (preferred) ──
       if (deviceId) {
-        for (const z of allZones) {
-          const src = z?.sensors?.[metricKey]?.sources?.[deviceId];
-          if (src?.history && Array.isArray(src.history) && src.history.length > 0) {
-            return src.history.slice(-48);
-          }
+        const src = getEnvSourceForSensor(allZones, metricKey, sensor);
+        if (src?.history && Array.isArray(src.history) && src.history.length > 0) {
+          return src.history.slice(-48);
         }
       }
 
@@ -2676,16 +2707,11 @@
         // zone.sensors.tempC.sources[deviceId].current. This is the most
         // authoritative and freshest source of per-sensor data.
         if (value == null && deviceId) {
-          for (const z of zones) {
-            const srcs = z?.sensors?.[metricKey]?.sources;
-            if (srcs && Object.prototype.hasOwnProperty.call(srcs, deviceId)) {
-              const srcVal = srcs[deviceId]?.current ?? srcs[deviceId]?.value;
-              if (Number.isFinite(srcVal)) {
-                value = srcVal;
-                source = 'env-sources';
-                break;
-              }
-            }
+          const src = getEnvSourceForSensor(zones, metricKey, sensor);
+          const srcVal = src?.current ?? src?.value;
+          if (Number.isFinite(Number(srcVal))) {
+            value = Number(srcVal);
+            source = 'env-sources';
           }
         }
 
