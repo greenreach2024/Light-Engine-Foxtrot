@@ -4260,6 +4260,12 @@ header {
   border: 1px solid var(--border, var(--gr-border, #e5e7eb));
   background: var(--bg-card, var(--gr-surface, #ffffff));
   box-shadow: var(--shadow, var(--gr-shadow));
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
+}
+
+.iot-vendor-card:hover {
+  border-color: var(--gr-border-strong, var(--gr-border, #8ba7a7));
+  box-shadow: var(--gr-shadow-lg, 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1));
 }
 
 .iot-vendor-card__title {
@@ -4308,6 +4314,37 @@ header {
   background: var(--bg-card, var(--gr-surface, #ffffff));
   box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
   color: var(--text-primary, var(--gr-text, #0f172a));
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
+}
+
+.iot-device-entry:hover {
+  transform: translateY(-1px);
+  border-color: var(--iot-device-accent, var(--gr-primary, #0d7d7d));
+  background: var(--bg-card, var(--gr-surface, #ffffff));
+  box-shadow: 0 16px 30px rgba(15, 23, 42, 0.16);
+}
+
+.iot-device-entry:focus-within {
+  border-color: var(--iot-device-accent, var(--gr-primary, #0d7d7d));
+  background: var(--bg-card, var(--gr-surface, #ffffff));
+  box-shadow: 0 0 0 2px rgba(13, 125, 125, 0.18), 0 16px 30px rgba(15, 23, 42, 0.16);
+}
+
+.iot-device-entry select,
+.iot-device-entry button {
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
+}
+
+.iot-device-entry select:hover,
+.iot-device-entry button:hover {
+  background: var(--bg-secondary, rgba(15, 23, 42, 0.04));
+}
+
+.iot-device-entry select:focus,
+.iot-device-entry button:focus-visible {
+  outline: none;
+  border-color: var(--iot-device-accent, var(--gr-primary, #0d7d7d));
+  box-shadow: 0 0 0 2px rgba(13, 125, 125, 0.18);
 }
 
 .iot-device-entry .tiny {
