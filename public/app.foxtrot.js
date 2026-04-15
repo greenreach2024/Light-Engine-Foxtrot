@@ -2145,9 +2145,9 @@ function buildInfoGrid(entries, options = {}) {
   const columns = options.columns || 2;
   const grid = document.createElement('div');
   grid.style.cssText = `margin-top:${options.compact ? '6px' : '10px'};display:grid;grid-template-columns:repeat(${columns}, minmax(0, 1fr));gap:${options.compact ? '6px' : '10px'};`; 
-  const cellStyle = options.cellStyle || 'background:#f1f5f9;border:1px solid #e2e8f0;border-radius:6px;padding:8px;display:flex;flex-direction:column;gap:2px;';
-  const labelStyle = options.labelStyle || 'font-size:10px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;color:#475569;';
-  const valueStyle = options.valueStyle || 'font-size:12px;color:#0f172a;font-weight:500;word-break:break-word;';
+  const cellStyle = options.cellStyle || 'background:rgba(15,23,42,0.88);border:1px solid rgba(148,163,184,0.18);border-radius:8px;padding:8px;display:flex;flex-direction:column;gap:2px;box-shadow:inset 0 1px 0 rgba(255,255,255,0.04);';
+  const labelStyle = options.labelStyle || 'font-size:10px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;color:#94a3b8;';
+  const valueStyle = options.valueStyle || 'font-size:12px;color:#f8fafc;font-weight:500;word-break:break-word;';
   items.forEach(entry => {
     const cell = document.createElement('div');
     cell.style.cssText = cellStyle;
@@ -2615,10 +2615,10 @@ function createDeviceEntryElement(device) {
   
   // Category-specific colors
   const categoryColors = {
-    'sensor': { border: '#4ade80', accent: '#86efac', icon: '' },
-    'plug': { border: '#f59e0b', accent: '#fbbf24', icon: '🔌' },
-    'controller': { border: '#818cf8', accent: '#a5b4fc', icon: '🎛' },
-    'device': { border: '#94a3b8', accent: '#cbd5e1', icon: '📱' }
+    'sensor': { border: '#4ade80', accent: '#bbf7d0', icon: '' },
+    'plug': { border: '#f59e0b', accent: '#fde68a', icon: '🔌' },
+    'controller': { border: '#818cf8', accent: '#c7d2fe', icon: '🎛' },
+    'device': { border: '#94a3b8', accent: '#e2e8f0', icon: '📱' }
   };
   
   const colors = categoryColors[deviceCategory] || categoryColors['device'];
@@ -2644,15 +2644,15 @@ function createDeviceEntryElement(device) {
   info.appendChild(name);
 
   const subline = document.createElement('div');
-  subline.style.cssText = 'font-size:10px;color:#475569;display:flex;flex-wrap:wrap;gap:6px;align-items:center;';
+  subline.style.cssText = 'font-size:10px;color:#cbd5e1;display:flex;flex-wrap:wrap;gap:6px;align-items:center;';
 
   // Add category badge
   const categoryBadge = document.createElement('span');
   const categoryBadgeColors = {
-    'sensor': { bg: '#dcfce7', color: '#166534' },
-    'plug': { bg: '#fef3c7', color: '#92400e' },
-    'controller': { bg: '#e0e7ff', color: '#3730a3' },
-    'device': { bg: '#e2e8f0', color: '#334155' }
+    'sensor': { bg: 'rgba(34, 197, 94, 0.18)', color: '#bbf7d0' },
+    'plug': { bg: 'rgba(245, 158, 11, 0.18)', color: '#fde68a' },
+    'controller': { bg: 'rgba(59, 130, 246, 0.18)', color: '#bfdbfe' },
+    'device': { bg: 'rgba(71, 85, 105, 0.35)', color: '#e2e8f0' }
   };
   const catColors = categoryBadgeColors[deviceCategory] || categoryBadgeColors['device'];
   categoryBadge.style.cssText = `background:${catColors.bg};color:${catColors.color};padding:2px 6px;border-radius:999px;font-weight:600;letter-spacing:0.03em;text-transform:uppercase;`;
@@ -2660,13 +2660,13 @@ function createDeviceEntryElement(device) {
   subline.appendChild(categoryBadge);
 
   const protocolBadge = document.createElement('span');
-  protocolBadge.style.cssText = 'background:#e0e7ff;color:#1d4ed8;padding:2px 6px;border-radius:999px;font-weight:600;letter-spacing:0.03em;text-transform:uppercase;';
+  protocolBadge.style.cssText = 'background:rgba(59,130,246,0.18);color:#bfdbfe;padding:2px 6px;border-radius:999px;font-weight:600;letter-spacing:0.03em;text-transform:uppercase;border:1px solid rgba(96,165,250,0.22);';
   protocolBadge.textContent = device.protocol || 'unknown';
   subline.appendChild(protocolBadge);
 
   if (device.type && device.type !== device.protocol) {
     const typeBadge = document.createElement('span');
-  typeBadge.style.cssText = 'background:#e2e8f0;color:#1f2937;padding:2px 6px;border-radius:999px;font-weight:500;text-transform:uppercase;letter-spacing:0.03em;';
+  typeBadge.style.cssText = 'background:rgba(148,163,184,0.16);color:#e2e8f0;padding:2px 6px;border-radius:999px;font-weight:500;text-transform:uppercase;letter-spacing:0.03em;border:1px solid rgba(148,163,184,0.2);';
     typeBadge.textContent = device.type;
     subline.appendChild(typeBadge);
   }
@@ -2860,10 +2860,10 @@ function createDeviceEntryElement(device) {
     
     // Add automation control toggle
     const automationRow = document.createElement('div');
-    automationRow.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-top:8px;padding-top:8px;border-top:1px solid #bae6fd;';
+    automationRow.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-top:8px;padding-top:8px;border-top:1px solid rgba(125,211,252,0.24);';
     
     const automationLabel = document.createElement('label');
-    automationLabel.style.cssText = 'display:flex;align-items:center;gap:8px;font-size:12px;color:#0c4a6e;font-weight:600;cursor:pointer;flex:1;';
+    automationLabel.style.cssText = 'display:flex;align-items:center;gap:8px;font-size:12px;color:#bae6fd;font-weight:600;cursor:pointer;flex:1;';
     
     const automationCheckbox = document.createElement('input');
     automationCheckbox.type = 'checkbox';
@@ -2883,7 +2883,7 @@ function createDeviceEntryElement(device) {
     
     // Add status badge
     const statusBadge = document.createElement('span');
-    statusBadge.style.cssText = `padding:2px 8px;border-radius:12px;font-size:10px;font-weight:600;${device.automationControl ? 'background:#dcfce7;color:#166534;' : 'background:#f3f4f6;color:#6b7280;'}`;
+    statusBadge.style.cssText = `padding:2px 8px;border-radius:12px;font-size:10px;font-weight:600;${device.automationControl ? 'background:rgba(34,197,94,0.18);color:#bbf7d0;border:1px solid rgba(34,197,94,0.24);' : 'background:rgba(71,85,105,0.35);color:#cbd5e1;border:1px solid rgba(148,163,184,0.18);'}`;
     statusBadge.textContent = device.automationControl ? 'Active' : 'Monitor Only';
     
     automationRow.appendChild(automationLabel);
@@ -2912,10 +2912,10 @@ function createDeviceEntryElement(device) {
   const controlledEquipment = getAllEquipment().filter(eq => eq.control === `IoT:${device.deviceId || device.id}`);
   if (controlledEquipment.length > 0) {
     const controlSection = document.createElement('div');
-    controlSection.style.cssText = 'margin-top:10px;padding:8px;background:#f1f5f9;border-radius:6px;border-left:3px solid #3b82f6;';
+    controlSection.style.cssText = 'margin-top:10px;padding:8px;background:rgba(15,23,42,0.82);border-radius:8px;border:1px solid rgba(59,130,246,0.2);border-left:3px solid #3b82f6;';
     
     const controlHeader = document.createElement('div');
-    controlHeader.style.cssText = 'font-size:11px;font-weight:600;color:#1e40af;margin-bottom:6px;';
+    controlHeader.style.cssText = 'font-size:11px;font-weight:600;color:#bfdbfe;margin-bottom:6px;';
     controlHeader.textContent = `Controls ${controlledEquipment.length} Equipment:`;
     controlSection.appendChild(controlHeader);
     
@@ -2924,7 +2924,7 @@ function createDeviceEntryElement(device) {
     
     controlledEquipment.forEach(eq => {
       const equipItem = document.createElement('div');
-      equipItem.style.cssText = 'font-size:11px;color:#475569;display:flex;align-items:center;gap:6px;';
+      equipItem.style.cssText = 'font-size:11px;color:#cbd5e1;display:flex;align-items:center;gap:6px;';
       equipItem.innerHTML = `
         <span style="width:6px;height:6px;background:#3b82f6;border-radius:50%;"></span>
         <span style="font-weight:500;">${escapeHtml(eq.name || eq.category || 'Equipment')}</span>
@@ -2989,7 +2989,7 @@ function createDeviceEntryElement(device) {
   const trustValue = String(device.trust || '').toLowerCase();
   if (trustValue && trustValue !== 'unknown') {
     const trustBadge = document.createElement('span');
-    trustBadge.style.cssText = 'font-size:10px;font-weight:600;text-transform:uppercase;color:#475569;';
+    trustBadge.style.cssText = 'font-size:10px;font-weight:600;text-transform:uppercase;color:#cbd5e1;';
     trustBadge.textContent = `Trust: ${trustValue}`;
     actions.appendChild(trustBadge);
   }

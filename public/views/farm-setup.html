@@ -159,12 +159,17 @@
       gap: 12px;
       margin-bottom: 1rem;
       flex-wrap: wrap;
+      background: rgba(15, 23, 42, 0.82) !important;
+      border: 1px solid rgba(59, 130, 246, 0.14) !important;
+      border-radius: 12px !important;
+      padding: 12px !important;
     }
     .fs-container .panel-header h2 {
       display: none; /* Title is in the summary */
     }
     .fs-container .panel-body {
       padding: 0 !important;
+      background: transparent !important;
     }
     .fs-container .card-header {
       display: none; /* Title is in the summary */
@@ -290,6 +295,15 @@
       padding: 12px !important;
       margin-bottom: 8px;
     }
+    .fs-container #lightsPanelBody,
+    .fs-container #iotPanel .panel-body,
+    .fs-container #addedIoTDevicesContainer,
+    .fs-container #addedIoTDevicesList,
+    .fs-container #iotDevicesList,
+    .fs-container #lightSetupsList {
+      background: transparent !important;
+      color: #f1f5f9 !important;
+    }
     .fs-container #roomsList span,
     .fs-container #lightSetupsList span,
     .fs-container #iotDevicesList span,
@@ -354,10 +368,16 @@
       color: #93c5fd !important;
     }
     .fs-container [style*="background: #ffffff"],
+    .fs-container [style*="background: #f8fafc"],
+    .fs-container [style*="background:#f8fafc"],
+    .fs-container [style*="background: #f1f5f9"],
+    .fs-container [style*="background:#f1f5f9"],
     .fs-container [style*="background:#fff"],
     .fs-container [style*="background: white"],
     .fs-container [style*="background:white"] {
       background: rgba(15, 23, 42, 0.5) !important;
+      color: #f1f5f9 !important;
+      border-color: rgba(148, 163, 184, 0.18) !important;
     }
 
     /* Scan results table */
