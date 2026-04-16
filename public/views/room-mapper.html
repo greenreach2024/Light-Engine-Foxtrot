@@ -156,6 +156,98 @@
       font-weight: 600;
     }
 
+    .room-light-card {
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid rgba(59, 130, 246, 0.25);
+      border-radius: 14px;
+      padding: 1rem;
+      display: grid;
+      gap: 0.85rem;
+    }
+
+    .room-light-card.is-disabled {
+      opacity: 0.55;
+      pointer-events: none;
+    }
+
+    .room-light-toggle {
+      display: flex;
+      align-items: center;
+      gap: 0.55rem;
+      font-size: 0.82rem;
+      color: #e2e8f0;
+      font-weight: 600;
+    }
+
+    .room-light-row {
+      display: grid;
+      grid-template-columns: 70px 1fr auto;
+      gap: 0.6rem;
+      align-items: center;
+      font-size: 0.78rem;
+      color: #cbd5e1;
+    }
+
+    .room-light-row input[type="range"] {
+      width: 100%;
+      accent-color: #60a5fa;
+    }
+
+    .room-light-row input[type="color"] {
+      width: 100%;
+      min-width: 42px;
+      height: 30px;
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      border-radius: 8px;
+      background: rgba(15, 23, 42, 0.8);
+      padding: 0.15rem;
+      cursor: pointer;
+    }
+
+    .room-light-value {
+      min-width: 54px;
+      text-align: right;
+      color: #93c5fd;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .room-light-preview {
+      display: flex;
+      align-items: center;
+      gap: 0.7rem;
+      padding: 0.7rem 0.8rem;
+      border-radius: 12px;
+      background: rgba(59, 130, 246, 0.08);
+      border: 1px solid rgba(59, 130, 246, 0.18);
+    }
+
+    .room-light-swatch {
+      width: 18px;
+      height: 18px;
+      border-radius: 999px;
+      border: 1px solid rgba(241, 245, 249, 0.35);
+      box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.05);
+      flex-shrink: 0;
+    }
+
+    .room-light-copy {
+      min-width: 0;
+      display: grid;
+      gap: 0.18rem;
+    }
+
+    .room-light-copy strong {
+      font-size: 0.8rem;
+      color: #f8fafc;
+    }
+
+    .room-light-copy span {
+      font-size: 0.72rem;
+      color: #94a3b8;
+      line-height: 1.4;
+    }
+
     .tool-palette {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -860,6 +952,34 @@
           </div>
         </div>
 
+        <div class="tool-section">
+          <h3>Room Lighting</h3>
+          <div class="room-light-card" id="roomLightingCard">
+            <label class="room-light-toggle">
+              <input type="checkbox" id="ambientLightingEnabled">
+              <span>Ambient grow lighting enabled</span>
+            </label>
+            <div class="room-light-row">
+              <label for="ambientLightingIntensity">Intensity</label>
+              <input type="range" id="ambientLightingIntensity" min="0" max="100" step="1" value="55">
+              <span class="room-light-value" id="ambientLightingIntensityValue">55%</span>
+            </div>
+            <div class="room-light-row">
+              <label for="ambientLightingColor">Color</label>
+              <input type="color" id="ambientLightingColor" value="#f8fafc">
+              <span class="room-light-value" id="ambientLightingColorValue">#F8FAFC</span>
+            </div>
+            <div class="room-light-preview">
+              <span class="room-light-swatch" id="ambientLightingSwatch"></span>
+              <div class="room-light-copy">
+                <strong id="ambientLightingStatus">Ambient lighting ready</strong>
+                <span>Saved with this room map and reflected in the 3D grow-room viewer.</span>
+              </div>
+            </div>
+            <button class="btn btn-primary" id="saveAmbientLightingBtn" onclick="saveAmbientLighting()" style="justify-content:center; width:100%;">Save Lighting</button>
+          </div>
+        </div>
+
         <!-- Legend -->
         <div class="legend">
           <div class="legend-title">Legend</div>
@@ -975,10 +1095,131 @@
       pendingGroupId: null,
       groupLibraryOpen: {},
       zonePanelOpen: {},
-      zoneCollectionOpen: {}
+      zoneCollectionOpen: {},
+      deletedSensorIds: [],
+      autoSaveTimer: null,
+      autoSavePending: false
     };
 
     const SELECT_HINT_KEY = 'roomMapper.selectHintDismissed';
+    const DEFAULT_ROOM_AMBIENT_LIGHTING = Object.freeze({ enabled: true, intensity: 55, color: '#f8fafc' });
+
+    function clampRoomLightingValue(value, min, max) {
+      const num = Number(value);
+      if (!Number.isFinite(num)) return min;
+      return Math.min(max, Math.max(min, num));
+    }
+
+    function normalizeAmbientLightingColor(value, fallback) {
+      const candidate = String(value || '').trim();
+      if (/^#[0-9a-fA-F]{6}$/.test(candidate)) return candidate.toLowerCase();
+      return fallback;
+    }
+
+    function normalizeAmbientLighting(config) {
+      const source = config && typeof config === 'object' ? config : {};
+      return {
+        enabled: source.enabled !== false,
+        intensity: Math.round(clampRoomLightingValue(source.intensity, 0, 100)),
+        color: normalizeAmbientLightingColor(source.color, DEFAULT_ROOM_AMBIENT_LIGHTING.color),
+      };
+    }
+
+    function getCurrentRoomRecord() {
+      return STATE.rooms.find(room => (room.id || room.name) === STATE.currentRoomId) || null;
+    }
+
+    function getCurrentRoomAmbientLighting() {
+      const room = getCurrentRoomRecord();
+      if (!room) return normalizeAmbientLighting(DEFAULT_ROOM_AMBIENT_LIGHTING);
+      room.ambientLighting = normalizeAmbientLighting(room.ambientLighting || DEFAULT_ROOM_AMBIENT_LIGHTING);
+      return room.ambientLighting;
+    }
+
+    function renderRoomLightingControls() {
+      const card = document.getElementById('roomLightingCard');
+      const enabledInput = document.getElementById('ambientLightingEnabled');
+      const intensityInput = document.getElementById('ambientLightingIntensity');
+      const colorInput = document.getElementById('ambientLightingColor');
+      const saveButton = document.getElementById('saveAmbientLightingBtn');
+      if (!card || !enabledInput || !intensityInput || !colorInput || !saveButton) return;
+
+      const room = getCurrentRoomRecord();
+      if (!room) {
+        card.classList.add('is-disabled');
+        enabledInput.checked = DEFAULT_ROOM_AMBIENT_LIGHTING.enabled;
+        intensityInput.value = String(DEFAULT_ROOM_AMBIENT_LIGHTING.intensity);
+        colorInput.value = DEFAULT_ROOM_AMBIENT_LIGHTING.color;
+        saveButton.disabled = true;
+        updateAmbientLightingPreview();
+        return;
+      }
+
+      const lighting = getCurrentRoomAmbientLighting();
+      card.classList.remove('is-disabled');
+      enabledInput.checked = lighting.enabled;
+      intensityInput.value = String(lighting.intensity);
+      colorInput.value = lighting.color;
+      saveButton.disabled = false;
+      updateAmbientLightingPreview();
+    }
+
+    window.updateAmbientLightingPreview = function updateAmbientLightingPreview() {
+      const enabledInput = document.getElementById('ambientLightingEnabled');
+      const intensityInput = document.getElementById('ambientLightingIntensity');
+      const colorInput = document.getElementById('ambientLightingColor');
+      const intensityValue = document.getElementById('ambientLightingIntensityValue');
+      const colorValue = document.getElementById('ambientLightingColorValue');
+      const status = document.getElementById('ambientLightingStatus');
+      const swatch = document.getElementById('ambientLightingSwatch');
+      if (!enabledInput || !intensityInput || !colorInput || !intensityValue || !colorValue || !status || !swatch) return;
+
+      const lighting = normalizeAmbientLighting({
+        enabled: enabledInput.checked,
+        intensity: intensityInput.value,
+        color: colorInput.value,
+      });
+      intensityValue.textContent = lighting.intensity + '%';
+      colorValue.textContent = lighting.color.toUpperCase();
+      swatch.style.background = lighting.color;
+      swatch.style.boxShadow = lighting.enabled
+        ? '0 0 0 4px rgba(255,255,255,0.05), 0 0 ' + (12 + Math.round(lighting.intensity / 4)) + 'px ' + lighting.color
+        : '0 0 0 4px rgba(255,255,255,0.05)';
+      status.textContent = lighting.enabled
+        ? ('Ambient lighting at ' + lighting.intensity + '% in ' + lighting.color.toUpperCase())
+        : 'Ambient lighting disabled for this room';
+    };
+
+    window.saveAmbientLighting = async function saveAmbientLighting() {
+      const room = getCurrentRoomRecord();
+      const button = document.getElementById('saveAmbientLightingBtn');
+      if (!room || !button) return;
+
+      room.ambientLighting = normalizeAmbientLighting({
+        enabled: document.getElementById('ambientLightingEnabled')?.checked,
+        intensity: document.getElementById('ambientLightingIntensity')?.value,
+        color: document.getElementById('ambientLightingColor')?.value,
+      });
+      updateAmbientLightingPreview();
+
+      const originalText = button.textContent;
+      button.disabled = true;
+      button.textContent = 'Saving...';
+      const saved = await saveMap({ silent: true });
+      if (saved) {
+        button.textContent = 'Saved';
+        setTimeout(() => {
+          button.textContent = originalText;
+          button.disabled = false;
+        }, 1200);
+      } else {
+        button.textContent = 'Save Failed';
+        setTimeout(() => {
+          button.textContent = originalText;
+          button.disabled = false;
+        }, 1800);
+      }
+    };
 
     // Device type icons (using simple text symbols instead of emojis)
     const DEVICE_ICONS = {
@@ -1022,6 +1263,13 @@
       await loadGroups();
       await loadExistingMap();
       setupEventListeners();
+      renderRoomLightingControls();
+      ['ambientLightingEnabled', 'ambientLightingIntensity', 'ambientLightingColor'].forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.addEventListener('input', updateAmbientLightingPreview);
+        el.addEventListener('change', updateAmbientLightingPreview);
+      });
       draw();
       maybeShowSelectHint();
     });
@@ -1148,6 +1396,7 @@
           STATE.currentRoomId = STATE.rooms[0].id || STATE.rooms[0].name;
           roomSelect.value = STATE.currentRoomId;
           updateRoomTitle();
+          renderRoomLightingControls();
         }
         
       } catch (error) {
@@ -1173,7 +1422,8 @@
       const newRoom = {
         id: roomId,
         name: roomName.trim(),
-        zones: []
+        zones: [],
+        ambientLighting: normalizeAmbientLighting(DEFAULT_ROOM_AMBIENT_LIGHTING)
       };
 
       STATE.rooms.push(newRoom);
@@ -1201,6 +1451,7 @@
         STATE.placedGroups = [];
         STATE.zones = [];
         renderGroupList();
+        renderRoomLightingControls();
         draw();
 
         alert(`Room "${roomName}" created successfully! Now place devices and zones, then click Save Map.`);
@@ -1250,6 +1501,7 @@
       renderDeviceList();
       renderEquipmentList();
       renderGroupList();
+      renderRoomLightingControls();
       updateZoneList();
       draw();
       updateStats();
@@ -1480,6 +1732,96 @@
       return match ? Number(match[1]) : null;
     }
 
+    function clampGridCoord(value, max) {
+      const num = Number(value);
+      if (!Number.isFinite(num)) return 0;
+      return Math.max(0, Math.min(Math.round(num), max));
+    }
+
+    function getZoneDimensions(zone) {
+      if (!zone) return { length: 0, width: 0 };
+      return {
+        length: Math.max(1, (Number(zone.x2) || 0) - (Number(zone.x1) || 0) + 1),
+        width: Math.max(1, (Number(zone.y2) || 0) - (Number(zone.y1) || 0) + 1)
+      };
+    }
+
+    function getZoneSizeLabel(zone) {
+      const dims = getZoneDimensions(zone);
+      return `L ${dims.length} • W ${dims.width}`;
+    }
+
+    function normalizeZoneSetpoint(range, fallback) {
+      const base = range && typeof range === 'object' ? range : {};
+      const min = Number.isFinite(Number(base.min)) ? Number(base.min) : fallback.min;
+      const max = Number.isFinite(Number(base.max)) ? Number(base.max) : fallback.max;
+      return {
+        min: Math.min(min, max),
+        max: Math.max(min, max)
+      };
+    }
+
+    function normalizeZoneForStorage(zone, index) {
+      const maxX = Math.max(0, STATE.gridSize - 1);
+      const maxY = Math.max(0, Math.floor(STATE.gridSize * 0.75) - 1);
+      const zoneNumber = normalizeZoneNumber(zone?.zone) || (index + 1);
+      const x1 = clampGridCoord(zone?.x1, maxX);
+      const y1 = clampGridCoord(zone?.y1, maxY);
+      const x2 = clampGridCoord(zone?.x2, maxX);
+      const y2 = clampGridCoord(zone?.y2, maxY);
+      return {
+        ...zone,
+        id: zone?.id || `zone-${zoneNumber}`,
+        zone: zoneNumber,
+        name: String(zone?.name || `Zone ${zoneNumber}`).trim() || `Zone ${zoneNumber}`,
+        color: zone?.color || ZONE_COLORS[(zoneNumber - 1) % ZONE_COLORS.length],
+        x1: Math.min(x1, x2),
+        y1: Math.min(y1, y2),
+        x2: Math.max(x1, x2),
+        y2: Math.max(y1, y2),
+        tempSetpoint: normalizeZoneSetpoint(zone?.tempSetpoint, { min: 20, max: 24 }),
+        rhSetpoint: normalizeZoneSetpoint(zone?.rhSetpoint, { min: 58, max: 65 }),
+        rhDelta: Number.isFinite(Number(zone?.rhDelta)) ? Number(zone.rhDelta) : 5
+      };
+    }
+
+    function normalizeStateZones() {
+      STATE.zones = (Array.isArray(STATE.zones) ? STATE.zones : []).map((zone, index) => normalizeZoneForStorage(zone, index));
+      return STATE.zones;
+    }
+
+    function normalizeDeletedSensorIds(sensorIds) {
+      return Array.from(new Set(
+        (Array.isArray(sensorIds) ? sensorIds : [])
+          .map(sensorId => String(sensorId || '').trim())
+          .filter(Boolean)
+      ));
+    }
+
+    function rememberDeletedSensor(sensorId) {
+      if (!sensorId) return;
+      STATE.deletedSensorIds = normalizeDeletedSensorIds([...(STATE.deletedSensorIds || []), sensorId]);
+    }
+
+    function restoreDeletedSensor(sensorId) {
+      if (!sensorId) return;
+      STATE.deletedSensorIds = normalizeDeletedSensorIds((STATE.deletedSensorIds || []).filter(id => id !== sensorId));
+    }
+
+    function scheduleZoneAutoSave(reason) {
+      if (!STATE.currentRoomId) return;
+      if (STATE.autoSaveTimer) clearTimeout(STATE.autoSaveTimer);
+      STATE.autoSavePending = true;
+      STATE.autoSaveTimer = setTimeout(async function() {
+        STATE.autoSaveTimer = null;
+        try {
+          await window.saveMap({ silent: true, reason: reason || 'zone update' });
+        } finally {
+          STATE.autoSavePending = false;
+        }
+      }, 300);
+    }
+
     function deriveGroupFamilyName(name) {
       const raw = String(name || 'Group').trim();
       return raw.replace(/\s+\d+$/, '').trim() || raw;
@@ -1493,8 +1835,24 @@
       const parts = [];
       if (group?.trays != null) parts.push(group.trays + ' trays');
       if (group?.crop) parts.push(group.crop);
-      if (group?.status) parts.push(group.status);
+      parts.push(getGroupLifecycleLabel(group));
       return parts.join(' • ') || 'No crop assigned';
+    }
+
+    function getGroupLifecycleLabel(group) {
+      const status = String(group?.status || '').trim().toLowerCase();
+      if (!status || ['draft', 'planned', 'idle'].includes(status)) return 'Draft';
+      if (['harvesting', 'harvested', 'completed'].includes(status)) return 'Ready for Harvest';
+      const harvestDate = String(group?.forecastHarvestDate || group?.forecast_harvest_date || '').trim();
+      if (harvestDate) {
+        const parsed = /^\d{4}-\d{2}-\d{2}$/.test(harvestDate)
+          ? new Date(harvestDate + 'T00:00:00')
+          : new Date(harvestDate);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        if (!Number.isNaN(parsed.getTime()) && parsed <= today) return 'Ready for Harvest';
+      }
+      return 'Growing';
     }
 
     function getPlacedObjectLabel(item) {
@@ -1575,11 +1933,10 @@
     }
 
     function getGroupColor(group) {
-      const status = String(group?.status || '').toLowerCase();
-      if (status === 'active') return '#22c55e';
-      if (status === 'draft') return '#10b981';
-      if (status === 'harvested') return '#f59e0b';
-      return '#4ade80';
+      const lifecycleLabel = getGroupLifecycleLabel(group);
+      if (lifecycleLabel === 'Draft') return '#64748b';
+      if (lifecycleLabel === 'Ready for Harvest') return '#f59e0b';
+      return '#22c55e';
     }
 
     function buildPlacedGroup(group, x, y) {
@@ -1652,15 +2009,18 @@
           body.className = 'group-family-body';
           members.sort((a, b) => getGroupDisplayName(a).localeCompare(getGroupDisplayName(b))).forEach(group => {
             const member = document.createElement('button');
-            member.type = 'button';
-            member.className = 'group-member' + (STATE.pendingGroupId === group.id ? ' active' : '');
             const alreadyPlaced = STATE.placedGroups.some(item => item.groupId === group.id);
+            const isPendingPlanting = STATE.pendingGroupId === group.id;
+            const lifecycleColor = getGroupColor(group);
+            const plantingLabel = alreadyPlaced ? 'Placed' : (isPendingPlanting ? 'Planting Target' : 'Select to Plant');
+            member.type = 'button';
+            member.className = 'group-member' + (isPendingPlanting ? ' active' : '');
             member.innerHTML = `
               <div class="group-member-copy">
                 <div class="group-member-name">${getGroupDisplayName(group)}</div>
                 <div class="group-member-meta">${getGroupSubtitle(group)}</div>
               </div>
-              <span class="group-member-state">${alreadyPlaced ? 'Placed' : 'Ready'}</span>
+              <span class="group-member-state" style="color:${alreadyPlaced ? '#cbd5e1' : (isPendingPlanting ? '#bfdbfe' : lifecycleColor)};">${plantingLabel}</span>
             `;
             member.addEventListener('click', () => selectGroupTemplate(group.id));
             body.appendChild(member);
@@ -1835,6 +2195,7 @@
       if (!isPlaced) {
         const centerX = Math.floor(STATE.gridSize / 2);
         const centerY = Math.floor((STATE.gridSize * 0.75) / 2);
+        restoreDeletedSensor(device.id);
         
         STATE.placedDevices.push({
           deviceId: device.id,
@@ -1992,6 +2353,7 @@
           if (zoneNum <= 9) {
             STATE.zones.push({
               zone: zoneNum,
+              id: `zone-${zoneNum}`,
               name: `Zone ${zoneNum}`,
               color: ZONE_COLORS[(zoneNum - 1) % ZONE_COLORS.length],
               x1: Math.min(STATE.zoneStart.x, x),
@@ -2002,15 +2364,35 @@
               rhSetpoint: { min: 58, max: 65 },
               rhDelta: 5
             });
+            normalizeStateZones();
             updateZoneList();
             draw();
             updateStats();
+            scheduleZoneAutoSave('create zone');
           }
         }
         
         STATE.zoneStart = null;
       }
       
+      const finishedZoneDrag = (STATE.dragMode === 'zone-resize' || STATE.dragMode === 'zone-move') && STATE.zoneDrag && STATE.zoneDrag.zone;
+      const rawDraggedZone = finishedZoneDrag ? STATE.zoneDrag.zone : null;
+      if (finishedZoneDrag) {
+        const zoneIndex = STATE.zones.indexOf(rawDraggedZone);
+        const normalizedZone = normalizeZoneForStorage(rawDraggedZone, zoneIndex >= 0 ? zoneIndex : 0);
+        if (zoneIndex >= 0) {
+          STATE.zones[zoneIndex] = normalizedZone;
+        }
+        if (STATE.selectedItem && STATE.selectedItem.zone === normalizedZone.zone) {
+          STATE.selectedItem = normalizedZone;
+          showDetails(normalizedZone);
+        }
+        updateZoneList();
+        draw();
+        updateStats();
+        scheduleZoneAutoSave(STATE.dragMode === 'zone-move' ? 'move zone' : 'resize zone');
+      }
+
       STATE.isDragging = false;
       STATE.draggedItem = null;
       STATE.dragMode = null;
@@ -2363,7 +2745,7 @@
             </div>
             <div class="detail-row">
               <span class="detail-label">Size</span>
-              <span class="detail-value">${item.x2 - item.x1 + 1} × ${item.y2 - item.y1 + 1} cells</span>
+              <span class="detail-value">Length ${getZoneDimensions(item).length}, Width ${getZoneDimensions(item).width}</span>
             </div>
 
             <div style="margin: 1rem 0; padding: 1rem; background: rgba(59, 130, 246, 0.1); border-radius: 14px; border: 1px solid rgba(59, 130, 246, 0.3);">
@@ -2382,7 +2764,11 @@
       }
     }
 
-    window.removeDevice = function(deviceId) {
+    window.removeDevice = async function(deviceId) {
+      const removedDevice = STATE.placedDevices.find(d => d.deviceId === deviceId) || null;
+      if (removedDevice && !removedDevice.isEquipment) {
+        rememberDeletedSensor(deviceId);
+      }
       STATE.placedDevices = STATE.placedDevices.filter(d => d.deviceId !== deviceId);
       STATE.selectedItem = null;
       document.getElementById('detailsContent').innerHTML = '<div class="details-empty">Click on a device or zone<br>to view details</div>';
@@ -2390,6 +2776,9 @@
       updateZoneList();
       draw();
       updateStats();
+      if (STATE.currentRoomId) {
+        await window.saveMap({ silent: true, reason: 'remove device' });
+      }
     }
 
     window.removeGroup = function(groupId) {
@@ -2409,6 +2798,7 @@
       updateZoneList();
       draw();
       updateStats();
+      scheduleZoneAutoSave('remove zone');
     }
 
     window.updateZoneSetpoint = function(zoneNum, field, value) {
@@ -2429,6 +2819,7 @@
         
         // Refresh the details panel to show updated ranges
         showDetails(zone);
+        scheduleZoneAutoSave('update zone setpoint');
         
         console.log(`[Room Mapper] Updated ${field} for Zone ${zoneNum} to ${numValue}`);
       }
@@ -2442,7 +2833,7 @@
       }
       
       list.innerHTML = '';
-      STATE.zones.forEach(zone => {
+      normalizeStateZones().forEach(zone => {
         const { sensors, equipment, groups } = getZoneContents(zone);
         const zoneOpen = !!STATE.zonePanelOpen[zone.zone];
         const item = document.createElement('div');
@@ -2456,7 +2847,7 @@
         header.innerHTML = `
           <div class="zone-card-title">
             <span class="zone-card-name">${zoneOpen ? '▼' : '▶'} ${zone.name}</span>
-            <span class="zone-card-meta">${(zone.x2 - zone.x1 + 1) * (zone.y2 - zone.y1 + 1)} cells</span>
+            <span class="zone-card-meta">${getZoneSizeLabel(zone)}</span>
           </div>
           <div class="zone-card-badges">
             <span class="zone-card-badge groups">${groups.length} groups</span>
@@ -2595,6 +2986,64 @@
       const width = STATE.gridSize;
       const height = Math.floor(STATE.gridSize * 0.75);
       document.getElementById('gridInfo').textContent = `${width}x${height} cells`;
+    }
+
+    function mergePlacedDeviceSnapshot(device, snapshot, deviceId) {
+      const base = device && typeof device === 'object' ? { ...device } : {};
+      if (!snapshot || typeof snapshot !== 'object') {
+        if (!base.id && deviceId) base.id = deviceId;
+        return base;
+      }
+
+      const inferredEquipment = isEquipmentRecord(snapshot, deviceId) || isEquipmentRecord(base, deviceId);
+
+      return {
+        ...base,
+        ...snapshot,
+        id: base.id || snapshot.id || deviceId,
+        zone: snapshot.zone ?? base.zone ?? null,
+        airflow_dir: snapshot.airflow_dir ?? base.airflow_dir ?? null,
+        heading: snapshot.heading ?? base.heading ?? null,
+        direction: snapshot.direction ?? base.direction ?? null,
+        control: snapshot.control ?? base.control ?? null,
+        isEquipment: snapshot.isEquipment ?? base.isEquipment ?? inferredEquipment
+      };
+    }
+
+    function isEquipmentRecord(deviceLike, deviceId) {
+      if (!deviceLike || typeof deviceLike !== 'object') return false;
+
+      if (deviceLike.isEquipment) return true;
+
+      const candidateId = deviceId || deviceLike.id || deviceLike.deviceId || null;
+      if (candidateId && Array.isArray(STATE.equipment) && STATE.equipment.some(item => item.id === candidateId)) {
+        return true;
+      }
+
+      const signature = [
+        deviceLike.category,
+        deviceLike.type,
+        deviceLike.deviceType,
+        deviceLike.model,
+        deviceLike.name,
+        deviceLike.vendor,
+        deviceLike.systemType,
+        deviceLike.layoutType
+      ].filter(Boolean).join(' ').toLowerCase();
+
+      return [
+        'fan',
+        'vent',
+        'controller',
+        'energy',
+        'dehumid',
+        'hvac',
+        'tower',
+        'zipgrow',
+        'zip grow',
+        'vertical',
+        'rack'
+      ].some(token => signature.includes(token));
     }
 
     function updateGridSize() {
@@ -2899,15 +3348,18 @@
       }
     }
 
-    window.saveMap = async function() {
+    window.saveMap = async function(options) {
+      const saveOptions = options && typeof options === 'object' ? options : {};
+      const silent = !!saveOptions.silent;
       if (!STATE.currentRoomId) {
-        alert('No room selected. Please select a room first.');
+        if (!silent) alert('No room selected. Please select a room first.');
         return;
       }
       
       // Find current room data
       const currentRoom = STATE.rooms.find(r => (r.id || r.name) === STATE.currentRoomId);
       const roomName = currentRoom ? (currentRoom.name || currentRoom.location || 'Unknown Room') : 'Unknown Room';
+      normalizeStateZones();
       
       // Helper to detect zone from device position
       const findZoneForPosition = (x, y) => {
@@ -2924,6 +3376,32 @@
           ? findZoneForPosition(placedDevice.x, placedDevice.y)
           : null;
         const finalZone = detectedZone !== null ? detectedZone : (placedDevice.device?.zone ?? null);
+        const sourceDevice = placedDevice.device && typeof placedDevice.device === 'object'
+          ? placedDevice.device
+          : {};
+          const isEquipment = isEquipmentRecord(placedDevice, placedDevice.deviceId) || isEquipmentRecord(sourceDevice, placedDevice.deviceId);
+        const displayName = sourceDevice.name
+          || [sourceDevice.vendor, sourceDevice.model].filter(Boolean).join(' ')
+          || null;
+        const snapshot = {
+          ...sourceDevice,
+          name: displayName,
+          type: sourceDevice.type || null,
+          model: sourceDevice.model || null,
+          protocol: sourceDevice.protocol || null,
+          category: sourceDevice.category || null,
+          vendor: sourceDevice.vendor || null,
+          deviceType: sourceDevice.deviceType || null,
+          control: placedDevice.control || sourceDevice.control || null,
+          airflow_dir: sourceDevice.airflow_dir ?? null,
+          heading: sourceDevice.heading ?? null,
+          direction: sourceDevice.direction ?? null,
+          zone: finalZone,
+          room: roomName,
+          roomId: STATE.currentRoomId,
+          icon: placedDevice.icon || null,
+          isEquipment
+        };
 
         console.log(`[Room Mapper Save] Device ${placedDevice.deviceId} at (${placedDevice.x}, ${placedDevice.y}):`, {
           detectedZone,
@@ -2936,18 +3414,9 @@
           deviceId: placedDevice.deviceId,
           x: placedDevice.x,
           y: placedDevice.y,
-          isEquipment: placedDevice.isEquipment || false,
-          snapshot: {
-            name: placedDevice.device?.name || null,
-            type: placedDevice.device?.type || null,
-            model: placedDevice.device?.model || null,
-            protocol: placedDevice.device?.protocol || null,
-            category: placedDevice.device?.category || null,
-            zone: finalZone,
-            room: roomName,
-            icon: placedDevice.icon || null,
-            isEquipment: placedDevice.isEquipment || false
-          }
+          isEquipment,
+          snapshot,
+          device: snapshot
         };
       };
 
@@ -2963,11 +3432,13 @@
           const mergedDevices = [...devices];
           const currentDeviceIds = new Set(devices.map(device => device.deviceId));
           const knownSensorIds = new Set(STATE.iotDevices.map(device => device.id));
+          const deletedSensorIds = new Set(normalizeDeletedSensorIds(existingMap.deletedSensorIds || STATE.deletedSensorIds));
           let preservedCount = 0;
 
           for (const savedDevice of Array.isArray(existingMap.devices) ? existingMap.devices : []) {
             if (savedDevice?.isEquipment) continue;
             if (!savedDevice?.deviceId || currentDeviceIds.has(savedDevice.deviceId)) continue;
+            if (deletedSensorIds.has(savedDevice.deviceId)) continue;
             if (knownSensorIds.size > 0 && !knownSensorIds.has(savedDevice.deviceId)) continue;
             mergedDevices.push(savedDevice);
             currentDeviceIds.add(savedDevice.deviceId);
@@ -3009,10 +3480,12 @@
         name: roomName,
         gridSize: STATE.gridSize,
         cellSize: STATE.cellSize,
-        version: 3,
+        version: 4,
+        ambientLighting: getCurrentRoomAmbientLighting(),
         devices: serializedDevices,
         groups: serializedGroups,
-        zones: STATE.zones,
+        deletedSensorIds: normalizeDeletedSensorIds(STATE.deletedSensorIds),
+        zones: STATE.zones.map((zone, index) => normalizeZoneForStorage(zone, index)),
         lastUpdated: new Date().toISOString()
       };
       
@@ -3034,19 +3507,25 @@
           await updateIotDevicesWithPlacements(mapData.devices, roomName);
           await updateGroupsWithPlacements(STATE.currentRoomId, roomName);
           
-          alert(`Map saved successfully for room: ${roomName}`);
+          if (!silent) {
+            alert(`Map saved successfully for room: ${roomName}`);
+          }
           
           // Refresh Groups v2 zone dropdown if it exists
           if (typeof window.refreshGroupsV2Zones === 'function') {
             console.log('[Room Mapper] Refreshing Groups v2 zones...');
             window.refreshGroupsV2Zones();
           }
+          return true;
         } else {
           throw new Error('Save failed');
         }
       } catch (error) {
         console.error('Failed to save map:', error);
-        alert('Failed to save map. See console for details.');
+        if (!silent) {
+          alert('Failed to save map. See console for details.');
+        }
+        return false;
       }
     }
 
@@ -3132,15 +3611,23 @@
 
       STATE.zones = currentRoom.zones.map((zName, i) => {
         const num = i + 1;
+        const zoneStart = i * zoneWidth;
+        const zoneEnd = (i === cols - 1) ? (totalW - 1) : ((i + 1) * zoneWidth - 1);
         return {
+          id: `zone-${num}`,
           zone: num,
           name: typeof zName === 'string' ? zName : (zName.name || `Zone ${num}`),
-          x1: i * zoneWidth,
+          color: ZONE_COLORS[(num - 1) % ZONE_COLORS.length],
+          x1: zoneStart,
           y1: 0,
-          x2: (i === cols - 1) ? totalW : (i + 1) * zoneWidth,
-          y2: totalH
+          x2: Math.max(zoneStart, zoneEnd),
+          y2: totalH - 1,
+          tempSetpoint: { min: 20, max: 24 },
+          rhSetpoint: { min: 58, max: 65 },
+          rhDelta: 5
         };
       });
+      normalizeStateZones();
       console.log(`[Room Mapper] Auto-generated ${STATE.zones.length} zones from rooms.json:`, STATE.zones.map(z => z.name));
 
       // Load IoT devices if not yet loaded
@@ -3151,6 +3638,7 @@
       for (const sensor of STATE.iotDevices) {
         const alreadyPlaced = STATE.placedDevices.some(p => p.deviceId === sensor.id);
         if (alreadyPlaced) continue;
+        if ((STATE.deletedSensorIds || []).includes(sensor.id)) continue;
 
         let sensorZone = sensor.zone != null ? Number(sensor.zone) : null;
         if (sensorZone == null && typeof sensor.zone === 'string') {
@@ -3210,7 +3698,10 @@
 
       STATE.gridSize = mapData.gridSize || 20;
       STATE.cellSize = mapData.cellSize || 40;
-      STATE.zones = mapData.zones || [];
+      STATE.deletedSensorIds = normalizeDeletedSensorIds(mapData.deletedSensorIds);
+      STATE.zones = Array.isArray(mapData.zones)
+        ? mapData.zones.map((zone, index) => normalizeZoneForStorage(zone, index))
+        : [];
       
       document.getElementById('gridSize').value = STATE.gridSize;
       document.getElementById('cellSize').value = STATE.cellSize;
@@ -3224,30 +3715,33 @@
       if (mapData.devices) {
         for (const devicePos of mapData.devices) {
           const snapshot = devicePos.snapshot || devicePos.metadata || null;
-          
-          // Determine if this is equipment from saved flag or category inference
-          const isEquipment = devicePos.isEquipment || snapshot?.isEquipment || (() => {
-            const cat = (snapshot?.category || '').toLowerCase();
-            return cat.includes('fan') || cat.includes('vent') || cat.includes('controller') || 
-                   cat.includes('energy') || cat.includes('dehumid') || cat.includes('hvac');
-          })();
-          
+
           // Search both IoT sensors AND equipment lists
-          let device = STATE.iotDevices.find(d => d.id === devicePos.deviceId);
-          if (!device) {
-            device = STATE.equipment.find(e => e.id === devicePos.deviceId);
+          const matchedSensor = STATE.iotDevices.find(d => d.id === devicePos.deviceId);
+          const matchedEquipment = STATE.equipment.find(e => e.id === devicePos.deviceId);
+          let device = matchedSensor || matchedEquipment;
+
+          if (device && snapshot) {
+            device = mergePlacedDeviceSnapshot(device, snapshot, devicePos.deviceId);
           }
 
           if (!device && snapshot) {
-            device = {
+            device = mergePlacedDeviceSnapshot({
               id: devicePos.deviceId,
               name: snapshot.name || 'Unknown Device',
               type: snapshot.type || 'Unknown',
               protocol: snapshot.protocol || 'Unknown',
               category: snapshot.category || null,
               zone: snapshot.zone ?? null
-            };
+            }, snapshot, devicePos.deviceId);
           }
+
+          const isEquipment = Boolean(
+            devicePos.isEquipment
+            || isEquipmentRecord(snapshot, devicePos.deviceId)
+            || isEquipmentRecord(device, devicePos.deviceId)
+            || matchedEquipment
+          );
 
           // Use correct icon function based on device type
           const resolvedIcon = isEquipment 
@@ -3275,8 +3769,16 @@
           }
 
           STATE.placedDevices.push(devicePayload);
+          if (!isEquipment) {
+            restoreDeletedSensor(devicePos.deviceId);
+          }
           if (isEquipment) equipCount++; else sensorCount++;
         }
+      }
+
+      const currentRoom = getCurrentRoomRecord();
+      if (currentRoom) {
+        currentRoom.ambientLighting = normalizeAmbientLighting(mapData.ambientLighting || currentRoom.ambientLighting || DEFAULT_ROOM_AMBIENT_LIGHTING);
       }
 
       if (Array.isArray(mapData.groups)) {
@@ -3306,6 +3808,7 @@
         for (const sensor of STATE.iotDevices) {
           const alreadyPlaced = STATE.placedDevices.some(p => p.deviceId === sensor.id);
           if (alreadyPlaced) continue;
+          if ((STATE.deletedSensorIds || []).includes(sensor.id)) continue;
 
           // Sensor must have a zone assignment to auto-place
           const sensorZone = sensor.zone != null ? Number(sensor.zone) : null;
@@ -3351,6 +3854,7 @@
       renderDeviceList();
       renderEquipmentList();
       renderGroupList();
+      renderRoomLightingControls();
       draw();
       updateStats();
     }
