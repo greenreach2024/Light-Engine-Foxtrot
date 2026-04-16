@@ -14,6 +14,7 @@ import { listNetworkFarms } from '../services/networkFarmsStore.js';
 import emailService from '../services/email-service.js';
 import smsService from '../services/sms-service.js';
 import alertNotifier from '../services/alert-notifier.js';
+import { listSupportRequests, resolveSupportRequest } from '../services/support-bridge.js';
 
 const router = express.Router();
 
@@ -376,6 +377,23 @@ export const ADMIN_TOOL_CATALOG = {
         if (params.limit) { sql += ` LIMIT $${idx++}`; values.push(parseInt(params.limit, 10)); }
         const result = await dbQuery(sql, values);
         return { ok: true, count: result.rows.length, alerts: result.rows };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  'get_support_requests': {
+    description: 'Get support requests created by growers through E.V.I.E. Filter by status, farm, or priority to review open support work.',
+    category: 'read',
+    required: [],
+    optional: ['status', 'farm_id', 'priority', 'limit'],
+    handler: async (params) => {
+      try {
+        return await listSupportRequests({
+          status: params.status || 'open',
+          farmId: params.farm_id || null,
+          priority: params.priority || null,
+          limit: params.limit || 25
+        });
       } catch (err) { return { ok: false, error: err.message }; }
     }
   },
@@ -1771,6 +1789,19 @@ export const ADMIN_TOOL_CATALOG = {
         );
         if (result.rows.length === 0) return { ok: false, error: 'Farm not found' };
         return { ok: true, farm: result.rows[0] };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  'resolve_support_request': {
+    description: 'Mark a grower support request as resolved after GreenReach staff have handled it. Optionally add resolution notes for the audit trail.',
+    category: 'write',
+    trust_tier: 'quick_confirm',
+    required: ['request_id'],
+    optional: ['resolution_notes'],
+    handler: async (params) => {
+      try {
+        return await resolveSupportRequest(params.request_id, params.resolution_notes || '');
       } catch (err) { return { ok: false, error: err.message }; }
     }
   },

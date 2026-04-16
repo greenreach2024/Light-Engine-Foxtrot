@@ -1026,6 +1026,73 @@
       return res.json();
     }
 
+    function summarizeEnvSnapshot(data, hoursBack) {
+      var zones = Array.isArray(data && data.zones) ? data.zones : [];
+      var metrics = { temperature: [], humidity: [], co2: [], ppfd: [], vpd: [], ec: [] };
+      var historyBuckets = { temperature: [], humidity: [] };
+
+      zones.forEach(function(zone) {
+        var sensors = zone && zone.sensors ? zone.sensors : {};
+        var temp = sensors.tempC && sensors.tempC.current != null ? Number(sensors.tempC.current) : (sensors.temperature && sensors.temperature.current != null ? Number(sensors.temperature.current) : null);
+        var humidity = sensors.rh && sensors.rh.current != null ? Number(sensors.rh.current) : (sensors.humidity && sensors.humidity.current != null ? Number(sensors.humidity.current) : null);
+        var co2 = sensors.co2 && sensors.co2.current != null ? Number(sensors.co2.current) : null;
+        var ppfd = sensors.ppfd && sensors.ppfd.current != null ? Number(sensors.ppfd.current) : (sensors.light && sensors.light.current != null ? Number(sensors.light.current) : null);
+        var vpd = sensors.vpd && sensors.vpd.current != null ? Number(sensors.vpd.current) : null;
+        var ec = sensors.ec && sensors.ec.current != null ? Number(sensors.ec.current) : null;
+
+        if (Number.isFinite(temp)) metrics.temperature.push(temp);
+        if (Number.isFinite(humidity)) metrics.humidity.push(humidity);
+        if (Number.isFinite(co2)) metrics.co2.push(co2);
+        if (Number.isFinite(ppfd)) metrics.ppfd.push(ppfd);
+        if (Number.isFinite(vpd)) metrics.vpd.push(vpd);
+        if (Number.isFinite(ec)) metrics.ec.push(ec);
+
+        var tempHistory = sensors.tempC && Array.isArray(sensors.tempC.history) ? sensors.tempC.history : [];
+        var humidityHistory = sensors.rh && Array.isArray(sensors.rh.history) ? sensors.rh.history : [];
+        tempHistory.forEach(function(value, index) {
+          if (!historyBuckets.temperature[index]) historyBuckets.temperature[index] = [];
+          if (Number.isFinite(Number(value))) historyBuckets.temperature[index].push(Number(value));
+        });
+        humidityHistory.forEach(function(value, index) {
+          if (!historyBuckets.humidity[index]) historyBuckets.humidity[index] = [];
+          if (Number.isFinite(Number(value))) historyBuckets.humidity[index].push(Number(value));
+        });
+      });
+
+      function average(values) {
+        if (!values.length) return null;
+        return values.reduce(function(sum, value) { return sum + value; }, 0) / values.length;
+      }
+
+      var pointCount = Math.max(historyBuckets.temperature.length, historyBuckets.humidity.length);
+      var readings = [];
+      if (pointCount > 0) {
+        var totalHours = Math.max(1, hoursBack || 24);
+        var intervalMs = Math.max(1, Math.round((totalHours * 60 * 60 * 1000) / Math.max(pointCount - 1, 1)));
+        var startTime = Date.now() - (intervalMs * Math.max(pointCount - 1, 0));
+        for (var i = 0; i < pointCount; i++) {
+          readings.push({
+            timestamp: new Date(startTime + (i * intervalMs)).toISOString(),
+            temperature: average(historyBuckets.temperature[i] || []),
+            humidity: average(historyBuckets.humidity[i] || [])
+          });
+        }
+      }
+
+      return {
+        sensors: {
+          temperature: average(metrics.temperature),
+          humidity: average(metrics.humidity),
+          co2: average(metrics.co2),
+          ppfd: average(metrics.ppfd),
+          vpd: average(metrics.vpd),
+          ec: average(metrics.ec)
+        },
+        timestamp: data && data.meta && data.meta.updatedAt ? data.meta.updatedAt : (data && data.timestamp ? data.timestamp : new Date().toISOString()),
+        readings: readings
+      };
+    }
+
     // Tab system
     document.querySelectorAll('.tab').forEach(function(tab) {
       tab.addEventListener('click', function() {
@@ -1241,13 +1308,19 @@
 
       try {
         var body = { message: msg };
-        if (gwenConversationId) body.conversationId = gwenConversationId;
+        if (gwenConversationId) body.conversation_id = gwenConversationId;
         var result = await apiFetch('/api/research/gwen/chat', { method: 'POST', body: JSON.stringify(body) });
-        gwenConversationId = result.conversationId || gwenConversationId;
+        gwenConversationId = result.conversation_id || gwenConversationId;
         var typing = document.getElementById('gwenTyping');
         if (typing) typing.remove();
-        var reply = result.response || result.message || 'No response';
+        var reply = result.reply || result.response || result.message || 'No response';
         messagesEl.innerHTML += '<div class="gwen-msg gwen">' + formatGwenResponse(reply) + '</div>';
+        if (Array.isArray(result.tool_calls) && result.tool_calls.length) {
+          var createdDataCards = result.tool_calls.some(function(tc) { return tc.tool === 'create_data_card'; });
+          var createdCharts = result.tool_calls.some(function(tc) { return tc.tool === 'create_research_chart' || tc.tool === 'create_custom_display'; });
+          if (createdDataCards) loadDataCards();
+          if (createdCharts) loadChartLibrary();
+        }
         if (result.displays) {
           for (var i = 0; i < result.displays.length; i++) handleGwenDisplay(result.displays[i]);
         }
@@ -1348,7 +1421,8 @@
 
     async function pollSensors() {
       try {
-        var data = await apiFetch('/api/sensors/current').catch(function() { return null; });
+        var env = await apiFetch('/api/env?hours=24').catch(function() { return null; });
+        var data = summarizeEnvSnapshot(env, 24);
         if (data && data.sensors) {
           var s = data.sensors;
           if (s.temperature != null) {
@@ -1386,7 +1460,8 @@
 
     async function loadSensorTrendChart() {
       try {
-        var data = await apiFetch('/api/sensors/history?hours=24').catch(function() { return null; });
+        var env = await apiFetch('/api/env?hours=24').catch(function() { return null; });
+        var data = summarizeEnvSnapshot(env, 24);
         if (!data || !data.readings || !data.readings.length) {
           document.getElementById('sensorTrendChart').innerHTML = '<div class="empty-state"><p>No sensor history available yet.</p></div>';
           return;

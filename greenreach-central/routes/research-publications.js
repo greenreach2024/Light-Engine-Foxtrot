@@ -21,6 +21,15 @@ import { query, isDatabaseAvailable } from '../config/database.js';
 
 const router = Router();
 
+async function safeQueryRows(sql, params, label) {
+  try {
+    return await query(sql, params);
+  } catch (err) {
+    console.warn(`[ResearchPublications] ${label} unavailable:`, err.message);
+    return { rows: [] };
+  }
+}
+
 const checkDb = (req, res, next) => {
   if (!isDatabaseAvailable()) return res.status(503).json({ ok: false, error: 'Database unavailable' });
   next();
@@ -32,7 +41,7 @@ router.use(checkDb);
 
 router.get('/research/publications', async (req, res) => {
   try {
-    const farmId = req.farmId || req.query.farm_id;
+    const farmId = req.farmId || req.user?.farmId || req.query.farm_id;
     if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
 
     const { status, grant_id } = req.query;
@@ -41,14 +50,14 @@ router.get('/research/publications', async (req, res) => {
     if (status) { params.push(status); where += ` AND p.status = $${params.length}`; }
     if (grant_id) { params.push(grant_id); where += ` AND p.grant_id = $${params.length}`; }
 
-    const result = await query(`
+    const result = await safeQueryRows(`
       SELECT p.*, ga.title as grant_title,
         (SELECT COUNT(*) FROM publication_datasets pd WHERE pd.publication_id = p.id) as linked_datasets,
         (SELECT COUNT(*) FROM publication_authors pa WHERE pa.publication_id = p.id) as author_count
       FROM publications p
       LEFT JOIN grant_applications ga ON p.grant_id = ga.id
       ${where} ORDER BY p.created_at DESC
-    `, params);
+    `, params, 'publication list');
 
     res.json({ ok: true, publications: result.rows, count: result.rows.length });
   } catch (err) {

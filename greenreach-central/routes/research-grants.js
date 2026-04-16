@@ -22,6 +22,15 @@ import { verifyStudyOwnership } from '../middleware/research-tenant.js';
 
 const router = Router();
 
+async function safeQueryRows(sql, params, label) {
+  try {
+    return await query(sql, params);
+  } catch (err) {
+    console.warn(`[ResearchGrants] ${label} unavailable:`, err.message);
+    return { rows: [] };
+  }
+}
+
 const checkDb = (req, res, next) => {
   if (!isDatabaseAvailable()) return res.status(503).json({ ok: false, error: 'Database unavailable' });
   next();
@@ -33,7 +42,7 @@ router.use(checkDb);
 
 router.get('/research/grants', async (req, res) => {
   try {
-    const farmId = req.farmId || req.query.farm_id;
+    const farmId = req.farmId || req.user?.farmId || req.query.farm_id;
     if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
 
     const { status, agency, study_id } = req.query;
@@ -43,12 +52,12 @@ router.get('/research/grants', async (req, res) => {
     if (agency) { params.push(agency); where += ` AND g.funding_agency = $${params.length}`; }
     if (study_id) { params.push(study_id); where += ` AND g.study_id = $${params.length}`; }
 
-    const result = await query(`
+    const result = await safeQueryRows(`
       SELECT g.*, s.title as study_title
       FROM grant_applications g
       LEFT JOIN studies s ON g.study_id = s.id
       ${where} ORDER BY g.created_at DESC
-    `, params);
+    `, params, 'grant list');
 
     res.json({ ok: true, grants: result.rows, count: result.rows.length });
   } catch (err) {

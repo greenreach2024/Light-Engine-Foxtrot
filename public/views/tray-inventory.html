@@ -4329,7 +4329,7 @@
           headers: getEvieAuthHeaders(),
           body: JSON.stringify({
             message,
-            conversationId: evieConversationId,
+            conversation_id: evieConversationId,
             context: {
               source: 'activity-hub',
               farmId: farmId || localStorage.getItem('farmId'),
@@ -4343,7 +4343,7 @@
         document.getElementById('evieTyping').classList.remove('active');
         document.getElementById('evieSendBtn').disabled = false;
 
-        if (data.conversationId) evieConversationId = data.conversationId;
+        evieConversationId = data.conversation_id || data.conversationId || evieConversationId;
 
         const reply = data.response || data.message || data.reply || 'No response received.';
         appendEvieMessage('assistant', reply);
