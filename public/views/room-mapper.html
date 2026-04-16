@@ -2995,6 +2995,8 @@
         return base;
       }
 
+      const inferredEquipment = isEquipmentRecord(snapshot, deviceId) || isEquipmentRecord(base, deviceId);
+
       return {
         ...base,
         ...snapshot,
@@ -3004,8 +3006,44 @@
         heading: snapshot.heading ?? base.heading ?? null,
         direction: snapshot.direction ?? base.direction ?? null,
         control: snapshot.control ?? base.control ?? null,
-        isEquipment: snapshot.isEquipment ?? base.isEquipment ?? false
+        isEquipment: snapshot.isEquipment ?? base.isEquipment ?? inferredEquipment
       };
+    }
+
+    function isEquipmentRecord(deviceLike, deviceId) {
+      if (!deviceLike || typeof deviceLike !== 'object') return false;
+
+      if (deviceLike.isEquipment) return true;
+
+      const candidateId = deviceId || deviceLike.id || deviceLike.deviceId || null;
+      if (candidateId && Array.isArray(STATE.equipment) && STATE.equipment.some(item => item.id === candidateId)) {
+        return true;
+      }
+
+      const signature = [
+        deviceLike.category,
+        deviceLike.type,
+        deviceLike.deviceType,
+        deviceLike.model,
+        deviceLike.name,
+        deviceLike.vendor,
+        deviceLike.systemType,
+        deviceLike.layoutType
+      ].filter(Boolean).join(' ').toLowerCase();
+
+      return [
+        'fan',
+        'vent',
+        'controller',
+        'energy',
+        'dehumid',
+        'hvac',
+        'tower',
+        'zipgrow',
+        'zip grow',
+        'vertical',
+        'rack'
+      ].some(token => signature.includes(token));
     }
 
     function updateGridSize() {
@@ -3341,17 +3379,7 @@
         const sourceDevice = placedDevice.device && typeof placedDevice.device === 'object'
           ? placedDevice.device
           : {};
-        const category = String(sourceDevice.category || '').toLowerCase();
-        const isEquipment = Boolean(
-          placedDevice.isEquipment
-          || sourceDevice.isEquipment
-          || category.includes('fan')
-          || category.includes('vent')
-          || category.includes('controller')
-          || category.includes('energy')
-          || category.includes('dehumid')
-          || category.includes('hvac')
-        );
+          const isEquipment = isEquipmentRecord(placedDevice, placedDevice.deviceId) || isEquipmentRecord(sourceDevice, placedDevice.deviceId);
         const displayName = sourceDevice.name
           || [sourceDevice.vendor, sourceDevice.model].filter(Boolean).join(' ')
           || null;
@@ -3687,19 +3715,11 @@
       if (mapData.devices) {
         for (const devicePos of mapData.devices) {
           const snapshot = devicePos.snapshot || devicePos.metadata || null;
-          
-          // Determine if this is equipment from saved flag or category inference
-          const isEquipment = devicePos.isEquipment || snapshot?.isEquipment || (() => {
-            const cat = (snapshot?.category || '').toLowerCase();
-            return cat.includes('fan') || cat.includes('vent') || cat.includes('controller') || 
-                   cat.includes('energy') || cat.includes('dehumid') || cat.includes('hvac');
-          })();
-          
+
           // Search both IoT sensors AND equipment lists
-          let device = STATE.iotDevices.find(d => d.id === devicePos.deviceId);
-          if (!device) {
-            device = STATE.equipment.find(e => e.id === devicePos.deviceId);
-          }
+          const matchedSensor = STATE.iotDevices.find(d => d.id === devicePos.deviceId);
+          const matchedEquipment = STATE.equipment.find(e => e.id === devicePos.deviceId);
+          let device = matchedSensor || matchedEquipment;
 
           if (device && snapshot) {
             device = mergePlacedDeviceSnapshot(device, snapshot, devicePos.deviceId);
@@ -3715,6 +3735,13 @@
               zone: snapshot.zone ?? null
             }, snapshot, devicePos.deviceId);
           }
+
+          const isEquipment = Boolean(
+            devicePos.isEquipment
+            || isEquipmentRecord(snapshot, devicePos.deviceId)
+            || isEquipmentRecord(device, devicePos.deviceId)
+            || matchedEquipment
+          );
 
           // Use correct icon function based on device type
           const resolvedIcon = isEquipment 
