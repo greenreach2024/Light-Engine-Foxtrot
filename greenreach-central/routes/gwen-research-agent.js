@@ -16,6 +16,9 @@
 
 import { Router } from 'express';
 import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { query, isDatabaseAvailable } from '../config/database.js';
 import { trackAiUsage, estimateChatCost } from '../lib/ai-usage-tracker.js';
 import { executeTool } from './farm-ops-agent.js';
@@ -24,6 +27,8 @@ import { ENFORCEMENT_PROMPT_BLOCK, sendEnforcedResponse } from '../middleware/ag
 import { getGeminiClient, GEMINI_PRO, estimateGeminiCost, isGeminiConfigured, refreshGeminiToken } from '../lib/gemini-client.js';
 
 const router = Router();
+const ROUTE_DIR = path.dirname(fileURLToPath(import.meta.url));
+const CENTRAL_PUBLIC_DATA_DIR = path.resolve(ROUTE_DIR, '..', 'public', 'data');
 
 // -- LLM Client (Gemini via Vertex AI) ---------------------------------
 let geminiClient = null;
@@ -322,6 +327,196 @@ function normalizeDeviceEntry(device = {}) {
     last_seen: device.lastSeen || device.last_seen || telemetry?.lastUpdate || null,
     telemetry,
     raw: device,
+  };
+}
+
+function readCentralPublicJson(fileName, fallbackValue) {
+  try {
+    const filePath = path.join(CENTRAL_PUBLIC_DATA_DIR, fileName);
+    if (!fs.existsSync(filePath)) return fallbackValue;
+    return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  } catch (err) {
+    console.warn(`[GWEN] Failed to load ${fileName}:`, err.message);
+    return fallbackValue;
+  }
+}
+
+function normalizeResearchDateOnly(value) {
+  if (!value) return null;
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.toISOString().slice(0, 10);
+  }
+  const text = String(value).trim();
+  if (!text) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
+  const parsed = new Date(text);
+  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString().slice(0, 10);
+}
+
+function loadResearchSupportData() {
+  const cropRegistryPayload = readCentralPublicJson('crop-registry.json', {});
+  const trayFormatsPayload = readCentralPublicJson('tray-formats.json', []);
+  const plantingSchedulePayload = readCentralPublicJson('planting-schedule.json', {});
+  const cropRegistry = cropRegistryPayload?.crops || cropRegistryPayload || {};
+  const trayFormats = Array.isArray(trayFormatsPayload) ? trayFormatsPayload : (trayFormatsPayload?.formats || []);
+  const assignments = Array.isArray(plantingSchedulePayload?.assignments) ? plantingSchedulePayload.assignments : [];
+  const scheduleByGroupId = new Map();
+  const scheduleByGroupName = new Map();
+  assignments.forEach((assignment) => {
+    const groupId = String(assignment?.group_id || '').trim();
+    const groupName = String(assignment?.group_name || '').trim().toLowerCase();
+    if (groupId) scheduleByGroupId.set(groupId, assignment);
+    if (groupName) scheduleByGroupName.set(groupName, assignment);
+  });
+  return { cropRegistry, trayFormats, scheduleByGroupId, scheduleByGroupName };
+}
+
+function resolveResearchCropRegistryEntry(cropName, cropRegistry) {
+  const target = String(cropName || '').trim().toLowerCase();
+  if (!target) return { key: '', entry: null };
+  for (const [key, entry] of Object.entries(cropRegistry || {})) {
+    if (String(key).trim().toLowerCase() === target) return { key, entry };
+    if ((entry?.aliases || []).some((alias) => String(alias).trim().toLowerCase() === target)) {
+      return { key, entry };
+    }
+    if ((entry?.planIds || []).some((planId) => String(planId).trim().toLowerCase() === target)) {
+      return { key, entry };
+    }
+  }
+  return { key: '', entry: null };
+}
+
+function normalizeResearchSystemType(value) {
+  const text = String(value || '').trim().toLowerCase();
+  if (!text) return '';
+  if (/zipgrow|tower|vertical/.test(text)) return 'zipgrow';
+  if (/aero/.test(text)) return 'aeroponics';
+  if (/nft|channel/.test(text)) return 'channel';
+  return text;
+}
+
+function findResearchTrayFormatForGroup(group, trayFormats, systemType) {
+  const formats = Array.isArray(trayFormats) ? trayFormats : [];
+  if (!formats.length) return null;
+
+  const refs = [
+    group?.trayFormatId,
+    group?.tray_format_id,
+    group?.trayFormat?.trayFormatId,
+    group?.trayFormat?.id,
+    group?.tray_format?.trayFormatId,
+    group?.tray_format?.id,
+    group?.trayFormat?.name,
+    group?.tray_format?.name,
+  ].filter(Boolean).map((value) => String(value).trim().toLowerCase());
+
+  if (refs.length) {
+    const explicit = formats.find((format) => {
+      const formatRefs = [format?.trayFormatId, format?.id, format?.name]
+        .filter(Boolean)
+        .map((value) => String(value).trim().toLowerCase());
+      return refs.some((ref) => formatRefs.includes(ref));
+    });
+    if (explicit) return explicit;
+  }
+
+  if (systemType === 'zipgrow') {
+    return formats.find((format) => {
+      const haystack = [format?.trayFormatId, format?.name, format?.description, format?.systemType]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+      return normalizeResearchSystemType(format?.systemType) === 'zipgrow' || /zipgrow|tower|vertical/.test(haystack);
+    }) || null;
+  }
+
+  return null;
+}
+
+function resolveResearchPlantingLocations(group, trayFormats, systemType) {
+  const candidates = [
+    group?.plantSiteCount,
+    group?.plant_site_count,
+    group?.plantingLocations,
+    group?.planting_locations,
+    group?.locationsPerTower,
+    group?.locations_per_tower,
+    group?.siteCount,
+    group?.site_count,
+    group?.capacity,
+  ];
+  for (const candidate of candidates) {
+    const count = Number(candidate);
+    if (Number.isFinite(count) && count > 0) return Math.round(count);
+  }
+
+  const trayFormat = findResearchTrayFormatForGroup(group, trayFormats, systemType);
+  const formatCount = Number(trayFormat?.plantSiteCount ?? trayFormat?.plant_site_count);
+  if (Number.isFinite(formatCount) && formatCount > 0) return Math.round(formatCount);
+
+  if (systemType === 'zipgrow') {
+    const trayCount = Number(group?.trays);
+    if (Number.isFinite(trayCount) && trayCount > 0) return Math.round(trayCount);
+  }
+
+  return null;
+}
+
+function enrichResearchGroup(group = {}, supportData) {
+  const cropName = String(group?.crop || group?.recipe || group?.plan || '').trim();
+  const groupId = String(group?.id || group?.group_id || '').trim();
+  const groupName = String(group?.name || group?.group_name || '').trim();
+  const schedule = supportData.scheduleByGroupId.get(groupId)
+    || supportData.scheduleByGroupName.get(groupName.toLowerCase())
+    || null;
+  const registryMatch = resolveResearchCropRegistryEntry(cropName, supportData.cropRegistry);
+  const registry = registryMatch.entry;
+  const systemType = normalizeResearchSystemType(group?.systemType || group?.system || group?.type || group?.category || groupName);
+  const plantingLocations = resolveResearchPlantingLocations(group, supportData.trayFormats, systemType);
+
+  const seedDate = normalizeResearchDateOnly(
+    schedule?.seed_date ||
+    group?.planConfig?.anchor?.seedDate ||
+    group?.planConfig?.seedDate ||
+    group?.seedDate ||
+    group?.seed_date
+  );
+
+  let growDays = Number(
+    schedule?.grow_days ||
+    group?.growDays ||
+    group?.grow_days ||
+    group?.planConfig?.target?.growDays ||
+    registry?.growth?.daysToHarvest
+  );
+  if (!Number.isFinite(growDays) || growDays <= 0) growDays = null;
+
+  let forecastHarvestDate = normalizeResearchDateOnly(schedule?.harvest_date);
+  if (!forecastHarvestDate && seedDate && growDays) {
+    const seed = new Date(seedDate + 'T00:00:00');
+    if (!Number.isNaN(seed.getTime())) {
+      const harvest = new Date(seed.getTime());
+      harvest.setDate(harvest.getDate() + growDays);
+      forecastHarvestDate = harvest.toISOString().slice(0, 10);
+    }
+  }
+
+  const explicitPlantCount = Number(group?.plants ?? group?.plant_count);
+  const estimatedPlantCount = Number.isFinite(explicitPlantCount) && explicitPlantCount > 0
+    ? Math.round(explicitPlantCount)
+    : plantingLocations;
+
+  return {
+    ...group,
+    crop_name: cropName || null,
+    seed_date: seedDate,
+    forecast_harvest_date: forecastHarvestDate,
+    planting_locations: plantingLocations,
+    estimated_plant_count: estimatedPlantCount || null,
+    grow_days: growDays,
+    system_type: systemType || null,
+    recipe_days_to_harvest: Number(registry?.growth?.daysToHarvest) || null,
+    raw: group?.raw || group,
   };
 }
 
@@ -5087,7 +5282,7 @@ ${sections.includes('bibliography') && bibItems ? `<h2>Bibliography</h2><ol>${bi
   },
 
   get_farm_layout_context: {
-    description: 'Get normalized farm topology for research context: rooms, zones, groups, and trays. Reads the latest farm-scoped room map and related records so GWEN can reason about local physical layout.',
+    description: 'Get normalized farm topology for research context: rooms, zones, groups, and trays. Reads the latest farm-scoped room map and related records so GWEN can reason about local physical layout, crop lifecycle timing, and tower planting capacity.',
     parameters: {
       include_raw: { type: 'boolean', description: 'When true, include raw source payloads used to build the normalized response' },
     },
@@ -5110,6 +5305,7 @@ ${sections.includes('bibliography') && bibItems ? `<h2>Bibliography</h2><ol>${bi
         const roomMapPayload = byType.get('room_map')?.data || null;
         const groupsPayload = byType.get('groups')?.data || null;
 
+        const supportData = loadResearchSupportData();
         const roomsNorm = normalizeFarmLayoutPayload(roomsPayload);
         const roomMapNorm = normalizeFarmLayoutPayload(roomMapPayload);
         const groupsNorm = normalizeFarmLayoutPayload(groupsPayload);
@@ -5140,7 +5336,15 @@ ${sections.includes('bibliography') && bibItems ? `<h2>Bibliography</h2><ol>${bi
           groups = derived;
         }
 
+        groups = groups.map((group) => enrichResearchGroup(group, supportData));
+
         const trays = extractTraysFromZones(zones);
+        const estimatedActivePlantCount = groups.reduce((sum, group) => {
+          const status = String(group?.status || '').toLowerCase();
+          if (status === 'completed' || status === 'archived' || status === 'idle') return sum;
+          const plantCount = Number(group?.estimated_plant_count);
+          return sum + (Number.isFinite(plantCount) && plantCount > 0 ? plantCount : 0);
+        }, 0);
 
         const response = {
           ok: true,
@@ -5150,6 +5354,7 @@ ${sections.includes('bibliography') && bibItems ? `<h2>Bibliography</h2><ol>${bi
             zone_count: Array.isArray(zones) ? zones.length : 0,
             group_count: Array.isArray(groups) ? groups.length : 0,
             tray_count: trays.length,
+            estimated_active_plant_count: estimatedActivePlantCount,
           },
           layout: {
             rooms,
@@ -5884,6 +6089,12 @@ Multi-hour environmental simulation and spatial microclimate prediction:
 - Plant transpiration and photosynthetic CO2 uptake modeling
 - Spatial zone prediction: hot spots, dead zones, humidity pockets at canopy level
 - Equipment placement optimization with 3D inverse-square thermal influence
+
+When modeling humidity load, transpiration cooling, or canopy-driven CO2 exchange from the live farm layout:
+- Call get_farm_topology first.
+- Use each active group's estimated_plant_count as the primary plant-count input.
+- If an explicit plant count is missing, use planting_locations as the default per-tower/site plant count.
+- Use seed_date, forecast_harvest_date, and grow_days to distinguish newly seeded groups from mature canopy loads before recommending dehumidification or ventilation changes.
 
 
 

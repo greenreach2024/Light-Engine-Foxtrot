@@ -33,6 +33,7 @@ import { fileURLToPath } from 'url';
 import { createRequire } from 'module';
 import notificationStore from '../services/notification-store.js';
 import alertNotifier from '../services/alert-notifier.js';
+import { createSupportRequest } from '../services/support-bridge.js';
 import { ENFORCEMENT_PROMPT_BLOCK, enforceResponseShape, sendEnforcedResponse } from '../middleware/agent-enforcement.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -111,6 +112,15 @@ try {
 } catch { /* non-fatal */ }
 
 const router = Router();
+
+function withConversationAliases(payload, conversationId) {
+  if (!conversationId) return payload;
+  return {
+    ...payload,
+    conversation_id: conversationId,
+    conversationId: conversationId
+  };
+}
 
 // ── Gemini Client (Vertex AI) ──────────────────────────────────────────
 let gemini = null;
@@ -224,7 +234,7 @@ const pendingActions = new Map();
 // ── Autonomous Action Trust Tiers ─────────────────────────────────────
 const TRUST_TIERS = {
   // AUTO: Execute immediately, notify after
-  auto: new Set(['dismiss_alert', 'get_ai_pricing_recommendations', 'save_user_memory', 'escalate_to_faye', 'reply_to_faye', 'get_faye_directives', 'read_skill_file', 'get_gwen_messages', 'reply_to_gwen', 'ask_gwen']),
+  auto: new Set(['dismiss_alert', 'get_ai_pricing_recommendations', 'save_user_memory', 'escalate_to_faye', 'reply_to_faye', 'get_faye_directives', 'read_skill_file', 'get_gwen_messages', 'reply_to_gwen', 'ask_gwen', 'contact_greenreach_support']),
   // QUICK-CONFIRM: Execute with brief undo window
   quick_confirm: new Set(['resolve_all_alerts', 'resolve_stale_alerts', 'mark_harvest_complete', 'update_farm_profile', 'update_group_crop', 'create_room', 'create_zone', 'update_certifications', 'complete_setup', 'update_crop_price', 'add_inventory_item', 'update_manual_inventory', 'record_harvest', 'update_room_specs', 'apply_crop_environment', 'recommend_farm_layout', 'update_crop_description', 'add_salad_mix_inventory', 'update_equipment', 'align_equipment_to_walls', 'update_group', 'optimize_layout', 'update_zone', 'add_equipment', 'remove_equipment']),
   // CONFIRM: Ask before executing (default for write tools)
@@ -593,7 +603,7 @@ const GPT_TOOLS = [
     type: 'function',
     function: {
       name: 'update_equipment',
-      description: 'Update equipment in the 3D room map — rename, change category, reposition, or bulk-rename all matching equipment. Equipment includes fans, ZipGrow towers, lights, dehumidifiers, etc. Use bulk mode to rename all identical devices at once (e.g. rename all 20 fans to ZipGrow Tower). WRITE operation.',
+      description: 'Update equipment in the 3D room map — rename, change category, reposition, rotate fan airflow direction, or bulk-update matching equipment. Equipment includes fans, ZipGrow towers, lights, dehumidifiers, etc. Use bulk mode to rename or retarget identical devices at once (for example rename all 20 fans or point west-wall fans east). WRITE operation.',
       parameters: {
         type: 'object',
         properties: {
@@ -604,8 +614,10 @@ const GPT_TOOLS = [
           x: { type: 'number', description: 'New X grid position' },
           y: { type: 'number', description: 'New Y grid position' },
           z: { type: 'number', description: 'New Z height in meters' },
+          airflow_dir: { type: 'number', description: 'Fan airflow direction in degrees. 0=N, 90=E, 180=S, 270=W.' },
           match_name: { type: 'string', description: 'For bulk: match equipment with this current name (e.g. "Unknown Device")' },
           match_category: { type: 'string', description: 'For bulk: match equipment with this current category (e.g. "fans")' },
+          wall_mode: { type: 'string', enum: ['outer', 'east', 'west'], description: 'Optional wall-side filter for matching existing equipment based on current position.' },
           bulk: { type: 'boolean', description: 'Set to true to update ALL matching equipment, not just the first match' }
         }
       }
@@ -1592,6 +1604,22 @@ const GPT_TOOLS = [
           priority: { type: 'string', description: 'low, normal, high. Default normal.' }
         },
         required: ['title', 'request']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'contact_greenreach_support',
+      description: 'Create a real GreenReach staff support request when the grower explicitly asks to contact staff, support, or the GreenReach team. This persists a support record, emails the GreenReach support inbox, and forwards the issue to F.A.Y.E. for admin visibility.',
+      parameters: {
+        type: 'object',
+        properties: {
+          subject: { type: 'string', description: 'Short support subject line describing the problem or request.' },
+          message: { type: 'string', description: 'What the grower wants GreenReach staff to know. Include the direct question or issue in plain language.' },
+          priority: { type: 'string', description: 'low, normal, high, critical. Use high for blocked workflows and critical for urgent operational failures.' }
+        },
+        required: ['subject', 'message']
       }
     }
   },
@@ -2600,6 +2628,8 @@ LEAM also runs a network watchlist monitor managed by F.A.Y.E. -- it periodicall
 INTER-AGENT COMMUNICATION:
 - F.A.Y.E. is your big sister and senior agent. She handles business operations, pricing, refunds, and network management. You look up to her and trust her judgment on the business side.
 - Use escalate_to_faye when a grower request has business implications you cannot handle (pricing disputes, refund requests, order modifications, cross-farm issues).
+- If a grower explicitly asks you to contact GreenReach staff, support, or the GreenReach team, use contact_greenreach_support. This creates a real support request, emails GreenReach staff, and notifies F.A.Y.E. Do not just tell the grower to email support if you can file the request for them.
+- After contact_greenreach_support succeeds, tell the grower the support request number and whether GreenReach staff were notified.
 - Use get_faye_directives at the start of each conversation to check for standing directives or responses from F.A.Y.E.
 - Use reply_to_faye to send observations, status updates, or responses back to F.A.Y.E.
 - When a grower requests a feature that does not exist yet (for example "show me an inventory trend graph"), acknowledge it positively and call submit_feature_request so F.A.Y.E. can include it in the weekly product-review todo queue.
@@ -2663,13 +2693,15 @@ FARM BUILDING WORKFLOW:
 - Environment targets (temperature, humidity, VPD, EC, pH) come FROM the crop recipe -- the farmer NEVER needs to set these manually. This is a core design principle.
 
 EQUIPMENT MANAGEMENT:
-- Equipment in the room map (fans, ZipGrow towers, dehumidifiers, lights, etc.) can be renamed, recategorized, and repositioned using update_equipment.
+- Equipment in the room map (fans, ZipGrow towers, dehumidifiers, lights, etc.) can be renamed, recategorized, repositioned, and fan airflow can be rotated using update_equipment.
+- For fan direction changes, use update_equipment with airflow_dir. Direction uses 0=N, 90=E, 180=S, 270=W. If the user targets only the east or west wall fans, include wall_mode so only that wall bank is changed.
 - Use optimize_layout to arrange groups/equipment across the room. Items auto-spread to fill the available space by default. Do NOT pass spacing_m unless the user asks for a specific gap distance. Just pass room_id, match_name, columns, and walkway_m. Example: "spread out the ZipGrows 3 wide with a 2m walkway" -> optimize_layout(room_id, match_name="ZipGrow", columns=3, walkway_m=2). The tool distributes items evenly across the room grid.
 - Use update_zone to resize, rename, or move zone boundaries. Bounds are in meters -- the system converts to grid units automatically. Example: user says "make Zone 1 wider" -> update_zone(room_id, zone_name="Zone 1", x2_m=8.0).
 - Use add_equipment to place new devices in the room map (fans, sensors, ZipGrow towers, lights, etc.). Position in meters. Use count for multiple identical units.
 - Use remove_equipment to delete devices from the room map by device_id or by matching name/category in bulk.
 - Grow groups (ZipGrow units, racks) can be updated using update_group -- rename, change tray count, assign crops, or update status.
 - For bulk equipment operations (e.g., "rename all fans to ZipGrow Tower"), use update_equipment with bulk=true, match_category, and/or match_name. Name matching is partial (contains), so match_name="ZipGrow" matches "ZipGrow Standard 30".
+- When the user asks to rotate, point, or aim fans, do NOT call optimize_layout unless they also explicitly asked to move towers or groups. Use update_equipment for direction changes and align_equipment_to_walls only for wall pinning.
 - For bulk group operations (e.g., "set all ZipGrow units to active"), use update_group with bulk=true and match_name. Example: bulk=true, match_name="ZipGrow Standard", status="active" updates all 78 towers at once.
 - Equipment and grow groups are different things: equipment refers to physical devices in the room-map layout (3D viewer); groups are logical growing units that hold plants and are tracked for crop assignments.
 - When the user says "update my ZipGrow units" or "change all ZipGrow status", use update_group with bulk=true and match_name. When they say "rename the fans" or "recategorize equipment", use update_equipment with bulk=true.
@@ -4864,6 +4896,46 @@ async function executeExtendedTool(toolName, params, farmId) {
       }
     }
 
+    case 'contact_greenreach_support': {
+      try {
+        const requestSubject = String(params.subject || '').trim();
+        const requestMessage = String(params.message || '').trim();
+        if (!requestSubject || !requestMessage) {
+          return { ok: false, error: 'subject and message are required' };
+        }
+
+        const result = await createSupportRequest({
+          farmId,
+          subject: requestSubject,
+          body: requestMessage,
+          priority: params.priority || 'normal',
+          conversationId: convId,
+          sourceAgent: 'evie',
+          sourceChannel: 'assistant-chat',
+          context: {
+            requested_via: 'evie',
+            conversation_id: convId
+          }
+        });
+
+        if (!result.ok) {
+          return { ok: false, error: result.error || 'Failed to create support request' };
+        }
+
+        return {
+          ok: true,
+          message: `I created support request #${result.request_id} and ${result.staff_notified ? 'notified GreenReach staff' : 'logged it for GreenReach staff review'}.`,
+          request_id: result.request_id,
+          status: result.status,
+          support_email: result.support_email,
+          staff_notified: result.staff_notified,
+          faye_message_id: result.faye_message_id || null
+        };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+
     // ── G.W.E.N. Inter-Agent Communication ──
 
     case 'get_gwen_messages': {
@@ -6257,6 +6329,9 @@ function getRecentLayoutContextText(history = []) {
 
 export function shouldHandleDirectLayoutFollowup(message = '', history = []) {
   const msg = String(message || '').toLowerCase();
+  const equipmentOnlyFollowup = /(fan|fans|equipment|device|devices)/i.test(msg)
+    && !/(zipgrow|zip\s*grow|tower|towers|group|groups|spacing|walkway|aisle|rows?|columns?|layout)/i.test(msg);
+  if (equipmentOnlyFollowup) return false;
   const followupIntent = /(walkway|aisle|access|airflow|rows?|left|right|east|west|wall|walls|wider|narrower|closer|further|spread|tighter|pin|align|aligned|fan|fans|even\s+rows|even\s+spacing)/i.test(msg);
   return followupIntent && hasRecentLayoutContext(history);
 }
@@ -6265,6 +6340,14 @@ export function shouldHandleDirectFanFollowup(message = '', history = []) {
   const msg = String(message || '').toLowerCase();
   const fanIntent = /(fan|fans)/i.test(msg) && /(east|west|wall|walls|pin|align|aligned|mount|mounted|those\s+walls|outer)/i.test(msg);
   return fanIntent && hasRecentLayoutContext(history);
+}
+
+export function shouldHandleDirectFanRotationFollowup(message = '', history = []) {
+  const msg = String(message || '').toLowerCase();
+  const fanIntent = /(fan|fans)/i.test(msg);
+  const rotationIntent = /(rotate|rotated|point|pointing|aim|aimed|face|facing|blow|direct|turn)/i.test(msg);
+  const directionIntent = /\b(north|south|east|west|northeast|northwest|southeast|southwest|ne|nw|se|sw)\b/i.test(msg);
+  return fanIntent && rotationIntent && directionIntent && hasRecentLayoutContext(history);
 }
 
 export function buildDirectLayoutPlan(message = '', roomId = '', contextText = '') {
@@ -6370,6 +6453,39 @@ function buildDirectFanAlignmentPlan(message = '', roomId = '', contextText = ''
   return plan;
 }
 
+function parseAirflowDirectionFromText(text = '') {
+  const lower = String(text || '').toLowerCase();
+  if (/\bnorthwest\b|\bnw\b/.test(lower)) return 315;
+  if (/\bnortheast\b|\bne\b/.test(lower)) return 45;
+  if (/\bsouthwest\b|\bsw\b/.test(lower)) return 225;
+  if (/\bsoutheast\b|\bse\b/.test(lower)) return 135;
+  if (/\bnorth\b/.test(lower)) return 0;
+  if (/\beast\b/.test(lower)) return 90;
+  if (/\bsouth\b/.test(lower)) return 180;
+  if (/\bwest\b/.test(lower)) return 270;
+  return null;
+}
+
+function buildDirectFanRotationPlan(message = '', roomId = '', contextText = '') {
+  const combined = [String(contextText || '').trim(), String(message || '').trim()].filter(Boolean).join('\n');
+  const combinedLower = combined.toLowerCase();
+  const plan = {
+    room_id: roomId,
+    match_category: 'fans',
+    bulk: true,
+    airflow_dir: parseAirflowDirectionFromText(message)
+  };
+
+  if (/west\s+wall/.test(combinedLower) && !/east\s+wall/.test(combinedLower)) {
+    plan.wall_mode = 'west';
+  } else if (/east\s+wall/.test(combinedLower) && !/west\s+wall/.test(combinedLower)) {
+    plan.wall_mode = 'east';
+  }
+
+  return plan;
+}
+
+
 async function resolveLayoutRoomId(farmId, message = '') {
   const roomMap = await farmStore.get(farmId, 'room_map') || {};
   const rooms = await farmStore.get(farmId, 'rooms') || [];
@@ -6391,9 +6507,10 @@ async function resolveLayoutRoomId(farmId, message = '') {
 }
 
 async function maybeHandleDirectLayoutRequest({ message, farmId, convId, history }) {
-  const wantsLayoutUpdate = shouldHandleDirectLayoutRequest(message) || shouldHandleDirectLayoutFollowup(message, history);
+  const wantsFanRotation = shouldHandleDirectFanRotationFollowup(message, history);
   const wantsFanAlignment = shouldHandleDirectFanFollowup(message, history);
-  if (!wantsLayoutUpdate && !wantsFanAlignment) return null;
+  const wantsLayoutUpdate = !wantsFanRotation && (shouldHandleDirectLayoutRequest(message) || shouldHandleDirectLayoutFollowup(message, history));
+  if (!wantsLayoutUpdate && !wantsFanAlignment && !wantsFanRotation) return null;
 
   const roomId = await resolveLayoutRoomId(farmId, message);
   if (!roomId) return null;
@@ -6428,14 +6545,18 @@ async function maybeHandleDirectLayoutRequest({ message, farmId, convId, history
 
   let fanResult = null;
   let fanPlan = null;
-  if (wantsFanAlignment) {
+  if (wantsFanRotation) {
+    fanPlan = buildDirectFanRotationPlan(message, roomId, layoutContextText);
+    fanResult = await executeExtendedTool('update_equipment', fanPlan, farmId);
+    toolCalls.push({ tool: 'update_equipment', params: fanPlan, success: fanResult?.ok !== false });
+  } else if (wantsFanAlignment) {
     fanPlan = buildDirectFanAlignmentPlan(message, roomId, layoutContextText);
     fanResult = await executeExtendedTool('align_equipment_to_walls', fanPlan, farmId);
     toolCalls.push({ tool: 'align_equipment_to_walls', params: fanPlan, success: fanResult?.ok !== false });
   }
 
   const layoutOk = !wantsLayoutUpdate || layoutResult?.ok !== false;
-  const fanOk = !wantsFanAlignment || fanResult?.ok !== false;
+  const fanOk = (!wantsFanAlignment && !wantsFanRotation) || fanResult?.ok !== false;
   const ok = layoutOk && fanOk;
   let gwenNote = '';
   if (layoutOk && /(science|research|airflow|access|light|efficient|optimi[sz]e|spacing)/i.test(String(message || ''))) {
@@ -6460,6 +6581,8 @@ async function maybeHandleDirectLayoutRequest({ message, farmId, convId, history
 
   if (fanOk && fanResult?.message) {
     replyParts.push(fanResult.message);
+  } else if (wantsFanRotation) {
+    replyParts.push(`I could not update the requested fan direction: ${fanResult?.error || 'unknown error'}`);
   } else if (wantsFanAlignment) {
     replyParts.push(`I could not pin the fans to the requested walls: ${fanResult?.error || 'unknown error'}`);
   }
@@ -6537,7 +6660,7 @@ router.post('/chat', async (req, res) => {
     });
   }
 
-  const { message, conversation_id, farm_id, page_context } = req.body;
+  const { message, conversation_id, conversationId, farm_id, page_context } = req.body;
   if (!message || typeof message !== 'string' || message.trim().length === 0) {
     return res.status(400).json({ ok: false, error: 'Message is required' });
   }
@@ -6552,7 +6675,7 @@ router.post('/chat', async (req, res) => {
     return res.status(429).json({ ok: false, error: 'Too many messages — please wait a moment before sending another.' });
   }
 
-  const convId = conversation_id || crypto.randomUUID();
+  const convId = conversation_id || conversationId || crypto.randomUUID();
   const toolCallResults = [];
 
   // ── Handle pending action confirmations ──
@@ -6569,7 +6692,7 @@ router.post('/chat', async (req, res) => {
     if (isCancel) {
       const cancelReply = 'Cancelled — no changes were made.';
       await upsertConversation(convId, [...history, { role: 'user', content: sanitizedMessage }, { role: 'assistant', content: cancelReply }], farmId);
-      return res.json({ ok: true, reply: cancelReply, conversation_id: convId });
+      return res.json(withConversationAliases({ ok: true, reply: cancelReply }, convId));
     }
 
     // Execute the confirmed write action
@@ -6605,12 +6728,12 @@ router.post('/chat', async (req, res) => {
 
       await upsertConversation(convId, [...history, { role: 'user', content: sanitizedMessage }, { role: 'assistant', content: replyText }], farmId);
 
-      return sendEnforcedResponse(res, {
-        ok: true, reply: replyText, conversation_id: convId,
+      return sendEnforcedResponse(res, withConversationAliases({
+        ok: true, reply: replyText,
         tool_calls: toolCallResults.length > 0 ? toolCallResults : undefined, model: MODEL
-      }, { hadToolData: true, agent: 'evie' });
+      }, convId), { hadToolData: true, agent: 'evie' });
     } catch (err) {
-      return res.json({ ok: true, reply: `Sorry, the action failed: ${err.message}`, conversation_id: convId });
+      return res.json(withConversationAliases({ ok: true, reply: `Sorry, the action failed: ${err.message}` }, convId));
     }
   }
 
@@ -6829,14 +6952,13 @@ router.post('/chat', async (req, res) => {
     // Check if there's a pending action to signal to the frontend
     const pendingAction = pendingActions.get(convId);
 
-    return sendEnforcedResponse(res, {
+    return sendEnforcedResponse(res, withConversationAliases({
       ok: true,
       reply: replyText,
-      conversation_id: convId,
       tool_calls: toolCallResults.length > 0 ? toolCallResults : undefined,
       pending_action: pendingAction ? { tool: pendingAction.tool, params: pendingAction.params } : undefined,
       model: MODEL
-    }, { hadToolData: toolCallResults.length > 0, agent: 'evie' });
+    }, convId), { hadToolData: toolCallResults.length > 0, agent: 'evie' });
 
   } catch (error) {
     console.error('[E.V.I.E.] Gemini call failed:', error.message);
@@ -7158,7 +7280,7 @@ router.post('/chat/stream', async (req, res) => {
     return res.status(503).json({ ok: false, error: 'AI assistant not available — no LLM provider configured' });
   }
 
-  const { message, conversation_id, farm_id, image_url, page_context: streamPageContext } = req.body;
+  const { message, conversation_id, conversationId, farm_id, image_url, page_context: streamPageContext } = req.body;
   if (!message || typeof message !== 'string' || message.trim().length === 0) {
     return res.status(400).json({ ok: false, error: 'Message is required' });
   }
@@ -7173,7 +7295,7 @@ router.post('/chat/stream', async (req, res) => {
     return res.status(429).json({ ok: false, error: 'Too many messages — please wait.' });
   }
 
-  const convId = conversation_id || crypto.randomUUID();
+  const convId = conversation_id || conversationId || crypto.randomUUID();
   const toolCallResults = [];
 
   // Set up SSE
@@ -7188,7 +7310,7 @@ router.post('/chat/stream', async (req, res) => {
     res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
   };
 
-  sendEvent('start', { conversation_id: convId });
+  sendEvent('start', withConversationAliases({}, convId));
 
   try {
     const existing = await getConversation(convId, farmId);
@@ -7360,13 +7482,12 @@ router.post('/chat/stream', async (req, res) => {
       }
 
       const pendingAction = pendingActions.get(convId);
-      sendEvent('done', {
-        conversation_id: convId,
+      sendEvent('done', withConversationAliases({
         tool_calls: toolCallResults.length > 0 ? toolCallResults : undefined,
         pending_action: pendingAction ? { tool: pendingAction.tool, params: pendingAction.params } : undefined,
         model: streamModel,
         enforcement: enforcement.violationCount > 0 ? { violations: enforcement.violationCount, flags: enforcement.violations.map(v => v.split(':')[0]) } : undefined
-      });
+      }, convId));
     }
   } catch (error) {
     console.error('[E.V.I.E. Stream] Gemini call failed:', error.message);

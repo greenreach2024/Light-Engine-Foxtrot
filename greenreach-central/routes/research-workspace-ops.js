@@ -7,6 +7,15 @@ const router = Router();
 const MAX_TEXT_LENGTH = 5000;
 const MAX_TITLE_LENGTH = 255;
 
+async function safeWorkspaceQuery(sql, params, fallbackRows, label) {
+  try {
+    return await query(sql, params);
+  } catch (err) {
+    console.warn(`[WorkspaceOps] ${label} unavailable:`, err.message);
+    return { rows: fallbackRows };
+  }
+}
+
 const checkDb = async (req, res, next) => {
   if (!(await isDatabaseAvailable())) {
     return res.status(503).json({ ok: false, error: 'Database not available' });
@@ -15,6 +24,104 @@ const checkDb = async (req, res, next) => {
 };
 
 router.use(checkDb);
+
+router.get('/research/data-cards', async (req, res) => {
+  try {
+    const farmId = req.farmId || req.user?.farmId || req.query.farm_id;
+    if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
+
+    const params = [farmId];
+    let sql = 'SELECT * FROM research_data_cards WHERE farm_id = $1 AND archived = false';
+    if (req.query.category) {
+      params.push(req.query.category);
+      sql += ` AND category = $${params.length}`;
+    }
+    if (req.query.study_id) {
+      params.push(req.query.study_id);
+      sql += ` AND study_id = $${params.length}`;
+    }
+    sql += ' ORDER BY category, card_name';
+
+    const result = await safeWorkspaceQuery(sql, params, [], 'data cards');
+    res.json({ ok: true, cards: result.rows, count: result.rows.length });
+  } catch (err) {
+    console.error('[WorkspaceOps] Data cards error:', err.message);
+    res.status(500).json({ ok: false, error: 'Failed to load data cards' });
+  }
+});
+
+router.get('/research/data-card-history', async (req, res) => {
+  try {
+    const farmId = req.farmId || req.user?.farmId || req.query.farm_id;
+    const variableKey = req.query.variable_key;
+    if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
+    if (!variableKey) return res.status(400).json({ ok: false, error: 'variable_key required' });
+
+    const hours = Math.max(1, Math.min(parseInt(req.query.hours, 10) || 168, 24 * 30));
+    const limit = Math.max(1, Math.min(parseInt(req.query.limit, 10) || 500, 1000));
+    const result = await safeWorkspaceQuery(
+      `SELECT value, notes, recorded_at FROM research_data_card_log
+       WHERE farm_id = $1 AND variable_key = $2 AND recorded_at > NOW() - INTERVAL '1 hour' * $3
+       ORDER BY recorded_at ASC LIMIT $4`,
+      [farmId, variableKey, hours, limit],
+      [],
+      'data card history'
+    );
+
+    res.json({ ok: true, variable_key: variableKey, data_points: result.rows, count: result.rows.length });
+  } catch (err) {
+    console.error('[WorkspaceOps] Data card history error:', err.message);
+    res.status(500).json({ ok: false, error: 'Failed to load data card history' });
+  }
+});
+
+router.get('/research/workspace-charts', async (req, res) => {
+  try {
+    const farmId = req.farmId || req.user?.farmId || req.query.farm_id;
+    if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
+
+    const result = await safeWorkspaceQuery(
+      `SELECT id, title, chart_type, config, study_id, created_at
+       FROM research_workspace_charts
+       WHERE farm_id = $1
+       ORDER BY created_at DESC
+       LIMIT 50`,
+      [farmId],
+      [],
+      'workspace charts'
+    );
+
+    res.json({ ok: true, charts: result.rows, count: result.rows.length });
+  } catch (err) {
+    console.error('[WorkspaceOps] Workspace charts error:', err.message);
+    res.status(500).json({ ok: false, error: 'Failed to load workspace charts' });
+  }
+});
+
+router.get('/research/tasks/summary', async (req, res) => {
+  try {
+    const farmId = req.farmId || req.user?.farmId || req.query.farm_id;
+    if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
+
+    const result = await safeWorkspaceQuery(
+      `SELECT wt.id, wt.title, wt.status, wt.priority, wt.due_date
+       FROM workspace_tasks wt
+       JOIN studies s ON wt.study_id = s.id
+       WHERE s.farm_id = $1
+       ORDER BY wt.due_date ASC NULLS LAST, wt.created_at DESC
+       LIMIT 100`,
+      [farmId],
+      [],
+      'task summary'
+    );
+
+    const openTasks = result.rows.filter((task) => !['done', 'completed', 'cancelled'].includes(String(task.status || '').toLowerCase()));
+    res.json({ ok: true, open_count: openTasks.length, tasks: result.rows });
+  } catch (err) {
+    console.error('[WorkspaceOps] Task summary error:', err.message);
+    res.status(500).json({ ok: false, error: 'Failed to load task summary' });
+  }
+});
 
 // ── Enhanced Project Workspace Operations ──
 // workspace_notes: id, farm_id, study_id, user_id, note_type (decision|meeting|general|action),

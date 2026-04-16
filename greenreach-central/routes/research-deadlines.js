@@ -337,18 +337,18 @@ router.get('/research/deadlines/conflicts', async (req, res) => {
 
 router.get('/research/deadlines/alerts', async (req, res) => {
   try {
-    const farmId = req.farmId || req.query.farm_id;
+    const farmId = req.farmId || req.user?.farmId || req.query.farm_id;
     if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
 
     const alerts = [];
 
     // Ethics expiring within 60 days
-    const expiringEthics = await query(`
+    const expiringEthics = await safeQuery(`
       SELECT ea.id, ea.protocol_title, ea.expiry_date
       FROM ethics_applications ea
       WHERE ea.farm_id = $1 AND ea.status = 'approved' AND ea.expiry_date <= NOW() + INTERVAL '60 days'
       ORDER BY ea.expiry_date ASC
-    `, [farmId]);
+    `, [farmId], 'ethics alerts');
 
     for (const e of expiringEthics.rows) {
       const daysLeft = Math.ceil((new Date(e.expiry_date) - new Date()) / 86400000);
@@ -362,12 +362,12 @@ router.get('/research/deadlines/alerts', async (req, res) => {
     }
 
     // Biosafety expiring within 60 days
-    const expiringBiosafety = await query(`
+    const expiringBiosafety = await safeQuery(`
       SELECT bp.id, bp.protocol_title, bp.expiry_date
       FROM biosafety_protocols bp
       WHERE bp.farm_id = $1 AND bp.status = 'active' AND bp.expiry_date <= NOW() + INTERVAL '60 days'
       ORDER BY bp.expiry_date ASC
-    `, [farmId]);
+    `, [farmId], 'biosafety alerts');
 
     for (const b of expiringBiosafety.rows) {
       const daysLeft = Math.ceil((new Date(b.expiry_date) - new Date()) / 86400000);
@@ -381,11 +381,11 @@ router.get('/research/deadlines/alerts', async (req, res) => {
     }
 
     // Overdue grant reports
-    const overdueReports = await query(`
+    const overdueReports = await safeQuery(`
       SELECT gr.id, gr.report_type, gr.due_date, ga.title as grant_title
       FROM grant_reports gr JOIN grant_applications ga ON gr.grant_id = ga.id
       WHERE ga.farm_id = $1 AND gr.status = 'pending' AND gr.due_date < NOW()
-    `, [farmId]);
+    `, [farmId], 'overdue reports');
 
     for (const r of overdueReports.rows) {
       const daysOverdue = Math.ceil((new Date() - new Date(r.due_date)) / 86400000);
@@ -399,11 +399,11 @@ router.get('/research/deadlines/alerts', async (req, res) => {
     }
 
     // Overdue trainee milestones
-    const overdueTrainee = await query(`
+    const overdueTrainee = await safeQuery(`
       SELECT tm.id, tm.title, tm.due_date, tr.name as trainee_name
       FROM trainee_milestones tm JOIN trainee_records tr ON tm.trainee_id = tr.id
       WHERE tr.farm_id = $1 AND tm.status NOT IN ('completed') AND tm.due_date < NOW()
-    `, [farmId]);
+    `, [farmId], 'overdue trainee milestones');
 
     for (const t of overdueTrainee.rows) {
       const daysOverdue = Math.ceil((new Date() - new Date(t.due_date)) / 86400000);
