@@ -50,7 +50,7 @@ IMPORTANT: Save this email for your records.
 
 --
 GreenReach -- The foundation for smarter farms
-greenreachgreens.com | info@greenreachgreens.com
+greenreachgreens.com | admin@greenreachgreens.com
 ${BUSINESS}`,
   html: `<div style="margin:0;padding:0;background:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
 <table width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:40px 20px;"><tr><td align="center">

@@ -147,7 +147,7 @@ Remaining gaps: no bank feed API sync, no AR/AP aging, no credit notes/refunds w
 
 | Channel | Technology | Status | Notes |
 |---|---|---|---|
-| **Email (transactional)** | Google Workspace SMTP (`smtp.gmail.com:587`) | ACTIVE | Order confirmations, admin alerts, donation notifications. From: `info@greenreachgreens.com`. |
+| **Email (transactional)** | Google Workspace SMTP (`smtp.gmail.com:587`) | ACTIVE | Order confirmations, admin alerts, donation notifications. From: `admin@greenreachgreens.com`. |
 | **Email (scheduled)** | `send-daily-summary.js` + Cloud Scheduler | ACTIVE | Daily admin briefing (7 AM), nightly audit (3 AM), lot expiry warnings. |
 | **SMS** | Email-to-SMS carrier gateway | SEVERELY LIMITED | Only 1 hardcoded recipient (Bell Canada). Not scalable. |
 | **In-app notifications** | PostgreSQL `farm_notifications` table + polling | ACTIVE | Mirrors critical alerts. Admin and farm dashboards. |

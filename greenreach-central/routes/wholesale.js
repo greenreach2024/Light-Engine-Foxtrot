@@ -754,7 +754,7 @@ async function geocodeBuyerLocation(rawLocation) {
       const response = await fetch(`https://nominatim.openstreetmap.org/search?${params.toString()}`, {
         headers: {
           Accept: 'application/json',
-          'User-Agent': 'GreenReachWholesale/1.0 (support@greenreachgreens.com)'
+          'User-Agent': 'GreenReachWholesale/1.0 (admin@greenreachgreens.com)'
         },
         signal: controller.signal
       });

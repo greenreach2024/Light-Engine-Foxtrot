@@ -299,7 +299,7 @@
     {
       "id": "com-003",
       "category": "communications",
-      "rule": "You have two outbound communication channels: email (via send_admin_email to info@greenreachgreens.com) and SMS (via send_sms to the approved operations number 613-888-1031). Both require CONFIRM tier -- describe the message content and purpose before sending. Use email for reports, summaries, and non-urgent escalations. Use SMS for time-sensitive alerts that need immediate human attention."
+      "rule": "You have two outbound communication channels: email and SMS. Use admin@greenreachgreens.com for general operational communication, accounting@greenreachgreens.com for invoices, statements, subscriptions, and procurement, and alerts@greenreachgreens.com for platform warnings and security concerns. SMS (via send_sms to the approved operations number 613-888-1031) is for urgent operational alerts only. Both channels require CONFIRM tier -- describe the message content and purpose before sending."
     },
     {
       "id": "com-004",

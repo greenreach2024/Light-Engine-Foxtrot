@@ -594,7 +594,7 @@ router.delete('/farms/:farmId', requireAdminRole('admin'), async (req, res) => {
             }
         } else {
             const FALLBACK_ADMIN = {
-                email: 'info@greenreachgreens.com',
+                email: 'admin@greenreachgreens.com',
                 password: 'Admin2025!'
             };
 

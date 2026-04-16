@@ -9,7 +9,7 @@
  * Google SMTP env vars:
  *   SMTP_HOST          — smtp.gmail.com
  *   SMTP_PORT          — 587 (STARTTLS) or 465 (implicit TLS)
- *   SMTP_USER          — info@greenreachgreens.com
+ *   SMTP_USER          — admin@greenreachgreens.com
  *   SMTP_PASS          — Google App Password (Secret Manager)
  *
  */
@@ -29,7 +29,7 @@ const BUSINESS_ADDRESS = 'GreenReach Greens -- Ottawa, ON, Canada';
 
 import { sendBuyerWelcomeEmail as _sendBuyerWelcomeEmail, sendBuyerMonthlyStatement as _sendBuyerMonthlyStatement, sendProducerMonthlyStatement as _sendProducerMonthlyStatement } from './email-new-templates.js';
 
-const FROM_ADDRESS = process.env.FROM_EMAIL || 'info@greenreachgreens.com';
+const FROM_ADDRESS = process.env.FROM_EMAIL || 'admin@greenreachgreens.com';
 
 let _smtpTransport = null;
 function getSmtpTransport() {
@@ -211,7 +211,7 @@ export async function sendWelcomeEmail({ email, farmId, farmName, contactName, t
             </p>
             <p style="color:#94a3b8;font-size:12px;margin:0 0 4px;">
               <a href="https://greenreachgreens.com" style="color:#64748b;text-decoration:none;">greenreachgreens.com</a> &nbsp;|&nbsp;
-              <a href="mailto:info@greenreachgreens.com" style="color:#64748b;text-decoration:none;">info@greenreachgreens.com</a>
+              <a href="mailto:admin@greenreachgreens.com" style="color:#64748b;text-decoration:none;">admin@greenreachgreens.com</a>
             </p>
             <p style="color:#94a3b8;font-size:11px;margin:0;">
               ${BUSINESS_ADDRESS}
@@ -250,7 +250,7 @@ IMPORTANT: Save this email — you'll need these credentials to log in from othe
 
 —
 GreenReach — The foundation for smarter farms
-greenreachgreens.com | info@greenreachgreens.com
+greenreachgreens.com | admin@greenreachgreens.com
 ${BUSINESS_ADDRESS}`;
 
   return sendEmail({ to: email, subject, html, text });

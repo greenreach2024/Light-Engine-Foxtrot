@@ -3,16 +3,18 @@
  * Transport: Google Workspace SMTP (smtp.gmail.com).
  * Fallback: console log stub in dev.
  *
- * Google SMTP requires an App Password for info@greenreachgreens.com.
+ * Google SMTP requires an App Password for admin@greenreachgreens.com.
  * Generate at: https://myaccount.google.com/apppasswords
- * Set SMTP_HOST=smtp.gmail.com, SMTP_PORT=587, SMTP_USER=info@greenreachgreens.com,
+ * Set SMTP_HOST=smtp.gmail.com, SMTP_PORT=587, SMTP_USER=admin@greenreachgreens.com,
  * SMTP_PASS=<app-password> in Cloud Run env / Secret Manager.
  */
 
 import nodemailer from 'nodemailer';
 import notificationStore from './notification-store.js';
 
-const FROM_EMAIL = process.env.FROM_EMAIL || process.env.EMAIL_FROM || 'info@greenreachgreens.com';
+const FROM_EMAIL = process.env.FROM_EMAIL || process.env.EMAIL_FROM || 'admin@greenreachgreens.com';
+const GENERAL_CONTACT_EMAIL = process.env.ADMIN_EMAIL || 'admin@greenreachgreens.com';
+const ACCOUNTING_CONTACT_EMAIL = process.env.ACCOUNTING_EMAIL || 'accounting@greenreachgreens.com';
 const FROM_NAME = process.env.FROM_NAME || 'GreenReach Farms';
 
 // Business address for CAN-SPAM / CASL compliance (included in all email footers)
@@ -137,7 +139,7 @@ class EmailService {
         '',
         '-- GreenReach Farms',
         `${BUSINESS_ADDRESS}`,
-        'info@greenreachgreens.com | greenreachgreens.com'
+        `${GENERAL_CONTACT_EMAIL} | greenreachgreens.com`
       ].filter(Boolean).join('\n')
     });
   }
@@ -187,7 +189,7 @@ class EmailService {
       </table>
       <p><strong>Payment Terms:</strong> ${payment_terms}</p>
       ${due_date ? `<p><strong>Due Date:</strong> ${due_date}</p>` : ''}
-      <p>If you have questions about this invoice, reply to this email or contact us at info@greenreachgreens.com.</p>
+      <p>If you have questions about this invoice, reply to this email or contact us at ${ACCOUNTING_CONTACT_EMAIL}.</p>
       <p>-- GreenReach Farms</p>
     `;
 
@@ -218,7 +220,7 @@ class EmailService {
       <p>We were unable to process your payment of <strong>$${Number(amount || 0).toFixed(2)} CAD</strong> for order <strong>#${String(order_id || '').substring(0, 8)}</strong>.</p>
       ${reason ? `<p><strong>Reason:</strong> ${reason}</p>` : ''}
       <p>Please update your payment method and try again through the wholesale portal, or contact us for assistance.</p>
-      <p>If you believe this is an error, please reply to this email or contact info@greenreachgreens.com.</p>
+      <p>If you believe this is an error, please reply to this email or contact ${ACCOUNTING_CONTACT_EMAIL}.</p>
       <p>-- GreenReach Farms</p>
     `;
 
@@ -247,7 +249,7 @@ class EmailService {
       <p>A refund of <strong>$${Number(amount || 0).toFixed(2)} CAD</strong> has been processed for order <strong>#${String(order_id || '').substring(0, 8)}</strong>.</p>
       <p>The refund should appear in your account within 5-10 business days depending on your bank.</p>
       ${refund_id ? `<p><strong>Refund Reference:</strong> ${refund_id}</p>` : ''}
-      <p>If you have questions, reply to this email or contact info@greenreachgreens.com.</p>
+      <p>If you have questions, reply to this email or contact ${ACCOUNTING_CONTACT_EMAIL}.</p>
       <p>-- GreenReach Farms</p>
     `;
 

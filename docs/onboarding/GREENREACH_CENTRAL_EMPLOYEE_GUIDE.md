@@ -2466,7 +2466,7 @@ Legend: ████ Growing  ▓▓▓▓ Predicted remaining
 ### Contact Information
 
 **GreenReach Central Team**:
-- General Inquiries: info@greenreachgreens.com
+- General Inquiries: admin@greenreachgreens.com
 - Technical Support: support@greenreachgreens.com
 - Sales: sales@greenreachgreens.com
 - Phone: +1-800-555-GROW (4769)

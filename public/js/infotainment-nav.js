@@ -71,7 +71,7 @@
         { id: 'exports',  label: 'Exports',  icon: 'icon-exports',  section: 'exports' },
         { id: 'payments', label: 'Payments', icon: 'icon-payments', section: 'payments' },
         { id: 'help',     label: 'Help',     icon: 'icon-help',     section: 'help' },
-        { id: 'contact-support', label: 'Contact Support', icon: 'icon-help', section: 'external', url: 'mailto:support@lightengine.io' },
+        { id: 'contact-support', label: 'Contact Support', icon: 'icon-help', section: 'external', url: 'mailto:admin@greenreachgreens.com' },
       ]
     },
     visualization: {

@@ -34,7 +34,7 @@ router.post('/login', async (req, res) => {
     // Define fallback admin credentials for non-database mode
     const FALLBACK_ADMIN = {
       id: 1,
-      email: 'info@greenreachgreens.com',
+      email: 'admin@greenreachgreens.com',
       password: 'Admin2025!', // Plain text for comparison
       name: 'GreenReach Admin',
       active: true,

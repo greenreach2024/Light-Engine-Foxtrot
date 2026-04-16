@@ -1,5 +1,5 @@
 /**
- * Send All Notification Templates to info@greenreachgreens.com
+ * Send All Notification Templates to admin@greenreachgreens.com
  * One-time review script — sends every email template with sample data.
  * Run: node scripts/send-all-notifications-review.js
  */
@@ -7,8 +7,8 @@
 import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses';
 import { sendBuyerWelcomeEmail, sendBuyerMonthlyStatement, sendProducerMonthlyStatement } from '../services/email-new-templates.js';
 
-const REVIEW_EMAIL = 'info@greenreachgreens.com';
-const SES_FROM = process.env.SES_FROM_EMAIL || 'info@greenreachgreens.com';
+const REVIEW_EMAIL = 'admin@greenreachgreens.com';
+const SES_FROM = process.env.SES_FROM_EMAIL || 'admin@greenreachgreens.com';
 const SES_REGION = process.env.SES_REGION || 'us-east-1';
 
 const ses = new SESClient({ region: SES_REGION });
@@ -131,7 +131,7 @@ async function sendWelcome() {
             </p>
             <p style="color:#94a3b8;font-size:12px;margin:0;">
               <a href="https://greenreachgreens.com" style="color:#64748b;text-decoration:none;">greenreachgreens.com</a> &nbsp;|&nbsp;
-              <a href="mailto:info@greenreachgreens.com" style="color:#64748b;text-decoration:none;">info@greenreachgreens.com</a>
+              <a href="mailto:admin@greenreachgreens.com" style="color:#64748b;text-decoration:none;">admin@greenreachgreens.com</a>
             </p>
           </td>
         </tr>
