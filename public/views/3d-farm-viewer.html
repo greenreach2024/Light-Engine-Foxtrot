@@ -57,6 +57,157 @@
     .toolbar button:disabled { opacity: 0.72; cursor: wait; }
     .toolbar select { outline: none; }
     .toolbar .sep { width: 1px; height: 18px; background: rgba(148,163,184,0.15); margin: 0 0.15rem; }
+    .toolbar .toolbar-note {
+      font-size: 0.62rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #64748b;
+      padding: 0 0.1rem 0 0.2rem;
+      white-space: nowrap;
+    }
+
+    .display-panel {
+      position: absolute;
+      top: 56px;
+      left: 12px;
+      width: min(320px, calc(100vw - 24px));
+      max-height: min(62vh, 520px);
+      overflow-y: auto;
+      background: rgba(15,23,42,0.95);
+      border: 1px solid rgba(99,102,241,0.22);
+      border-radius: 12px;
+      padding: 0.85rem;
+      backdrop-filter: blur(12px);
+      box-shadow: 0 18px 40px rgba(2,6,23,0.34);
+      z-index: 68;
+      display: none;
+    }
+    .display-panel.visible { display: block; }
+    .display-panel .display-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.6rem;
+    }
+    .display-panel h4 {
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: #c7d2fe;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .display-panel .display-close {
+      background: none;
+      border: none;
+      color: #64748b;
+      font-size: 1rem;
+      cursor: pointer;
+      padding: 0;
+      line-height: 1;
+    }
+    .display-panel .display-close:hover { color: #e2e8f0; }
+    .display-panel .display-sub {
+      margin-top: 0.35rem;
+      font-size: 0.7rem;
+      color: #94a3b8;
+      line-height: 1.45;
+    }
+    .display-panel .display-actions {
+      margin-top: 0.7rem;
+      display: flex;
+      gap: 0.45rem;
+      flex-wrap: wrap;
+    }
+    .display-panel .display-actions button,
+    .display-panel .display-hidden-item button {
+      background: rgba(30,41,59,0.9);
+      color: #e2e8f0;
+      border: 1px solid rgba(99,102,241,0.24);
+      border-radius: 7px;
+      padding: 0.34rem 0.62rem;
+      font-size: 0.7rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .display-panel .display-actions button:hover,
+    .display-panel .display-hidden-item button:hover {
+      background: rgba(99,102,241,0.18);
+      border-color: rgba(129,140,248,0.5);
+    }
+    .display-panel .display-actions button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .display-panel .display-section {
+      margin-top: 0.8rem;
+      border-top: 1px solid rgba(148,163,184,0.08);
+      padding-top: 0.7rem;
+    }
+    .display-panel .display-label {
+      font-size: 0.67rem;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 0.45rem;
+    }
+    .display-panel .display-filter-list {
+      display: grid;
+      gap: 0.38rem;
+    }
+    .display-panel .display-filter {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      font-size: 0.75rem;
+      color: #e2e8f0;
+      padding: 0.36rem 0.45rem;
+      border-radius: 8px;
+      background: rgba(30,41,59,0.45);
+    }
+    .display-panel .display-filter span:last-child {
+      font-size: 0.66rem;
+      color: #94a3b8;
+    }
+    .display-panel .display-filter input {
+      accent-color: #818cf8;
+      cursor: pointer;
+    }
+    .display-panel .display-hidden-list {
+      display: grid;
+      gap: 0.38rem;
+    }
+    .display-panel .display-hidden-empty {
+      font-size: 0.72rem;
+      color: #64748b;
+      line-height: 1.45;
+    }
+    .display-panel .display-hidden-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.55rem;
+      background: rgba(30,41,59,0.45);
+      border-radius: 8px;
+      padding: 0.42rem 0.48rem;
+    }
+    .display-panel .display-hidden-text {
+      min-width: 0;
+    }
+    .display-panel .display-hidden-title {
+      font-size: 0.74rem;
+      color: #e2e8f0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .display-panel .display-hidden-meta {
+      margin-top: 0.08rem;
+      font-size: 0.65rem;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
 
     /* -- Canvas container -------------------------------------- */
     #viewer-container { flex: 1; position: relative; overflow: hidden; }
@@ -198,6 +349,13 @@
     }
     .stat-chip .chip-value { font-size: 1.05rem; font-weight: 700; color: #e2e8f0; line-height: 1.2; }
     .stat-chip .chip-label { font-size: 0.6rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.4px; }
+    .stat-chip.target-chip {
+      background: rgba(8,47,73,0.9);
+      border-color: rgba(56,189,248,0.28);
+      box-shadow: inset 0 0 0 1px rgba(14,165,233,0.08);
+    }
+    .stat-chip.target-chip .chip-value { color: #d6f4ff; }
+    .stat-chip.target-chip .chip-label { color: #7dd3fc; }
 
     /* -- Detail panel (right side) ----------------------------- */
     .detail-panel {
@@ -259,6 +417,72 @@
     }
     .dp-save-btn:hover { background: rgba(99,102,241,0.25); border-color: #818cf8; }
     .dp-save-btn.saved { background: rgba(34,197,94,0.15); border-color: rgba(34,197,94,0.3); color: #86efac; }
+    .dp-collapsible-toggle {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+      background: rgba(30,41,59,0.72);
+      border: 1px solid rgba(99,102,241,0.18);
+      color: #e2e8f0;
+      padding: 0.45rem 0.6rem;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.76rem;
+    }
+    .dp-collapsible-toggle:hover {
+      border-color: rgba(129,140,248,0.34);
+      background: rgba(51,65,85,0.82);
+    }
+    .dp-collapsible-title {
+      font-weight: 600;
+      color: #c7d2fe;
+      text-align: left;
+    }
+    .dp-collapsible-meta {
+      color: #94a3b8;
+      font-size: 0.68rem;
+      flex: 1;
+      text-align: right;
+    }
+    .dp-collapsible-icon {
+      color: #818cf8;
+      font-size: 0.68rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .dp-collapsible-body {
+      display: none;
+      margin-top: 0.45rem;
+    }
+    .dp-collapsible-body.expanded {
+      display: block;
+    }
+    .dp-group-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+    .dp-group-item {
+      background: rgba(99,102,241,0.06);
+      border: 1px solid rgba(99,102,241,0.12);
+      border-radius: 8px;
+      padding: 0.45rem 0.55rem;
+    }
+    .dp-group-item strong {
+      display: block;
+      font-size: 0.8rem;
+      color: #e2e8f0;
+      line-height: 1.25;
+    }
+    .dp-group-meta {
+      display: block;
+      margin-top: 0.15rem;
+      font-size: 0.74rem;
+      color: #94a3b8;
+      line-height: 1.3;
+    }
 
     /* -- GWEN assist button ------------------------------------ */
     .gwen-fab {
@@ -309,8 +533,9 @@
       padding: 0.4rem 0.65rem;
       font-size: 0.74rem;
       pointer-events: none; z-index: 80;
-      transform: translate(-50%, -115%);
-      white-space: nowrap;
+      max-width: min(260px, calc(100vw - 32px));
+      line-height: 1.35;
+      white-space: normal;
       opacity: 0; transition: opacity 0.12s;
     }
     .hover-tip.visible { opacity: 1; }
@@ -348,6 +573,16 @@
       display: none;
     }
     .edit-indicator.visible { display: block; }
+    .selection-box {
+      position: absolute;
+      border: 1px solid rgba(129, 140, 248, 0.95);
+      background: rgba(99, 102, 241, 0.16);
+      box-shadow: inset 0 0 0 1px rgba(199, 210, 254, 0.18);
+      pointer-events: none;
+      z-index: 75;
+      display: none;
+    }
+    .selection-box.visible { display: block; }
 
     @media (max-width: 960px) {
       .timeline-hud {
@@ -385,7 +620,12 @@
       <button data-overlay="co2">CO2</button>
       <button data-overlay="vpd">VPD</button>
       <div class="sep"></div>
+      <span class="toolbar-note">Heatmap</span>
+      <button data-overlay-mode="absolute" class="active">Values</button>
+      <button data-overlay-mode="delta">Delta</button>
+      <div class="sep"></div>
       <button id="btnWalls" class="active" title="Toggle walls and ceiling">Walls</button>
+      <button id="btnDisplay" title="Temporarily hide scene items without deleting them">Display</button>
       <div class="sep"></div>
       <button id="btnTop" title="Top-down view">Top</button>
       <button id="btnAngle" title="Angled view">3D</button>
@@ -393,6 +633,7 @@
       <button id="btnRefresh" title="Reload rooms, groups, sensors, and heatmap data">Refresh</button>
       <div class="sep"></div>
       <button id="btnEdit" title="Edit mode: drag sensors and equipment to reposition">Edit</button>
+      <button id="btnUndo" title="Undo the most recent saved edit" disabled>Undo</button>
     </div>
   </div>
 
@@ -434,12 +675,38 @@
         <div class="range-labels"><span id="legendMin">15C</span><span id="legendMax">35C</span></div>
       </div>
     </div>
+    <div class="display-panel" id="displayPanel">
+      <div class="display-head">
+        <h4>Display</h4>
+        <button class="display-close" id="closeDisplayPanel" title="Close display controls">&#10005;</button>
+      </div>
+      <div class="display-sub">Temporarily remove towers, sensors, lights, or other items from the scene so you can inspect and edit the unobstructed layout. This only changes the display.</div>
+      <div class="display-actions">
+        <button id="btnHideCurrentDisplay" type="button">Hide Current</button>
+        <button id="btnRestoreAllDisplay" type="button">Show All</button>
+      </div>
+      <div class="display-section">
+        <div class="display-label">Categories</div>
+        <div class="display-filter-list">
+          <label class="display-filter"><span><input type="checkbox" data-display-filter="groups" checked> Grow Towers / Groups</span><span id="displayCountGroups"></span></label>
+          <label class="display-filter"><span><input type="checkbox" data-display-filter="sensors" checked> Sensors</span><span id="displayCountSensors"></span></label>
+          <label class="display-filter"><span><input type="checkbox" data-display-filter="equipment" checked> Equipment</span><span id="displayCountEquipment"></span></label>
+          <label class="display-filter"><span><input type="checkbox" data-display-filter="lights" checked> Lights</span><span id="displayCountLights"></span></label>
+          <label class="display-filter"><span><input type="checkbox" data-display-filter="zones" checked> Zones</span><span id="displayCountZones"></span></label>
+        </div>
+      </div>
+      <div class="display-section">
+        <div class="display-label">Hidden Items</div>
+        <div class="display-hidden-list" id="displayHiddenList"></div>
+      </div>
+    </div>
     <div class="detail-panel" id="detailPanel">
       <button class="close-btn" id="detailClose">&#10005;</button>
       <div id="detailContent"></div>
     </div>
     <div class="status-bar" id="statusBar">Ready</div>
-    <div class="edit-indicator" id="editIndicator">EDIT MODE -- Drag sensors, equipment, and zones to reposition. Shift-click equipment, sensors, or groups to multi-select.</div>
+    <div class="edit-indicator" id="editIndicator">EDIT MODE -- Drag sensors, equipment, and zones to reposition. Shift-click to add/remove items or Shift-drag to box-select a movable group.</div>
+    <div class="selection-box" id="selectionBox"></div>
     <button class="gwen-fab" id="gwenFab" title="Ask GWEN about this view">G<div class="gwen-tooltip">Ask GWEN to analyze zone data</div></button>
   </div>
 
@@ -470,15 +737,16 @@
     // ---- State -----------------------------------------------
     const S = {
       rooms: [], groups: [], roomMaps: {}, envData: null,
-      iotDevices: [], cropRegistry: {},
+      iotDevices: [], cropRegistry: {}, trayFormats: [], lightingRecipes: {},
       overlay: 'none', roomFilter: '__all',
+      overlayMode: 'absolute',
       currentTimeIndex: -1,
       isPlaying: false,
       playInterval: null,
       scene: null, camera: null, renderer: null, controls: null,
       raycaster: new THREE.Raycaster(), mouse: new THREE.Vector2(),
       clock: new THREE.Clock(),
-      meshes: { floors: [], zones: [], trays: [], sensors: [], equipment: [], walls: [], ceilings: [], labels: [] },
+      meshes: { floors: [], zones: [], trays: [], sensors: [], equipment: [], walls: [], ceilings: [], labels: [], lights: [] },
       zoneMeshMap: {},
       zoneDataMap: {},
       floorMeshMap: {},    // roomId -> floor mesh (for overlay fallback)
@@ -496,18 +764,82 @@
       dragSelection: [],
       dragPlane: new THREE.Plane(new THREE.Vector3(0, 1, 0), 0),
       dragOffset: new THREE.Vector3(),
+      selectionBox: {
+        active: false,
+        startX: 0,
+        startY: 0,
+        endX: 0,
+        endY: 0,
+        suppressClick: false,
+      },
       isDragging: false,
       isLoadingData: false,
+      isRestoringUndo: false,
       hasUnsavedChanges: false,
       lastFullRefresh: 0,
+      lastLocalStructureChangeAt: 0,
       lastStructureSignature: '',
+      undoStack: [],
+      displayFilters: { groups: true, sensors: true, equipment: true, lights: true, zones: true },
+      hiddenDisplayItems: {},
+      displayPanelOpen: false,
       // Persisted dimensions keyed by group/room id
       groupDimensions: {},   // groupId -> { length, width, height, lightOrientation }
       roomDimensions: {},    // roomId  -> { length, width, height }
     };
 
     const ZONE_PALETTE = [0x6366f1, 0x8b5cf6, 0x3b82f6, 0x06b6d4, 0x10b981, 0xf59e0b, 0xef4444, 0xec4899, 0x14b8a6, 0xa855f7];
-    const STATUS_COLOR = { active: 0x22c55e, growing: 0x22c55e, deployed: 0x22c55e, planned: 0x3b82f6, draft: 0x475569, completed: 0xf59e0b, archived: 0x334155 };
+    const GROUP_VISUAL_STATES = {
+      draft: { key: 'draft', label: 'Draft', trayColor: 0x64748b, surfaceColor: 0x94a3b8, frameColor: 0x475569, detailColor: 0xcbd5e1, opacity: 0.24, badgeColor: '#94a3b8' },
+      growing: { key: 'growing', label: 'Growing', trayColor: 0x22c55e, surfaceColor: 0x34d399, frameColor: 0x15803d, detailColor: 0xbbf7d0, opacity: 0.24, badgeColor: '#4ade80' },
+      harvest: { key: 'harvest', label: 'Ready for Harvest', trayColor: 0xf59e0b, surfaceColor: 0xfbbf24, frameColor: 0xb45309, detailColor: 0xfde68a, opacity: 0.28, badgeColor: '#fbbf24' },
+      archived: { key: 'archived', label: 'Archived', trayColor: 0x334155, surfaceColor: 0x475569, frameColor: 0x1e293b, detailColor: 0x64748b, opacity: 0.18, badgeColor: '#64748b' },
+    };
+    const DEFAULT_ROOM_AMBIENT_LIGHTING = Object.freeze({ enabled: true, intensity: 55, color: '#f8fafc' });
+
+    function clampAmbientLightingValue(value, min, max) {
+      const num = Number(value);
+      if (!Number.isFinite(num)) return min;
+      return Math.min(max, Math.max(min, num));
+    }
+
+    function normalizeAmbientLightingHex(value, fallback) {
+      const candidate = String(value || '').trim();
+      if (/^#[0-9a-fA-F]{6}$/.test(candidate)) return candidate.toLowerCase();
+      return fallback;
+    }
+
+    function normalizeRoomAmbientLighting(config) {
+      const source = config && typeof config === 'object' ? config : {};
+      return {
+        enabled: source.enabled !== false,
+        intensity: Math.round(clampAmbientLightingValue(source.intensity, 0, 100)),
+        color: normalizeAmbientLightingHex(source.color, DEFAULT_ROOM_AMBIENT_LIGHTING.color),
+      };
+    }
+
+    function normalizeRoomMapData(map) {
+      const next = map && typeof map === 'object' ? map : {};
+      next.ambientLighting = normalizeRoomAmbientLighting(next.ambientLighting);
+      next.deletedSensorIds = Array.from(new Set(
+        (Array.isArray(next.deletedSensorIds) ? next.deletedSensorIds : [])
+          .map(function(sensorId) { return String(sensorId || '').trim(); })
+          .filter(Boolean)
+      ));
+      return next;
+    }
+
+    function getRoomAmbientLighting(roomId) {
+      if (!S.roomMaps[roomId]) S.roomMaps[roomId] = {};
+      S.roomMaps[roomId].ambientLighting = normalizeRoomAmbientLighting(S.roomMaps[roomId].ambientLighting);
+      return S.roomMaps[roomId].ambientLighting;
+    }
+
+    function roomMapMatchesRoom(roomId, mapData) {
+      if (!mapData || typeof mapData !== 'object' || Array.isArray(mapData)) return false;
+      if (!roomId) return true;
+      return !mapData.roomId || String(mapData.roomId) === String(roomId);
+    }
 
     const OVERLAY_CFG = {
       temperature: { min: 15, max: 35, unit: '\u00b0C', label: 'Temperature', colors: [0x1d4ed8, 0x06b6d4, 0x22c55e, 0xf59e0b, 0xef4444], key: 'temp' },
@@ -515,6 +847,320 @@
       co2:         { min: 300, max: 1800, unit: 'ppm', label: 'CO\u2082 Concentration', colors: [0x22c55e, 0xfacc15, 0xf59e0b, 0xef4444, 0x7f1d1d], key: 'co2' },
       vpd:         { min: 0.2, max: 2.0, unit: 'kPa', label: 'Vapor Pressure Deficit', colors: [0x1d4ed8, 0x06b6d4, 0x22c55e, 0xf59e0b, 0xef4444], key: 'vpd' },
     };
+    const OVERLAY_DELTA_CFG = {
+      temperature: { range: 3, unit: '\u00b0C', label: 'Temperature Delta', colors: [0x1e3a8a, 0x60a5fa, 0xe2e8f0, 0xf59e0b, 0xb91c1c] },
+      humidity:    { range: 12, unit: '%', label: 'Humidity Delta', colors: [0x1e3a8a, 0x60a5fa, 0xe2e8f0, 0xf59e0b, 0xb91c1c] },
+      co2:         { range: 250, unit: 'ppm', label: 'CO\u2082 Delta', colors: [0x1e3a8a, 0x60a5fa, 0xe2e8f0, 0xf59e0b, 0xb91c1c] },
+      vpd:         { range: 0.25, unit: 'kPa', label: 'VPD Delta', colors: [0x1e3a8a, 0x60a5fa, 0xe2e8f0, 0xf59e0b, 0xb91c1c] },
+    };
+    const DEFAULT_DISPLAY_FILTERS = { groups: true, sensors: true, equipment: true, lights: true, zones: true };
+    const VIEWER_PREFS_KEY = 'farm3d_viewer_prefs';
+    const STRUCTURE_REFRESH_INTERVAL_MS = 180000;
+    const STRUCTURE_REFRESH_GRACE_MS = 10 * 60 * 1000;
+    const MAX_UNDO_STEPS = 25;
+
+    function toStableNumber(value) {
+      var num = Number(value);
+      return Number.isFinite(num) ? Number(num.toFixed(4)) : null;
+    }
+
+    function stableSortBy(items, getter) {
+      return (items || []).slice().sort(function(a, b) {
+        return String(getter(a) || '').localeCompare(String(getter(b) || ''));
+      });
+    }
+
+    function loadViewerPrefs() {
+      try {
+        var prefs = JSON.parse(localStorage.getItem(VIEWER_PREFS_KEY) || '{}');
+        if (prefs.overlay === 'none' || OVERLAY_CFG[prefs.overlay]) S.overlay = prefs.overlay;
+        if (prefs.overlayMode === 'delta' || prefs.overlayMode === 'absolute') S.overlayMode = prefs.overlayMode;
+        if (typeof prefs.roomFilter === 'string' && prefs.roomFilter) S.roomFilter = prefs.roomFilter;
+        if (typeof prefs.wallsVisible === 'boolean') S.wallsVisible = prefs.wallsVisible;
+        if (prefs.displayFilters && typeof prefs.displayFilters === 'object') {
+          S.displayFilters = Object.assign({}, DEFAULT_DISPLAY_FILTERS, prefs.displayFilters);
+        }
+        if (prefs.hiddenDisplayItems && typeof prefs.hiddenDisplayItems === 'object') {
+          S.hiddenDisplayItems = Object.assign({}, prefs.hiddenDisplayItems);
+        }
+      } catch (err) {
+        console.warn('[3D] Unable to load viewer prefs:', err);
+      }
+    }
+
+    function saveViewerPrefs() {
+      try {
+        localStorage.setItem(VIEWER_PREFS_KEY, JSON.stringify({
+          overlay: S.overlay,
+          overlayMode: S.overlayMode,
+          roomFilter: S.roomFilter,
+          wallsVisible: S.wallsVisible,
+          displayFilters: S.displayFilters,
+          hiddenDisplayItems: S.hiddenDisplayItems,
+        }));
+      } catch (err) {
+        console.warn('[3D] Unable to save viewer prefs:', err);
+      }
+    }
+
+    function syncOverlayButtons() {
+      document.querySelectorAll('.toolbar button[data-overlay]').forEach(function(btn) {
+        btn.classList.toggle('active', btn.dataset.overlay === S.overlay);
+      });
+    }
+
+    function syncOverlayModeButtons() {
+      document.querySelectorAll('.toolbar button[data-overlay-mode]').forEach(function(btn) {
+        btn.classList.toggle('active', btn.dataset.overlayMode === S.overlayMode);
+      });
+    }
+
+    function applyViewerPrefsToUi() {
+      syncOverlayButtons();
+      syncOverlayModeButtons();
+      var wallsBtn = document.getElementById('btnWalls');
+      if (wallsBtn) wallsBtn.classList.toggle('active', S.wallsVisible);
+      var roomSelect = document.getElementById('roomSelect');
+      if (roomSelect) {
+        var hasFilter = Array.from(roomSelect.options).some(function(option) { return option.value === S.roomFilter; });
+        if (!hasFilter && roomSelect.options.length > 1) S.roomFilter = '__all';
+        roomSelect.value = hasFilter ? S.roomFilter : '__all';
+      }
+      refreshDisplayPanel();
+    }
+
+    function getDisplayEntryForUserData(ud) {
+      if (!ud || !ud.type) return null;
+      if (ud.type === 'group' || ud.type === 'group-detail') {
+        var groupKey = getGroupKey(ud.group) || ud.group?.name || 'group';
+        return { key: 'group:' + groupKey, category: 'groups', label: ud.group?.name || ud.group?.crop || ud.group?.recipe || 'Grow Group' };
+      }
+      if (ud.type === 'sensor') {
+        var sensor = ud.device || {};
+        var sensorId = sensor.deviceId || sensor.id || sensor.snapshot?.deviceId || sensor.snapshot?.name || sensor.name || 'sensor';
+        return { key: 'sensor:' + sensorId, category: 'sensors', label: sensor.snapshot?.name || sensor.name || sensorId };
+      }
+      if (ud.type === 'equipment' || ud.type === 'fanArrow') {
+        var device = ud.device || ud.parentMesh?.userData?.device || {};
+        var equipmentId = device.deviceId || device.id || device.snapshot?.deviceId || device.snapshot?.name || device.name || 'equipment';
+        return { key: 'equipment:' + equipmentId, category: 'equipment', label: device.snapshot?.name || device.name || equipmentId };
+      }
+      if (ud.type === 'light') {
+        var lightGroupKey = getGroupKey(ud.group) || ud.group?.name || 'light';
+        return { key: 'light:' + lightGroupKey + ':' + (ud.orientation || 'default'), category: 'lights', label: (ud.group?.name || 'Group') + ' Light' };
+      }
+      if (ud.type === 'zone') {
+        var zoneKey = getZoneLookupKey(ud.zone) || ud.zoneId || 'zone';
+        return { key: 'zone:' + zoneKey, category: 'zones', label: getZoneDisplayName(ud.zone) };
+      }
+      return null;
+    }
+
+    function getDisplayEntryForMesh(mesh) {
+      return mesh ? getDisplayEntryForUserData(mesh.userData) : null;
+    }
+
+    function isMeshDisplayVisible(mesh) {
+      var entry = getDisplayEntryForMesh(mesh);
+      if (!entry) return true;
+      if (S.displayFilters[entry.category] === false) return false;
+      return !S.hiddenDisplayItems[entry.key];
+    }
+
+    function isMeshInteractable(mesh) {
+      return !!(mesh && mesh.visible !== false && isMeshDisplayVisible(mesh));
+    }
+
+    function getActiveDisplayEntry() {
+      if (S.selectedMeshes.length > 0) return getDisplayEntryForMesh(S.selectedMeshes[0]);
+      if (S.activeDetail) return getDisplayEntryForUserData(S.activeDetail);
+      return null;
+    }
+
+    function getDisplayCategoryCount(category) {
+      var seen = new Set();
+      []
+        .concat(S.meshes.trays)
+        .concat(S.meshes.sensors)
+        .concat(S.meshes.equipment)
+        .concat(S.meshes.zones)
+        .forEach(function(mesh) {
+          var entry = getDisplayEntryForMesh(mesh);
+          if (entry && entry.category === category) seen.add(entry.key);
+        });
+      return seen.size;
+    }
+
+    function refreshDisplayPanel() {
+      var panel = document.getElementById('displayPanel');
+      if (!panel) return;
+      panel.classList.toggle('visible', S.displayPanelOpen);
+      var btn = document.getElementById('btnDisplay');
+      if (btn) btn.classList.toggle('active', S.displayPanelOpen);
+
+      document.querySelectorAll('[data-display-filter]').forEach(function(input) {
+        input.checked = S.displayFilters[input.dataset.displayFilter] !== false;
+      });
+
+      var counts = {
+        groups: getDisplayCategoryCount('groups'),
+        sensors: getDisplayCategoryCount('sensors'),
+        equipment: getDisplayCategoryCount('equipment'),
+        lights: getDisplayCategoryCount('lights'),
+        zones: getDisplayCategoryCount('zones'),
+      };
+      Object.keys(counts).forEach(function(key) {
+        var el = document.getElementById('displayCount' + key.charAt(0).toUpperCase() + key.slice(1));
+        if (el) el.textContent = counts[key] ? counts[key] + ' shown' : '0 shown';
+      });
+
+      var activeEntry = getActiveDisplayEntry();
+      var hideBtn = document.getElementById('btnHideCurrentDisplay');
+      if (hideBtn) {
+        hideBtn.disabled = !activeEntry;
+        hideBtn.textContent = activeEntry ? ('Hide ' + activeEntry.label) : 'Hide Current';
+      }
+
+      var hiddenList = document.getElementById('displayHiddenList');
+      if (!hiddenList) return;
+      var hiddenEntries = Object.entries(S.hiddenDisplayItems).sort(function(a, b) {
+        return String(a[1]?.label || a[0]).localeCompare(String(b[1]?.label || b[0]));
+      });
+      if (!hiddenEntries.length) {
+        hiddenList.innerHTML = '<div class="display-hidden-empty">No individual items are hidden. Use the category toggles or hide the current selection/detail item.</div>';
+        return;
+      }
+      hiddenList.innerHTML = hiddenEntries.map(function(entry) {
+        var key = entry[0];
+        var meta = entry[1] || {};
+        return '<div class="display-hidden-item">'
+          + '<div class="display-hidden-text"><div class="display-hidden-title">' + escapeHtml(meta.label || key) + '</div><div class="display-hidden-meta">' + escapeHtml(meta.category || 'item') + '</div></div>'
+          + '<button type="button" data-display-restore="' + escapeHtml(key) + '">Restore</button>'
+          + '</div>';
+      }).join('');
+    }
+
+    function applyDisplayVisibility() {
+      S.meshes.trays.forEach(function(mesh) { mesh.visible = isMeshDisplayVisible(mesh); });
+      S.meshes.sensors.forEach(function(mesh) { mesh.visible = isMeshDisplayVisible(mesh); });
+      S.meshes.equipment.forEach(function(mesh) { mesh.visible = isMeshDisplayVisible(mesh); });
+      S.meshes.zones.forEach(function(mesh) { mesh.visible = isMeshDisplayVisible(mesh); });
+
+      var nextSelection = S.selectedMeshes.filter(function(mesh) { return mesh && isMeshDisplayVisible(mesh); });
+      if (nextSelection.length !== S.selectedMeshes.length) {
+        S.selectedMeshes = nextSelection;
+      }
+      refreshSelectionVisuals();
+
+      var activeEntry = getDisplayEntryForUserData(S.activeDetail);
+      if (activeEntry && (S.displayFilters[activeEntry.category] === false || S.hiddenDisplayItems[activeEntry.key])) {
+        closeDetailPanel();
+      }
+
+      refreshDisplayPanel();
+    }
+
+    function hideDisplayEntry(entry) {
+      if (!entry) return;
+      S.hiddenDisplayItems[entry.key] = { label: entry.label, category: entry.category };
+      saveViewerPrefs();
+      applyDisplayVisibility();
+      setStatusBarMessage(entry.label + ' hidden from display', '#fbbf24', 1800);
+    }
+
+    function restoreDisplayEntry(key) {
+      if (!key || !S.hiddenDisplayItems[key]) return;
+      var label = S.hiddenDisplayItems[key].label || 'Item';
+      delete S.hiddenDisplayItems[key];
+      saveViewerPrefs();
+      applyDisplayVisibility();
+      setStatusBarMessage(label + ' restored to display', '#4ade80', 1800);
+    }
+
+    function restoreAllDisplayItems() {
+      S.hiddenDisplayItems = {};
+      S.displayFilters = Object.assign({}, DEFAULT_DISPLAY_FILTERS);
+      saveViewerPrefs();
+      applyDisplayVisibility();
+      setStatusBarMessage('All display items restored', '#4ade80', 1800);
+    }
+
+    function hideCurrentDisplayTarget() {
+      var entry = getActiveDisplayEntry();
+      if (!entry) {
+        setStatusBarMessage('Select or inspect an item to hide it from display', '#fbbf24', 2000);
+        return;
+      }
+      hideDisplayEntry(entry);
+    }
+
+    function toggleDisplayPanel(forceOpen) {
+      S.displayPanelOpen = typeof forceOpen === 'boolean' ? forceOpen : !S.displayPanelOpen;
+      refreshDisplayPanel();
+    }
+
+    function buildStructureSignature() {
+      var normalizedRooms = stableSortBy(S.rooms, function(room) { return room.id || room.name || ''; }).map(function(room) {
+        return { id: room.id || '', name: room.name || '' };
+      });
+      var normalizedGroups = stableSortBy(S.groups, function(group) { return getGroupKey(group) || ''; }).map(function(group) {
+        return {
+          id: getGroupKey(group) || '',
+          roomId: group.roomId || '',
+          zone: group.zone || '',
+          gridX: toStableNumber(group.gridX),
+          gridY: toStableNumber(group.gridY),
+          length: toStableNumber(group.length),
+          width: toStableNumber(group.width),
+          height: toStableNumber(group.height),
+          trays: toStableNumber(group.trays),
+          status: group.status || '',
+          crop: group.crop || group.recipe || '',
+          lightOrientation: group.lightOrientation || '',
+        };
+      });
+      var normalizedMaps = stableSortBy(Object.keys(S.roomMaps), function(roomId) { return roomId; }).map(function(roomId) {
+        var map = S.roomMaps[roomId] || {};
+        return {
+          roomId: roomId,
+          roomLength: toStableNumber(map.roomLength),
+          roomWidth: toStableNumber(map.roomWidth),
+          ceilingHeight: toStableNumber(map.ceilingHeight),
+          ambientLighting: {
+            enabled: !!map.ambientLighting?.enabled,
+            intensity: toStableNumber(map.ambientLighting?.intensity),
+            color: map.ambientLighting?.color || '',
+          },
+          zones: stableSortBy(map.zones, function(zone) { return zone.id || zone.zone || zone.name || ''; }).map(function(zone) {
+            return {
+              id: zone.id || '',
+              zone: zone.zone || '',
+              name: zone.name || '',
+              x1: toStableNumber(zone.x1),
+              y1: toStableNumber(zone.y1),
+              x2: toStableNumber(zone.x2),
+              y2: toStableNumber(zone.y2),
+            };
+          }),
+          devices: stableSortBy(map.devices, function(device) {
+            return device.id || device.deviceId || device.snapshot?.deviceId || device.snapshot?.name || device.name || '';
+          }).map(function(device) {
+            return {
+              id: device.id || '',
+              deviceId: device.deviceId || '',
+              name: device.snapshot?.name || device.name || '',
+              category: device.snapshot?.category || device.snapshot?.type || '',
+              x: toStableNumber(device.x),
+              y: toStableNumber(device.y),
+              z: toStableNumber(device.z),
+              zone: device.snapshot?.zone || '',
+              airflowDir: toStableNumber(device.airflowDir),
+            };
+          })
+        };
+      });
+      return JSON.stringify({ rooms: normalizedRooms, groups: normalizedGroups, roomMaps: normalizedMaps });
+    }
 
     function extractNumericReading(sample) {
       if (sample == null) return null;
@@ -591,11 +1237,16 @@
       return fallbackValue ?? null;
     }
 
+    function getMetricValueForFrame(currentValue, history) {
+      if (isPlaybackAtLatest()) return extractNumericReading(currentValue);
+      return getHistoryValueForFrame(history, null);
+    }
+
     function getZoneMetricValueAtFrame(zoneData, metricKey) {
       if (!zoneData) return null;
       const historyKey = { temp: 'tempHistory', humidity: 'humidityHistory', co2: 'co2History', vpd: 'vpdHistory' }[metricKey];
-      const fallbackValue = getPlaybackFallbackValue(zoneData[metricKey]);
-      return historyKey ? getHistoryValueForFrame(zoneData[historyKey], fallbackValue) : fallbackValue;
+      if (!historyKey) return extractNumericReading(zoneData[metricKey]);
+      return getMetricValueForFrame(zoneData[metricKey], zoneData[historyKey]);
     }
 
     function getZoneFrameData(zoneData) {
@@ -734,6 +1385,7 @@
         if (!dims.height && map.ceilingHeight) dims.height = map.ceilingHeight;
         if (!dims.length && map.roomLength) dims.length = map.roomLength;
         if (!dims.width && map.roomWidth) dims.width = map.roomWidth;
+        map.ambientLighting = normalizeRoomAmbientLighting(map.ambientLighting);
       }
       // Hydrate group dimensions from group objects (server-persisted fallback)
       // Keep browser-saved values authoritative and only backfill missing fields from the server.
@@ -769,6 +1421,121 @@
       }
     }
 
+    function markLocalStructureChange() {
+      S.lastLocalStructureChangeAt = Date.now();
+    }
+
+    function cloneUndoSnapshot() {
+      return JSON.parse(JSON.stringify({
+        roomMaps: S.roomMaps,
+        groups: S.groups,
+        iotDevices: S.iotDevices,
+        groupDimensions: S.groupDimensions,
+        roomDimensions: S.roomDimensions,
+      }));
+    }
+
+    function updateUndoButtonState() {
+      var btn = document.getElementById('btnUndo');
+      if (!btn) return;
+      btn.disabled = !S.undoStack.length || S.isRestoringUndo;
+      btn.textContent = S.isRestoringUndo ? 'Undoing...' : 'Undo';
+      btn.title = S.undoStack.length ? ('Undo ' + S.undoStack[S.undoStack.length - 1].label) : 'Nothing to undo';
+    }
+
+    function pushUndoSnapshot(label) {
+      try {
+        S.undoStack.push({ label: label || 'last edit', snapshot: cloneUndoSnapshot() });
+        if (S.undoStack.length > MAX_UNDO_STEPS) S.undoStack.shift();
+        updateUndoButtonState();
+      } catch (err) {
+        console.warn('[3D] Unable to capture undo snapshot:', err);
+      }
+    }
+
+    async function undoLastEdit() {
+      if (!S.undoStack.length || S.isRestoringUndo) return false;
+      var entry = S.undoStack.pop();
+      S.isRestoringUndo = true;
+      updateUndoButtonState();
+      try {
+        closeDetailPanel();
+        clearSelection({ silent: true });
+        S.roomMaps = entry.snapshot.roomMaps || {};
+        S.groups = entry.snapshot.groups || [];
+        S.iotDevices = entry.snapshot.iotDevices || [];
+        S.groupDimensions = entry.snapshot.groupDimensions || {};
+        S.roomDimensions = entry.snapshot.roomDimensions || {};
+        try { localStorage.setItem('farm3d_groupDims', JSON.stringify(S.groupDimensions)); } catch (e) {}
+        try { localStorage.setItem('farm3d_roomDims', JSON.stringify(S.roomDimensions)); } catch (e) {}
+        await persistRoomMaps(Object.keys(S.roomMaps));
+        await persistGroupsData(S.groups);
+        await persistViewerIotDevices();
+        S.lastStructureSignature = '';
+        buildZoneDataMap();
+        buildScene();
+        renderFarmStats();
+        setStatusBarMessage('Undid ' + entry.label, '#4ade80', 2200);
+        return true;
+      } catch (err) {
+        console.error('[3D] Undo failed:', err);
+        S.undoStack.push(entry);
+        setStatusBarMessage('Undo failed', '#f87171', 2200);
+        return false;
+      } finally {
+        S.isRestoringUndo = false;
+        updateUndoButtonState();
+      }
+    }
+
+    function positionHoverTip(clientX, clientY) {
+      var container = document.getElementById('viewer-container');
+      var tip = document.getElementById('hoverTip');
+      if (!container || !tip) return;
+      var rect = container.getBoundingClientRect();
+      var pointerX = clientX - rect.left;
+      var pointerY = clientY - rect.top;
+      var gap = 18;
+      var margin = 10;
+      var left = pointerX + gap;
+      var top = pointerY - tip.offsetHeight - gap;
+      var maxLeft = rect.width - tip.offsetWidth - margin;
+      var maxTop = rect.height - tip.offsetHeight - margin;
+
+      if (left > maxLeft) left = pointerX - tip.offsetWidth - gap;
+      if (left < margin) left = margin;
+      if (top < margin) top = pointerY + gap;
+      if (top > maxTop) top = Math.max(margin, pointerY - tip.offsetHeight - gap);
+
+      tip.style.left = left + 'px';
+      tip.style.top = top + 'px';
+    }
+
+    function ensurePersistedZone(roomId, zoneRef, zoneId) {
+      if (!roomId || !S.roomMaps[roomId]) return null;
+      var map = S.roomMaps[roomId];
+      if (!Array.isArray(map.zones)) map.zones = [];
+      var lookupKey = getZoneLookupKey(zoneRef) || String(zoneId || zoneRef?.id || zoneRef?.zone || zoneRef?.name || '');
+      var persisted = map.zones.find(function(entry) {
+        return getZoneLookupKey(entry) === lookupKey ||
+          String(entry.id || '') === String(zoneId || '') ||
+          String(entry.zone || entry.name || '') === String(zoneRef?.zone || zoneRef?.name || lookupKey || '');
+      });
+      if (persisted) return persisted;
+
+      persisted = {
+        id: zoneRef?.id || zoneId || lookupKey,
+        zone: zoneRef?.zone || zoneRef?.name || lookupKey,
+        name: zoneRef?.name || zoneRef?.zone || lookupKey,
+        x1: Number.isFinite(Number(zoneRef?.x1)) ? Number(zoneRef.x1) : 0,
+        y1: Number.isFinite(Number(zoneRef?.y1)) ? Number(zoneRef.y1) : 0,
+        x2: Number.isFinite(Number(zoneRef?.x2)) ? Number(zoneRef.x2) : (map.gridSize || 20),
+        y2: Number.isFinite(Number(zoneRef?.y2)) ? Number(zoneRef.y2) : (map.gridSize || 20),
+      };
+      map.zones.push(persisted);
+      return persisted;
+    }
+
     async function postViewerJson(url, payload) {
       const resp = await authFetch(url, {
         method: 'POST',
@@ -789,7 +1556,9 @@
 
     async function persistRoomMap(roomId) {
       if (!roomId || !S.roomMaps[roomId]) throw new Error('Missing room map for ' + roomId);
-      return postViewerJson('/data/room-map-' + roomId + '.json', S.roomMaps[roomId]);
+      const result = await postViewerJson('/data/room-map-' + roomId + '.json', S.roomMaps[roomId]);
+      markLocalStructureChange();
+      return result;
     }
 
     async function persistRoomMaps(roomIds) {
@@ -797,6 +1566,7 @@
         return roomId && S.roomMaps[roomId];
       })));
       await Promise.all(ids.map(function(roomId) { return persistRoomMap(roomId); }));
+      if (ids.length) markLocalStructureChange();
       return true;
     }
 
@@ -820,17 +1590,572 @@
 
     async function persistGroupsData(groups) {
       const payload = { groups: Array.isArray(groups) ? groups : [] };
-      let lastError = null;
-
       try {
-        await postViewerJson('/groups', payload);
+        await postViewerJson('/data/groups.json', payload);
+        markLocalStructureChange();
         return true;
       } catch (err) {
-        lastError = err;
+        await postViewerJson('/groups', payload);
+        markLocalStructureChange();
+        return true;
+      }
+    }
+
+    function normalizeDateOnly(value) {
+      if (!value) return '';
+      if (value instanceof Date && !Number.isNaN(value.getTime())) {
+        return value.toISOString().slice(0, 10);
+      }
+      const text = String(value).trim();
+      if (!text) return '';
+      if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
+      const parsed = new Date(text);
+      return Number.isNaN(parsed.getTime()) ? '' : parsed.toISOString().slice(0, 10);
+    }
+
+    function formatDateLabel(value) {
+      const iso = normalizeDateOnly(value);
+      if (!iso) return '—';
+      const parsed = new Date(iso + 'T00:00:00');
+      if (Number.isNaN(parsed.getTime())) return iso;
+      return parsed.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+    }
+
+    function getGroupVisualState(group) {
+      const status = String(group?.status || '').trim().toLowerCase();
+      if (status === 'archived') return GROUP_VISUAL_STATES.archived;
+      if (!status || ['draft', 'planned', 'idle'].includes(status)) return GROUP_VISUAL_STATES.draft;
+      if (['harvesting', 'harvested', 'completed'].includes(status)) return GROUP_VISUAL_STATES.harvest;
+
+      const lifecycle = getGroupLifecycle(group);
+      if (lifecycle.daysRemaining != null && lifecycle.daysRemaining <= 0) {
+        return GROUP_VISUAL_STATES.harvest;
+      }
+      return GROUP_VISUAL_STATES.growing;
+    }
+
+    function getTodayIsoDate() {
+      return new Date().toISOString().slice(0, 10);
+    }
+
+    function resolveCropRegistryEntry(cropName) {
+      const target = String(cropName || '').trim().toLowerCase();
+      if (!target) return { key: '', entry: null };
+      const registryKeys = Object.keys(S.cropRegistry || {});
+      for (const key of registryKeys) {
+        const entry = S.cropRegistry[key] || {};
+        if (String(key).trim().toLowerCase() === target) return { key, entry };
+        if ((entry.aliases || []).some(alias => String(alias).trim().toLowerCase() === target)) {
+          return { key, entry };
+        }
+        if ((entry.planIds || []).some(planId => String(planId).trim().toLowerCase() === target)) {
+          return { key, entry };
+        }
+      }
+      return { key: '', entry: null };
+    }
+
+    function normalizeLookupValue(value) {
+      return String(value || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    }
+
+    function firstFiniteNumber(values) {
+      for (const value of values || []) {
+        const num = Number(value);
+        if (Number.isFinite(num)) return num;
+      }
+      return null;
+    }
+
+    function averageSetpointValue(setpoint) {
+      if (setpoint == null) return null;
+      if (typeof setpoint === 'number') return Number.isFinite(setpoint) ? setpoint : null;
+      if (Array.isArray(setpoint)) {
+        const nums = setpoint.map(function(value) { return Number(value); }).filter(Number.isFinite);
+        if (!nums.length) return null;
+        return nums.reduce(function(sum, value) { return sum + value; }, 0) / nums.length;
+      }
+      if (typeof setpoint === 'object') {
+        const direct = Number(setpoint.value);
+        if (Number.isFinite(direct)) return direct;
+        const min = Number(setpoint.min);
+        const max = Number(setpoint.max);
+        if (Number.isFinite(min) && Number.isFinite(max)) return (min + max) / 2;
+        if (Number.isFinite(min)) return min;
+        if (Number.isFinite(max)) return max;
+      }
+      return null;
+    }
+
+    function formatSignedMetric(value, unit) {
+      const num = Number(value);
+      if (!Number.isFinite(num)) return '—';
+      const abs = Math.abs(num);
+      const rounded = abs >= 10 ? Math.round(abs) : (Math.round(abs * 10) / 10);
+      const prefix = num > 0 ? '+' : num < 0 ? '-' : '\u00b10';
+      if (prefix === '\u00b10') return prefix + unit;
+      return prefix + rounded + unit;
+    }
+
+    function isDeltaOverlayActive() {
+      return S.overlayMode === 'delta';
+    }
+
+    function getCellMetricLabel(metricKey) {
+      if (!isDeltaOverlayActive()) {
+        return metricKey === 'temp' ? 'Cell Temp'
+          : metricKey === 'humidity' ? 'Cell RH'
+          : 'Cell VPD';
+      }
+      return metricKey === 'temp' ? 'Cell Temp Delta'
+        : metricKey === 'humidity' ? 'Cell RH Delta'
+        : 'Cell VPD Delta';
+    }
+
+    function formatCellMetricValue(metricKey, value) {
+      if (!Number.isFinite(Number(value))) return '—';
+      const num = Number(value);
+      if (isDeltaOverlayActive()) {
+        return formatSignedMetric(num, metricKey === 'humidity' ? '%' : metricKey === 'vpd' ? ' kPa' : '\u00b0C');
+      }
+      if (metricKey === 'humidity') return Math.round(num) + '%';
+      if (metricKey === 'vpd') return num.toFixed(2) + ' kPa';
+      return num.toFixed(1) + '\u00b0C';
+    }
+
+    function getCellMetricClass(metricKey, value) {
+      const num = Number(value);
+      if (!Number.isFinite(num)) return '';
+      if (!isDeltaOverlayActive()) {
+        return metricKey === 'temp' ? tempClass(num)
+          : metricKey === 'humidity' ? humidityClass(num)
+          : vpdClass(num);
+      }
+      const abs = Math.abs(num);
+      if (metricKey === 'temp') return abs <= 1 ? 'good' : abs <= 3 ? 'warn' : 'danger';
+      if (metricKey === 'humidity') return abs <= 5 ? 'good' : abs <= 10 ? 'warn' : 'danger';
+      return abs <= 0.15 ? 'good' : abs <= 0.35 ? 'warn' : 'danger';
+    }
+
+    function buildCellHoverSummary(cell) {
+      if (!cell) return 'No data';
+      const parts = ['Grid ' + cell.gridX + ', ' + cell.gridY];
+      if (cell.temp != null) parts.push((isDeltaOverlayActive() ? '\u0394T ' : '') + formatCellMetricValue('temp', cell.temp));
+      if (cell.humidity != null) parts.push((isDeltaOverlayActive() ? '\u0394RH ' : '') + formatCellMetricValue('humidity', cell.humidity));
+      if (cell.vpd != null) parts.push((isDeltaOverlayActive() ? '\u0394VPD ' : 'VPD ') + formatCellMetricValue('vpd', cell.vpd));
+      return parts.join(' | ');
+    }
+
+    function getRoomNameById(roomId) {
+      const room = (S.rooms || []).find(function(entry) { return String(entry?.id || '') === String(roomId || ''); });
+      return room?.name || '';
+    }
+
+    function isGroupActive(group) {
+      const status = String(group?.status || '').trim().toLowerCase();
+      return group?.active === true || ['active', 'growing', 'deployed'].includes(status);
+    }
+
+    function groupMatchesRoomSelection(group, roomId) {
+      if (!roomId || roomId === '__all') return true;
+      const roomValues = [group?.roomId, group?.room];
+      const roomTargets = [roomId, getRoomNameById(roomId)];
+      return roomTargets.some(function(target) {
+        const normalizedTarget = normalizeLookupValue(target);
+        return normalizedTarget && roomValues.some(function(value) {
+          return normalizeLookupValue(value) === normalizedTarget;
+        });
+      });
+    }
+
+    function groupMatchesZoneSelection(group, zone) {
+      if (!zone) return true;
+      const zoneValues = [group?.zoneId, group?.zone];
+      const zoneTargets = [zone?.id, zone?.zoneId, zone?.name, zone?.zone, getZoneLookupKey(zone)];
+      return zoneTargets.some(function(target) {
+        const normalizedTarget = normalizeLookupValue(target);
+        return normalizedTarget && zoneValues.some(function(value) {
+          return normalizeLookupValue(value) === normalizedTarget;
+        });
+      });
+    }
+
+    function resolveLightingRecipeEntry(cropName) {
+      const recipes = S.lightingRecipes || {};
+      const recipeKeys = Object.keys(recipes);
+      if (!recipeKeys.length) return { key: '', entry: null };
+      const registryMatch = resolveCropRegistryEntry(cropName);
+      const candidates = [
+        cropName,
+        registryMatch.key,
+        registryMatch.entry?.market?.resolveAs,
+        ...(registryMatch.entry?.aliases || []),
+      ].filter(Boolean);
+      for (const candidate of candidates) {
+        const normalizedCandidate = normalizeLookupValue(candidate);
+        const key = recipeKeys.find(function(recipeKey) {
+          return normalizeLookupValue(recipeKey) === normalizedCandidate;
+        });
+        if (key) return { key, entry: recipes[key] };
+      }
+      return { key: '', entry: null };
+    }
+
+    function getRecipeDaysToHarvest(recipeEntry) {
+      const schedule = Array.isArray(recipeEntry?.schedule) ? recipeEntry.schedule : [];
+      if (!schedule.length) return null;
+      const maxDay = schedule.reduce(function(currentMax, point) {
+        const day = Number(point?.day);
+        return Number.isFinite(day) ? Math.max(currentMax, day) : currentMax;
+      }, 0);
+      return maxDay > 0 ? Math.ceil(maxDay) : null;
+    }
+
+    function getAvailableRecipeCropNames() {
+      return Object.keys(S.lightingRecipes || {})
+        .filter(function(name) { return !!String(name || '').trim(); })
+        .sort(function(left, right) { return left.localeCompare(right); });
+    }
+
+    function resolveLightingScheduleTarget(recipeEntry, daysGrown) {
+      const schedule = Array.isArray(recipeEntry?.schedule) ? recipeEntry.schedule : [];
+      if (!schedule.length) return null;
+      const targetDay = Number.isFinite(Number(daysGrown)) && Number(daysGrown) >= 0 ? (Number(daysGrown) + 1) : 1;
+      let best = schedule[0];
+      schedule.forEach(function(point) {
+        const pointDay = Number(point?.day);
+        const bestDay = Number(best?.day);
+        if (!Number.isFinite(pointDay)) return;
+        if (!Number.isFinite(bestDay) || (pointDay <= targetDay && pointDay >= bestDay)) {
+          best = point;
+        }
+      });
+      return best || schedule[0];
+    }
+
+    function resolveGroupEnvironmentalTargets(group) {
+      const lifecycle = getGroupLifecycle(group);
+      const recipeMatch = resolveLightingRecipeEntry(lifecycle.cropName);
+      const scheduleTarget = resolveLightingScheduleTarget(recipeMatch.entry, lifecycle.daysGrown);
+      const temp = firstFiniteNumber([
+        group?.planConfig?.target?.temperature,
+        group?.planConfig?.target?.tempC,
+        scheduleTarget?.temperature,
+      ]);
+      const humidity = firstFiniteNumber([
+        group?.planConfig?.target?.humidity,
+        group?.planConfig?.target?.rh,
+        scheduleTarget?.humidity,
+        scheduleTarget?.rh,
+        scheduleTarget?.max_humidity,
+      ]);
+      const vpd = firstFiniteNumber([
+        group?.planConfig?.target?.vpd,
+        scheduleTarget?.vpd,
+      ]);
+      const co2 = firstFiniteNumber([
+        group?.planConfig?.target?.co2,
+        scheduleTarget?.co2,
+        scheduleTarget?.co2_ppm,
+      ]);
+      return {
+        temp,
+        humidity,
+        vpd,
+        co2,
+        stage: scheduleTarget?.stage || '',
+        day: Number(scheduleTarget?.day) || null,
+        weight: Math.max(1, Number(group?.trays) || Number(group?.plants) || 1),
+        hasTargets: [temp, humidity, vpd, co2].some(function(value) { return Number.isFinite(value); }),
+      };
+    }
+
+    function getScopedActiveGroups(options) {
+      const roomId = options?.roomId || (S.roomFilter !== '__all' ? S.roomFilter : null);
+      const zone = options?.zone || null;
+      return (S.groups || []).filter(function(group) {
+        return isGroupActive(group)
+          && groupMatchesRoomSelection(group, roomId)
+          && groupMatchesZoneSelection(group, zone);
+      });
+    }
+
+    function aggregateEnvironmentalTargets(groups) {
+      const metrics = ['temp', 'humidity', 'vpd', 'co2'];
+      const totals = { temp: 0, humidity: 0, vpd: 0, co2: 0 };
+      const weights = { temp: 0, humidity: 0, vpd: 0, co2: 0 };
+      let count = 0;
+      (groups || []).forEach(function(group) {
+        const targets = resolveGroupEnvironmentalTargets(group);
+        if (!targets.hasTargets) return;
+        count += 1;
+        metrics.forEach(function(metric) {
+          if (!Number.isFinite(targets[metric])) return;
+          totals[metric] += targets[metric] * targets.weight;
+          weights[metric] += targets.weight;
+        });
+      });
+      return {
+        temp: weights.temp ? (totals.temp / weights.temp) : null,
+        humidity: weights.humidity ? (totals.humidity / weights.humidity) : null,
+        vpd: weights.vpd ? (totals.vpd / weights.vpd) : null,
+        co2: weights.co2 ? (totals.co2 / weights.co2) : null,
+        count,
+      };
+    }
+
+    function findEnvZoneEntry(roomId, zone) {
+      const envZones = S.envData?.zones || [];
+      const zoneTargets = [zone?.id, zone?.zoneId, zone?.name, zone?.zone, getZoneLookupKey(zone)];
+      const roomTargets = [roomId, getRoomNameById(roomId)].filter(Boolean);
+      return envZones.find(function(entry) {
+        const entryTargets = [entry?.id, entry?.zone_id, entry?.name, entry?.zone];
+        const matchesZone = zoneTargets.some(function(target) {
+          const normalizedTarget = normalizeLookupValue(target);
+          return normalizedTarget && entryTargets.some(function(value) {
+            return normalizeLookupValue(value) === normalizedTarget;
+          });
+        });
+        if (!matchesZone) return false;
+        const scopeTargets = [entry?.roomId, entry?.room_id, entry?.room, entry?.roomName, entry?.scopeName].filter(Boolean);
+        if (!scopeTargets.length || !roomTargets.length) return true;
+        return roomTargets.some(function(target) {
+          const normalizedTarget = normalizeLookupValue(target);
+          return normalizedTarget && scopeTargets.some(function(value) {
+            return normalizeLookupValue(value) === normalizedTarget;
+          });
+        });
+      }) || null;
+    }
+
+    function getZoneFallbackTarget(roomId, zone, metricKey) {
+      const envMetricKey = metricKey === 'temp' ? 'tempC' : metricKey === 'humidity' ? 'rh' : metricKey;
+      const roomZones = zone ? [zone] : (S.roomMaps[roomId]?.zones || []);
+      const values = [];
+      roomZones.forEach(function(zoneEntry) {
+        const envZone = findEnvZoneEntry(roomId, zoneEntry);
+        const envSetpoint = averageSetpointValue(envZone?.sensors?.[envMetricKey]?.setpoint);
+        if (Number.isFinite(envSetpoint)) {
+          values.push(envSetpoint);
+          return;
+        }
+        const mapSetpoint = metricKey === 'temp' ? zoneEntry?.tempSetpoint
+          : metricKey === 'humidity' ? zoneEntry?.rhSetpoint
+          : metricKey === 'co2' ? zoneEntry?.co2Setpoint
+          : zoneEntry?.vpdSetpoint;
+        const averaged = averageSetpointValue(mapSetpoint);
+        if (Number.isFinite(averaged)) values.push(averaged);
+      });
+      if (!values.length) return null;
+      return values.reduce(function(sum, value) { return sum + value; }, 0) / values.length;
+    }
+
+    function resolveTargetForScope(roomId, zone, metricKey) {
+      const metric = metricKey === 'temp' ? 'temp' : metricKey === 'humidity' ? 'humidity' : metricKey;
+      const scopedTargets = aggregateEnvironmentalTargets(getScopedActiveGroups({ roomId, zone }));
+      if (Number.isFinite(scopedTargets[metric])) {
+        return { value: scopedTargets[metric], source: 'recipe' };
+      }
+      const zoneFallback = getZoneFallbackTarget(roomId, zone, metric);
+      if (Number.isFinite(zoneFallback)) {
+        return { value: zoneFallback, source: 'setpoint' };
+      }
+      const roomTargets = aggregateEnvironmentalTargets(getScopedActiveGroups({ roomId }));
+      if (Number.isFinite(roomTargets[metric])) {
+        return { value: roomTargets[metric], source: 'room-recipe' };
+      }
+      const roomFallback = getZoneFallbackTarget(roomId, null, metric);
+      if (Number.isFinite(roomFallback)) {
+        return { value: roomFallback, source: 'room-setpoint' };
+      }
+      return { value: null, source: 'none' };
+    }
+
+    function getOverlayDescriptor(type) {
+      const base = OVERLAY_CFG[type];
+      if (!base) return null;
+      if (S.overlayMode !== 'delta') return Object.assign({ mode: 'absolute', defaultRange: base.max - base.min }, base);
+      const deltaCfg = OVERLAY_DELTA_CFG[type];
+      if (!deltaCfg) return Object.assign({ mode: 'absolute', defaultRange: base.max - base.min }, base);
+      return {
+        mode: 'delta',
+        key: base.key,
+        min: -deltaCfg.range,
+        max: deltaCfg.range,
+        unit: deltaCfg.unit,
+        label: deltaCfg.label,
+        colors: deltaCfg.colors,
+        defaultRange: deltaCfg.range,
+      };
+    }
+
+    function normalizeTraySystemType(value) {
+      const text = String(value || '').trim().toLowerCase();
+      if (!text) return '';
+      if (/zipgrow|tower|vertical/.test(text)) return 'zipgrow';
+      if (/aero/.test(text)) return 'aeroponics';
+      if (/nft|channel/.test(text)) return 'channel';
+      return text;
+    }
+
+    function findTrayFormatForGroup(group, systemType) {
+      const formats = Array.isArray(S.trayFormats) ? S.trayFormats : [];
+      if (!formats.length) return null;
+
+      const groupFormatRefs = [
+        group?.trayFormatId,
+        group?.tray_format_id,
+        group?.trayFormat?.trayFormatId,
+        group?.trayFormat?.id,
+        group?.tray_format?.trayFormatId,
+        group?.tray_format?.id,
+        group?.trayFormat?.name,
+        group?.tray_format?.name,
+      ].filter(Boolean).map(value => String(value).trim().toLowerCase());
+
+      if (groupFormatRefs.length) {
+        const explicit = formats.find(function(format) {
+          const formatRefs = [format?.trayFormatId, format?.id, format?.name]
+            .filter(Boolean)
+            .map(value => String(value).trim().toLowerCase());
+          return groupFormatRefs.some(ref => formatRefs.includes(ref));
+        });
+        if (explicit) return explicit;
       }
 
-      await postViewerJson('/data/groups.json', payload);
-      return true;
+      if (systemType === 'zipgrow') {
+        const directZipgrow = formats.find(function(format) {
+          const haystack = [format?.trayFormatId, format?.name, format?.description, format?.systemType]
+            .filter(Boolean)
+            .join(' ')
+            .toLowerCase();
+          return normalizeTraySystemType(format?.systemType) === 'zipgrow' || /zipgrow/.test(haystack);
+        });
+        if (directZipgrow) return directZipgrow;
+
+        const towerFallback = formats.find(function(format) {
+          const haystack = [format?.trayFormatId, format?.name, format?.description, format?.systemType]
+            .filter(Boolean)
+            .join(' ')
+            .toLowerCase();
+          return /tower|vertical/.test(haystack);
+        });
+        if (towerFallback) return towerFallback;
+      }
+
+      return null;
+    }
+
+    function resolveGroupPlantingLocations(group, systemType) {
+      const candidates = [
+        group?.plantSiteCount,
+        group?.plant_site_count,
+        group?.plantingLocations,
+        group?.planting_locations,
+        group?.locationsPerTower,
+        group?.locations_per_tower,
+        group?.siteCount,
+        group?.site_count,
+        group?.capacity,
+        group?.trayFormat?.plantSiteCount,
+        group?.trayFormat?.plant_site_count,
+        group?.tray_format?.plantSiteCount,
+        group?.tray_format?.plant_site_count,
+      ];
+      for (const candidate of candidates) {
+        const count = Number(candidate);
+        if (Number.isFinite(count) && count > 0) return Math.round(count);
+      }
+
+      const format = findTrayFormatForGroup(group, systemType);
+      const formatCount = Number(format?.plantSiteCount ?? format?.plant_site_count);
+      if (Number.isFinite(formatCount) && formatCount > 0) return Math.round(formatCount);
+
+      if (systemType === 'zipgrow') {
+        const trayCount = Number(group?.trays);
+        if (Number.isFinite(trayCount) && trayCount > 0) return Math.round(trayCount);
+      }
+
+      return null;
+    }
+
+    function getGroupLifecycle(group, cropOverride, seedDateOverride) {
+      const cropName = String(cropOverride || group?.crop || group?.recipe || group?.plan || '').trim();
+      const recipeMatch = resolveLightingRecipeEntry(cropName);
+      const registryMatch = resolveCropRegistryEntry(cropName);
+      const registry = registryMatch.entry;
+      const seedDate = normalizeDateOnly(
+        seedDateOverride ||
+        group?.planConfig?.anchor?.seedDate ||
+        group?.planConfig?.seedDate ||
+        group?.seedDate ||
+        group?.seed_date
+      );
+
+      let daysToHarvest = Number(
+        group?.growDays ||
+        group?.grow_days ||
+        group?.planConfig?.target?.growDays ||
+        getRecipeDaysToHarvest(recipeMatch.entry) ||
+        registry?.growth?.daysToHarvest
+      );
+      if (!Number.isFinite(daysToHarvest) || daysToHarvest <= 0) daysToHarvest = null;
+
+      let forecastHarvestDate = '';
+      let daysGrown = null;
+      let daysRemaining = null;
+      if (seedDate && daysToHarvest) {
+        const seed = new Date(seedDate + 'T00:00:00');
+        if (!Number.isNaN(seed.getTime())) {
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          const harvest = new Date(seed.getTime());
+          harvest.setDate(harvest.getDate() + daysToHarvest);
+          forecastHarvestDate = harvest.toISOString().slice(0, 10);
+          daysGrown = Math.max(0, Math.floor((today - seed) / 86400000));
+          daysRemaining = Math.max(0, Math.ceil((harvest - today) / 86400000));
+        }
+      }
+
+      const systemType = inferGroupSystemType(group);
+      return {
+        cropName: cropName || 'Unknown',
+        recipe: recipeMatch.entry,
+        recipeKey: recipeMatch.key,
+        registry,
+        registryKey: registryMatch.key,
+        seedDate,
+        forecastHarvestDate,
+        daysToHarvest,
+        daysGrown,
+        daysRemaining,
+        plantingLocations: resolveGroupPlantingLocations(group, systemType),
+        systemType,
+      };
+    }
+
+    function groupHasAssignedCrop(group, cropOverride) {
+      return !!String(cropOverride || group?.crop || group?.recipe || group?.plan || '').trim();
+    }
+
+    function getGroupPlantCount(group, lifecycle, cropOverride) {
+      if (!groupHasAssignedCrop(group, cropOverride)) return 0;
+      const derivedLifecycle = lifecycle || getGroupLifecycle(group, cropOverride);
+      const plantingLocations = Number(derivedLifecycle?.plantingLocations);
+      if (Number.isFinite(plantingLocations) && plantingLocations > 0) return Math.round(plantingLocations);
+
+      const fallbackCandidates = [
+        group?.estimatedPlantCount,
+        group?.estimated_plant_count,
+        group?.plantCount,
+        group?.plant_count,
+        group?.plants,
+      ];
+      for (const candidate of fallbackCandidates) {
+        const count = Number(candidate);
+        if (Number.isFinite(count) && count > 0) return Math.round(count);
+      }
+      return 0;
     }
 
     async function saveRoomDimensions(roomIds) {
@@ -870,9 +2195,59 @@
       return getViewerDeviceKeys(device).some(function(key) { return keys.includes(key); });
     }
 
+    function getViewerStableDeviceKeys(device) {
+      const keys = new Set();
+      const addKey = function(value) {
+        if (value == null) return;
+        const str = String(value).trim();
+        if (str) keys.add(str);
+      };
+      if (device && typeof device === 'object') {
+        addKey(device.id);
+        addKey(device.deviceId);
+        addKey(device.snapshot?.deviceId);
+        addKey(device.telemetry?.deviceId);
+        addKey(device.deviceData?.deviceId);
+      }
+      return Array.from(keys);
+    }
+
+    function deviceMatchesViewerStableKeys(device, keys) {
+      if (!device || !keys || !keys.length) return false;
+      return getViewerStableDeviceKeys(device).some(function(key) { return keys.includes(key); });
+    }
+
+    function ensurePersistedRoomDevice(roomId, deviceRef) {
+      if (!roomId || !S.roomMaps[roomId]) return null;
+      var map = S.roomMaps[roomId];
+      if (!Array.isArray(map.devices)) map.devices = [];
+      var stableKeys = getViewerStableDeviceKeys(deviceRef);
+      var persisted = stableKeys.length
+        ? map.devices.find(function(entry) { return deviceMatchesViewerStableKeys(entry, stableKeys); })
+        : null;
+      if (!persisted) {
+        var keys = getViewerDeviceKeys(deviceRef);
+        persisted = map.devices.find(function(entry) { return deviceMatchesViewerKeys(entry, keys); });
+      }
+      if (persisted) return persisted;
+
+      persisted = Object.assign({}, deviceRef || {});
+      if (deviceRef && typeof deviceRef === 'object') {
+        if (deviceRef.snapshot && typeof deviceRef.snapshot === 'object') {
+          persisted.snapshot = Object.assign({}, deviceRef.snapshot);
+        }
+        if (deviceRef.telemetry && typeof deviceRef.telemetry === 'object') {
+          persisted.telemetry = Object.assign({}, deviceRef.telemetry);
+        }
+      }
+      map.devices.push(persisted);
+      return persisted;
+    }
+
     async function persistViewerIotDevices() {
       const payload = Array.isArray(S.iotDevices) ? S.iotDevices : [];
       await postViewerJson('/data/iot-devices.json', payload);
+      markLocalStructureChange();
       return true;
     }
 
@@ -880,23 +2255,40 @@
       if (!ud || (ud.type !== 'sensor' && ud.type !== 'equipment')) return;
       const device = ud.device;
       const roomId = ud.roomId || (ud.room ? ud.room.id : '');
-      const keys = getViewerDeviceKeys(device);
+      const stableKeys = getViewerStableDeviceKeys(device);
+      const keys = stableKeys.length ? stableKeys : getViewerDeviceKeys(device);
+      const deletedSensorIds = stableKeys.length ? stableKeys : keys;
       const deviceName = device?.snapshot?.name || device?.name || device?.deviceId || 'device';
       if (!keys.length || !roomId || !S.roomMaps[roomId]) {
         throw new Error('Device context unavailable');
       }
       if (!window.confirm('Delete ' + deviceName + ' from this room map?')) return false;
 
+      pushUndoSnapshot('delete ' + deviceName);
+
       let removedFromMaps = 0;
       Object.values(S.roomMaps).forEach(function(map) {
         if (!map || !Array.isArray(map.devices)) return;
         const before = map.devices.length;
-        map.devices = map.devices.filter(function(entry) { return !deviceMatchesViewerKeys(entry, keys); });
-        removedFromMaps += before - map.devices.length;
+        map.devices = map.devices.filter(function(entry) {
+          return stableKeys.length
+            ? !deviceMatchesViewerStableKeys(entry, keys)
+            : !deviceMatchesViewerKeys(entry, keys);
+        });
+        const removedCount = before - map.devices.length;
+        if (removedCount > 0 && ud.type === 'sensor') {
+          const existingDeletedIds = Array.isArray(map.deletedSensorIds) ? map.deletedSensorIds : [];
+          map.deletedSensorIds = Array.from(new Set(existingDeletedIds.concat(deletedSensorIds)));
+        }
+        removedFromMaps += removedCount;
       });
 
       const beforeIotCount = Array.isArray(S.iotDevices) ? S.iotDevices.length : 0;
-      S.iotDevices = (S.iotDevices || []).filter(function(entry) { return !deviceMatchesViewerKeys(entry, keys); });
+      S.iotDevices = (S.iotDevices || []).filter(function(entry) {
+        return stableKeys.length
+          ? !deviceMatchesViewerStableKeys(entry, keys)
+          : !deviceMatchesViewerKeys(entry, keys);
+      });
       const removedFromIot = beforeIotCount - S.iotDevices.length;
 
       if (!removedFromMaps && !removedFromIot) return false;
@@ -1057,6 +2449,12 @@
 
     async function loadAllData(opts) {
       opts = opts || {};
+      if (opts.reason === 'auto' || opts.reason === 'visible' || opts.reason === 'focus') {
+        const recentLocalChangeAge = Date.now() - (S.lastLocalStructureChangeAt || 0);
+        if (recentLocalChangeAge >= 0 && recentLocalChangeAge < STRUCTURE_REFRESH_GRACE_MS) {
+          return false;
+        }
+      }
       if (hasPendingDetailEdits()) {
         if (opts.reason === 'manual') {
           if (!confirmDiscardDetailEdits('Refresh viewer data and discard unsaved detail panel changes?')) {
@@ -1075,12 +2473,14 @@
         if (!opts.silent) {
           status(opts.reason === 'manual' ? 'Refreshing viewer data...' : 'Loading farm data...');
         }
-        const [roomsRes, groupsRes, iotRes, envRes, regRes] = await Promise.all([
+        const [roomsRes, groupsRes, iotRes, envRes, regRes, trayRes, recipeRes] = await Promise.all([
           authFetch('/data/rooms.json?t=' + Date.now()),
           authFetch('/data/groups.json?t=' + Date.now()),
           authFetch('/data/iot-devices.json?t=' + Date.now()),
           authFetch('/env?hours=24&t=' + Date.now(), { cache: 'no-store' }),
           authFetch('/data/crop-registry.json?t=' + Date.now()),
+          authFetch('/api/tray-formats?t=' + Date.now()),
+          authFetch('/data/lighting-recipes.json?t=' + Date.now()),
         ]);
 
         S.roomMaps = {};
@@ -1089,20 +2489,58 @@
         if (iotRes.ok) { const d = await iotRes.json(); S.iotDevices = Array.isArray(d) ? d : (d.devices || []); }
         if (envRes.ok) { S.envData = await envRes.json(); }
         if (regRes.ok) { const d = await regRes.json(); S.cropRegistry = d.crops || d || {}; }
+        if (recipeRes.ok) {
+          const d = await recipeRes.json();
+          S.lightingRecipes = d.crops || d.recipes || d || {};
+        } else {
+          S.lightingRecipes = {};
+        }
+        if (trayRes.ok) {
+          const d = await trayRes.json();
+          S.trayFormats = Array.isArray(d) ? d : (d.formats || []);
+        } else {
+          try {
+            const fallbackRes = await authFetch('/data/tray-formats.json?t=' + Date.now());
+            if (fallbackRes.ok) {
+              const d = await fallbackRes.json();
+              S.trayFormats = Array.isArray(d) ? d : (d.formats || []);
+            } else {
+              S.trayFormats = [];
+            }
+          } catch (trayErr) {
+            console.warn('[3D] Unable to load tray formats:', trayErr);
+            S.trayFormats = [];
+          }
+        }
 
         status('Loading room layouts...');
         for (const room of S.rooms) {
           try {
             let res = await authFetch('/data/room-map-' + room.id + '.json?t=' + Date.now());
-            if (!res.ok) res = await authFetch('/data/room-map.json?t=' + Date.now());
-            if (res.ok) S.roomMaps[room.id] = await res.json();
+            let map = null;
+            if (res.ok) {
+              const candidate = normalizeRoomMapData(await res.json());
+              if (roomMapMatchesRoom(room.id, candidate)) {
+                map = candidate;
+              }
+            }
+            if (!map) {
+              res = await authFetch('/data/room-map.json?t=' + Date.now());
+              if (res.ok) {
+                const candidate = normalizeRoomMapData(await res.json());
+                if (roomMapMatchesRoom(room.id, candidate)) {
+                  map = candidate;
+                }
+              }
+            }
+            if (map) S.roomMaps[room.id] = map;
           } catch (e) {}
         }
         if (S.rooms.length === 0) {
           try {
             const res = await authFetch('/data/room-map.json?t=' + Date.now());
             if (res.ok) {
-              const data = await res.json();
+              const map = normalizeRoomMapData(await res.json());
               const rid = data.roomId || 'default-room';
               S.roomMaps[rid] = data;
               S.rooms = [{ id: rid, name: data.name || 'Farm', zones: [] }];
@@ -1110,13 +2548,7 @@
           } catch (e) {}
         }
 
-        const structureSignature = JSON.stringify({
-          rooms: S.rooms,
-          groups: S.groups,
-          roomMaps: S.roomMaps,
-          iotDevices: S.iotDevices,
-          cropRegistry: S.cropRegistry
-        });
+        const structureSignature = buildStructureSignature();
         const structureChanged = structureSignature !== S.lastStructureSignature;
 
         loadPersistedDimensions();
@@ -1155,16 +2587,22 @@
     // array. Inject them so the heatmap IDW can use distinct values.
     function injectIoTSensorsIntoRoomMaps() {
       if (!S.iotDevices || S.iotDevices.length === 0) return;
-      const iotById = new Map((S.iotDevices || []).map(d => [d.deviceId, d]));
-      const envZones = S.envData?.zones || [];
+      const iotById = new Map(
+        (S.iotDevices || [])
+          .map(function(d) { return [d.deviceId || d.id, d]; })
+          .filter(function(entry) { return !!entry[0]; })
+      );
+      const envZones = getNormalizedEnvZones();
 
       function findEnvZoneForMapZone(mapZone) {
-        const zoneName = String(mapZone?.name || mapZone?.zone || '').trim();
-        const zoneId = String(mapZone?.id || mapZone?.zone || '').trim();
+        const zoneRefs = [mapZone?.id, mapZone?.zone, mapZone?.name]
+          .map(function(value) { return normalizeLookupValue(value); })
+          .filter(Boolean);
         return envZones.find(function(z) {
-          const envId = String(z?.id || z?.zone_id || z?.zone || '').trim();
-          const envName = String(z?.name || z?.zone || '').trim();
-          return envId === zoneId || envId === zoneName || envName === zoneName || envName === ('Zone ' + zoneId);
+          const envRefs = [z?.id, z?.zone_id, z?.zone, z?.name]
+            .map(function(value) { return normalizeLookupValue(value); })
+            .filter(Boolean);
+          return zoneRefs.some(function(ref) { return envRefs.includes(ref); });
         });
       }
 
@@ -1183,6 +2621,7 @@
       Object.values(S.roomMaps).forEach(function(map) {
         if (!map) return;
         if (!Array.isArray(map.devices)) map.devices = [];
+        const deletedSensorIds = new Set(Array.isArray(map.deletedSensorIds) ? map.deletedSensorIds : []);
         const existingSensorIds = new Set(map.devices.map(function(dev) {
           return dev?.deviceId || dev?.snapshot?.deviceId || dev?.id;
         }).filter(Boolean));
@@ -1209,7 +2648,9 @@
         zones.forEach(function(mapZone) {
           const envZone = findEnvZoneForMapZone(mapZone);
           if (!envZone) return;
-          const sourceIds = getZoneSourceIds(envZone).filter(function(id) { return !existingSensorIds.has(id); });
+          const sourceIds = getZoneSourceIds(envZone).filter(function(id) {
+            return !existingSensorIds.has(id) && !deletedSensorIds.has(id);
+          });
           if (!sourceIds.length) return;
 
           const zoneX1 = Number(mapZone.x1 ?? 0);
@@ -1250,27 +2691,33 @@
       });
     }
 
+    function getNormalizedEnvZones() {
+      let envZones = Array.isArray(S.envData?.zones) ? S.envData.zones : [];
+      if (!envZones.length && S.envData?.env?.scopes) {
+        const scopes = S.envData.env.scopes;
+        envZones = Object.entries(scopes)
+          .filter(function(entry) { return entry[0].startsWith('zone'); })
+          .map(function(entry) {
+            return {
+              id: entry[0],
+              name: entry[1].name || entry[0].replace(/-/g, ' ').replace(/\b\w/g, function(c) { return c.toUpperCase(); }),
+              zone_id: entry[0],
+              zone: entry[1].zone || entry[1].name || entry[0],
+              sensors: entry[1].sensors || {},
+              updatedAt: entry[1].updatedAt
+            };
+          });
+      }
+      if (!Array.isArray(S.envData?.zones) && envZones.length) {
+        S.envData = Object.assign({}, S.envData || {}, { zones: envZones });
+      }
+      return envZones;
+    }
+
     // ---- Zone data map (merge env + groups) ------------------
     function buildZoneDataMap() {
       S.zoneDataMap = {};
-      // Normalize env API: /env returns { ok, env: { scopes: {...} } }
-      // Convert zone-prefixed scopes to the zones array format
-      let envZones = S.envData?.zones || [];
-      if (envZones.length === 0 && S.envData?.env?.scopes) {
-        const scopes = S.envData.env.scopes;
-        envZones = Object.entries(scopes)
-          .filter(function(e) { return e[0].startsWith('zone'); })
-          .map(function(e) {
-            return {
-              id: e[0],
-              name: e[1].name || e[0].replace(/-/g, ' ').replace(/\b\w/g, function(c) { return c.toUpperCase(); }),
-              zone_id: e[0],
-              sensors: e[1].sensors || {},
-              updatedAt: e[1].updatedAt
-            };
-          });
-        if (!S.envData.zones) S.envData.zones = envZones;
-      }
+      const envZones = getNormalizedEnvZones();
 
       envZones.forEach(z => {
         const zId = String(z.id ?? z.zone_id ?? z.name ?? '');
@@ -1330,7 +2777,24 @@
     function getHistory(sensors, ...keys) {
       if (Array.isArray(sensors)) return [];
       for (const k of keys) {
-        if (sensors[k]?.history && Array.isArray(sensors[k].history)) return sensors[k].history;
+        if (sensors[k]?.history && Array.isArray(sensors[k].history)) {
+          const history = sensors[k].history.slice();
+          const timestamps = Array.isArray(sensors[k].timestamps) ? sensors[k].timestamps : [];
+          if (timestamps.length >= 2) {
+            const firstTs = Date.parse(timestamps[0]);
+            const lastTs = Date.parse(timestamps[timestamps.length - 1]);
+            if (Number.isFinite(firstTs) && Number.isFinite(lastTs) && firstTs > lastTs) {
+              return history.reverse();
+            }
+          }
+          const current = sensors[k].current;
+          const first = extractNumericReading(history[0]);
+          const last = extractNumericReading(history[history.length - 1]);
+          if (current != null && first != null && last != null && Math.abs(first - Number(current)) < Math.abs(last - Number(current))) {
+            return history.reverse();
+          }
+          return history;
+        }
       }
       return [];
     }
@@ -1375,9 +2839,10 @@
 
     // ---- Build 3D Scene --------------------------------------
     function buildScene() {
-      if (S.selectedMeshes.length) clearSelection({ silent: true });
+      var sceneState = captureSceneState();
+      S.selectedMeshes = [];
       // Clear all meshes
-      ['floors','zones','trays','sensors','equipment','walls','ceilings','labels'].forEach(k => {
+      ['floors','zones','trays','sensors','equipment','walls','ceilings','labels','lights'].forEach(k => {
         (S.meshes[k] || []).forEach(m => { S.scene.remove(m); disposeMesh(m); });
         S.meshes[k] = [];
       });
@@ -1392,6 +2857,11 @@
       visible.forEach((room) => {
         const map = S.roomMaps[room.id];
         const gridSize = map?.gridSize || 20;
+        const ambientSettings = getRoomAmbientLighting(room.id);
+        const ambientStrength = ambientSettings.enabled ? (ambientSettings.intensity / 100) : 0;
+        const ambientColor = new THREE.Color(ambientSettings.color);
+        const wallColor = new THREE.Color(0xc8d6e5).lerp(ambientColor.clone(), Math.min(0.42, 0.08 + ambientStrength * 0.34));
+        const ceilingColor = new THREE.Color(0xdbeafe).lerp(ambientColor.clone(), Math.min(0.48, 0.12 + ambientStrength * 0.36));
 
         // Use persisted room dimensions or fallback to grid-based
         const dims = S.roomDimensions[room.id] || {};
@@ -1403,7 +2873,13 @@
 
         // Floor
         const floorGeo = new THREE.BoxGeometry(roomW, 0.12, roomD);
-        const floorMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.75, metalness: 0.05 });
+        const floorMat = new THREE.MeshStandardMaterial({
+          color: 0x1e293b,
+          roughness: 0.75,
+          metalness: 0.05,
+          emissive: ambientColor.clone().multiplyScalar(ambientStrength * 0.24),
+          emissiveIntensity: ambientStrength > 0 ? 0.9 : 0,
+        });
         const floor = new THREE.Mesh(floorGeo, floorMat);
         floor.position.set(cx, 0, cz);
         floor.receiveShadow = true;
@@ -1412,18 +2888,30 @@
         S.meshes.floors.push(floor);
         S.floorMeshMap[room.id] = floor;
 
+        if (ambientStrength > 0) {
+          const roomGlow = new THREE.PointLight(ambientSettings.color, 0.35 + ambientStrength * 1.35, Math.max(roomW, roomD) * 1.75, 1.4);
+          roomGlow.position.set(cx, Math.max(1.4, wallH - 0.35), cz);
+          roomGlow.userData = { type: 'room-ambient-light', roomId: room.id };
+          S.scene.add(roomGlow);
+          S.meshes.lights.push(roomGlow);
+        }
+
         // Walls (4) + ceiling -- togglable, glass-like see-through
         const wallMat = new THREE.MeshPhysicalMaterial({
-          color: 0xc8d6e5, transparent: true, opacity: 0.08,
+          color: wallColor, transparent: true, opacity: 0.08,
           roughness: 0.05, metalness: 0.1, transmission: 0.92,
           thickness: 0.1, side: THREE.DoubleSide,
           depthWrite: false,
+          emissive: ambientColor.clone().multiplyScalar(ambientStrength * 0.12),
+          emissiveIntensity: ambientStrength > 0 ? 0.75 : 0,
         });
         const ceilMat = new THREE.MeshPhysicalMaterial({
-          color: 0xdbeafe, transparent: true, opacity: 0.06,
+          color: ceilingColor, transparent: true, opacity: 0.06,
           roughness: 0.05, metalness: 0.1, transmission: 0.95,
           thickness: 0.05, side: THREE.DoubleSide,
           depthWrite: false,
+          emissive: ambientColor.clone().multiplyScalar(ambientStrength * 0.18),
+          emissiveIntensity: ambientStrength > 0 ? 0.85 : 0,
         });
 
         // front, back, left, right
@@ -1511,22 +2999,22 @@
         if (mapZones.length > 0) {
           zones = mapZones;
         } else if (roomZoneNames.length > 0) {
-          // Synthesize zone rectangles from room zone name list
+          // Synthesize zone rectangles from room zone name list in grid units.
           const nz = roomZoneNames.length;
-          const zoneW = roomW / nz;
+          const zoneW = gridSize / nz;
           roomZoneNames.forEach((zName, zi) => {
             zones.push({
               zone: zName, name: zName,
               x1: zi * zoneW, y1: 0,
-              x2: (zi + 1) * zoneW, y2: roomD,
+              x2: (zi + 1) * zoneW, y2: gridSize,
             });
           });
         } else {
-          // Single zone covering entire room
+          // Single zone covering entire room in grid units.
           zones.push({
             zone: room.name || room.id,
             name: room.name || room.id,
-            x1: 0, y1: 0, x2: roomW, y2: roomD,
+            x1: 0, y1: 0, x2: gridSize, y2: gridSize,
           });
         }
 
@@ -1616,9 +3104,9 @@
             gz = 2 + Math.floor(gi / 6) * 3;
           }
 
-          const gStatus = (group.status || 'active').toLowerCase();
           const trayCount = Math.max(1, Math.min(Number(group.trays) || 1, 20));
-          const color = STATUS_COLOR[gStatus] || 0x22c55e;
+          const visualState = getGroupVisualState(group);
+          const color = visualState.trayColor;
 
           // Use saved dimensions first, then the group's persisted server values, then defaults.
           const gDims = getSavedGroupDimensions(group);
@@ -1629,12 +3117,12 @@
 
           const systemType = inferGroupSystemType(group);
           const rackLevels = getGroupRackLevels(group, gHeight, trayCount);
-          const frameMat = new THREE.MeshStandardMaterial({ color: 0x38bdf8, roughness: 0.35, metalness: 0.35, transparent: true, opacity: 0.75 });
-          const growMat = new THREE.MeshStandardMaterial({ color: 0x34d399, roughness: 0.5, metalness: 0.2, transparent: true, opacity: 0.82 });
-          const detailMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.45, metalness: 0.25, transparent: true, opacity: 0.7 });
+          const frameMat = new THREE.MeshStandardMaterial({ color: visualState.frameColor, roughness: 0.35, metalness: 0.35, transparent: true, opacity: 0.82 });
+          const growMat = new THREE.MeshStandardMaterial({ color: visualState.surfaceColor, roughness: 0.5, metalness: 0.2, transparent: true, opacity: 0.88 });
+          const detailMat = new THREE.MeshStandardMaterial({ color: visualState.detailColor, roughness: 0.45, metalness: 0.25, transparent: true, opacity: 0.74 });
 
           const trayGeo = new THREE.BoxGeometry(gLength, gHeight, gWidth);
-          const trayMat = new THREE.MeshStandardMaterial({ color, roughness: 0.5, metalness: 0.15, transparent: true, opacity: 0.18 });
+          const trayMat = new THREE.MeshStandardMaterial({ color, roughness: 0.5, metalness: 0.15, transparent: true, opacity: visualState.opacity });
           const tray = new THREE.Mesh(trayGeo, trayMat);
           tray.position.set(gx, gHeight / 2 + 0.12, gz);
           tray.castShadow = true;
@@ -1764,16 +3252,6 @@
           airflowHead.position.set(gx, 0.12 + Math.max(0.3, gHeight * 0.52), gz + airflowLen * 0.5 + 0.06);
           addDetailMesh(airflowHead);
 
-          // Active indicator strip on top
-          if (gStatus === 'active' || gStatus === 'growing') {
-            const indicGeo = new THREE.BoxGeometry(gLength, 0.04, gWidth);
-            const indicMat = new THREE.MeshStandardMaterial({ color: 0x4ade80, emissive: 0x4ade80, emissiveIntensity: 0.3 });
-            const indic = new THREE.Mesh(indicGeo, indicMat);
-            indic.position.set(gx, gHeight + 0.14, gz);
-            S.scene.add(indic);
-            S.meshes.trays.push(indic);
-          }
-
           // Light bar representation
           if (group.lights?.length) {
             const lightY = lightOri === 'intercanopy'
@@ -1800,6 +3278,7 @@
             const cone = new THREE.Mesh(coneGeo, coneMat);
             cone.position.set(gx, lightY - coneH / 2, gz);
             cone.rotation.x = Math.PI;
+            cone.userData = { type: 'light', group, orientation: lightOri, isLightCone: true };
             S.scene.add(cone);
             S.meshes.equipment.push(cone);
           }
@@ -1891,7 +3370,7 @@
       });
 
       // Center camera
-      if (visible.length > 0) {
+      if (visible.length > 0 && !(sceneState && sceneState.camera)) {
         const totalW = offsetX - 4;
         const firstDims = S.roomDimensions[visible[0].id] || {};
         const totalD = firstDims.width || S.roomMaps[visible[0].id]?.gridSize || 20;
@@ -1901,7 +3380,12 @@
         S.controls.update();
       }
 
+      S.meshes.walls.forEach(function(mesh) { mesh.visible = S.wallsVisible; });
+      S.meshes.ceilings.forEach(function(mesh) { mesh.visible = S.wallsVisible; });
+
       applyOverlay(S.overlay);
+      applyDisplayVisibility();
+      restoreSceneState(sceneState);
     }
 
     // ---- Particles -------------------------------------------
@@ -2010,11 +3494,11 @@
       if (metricKey === 'vpd') {
         const tempSrc = getMetricSourceForDevice(zones, 'tempC', dev);
         const rhSrc = getMetricSourceForDevice(zones, 'rh', dev);
-        let temp = toNum(getHistoryValueForFrame(tempSrc?.history, getPlaybackFallbackValue(tempSrc?.current ?? tempSrc?.value)));
-        let rh = toNum(getHistoryValueForFrame(rhSrc?.history, getPlaybackFallbackValue(rhSrc?.current ?? rhSrc?.value)));
+        let temp = toNum(getMetricValueForFrame(tempSrc?.current ?? tempSrc?.value, tempSrc?.history));
+        let rh = toNum(getMetricValueForFrame(rhSrc?.current ?? rhSrc?.value, rhSrc?.history));
         const tel = dev.telemetry || iotById.get(devId)?.telemetry || {};
-        if (temp == null) temp = toNum(getPlaybackFallbackValue(tel.tempC ?? tel.temperature));
-        if (rh == null) rh = toNum(getPlaybackFallbackValue(tel.rh ?? tel.humidity));
+        if (temp == null && isPlaybackAtLatest()) temp = toNum(tel.tempC ?? tel.temperature);
+        if (rh == null && isPlaybackAtLatest()) rh = toNum(tel.rh ?? tel.humidity);
         if (temp != null && rh != null) {
           const svp = 0.6108 * Math.exp((17.27 * temp) / (temp + 237.3));
           return { value: svp * (1 - rh / 100), source: 'computed-vpd' };
@@ -2023,7 +3507,7 @@
 
       const envMetricKey = { temp: 'tempC', humidity: 'rh', co2: 'co2', vpd: 'vpd' }[metricKey] || metricKey;
       const src = getMetricSourceForDevice(zones, envMetricKey, dev);
-      const envVal = src ? toNum(getHistoryValueForFrame(src.history, getPlaybackFallbackValue(src.current ?? src.value))) : null;
+      const envVal = src ? toNum(getMetricValueForFrame(src.current ?? src.value, src.history)) : null;
       if (envVal != null) return { value: envVal, source: 'env-sources' };
 
       const tel = dev.telemetry || iotById.get(devId)?.telemetry || {};
@@ -2031,7 +3515,7 @@
         : envMetricKey === 'rh' ? ['rh', 'humidity']
         : [envMetricKey];
       for (const k of keys) {
-        const v = toNum(getPlaybackFallbackValue(tel[k]));
+        const v = isPlaybackAtLatest() ? toNum(tel[k]) : null;
         if (v != null) return { value: v, source: 'iot-registry' };
       }
 
@@ -2055,6 +3539,8 @@
     // ---- Overlay system (FIXED: applies to both zones AND floor) ----
     function applyOverlay(type) {
       S.overlay = type;
+      syncOverlayButtons();
+      saveViewerPrefs();
       console.log('[heatmap] applyOverlay called, type=' + type);
 
       // Reset zone meshes
@@ -2093,54 +3579,43 @@
         return;
       }
 
-      const cfg = OVERLAY_CFG[type];
+      const cfg = getOverlayDescriptor(type);
       if (!cfg) { legend.classList.remove('visible'); return; }
 
-      // Collect live per-device values first so real sensor spread drives the scale.
-      const liveValsForScale = [];
+      const roomSensorData = {};
+      const allVals = [];
       S.rooms.forEach(function(room) {
         const map = S.roomMaps[room.id];
-        const devices = map?.devices || [];
-        devices.forEach(function(dev) {
-          if (!isSensorLikeDevice(dev)) return;
-          const exact = getOverlayMetricForDevice(dev, cfg.key);
-          if (exact.value != null) liveValsForScale.push(Number(exact.value));
-        });
-      });
-      const allVals = liveValsForScale.length
-        ? liveValsForScale
-        : Object.values(S.zoneDataMap).map(d => getZoneMetricValueAtFrame(d, cfg.key)).filter(v => v != null);
-      const hasData = allVals.length > 0;
-
-      // Auto-scale: collect per-device source values for tighter data range
-      const envMetricKeyMap = { temp: 'tempC', humidity: 'rh', co2: 'co2', vpd: 'vpd' };
-      const perDeviceVals = [];
-      const envZonesForScale = S.envData?.zones || [];
-      const scaleMetric = envMetricKeyMap[cfg.key] || cfg.key;
-      envZonesForScale.forEach(ez => {
-        const src = ez.sensors?.[scaleMetric]?.sources;
-        if (src) {
-          Object.values(src).forEach(s => {
-            const v = getHistoryValueForFrame(s.history, getPlaybackFallbackValue(s.current ?? s.value));
-            if (v != null && Number.isFinite(Number(v))) perDeviceVals.push(Number(v));
+        if (!map) return;
+        const gridSize = map.gridSize || 20;
+        const dims = S.roomDimensions[room.id] || {};
+        const roomW = dims.length || map.roomLength || gridSize;
+        const roomD = dims.width || map.roomWidth || gridSize;
+        const points = getRoomHeatmapMetricPoints(room.id, cfg.key);
+        if (points.length > 0) {
+          roomSensorData[room.id] = { points, roomW, roomD };
+          points.forEach(function(point) {
+            if (Number.isFinite(point.val)) allVals.push(Number(point.val));
           });
         }
       });
-      console.log('[heatmap] zoneVals=' + JSON.stringify(allVals) + ' perDeviceVals=' + JSON.stringify(perDeviceVals));
-      // Merge zone averages + per-device values for full range
-      const allDataVals = perDeviceVals.length ? perDeviceVals : allVals;
+      const hasData = allVals.length > 0;
       let scaleMin = cfg.min, scaleMax = cfg.max;
-      if (allDataVals.length >= 2) {
-        const dataMin = Math.min(...allDataVals);
-        const dataMax = Math.max(...allDataVals);
+      if (cfg.mode === 'delta' && allVals.length) {
+        const maxAbs = allVals.reduce(function(maxValue, value) {
+          return Math.max(maxValue, Math.abs(Number(value) || 0));
+        }, cfg.defaultRange * 0.35);
+        scaleMin = -maxAbs;
+        scaleMax = maxAbs;
+      } else if (allVals.length >= 2) {
+        const dataMin = Math.min(...allVals);
+        const dataMax = Math.max(...allVals);
         const dataSpread = dataMax - dataMin;
         const cfgSpread = cfg.max - cfg.min;
-        // If data occupies less than 30% of the fixed range, auto-scale
         if (dataSpread < cfgSpread * 0.3) {
           const pad = Math.max(dataSpread * 0.5, cfgSpread * 0.02);
           scaleMin = Math.max(cfg.min, dataMin - pad);
           scaleMax = Math.min(cfg.max, dataMax + pad);
-          // Ensure minimum spread to avoid division-by-zero
           if (scaleMax - scaleMin < 0.1) { scaleMin -= 0.5; scaleMax += 0.5; }
         }
       }
@@ -2149,53 +3624,30 @@
 
 
       if (!hasData) {
-        // No env data at all -- show legend but leave scene neutral
         legend.classList.add('visible');
-        document.getElementById('legendTitle').textContent = cfg.label + ' (no data)';
-        document.getElementById('legendMin').textContent = cfg.min + cfg.unit;
-        document.getElementById('legendMax').textContent = cfg.max + cfg.unit;
+        document.getElementById('legendTitle').textContent = cfg.mode === 'delta' ? (cfg.label + ' (no targets)') : (cfg.label + ' (no data)');
+        document.getElementById('legendMin').textContent = cfg.mode === 'delta' ? formatSignedMetric(scaleMin, cfg.unit) : (cfg.min + cfg.unit);
+        document.getElementById('legendMax').textContent = cfg.mode === 'delta' ? formatSignedMetric(scaleMax, cfg.unit) : (cfg.max + cfg.unit);
         const gradBar = document.getElementById('legendGradient');
-        gradBar.style.background = 'linear-gradient(to right, #334155, #475569)';
+        const emptyStops = cfg.colors.map(function(color, index) {
+          const pct = (index / (cfg.colors.length - 1)) * 100;
+          return '#' + color.toString(16).padStart(6, '0') + ' ' + pct + '%';
+        });
+        gradBar.style.background = 'linear-gradient(to right, ' + emptyStops.join(', ') + ')';
         return;
       }
 
-      // Apply gradient heatmap to floor planes using canvas textures
-      // Collect sensor positions + values per room for spatial interpolation
-      const roomSensorData = {}; // roomId -> [{x, z, val}]
-      Object.entries(S.zoneDataMap).forEach(([zId, data]) => {
-        const val = getZoneMetricValueAtFrame(data, cfg.key);
+      S.meshes.zones.forEach(function(mesh) {
+        if (!mesh.isMesh || mesh.userData.type !== 'zone') return;
+        const data = S.zoneDataMap[mesh.userData.zoneId] || findZoneDataByName(mesh.userData.zone?.name || mesh.userData.zone?.zone);
+        const val = getZoneOverlayMetricValue(data, mesh.userData.room?.id || mesh.userData.roomId, mesh.userData.zone, cfg.key);
         if (val == null) return;
-        // Color zone meshes too
         const t = Math.max(0, Math.min(1, (val - scaleMin) / (scaleMax - scaleMin)));
         const color = multiLerp(cfg.colors, t);
-        let mesh = S.zoneMeshMap[zId];
-        if (!mesh) {
-          mesh = S.meshes.zones.find(m => m.isMesh && m.userData.type === 'zone' &&
-            (m.userData.zoneId === zId || String(m.userData.zone?.name) === data.name || String(m.userData.zone?.zone) === data.name)
-          );
-        }
-        if (mesh) {
-          mesh.material.color.setHex(color);
-          mesh.material.visible = false;
-          mesh.material.emissive = new THREE.Color(color);
-          mesh.material.emissiveIntensity = 0.03;
-        }
-      });
-
-      // Build per-room sensor value points from devices + env data
-      S.rooms.forEach(room => {
-        const map = S.roomMaps[room.id];
-        if (!map) return;
-        const devices = map.devices || [];
-        const gridSize = map.gridSize || 20;
-        const dims = S.roomDimensions[room.id] || {};
-        const roomW = dims.length || map.roomLength || gridSize;
-        const roomD = dims.width || map.roomWidth || gridSize;
-        const points = getRoomHeatmapMetricPoints(room.id, cfg.key);
-        // Real-only rule: do not invent zone-center or room-average points.
-        if (points.length > 0) {
-          roomSensorData[room.id] = { points, roomW, roomD };
-        }
+        mesh.material.color.setHex(color);
+        mesh.material.visible = false;
+        mesh.material.emissive = new THREE.Color(color);
+        mesh.material.emissiveIntensity = 0.03;
       });
 
       console.log('[heatmap] roomSensorData:', Object.entries(roomSensorData).map(function(e) { var pts = e[1].points; return e[0] + ':' + pts.length + 'pts vals=[' + pts.map(function(p){return p.val.toFixed(1)+'@('+p.gx.toFixed(2)+','+p.gz.toFixed(2)+')'}).join(',') + ']'; }));
@@ -2208,8 +3660,8 @@
         const localMin = pointVals.length ? Math.min(...pointVals) : scaleMin;
         const localMax = pointVals.length ? Math.max(...pointVals) : scaleMax;
         const localPad = Math.max((localMax - localMin) * 0.04, cfg.key === 'humidity' ? 0.35 : 0.01);
-        const renderMin = localMin - localPad;
-        const renderMax = localMax + localPad;
+        const renderMin = cfg.mode === 'delta' ? scaleMin : (localMin - localPad);
+        const renderMax = cfg.mode === 'delta' ? scaleMax : (localMax + localPad);
         const res = 128;
         const canvas = document.createElement("canvas");
         canvas.width = res; canvas.height = res;
@@ -2272,6 +3724,17 @@
         var val = null;
         var exactReading = getOverlayMetricForDevice(dev, cfg.key);
         if (exactReading && exactReading.value != null) val = Number(exactReading.value);
+        var roomId = sm.userData.roomId || (sm.userData.room ? sm.userData.room.id : '');
+        var roomMap = roomId ? S.roomMaps[roomId] : null;
+        var deviceZone = null;
+        if (roomMap && dev.snapshot?.zone) {
+          deviceZone = (roomMap.zones || []).find(function(entry) {
+            return normalizeLookupValue(entry?.name || entry?.zone || entry?.id) === normalizeLookupValue(dev.snapshot.zone);
+          }) || null;
+        }
+        if (!deviceZone && roomMap && Number.isFinite(Number(dev.x)) && Number.isFinite(Number(dev.y))) {
+          deviceZone = findRoomZoneForGridCell(roomId, clampGridIndex(Number(dev.x), roomMap.gridSize || 20), clampGridIndex(Number(dev.y), roomMap.gridSize || 20));
+        }
         // Fallback: device zone assignment
         if (val == null && dev.snapshot?.zone != null) {
           var devZone = String(dev.snapshot.zone);
@@ -2302,6 +3765,10 @@
             }
           }
         }
+        if (val != null && cfg.mode === 'delta') {
+          var targetValue = resolveTargetForScope(roomId, deviceZone, cfg.key).value;
+          val = Number.isFinite(targetValue) ? (val - targetValue) : null;
+        }
         if (val != null) {
           var t2 = Math.max(0, Math.min(1, (val - scaleMin) / (scaleMax - scaleMin)));
           var c2 = multiLerp(cfg.colors, t2);
@@ -2314,8 +3781,12 @@
       // Show legend
       legend.classList.add('visible');
       document.getElementById('legendTitle').textContent = cfg.label;
-      document.getElementById('legendMin').textContent = (Math.round(scaleMin * 10) / 10) + cfg.unit;
-      document.getElementById('legendMax').textContent = (Math.round(scaleMax * 10) / 10) + cfg.unit;
+      document.getElementById('legendMin').textContent = cfg.mode === 'delta'
+        ? formatSignedMetric(scaleMin, cfg.unit)
+        : ((Math.round(scaleMin * 10) / 10) + cfg.unit);
+      document.getElementById('legendMax').textContent = cfg.mode === 'delta'
+        ? formatSignedMetric(scaleMax, cfg.unit)
+        : ((Math.round(scaleMax * 10) / 10) + cfg.unit);
       const gradBar = document.getElementById('legendGradient');
       const stops = cfg.colors.map((c, i) => {
         const pct = (i / (cfg.colors.length - 1)) * 100;
@@ -2326,8 +3797,10 @@
       // Also show current values on legend
       if (allVals.length > 0) {
         const avg = allVals.reduce((a, b) => a + b, 0) / allVals.length;
-        const isAutoScaled = (scaleMin !== cfg.min || scaleMax !== cfg.max);
-        document.getElementById('legendTitle').textContent = cfg.label + ' (avg: ' + avg.toFixed(1) + cfg.unit + (isAutoScaled ? ', zoomed' : '') + ')';
+        const isAutoScaled = (cfg.mode !== 'delta' && (scaleMin !== cfg.min || scaleMax !== cfg.max));
+        document.getElementById('legendTitle').textContent = cfg.mode === 'delta'
+          ? (cfg.label + ' (avg: ' + formatSignedMetric(avg, cfg.unit) + ')')
+          : (cfg.label + ' (avg: ' + avg.toFixed(1) + cfg.unit + (isAutoScaled ? ', zoomed' : '') + ')');
       }
       refreshSelectionVisuals();
     }
@@ -2392,15 +3865,44 @@
         if (!isSensorLikeDevice(dev)) return;
         const exact = getOverlayMetricForDevice(dev, metricKey);
         if (exact.value != null && Number.isFinite(Number(dev.x)) && Number.isFinite(Number(dev.y))) {
+          const gridX = clampGridIndex(Number(dev.x), geom.gridSize);
+          const gridY = clampGridIndex(Number(dev.y), geom.gridSize);
+          let zone = null;
+          if (dev.snapshot?.zone) {
+            zone = (geom.map.zones || []).find(function(entry) {
+              return normalizeLookupValue(entry?.name || entry?.zone || entry?.id) === normalizeLookupValue(dev.snapshot.zone);
+            }) || null;
+          }
+          if (!zone) zone = findRoomZoneForGridCell(roomId, gridX, gridY);
+          const target = resolveTargetForScope(roomId, zone, metricKey);
+          const pointValue = S.overlayMode === 'delta'
+            ? (target.value != null ? (Number(exact.value) - target.value) : null)
+            : Number(exact.value);
+          if (pointValue == null) return;
           points.push({
             gx: Number(dev.x) / geom.gridSize,
             gz: Number(dev.y) / geom.gridSize,
-            val: Number(exact.value),
-            source: exact.source || 'env-sources'
+            val: Number(pointValue),
+            source: S.overlayMode === 'delta' ? target.source : (exact.source || 'env-sources'),
+            target: target.value,
           });
         }
       });
       return points;
+    }
+
+    function getZoneOverlayMetricValue(zoneData, roomId, zone, metricKey) {
+      const frame = getZoneFrameData(zoneData);
+      if (!frame) return null;
+      const metricValue = metricKey === 'temp' ? frame.temp
+        : metricKey === 'humidity' ? frame.humidity
+        : metricKey === 'co2' ? frame.co2
+        : frame.vpd;
+      if (!Number.isFinite(metricValue)) return null;
+      if (S.overlayMode !== 'delta') return metricValue;
+      const target = resolveTargetForScope(roomId, zone, metricKey);
+      if (!Number.isFinite(target.value)) return null;
+      return metricValue - target.value;
     }
 
     function interpolateHeatmapMetric(points, fx, fz) {
@@ -2507,11 +4009,32 @@
     // ---- Farm stats ------------------------------------------
     function renderFarmStats() {
       const el = document.getElementById('farmStats');
-      const activeGroups = S.groups.filter(g => ['active', 'growing', 'deployed'].includes((g.status || '').toLowerCase()));
+      const activeGroups = getScopedActiveGroups({});
       const totalTrays = activeGroups.reduce((s, g) => s + (Number(g.trays) || 0), 0);
+      const totalPlants = activeGroups.reduce(function(sum, group) {
+        return sum + getGroupPlantCount(group);
+      }, 0);
+      const targetSummary = aggregateEnvironmentalTargets(activeGroups);
 
       let avgTemp = null, avgHumidity = null, avgVpd = null;
-      const vals = Object.values(S.zoneDataMap).map(getZoneFrameData).filter(Boolean);
+      const roomZones = S.roomFilter !== '__all' ? (S.roomMaps[S.roomFilter]?.zones || []) : [];
+      const vals = Object.entries(S.zoneDataMap)
+        .filter(function(entry) {
+          if (S.roomFilter === '__all') return true;
+          const zoneId = entry[0];
+          const zoneName = entry[1]?.name;
+          return roomZones.some(function(zone) {
+            const refs = [zone?.id, zone?.zoneId, zone?.name, zone?.zone, getZoneLookupKey(zone)];
+            return refs.some(function(ref) {
+              const normalizedRef = normalizeLookupValue(ref);
+              return normalizedRef && [zoneId, zoneName].some(function(value) {
+                return normalizeLookupValue(value) === normalizedRef;
+              });
+            });
+          });
+        })
+        .map(function(entry) { return getZoneFrameData(entry[1]); })
+        .filter(Boolean);
       if (vals.length > 0) {
         const temps = vals.map(v => v.temp).filter(v => v != null);
         const hums = vals.map(v => v.humidity).filter(v => v != null);
@@ -2522,11 +4045,16 @@
       }
 
       let html = '';
+  if (targetSummary.temp != null) html += '<div class="stat-chip target-chip"><div class="chip-value">' + targetSummary.temp.toFixed(1) + '\u00b0C</div><div class="chip-label">Target Temp</div></div>';
+  if (targetSummary.humidity != null) html += '<div class="stat-chip target-chip"><div class="chip-value">' + Math.round(targetSummary.humidity) + '%</div><div class="chip-label">Target RH Max</div></div>';
+  if (targetSummary.vpd != null) html += '<div class="stat-chip target-chip"><div class="chip-value">' + targetSummary.vpd.toFixed(2) + '</div><div class="chip-label">Target VPD</div></div>';
+  if (targetSummary.co2 != null) html += '<div class="stat-chip target-chip"><div class="chip-value">' + Math.round(targetSummary.co2) + '</div><div class="chip-label">Target CO2</div></div>';
       if (avgTemp != null) html += '<div class="stat-chip"><div class="chip-value">' + avgTemp + '\u00b0C</div><div class="chip-label">Avg Temp</div></div>';
       if (avgHumidity != null) html += '<div class="stat-chip"><div class="chip-value">' + avgHumidity + '%</div><div class="chip-label">Avg RH</div></div>';
       if (avgVpd != null) html += '<div class="stat-chip"><div class="chip-value">' + avgVpd + '</div><div class="chip-label">VPD kPa</div></div>';
       html += '<div class="stat-chip"><div class="chip-value">' + activeGroups.length + '</div><div class="chip-label">Active Groups</div></div>';
       html += '<div class="stat-chip"><div class="chip-value">' + totalTrays + '</div><div class="chip-label">Trays</div></div>';
+      html += '<div class="stat-chip"><div class="chip-value">' + totalPlants + '</div><div class="chip-label">Plants</div></div>';
       el.innerHTML = html;
     }
 
@@ -2539,11 +4067,11 @@
 
       S.raycaster.setFromCamera(S.mouse, S.camera);
       const targets = [
-        ...S.meshes.trays.filter(m => m.userData.type === 'group'),
-        ...S.meshes.sensors.filter(m => m.userData.type === 'sensor'),
-        ...S.meshes.equipment.filter(m => m.userData.type === 'equipment' || m.userData.type === 'light'),
+        ...S.meshes.trays.filter(m => m.userData.type === 'group' && isMeshInteractable(m)),
+        ...S.meshes.sensors.filter(m => m.userData.type === 'sensor' && isMeshInteractable(m)),
+        ...S.meshes.equipment.filter(m => (m.userData.type === 'equipment' || m.userData.type === 'light') && isMeshInteractable(m)),
         ...S.heatmapOverlays,
-        ...S.meshes.zones.filter(m => m.isMesh && m.userData.type === 'zone' && (!m.material || m.material.visible !== false)),
+        ...S.meshes.zones.filter(m => m.isMesh && m.userData.type === 'zone' && isMeshInteractable(m) && (!m.material || m.material.visible !== false)),
         ...S.meshes.floors,
       ];
       const hits = S.raycaster.intersectObjects(targets);
@@ -2583,10 +4111,7 @@
           const zHovD = activeZoneUd.zScaleZ ? Math.abs(((activeZoneUd.zone.y2 ?? 0) - (activeZoneUd.zone.y1 ?? 0)) * activeZoneUd.zScaleZ).toFixed(1) : '?';
           const zData = getZoneFrameData(S.zoneDataMap[activeZoneUd.zoneId] || findZoneDataByName(activeZoneUd.zone.name || activeZoneUd.zone.zone));
           if (cell && (cell.temp != null || cell.humidity != null || cell.vpd != null)) {
-            sub = 'Grid ' + cell.gridX + ', ' + cell.gridY
-              + ' | ' + (cell.temp != null ? cell.temp.toFixed(1) : '--') + '°C'
-              + ' | ' + (cell.humidity != null ? Math.round(cell.humidity) : '--') + '% RH'
-              + ' | VPD ' + (cell.vpd != null ? cell.vpd.toFixed(2) : '--');
+            sub = buildCellHoverSummary(cell);
           } else {
             sub = zHovW + 'm x ' + zHovD + 'm' + (zData ? ' | ' + (zData.temp?.toFixed(1) ?? '--') + '\u00b0C | ' + Math.round(zData.humidity ?? 0) + '% | VPD ' + (zData.vpd?.toFixed(2) ?? '--') : '');
           }
@@ -2596,13 +4121,12 @@
           showZoneHud(activeZoneUd.zoneId, activeZoneUd.zone, cell);
         } else if (ud.type === 'room' || ud.type === 'heatmap-overlay') {
           title = ud.room?.name || 'Room';
-          sub = cell ? ('Grid ' + cell.gridX + ', ' + cell.gridY + ' | ' + (cell.temp != null ? cell.temp.toFixed(1) : '--') + '°C | ' + (cell.humidity != null ? Math.round(cell.humidity) : '--') + '% RH | VPD ' + (cell.vpd != null ? cell.vpd.toFixed(2) : '--')) : 'No data';
+          sub = cell ? buildCellHoverSummary(cell) : 'No data';
         }
 
         document.getElementById('htTitle').textContent = title;
         document.getElementById('htSub').textContent = sub;
-        tip.style.left = e.clientX + 'px';
-        tip.style.top = (e.clientY - rect.top) + 'px';
+        positionHoverTip(e.clientX, e.clientY);
         tip.classList.add('visible');
         document.body.style.cursor = 'pointer';
         if (!activeZoneUd && S.hoveredZone) { S.hoveredZone = null; S.hoveredZoneObject = null; S.hoveredHeatmapCell = null; hud.classList.remove('visible'); }
@@ -2630,7 +4154,7 @@
       Object.keys(metricMap).forEach(function(envKey) {
         var src = getMetricSourceForDevice(envZones, envKey, deviceLike);
         if (src && (src.current != null || src.value != null || Array.isArray(src.history))) {
-          var value = getHistoryValueForFrame(src.history, getPlaybackFallbackValue(src.current ?? src.value));
+          var value = getMetricValueForFrame(src.current ?? src.value, src.history);
           if (value != null) result[metricMap[envKey]] = Number(value);
         }
       });
@@ -2654,9 +4178,9 @@
       if (cellData) {
         html += '<div class="hud-row"><span class="hud-label">Grid Box</span><span class="hud-value">' + cellData.gridX + ', ' + cellData.gridY + '</span></div>';
         html += '<div class="hud-row"><span class="hud-label">Position</span><span class="hud-value">' + cellData.metersX + 'm x ' + cellData.metersY + 'm</span></div>';
-        if (cellData.temp != null) html += '<div class="hud-row"><span class="hud-label">Cell Temp</span><span class="hud-value ' + tempClass(cellData.temp) + '">' + cellData.temp.toFixed(1) + '\u00b0C</span></div>';
-        if (cellData.humidity != null) html += '<div class="hud-row"><span class="hud-label">Cell RH</span><span class="hud-value ' + humidityClass(cellData.humidity) + '">' + Math.round(cellData.humidity) + '%</span></div>';
-        if (cellData.vpd != null) html += '<div class="hud-row"><span class="hud-label">Cell VPD</span><span class="hud-value ' + vpdClass(cellData.vpd) + '">' + cellData.vpd.toFixed(2) + ' kPa</span></div>';
+        if (cellData.temp != null) html += '<div class="hud-row"><span class="hud-label">' + getCellMetricLabel('temp') + '</span><span class="hud-value ' + getCellMetricClass('temp', cellData.temp) + '">' + formatCellMetricValue('temp', cellData.temp) + '</span></div>';
+        if (cellData.humidity != null) html += '<div class="hud-row"><span class="hud-label">' + getCellMetricLabel('humidity') + '</span><span class="hud-value ' + getCellMetricClass('humidity', cellData.humidity) + '">' + formatCellMetricValue('humidity', cellData.humidity) + '</span></div>';
+        if (cellData.vpd != null) html += '<div class="hud-row"><span class="hud-label">' + getCellMetricLabel('vpd') + '</span><span class="hud-value ' + getCellMetricClass('vpd', cellData.vpd) + '">' + formatCellMetricValue('vpd', cellData.vpd) + '</span></div>';
       }
       if (data) {
         const rows = [];
@@ -2698,6 +4222,7 @@
       var floorMeshes = S.meshes.equipment.filter(function(m) {
         if (m === mesh) return false;
         if (!m.userData) return false;
+        if (!isMeshInteractable(m)) return false;
         // Only block against floor-level items (Y < 1.5), skip ceiling fans
         if (m.userData.type === 'fanArrow') return false;
         if (m.position && m.position.y > 1.5) return false;
@@ -2706,6 +4231,7 @@
       }).concat(S.meshes.trays.filter(function(m) {
         if (m === mesh) return false;
         if (!m.userData || m.userData.type !== 'group') return false;
+        if (!isMeshInteractable(m)) return false;
         var mRoom = m.userData.roomId || (m.userData.room ? m.userData.room.id : '');
         return mRoom === roomId;
       }));
@@ -2729,6 +4255,7 @@
 
     function isSelectableMesh(mesh) {
       if (!mesh || !mesh.userData) return false;
+      if (mesh.visible === false) return false;
       return mesh.userData.type === 'sensor' || mesh.userData.type === 'equipment' || mesh.userData.type === 'group';
     }
 
@@ -2895,6 +4422,7 @@
     async function saveDragSelection(meshes) {
       var moved = (meshes || []).filter(isSelectableMesh);
       if (moved.length === 0) return;
+      pushUndoSnapshot('move ' + moved.length + ' items');
       var roomIdsToSave = new Set();
       var groupsChanged = false;
 
@@ -2905,17 +4433,29 @@
           var scX = ud.scaleX || 1;
           var scZ = ud.scaleZ || 1;
           var offX = ud.offsetX || 0;
-          dev.x = Math.round((mesh.position.x - offX) / scX);
-          dev.y = Math.round(mesh.position.z / scZ);
-          if (dev.z != null || mesh.position.y > 0) dev.z = parseFloat(mesh.position.y.toFixed(1));
           var roomId = getMeshRoomId(mesh);
+          var targetDev = ensurePersistedRoomDevice(roomId, dev) || dev;
+          var nextX = Math.round((mesh.position.x - offX) / scX);
+          var nextY = Math.round(mesh.position.z / scZ);
+          var nextZ = parseFloat(mesh.position.y.toFixed(1));
+          dev.x = nextX;
+          dev.y = nextY;
+          targetDev.x = nextX;
+          targetDev.y = nextY;
+          if (dev.z != null || mesh.position.y > 0) {
+            dev.z = nextZ;
+            targetDev.z = nextZ;
+          }
           if (roomId && S.roomMaps[roomId]) {
             var map = S.roomMaps[roomId];
             var detectedZone = (map.zones || []).find(function(z) {
-              return dev.x >= (z.x1 || 0) && dev.x <= (z.x2 || 999) && dev.y >= (z.y1 || 0) && dev.y <= (z.y2 || 999);
+              return nextX >= (z.x1 || 0) && nextX <= (z.x2 || 999) && nextY >= (z.y1 || 0) && nextY <= (z.y2 || 999);
             });
-            if (detectedZone && dev.snapshot) {
+            if (detectedZone) {
+              if (!dev.snapshot) dev.snapshot = {};
+              if (!targetDev.snapshot) targetDev.snapshot = {};
               dev.snapshot.zone = detectedZone.zone || detectedZone.name;
+              targetDev.snapshot.zone = detectedZone.zone || detectedZone.name;
             }
             roomIdsToSave.add(roomId);
           }
@@ -2949,12 +4489,7 @@
 
       if (groupsChanged) {
         try {
-          var groupsResp = await authFetch('/data/groups.json', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(S.groups)
-          });
-          if (!groupsResp.ok) saveFailed = true;
+          await persistGroupsData(S.groups);
         } catch (err) {
           console.error('[3D] Multi-drag group save error:', err);
           saveFailed = true;
@@ -2991,22 +4526,31 @@
 
     function onPointerDown(e) {
       if (!S.editMode) return;
-      if (e.shiftKey || e.metaKey || e.ctrlKey) return;
+      if (e.shiftKey || e.metaKey || e.ctrlKey) {
+        beginSelectionBox(e);
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
       var container = document.getElementById('viewer-container');
       var rect = container.getBoundingClientRect();
       S.mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
       S.mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
       S.raycaster.setFromCamera(S.mouse, S.camera);
       var draggable = []
-        .concat(S.meshes.zones.filter(function(m) { return m.isMesh && m.userData.type === 'zone'; }))
-        .concat(S.meshes.sensors.filter(function(m) { return m.userData.type === 'sensor'; }))
-        .concat(S.meshes.equipment.filter(function(m) { return m.userData.type === 'equipment'; }))
-        .concat(S.meshes.trays.filter(function(m) { return m.userData.type === 'group'; }));
+        .concat(S.meshes.zones.filter(function(m) { return m.isMesh && m.userData.type === 'zone' && isMeshInteractable(m); }))
+        .concat(S.meshes.sensors.filter(function(m) { return m.userData.type === 'sensor' && isMeshInteractable(m); }))
+        .concat(S.meshes.equipment.filter(function(m) { return m.userData.type === 'equipment' && isMeshInteractable(m); }))
+        .concat(S.meshes.trays.filter(function(m) { return m.userData.type === 'group' && isMeshInteractable(m); }));
       var hits = S.raycaster.intersectObjects(draggable);
       if (hits.length > 0) {
         var hitMesh = hits[0].object;
         if (isSelectableMesh(hitMesh) && !isMeshSelected(hitMesh)) {
-          setSelection([hitMesh], { silent: true });
+          if (canJoinSelection(hitMesh) && S.selectedMeshes.length > 0) {
+            setSelection(S.selectedMeshes.concat(hitMesh), { silent: true });
+          } else {
+            setSelection([hitMesh], { silent: true });
+          }
         }
         S.dragTarget = hitMesh;
         S.dragSelection = isSelectableMesh(hitMesh) && isMeshSelected(hitMesh) && S.selectedMeshes.length > 1
@@ -3024,6 +4568,14 @@
     }
 
     function onPointerMove(e) {
+      if (S.selectionBox.active) {
+        var container = document.getElementById('viewer-container');
+        var rect = container.getBoundingClientRect();
+        S.selectionBox.endX = e.clientX - rect.left;
+        S.selectionBox.endY = e.clientY - rect.top;
+        updateSelectionBoxOverlay();
+        return;
+      }
       if (!S.dragTarget) {
         onMouseMove(e);
         return;
@@ -3102,6 +4654,10 @@
     }
 
     function onPointerUp(e) {
+      if (S.selectionBox.active) {
+        finishSelectionBox();
+        return;
+      }
       if (!S.dragTarget) return;
       S.controls.enabled = true;
       document.getElementById('farmCanvas').classList.remove('dragging');
@@ -3119,23 +4675,38 @@
 
     async function saveDragPosition(mesh) {
       var ud = mesh.userData;
+      if (ud && (ud.type === 'sensor' || ud.type === 'equipment' || ud.type === 'zone' || ud.type === 'group')) {
+        pushUndoSnapshot('move ' + (ud.type === 'zone' ? (ud.zone?.name || 'zone') : ud.type === 'group' ? (ud.group?.name || 'group') : (ud.device?.snapshot?.name || 'device')));
+      }
       if (ud.type === 'sensor' || ud.type === 'equipment') {
-        var dev = ud.device;
+          var dev = ud.device;
         var scX = ud.scaleX || 1;
         var scZ = ud.scaleZ || 1;
         var offX = ud.offsetX || 0;
-        dev.x = Math.round((mesh.position.x - offX) / scX);
-        dev.y = Math.round(mesh.position.z / scZ);
-        if (dev.z != null || mesh.position.y > 0) dev.z = parseFloat(mesh.position.y.toFixed(1));
+          var roomId = ud.roomId || (ud.room ? ud.room.id : '');
+          var targetDev = ensurePersistedRoomDevice(roomId, dev) || dev;
+          var nextX = Math.round((mesh.position.x - offX) / scX);
+          var nextY = Math.round(mesh.position.z / scZ);
+          var nextZ = parseFloat(mesh.position.y.toFixed(1));
+          dev.x = nextX;
+          dev.y = nextY;
+          targetDev.x = nextX;
+          targetDev.y = nextY;
+          if (dev.z != null || mesh.position.y > 0) {
+            dev.z = nextZ;
+            targetDev.z = nextZ;
+          }
         // Auto-detect zone from new grid position
-        var roomId = ud.roomId || (ud.room ? ud.room.id : '');
         if (roomId && S.roomMaps[roomId]) {
           var map = S.roomMaps[roomId];
           var detectedZone = (map.zones || []).find(function(z) {
-            return dev.x >= (z.x1 || 0) && dev.x <= (z.x2 || 999) && dev.y >= (z.y1 || 0) && dev.y <= (z.y2 || 999);
+              return nextX >= (z.x1 || 0) && nextX <= (z.x2 || 999) && nextY >= (z.y1 || 0) && nextY <= (z.y2 || 999);
           });
-          if (detectedZone && dev.snapshot) {
-            dev.snapshot.zone = detectedZone.zone || detectedZone.name;
+            if (detectedZone) {
+              if (!dev.snapshot) dev.snapshot = {};
+              if (!targetDev.snapshot) targetDev.snapshot = {};
+              dev.snapshot.zone = detectedZone.zone || detectedZone.name;
+              targetDev.snapshot.zone = detectedZone.zone || detectedZone.name;
           }
           try {
             await persistRoomMap(roomId);
@@ -3148,6 +4719,8 @@
       } else if (ud.type === 'zone') {
         // Zone drag: convert new center back to grid bounds and save
         var zone = ud.zone;
+        var zRId = ud.room?.id;
+        var targetZone = ensurePersistedZone(zRId, zone, ud.zoneId) || zone;
         var zGridSz = ud.gridSize || 20;
         var zSX = ud.zScaleX || 1;
         var zSZ = ud.zScaleZ || 1;
@@ -3167,7 +4740,7 @@
         if (ny2 > zGridSz) { ny1 -= (ny2 - zGridSz); ny2 = zGridSz; }
         nx1 = Math.max(0, nx1); ny1 = Math.max(0, ny1);
         zone.x1 = nx1; zone.y1 = ny1; zone.x2 = nx2; zone.y2 = ny2;
-        var zRId = ud.room?.id;
+        targetZone.x1 = nx1; targetZone.y1 = ny1; targetZone.x2 = nx2; targetZone.y2 = ny2;
         if (zRId && S.roomMaps[zRId]) {
           try {
             await persistRoomMap(zRId);
@@ -3225,10 +4798,10 @@
       const targets = [
         ...S.heatmapOverlays,
         ...S.meshes.floors,
-        ...S.meshes.trays.filter(m => m.userData.type === 'group'),
-        ...S.meshes.sensors.filter(m => m.userData.type === 'sensor'),
-        ...S.meshes.equipment.filter(m => m.userData.type === 'equipment' || m.userData.type === 'light'),
-        ...S.meshes.zones.filter(m => m.isMesh && m.userData.type === 'zone' && (!m.material || m.material.visible !== false)),
+        ...S.meshes.trays.filter(m => m.userData.type === 'group' && isMeshInteractable(m)),
+        ...S.meshes.sensors.filter(m => m.userData.type === 'sensor' && isMeshInteractable(m)),
+        ...S.meshes.equipment.filter(m => (m.userData.type === 'equipment' || m.userData.type === 'light') && isMeshInteractable(m)),
+        ...S.meshes.zones.filter(m => m.isMesh && m.userData.type === 'zone' && isMeshInteractable(m) && (!m.material || m.material.visible !== false)),
       ];
       const hits = S.raycaster.intersectObjects(targets);
       if (S.editMode) {
@@ -3243,8 +4816,12 @@
             toggleSelection(hitMesh);
             return;
           }
-          if (!isMeshSelected(hitMesh) || S.selectedMeshes.length > 1) {
-            setSelection([hitMesh], { silent: true });
+          if (!isMeshSelected(hitMesh)) {
+            if (canJoinSelection(hitMesh) && S.selectedMeshes.length > 0) {
+              setSelection(S.selectedMeshes.concat(hitMesh), { silent: true });
+            } else {
+              setSelection([hitMesh], { silent: true });
+            }
           }
           showDetailPanel(hitMesh.userData);
           return;
@@ -3281,7 +4858,10 @@
 
       if (ud.type === 'group') {
         const g = ud.group;
-        const crop = g.crop || g.recipe || 'Unknown';
+        const lifecycle = getGroupLifecycle(g);
+        const plantCount = getGroupPlantCount(g, lifecycle);
+        const visualState = getGroupVisualState(g);
+        const crop = lifecycle.cropName;
         const d = ud.dims;
         const gId = g.id;
         const gName = g.name || g.id;
@@ -3294,8 +4874,8 @@
         });
         const similarCount = similarGroups.length;
 
-        // Build crop dropdown options from crop registry
-        const cropKeys = Object.keys(S.cropRegistry || {});
+        // Build crop dropdown options from the canonical lighting recipe catalog.
+        const cropKeys = getAvailableRecipeCropNames();
         let cropOptions = '<option value="">-- Select Crop --</option>';
         cropKeys.forEach(c => {
           cropOptions += '<option value="' + c + '"' + (crop === c ? ' selected' : '') + '>' + c + '</option>';
@@ -3306,15 +4886,23 @@
 
         let html = '<h3>' + gName + '</h3>';
         html += '<div class="dp-label">Location</div><div class="dp-value">' + (g.room || g.roomId || '--') + ' / ' + (g.zone || '--') + '</div>';
+        const plantingMetricLabel = lifecycle.systemType === 'zipgrow' ? 'Locations/Tower' : 'Plant Sites';
+        const seedDateValue = lifecycle.seedDate || '';
         html += '<div class="dp-grid">';
         html += '<div class="dp-metric"><div class="metric-val">' + (g.trays || 0) + '</div><div class="metric-lbl">Trays</div></div>';
-        html += '<div class="dp-metric"><div class="metric-val">' + (g.plants || 0) + '</div><div class="metric-lbl">Plants</div></div>';
+        html += '<div class="dp-metric"><div class="metric-val">' + plantCount + '</div><div class="metric-lbl">Plants</div></div>';
+        if (lifecycle.plantingLocations != null) {
+          html += '<div class="dp-metric"><div class="metric-val">' + lifecycle.plantingLocations + '</div><div class="metric-lbl">' + plantingMetricLabel + '</div></div>';
+        }
+        if (lifecycle.forecastHarvestDate) {
+          html += '<div class="dp-metric"><div class="metric-val">' + formatDateLabel(lifecycle.forecastHarvestDate) + '</div><div class="metric-lbl">Forecast Harvest</div></div>';
+        }
         html += '</div>';
         if (similarCount > 1) {
           html += '<div class="dp-label">Similar Units</div><div class="dp-value" style="color:#818cf8">' + similarCount + ' x ' + nameBase + '</div>';
         }
 
-        const systemType = ud.systemType || inferGroupSystemType(g);
+        const systemType = ud.systemType || lifecycle.systemType || inferGroupSystemType(g);
         const systemLabel = formatGroupSystemLabel(systemType);
         const airflowNote = getGroupAirflowNote(systemType, ud.rackLevels || getGroupRackLevels(g, d.height, Number(g.trays) || 1));
         html += '<div class="dp-label">System Profile</div><div class="dp-value">' + systemLabel + ' | ' + airflowNote + '</div>';
@@ -3322,6 +4910,10 @@
         // Editable crop + status
         html += '<div class="dp-section"><div class="dp-label">Crop Assignment</div>';
         html += '<div class="dp-input-row"><select id="grpCrop" style="flex:1">' + cropOptions + '</select></div></div>';
+
+        html += '<div class="dp-section"><div class="dp-label">Seed Date</div>';
+        html += '<div class="dp-input-row"><input type="date" id="grpSeedDate" value="' + seedDateValue + '" style="flex:1; width:auto"></div>';
+        html += '<div class="dp-value" style="margin-top:0.35rem">Forecast Harvest: ' + formatDateLabel(lifecycle.forecastHarvestDate) + (lifecycle.daysRemaining != null ? ' | ' + lifecycle.daysRemaining + ' days remaining' : '') + '</div></div>';
 
         html += '<div class="dp-section"><div class="dp-label">Status</div>';
         html += '<div class="dp-input-row"><select id="grpStatus" style="flex:1">';
@@ -3331,6 +4923,7 @@
           html += '<option value="' + st + '"' + (curStatus === st ? ' selected' : '') + '>' + st.charAt(0).toUpperCase() + st.slice(1) + '</option>';
         });
         html += '</select></div></div>';
+        html += '<div class="dp-value" style="margin-top:-0.45rem; margin-bottom:0.9rem; color:' + visualState.badgeColor + '">Rack Color State: ' + visualState.label + '</div>';
 
         // Editable dimensions
         html += '<div class="dp-section"><div class="dp-label">Equipment Dimensions</div>';
@@ -3362,16 +4955,37 @@
         content.innerHTML = html;
 
         // Save handler for single group
+        function resolveEditedSeedDate(target, selectedCrop) {
+          const rawSeedDate = normalizeDateOnly(document.getElementById('grpSeedDate')?.value);
+          const existingSeedDate = normalizeDateOnly(target?.planConfig?.anchor?.seedDate || target?.planConfig?.seedDate || target?.seedDate || target?.seed_date);
+          if (rawSeedDate) return rawSeedDate;
+          if (selectedCrop && !existingSeedDate) return getTodayIsoDate();
+          return existingSeedDate;
+        }
+
         function applyGroupEdits(target) {
           const newCrop = document.getElementById('grpCrop').value;
           const newStatus = document.getElementById('grpStatus').value;
+          const seedDate = resolveEditedSeedDate(target, newCrop || target.crop || target.recipe || target.plan);
           if (newCrop) target.crop = newCrop;
           if (newStatus) target.status = newStatus;
+          if (seedDate) {
+            target.planConfig = target.planConfig || {};
+            target.planConfig.anchor = target.planConfig.anchor || {};
+            target.planConfig.anchor.seedDate = seedDate;
+          } else if (target.planConfig?.anchor?.seedDate) {
+            delete target.planConfig.anchor.seedDate;
+          }
+          const updatedLifecycle = getGroupLifecycle(target, newCrop || target.crop || target.recipe || target.plan, seedDate);
+          const updatedPlantCount = getGroupPlantCount(target, updatedLifecycle, newCrop || target.crop || target.recipe || target.plan);
+          target.plants = updatedPlantCount;
+          target.estimated_plant_count = updatedPlantCount;
           target.lastModified = new Date().toISOString();
         }
 
         document.getElementById('saveGrpOne').addEventListener('click', async () => {
           const btn = document.getElementById('saveGrpOne');
+          pushUndoSnapshot('update group ' + (g.name || nameBase || 'group'));
           applyGroupEdits(g);
           // Also save dimensions
           const l = parseFloat(document.getElementById('dimL').value) || d.length;
@@ -3398,6 +5012,7 @@
         const bulkGrpBtn = document.getElementById('saveGrpAll');
         if (bulkGrpBtn) {
           bulkGrpBtn.addEventListener('click', async () => {
+            pushUndoSnapshot('bulk update ' + similarCount + ' groups');
             const newCrop = document.getElementById('grpCrop').value;
             const newStatus = document.getElementById('grpStatus').value;
             const l = parseFloat(document.getElementById('dimL').value) || d.length;
@@ -3406,9 +5021,7 @@
             const ori = document.getElementById('lightOri').value;
             let updated = 0;
             for (const sg of similarGroups) {
-              if (newCrop) sg.crop = newCrop;
-              if (newStatus) sg.status = newStatus;
-              sg.lastModified = new Date().toISOString();
+              applyGroupEdits(sg);
               const sgId = getGroupKey(sg);
               if (sgId) S.groupDimensions[sgId] = { length: l, width: w, height: h, lightOrientation: ori };
               sg.length = l; sg.width = w; sg.height = h; sg.lightOrientation = ori;
@@ -3442,9 +5055,9 @@
         if (cellData) {
           html += '<div class="dp-label">Grid Box</div><div class="dp-value">' + cellData.gridX + ', ' + cellData.gridY + ' at ' + cellData.metersX + 'm x ' + cellData.metersY + 'm</div>';
           html += '<div class="dp-grid">';
-          if (cellData.temp != null) html += '<div class="dp-metric"><div class="metric-val">' + cellData.temp.toFixed(1) + '\u00b0</div><div class="metric-lbl">Cell Temp</div></div>';
-          if (cellData.humidity != null) html += '<div class="dp-metric"><div class="metric-val">' + Math.round(cellData.humidity) + '%</div><div class="metric-lbl">Cell RH</div></div>';
-          if (cellData.vpd != null) html += '<div class="dp-metric"><div class="metric-val">' + cellData.vpd.toFixed(2) + '</div><div class="metric-lbl">Cell VPD</div></div>';
+          if (cellData.temp != null) html += '<div class="dp-metric"><div class="metric-val">' + formatCellMetricValue('temp', cellData.temp) + '</div><div class="metric-lbl">' + getCellMetricLabel('temp') + '</div></div>';
+          if (cellData.humidity != null) html += '<div class="dp-metric"><div class="metric-val">' + formatCellMetricValue('humidity', cellData.humidity) + '</div><div class="metric-lbl">' + getCellMetricLabel('humidity') + '</div></div>';
+          if (cellData.vpd != null) html += '<div class="dp-metric"><div class="metric-val">' + formatCellMetricValue('vpd', cellData.vpd) + '</div><div class="metric-lbl">' + getCellMetricLabel('vpd') + '</div></div>';
           html += '</div>';
         }
 
@@ -3463,10 +5076,31 @@
             html += '<div class="dp-section"><div class="dp-label">Humidity (24h)</div><div class="dp-sparkline"><canvas id="sparkHum" width="260" height="40"></canvas></div></div>';
           }
           if (data.groups.length > 0) {
-            html += '<div class="dp-section"><div class="dp-label">Growing Groups (' + data.groups.length + ')</div>';
+            const groupCount = data.groups.length;
+            const groupTrayTotal = data.groups.reduce(function(sum, group) { return sum + (Number(group.trays) || 0); }, 0);
+            const groupsExpandedByDefault = groupCount <= 3;
+            html += '<div class="dp-section">';
+            html += '<button type="button" class="dp-collapsible-toggle" id="toggleZoneGroups" aria-expanded="' + (groupsExpandedByDefault ? 'true' : 'false') + '">';
+            html += '<span class="dp-collapsible-title">Growing Groups (' + groupCount + ')</span>';
+            html += '<span class="dp-collapsible-meta">' + groupTrayTotal + ' trays total</span>';
+            html += '<span class="dp-collapsible-icon" id="toggleZoneGroupsLabel">' + (groupsExpandedByDefault ? 'Hide' : 'Show') + '</span>';
+            html += '</button>';
+            html += '<div class="dp-collapsible-body' + (groupsExpandedByDefault ? ' expanded' : '') + '" id="zoneGroupList">';
+            html += '<div class="dp-group-list">';
             data.groups.forEach(g => {
-              html += '<div style="margin-top:4px;padding:5px 7px;background:rgba(99,102,241,0.06);border-radius:6px;font-size:0.78rem;"><strong>' + (g.name || g.id) + '</strong><br><span style="color:#64748b">' + (g.crop || g.recipe || '--') + ' | ' + (g.trays || 0) + ' trays | ' + (g.status || 'active') + '</span></div>';
+              const groupLifecycle = getGroupLifecycle(g);
+              const metaParts = [
+                groupLifecycle.cropName || '--',
+                (g.trays || 0) + ' trays',
+              ];
+              if (groupLifecycle.plantingLocations != null) metaParts.push(groupLifecycle.plantingLocations + ' sites');
+              if (groupLifecycle.seedDate) metaParts.push('Seed ' + formatDateLabel(groupLifecycle.seedDate));
+              if (groupLifecycle.forecastHarvestDate) metaParts.push('Harvest ' + formatDateLabel(groupLifecycle.forecastHarvestDate));
+              metaParts.push(g.status || 'active');
+              html += '<div class="dp-group-item"><strong>' + (g.name || g.id) + '</strong><span class="dp-group-meta">' + metaParts.join(' | ') + '</span></div>';
             });
+            html += '</div>';
+            html += '</div>';
             html += '</div>';
           }
         }
@@ -3497,10 +5131,24 @@
           if (data?.humidityHistory.length > 2) drawSparkline('sparkHum', data.humidityHistory, '#06b6d4');
         });
 
+        var toggleZoneGroups = document.getElementById('toggleZoneGroups');
+        if (toggleZoneGroups) {
+          toggleZoneGroups.addEventListener('click', function() {
+            var list = document.getElementById('zoneGroupList');
+            var label = document.getElementById('toggleZoneGroupsLabel');
+            var nextExpanded = toggleZoneGroups.getAttribute('aria-expanded') !== 'true';
+            toggleZoneGroups.setAttribute('aria-expanded', nextExpanded ? 'true' : 'false');
+            if (list) list.classList.toggle('expanded', nextExpanded);
+            if (label) label.textContent = nextExpanded ? 'Hide' : 'Show';
+          });
+        }
+
         // Zone save handler
         const saveZoneChanges = async function(isAutoSave) {
           var btn = document.getElementById('saveZone');
           var newName = document.getElementById('zoneName').value.trim();
+          var persistedZone = ensurePersistedZone(rId, z, ud.zoneId);
+          var targetZone = persistedZone || z;
           // Convert meters back to grid cells
           var zSaveMap = S.roomMaps[rId];
           var zSaveGrid = zSaveMap?.gridSize || 20;
@@ -3516,11 +5164,29 @@
           newY1 = Math.max(0, Math.min(zSaveGrid, newY1));
           newX2 = Math.max(0, Math.min(zSaveGrid, newX2));
           newY2 = Math.max(0, Math.min(zSaveGrid, newY2));
-          if (newName) { z.name = newName; z.zone = newName; }
-          if (!isNaN(newX1)) z.x1 = newX1;
-          if (!isNaN(newY1)) z.y1 = newY1;
-          if (!isNaN(newX2)) z.x2 = newX2;
-          if (!isNaN(newY2)) z.y2 = newY2;
+          pushUndoSnapshot('update zone ' + zName);
+          if (newName) {
+            targetZone.name = newName;
+            targetZone.zone = newName;
+            z.name = newName;
+            z.zone = newName;
+          }
+          if (!isNaN(newX1)) {
+            targetZone.x1 = newX1;
+            z.x1 = newX1;
+          }
+          if (!isNaN(newY1)) {
+            targetZone.y1 = newY1;
+            z.y1 = newY1;
+          }
+          if (!isNaN(newX2)) {
+            targetZone.x2 = newX2;
+            z.x2 = newX2;
+          }
+          if (!isNaN(newY2)) {
+            targetZone.y2 = newY2;
+            z.y2 = newY2;
+          }
           if (rId && S.roomMaps[rId]) {
             try {
               await persistRoomMap(rId);
@@ -3553,18 +5219,23 @@
         const r = ud.room;
         const rId = r.id;
         const dims = S.roomDimensions[rId] || {};
+        const ambientSettings = getRoomAmbientLighting(rId);
         const map = S.roomMaps[rId];
         const gs = map?.gridSize || 20;
         const rL = dims.length || gs;
         const rW = dims.width  || gs;
         const rH = dims.height || 3.5;
         const roomGroups = S.groups.filter(g => (g.roomId || g.room) === r.id || (g.roomId || g.room) === r.name);
+        const roomPlantTotal = roomGroups.reduce(function(sum, group) {
+          return sum + getGroupPlantCount(group);
+        }, 0);
 
         let html = '<h3>' + (r.name || r.id) + '</h3>';
         html += '<div class="dp-grid">';
         html += '<div class="dp-metric"><div class="metric-val">' + (r.zones || []).length + '</div><div class="metric-lbl">Zones</div></div>';
         html += '<div class="dp-metric"><div class="metric-val">' + roomGroups.length + '</div><div class="metric-lbl">Groups</div></div>';
         html += '<div class="dp-metric"><div class="metric-val">' + roomGroups.reduce((s, g) => s + (Number(g.trays) || 0), 0) + '</div><div class="metric-lbl">Trays</div></div>';
+        html += '<div class="dp-metric"><div class="metric-val">' + roomPlantTotal + '</div><div class="metric-lbl">Plants</div></div>';
         html += '</div>';
 
         // Editable room dimensions
@@ -3573,14 +5244,48 @@
         html += '<label>W</label><input type="number" step="0.5" min="1" id="roomW" value="' + rW + '"><span class="unit">m</span>';
         html += '<label>H</label><input type="number" step="0.1" min="1" id="roomH" value="' + rH + '"><span class="unit">m</span></div>';
         html += '</div>';
-        html += '<button class="dp-save-btn" id="saveRoom">Save Room Dimensions</button>';
+        html += '<div class="dp-section"><div class="dp-label">Ambient Grow Lighting</div>';
+        html += '<div class="dp-input-row"><label>On</label><input type="checkbox" id="roomAmbientEnabled"' + (ambientSettings.enabled ? ' checked' : '') + ' style="width:auto">';
+        html += '<label>Color</label><input type="color" id="roomAmbientColor" value="' + ambientSettings.color + '" style="width:42px; padding:0; height:28px">';
+        html += '<label>Power</label><input type="range" min="0" max="100" step="1" id="roomAmbientIntensity" value="' + ambientSettings.intensity + '" style="width:82px"><span class="unit" id="roomAmbientIntensityValue">' + ambientSettings.intensity + '%</span></div>';
+        html += '<div class="dp-value" id="roomAmbientPreview" style="margin-top:0.45rem; color:' + ambientSettings.color + ';">Ambient lighting ' + (ambientSettings.enabled ? ('enabled at ' + ambientSettings.intensity + '%') : 'disabled') + '</div>';
+        html += '</div>';
+        html += '<button class="dp-save-btn" id="saveRoom">Save Room Settings</button>';
         content.innerHTML = html;
+
+        const updateRoomAmbientPreview = function() {
+          const enabled = document.getElementById('roomAmbientEnabled')?.checked !== false;
+          const intensity = Math.round(clampAmbientLightingValue(document.getElementById('roomAmbientIntensity')?.value, 0, 100));
+          const color = normalizeAmbientLightingHex(document.getElementById('roomAmbientColor')?.value, DEFAULT_ROOM_AMBIENT_LIGHTING.color);
+          const intensityLabel = document.getElementById('roomAmbientIntensityValue');
+          const preview = document.getElementById('roomAmbientPreview');
+          if (intensityLabel) intensityLabel.textContent = intensity + '%';
+          if (preview) {
+            preview.style.color = color;
+            preview.textContent = enabled ? ('Ambient lighting enabled at ' + intensity + '% (' + color.toUpperCase() + ')') : 'Ambient lighting disabled';
+          }
+        };
+        ['roomAmbientEnabled', 'roomAmbientColor', 'roomAmbientIntensity'].forEach(function(id) {
+          const el = document.getElementById(id);
+          if (!el) return;
+          el.addEventListener('input', updateRoomAmbientPreview);
+          el.addEventListener('change', updateRoomAmbientPreview);
+        });
+        updateRoomAmbientPreview();
 
         const saveRoomChanges = async function(isAutoSave) {
           const l = parseFloat(document.getElementById('roomL').value) || rL;
           const w = parseFloat(document.getElementById('roomW').value) || rW;
           const h = parseFloat(document.getElementById('roomH').value) || rH;
+          const ambientLighting = normalizeRoomAmbientLighting({
+            enabled: document.getElementById('roomAmbientEnabled')?.checked,
+            color: document.getElementById('roomAmbientColor')?.value,
+            intensity: document.getElementById('roomAmbientIntensity')?.value,
+          });
+          pushUndoSnapshot('update room ' + (r.name || r.id || 'room'));
           S.roomDimensions[rId] = { length: l, width: w, height: h };
+          if (!S.roomMaps[rId]) S.roomMaps[rId] = {};
+          S.roomMaps[rId].ambientLighting = ambientLighting;
           const btn = document.getElementById('saveRoom');
           try {
             await saveRoomDimensions([rId]);
@@ -3590,7 +5295,7 @@
             } else {
               btn.textContent = 'Saved';
               btn.classList.add('saved');
-              setTimeout(() => { btn.textContent = 'Save Room Dimensions'; btn.classList.remove('saved'); }, 1500);
+              setTimeout(() => { btn.textContent = 'Save Room Settings'; btn.classList.remove('saved'); }, 1500);
             }
           } catch (err) {
             console.error('[3D] Room save error:', err);
@@ -3599,7 +5304,7 @@
             } else {
               btn.textContent = 'Save Failed';
               btn.style.background = '#dc2626';
-              setTimeout(() => { btn.textContent = 'Save Room Dimensions'; btn.style.background = ''; }, 2000);
+              setTimeout(() => { btn.textContent = 'Save Room Settings'; btn.style.background = ''; }, 2000);
             }
           }
           buildScene();
@@ -3607,7 +5312,7 @@
         };
 
         document.getElementById('saveRoom').addEventListener('click', function() { saveRoomChanges(false); });
-        bindAutoSaveOnCommit(['roomL', 'roomW', 'roomH'], saveRoomChanges);
+        bindAutoSaveOnCommit(['roomL', 'roomW', 'roomH', 'roomAmbientEnabled', 'roomAmbientColor', 'roomAmbientIntensity'], saveRoomChanges);
 
       } else if (ud.type === 'sensor') {
         const d = ud.device;
@@ -3759,21 +5464,37 @@
           // Save-one handler (name/cat/position for this device only)
           document.getElementById('saveEqOne').addEventListener('click', async () => {
             const btn = document.getElementById('saveEqOne');
+            pushUndoSnapshot('update equipment ' + devName);
             const newName = document.getElementById('eqName').value.trim() || devName;
             const newCat = document.getElementById('eqCat').value.trim() || devCat;
             const newX = Math.round(parseFloat(document.getElementById('eqPosX').value) * eGridSz / eRL);
             const newY = Math.round(parseFloat(document.getElementById('eqPosY').value) * eGridSz / eRW);
             const newZ = parseFloat(document.getElementById('eqPosZ').value);
+            const targetDevice = ensurePersistedRoomDevice(rId, d) || d;
             if (!d.snapshot) d.snapshot = {};
+            if (!targetDevice.snapshot) targetDevice.snapshot = {};
             d.snapshot.name = newName;
             d.snapshot.category = newCat;
-            if (!isNaN(newX)) d.x = newX;
-            if (!isNaN(newY)) d.y = newY;
-            if (!isNaN(newZ)) d.z = newZ;
+            targetDevice.snapshot.name = newName;
+            targetDevice.snapshot.category = newCat;
+            if (!isNaN(newX)) {
+              d.x = newX;
+              targetDevice.x = newX;
+            }
+            if (!isNaN(newY)) {
+              d.y = newY;
+              targetDevice.y = newY;
+            }
+            if (!isNaN(newZ)) {
+              d.z = newZ;
+              targetDevice.z = newZ;
+            }
             // Save fan airflow direction
             var fanDirField = document.getElementById('eqFanDir');
             if (fanDirField) {
-              d.airflowDir = parseInt(fanDirField.value, 10) || 0;
+              var nextAirflowDir = parseInt(fanDirField.value, 10) || 0;
+              d.airflowDir = nextAirflowDir;
+              targetDevice.airflowDir = nextAirflowDir;
             }
             console.log('[3D] Save-one:', newName, newCat, 'room:', rId);
             if (!rId || !S.roomMaps[rId]) {
@@ -3783,19 +5504,7 @@
               return;
             }
             try {
-                const resp = await authFetch('/data/room-map-' + rId + '.json', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify(S.roomMaps[rId])
-                });
-                const result = await resp.json().catch(() => ({}));
-                if (!resp.ok || !result.success) {
-                  btn.textContent = 'Save Failed'; btn.style.background = '#dc2626';
-                  console.error('[3D] Save-one failed:', resp.status, result);
-                  setTimeout(() => { btn.textContent = identicalCount > 1 ? 'Update This One Only' : 'Save Equipment'; btn.style.background = ''; }, 3000);
-                  return;
-                }
-                console.log('[3D] Save-one OK:', result);
+                await persistRoomMap(rId);
                 markDetailDirty(false);
               } catch (err) {
                 btn.textContent = 'Save Failed'; btn.style.background = '#dc2626';
@@ -3812,6 +5521,7 @@
           const bulkBtn = document.getElementById('saveEqAll');
           if (bulkBtn) {
             bulkBtn.addEventListener('click', async () => {
+              pushUndoSnapshot('bulk update ' + identicalCount + ' equipment items');
               const newName = document.getElementById('eqName').value.trim() || devName;
               const newCat = document.getElementById('eqCat').value.trim() || devCat;
               console.log('[3D] Bulk update: renaming', devCat + '/' + devName, '->', newCat + '/' + newName);
@@ -3835,18 +5545,7 @@
               let saveErrors = 0;
               for (const rmId of roomsToSave) {
                 try {
-                  const resp = await authFetch('/data/room-map-' + rmId + '.json', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(S.roomMaps[rmId])
-                  });
-                  const result = await resp.json().catch(() => ({}));
-                  if (!resp.ok || !result.success) {
-                    console.error('[3D] Bulk save failed for room', rmId, ':', resp.status, result);
-                    saveErrors++;
-                  } else {
-                    console.log('[3D] Bulk save OK for room', rmId, ':', result);
-                  }
+                  await persistRoomMap(rmId);
                 } catch (err) {
                   console.error('[3D] Bulk save error for room', rmId, ':', err);
                   saveErrors++;
@@ -3947,6 +5646,119 @@
         opt.textContent = r.name || r.id;
         sel.appendChild(opt);
       });
+      applyViewerPrefsToUi();
+    }
+
+    function getSelectableSceneMeshes() {
+      return []
+        .concat(S.meshes.sensors.filter(isSelectableMesh))
+        .concat(S.meshes.equipment.filter(isSelectableMesh))
+        .concat(S.meshes.trays.filter(function(mesh) { return mesh.userData && mesh.userData.type === 'group'; }));
+    }
+
+    function captureSceneState() {
+      if (!S.camera || !S.controls || !S.lastFullRefresh) return null;
+      return {
+        camera: {
+          x: S.camera.position.x,
+          y: S.camera.position.y,
+          z: S.camera.position.z,
+          targetX: S.controls.target.x,
+          targetY: S.controls.target.y,
+          targetZ: S.controls.target.z,
+        },
+        selectedKeys: S.editMode ? S.selectedMeshes.map(getSelectionKey).filter(Boolean) : [],
+      };
+    }
+
+    function restoreSceneState(sceneState) {
+      if (!sceneState) return;
+      if (sceneState.camera && S.camera && S.controls) {
+        S.camera.position.set(sceneState.camera.x, sceneState.camera.y, sceneState.camera.z);
+        S.controls.target.set(sceneState.camera.targetX, sceneState.camera.targetY, sceneState.camera.targetZ);
+        S.controls.update();
+      }
+      if (S.editMode && Array.isArray(sceneState.selectedKeys) && sceneState.selectedKeys.length) {
+        var selection = getSelectableSceneMeshes().filter(function(mesh) {
+          return sceneState.selectedKeys.includes(getSelectionKey(mesh));
+        });
+        if (selection.length) setSelection(selection, { silent: true });
+      }
+    }
+
+    function updateSelectionBoxOverlay() {
+      var box = document.getElementById('selectionBox');
+      if (!box) return;
+      if (!S.selectionBox.active) {
+        box.classList.remove('visible');
+        return;
+      }
+      var left = Math.min(S.selectionBox.startX, S.selectionBox.endX);
+      var top = Math.min(S.selectionBox.startY, S.selectionBox.endY);
+      var width = Math.abs(S.selectionBox.endX - S.selectionBox.startX);
+      var height = Math.abs(S.selectionBox.endY - S.selectionBox.startY);
+      box.style.left = left + 'px';
+      box.style.top = top + 'px';
+      box.style.width = width + 'px';
+      box.style.height = height + 'px';
+      box.classList.add('visible');
+    }
+
+    function beginSelectionBox(e) {
+      var container = document.getElementById('viewer-container');
+      var rect = container.getBoundingClientRect();
+      S.selectionBox.active = true;
+      S.selectionBox.startX = e.clientX - rect.left;
+      S.selectionBox.startY = e.clientY - rect.top;
+      S.selectionBox.endX = S.selectionBox.startX;
+      S.selectionBox.endY = S.selectionBox.startY;
+      S.controls.enabled = false;
+      updateSelectionBoxOverlay();
+    }
+
+    function finishSelectionBox() {
+      var width = Math.abs(S.selectionBox.endX - S.selectionBox.startX);
+      var height = Math.abs(S.selectionBox.endY - S.selectionBox.startY);
+      var box = document.getElementById('selectionBox');
+      if (box) box.classList.remove('visible');
+      S.controls.enabled = true;
+      if (width < 6 && height < 6) {
+        S.selectionBox.active = false;
+        return false;
+      }
+      var container = document.getElementById('viewer-container');
+      var rect = container.getBoundingClientRect();
+      var left = Math.min(S.selectionBox.startX, S.selectionBox.endX);
+      var right = Math.max(S.selectionBox.startX, S.selectionBox.endX);
+      var top = Math.min(S.selectionBox.startY, S.selectionBox.endY);
+      var bottom = Math.max(S.selectionBox.startY, S.selectionBox.endY);
+      var matches = getSelectableSceneMeshes().filter(function(mesh) {
+        var world = new THREE.Vector3();
+        mesh.getWorldPosition(world);
+        world.project(S.camera);
+        var screenX = (world.x * 0.5 + 0.5) * rect.width;
+        var screenY = (-world.y * 0.5 + 0.5) * rect.height;
+        return screenX >= left && screenX <= right && screenY >= top && screenY <= bottom;
+      });
+      if (matches.length > 1) {
+        var groups = new Map();
+        matches.forEach(function(mesh) {
+          var key = (mesh.userData?.type || '') + '|' + getMeshRoomId(mesh);
+          if (!groups.has(key)) groups.set(key, []);
+          groups.get(key).push(mesh);
+        });
+        matches = Array.from(groups.values()).sort(function(a, b) { return b.length - a.length; })[0] || matches;
+      }
+      if (matches.length) {
+        setSelection(matches);
+        setStatusBarMessage(matches.length + ' items selected -- drag any selected item to move as a group', '', 1800);
+      } else {
+        clearSelection({ silent: true });
+      }
+      S.selectionBox.active = false;
+      S.selectionBox.suppressClick = true;
+      setTimeout(function() { S.selectionBox.suppressClick = false; }, 0);
+      return true;
     }
 
     // ---- Toggle walls/ceiling --------------------------------
@@ -3956,6 +5768,14 @@
       S.meshes.ceilings.forEach(m => { m.visible = S.wallsVisible; });
       const btn = document.getElementById('btnWalls');
       btn.classList.toggle('active', S.wallsVisible);
+      saveViewerPrefs();
+    }
+
+    function setDisplayFilter(filterKey, isVisible) {
+      if (!(filterKey in DEFAULT_DISPLAY_FILTERS)) return;
+      S.displayFilters[filterKey] = !!isVisible;
+      saveViewerPrefs();
+      applyDisplayVisibility();
     }
 
     // ---- GWEN integration ------------------------------------
@@ -3965,7 +5785,20 @@
         var id = entry[0], data = entry[1];
         envSummary[data.name || id] = {
           temp: data.temp, humidity: data.humidity, vpd: data.vpd, co2: data.co2,
-          groups: data.groups.map(function(g) { return { name: g.name, crop: g.crop || g.recipe, trays: g.trays, status: g.status }; }),
+          groups: data.groups.map(function(g) {
+            var lifecycle = getGroupLifecycle(g);
+            return {
+              name: g.name,
+              crop: lifecycle.cropName,
+              trays: g.trays,
+              status: g.status,
+              seedDate: lifecycle.seedDate || null,
+              forecastHarvestDate: lifecycle.forecastHarvestDate || null,
+              plantingLocations: lifecycle.plantingLocations,
+              daysToHarvest: lifecycle.daysToHarvest,
+              daysRemaining: lifecycle.daysRemaining,
+            };
+          }),
         };
       });
       var prompt = 'I am looking at the 3D Farm Viewer. Here is the current environment snapshot:\n' + JSON.stringify(envSummary, null, 2) + '\n\nCan you analyze the current growing conditions and suggest any adjustments?';
@@ -3982,6 +5815,15 @@
           applyOverlay(btn.dataset.overlay);
         });
       });
+      document.querySelectorAll('.toolbar button[data-overlay-mode]').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          S.overlayMode = btn.dataset.overlayMode === 'delta' ? 'delta' : 'absolute';
+          syncOverlayModeButtons();
+          saveViewerPrefs();
+          renderFarmStats();
+          if (S.overlay !== 'none') applyOverlay(S.overlay);
+        });
+      });
 
       document.getElementById('playBtn').addEventListener('click', startPlayback);
       document.getElementById('pauseBtn').addEventListener('click', pausePlayback);
@@ -3992,6 +5834,19 @@
       });
 
       document.getElementById('btnWalls').addEventListener('click', toggleWalls);
+      document.getElementById('btnDisplay').addEventListener('click', function() { toggleDisplayPanel(); });
+      document.getElementById('closeDisplayPanel').addEventListener('click', function() { toggleDisplayPanel(false); });
+      document.getElementById('btnHideCurrentDisplay').addEventListener('click', hideCurrentDisplayTarget);
+      document.getElementById('btnRestoreAllDisplay').addEventListener('click', restoreAllDisplayItems);
+      document.querySelectorAll('[data-display-filter]').forEach(function(input) {
+        input.addEventListener('change', function() {
+          setDisplayFilter(input.dataset.displayFilter, input.checked);
+        });
+      });
+      document.getElementById('displayHiddenList').addEventListener('click', function(e) {
+        var restoreKey = e.target?.dataset?.displayRestore;
+        if (restoreKey) restoreDisplayEntry(restoreKey);
+      });
       document.getElementById('btnTop').addEventListener('click', function() { var t = S.controls.target; animateTo({ x: t.x, y: 35, z: t.z + 0.1 }); });
       document.getElementById('btnAngle').addEventListener('click', function() { var t = S.controls.target; animateTo({ x: t.x - 10, y: 16, z: t.z + 18 }); });
       document.getElementById('btnReset').addEventListener('click', function() {
@@ -4003,9 +5858,13 @@
       document.getElementById('btnRefresh').addEventListener('click', function() {
         loadAllData({ reason: 'manual', skipRebuildIfUnchanged: false });
       });
+      document.getElementById('btnUndo').addEventListener('click', function() {
+        undoLastEdit();
+      });
 
       document.getElementById('roomSelect').addEventListener('change', function(e) {
         S.roomFilter = e.target.value;
+        saveViewerPrefs();
         buildScene();
         renderFarmStats();
       });
@@ -4026,6 +5885,12 @@
         if (e.key === 'Escape') {
           clearSelection({ silent: true });
           closeDetailPanel({ confirm: true, message: 'Discard unsaved detail panel changes?' });
+          return;
+        }
+        if ((e.metaKey || e.ctrlKey) && !e.shiftKey && (e.key === 'z' || e.key === 'Z')) {
+          if (detailPanelHasFocusedField()) return;
+          e.preventDefault();
+          undoLastEdit();
         }
       });
 
@@ -4034,12 +5899,19 @@
       canvas.addEventListener('pointerdown', onPointerDown);
       canvas.addEventListener('pointermove', onPointerMove);
       canvas.addEventListener('pointerup', onPointerUp);
-      canvas.addEventListener('click', function(e) { if (!S.isDragging && !S.editMode) onClick(e); else if (S.editMode && !S.isDragging) onClick(e); });
+      canvas.addEventListener('click', function(e) {
+        if (S.selectionBox.suppressClick) {
+          S.selectionBox.suppressClick = false;
+          return;
+        }
+        if (!S.isDragging && !S.editMode) onClick(e); else if (S.editMode && !S.isDragging) onClick(e);
+      });
       document.getElementById('btnEdit').addEventListener('click', toggleEditMode);
       document.getElementById('detailClose').addEventListener('click', function() {
         closeDetailPanel({ confirm: true, message: 'Discard unsaved detail panel changes?' });
       });
       document.getElementById('gwenFab').addEventListener('click', openGwenWithContext);
+      updateUndoButtonState();
     }
 
     // ---- Auto-refresh ----------------------------------------
@@ -4063,7 +5935,7 @@
       setInterval(function() {
         if (document.hidden || S.editMode || S.isDragging || S.isLoadingData || hasPendingDetailEdits()) return;
         loadAllData({ reason: 'auto', silent: true, skipRebuildIfUnchanged: true });
-      }, 30000);
+      }, STRUCTURE_REFRESH_INTERVAL_MS);
       document.addEventListener('visibilitychange', function() {
         if (document.hidden || S.editMode || S.isLoadingData || hasPendingDetailEdits()) return;
         loadAllData({ reason: 'visible', silent: true, skipRebuildIfUnchanged: true });
@@ -4087,7 +5959,10 @@
     // ---- Bootstrap -------------------------------------------
     document.addEventListener('DOMContentLoaded', function() {
       initScene();
+      loadViewerPrefs();
+      applyViewerPrefsToUi();
       bindEvents();
+      refreshDisplayPanel();
       updatePlaybackControls();
       loadAllData({ reason: 'initial', skipRebuildIfUnchanged: false });
       startAutoRefresh();

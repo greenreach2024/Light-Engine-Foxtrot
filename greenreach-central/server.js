@@ -307,7 +307,7 @@ app.use(helmet({
       defaultSrc: ["'self'"],
       scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net", "https://unpkg.com", "https://web.squarecdn.com", "https://www.googletagmanager.com", "https://www.google-analytics.com", "https://cdnjs.cloudflare.com", "https://cdn.plot.ly"],
       scriptSrcAttr: ["'unsafe-inline'"],  // Allow inline event handlers (onclick, etc.)
-      styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net", "https://cdnjs.cloudflare.com", "https://web.squarecdn.com"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net", "https://cdnjs.cloudflare.com", "https://web.squarecdn.com", "https://unpkg.com"],
       imgSrc: ["'self'", "data:", "https:"],
       connectSrc: ["'self'", "https:", "wss:", "https://connect.squareup.com", "https://pci-connect.squareup.com", "https://connect.stripe.com", "https://api.stripe.com", "https://www.google-analytics.com", "https://analytics.google.com"],
       fontSrc: ["'self'", "data:", "https://cdn.jsdelivr.net", "https://cash-f.squarecdn.com", "https://square-fonts-production-f.squarecdn.com", "https://d1g145x70srn7h.cloudfront.net"],
@@ -470,8 +470,27 @@ app.get('/data/room-map-:roomId.json', async (req, res) => {
       return res.json(payload);
     }
   }
-  return res.json({ roomId, zones: [], devices: [] });
+  return res.status(404).json({ success: false, error: `Room map not found for ${roomId}` });
 });
+
+function forwardRoomMapToLightEngine(req, fileName, payload) {
+  const lightEngineUrl = resolveEdgeUrlForProxy();
+  if (!lightEngineUrl) return;
+
+  const headers = { 'Content-Type': 'application/json' };
+  if (req.headers && req.headers['x-farm-id']) {
+    headers['X-Farm-ID'] = req.headers['x-farm-id'];
+  }
+
+  fetch(`${lightEngineUrl}/data/${fileName}`, {
+    method: 'POST',
+    headers: leProxyHeaders(headers),
+    body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(10000)
+  })
+    .then((upstreamRes) => logger.info(`[Room Map] Forwarded ${fileName} to Light Engine: ${upstreamRes.status}`))
+    .catch((err) => logger.warn(`[Room Map] Light Engine forward failed for ${fileName} (non-fatal): ${err.message}`));
+}
 
 app.post('/data/room-map.json', async (req, res) => {
   const fid = farmStore.farmIdFromReq(req);
@@ -480,6 +499,7 @@ app.post('/data/room-map.json', async (req, res) => {
   }
   try {
     await farmStore.set(fid, 'room_map', req.body);
+    forwardRoomMapToLightEngine(req, 'room-map.json', req.body);
     return res.json({ success: true, dataType: 'room_map', farmId: fid });
   } catch (err) {
     logger.error('[Room Map] Save failed:', err.message);
@@ -514,6 +534,8 @@ app.post('/data/room-map-:roomId.json', async (req, res) => {
       await farmStore.set(fid, 'room_map', payload);
     }
 
+    forwardRoomMapToLightEngine(req, `room-map-${roomId}.json`, payload);
+
     return res.json({ success: true, dataType: 'room_maps', farmId: fid, roomId });
   } catch (err) {
     logger.error('[Room Map] Save failed:', err.message);
@@ -521,6 +543,44 @@ app.post('/data/room-map-:roomId.json', async (req, res) => {
   }
 });
 
+
+// Shared metadata JSON files are not farm-scoped and should be served from disk.
+// Make this explicit so Central does not rely on generic static fallthrough for /data.
+const SHARED_DATA_DIRS = [
+  path.join(__dirname, 'public', 'data'),
+  path.join(__dirname, '..', 'public', 'data')
+];
+const FARM_SCOPED_OR_SPECIAL_DATA_FILES = new Set([
+  'groups.json',
+  'rooms.json',
+  'env.json',
+  'schedules.json',
+  'iot-devices.json',
+  'farm.json',
+  'plans.json',
+  'light-setups.json',
+  'room-map.json',
+  'switchbot-devices.json',
+  'device-meta.json',
+  'farm-settings.json'
+]);
+
+app.get('/data/:fileName', (req, res, next) => {
+  const fileName = String(req.params.fileName || '').toLowerCase();
+  if (!/^[a-z0-9._-]+\.json$/i.test(fileName)) return next();
+  if (FARM_SCOPED_OR_SPECIAL_DATA_FILES.has(fileName)) return next();
+
+  for (const dir of SHARED_DATA_DIRS) {
+    const filePath = path.join(dir, fileName);
+    if (!filePath.startsWith(dir)) continue;
+    if (!fs.existsSync(filePath)) continue;
+
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    return res.sendFile(filePath);
+  }
+
+  return next();
+});
 // ── Farm Profile: merge DB data on top of static farm.json ─────────────────
 mountFarmJsonRoute(app, { farmStore, logger });
 
@@ -3782,6 +3842,7 @@ const researchAuthGuard = (req, res, next) => {
   if (req.path.startsWith('/research/')) {
     return authMiddleware(req, res, (authErr) => {
       if (authErr) return next(authErr);
+      if (!req.farmId && req.user?.farmId) req.farmId = req.user.farmId;
       return researchFeatureGate(req, res, next);
     });
   }

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
 import { calculateOptimalLayoutColumns, inferRoomDimensionsMeters, deriveScientificLayoutDefaults, executeTool } from '../routes/farm-ops-agent.js';
-import { shouldEnterFarmHandMode, shouldHandleDirectLayoutRequest, shouldHandleDirectLayoutFollowup, shouldHandleDirectFanFollowup, buildDirectLayoutPlan, shouldUseDeliberativeSupport, buildRelevantHistoryReview, shouldRequestGwenReview, shouldForceGroundedRewrite } from '../routes/assistant-chat.js';
+import { shouldEnterFarmHandMode, shouldHandleDirectLayoutRequest, shouldHandleDirectLayoutFollowup, shouldHandleDirectFanFollowup, shouldHandleDirectFanRotationFollowup, buildDirectLayoutPlan, shouldUseDeliberativeSupport, buildRelevantHistoryReview, shouldRequestGwenReview, shouldForceGroundedRewrite } from '../routes/assistant-chat.js';
 
 function expect(value) {
   return {
@@ -88,7 +88,9 @@ describe('calculateOptimalLayoutColumns', () => {
     ];
 
     expect(shouldHandleDirectLayoutFollowup('move them closer to the east and west walls and increase the spacing between the groups', history)).toBe(true);
+    expect(shouldHandleDirectLayoutFollowup('pin the fans to those walls', history)).toBe(false);
     expect(shouldHandleDirectFanFollowup('pin the fans to those walls', history)).toBe(true);
+    expect(shouldHandleDirectFanRotationFollowup('rotate the fans along the west wall to point east', history)).toBe(true);
 
     const plan = buildDirectLayoutPlan(
       'move them closer to the east and west walls and increase the spacing between the groups',
@@ -224,6 +226,22 @@ describe('calculateOptimalLayoutColumns', () => {
     expect(result.ok).toBe(true);
     expect(result.updated).toBeGreaterThan(0);
     expect(result.placements.every(item => item.x === 0 || item.x === 29)).toBe(true);
+  });
+
+  test('fan direction updates can target only one wall bank', async () => {
+    const result = await executeTool('update_equipment', {
+      farm_id: 'FARM-MLTP9LVH-B0B85039',
+      room_id: 'room-3xxjln',
+      match_category: 'fans',
+      wall_mode: 'west',
+      bulk: true,
+      airflow_dir: 90
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.updated).toBeGreaterThan(0);
+    expect(result.changes).toContain('airflow_dir -> 90');
+    expect(result.changes).toContain('wall_mode filter -> west');
   });
 
   test('uses fewer columns in narrow rooms', () => {

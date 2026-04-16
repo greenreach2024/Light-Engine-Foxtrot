@@ -329,7 +329,7 @@ app.use(helmet({
       defaultSrc: ["'self'"],
       scriptSrc: ["'self'", "'unsafe-inline'", "https://web.squarecdn.com", "https://cdn.jsdelivr.net", "https://cdnjs.cloudflare.com", "https://unpkg.com"], // Note: unsafe-inline/eval needed for dynamic UI
       scriptSrcAttr: ["'unsafe-inline'"], // Allow inline event handlers (onclick, etc.)
-      styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net", "https://web.squarecdn.com"], // Note: unsafe-inline needed for inline styles
+      styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net", "https://web.squarecdn.com", "https://unpkg.com"], // Note: unsafe-inline needed for inline styles
       imgSrc: ["'self'", "data:", "http:", "https:"],
       connectSrc: ["'self'", "ws:", "wss:", "http:", "https:"], // Allow WebSocket connections
       fontSrc: ["'self'", "data:", "https://cdn.jsdelivr.net", "https://cash-f.squarecdn.com", "https://square-fonts-production-f.squarecdn.com", "https://d1g145x70srn7h.cloudfront.net"],
@@ -510,7 +510,7 @@ const STRICT_DEVICE_VALIDATION = ['1', 'true', 'yes'].includes(String(process.en
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const LIGHT_ENGINE_DIR = path.join(__dirname, 'light-engine', 'public');
 
-// Crop registry — single source of truth for all crop metadata (Phase 2a)
+// Crop registry — secondary metadata and alias mapping. The canonical recipe catalog lives in lighting-recipes.json.
 const _require = createRequire(import.meta.url);
 const cropUtils = _require('./public/js/crop-utils.js');
 try {
@@ -776,6 +776,54 @@ app.use((req, res, next) => {
   if (req.method === 'OPTIONS') return res.status(204).end();
   next();
 });
+
+// Top-of-stack diagnostic + override for per-room room-map reads.
+// This must run before any static middleware so production behavior is unambiguous.
+app.use(async (req, res, next) => {
+  if (req.method !== 'GET') return next();
+  const requestPath = String(req.path || "");
+  const match = requestPath.match(new RegExp("^/data/room-map-(.+)\\.json$", "i"));
+  if (!match || String(match[1] || "").toLowerCase() === "room-map") return next();
+
+  const roomId = String(match[1] || '').trim();
+  const farmId = String(req.headers['x-farm-id'] || '').trim();
+  const centralTarget = getCentralApiTarget();
+
+  const sendLocalFallback = () => {
+    const localDataPath = resolveDataReadPath(`room-map-${roomId}.json`);
+    if (!fs.existsSync(localDataPath)) return next();
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('X-Room-Map-Source', 'top-level-local');
+    res.type('application/json');
+    return fs.createReadStream(localDataPath).pipe(res);
+  };
+
+  if (!roomId || !centralTarget || /light-engine-1029387937866/i.test(centralTarget)) {
+    return sendLocalFallback();
+  }
+
+  try {
+    const upstream = await fetch(`${centralTarget.replace(/\/$/, "")}/data/room-map-${roomId}.json`, {
+      method: 'GET',
+      headers: farmId ? { 'X-Farm-ID': farmId } : {},
+      signal: AbortSignal.timeout(5000)
+    });
+    if (!upstream.ok) {
+      return sendLocalFallback();
+    }
+
+    const body = await upstream.text();
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('X-Room-Map-Source', 'top-level-central');
+    res.type('application/json');
+    return res.send(body);
+  } catch (err) {
+    console.warn(`[room-map] Top-level Central fallback failed for room ${roomId}:`, err?.message || err);
+    return sendLocalFallback();
+  }
+});
 // Default controller target. Can be overridden with the CTRL env var.
 // Use the Pi forwarder when available for remote device reachability during development.
 const DEFAULT_CONTROLLER = "http://192.168.2.80:3000";
@@ -805,8 +853,9 @@ const IFTTT_ENABLED = Boolean(IFTTT_KEY);
 // Legacy: AZURE_LATEST_URL still supported for backward compatibility
 const CLOUD_ENDPOINT_URL = process.env.CLOUD_ENDPOINT_URL || process.env.AWS_ENDPOINT_URL || process.env.AZURE_LATEST_URL || "";
 const ENV_SOURCE = process.env.ENV_SOURCE || (CLOUD_ENDPOINT_URL ? "cloud" : "local");
-const ENV_PATH = path.resolve("./public/data/env.json");
-const DATA_DIR = path.resolve("./public/data");
+const BUNDLED_DATA_DIR = path.resolve("./public/data");
+const DATA_DIR = process.env.K_SERVICE ? '/app/data' : BUNDLED_DATA_DIR;
+const ENV_PATH = path.join(DATA_DIR, 'env.json');
 
 // Recipe metadata: display names + descriptions from Central admin
 // Shared GCS mount at /app/data on both LE and Central Cloud Run services
@@ -905,6 +954,14 @@ function ensureDataDir() {
   try { fs.mkdirSync(DATA_DIR, { recursive: true }); } catch {}
 }
 
+function resolveDataReadPath(fileName) {
+  const normalized = String(fileName || '').replace(/^\/+/, '');
+  const mutablePath = path.isAbsolute(normalized) ? normalized : path.join(DATA_DIR, normalized);
+  if (fs.existsSync(mutablePath)) return mutablePath;
+  if (path.isAbsolute(normalized)) return normalized;
+  return path.join(BUNDLED_DATA_DIR, normalized);
+}
+
 /**
  * Seed runtime data files that are not shipped in the deploy artifact.
  * These files are created at runtime and persisted via writeJsonQueued / fs.writeFileSync.
@@ -928,8 +985,14 @@ function seedRuntimeDataFiles() {
     const filePath = path.join(DATA_DIR, file);
     if (!fs.existsSync(filePath)) {
       try {
-        fs.writeFileSync(filePath, defaultContent);
-        console.log(`[seed] Created default ${file} (${defaultContent.length} bytes)`);
+        const bundledPath = path.join(BUNDLED_DATA_DIR, file);
+        if (fs.existsSync(bundledPath)) {
+          fs.copyFileSync(bundledPath, filePath);
+          console.log(`[seed] Copied bundled ${file} into mutable data dir`);
+        } else {
+          fs.writeFileSync(filePath, defaultContent);
+          console.log(`[seed] Created default ${file} (${defaultContent.length} bytes)`);
+        }
       } catch (err) {
         console.warn(`[seed] Failed to create ${file}:`, err.message);
       }
@@ -1033,8 +1096,9 @@ function applyMultipliersToHexPayload(hexValue, multipliers, maxByte = DEFAULT_C
 function loadGroupsFile() {
   ensureDataDir();
   try {
-    if (!fs.existsSync(GROUPS_PATH)) return [];
-    const raw = JSON.parse(fs.readFileSync(GROUPS_PATH, 'utf8'));
+    const groupsPath = resolveDataReadPath('groups.json');
+    if (!fs.existsSync(groupsPath)) return [];
+    const raw = JSON.parse(fs.readFileSync(groupsPath, 'utf8'));
     if (Array.isArray(raw)) return raw;
     if (raw && Array.isArray(raw.groups)) return raw.groups;
     return [];
@@ -2310,7 +2374,7 @@ app.use(buyerRouter);
 const envPath = path.join(DATA_DIR, 'env.json');
 
 function readJSON(fileName, fallback = null) {
-  const target = path.isAbsolute(fileName) ? fileName : path.join(DATA_DIR, fileName);
+  const target = path.isAbsolute(fileName) ? fileName : resolveDataReadPath(fileName);
   return readJsonSafe(target, fallback);
 }
 
@@ -19832,7 +19896,7 @@ ${msgBlock}
 
         const invText = `You're Invited to ${farmName || 'Light Engine'}!\n\nHi ${firstName},\n\nYou have been added as a ${roleLabel} on ${farmName || 'Light Engine'}.\n${msgText}\nYOUR LOGIN CREDENTIALS\n----------------------------------------------\nFarm ID:        ${farmId}\nEmail:          ${email}\nTemp Password:  ${password}\n\nGETTING STARTED\n----------------------------------------------\n1. Open: ${invDashUrl}\n2. Enter your Farm ID and Temporary Password\n3. Change your password after first login\n\nLogin page: ${invLoginUrl}\n\nIMPORTANT: Save this email and change your password after first login.\n\n--\nGreenReach -- The foundation for smarter farms\ngreenreachgreens.com`;
 
-        const result = await sendEmailViaSES({ to: email, subject: invSubject, html: invHtml, text: invText, from: 'GreenReach <info@greenreachgreens.com>' });
+        const result = await sendEmailViaSES({ to: email, subject: invSubject, html: invHtml, text: invText, from: 'GreenReach <admin@greenreachgreens.com>' });
         emailSent = result.success || false;
         console.log(`[/api/users/create] Invite email to ${email}: ${result.success ? 'sent via ' + (result.provider || 'unknown') : 'failed -- ' + (result.error || 'unknown')}`);
       } catch (emailErr) {
@@ -23133,7 +23197,7 @@ app.post('/api/trays/:trayId/seed', async (req, res) => {
 
 /**
  * GET /api/crops
- * Returns crop definitions from crop-registry.json (Phase 2a — single source of truth)
+ * Returns crop metadata from crop-registry.json. The canonical full recipe catalog lives in lighting-recipes.json.
  * Query params: ?active=true (filter to active crops only), ?category=lettuce
  */
 app.get('/api/crops', (req, res) => {
@@ -24492,7 +24556,7 @@ app.get('/data/rooms.json', (req, res, next) => {
 });
 
 // IoT devices (sensors)
-app.get('/data/iot-devices.json', (req, res, next) => {
+app.get('/data/iot-devices.json', async (req, res, next) => {
   const farm = loadDemoFarmSnapshot();
   if (!farm) return next();
   
@@ -24524,6 +24588,85 @@ app.get('/data/iot-devices.json', (req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Cache-Control', 'no-cache');
   return res.json(sensors);
+});
+
+app.get('/data/iot-devices.json', async (req, res) => {
+  try {
+    const storedDevices = readJSON('iot-devices.json', []);
+    const devices = Array.isArray(storedDevices) ? storedDevices.map((device) => ({ ...device })) : [];
+    const byId = new Map(
+      devices
+        .map((device) => [device?.deviceId || device?.id, device])
+        .filter(([deviceId]) => Boolean(deviceId))
+    );
+
+    try {
+      const discovery = await fetchSwitchBotDevices({ force: false });
+      const deviceList = discovery?.payload?.body?.deviceList;
+      if (Array.isArray(deviceList)) {
+        for (const discovered of deviceList) {
+          const deviceId = discovered?.deviceId;
+          if (!deviceId) continue;
+
+          const deviceType = String(discovered.deviceType || '').toLowerCase();
+          const existing = byId.get(deviceId);
+          if (existing) {
+            existing.id = existing.id || deviceId;
+            existing.deviceId = existing.deviceId || deviceId;
+            if (discovered.deviceName) existing.name = discovered.deviceName;
+            if (deviceType) existing.type = deviceType;
+            existing.brand = existing.brand || 'SwitchBot';
+            existing.vendor = existing.vendor || 'SwitchBot';
+            existing.protocol = existing.protocol || 'switchbot';
+            continue;
+          }
+
+          if (!deviceType.includes('sensor') && discovered.deviceType !== 'Hub Mini') {
+            continue;
+          }
+
+          const appended = {
+            id: deviceId,
+            deviceId,
+            ip: deviceId,
+            mac: null,
+            name: discovered.deviceName || deviceId,
+            type: deviceType || 'sensor',
+            zone: null,
+            brand: 'SwitchBot',
+            model: null,
+            trust: 'trusted',
+            vendor: 'SwitchBot',
+            address: deviceId,
+            category: null,
+            lastSeen: null,
+            location: null,
+            protocol: 'switchbot',
+            telemetry: {},
+            deviceData: {
+              deviceId,
+              deviceName: discovered.deviceName || deviceId,
+              deviceType: discovered.deviceType || null,
+              hubDeviceId: discovered.hubDeviceId || null,
+              source: 'cloud-api'
+            },
+            credentials: { protocol: 'switchbot', _fromStore: true },
+            automationControl: deviceType.includes('sensor')
+          };
+          devices.push(appended);
+          byId.set(deviceId, appended);
+        }
+      }
+    } catch (error) {
+      console.warn('[iot-devices] Live SwitchBot merge failed:', error?.message || error);
+    }
+
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cache-Control', 'no-cache');
+    return res.json(devices);
+  } catch (error) {
+    return res.status(500).json({ ok: false, error: error.message });
+  }
 });
 
 app.get('/data/groups.json', (req, res, next) => {
@@ -25240,8 +25383,8 @@ app.use('/data', (req, res, next) => {
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
   if (req.method === 'OPTIONS') return res.status(204).end();
-  // Serve the file from public/data
-  const filePath = path.join(__dirname, 'public', 'data', req.path);
+  // Serve mutable farm data from the durable data dir, falling back to bundled seed files.
+  const filePath = resolveDataReadPath(req.path);
   if (!fs.existsSync(filePath)) return res.status(404).send('Not found');
   res.type('application/json');
   fs.createReadStream(filePath).pipe(res);
@@ -26128,7 +26271,7 @@ app.post("/ingest/env", async (req, res) => {
     // The source field must correspond to a device ID in iot-devices.json.
     // This prevents phantom sources from being created by arbitrary POST requests.
     if (source) {
-      const IOT_DEVICES_PATH = path.join(PUBLIC_DIR, 'data', 'iot-devices.json');
+      const IOT_DEVICES_PATH = resolveDataReadPath('iot-devices.json');
       let registeredIds = new Set();
       try {
         if (fs.existsSync(IOT_DEVICES_PATH)) {
@@ -30751,7 +30894,7 @@ async function resolveAvailablePort(initialPort) {
 
 // Initialize zone environmental setpoints from room-map.json
 function initializeZoneSetpointsFromRoomMap() {
-  const ROOM_MAP_PATH = path.join(PUBLIC_DIR, 'data', 'room-map.json');
+  const ROOM_MAP_PATH = resolveDataReadPath('room-map.json');
   
   try {
     if (!fs.existsSync(ROOM_MAP_PATH)) {
@@ -30969,8 +31112,8 @@ reconcileRoomMaps();
 // Sync zone assignments from room-map.json to iot-devices.json
 // This ensures devices discovered and mapped in the Room Mapper get proper zone assignments
 function syncZoneAssignmentsFromRoomMap() {
-  const IOT_DEVICES_PATH = path.join(PUBLIC_DIR, 'data', 'iot-devices.json');
-  const ROOM_MAP_PATH = path.join(PUBLIC_DIR, 'data', 'room-map.json');
+  const IOT_DEVICES_PATH = path.join(DATA_DIR, 'iot-devices.json');
+  const ROOM_MAP_PATH = resolveDataReadPath('room-map.json');
   
   try {
     if (!fs.existsSync(ROOM_MAP_PATH)) {
@@ -30979,9 +31122,10 @@ function syncZoneAssignmentsFromRoomMap() {
     
     const roomMap = JSON.parse(fs.readFileSync(ROOM_MAP_PATH, 'utf8'));
     let iotDevices = [];
-    if (fs.existsSync(IOT_DEVICES_PATH)) {
+    const iotReadPath = resolveDataReadPath('iot-devices.json');
+    if (fs.existsSync(iotReadPath)) {
       try {
-        const parsed = JSON.parse(fs.readFileSync(IOT_DEVICES_PATH, 'utf8'));
+        const parsed = JSON.parse(fs.readFileSync(iotReadPath, 'utf8'));
         iotDevices = Array.isArray(parsed) ? parsed : [];
       } catch (_) { iotDevices = []; }
     }
@@ -31062,7 +31206,7 @@ function syncZoneAssignmentsFromRoomMap() {
 
 // Sync live sensor data from iot-devices.json to env.json zones
 function setupLiveSensorSync() {
-  const IOT_DEVICES_PATH = path.join(PUBLIC_DIR, 'data', 'iot-devices.json');
+  const IOT_DEVICES_PATH = path.join(DATA_DIR, 'iot-devices.json');
   const SYNC_INTERVAL = 30000; // 30 seconds
   const HISTORY_SAMPLE_INTERVAL_MS = Number(process.env.SENSOR_HISTORY_INTERVAL_MS || 300000);
   const SWITCHBOT_SENSOR_STATUS_BATCH = Math.max(1, Number.parseInt(process.env.SWITCHBOT_SENSOR_STATUS_BATCH || '3', 10));
@@ -31180,13 +31324,108 @@ function setupLiveSensorSync() {
         return { changed: false, readings: new Map() };
       }
 
+      let registryChanged = false;
+      const iotDevicesById = new Map(
+        iotDevices
+          .map((device) => [device?.deviceId || device?.id, device])
+          .filter(([deviceId]) => Boolean(deviceId))
+      );
+
+      for (const discoveredDevice of deviceList) {
+        const discoveredId = discoveredDevice?.deviceId;
+        if (!discoveredId) continue;
+
+        const deviceType = String(discoveredDevice.deviceType || '').toLowerCase();
+        const existingDevice = iotDevicesById.get(discoveredId);
+        if (existingDevice) {
+          let existingMutated = false;
+          if (!existingDevice.deviceId) {
+            existingDevice.deviceId = discoveredId;
+            existingMutated = true;
+          }
+          if (!existingDevice.id) {
+            existingDevice.id = discoveredId;
+            existingMutated = true;
+          }
+          if (discoveredDevice.deviceName && existingDevice.name !== discoveredDevice.deviceName) {
+            existingDevice.name = discoveredDevice.deviceName;
+            existingMutated = true;
+          }
+          if (deviceType && existingDevice.type !== deviceType) {
+            existingDevice.type = deviceType;
+            existingMutated = true;
+          }
+          if (!existingDevice.brand) {
+            existingDevice.brand = 'SwitchBot';
+            existingMutated = true;
+          }
+          if (!existingDevice.vendor) {
+            existingDevice.vendor = 'SwitchBot';
+            existingMutated = true;
+          }
+          if (!existingDevice.protocol) {
+            existingDevice.protocol = 'switchbot';
+            existingMutated = true;
+          }
+          if (existingMutated) {
+            registryChanged = true;
+          }
+          continue;
+        }
+
+        if (!deviceType.includes('sensor')) {
+          continue;
+        }
+
+        iotDevices.push({
+          id: discoveredId,
+          deviceId: discoveredId,
+          ip: discoveredId,
+          mac: null,
+          name: discoveredDevice.deviceName || discoveredId,
+          type: deviceType || 'sensor',
+          zone: null,
+          brand: 'SwitchBot',
+          model: null,
+          trust: 'trusted',
+          vendor: 'SwitchBot',
+          address: discoveredId,
+          category: null,
+          lastSeen: null,
+          location: null,
+          protocol: 'switchbot',
+          telemetry: {},
+          deviceData: {
+            deviceId: discoveredId,
+            deviceName: discoveredDevice.deviceName || discoveredId,
+            deviceType: discoveredDevice.deviceType || null,
+            hubDeviceId: discoveredDevice.hubDeviceId || null,
+            source: 'cloud-api'
+          },
+          credentials: { protocol: 'switchbot', _fromStore: true },
+          automationControl: true
+        });
+        iotDevicesById.set(discoveredId, iotDevices[iotDevices.length - 1]);
+        registryChanged = true;
+      }
+
       const nowMs = Date.now();
       const needsRefresh = !switchBotQueue.length || (nowMs - switchBotQueueRefreshed) > SWITCHBOT_DEVICE_CACHE_TTL_MS || devicesResult.fromCache === false;
       if (needsRefresh) {
         switchBotQueue = deviceList
           .filter((device) => String(device.deviceType || '').toLowerCase().includes('sensor'))
           .map((device) => device.deviceId)
-          .filter(Boolean);
+          .filter(Boolean)
+          .sort((leftId, rightId) => {
+            const leftTelemetry = iotDevicesById.get(leftId)?.telemetry || {};
+            const rightTelemetry = iotDevicesById.get(rightId)?.telemetry || {};
+            const leftMissing = !(Number.isFinite(leftTelemetry.temperature) || Number.isFinite(leftTelemetry.humidity));
+            const rightMissing = !(Number.isFinite(rightTelemetry.temperature) || Number.isFinite(rightTelemetry.humidity));
+            if (leftMissing !== rightMissing) {
+              return leftMissing ? -1 : 1;
+            }
+            return String(leftId).localeCompare(String(rightId));
+          });
         switchBotQueueIndex = 0;
         switchBotQueueRefreshed = nowMs;
       }
@@ -31209,7 +31448,7 @@ function setupLiveSensorSync() {
       }
 
       const readings = new Map();
-      let fileChanged = false;
+      let fileChanged = registryChanged;
 
       for (const deviceId of batchIds) {
         let statusResult;
