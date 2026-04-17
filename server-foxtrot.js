@@ -16560,24 +16560,6 @@ app.get('/api/weather/current', async (req, res) => {
 
 // ===== NUTRIENT MANAGEMENT API (MQTT-backed) =====
 
-// Note: Charlie backend (port 8000) deprecated - all nutrient endpoints use MQTT directly
-// Legacy fetchPythonBackend function kept for compatibility but not used
-async function fetchPythonBackend(endpoint, options = {}) {
-  // DEPRECATED: This function is no longer used (nutrients use MQTT)
-  const url = `http://localhost:8000${endpoint}`;
-  
-  try {
-    const response = await fetch(url, {
-      timeout: 5000,
-      ...options
-    });
-    return response;
-  } catch (error) {
-    console.warn(`[Nutrient API] Python backend unavailable at ${url}:`, error.message);
-    return null;
-  }
-}
-
 async function publishNutrientCommand(payload, {
   brokerUrl = DEFAULT_NUTRIENT_MQTT_URL,
   topic = DEFAULT_NUTRIENT_COMMAND_TOPIC,
@@ -17317,6 +17299,25 @@ app.post('/api/nutrients/targets', requireEdgeForControl, async (req, res) => {
 
     const publishResult = await publishNutrientCommand(payload, { brokerUrl, topic });
 
+    // Persist applied setpoints to dashboard cache so reloads reflect what Atlas was sent
+    try {
+      const dashDoc = loadNutrientDashboardCache() || {};
+      dashDoc.lastAppliedTargets = {
+        phTarget: config.phTarget,
+        ecTarget: config.ecTarget,
+        phTolerance: config.phTolerance,
+        ecTolerance: config.ecTolerance,
+        autodoseEnabled: config.autodoseEnabled,
+        ecDoseSeconds: config.ecDoseSeconds,
+        phDownDoseSeconds: config.phDownDoseSeconds,
+        minDoseIntervalSec: config.minDoseIntervalSec,
+        appliedAt: new Date().toISOString()
+      };
+      schedulePersistNutrientDashboard(dashDoc);
+    } catch (persistErr) {
+      console.warn('[nutrients] Failed to persist applied setpoints:', persistErr?.message || persistErr);
+    }
+
     res.json({
       ok: true,
       brokerUrl: publishResult?.brokerUrl || brokerUrl,
@@ -17339,7 +17340,7 @@ app.options('/api/nutrients/pump-calibration', (req, res) => {
   res.status(204).end();
 });
 
-app.post('/api/nutrients/pump-calibration', async (req, res) => {
+app.post('/api/nutrients/pump-calibration', requireEdgeForControl, async (req, res) => {
   try {
     setCors(req, res);
     const body = req.body || {};
@@ -17406,7 +17407,7 @@ app.options('/api/nutrients/sensor-calibration', (req, res) => {
   res.status(204).end();
 });
 
-app.post('/api/nutrients/sensor-calibration', async (req, res) => {
+app.post('/api/nutrients/sensor-calibration', requireEdgeForControl, async (req, res) => {
   try {
     setCors(req, res);
     const body = req.body || {};
@@ -17605,7 +17606,7 @@ app.get('/api/nutrients/history/:scope/:sensor', async (req, res) => {
 });
 
 // Manual ingest endpoint (for testing with mosquitto_pub simulation)
-app.post('/api/nutrients/ingest', async (req, res) => {
+app.post('/api/nutrients/ingest', requireEdgeForControl, async (req, res) => {
   try {
     setCors(req, res);
     const payload = req.body;
