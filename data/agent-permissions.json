@@ -1,347 +1,854 @@
 {
   "_version": "1.0.0",
-  "_description": "Agent permission matrix — defines per-agent-class action scopes and human-approval tiers. Loaded by services/ai-agent.js to gate actions at runtime.",
+  "_description": "Agent permission matrix \u2014 defines per-agent-class action scopes and human-approval tiers. Loaded by services/ai-agent.js to gate actions at runtime.",
   "_tiers": {
     "auto": "Action executes immediately without human confirmation",
     "recommend": "Agent generates recommendation; human reviews and clicks to apply",
     "require-approval": "Action queued for explicit human approval before execution"
   },
-
   "agent_classes": {
     "farm-operator": {
       "description": "Default agent class for day-to-day farm staff and on-site operators",
       "capabilities": {
         "inventory": {
-          "list_products":    { "tier": "auto" },
-          "low_stock_alert":  { "tier": "auto" },
-          "search_product":   { "tier": "auto" },
-          "product_details":  { "tier": "auto" },
-          "inventory_value":  { "tier": "auto" }
+          "list_products": {
+            "tier": "auto"
+          },
+          "low_stock_alert": {
+            "tier": "auto"
+          },
+          "search_product": {
+            "tier": "auto"
+          },
+          "product_details": {
+            "tier": "auto"
+          },
+          "inventory_value": {
+            "tier": "auto"
+          }
         },
         "orders": {
-          "list_orders":      { "tier": "auto" },
-          "recent_orders":    { "tier": "auto" },
-          "order_status":     { "tier": "auto" },
-          "order_details":    { "tier": "auto" },
-          "create_order":     { "tier": "recommend" }
+          "list_orders": {
+            "tier": "auto"
+          },
+          "recent_orders": {
+            "tier": "auto"
+          },
+          "order_status": {
+            "tier": "auto"
+          },
+          "order_details": {
+            "tier": "auto"
+          },
+          "create_order": {
+            "tier": "recommend"
+          }
         },
         "sales": {
-          "list_customers":   { "tier": "auto" },
-          "customer_details": { "tier": "auto" },
-          "top_customers":    { "tier": "auto" },
-          "revenue_today":    { "tier": "auto" }
+          "list_customers": {
+            "tier": "auto"
+          },
+          "customer_details": {
+            "tier": "auto"
+          },
+          "top_customers": {
+            "tier": "auto"
+          },
+          "revenue_today": {
+            "tier": "auto"
+          }
         },
         "reports": {
-          "sales_report":     { "tier": "auto" },
-          "inventory_report": { "tier": "auto" },
-          "export_data":      { "tier": "recommend" },
-          "daily_summary":    { "tier": "auto" }
+          "sales_report": {
+            "tier": "auto"
+          },
+          "inventory_report": {
+            "tier": "auto"
+          },
+          "export_data": {
+            "tier": "recommend"
+          },
+          "daily_summary": {
+            "tier": "auto"
+          }
         },
         "checklists": {
-          "daily_checklist":  { "tier": "auto" },
-          "harvest_checklist":{ "tier": "auto" },
-          "quality_check":    { "tier": "auto" },
-          "closing_checklist":{ "tier": "auto" }
+          "daily_checklist": {
+            "tier": "auto"
+          },
+          "harvest_checklist": {
+            "tier": "auto"
+          },
+          "quality_check": {
+            "tier": "auto"
+          },
+          "closing_checklist": {
+            "tier": "auto"
+          }
         },
         "monitoring": {
-          "get_readings":     { "tier": "auto" },
-          "zone_status":      { "tier": "auto" },
-          "alert_status":     { "tier": "auto" },
-          "view_automation":  { "tier": "auto" }
+          "get_readings": {
+            "tier": "auto"
+          },
+          "zone_status": {
+            "tier": "auto"
+          },
+          "alert_status": {
+            "tier": "auto"
+          },
+          "view_automation": {
+            "tier": "auto"
+          }
         },
         "system": {
-          "status":           { "tier": "auto" },
-          "health_check":     { "tier": "auto" },
-          "recent_activity":  { "tier": "auto" }
+          "status": {
+            "tier": "auto"
+          },
+          "health_check": {
+            "tier": "auto"
+          },
+          "recent_activity": {
+            "tier": "auto"
+          }
         },
         "infrastructure": {
-          "list_rooms":          { "tier": "auto" },
-          "list_zones":          { "tier": "auto" },
-          "list_groups":         { "tier": "auto" },
-          "list_devices":        { "tier": "auto" },
-          "list_sensors":        { "tier": "auto" },
-          "device_status":       { "tier": "auto" },
-          "equipment_summary":   { "tier": "auto" },
-          "scan_status":         { "tier": "auto" },
-          "start_device_setup":  { "tier": "recommend" },
-          "select_protocol":     { "tier": "auto" },
-          "configure_connection":{ "tier": "auto" },
-          "discover_devices":    { "tier": "auto" },
-          "select_device":       { "tier": "auto" },
-          "assign_device_room":  { "tier": "recommend" },
-          "save_device":         { "tier": "require-approval" },
-          "cancel_setup":        { "tier": "auto" },
-          "create_room":         { "tier": "require-approval" },
-          "create_zone":         { "tier": "require-approval" },
-          "create_group":        { "tier": "require-approval" },
-          "assign_light":        { "tier": "require-approval" },
-          "update_schedule":     { "tier": "require-approval" },
-          "report_unknown_device": { "tier": "auto" }
+          "list_rooms": {
+            "tier": "auto"
+          },
+          "list_zones": {
+            "tier": "auto"
+          },
+          "list_groups": {
+            "tier": "auto"
+          },
+          "list_devices": {
+            "tier": "auto"
+          },
+          "list_sensors": {
+            "tier": "auto"
+          },
+          "device_status": {
+            "tier": "auto"
+          },
+          "equipment_summary": {
+            "tier": "auto"
+          },
+          "scan_status": {
+            "tier": "auto"
+          },
+          "start_device_setup": {
+            "tier": "recommend"
+          },
+          "select_protocol": {
+            "tier": "auto"
+          },
+          "configure_connection": {
+            "tier": "auto"
+          },
+          "discover_devices": {
+            "tier": "auto"
+          },
+          "select_device": {
+            "tier": "auto"
+          },
+          "assign_device_room": {
+            "tier": "recommend"
+          },
+          "save_device": {
+            "tier": "require-approval"
+          },
+          "cancel_setup": {
+            "tier": "auto"
+          },
+          "create_room": {
+            "tier": "require-approval"
+          },
+          "create_zone": {
+            "tier": "require-approval"
+          },
+          "create_group": {
+            "tier": "require-approval"
+          },
+          "assign_light": {
+            "tier": "require-approval"
+          },
+          "update_schedule": {
+            "tier": "require-approval"
+          },
+          "report_unknown_device": {
+            "tier": "auto"
+          }
         }
       }
     },
-
     "admin-ops": {
       "description": "Cross-farm alert triage, SLA risk assessment, and operational summaries",
       "capabilities": {
         "inventory": {
-          "list_products":    { "tier": "auto" },
-          "low_stock_alert":  { "tier": "auto" },
-          "search_product":   { "tier": "auto" },
-          "product_details":  { "tier": "auto" },
-          "inventory_value":  { "tier": "auto" }
+          "list_products": {
+            "tier": "auto"
+          },
+          "low_stock_alert": {
+            "tier": "auto"
+          },
+          "search_product": {
+            "tier": "auto"
+          },
+          "product_details": {
+            "tier": "auto"
+          },
+          "inventory_value": {
+            "tier": "auto"
+          }
         },
         "orders": {
-          "list_orders":      { "tier": "auto" },
-          "recent_orders":    { "tier": "auto" },
-          "order_status":     { "tier": "auto" },
-          "order_details":    { "tier": "auto" },
-          "create_order":     { "tier": "require-approval" }
+          "list_orders": {
+            "tier": "auto"
+          },
+          "recent_orders": {
+            "tier": "auto"
+          },
+          "order_status": {
+            "tier": "auto"
+          },
+          "order_details": {
+            "tier": "auto"
+          },
+          "create_order": {
+            "tier": "require-approval"
+          }
         },
         "sales": {
-          "list_customers":   { "tier": "auto" },
-          "customer_details": { "tier": "auto" },
-          "top_customers":    { "tier": "auto" },
-          "revenue_today":    { "tier": "auto" }
+          "list_customers": {
+            "tier": "auto"
+          },
+          "customer_details": {
+            "tier": "auto"
+          },
+          "top_customers": {
+            "tier": "auto"
+          },
+          "revenue_today": {
+            "tier": "auto"
+          }
         },
         "reports": {
-          "sales_report":     { "tier": "auto" },
-          "inventory_report": { "tier": "auto" },
-          "export_data":      { "tier": "recommend" },
-          "daily_summary":    { "tier": "auto" }
+          "sales_report": {
+            "tier": "auto"
+          },
+          "inventory_report": {
+            "tier": "auto"
+          },
+          "export_data": {
+            "tier": "recommend"
+          },
+          "daily_summary": {
+            "tier": "auto"
+          }
         },
         "checklists": {
-          "daily_checklist":  { "tier": "auto" },
-          "harvest_checklist":{ "tier": "auto" },
-          "quality_check":    { "tier": "auto" },
-          "closing_checklist":{ "tier": "auto" }
+          "daily_checklist": {
+            "tier": "auto"
+          },
+          "harvest_checklist": {
+            "tier": "auto"
+          },
+          "quality_check": {
+            "tier": "auto"
+          },
+          "closing_checklist": {
+            "tier": "auto"
+          }
         },
         "monitoring": {
-          "get_readings":     { "tier": "auto" },
-          "zone_status":      { "tier": "auto" },
-          "alert_status":     { "tier": "auto" },
-          "view_automation":  { "tier": "auto" }
+          "get_readings": {
+            "tier": "auto"
+          },
+          "zone_status": {
+            "tier": "auto"
+          },
+          "alert_status": {
+            "tier": "auto"
+          },
+          "view_automation": {
+            "tier": "auto"
+          }
         },
         "system": {
-          "status":           { "tier": "auto" },
-          "health_check":     { "tier": "auto" },
-          "recent_activity":  { "tier": "auto" }
+          "status": {
+            "tier": "auto"
+          },
+          "health_check": {
+            "tier": "auto"
+          },
+          "recent_activity": {
+            "tier": "auto"
+          }
         },
         "admin": {
-          "cross_farm_summary":  { "tier": "auto" },
-          "sla_risk_report":     { "tier": "auto" },
-          "alert_triage":        { "tier": "auto" },
-          "reassign_resources":  { "tier": "require-approval" },
-          "override_schedule":   { "tier": "require-approval" }
+          "cross_farm_summary": {
+            "tier": "auto"
+          },
+          "sla_risk_report": {
+            "tier": "auto"
+          },
+          "alert_triage": {
+            "tier": "auto"
+          },
+          "reassign_resources": {
+            "tier": "require-approval"
+          },
+          "override_schedule": {
+            "tier": "require-approval"
+          }
         },
         "infrastructure": {
-          "list_rooms":          { "tier": "auto" },
-          "list_zones":          { "tier": "auto" },
-          "list_groups":         { "tier": "auto" },
-          "list_devices":        { "tier": "auto" },
-          "list_sensors":        { "tier": "auto" },
-          "device_status":       { "tier": "auto" },
-          "equipment_summary":   { "tier": "auto" },
-          "scan_status":         { "tier": "auto" },
-          "start_device_setup":  { "tier": "recommend" },
-          "select_protocol":     { "tier": "auto" },
-          "configure_connection":{ "tier": "auto" },
-          "discover_devices":    { "tier": "auto" },
-          "select_device":       { "tier": "auto" },
-          "assign_device_room":  { "tier": "recommend" },
-          "save_device":         { "tier": "require-approval" },
-          "cancel_setup":        { "tier": "auto" },
-          "create_room":         { "tier": "require-approval" },
-          "create_zone":         { "tier": "require-approval" },
-          "create_group":        { "tier": "require-approval" },
-          "assign_light":        { "tier": "require-approval" },
-          "update_schedule":     { "tier": "require-approval" },
-          "report_unknown_device": { "tier": "auto" }
+          "list_rooms": {
+            "tier": "auto"
+          },
+          "list_zones": {
+            "tier": "auto"
+          },
+          "list_groups": {
+            "tier": "auto"
+          },
+          "list_devices": {
+            "tier": "auto"
+          },
+          "list_sensors": {
+            "tier": "auto"
+          },
+          "device_status": {
+            "tier": "auto"
+          },
+          "equipment_summary": {
+            "tier": "auto"
+          },
+          "scan_status": {
+            "tier": "auto"
+          },
+          "start_device_setup": {
+            "tier": "recommend"
+          },
+          "select_protocol": {
+            "tier": "auto"
+          },
+          "configure_connection": {
+            "tier": "auto"
+          },
+          "discover_devices": {
+            "tier": "auto"
+          },
+          "select_device": {
+            "tier": "auto"
+          },
+          "assign_device_room": {
+            "tier": "recommend"
+          },
+          "save_device": {
+            "tier": "require-approval"
+          },
+          "cancel_setup": {
+            "tier": "auto"
+          },
+          "create_room": {
+            "tier": "require-approval"
+          },
+          "create_zone": {
+            "tier": "require-approval"
+          },
+          "create_group": {
+            "tier": "require-approval"
+          },
+          "assign_light": {
+            "tier": "require-approval"
+          },
+          "update_schedule": {
+            "tier": "require-approval"
+          },
+          "report_unknown_device": {
+            "tier": "auto"
+          }
         }
       }
     },
-
     "marketing": {
-      "description": "Lead scoring, outreach copy, SEO drafts, conversion analytics. Content generation only — no autonomous publishing.",
+      "description": "Lead scoring, outreach copy, SEO drafts, conversion analytics. Content generation only \u2014 no autonomous publishing.",
       "capabilities": {
         "sales": {
-          "list_customers":   { "tier": "auto" },
-          "customer_details": { "tier": "auto" },
-          "top_customers":    { "tier": "auto" },
-          "revenue_today":    { "tier": "auto" }
+          "list_customers": {
+            "tier": "auto"
+          },
+          "customer_details": {
+            "tier": "auto"
+          },
+          "top_customers": {
+            "tier": "auto"
+          },
+          "revenue_today": {
+            "tier": "auto"
+          }
         },
         "reports": {
-          "sales_report":     { "tier": "auto" },
-          "export_data":      { "tier": "recommend" },
-          "daily_summary":    { "tier": "auto" }
+          "sales_report": {
+            "tier": "auto"
+          },
+          "export_data": {
+            "tier": "recommend"
+          },
+          "daily_summary": {
+            "tier": "auto"
+          }
         },
         "marketing": {
-          "score_leads":         { "tier": "auto" },
-          "generate_outreach":   { "tier": "recommend" },
-          "draft_seo_page":      { "tier": "recommend" },
-          "conversion_analytics":{ "tier": "auto" },
-          "publish_content":     { "tier": "require-approval" },
-          "send_campaign":       { "tier": "require-approval" }
+          "score_leads": {
+            "tier": "auto"
+          },
+          "generate_outreach": {
+            "tier": "recommend"
+          },
+          "draft_seo_page": {
+            "tier": "recommend"
+          },
+          "conversion_analytics": {
+            "tier": "auto"
+          },
+          "publish_content": {
+            "tier": "require-approval"
+          },
+          "send_campaign": {
+            "tier": "require-approval"
+          }
         }
       }
     },
-
     "payroll": {
-      "description": "Payout reconciliation, exception detection, policy compliance. Read-only analysis — no autonomous payments.",
+      "description": "Payout reconciliation, exception detection, policy compliance. Read-only analysis \u2014 no autonomous payments.",
       "capabilities": {
         "reports": {
-          "sales_report":     { "tier": "auto" },
-          "daily_summary":    { "tier": "auto" }
+          "sales_report": {
+            "tier": "auto"
+          },
+          "daily_summary": {
+            "tier": "auto"
+          }
         },
         "payroll": {
-          "reconcile_payouts":   { "tier": "auto" },
-          "detect_anomalies":    { "tier": "auto" },
-          "compliance_check":    { "tier": "auto" },
-          "generate_pay_stub":   { "tier": "recommend" },
-          "execute_payout":      { "tier": "require-approval" },
-          "adjust_rate":         { "tier": "require-approval" }
+          "reconcile_payouts": {
+            "tier": "auto"
+          },
+          "detect_anomalies": {
+            "tier": "auto"
+          },
+          "compliance_check": {
+            "tier": "auto"
+          },
+          "generate_pay_stub": {
+            "tier": "recommend"
+          },
+          "execute_payout": {
+            "tier": "require-approval"
+          },
+          "adjust_rate": {
+            "tier": "require-approval"
+          }
         }
       }
     },
-
     "grow-advisor": {
-      "description": "Crop optimization, experiment analysis, recipe tuning. Autonomous recipe adjustment within guardrail bounds (±5% spectrum, ±1°C temp, ±15 PPFD). Auto-reverts on regression.",
+      "description": "Crop optimization, experiment analysis, recipe tuning. Autonomous recipe adjustment within guardrail bounds (\u00b15% spectrum, \u00b11\u00b0C temp, \u00b115 PPFD). Auto-reverts on regression.",
       "capabilities": {
         "inventory": {
-          "list_products":    { "tier": "auto" },
-          "product_details":  { "tier": "auto" }
+          "list_products": {
+            "tier": "auto"
+          },
+          "product_details": {
+            "tier": "auto"
+          }
         },
         "monitoring": {
-          "get_readings":     { "tier": "auto" },
-          "zone_status":      { "tier": "auto" },
-          "alert_status":     { "tier": "auto" },
-          "view_automation":  { "tier": "auto" }
+          "get_readings": {
+            "tier": "auto"
+          },
+          "zone_status": {
+            "tier": "auto"
+          },
+          "alert_status": {
+            "tier": "auto"
+          },
+          "view_automation": {
+            "tier": "auto"
+          }
         },
         "checklists": {
-          "harvest_checklist":{ "tier": "auto" },
-          "quality_check":    { "tier": "auto" }
+          "harvest_checklist": {
+            "tier": "auto"
+          },
+          "quality_check": {
+            "tier": "auto"
+          }
         },
         "infrastructure": {
-          "list_rooms":          { "tier": "auto" },
-          "list_zones":          { "tier": "auto" },
-          "list_groups":         { "tier": "auto" },
-          "list_devices":        { "tier": "auto" },
-          "list_sensors":        { "tier": "auto" },
-          "device_status":       { "tier": "auto" },
-          "equipment_summary":   { "tier": "auto" },
-          "scan_status":         { "tier": "auto" },
-          "report_unknown_device": { "tier": "auto" }
+          "list_rooms": {
+            "tier": "auto"
+          },
+          "list_zones": {
+            "tier": "auto"
+          },
+          "list_groups": {
+            "tier": "auto"
+          },
+          "list_devices": {
+            "tier": "auto"
+          },
+          "list_sensors": {
+            "tier": "auto"
+          },
+          "device_status": {
+            "tier": "auto"
+          },
+          "equipment_summary": {
+            "tier": "auto"
+          },
+          "scan_status": {
+            "tier": "auto"
+          },
+          "report_unknown_device": {
+            "tier": "auto"
+          }
         },
         "grow": {
-          "analyze_experiments":       { "tier": "auto" },
-          "recommend_recipe":          { "tier": "recommend" },
-          "compare_benchmarks":        { "tier": "auto" },
-          "predict_harvest":           { "tier": "auto" },
-          "modify_recipe":             { "tier": "require-approval" },
-          "adjust_light_schedule":     { "tier": "require-approval" },
-          "auto_apply_recipe":         { "tier": "auto", "notes": "Phase 5: Autonomous within guardrail bounds. Auto-reverts on regression." },
-          "auto_revert_recipe":        { "tier": "auto", "notes": "Phase 5: Auto-revert on 2 consecutive underperformances." },
-          "clear_revert":              { "tier": "require-approval", "notes": "Phase 5: Manual review required to re-enable autonomous application." },
-          "autonomous_status":         { "tier": "auto" }
+          "analyze_experiments": {
+            "tier": "auto"
+          },
+          "recommend_recipe": {
+            "tier": "recommend"
+          },
+          "compare_benchmarks": {
+            "tier": "auto"
+          },
+          "predict_harvest": {
+            "tier": "auto"
+          },
+          "modify_recipe": {
+            "tier": "require-approval"
+          },
+          "adjust_light_schedule": {
+            "tier": "require-approval"
+          },
+          "auto_apply_recipe": {
+            "tier": "auto",
+            "notes": "Phase 5: Autonomous within guardrail bounds. Auto-reverts on regression."
+          },
+          "auto_revert_recipe": {
+            "tier": "auto",
+            "notes": "Phase 5: Auto-revert on 2 consecutive underperformances."
+          },
+          "clear_revert": {
+            "tier": "require-approval",
+            "notes": "Phase 5: Manual review required to re-enable autonomous application."
+          },
+          "autonomous_status": {
+            "tier": "auto"
+          }
         }
       }
     },
-
     "deployment": {
-      "description": "New site readiness scoring, preflight checks, deployment plans. Advisory only — never executes deployments.",
+      "description": "New site readiness scoring, preflight checks, deployment plans. Advisory only \u2014 never executes deployments.",
       "capabilities": {
         "monitoring": {
-          "get_readings":     { "tier": "auto" },
-          "zone_status":      { "tier": "auto" },
-          "alert_status":     { "tier": "auto" },
-          "view_automation":  { "tier": "auto" }
+          "get_readings": {
+            "tier": "auto"
+          },
+          "zone_status": {
+            "tier": "auto"
+          },
+          "alert_status": {
+            "tier": "auto"
+          },
+          "view_automation": {
+            "tier": "auto"
+          }
         },
         "system": {
-          "status":           { "tier": "auto" },
-          "health_check":     { "tier": "auto" }
+          "status": {
+            "tier": "auto"
+          },
+          "health_check": {
+            "tier": "auto"
+          }
         },
         "deployment": {
-          "site_readiness":      { "tier": "auto" },
-          "preflight_check":     { "tier": "auto" },
-          "generate_plan":       { "tier": "recommend" },
-          "compliance_baseline": { "tier": "auto" },
-          "network_topology":    { "tier": "auto" }
+          "site_readiness": {
+            "tier": "auto"
+          },
+          "preflight_check": {
+            "tier": "auto"
+          },
+          "generate_plan": {
+            "tier": "recommend"
+          },
+          "compliance_baseline": {
+            "tier": "auto"
+          },
+          "network_topology": {
+            "tier": "auto"
+          }
         },
         "infrastructure": {
-          "list_rooms":          { "tier": "auto" },
-          "list_zones":          { "tier": "auto" },
-          "list_groups":         { "tier": "auto" },
-          "list_devices":        { "tier": "auto" },
-          "list_sensors":        { "tier": "auto" },
-          "device_status":       { "tier": "auto" },
-          "equipment_summary":   { "tier": "auto" },
-          "scan_status":         { "tier": "auto" },
-          "start_device_setup":  { "tier": "recommend" },
-          "discover_devices":    { "tier": "auto" },
-          "report_unknown_device": { "tier": "auto" }
+          "list_rooms": {
+            "tier": "auto"
+          },
+          "list_zones": {
+            "tier": "auto"
+          },
+          "list_groups": {
+            "tier": "auto"
+          },
+          "list_devices": {
+            "tier": "auto"
+          },
+          "list_sensors": {
+            "tier": "auto"
+          },
+          "device_status": {
+            "tier": "auto"
+          },
+          "equipment_summary": {
+            "tier": "auto"
+          },
+          "scan_status": {
+            "tier": "auto"
+          },
+          "start_device_setup": {
+            "tier": "recommend"
+          },
+          "discover_devices": {
+            "tier": "auto"
+          },
+          "report_unknown_device": {
+            "tier": "auto"
+          }
         }
       }
     },
-
     "viability": {
       "description": "Farm closure risk scoring, acquisition evaluation, strategic growth analysis. All outputs require board review.",
       "capabilities": {
         "reports": {
-          "sales_report":     { "tier": "auto" },
-          "daily_summary":    { "tier": "auto" }
+          "sales_report": {
+            "tier": "auto"
+          },
+          "daily_summary": {
+            "tier": "auto"
+          }
         },
         "viability": {
-          "closure_risk":         { "tier": "auto" },
-          "acquisition_eval":     { "tier": "require-approval" },
-          "growth_scenarios":     { "tier": "recommend" },
-          "competitive_position": { "tier": "auto" },
-          "portfolio_optimization": { "tier": "require-approval" }
+          "closure_risk": {
+            "tier": "auto"
+          },
+          "acquisition_eval": {
+            "tier": "require-approval"
+          },
+          "growth_scenarios": {
+            "tier": "recommend"
+          },
+          "competitive_position": {
+            "tier": "auto"
+          },
+          "portfolio_optimization": {
+            "tier": "require-approval"
+          }
         }
       }
     },
-
     "developer": {
-      "description": "Developer mode: evaluate and propose code/config changes. All actions require human approval — no autonomous modifications.",
+      "description": "Developer mode: evaluate and propose code/config changes. All actions require human approval \u2014 no autonomous modifications.",
       "capabilities": {
         "developer": {
-          "evaluate_request":  { "tier": "auto" },
-          "propose_change":    { "tier": "require-approval" },
-          "list_proposals":    { "tier": "auto" },
-          "approve_proposal":  { "tier": "require-approval" },
-          "reject_proposal":   { "tier": "require-approval" }
+          "evaluate_request": {
+            "tier": "auto"
+          },
+          "propose_change": {
+            "tier": "require-approval"
+          },
+          "list_proposals": {
+            "tier": "auto"
+          },
+          "approve_proposal": {
+            "tier": "require-approval"
+          },
+          "reject_proposal": {
+            "tier": "require-approval"
+          }
         },
         "system": {
-          "status":            { "tier": "auto" },
-          "health_check":      { "tier": "auto" }
+          "status": {
+            "tier": "auto"
+          },
+          "health_check": {
+            "tier": "auto"
+          }
         },
         "infrastructure": {
-          "list_rooms":          { "tier": "auto" },
-          "list_zones":          { "tier": "auto" },
-          "list_groups":         { "tier": "auto" },
-          "list_devices":        { "tier": "auto" },
-          "list_sensors":        { "tier": "auto" },
-          "device_status":       { "tier": "auto" },
-          "equipment_summary":   { "tier": "auto" },
-          "scan_status":         { "tier": "auto" },
-          "start_device_setup":  { "tier": "auto" },
-          "select_protocol":     { "tier": "auto" },
-          "configure_connection":{ "tier": "auto" },
-          "discover_devices":    { "tier": "auto" },
-          "select_device":       { "tier": "auto" },
-          "assign_device_room":  { "tier": "auto" },
-          "save_device":         { "tier": "require-approval" },
-          "cancel_setup":        { "tier": "auto" },
-          "create_room":         { "tier": "require-approval" },
-          "create_zone":         { "tier": "require-approval" },
-          "create_group":        { "tier": "require-approval" },
-          "assign_light":        { "tier": "require-approval" },
-          "update_schedule":     { "tier": "require-approval" },
-          "report_unknown_device": { "tier": "auto" }
+          "list_rooms": {
+            "tier": "auto"
+          },
+          "list_zones": {
+            "tier": "auto"
+          },
+          "list_groups": {
+            "tier": "auto"
+          },
+          "list_devices": {
+            "tier": "auto"
+          },
+          "list_sensors": {
+            "tier": "auto"
+          },
+          "device_status": {
+            "tier": "auto"
+          },
+          "equipment_summary": {
+            "tier": "auto"
+          },
+          "scan_status": {
+            "tier": "auto"
+          },
+          "start_device_setup": {
+            "tier": "auto"
+          },
+          "select_protocol": {
+            "tier": "auto"
+          },
+          "configure_connection": {
+            "tier": "auto"
+          },
+          "discover_devices": {
+            "tier": "auto"
+          },
+          "select_device": {
+            "tier": "auto"
+          },
+          "assign_device_room": {
+            "tier": "auto"
+          },
+          "save_device": {
+            "tier": "require-approval"
+          },
+          "cancel_setup": {
+            "tier": "auto"
+          },
+          "create_room": {
+            "tier": "require-approval"
+          },
+          "create_zone": {
+            "tier": "require-approval"
+          },
+          "create_group": {
+            "tier": "require-approval"
+          },
+          "assign_light": {
+            "tier": "require-approval"
+          },
+          "update_schedule": {
+            "tier": "require-approval"
+          },
+          "report_unknown_device": {
+            "tier": "auto"
+          }
+        }
+      }
+    },
+    "crop-scheduler": {
+      "description": "S.A.G.E. -- Scheduling Agent for Grow Events. Daily planting/harvest scheduling, zone assignment, succession planning, seed-window alerts. Never modifies recipes.",
+      "capabilities": {
+        "monitoring": {
+          "zone_status": {
+            "tier": "auto"
+          },
+          "get_readings": {
+            "tier": "auto"
+          },
+          "alert_status": {
+            "tier": "auto"
+          }
+        },
+        "inventory": {
+          "list_products": {
+            "tier": "auto"
+          },
+          "inventory_value": {
+            "tier": "auto"
+          },
+          "product_details": {
+            "tier": "auto"
+          }
+        },
+        "infrastructure": {
+          "list_rooms": {
+            "tier": "auto"
+          },
+          "list_zones": {
+            "tier": "auto"
+          },
+          "list_groups": {
+            "tier": "auto"
+          },
+          "list_devices": {
+            "tier": "auto"
+          }
+        },
+        "planting": {
+          "list_plans": {
+            "tier": "auto"
+          },
+          "generate_daily_tasks": {
+            "tier": "auto"
+          },
+          "match_scan_to_plan": {
+            "tier": "auto"
+          },
+          "suggest_zone_for_crop": {
+            "tier": "auto"
+          },
+          "simulate_zone_impact": {
+            "tier": "auto"
+          },
+          "create_plan_assignment": {
+            "tier": "recommend"
+          },
+          "assign_crop_to_group": {
+            "tier": "recommend"
+          },
+          "auto_fill_seed_form": {
+            "tier": "auto"
+          },
+          "override_existing_plan": {
+            "tier": "require-approval"
+          },
+          "reserve_zone_capacity": {
+            "tier": "recommend"
+          }
+        },
+        "succession": {
+          "schedule": {
+            "tier": "recommend"
+          },
+          "suggest": {
+            "tier": "auto"
+          },
+          "optimize": {
+            "tier": "recommend"
+          },
+          "forecast": {
+            "tier": "auto"
+          }
         }
       }
     }
   },
-
   "defaults": {
     "unknown_agent_class": "farm-operator",
     "unknown_action_tier": "require-approval",

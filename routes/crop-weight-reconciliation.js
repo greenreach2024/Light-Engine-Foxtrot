@@ -475,7 +475,7 @@ export function getCropBenchmark(cropKey) {
     avg_weight_per_plant_oz: bm.avg_weight_per_plant_oz,
     avg_weight_per_tray_oz: bm.avg_weight_per_tray_oz,
     sample_count: bm.samples.length,
-    verified: bm.samples.length >= 1
+    verified: bm.samples.length >= 3
   };
 }
 

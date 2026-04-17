@@ -112,89 +112,151 @@ export default class RecipeEnvironmentalTargets {
    */
   async _calculateWeightedTargets(trays, level, levelId) {
     let totalWeight = 0;
-    let weightedVpd = 0;
-    let weightedTemp = 0;
-    let weightedMaxRh = 0;
     let maxRhValues = [];
-    
+    const contributors = []; // Per-tray breakdown for telemetry
+
+    // Default comfort bands (half-widths) per dimension
+    const VPD_HALF_BAND = 0.15;  // kPa
+    const TEMP_HALF_BAND = 1.5;  // C
+
     for (const tray of trays) {
-      // Get recipe data
       const recipe = await this._getRecipeData(tray.recipe_id);
-      
+
       if (!recipe || !recipe.data || !recipe.data.schedule) {
         this.logger.warn(`[recipe-targets] Recipe ${tray.recipe_id} not found or invalid`);
         continue;
       }
-      
-      // Calculate current day in grow cycle
+
       const currentDay = this._calculateCurrentDay(tray.seed_date);
-      
-      // Find closest schedule day in recipe
       const scheduleDay = this._findScheduleDay(recipe.data.schedule, currentDay);
-      
+
       if (!scheduleDay) {
         this.logger.warn(`[recipe-targets] No schedule found for day ${currentDay} in recipe ${recipe.name}`);
         continue;
       }
-      
-      // Use planted_site_count as weight (more plants = more influence)
+
       const weight = tray.planted_site_count || 1;
-      
-      // Extract targets from schedule (v2 format)
       const vpdTarget = parseFloat(scheduleDay.vpd_target) || null;
       const tempTarget = parseFloat(scheduleDay.temp_target) || null;
       const maxRh = parseFloat(scheduleDay.max_humidity) || null;
-      
-      // Accumulate weighted values
+
       if (vpdTarget !== null) {
-        weightedVpd += vpdTarget * weight;
+        contributors.push({
+          tray_id: tray.tray_id,
+          tray_run_id: tray.tray_run_id,
+          recipe_id: tray.recipe_id,
+          day: currentDay,
+          weight,
+          vpd: { target: vpdTarget, min: vpdTarget - VPD_HALF_BAND, max: vpdTarget + VPD_HALF_BAND },
+          temp: tempTarget !== null ? { target: tempTarget, min: tempTarget - TEMP_HALF_BAND, max: tempTarget + TEMP_HALF_BAND } : null,
+          maxRh
+        });
         totalWeight += weight;
       }
-      
-      if (tempTarget !== null) {
-        weightedTemp += tempTarget * weight;
-      }
-      
+
       if (maxRh !== null) {
         maxRhValues.push(maxRh);
       }
-      
+
       this.logger.debug(`[recipe-targets] Tray ${tray.tray_id}: Day ${currentDay}, VPD ${vpdTarget}, Temp ${tempTarget}, MaxRH ${maxRh}, Weight ${weight}`);
     }
-    
-    if (totalWeight === 0) {
+
+    if (totalWeight === 0 || contributors.length === 0) {
       this.logger.warn(`[recipe-targets] No valid recipes found for ${level} ${levelId}`);
       return this._getDefaultTargets('no-valid-recipes');
     }
-    
-    // Calculate weighted averages
-    const avgVpd = weightedVpd / totalWeight;
-    const avgTemp = weightedTemp / totalWeight;
-    
-    // For Max RH, use the MINIMUM (most restrictive) across all trays
-    // This prevents any tray from exceeding its humidity limit
+
+    // ── Range intersection algorithm ────────────────────────────────────
+    // Intersect comfort bands across all trays. If the intersection is
+    // non-empty, pick the weighted centroid clamped inside.  If empty,
+    // mark infeasible and protect the most-sensitive crop (smallest band).
+
+    const vpdIntersectMin = Math.max(...contributors.map(c => c.vpd.min));
+    const vpdIntersectMax = Math.min(...contributors.map(c => c.vpd.max));
+
+    const tempContributors = contributors.filter(c => c.temp !== null);
+    const tempIntersectMin = tempContributors.length > 0
+      ? Math.max(...tempContributors.map(c => c.temp.min)) : null;
+    const tempIntersectMax = tempContributors.length > 0
+      ? Math.min(...tempContributors.map(c => c.temp.max)) : null;
+
+    // Weighted centroid (used only within feasible intersection)
+    const weightedVpdCentroid = contributors.reduce((s, c) => s + c.vpd.target * c.weight, 0) / totalWeight;
+    const weightedTempCentroid = tempContributors.length > 0
+      ? tempContributors.reduce((s, c) => s + c.temp.target * c.weight, 0)
+        / tempContributors.reduce((s, c) => s + c.weight, 0)
+      : null;
+
+    // VPD resolution
+    let vpdState, vpdTarget, vpdBandMin, vpdBandMax;
+    if (vpdIntersectMin <= vpdIntersectMax) {
+      // Feasible: clamp centroid inside intersection
+      vpdState = 'feasible';
+      vpdTarget = Math.max(vpdIntersectMin, Math.min(vpdIntersectMax, weightedVpdCentroid));
+      vpdBandMin = vpdIntersectMin;
+      vpdBandMax = vpdIntersectMax;
+    } else {
+      // Infeasible: protect the most-sensitive crop (smallest band width)
+      vpdState = 'infeasible';
+      const sensitive = contributors.reduce((best, c) => {
+        const width = c.vpd.max - c.vpd.min;
+        return (!best || width < best.width) ? { ...c, width } : best;
+      }, null);
+      vpdTarget = sensitive.vpd.target;
+      vpdBandMin = sensitive.vpd.min;
+      vpdBandMax = sensitive.vpd.max;
+      this.logger.warn(`[recipe-targets] VPD INFEASIBLE for ${level} ${levelId}: no common band across ${contributors.length} crops. Protecting ${sensitive.recipe_id}.`);
+    }
+
+    // Temperature resolution
+    let tempState = 'feasible', tempTarget2, tempBandMin, tempBandMax;
+    if (tempIntersectMin !== null && tempIntersectMax !== null) {
+      if (tempIntersectMin <= tempIntersectMax) {
+        tempState = 'feasible';
+        tempTarget2 = Math.max(tempIntersectMin, Math.min(tempIntersectMax, weightedTempCentroid));
+        tempBandMin = tempIntersectMin;
+        tempBandMax = tempIntersectMax;
+      } else {
+        tempState = 'infeasible';
+        const sensitive = tempContributors.reduce((best, c) => {
+          const width = c.temp.max - c.temp.min;
+          return (!best || width < best.width) ? { ...c, width } : best;
+        }, null);
+        tempTarget2 = sensitive.temp.target;
+        tempBandMin = sensitive.temp.min;
+        tempBandMax = sensitive.temp.max;
+        this.logger.warn(`[recipe-targets] TEMP INFEASIBLE for ${level} ${levelId}: no common band across ${tempContributors.length} crops. Protecting ${sensitive.recipe_id}.`);
+      }
+    } else {
+      // No temp data at all -- use default
+      tempTarget2 = 21;
+      tempBandMin = 19;
+      tempBandMax = 23;
+    }
+
+    // Max RH: minimum (most restrictive) -- unchanged, already correct
     const maxRhOverride = maxRhValues.length > 0 ? Math.min(...maxRhValues) : null;
-    
-    // Create VPD band with hysteresis
-    const vpdBand = {
-      min: avgVpd - 0.15, // ±0.15 kPa band
-      max: avgVpd + 0.15,
-      target: avgVpd,
-      unit: 'kPa'
-    };
-    
-    // Create temp band
-    const tempBand = {
-      min: avgTemp - 1.5, // ±1.5°C band
-      max: avgTemp + 1.5,
-      target: avgTemp,
-      unit: '°C'
-    };
-    
+
+    const vpdBand = { min: vpdBandMin, max: vpdBandMax, target: vpdTarget, unit: 'kPa' };
+    const tempBand = { min: tempBandMin, max: tempBandMax, target: tempTarget2, unit: 'C' };
+
     return {
       vpd: vpdBand,
       temperature: tempBand,
       maxRh: maxRhOverride,
+      compromise_state: (vpdState === 'feasible' && tempState === 'feasible') ? 'feasible' : 'infeasible',
+      vpd_state: vpdState,
+      temp_state: tempState,
+      contributors: contributors.map(c => ({
+        tray_id: c.tray_id,
+        tray_run_id: c.tray_run_id,
+        recipe_id: c.recipe_id,
+        day: c.day,
+        vpd_target: c.vpd.target,
+        temp_target: c.temp?.target ?? null,
+        delta_vpd: Math.abs(c.vpd.target - vpdTarget),
+        delta_temp: c.temp ? Math.abs(c.temp.target - tempTarget2) : null
+      })),
       level,
       levelId,
       trayCount: trays.length,
