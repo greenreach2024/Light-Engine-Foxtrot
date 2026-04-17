@@ -660,8 +660,62 @@ function canManageProcurement() {
   return currentUserRole === 'manager' || currentUserRole === 'admin';
 }
 
+function getProcurementAuthHeaders() {
+  const headers = {};
+  const token = getStoredToken();
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  const session = decodeJwtPayload(token);
+  const farmId = session?.farm_id || session?.farmId || localStorage.getItem('farmId') || sessionStorage.getItem('farmId');
+  if (farmId) {
+    headers['X-Farm-ID'] = farmId;
+  }
+
+  return headers;
+}
+
+function normalizeProcurementPrice(value) {
+  const amount = Number(value);
+  return Number.isFinite(amount) ? amount : 0;
+}
+
+function normalizeProcurementCatalogProduct(product) {
+  return {
+    ...product,
+    price: normalizeProcurementPrice(product?.price),
+  };
+}
+
+function normalizeProcurementOrderSummary(order) {
+  return {
+    ...order,
+    subtotal: normalizeProcurementPrice(order?.subtotal),
+    itemCount: Number(order?.itemCount) || 0,
+  };
+}
+
+function normalizeProcurementOrderDetail(order) {
+  return {
+    ...order,
+    subtotal: normalizeProcurementPrice(order?.subtotal),
+    items: Array.isArray(order?.items) ? order.items.map((item) => ({
+      ...item,
+      unitPrice: normalizeProcurementPrice(item?.unitPrice ?? item?.price),
+      lineTotal: normalizeProcurementPrice(item?.lineTotal ?? item?.total),
+    })) : [],
+  };
+}
+
 async function apiFetch(path, options = {}) {
-  const response = await fetch(`${API}${path}`, options);
+  const response = await fetch(`${API}${path}`, {
+    ...options,
+    headers: {
+      ...getProcurementAuthHeaders(),
+      ...(options.headers || {}),
+    },
+  });
   if (response.status === 401) {
     throw new Error('auth_required');
   }
@@ -695,7 +749,7 @@ async function loadCatalog() {
     const r = await apiFetch('/catalog?limit=100');
     const data = await r.json();
     if (data.ok) {
-      catalog.products = data.products;
+      catalog.products = Array.isArray(data.products) ? data.products.map(normalizeProcurementCatalogProduct) : [];
       catalog.categories = data.categories || [];
       renderCategoryPills();
       renderProducts(catalog.products);
@@ -1029,7 +1083,9 @@ async function loadOrders() {
     const r = await apiFetch('/orders');
     const data = await r.json();
 
-    if (!data.ok || !data.orders.length) {
+    const orders = Array.isArray(data.orders) ? data.orders.map(normalizeProcurementOrderSummary) : [];
+
+    if (!data.ok || !orders.length) {
       container.innerHTML = '<div class="empty-state">No orders yet<div style="font-size:0.85rem;margin-top:0.25rem;">Place your first order from the catalog</div></div>';
       return;
     }
@@ -1046,7 +1102,7 @@ async function loadOrders() {
           <th></th>
         </tr></thead>
         <tbody>
-          ${data.orders.map(o => `
+          ${orders.map(o => `
             <tr>
               <td style="font-weight:600;color:#60a5fa;">${o.orderId}</td>
               <td>${new Date(o.createdAt).toLocaleDateString()}</td>
@@ -1080,7 +1136,7 @@ async function viewOrder(orderId) {
     const data = await r.json();
     if (!data.ok) { detail.innerHTML = '<div class="empty-state">Order not found</div>'; return; }
 
-    const o = data.order;
+    const o = normalizeProcurementOrderDetail(data.order);
     // Group items by supplier
     const groups = {};
     o.items.forEach(item => {

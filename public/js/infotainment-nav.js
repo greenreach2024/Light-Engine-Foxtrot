@@ -54,7 +54,7 @@
         { id: 'wholesale-orders', label: 'Wholesale Orders',    icon: 'icon-wholesale',     section: 'wholesale-orders' },
         { id: 'procurement',      label: 'Procurement',         icon: 'icon-procurement',   section: 'iframe-view', url: '/views/procurement-portal.html' },
         { id: 'pricing',          label: 'Pricing',             icon: 'icon-pricing',       section: 'pricing' },
-        { id: 'crop-value',       label: 'Crop Value',          icon: 'icon-crop-value',    section: 'crop-value' },
+        { id: 'crop-value',       label: 'Farm Value',          icon: 'icon-crop-value',    section: 'dashboard' },
         { id: 'traceability',     label: 'Lot Traceability',    icon: 'icon-traceability',  section: 'traceability' },
         { id: 'harvest-donations', label: 'Harvest & Donations', icon: 'icon-sustainability', section: 'harvest-donations' },
         { id: 'sustainability',   label: 'Sustainability',      icon: 'icon-sustainability', section: 'sustainability' },
@@ -240,6 +240,17 @@
     history.replaceState(null, '', window.location.pathname);
   }
 
+  function openFarmValueOverview() {
+    currentCategory = 'business';
+    currentItem = null;
+    showDashboardInHome();
+    setActiveLayer(0);
+    history.replaceState(null, '', window.location.pathname + '#business/crop-value');
+    if (typeof window.focusDashboardFarmValueCard === 'function') {
+      window.focusDashboardFarmValueCard();
+    }
+  }
+
   function navigateToCategory(catKey) {
     var cat = CATEGORIES[catKey];
     if (!cat) return;
@@ -262,6 +273,11 @@
 
     currentCategory = catKey;
     currentItem = item;
+
+    if (item.id === 'crop-value') {
+      openFarmValueOverview();
+      return;
+    }
 
     // Hide all content-sections in the content layer
     var sections = layerContent.querySelectorAll('.content-section');
@@ -399,6 +415,11 @@
     var hash = window.location.hash.replace('#', '');
     if (!hash) return false;
 
+    if (hash === 'crop-value' || hash === 'business/crop-value') {
+      openFarmValueOverview();
+      return true;
+    }
+
     var parts = hash.split('/');
     var catKey = parts[0];
     var itemId = parts[1];
@@ -464,6 +485,10 @@
 
           if (section === 'dashboard') {
             navigateHome();
+            if (el.dataset.focusCard === 'farm-value' && typeof window.focusDashboardFarmValueCard === 'function') {
+              window.focusDashboardFarmValueCard();
+              history.replaceState(null, '', window.location.pathname + '#business/crop-value');
+            }
             return;
           }
 
@@ -521,6 +546,10 @@
 
           if (section === 'dashboard') {
             navigateHome();
+            if (card.dataset.focusCard === 'farm-value' && typeof window.focusDashboardFarmValueCard === 'function') {
+              window.focusDashboardFarmValueCard();
+              history.replaceState(null, '', window.location.pathname + '#business/crop-value');
+            }
             return;
           }
 

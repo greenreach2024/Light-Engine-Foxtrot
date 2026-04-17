@@ -44,6 +44,11 @@ const SUPPORTED_PAYMENT_METHODS = new Set(['invoice']);
 const ADMIN_ROLES = ['admin'];
 const MANAGER_ROLES = ['manager', 'admin'];
 
+function normalizeMoney(value) {
+  const amount = Number(value);
+  return Number.isFinite(amount) ? amount : 0;
+}
+
 // ─── Helpers ───────────────────────────────────────────
 
 function readJSON(filePath) {
@@ -259,6 +264,11 @@ router.get('/catalog', (req, res) => {
     }
 
     // Sort
+    products = products.map(product => ({
+      ...product,
+      price: normalizeMoney(product.price)
+    }));
+
     if (sort === 'price_asc') products.sort((a, b) => a.price - b.price);
     else if (sort === 'price_desc') products.sort((a, b) => b.price - a.price);
     else if (sort === 'name') products.sort((a, b) => a.name.localeCompare(b.name));
@@ -410,9 +420,9 @@ router.put('/cart', (req, res) => {
         category: product.category,
         supplierId: product.supplierId,
         quantity: parseInt(item.quantity),
-        unitPrice: product.price,
+        unitPrice: normalizeMoney(product.price),
         saleUnit: product.saleUnit,
-        lineTotal: product.price * parseInt(item.quantity),
+        lineTotal: normalizeMoney(product.price) * parseInt(item.quantity),
         inStock: product.inStock
       });
     }
@@ -488,11 +498,11 @@ router.post('/orders', async (req, res) => {
         category: product.category,
         supplierId: product.supplierId,
         quantity: parseInt(item.quantity) || 1,
-        unitPrice: product.price,
+        unitPrice: normalizeMoney(product.price),
         saleUnit: product.saleUnit,
         standardUnit: product.standardUnit,
         standardQty: product.standardQty,
-        lineTotal: product.price * (parseInt(item.quantity) || 1),
+        lineTotal: normalizeMoney(product.price) * (parseInt(item.quantity) || 1),
         status: 'pending',
         trackingNumber: null,
         carrier: null,

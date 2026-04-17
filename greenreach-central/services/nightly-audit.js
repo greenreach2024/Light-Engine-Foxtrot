@@ -19,6 +19,7 @@ const TAG = '[NightlyAudit]';
 
 let auditInterval = null;
 let emailVerifySent = false;
+const ENABLE_STARTUP_EMAIL_VERIFY = String(process.env.ENABLE_STARTUP_EMAIL_VERIFY || '').toLowerCase() === 'true';
 
 // ── Public API ──────────────────────────────────────────────────────
 
@@ -32,8 +33,8 @@ export function startNightlyAuditService() {
 
   logger.info(`${TAG} Scheduled for ${next.toISOString()} (in ${Math.round(msUntilNext / 60000)} min)`);
 
-  // Verify email transport once per container cold-start (skip on warm restarts)
-  if (!emailVerifySent) {
+  // Startup transport verification is noisy on Cloud Run cold starts, so keep it opt-in.
+  if (ENABLE_STARTUP_EMAIL_VERIFY && !emailVerifySent) {
     setTimeout(() => verifyEmailTransport(), 30_000);
   }
 

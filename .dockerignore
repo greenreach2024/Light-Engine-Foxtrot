@@ -61,11 +61,13 @@ npm-debug.log*
 # so we include that dir and exclude the rest.
 greenreach-central/node_modules/
 greenreach-central/routes/
-greenreach-central/services/
+greenreach-central/services/*
+!greenreach-central/services/
 !greenreach-central/services/notification-store.js
 greenreach-central/lib/
 greenreach-central/middleware/
-greenreach-central/config/
+greenreach-central/config/*
+!greenreach-central/config/
 !greenreach-central/config/database.js
 greenreach-central/data/
 greenreach-central/docs/
@@ -91,6 +93,17 @@ greenreach-central/public/videos/
 light-engine-access-manager/
 greenreach-central-app/
 external/
+aws-lambda/
+aws-infrastructure/
+aws-testing/
+deployments/
+install-server/
+leam/
+.platform/
+.ebextensions/
+Procfile
+buildspec.yml
+ecosystem.config.cjs
 config/sync-queue.json
 data/sync-monitor-snapshot.json
 

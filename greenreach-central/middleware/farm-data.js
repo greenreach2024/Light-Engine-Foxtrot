@@ -14,7 +14,7 @@
  * server URL.
  */
 
-import { readFileSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
 import { randomBytes } from 'crypto';
@@ -59,6 +59,89 @@ const FILE_TO_DATA_TYPE = {
   'device-meta.json': 'device_meta',
   'farm-settings.json': 'farm_settings',
 };
+
+const SHARED_PUBLIC_DATA_FILES = new Set([
+  'calibration.json',
+  'crop-pricing.json',
+  'crop-registry.json',
+  'device-kb.json',
+  'device-manufacturers.json',
+  'equipment.catalog.json',
+  'equipment-kb.json',
+  'equipment-metadata.json',
+  'spd-library-default.json',
+  'spd-library.json',
+]);
+
+let _sharedPublicDataManifest = null;
+
+function loadSharedDataManifest() {
+  if (_sharedPublicDataManifest !== null) {
+    return _sharedPublicDataManifest;
+  }
+
+  const __dirname = dirname(fileURLToPath(import.meta.url));
+  const candidates = [
+    resolve(process.cwd(), 'shared-public-data.generated.json'),
+    resolve(__dirname, '..', 'shared-public-data.generated.json'),
+  ];
+
+  for (const candidate of candidates) {
+    try {
+      if (!existsSync(candidate)) {
+        continue;
+      }
+
+      _sharedPublicDataManifest = JSON.parse(readFileSync(candidate, 'utf8'));
+      return _sharedPublicDataManifest;
+    } catch {
+      // Try the next candidate.
+    }
+  }
+
+  _sharedPublicDataManifest = {};
+  return _sharedPublicDataManifest;
+}
+
+function resolveSharedDataFile(fileName) {
+  const __dirname = dirname(fileURLToPath(import.meta.url));
+  return [
+    resolve('/opt', 'shared-data', fileName),
+    resolve(process.cwd(), 'public', 'data', fileName),
+    resolve(process.cwd(), 'data', fileName),
+    resolve(__dirname, '..', 'public', 'data', fileName),
+    resolve(__dirname, '..', 'data', fileName),
+    resolve(__dirname, '..', '..', 'public', 'data', fileName),
+    resolve(__dirname, '..', '..', 'data', fileName),
+  ];
+}
+
+function loadSharedDataFile(fileName) {
+  const manifest = loadSharedDataManifest();
+  if (typeof manifest[fileName] === 'string') {
+    return {
+      path: 'manifest',
+      content: manifest[fileName],
+    };
+  }
+
+  for (const candidate of resolveSharedDataFile(fileName)) {
+    try {
+      if (!existsSync(candidate)) {
+        continue;
+      }
+
+      return {
+        path: candidate,
+        content: readFileSync(candidate, 'utf8'),
+      };
+    } catch {
+      // Try the next candidate path.
+    }
+  }
+
+  return null;
+}
 
 // Default empty responses for each data type (prevent frontend errors)
 // When a farm is authenticated but has no data yet, return these instead of
@@ -166,10 +249,22 @@ export function farmDataMiddleware(inMemoryStore) {
     // Only intercept GET requests to /data/*.json
     if (req.method !== 'GET') return next();
 
-    const match = req.path.match(/^\/data\/([a-z0-9_-]+\.json)$/i);
+    const match = req.path.match(/^\/data\/([a-z0-9_.-]+\.json)$/i);
     if (!match) return next();
 
     const fileName = match[1];
+
+    // Shared library/catalog JSON is global, not farm-scoped. Serve it from
+    // disk here so these requests stay inside the existing /data pipeline.
+    if (SHARED_PUBLIC_DATA_FILES.has(fileName)) {
+      const asset = loadSharedDataFile(fileName);
+      if (asset) {
+        return res.type('application/json').send(asset.content);
+      }
+
+      logger.warn(`[FarmData] Missing shared data asset: ${fileName}`);
+      return res.status(404).json({ error: 'Not Found', message: `Shared data file ${fileName} not found` });
+    }
 
     // farm.json is handled by the dedicated merge route (farm-json-merge.js)
     // which merges DB data with flat file data for complete farm profiles.

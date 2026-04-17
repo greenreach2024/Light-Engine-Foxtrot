@@ -1904,7 +1904,7 @@ On login and token expiry, all farm-scoped browser storage keys are cleared.
 | farms/ | Farm credentials directory |
 | buyers/ | Wholesale buyer profiles |
 | nginx/ | Nginx proxy config |
-| greenreach-firebase.json | Firebase service account |
+| (no committed Firebase key file) | Use ADC/workload identity; optional local JSON outside repo |
 | greenreach-private.pem | RSA private key |
 | greenreach-public.pem | RSA public key |
 
@@ -2000,7 +2000,7 @@ On login and token expiry, all farm-scoped browser storage keys are cleared.
 | Google Cloud Storage | USE_GCS, GCS_BUCKET | Persistent file storage (greenreach-storage bucket) | Both |
 | Google Secret Manager | (auto via IAM) | Credentials storage | Both |
 | AlloyDB | DB_HOST, DB_PASSWORD | PostgreSQL-compatible database (10.87.0.2) | Both |
-| Firebase | greenreach-firebase.json | Push notifications | Both |
+| Firebase | FIREBASE_ENABLED, GOOGLE_APPLICATION_CREDENTIALS (local-only fallback) | Push notifications | Both |
 | IFTTT | IFTTT_KEY, IFTTT_WEBHOOK_KEY | Webhook automations | LE |
 | TP-Link Kasa | KASA_EMAIL, KASA_PASSWORD | Smart plug control | LE |
 | Shelly | LAN-based | Smart plug control | LE |

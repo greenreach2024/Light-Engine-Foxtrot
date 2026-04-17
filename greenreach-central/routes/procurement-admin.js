@@ -4,6 +4,11 @@ import { farmStore } from '../lib/farm-data-store.js';
 const router = express.Router();
 const commissionRate = parseFloat(process.env.PROCUREMENT_COMMISSION_RATE) || 0.05;
 
+function normalizeMoney(value) {
+  const amount = Number(value);
+  return Number.isFinite(amount) ? amount : 0;
+}
+
 /**
  * GreenReach Central Procurement Admin Routes
  * Manages the master catalog, suppliers, and procurement revenue
@@ -205,7 +210,7 @@ router.get('/orders', async (req, res) => {
       ...o,
       orderId: o.orderId || o.id,
       itemCount: o.itemCount || (o.items || []).reduce((s, i) => s + (i.quantity || 1), 0),
-      subtotal: o.subtotal || (o.items || []).reduce((s, i) => s + (i.total || (i.price || 0) * (i.quantity || 1) || 0), 0),
+      subtotal: normalizeMoney(o.subtotal || (o.items || []).reduce((s, i) => s + (normalizeMoney(i.total) || normalizeMoney(i.price) * (i.quantity || 1) || 0), 0)),
       paymentStatus: o.paymentStatus || 'pending',
     }));
     res.json({ ok: true, orders: enriched, total: enriched.length });
@@ -227,8 +232,8 @@ router.get('/orders/:orderId', async (req, res) => {
     const suppData = await farmStore.get(fid, 'procurement_suppliers') || { suppliers: [] };
     const enrichedItems = (order.items || []).map(item => ({
       ...item,
-      unitPrice: item.unitPrice || item.price || 0,
-      lineTotal: item.lineTotal || item.total || (item.price || 0) * (item.quantity || 1),
+      unitPrice: normalizeMoney(item.unitPrice || item.price || 0),
+      lineTotal: normalizeMoney(item.lineTotal || item.total || normalizeMoney(item.price) * (item.quantity || 1)),
       saleUnit: item.saleUnit || item.unit || 'each',
       status: item.status || order.status || 'pending',
       supplierName: item.supplierName || (suppData.suppliers || []).find(s => s.id === item.supplierId)?.name || item.supplierId || '',
@@ -241,6 +246,7 @@ router.get('/orders/:orderId', async (req, res) => {
       paymentMethod: order.paymentMethod || 'invoice',
       paymentStatus: order.paymentStatus || 'pending',
       shippingAddress: order.shippingAddress || null,
+      subtotal: normalizeMoney(order.subtotal),
       items: enrichedItems,
     };
     res.json({ ok: true, order: enrichedOrder });
@@ -268,7 +274,7 @@ router.post('/orders', async (req, res) => {
     let subtotal = 0;
     const orderItems = items.map(item => {
       const product = products.find(p => p.sku === item.sku);
-      const price = product ? (product.price || 0) : (item.price || 0);
+      const price = product ? normalizeMoney(product.price || 0) : normalizeMoney(item.price || 0);
       const lineTotal = price * (item.quantity || 1);
       subtotal += lineTotal;
       return {

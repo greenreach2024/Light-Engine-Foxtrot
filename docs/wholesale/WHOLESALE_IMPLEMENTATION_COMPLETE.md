@@ -316,11 +316,14 @@ alternative_farm_search (triggered)
 #### 2. Firebase Setup (30 minutes)
 - [ ] Create project: https://console.firebase.google.com
 - [ ] Enable Cloud Messaging
-- [ ] Generate service account JSON
-- [ ] Save to `/config/greenreach-firebase.json`
-- [ ] Add path to .env:
+- [ ] Configure keyless auth on Cloud Run/GCP via service account IAM
+- [ ] For local fallback only, store service account JSON outside this repository
+- [ ] Add Firebase settings to .env:
   ```bash
-  FIREBASE_SERVICE_ACCOUNT_PATH=./config/greenreach-firebase.json
+  FIREBASE_ENABLED=true
+  # Optional local fallback only:
+  # GOOGLE_APPLICATION_CREDENTIALS=/absolute/path/outside/repo/firebase-service-account.json
+  # FIREBASE_SERVICE_ACCOUNT_PATH=/absolute/path/outside/repo/firebase-service-account.json
   ```
 
 #### 3. Database Migrations (5 minutes)
@@ -415,7 +418,9 @@ TWILIO_AUTH_TOKEN=xxxxxxxxxx
 TWILIO_PHONE_NUMBER=+16135551234
 
 # Notifications - Push (REQUIRED FOR PRODUCTION)
-FIREBASE_SERVICE_ACCOUNT_PATH=./config/greenreach-firebase.json
+FIREBASE_ENABLED=true
+# Optional local fallback only:
+# GOOGLE_APPLICATION_CREDENTIALS=/absolute/path/outside/repo/firebase-service-account.json
 
 # Application
 APP_URL=https://central.greenreach.ca

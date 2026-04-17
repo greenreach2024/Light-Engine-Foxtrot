@@ -376,7 +376,7 @@ export async function sendDailyBriefing() {
     const farms = farmStats.status === 'fulfilled' ? farmStats.value.rows[0] : {};
 
     const alertSummary = alerts.map(a => `${a.severity}: ${a.cnt}`).join(', ') || 'None';
-    const briefingTo = process.env.ADMIN_BRIEFING_EMAIL || process.env.ADMIN_EMAIL;
+    const briefingTo = String(process.env.ADMIN_BRIEFING_EMAIL || '').trim();
     if (!briefingTo) { logger.info(`${TAG} No ADMIN_BRIEFING_EMAIL set, skipping briefing.`); return; }
 
     await emailService.sendEmail({
@@ -456,7 +456,7 @@ async function sendWeeklyDigest() {
   if (!isDatabaseAvailable()) return;
 
   try {
-    const briefingTo = process.env.ADMIN_BRIEFING_EMAIL || process.env.ADMIN_EMAIL;
+    const briefingTo = String(process.env.ADMIN_BRIEFING_EMAIL || '').trim();
     if (!briefingTo) {
       logger.info(`${TAG} No ADMIN_BRIEFING_EMAIL set, skipping weekly digest.`);
       return;

@@ -126,6 +126,7 @@ import adminPricingRoutes from './routes/admin-pricing.js';
 import mountFarmJsonRoute from "./routes/farm-json-merge.js";
 import farmSaladMixesRouter from './routes/farm-salad-mixes.js';
 import adminSaladMixesRouter from './routes/admin-salad-mixes.js';
+import stockGroupCatalogRouter from './routes/stock-group-catalog.js';
 let grantWizardRoutes, startGrantProgramSync, seedGrantPrograms, cleanupExpiredApplications;
 if (process.env.ENABLE_GRANT_WIZARD !== 'false') {
   const gwMod = await import('./routes/grant-wizard.js');
@@ -3809,6 +3810,7 @@ app.use('/api/farm/stripe', stripeConnectControlRouter); // Central-owned Stripe
 
 app.use('/', purchaseRouter);                                // Purchase/checkout pipeline (Square) — MUST precede /api/farms auth
 app.use('/api/farm/salad-mixes', farmSaladMixesRouter);                                           // Farm-accessible salad mix templates (no admin auth)
+app.use('/api', stockGroupCatalogRouter);                                                        // Stock-group catalog (farm + admin)
 app.use('/api/farm/products', authOrAdminMiddleware, customProductsRouter);                       // /api/farm/products/* -- Custom product CRUD (MUST precede /api/farm auth)
 app.use('/api/farms', authOrAdminMiddleware, farmRoutes);
 app.use('/api/farm', authOrAdminMiddleware, farmRoutes); // Singular route for profile endpoint

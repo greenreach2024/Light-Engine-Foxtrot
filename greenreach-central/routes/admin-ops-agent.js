@@ -1751,20 +1751,25 @@ export const ADMIN_TOOL_CATALOG = {
   },
 
   'send_sms': {
-    description: 'Send an SMS text message to the approved GreenReach operations phone number (613-888-1031). Use for urgent alerts, time-sensitive notifications, or operational updates that need immediate attention. Recipient is hardcoded -- you cannot choose who receives the text.',
+    description: 'Send an SMS text message to the configured GreenReach operations phone number (ADMIN_ALERT_PHONE). Use for urgent alerts, time-sensitive notifications, or operational updates that need immediate attention.',
     category: 'write',
     trust_tier: 'confirm',
     required: ['message'],
     optional: [],
     handler: async (params) => {
       try {
+        const recipient = String(process.env.ADMIN_ALERT_PHONE || '').trim();
+        if (!recipient) {
+          return { ok: false, error: 'ADMIN_ALERT_PHONE is not configured' };
+        }
+
         const message = `[F.A.Y.E.] ${params.message}`;
         const result = await smsService.sendSms({
-          to: '+16138881031',
+          to: recipient,
           message
         });
         if (result.success) {
-          return { ok: true, messageId: result.messageId, recipient: '613-888-1031', stub: result.stub || false };
+          return { ok: true, messageId: result.messageId, recipient, stub: result.stub || false };
         }
         return { ok: false, error: result.error };
       } catch (err) { return { ok: false, error: err.message }; }

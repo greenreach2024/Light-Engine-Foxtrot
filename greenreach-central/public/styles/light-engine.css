@@ -474,10 +474,21 @@ body.le-help-active [data-help]:hover {
 }
 
 /* Farm Admin dark-theme patch for inline-generated setup cards and modal controls */
+#first-time-setup-modal,
+#deviceSignInModal,
+#brandingModalBackdrop,
+#brandingWizardBackdrop {
+  padding: clamp(16px, 3vw, 28px);
+  overflow-y: auto;
+}
+
 #first-time-setup-modal > div,
 #deviceSignInModal > div,
 #brandingModalBackdrop > div,
 #brandingWizardBackdrop > div {
+  width: min(960px, calc(100vw - 32px)) !important;
+  max-height: calc(100vh - 32px) !important;
+  overflow: hidden;
   background: var(--bg-card) !important;
   border: 1px solid var(--gr-border) !important;
   color: var(--text-primary) !important;
@@ -510,9 +521,9 @@ body.le-help-active [data-help]:hover {
 #controllerAssignmentsTable #editZoneDropdown,
 .light-controller-select,
 .iot-device-entry select {
-  background: rgba(15, 23, 42, 0.92) !important;
+  background: var(--bg-secondary, var(--gr-surface, #ffffff)) !important;
   color: var(--text-primary) !important;
-  border-color: rgba(148, 163, 184, 0.28) !important;
+  border-color: var(--border, var(--gr-border, #DCE5E5)) !important;
 }
 
 #first-time-setup-modal option,
@@ -577,6 +588,9 @@ body.le-help-active [data-help]:hover {
 .fresh-light-modal__dialog {
   border: 1px solid rgba(148, 163, 184, 0.18) !important;
   box-shadow: 0 24px 60px rgba(2, 6, 23, 0.46) !important;
+  background: linear-gradient(160deg, rgba(15, 23, 42, 0.98) 0%, rgba(30, 41, 59, 0.96) 100%) !important;
+  color: var(--text-primary) !important;
+  border-color: rgba(148, 163, 184, 0.16) !important;
 }
 
 .fresh-light-modal__close,
@@ -585,15 +599,36 @@ body.le-help-active [data-help]:hover {
   color: var(--text-primary) !important;
 }
 
+.fresh-light-modal,
+.device-pair-modal {
+  padding: clamp(12px, 3vw, 24px);
+  overflow-y: auto;
+}
+
+.fresh-light-modal__dialog,
+.device-pair-modal__dialog {
+  width: min(720px, calc(100vw - 24px)) !important;
+  max-height: calc(100vh - 32px) !important;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.fresh-light-modal__content {
+  flex: 1 1 auto;
+  max-height: none !important;
+  overflow-y: auto;
+}
+
 .fresh-light-modal select,
 .fresh-light-modal input,
 .fresh-light-modal textarea,
 .fresh-light-modal button,
 .iot-unknown-table input,
 .iot-unknown-table select {
-  background: rgba(15, 23, 42, 0.92) !important;
+  background: var(--bg-secondary, rgba(248, 250, 252, 0.94)) !important;
   color: var(--text-primary) !important;
-  border-color: rgba(148, 163, 184, 0.28) !important;
+  border-color: var(--border, rgba(148, 163, 184, 0.28)) !important;
 }
 
 .fresh-light-modal button:hover,

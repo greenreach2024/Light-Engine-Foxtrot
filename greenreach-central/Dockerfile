@@ -16,6 +16,37 @@ RUN npm ci --omit=dev
 
 COPY . .
 
+RUN node - <<'NODE'
+const fs = require('fs');
+const path = require('path');
+
+const files = [
+  'calibration.json',
+  'crop-pricing.json',
+  'crop-registry.json',
+  'device-kb.json',
+  'device-manufacturers.json',
+  'equipment.catalog.json',
+  'equipment-kb.json',
+  'equipment-metadata.json',
+  'spd-library-default.json',
+  'spd-library.json',
+];
+
+const sourceDir = path.join(process.cwd(), 'public', 'data');
+const manifestPath = path.join(process.cwd(), 'shared-public-data.generated.json');
+const manifest = {};
+
+for (const fileName of files) {
+  manifest[fileName] = fs.readFileSync(path.join(sourceDir, fileName), 'utf8');
+}
+
+fs.writeFileSync(manifestPath, JSON.stringify(manifest));
+NODE
+
+# Copy shared JSON assets outside /app so runtime mounts cannot shadow them
+RUN mkdir -p /opt/shared-data && cp -r public/data/. /opt/shared-data/
+
 # Copy recipe CSVs outside /app/data so GCS FUSE mount doesn't shadow them
 RUN cp -r data/recipes-v2 /opt/recipes-v2
 

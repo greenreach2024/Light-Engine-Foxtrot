@@ -1987,8 +1987,25 @@
       const headers = {
         'Content-Type': 'application/json'
       };
-      if (deviceToken) {
-        headers['Authorization'] = `Bearer ${deviceToken}`;
+      const token = localStorage.getItem('authToken')
+        || sessionStorage.getItem('authToken')
+        || localStorage.getItem('token')
+        || sessionStorage.getItem('token')
+        || localStorage.getItem('farm_token')
+        || sessionStorage.getItem('farm_token')
+        || localStorage.getItem('deviceToken')
+        || sessionStorage.getItem('deviceToken')
+        || deviceToken;
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      const resolvedFarmId = farmId
+        || localStorage.getItem('farm_id')
+        || sessionStorage.getItem('farm_id')
+        || localStorage.getItem('farmId')
+        || sessionStorage.getItem('farmId');
+      if (resolvedFarmId) {
+        headers['X-Farm-ID'] = resolvedFarmId;
       }
       return headers;
     }
@@ -4601,7 +4618,9 @@
     // AI Status Badge Loader (S4.4)
     async function loadAIStatus() {
       try {
-        const resp = await fetch('/api/notifications?unread=true&limit=50&t=' + Date.now());
+        const resp = await fetch(`${currentAPI}/api/assistant/notifications?unread=true&limit=50&t=${Date.now()}`, {
+          headers: getAuthHeaders()
+        });
         if (!resp.ok) return;
         const data = await resp.json();
         const aiCount = (data.notifications || []).filter(n => n.type === 'ai_recommendation' || n.source === 'ai').length || data.totalUnread || 0;
@@ -4723,10 +4742,26 @@
     async function loadOrderPickList() {
       try {
         // Fetch pending wholesale orders
-        const response = await fetch(`${currentAPI}/api/wholesale/orders/pending`);
+        const headers = getAuthHeaders();
+        const resolvedFarmId = headers['X-Farm-ID'] || farmId;
+        let response = await fetch(`${currentAPI}/api/wholesale/orders/pending`, {
+          headers
+        });
+
+        if (!response.ok && (response.status === 401 || response.status === 404) && resolvedFarmId) {
+          response = await fetch(`${currentAPI}/api/wholesale/orders/pending-verification/${encodeURIComponent(resolvedFarmId)}`, {
+            headers
+          });
+        }
+
+        if (!response.ok && (response.status === 401 || response.status === 404)) {
+          response = await fetch(`${currentAPI}/api/wholesale/order-events`, {
+            headers
+          });
+        }
+
         const data = await response.json();
-        
-        const orders = data.orders || [];
+        const orders = Array.isArray(data.orders) ? data.orders : Array.isArray(data) ? data : [];
         populateOrderPickList(orders);
         
       } catch (error) {

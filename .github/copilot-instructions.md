@@ -60,6 +60,22 @@ The farm runs entirely on Google Cloud Run. The Light Engine Cloud Run service I
     - **Stale data indicator**: Added staleness detection -- if env data hasn't refreshed in >5 minutes, status bar shows warning with elapsed time in amber color.
     - **Full data refresh**: Added 10-minute interval for full data reload (rooms, groups, devices, env). Previously only env data refreshed every 2 minutes; new sensors, rooms, or group changes required manual page reload.
 
+### Recent Fixes (Apr 16, 2026)
+
+38. **LE 3D + E.V.I.E. + Setup Stability Corrections (code-level, local pending deploy)**
+    - File: `greenreach-central/public/farm-admin.js`
+    - Restored missing setup wizard helper functions (`updateSetupStepDisplay`, `validateSetupStep`, `showSalesOnlyPaymentStep`, `checkSquareStatusForSetup`, `connectSquareFromSetup`, `showSetupError`, `showSetupSuccess`) that were still referenced but not defined.
+    - File: `routes/setup-wizard.js`
+    - Added `GET /api/setup-wizard/onboarding-status` on LE to provide onboarding task status for E.V.I.E. setup guidance.
+    - File: `server-foxtrot.js`
+    - Added backward-compatible alias `GET /api/setup/onboarding-status` -> `307 /api/setup-wizard/onboarding-status`.
+    - Files: `public/js/farm-assistant.js`, `greenreach-central/public/js/farm-assistant.js`
+    - Updated onboarding status calls to `/api/setup-wizard/onboarding-status`.
+    - Replaced outdated Edge hardware upgrade messaging with cloud-only guidance.
+    - Removed hardcoded WebSocket default `:3001`; E.V.I.E. now uses `EVIE_WS_URL` when provided, `EVIE_WS_PORT` when explicitly configured, and same-host WebSocket only on Central hosts.
+    - Files: `public/views/3d-farm-viewer.html`, `greenreach-central/public/views/3d-farm-viewer.html`
+    - Fixed empty-room fallback crash by replacing undefined `data` references with the normalized `map` object (`map.roomId`, `S.roomMaps[rid] = map`, `name: map.name`).
+
 ### Recent Fixes (Apr 10, 2026)
 
 34. **Trait-Based Salad Mix System (deployed greenreach-central-00113-7r9, light-engine-00069-sqt)**

@@ -39,6 +39,17 @@ import { ENFORCEMENT_PROMPT_BLOCK, enforceResponseShape, sendEnforcedResponse } 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const DATA_DIR = path.join(__dirname, '..', 'public', 'data');
+const LE_WRITE_TIMEOUT_MS = 10000;
+const LE_WRITE_RETRIES = 3;
+const LE_WRITE_BACKOFF_MS = 800;
+const LE_WRITE_MAX_BACKOFF_MS = 15 * 60 * 1000;
+const LE_WRITE_QUEUE_TYPE = 'le_write_queue';
+const LE_WRITE_DLQ_TYPE = 'le_write_dlq';
+const LE_WRITE_DLQ_MAX = 200;
+const LE_WRITE_DLQ_THRESHOLD = 3;
+const LE_WRITE_QUEUE_BATCH_SIZE = 25;
+const GWEN_DIRECT_TIMEOUT_MS = Number(process.env.GWEN_DIRECT_TIMEOUT_MS || 30000);
+const leWriteQueueLocks = new Map();
 
 // Helper to read JSON files from DATA_DIR with a fallback default
 function readJSON(filename, fallback) {
@@ -51,12 +62,69 @@ function readJSON(filename, fallback) {
 
 // Write data back to Light Engine via POST /data/{filename}
 // Room Mapper is the source of truth on LE — GWEN must sync changes back.
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function getLeWriteScopeFarmId(farmId) {
+  return String(farmId || process.env.FARM_ID || 'default');
+}
+
+function normalizeLeWriteQueue(raw) {
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((item) => item && typeof item === 'object' && item.id && item.filename);
+}
+
+function normalizeLeWriteDlq(raw) {
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((item) => item && typeof item === 'object' && item.id && item.filename);
+}
+
+async function loadLeWriteQueue(farmId) {
+  const scopeFarmId = getLeWriteScopeFarmId(farmId);
+  const queue = await farmStore.get(scopeFarmId, LE_WRITE_QUEUE_TYPE);
+  return normalizeLeWriteQueue(queue);
+}
+
+async function persistLeWriteQueue(farmId, queue) {
+  const scopeFarmId = getLeWriteScopeFarmId(farmId);
+  await farmStore.set(scopeFarmId, LE_WRITE_QUEUE_TYPE, normalizeLeWriteQueue(queue));
+}
+
+async function appendLeWriteDlq(farmId, entry) {
+  const scopeFarmId = getLeWriteScopeFarmId(farmId);
+  const current = normalizeLeWriteDlq(await farmStore.get(scopeFarmId, LE_WRITE_DLQ_TYPE));
+  current.unshift(entry);
+  if (current.length > LE_WRITE_DLQ_MAX) {
+    current.length = LE_WRITE_DLQ_MAX;
+  }
+  await farmStore.set(scopeFarmId, LE_WRITE_DLQ_TYPE, current);
+}
+
+async function withLeWriteQueueLock(farmId, taskFn) {
+  const scopeFarmId = getLeWriteScopeFarmId(farmId);
+  const previous = leWriteQueueLocks.get(scopeFarmId) || Promise.resolve();
+  const next = previous.catch(() => {}).then(taskFn);
+  leWriteQueueLocks.set(scopeFarmId, next);
+  try {
+    return await next;
+  } finally {
+    if (leWriteQueueLocks.get(scopeFarmId) === next) {
+      leWriteQueueLocks.delete(scopeFarmId);
+    }
+  }
+}
+
 async function writeToLE(filename, data) {
   try {
     let url = process.env.FARM_EDGE_URL;
     if (!url) {
       const farmData = readJSON('farm.json', {});
-      if (!farmData.url) { logger.warn('[GWEN->LE] No Light Engine URL configured'); return false; }
+      if (!farmData.url) {
+        const error = 'No Light Engine URL configured';
+        logger.warn(`[GWEN->LE] ${error}`);
+        return { ok: false, error };
+      }
       url = farmData.url;
     }
     const headers = { 'Content-Type': 'application/json', 'Accept': 'application/json' };
@@ -65,20 +133,200 @@ async function writeToLE(filename, data) {
     const apiKey = process.env.GREENREACH_API_KEY;
     if (apiKey) headers['X-API-Key'] = apiKey;
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 10000);
-    const res = await fetch(`${url}/data/${filename}`, {
-      method: 'POST', headers, body: JSON.stringify(data), signal: controller.signal
-    });
-    clearTimeout(timeout);
-    if (res.ok) {
-      logger.info(`[GWEN->LE] Wrote ${filename} to Light Engine`);
-      return true;
+    const timeoutId = setTimeout(() => controller.abort(), LE_WRITE_TIMEOUT_MS);
+    try {
+      const res = await fetch(`${url}/data/${filename}`, {
+        method: 'POST', headers, body: JSON.stringify(data), signal: controller.signal
+      });
+      if (res.ok) {
+        logger.info(`[GWEN->LE] Wrote ${filename} to Light Engine`);
+        return { ok: true, error: null };
+      }
+      const error = `Failed to write ${filename}: HTTP ${res.status}`;
+      logger.warn(`[GWEN->LE] ${error}`);
+      return { ok: false, error };
+    } finally {
+      clearTimeout(timeoutId);
     }
-    logger.warn(`[GWEN->LE] Failed to write ${filename}: ${res.status}`);
-    return false;
   } catch (err) {
-    logger.warn(`[GWEN->LE] Error writing ${filename}:`, err.message);
-    return false;
+    const error = `Error writing ${filename}: ${err.message}`;
+    logger.warn('[GWEN->LE] ' + error);
+    return { ok: false, error };
+  }
+}
+
+async function writeToLEWithRetry(filename, data, options = {}) {
+  const retries = Number(options.retries || LE_WRITE_RETRIES);
+  const backoffMs = Number(options.backoffMs || LE_WRITE_BACKOFF_MS);
+  let lastError = 'Unknown LE write failure';
+  for (let attempt = 1; attempt <= retries; attempt += 1) {
+    const result = await writeToLE(filename, data);
+    if (result.ok) return { ok: true, attempts: attempt, error: null };
+    lastError = result.error || lastError;
+    if (attempt < retries) await delay(backoffMs * attempt);
+  }
+  logger.error(`[GWEN->LE] Failed to write ${filename} after ${retries} attempts: ${lastError}`);
+  return { ok: false, attempts: retries, error: lastError };
+}
+
+async function flushLeWriteQueue(farmId, options = {}) {
+  const scopeFarmId = getLeWriteScopeFarmId(farmId);
+  const maxItems = Number(options.maxItems || LE_WRITE_QUEUE_BATCH_SIZE);
+  const targetTaskId = options.targetTaskId || null;
+  const now = Date.now();
+  const queue = await loadLeWriteQueue(scopeFarmId);
+
+  if (queue.length === 0) {
+    return { queueDepth: 0, processed: 0, target: null };
+  }
+
+  const remaining = [];
+  let processed = 0;
+  let target = null;
+
+  for (const task of queue) {
+    const nextAttemptAt = Number(task.nextAttemptAt || 0);
+    if (processed >= maxItems || (nextAttemptAt && nextAttemptAt > now)) {
+      remaining.push(task);
+      continue;
+    }
+
+    processed += 1;
+    const result = await writeToLEWithRetry(task.filename, task.data, {
+      retries: LE_WRITE_RETRIES,
+      backoffMs: LE_WRITE_BACKOFF_MS
+    });
+
+    if (result.ok) {
+      if (task.id === targetTaskId) {
+        target = {
+          taskId: task.id,
+          ok: true,
+          queued: false,
+          dlq: false,
+          attempts: Number(task.attempts || 0) + result.attempts,
+          queueDepth: 0,
+          error: null
+        };
+      }
+      continue;
+    }
+
+    const attemptsTotal = Number(task.attempts || 0) + 1;
+    const lastError = result.error || 'Unknown LE write failure';
+
+    if (attemptsTotal >= LE_WRITE_DLQ_THRESHOLD) {
+      const dlqEntry = {
+        ...task,
+        attempts: attemptsTotal,
+        lastError,
+        movedToDlqAt: new Date().toISOString()
+      };
+      await appendLeWriteDlq(scopeFarmId, dlqEntry);
+      logger.error(`[GWEN->LE] Moved task ${task.id} (${task.filename}) to DLQ after ${attemptsTotal} failures`);
+      if (task.id === targetTaskId) {
+        target = {
+          taskId: task.id,
+          ok: false,
+          queued: false,
+          dlq: true,
+          attempts: attemptsTotal,
+          queueDepth: 0,
+          error: lastError
+        };
+      }
+      continue;
+    }
+
+    const retryDelay = Math.min(LE_WRITE_MAX_BACKOFF_MS, LE_WRITE_BACKOFF_MS * Math.pow(2, attemptsTotal));
+    const updatedTask = {
+      ...task,
+      attempts: attemptsTotal,
+      lastError,
+      lastAttemptAt: new Date().toISOString(),
+      nextAttemptAt: Date.now() + retryDelay
+    };
+    remaining.push(updatedTask);
+    if (task.id === targetTaskId) {
+      target = {
+        taskId: task.id,
+        ok: false,
+        queued: true,
+        dlq: false,
+        attempts: attemptsTotal,
+        retryAt: new Date(updatedTask.nextAttemptAt).toISOString(),
+        queueDepth: 0,
+        error: lastError
+      };
+    }
+  }
+
+  await persistLeWriteQueue(scopeFarmId, remaining);
+
+  if (target) {
+    target.queueDepth = remaining.length;
+  }
+
+  return {
+    queueDepth: remaining.length,
+    processed,
+    target
+  };
+}
+
+async function enqueueLeWriteTask(farmId, filename, data, context = {}) {
+  return withLeWriteQueueLock(farmId, async () => {
+    const scopeFarmId = getLeWriteScopeFarmId(farmId);
+    const queue = await loadLeWriteQueue(scopeFarmId);
+    const task = {
+      id: `lew-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`,
+      filename,
+      data,
+      context,
+      attempts: 0,
+      createdAt: new Date().toISOString(),
+      nextAttemptAt: Date.now(),
+      lastError: null
+    };
+
+    queue.push(task);
+    await persistLeWriteQueue(scopeFarmId, queue);
+
+    const flush = await flushLeWriteQueue(scopeFarmId, {
+      targetTaskId: task.id,
+      maxItems: LE_WRITE_QUEUE_BATCH_SIZE
+    });
+
+    if (flush.target) {
+      return flush.target;
+    }
+
+    const remaining = await loadLeWriteQueue(scopeFarmId);
+    const pending = remaining.find((item) => item.id === task.id);
+    return {
+      taskId: task.id,
+      ok: false,
+      queued: true,
+      dlq: false,
+      attempts: Number(pending?.attempts || 0),
+      retryAt: pending?.nextAttemptAt ? new Date(pending.nextAttemptAt).toISOString() : null,
+      queueDepth: remaining.length,
+      error: pending?.lastError || 'LE sync queued for retry'
+    };
+  });
+}
+
+async function askGwenWithTimeout(question, farmId, conversationId, timeoutMs = GWEN_DIRECT_TIMEOUT_MS) {
+  let timeoutId = null;
+  try {
+    return await Promise.race([
+      askGwenDirect(question, farmId, conversationId),
+      new Promise((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error(`GWEN direct call timed out after ${timeoutMs}ms`)), timeoutMs);
+      })
+    ]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
   }
 }
 
@@ -4123,8 +4371,27 @@ async function executeExtendedTool(toolName, params, farmId) {
         }
         // Write back to LE rooms.json so Room Mapper, 3D Viewer, and Heatmap see it
         const leRooms = existing.map(r => ({ id: r.id || r.room_id, name: r.name, zones: r.zones || [], type: r.type }));
-        writeToLE('rooms.json', { rooms: leRooms }).catch(() => {});
-        return { ok: true, room: newRoom, message: `Room "${name}" created`, total_rooms: existing.length };
+        const leSync = await enqueueLeWriteTask(farmId, 'rooms.json', { rooms: leRooms }, {
+          source: 'create_room',
+          room_id: roomId,
+          room_name: name
+        });
+        const response = { ok: true, room: newRoom, message: `Room "${name}" created`, total_rooms: existing.length, sync_to_le: leSync.ok };
+        response.le_sync = {
+          task_id: leSync.taskId,
+          queued: !!leSync.queued,
+          dlq: !!leSync.dlq,
+          attempts: leSync.attempts,
+          queue_depth: leSync.queueDepth,
+          retry_at: leSync.retryAt || null,
+          error: leSync.error || null
+        };
+        if (!leSync.ok) {
+          response.warning = leSync.dlq
+            ? 'Room was saved on Central, but LE sync moved to durable DLQ after repeated failures. Manual replay may be required once LE connectivity is restored.'
+            : 'Room was saved on Central and queued for durable LE retry. Sync will retry automatically on subsequent write events.';
+        }
+        return response;
       } catch (err) {
         return { ok: false, error: err.message };
       }
@@ -4152,8 +4419,28 @@ async function executeExtendedTool(toolName, params, farmId) {
         await farmStore.set(farmId, 'rooms', rooms);
         // Write back to LE rooms.json so zone changes propagate to Room Mapper, 3D Viewer, Heatmap
         const leRooms = rooms.map(r => ({ id: r.id || r.room_id, name: r.name, zones: Array.isArray(r.zones) ? r.zones.map(z => typeof z === 'string' ? z : z.name) : [], type: r.type }));
-        writeToLE('rooms.json', { rooms: leRooms }).catch(() => {});
-        return { ok: true, zone: newZone, room_name: room.name, message: `Zone "${name}" added to ${room.name}`, total_zones: room.zones.length };
+        const leSync = await enqueueLeWriteTask(farmId, 'rooms.json', { rooms: leRooms }, {
+          source: 'create_zone',
+          room_id: room_id,
+          room_name: room.name,
+          zone_name: name
+        });
+        const response = { ok: true, zone: newZone, room_name: room.name, message: `Zone "${name}" added to ${room.name}`, total_zones: room.zones.length, sync_to_le: leSync.ok };
+        response.le_sync = {
+          task_id: leSync.taskId,
+          queued: !!leSync.queued,
+          dlq: !!leSync.dlq,
+          attempts: leSync.attempts,
+          queue_depth: leSync.queueDepth,
+          retry_at: leSync.retryAt || null,
+          error: leSync.error || null
+        };
+        if (!leSync.ok) {
+          response.warning = leSync.dlq
+            ? 'Zone was saved on Central, but LE sync moved to durable DLQ after repeated failures. Manual replay may be required once LE connectivity is restored.'
+            : 'Zone was saved on Central and queued for durable LE retry. Sync will retry automatically on subsequent write events.';
+        }
+        return response;
       } catch (err) {
         return { ok: false, error: err.message };
       }
@@ -4976,7 +5263,7 @@ async function executeExtendedTool(toolName, params, farmId) {
         const question = String(params.question || '').trim();
         if (!question) return { ok: false, error: 'No question provided.' };
         console.log(`[E.V.I.E.->G.W.E.N.] Asking: ${question.slice(0, 100)}...`);
-        const result = await askGwenDirect(question, farmId, farmId);
+        const result = await askGwenWithTimeout(question, farmId, farmId);
         if (!result.ok) return { ok: false, error: result.error || 'G.W.E.N. could not process the request.' };
         return { ok: true, gwen_reply: result.reply, model: result.model };
       } catch (err) {
@@ -6255,7 +6542,7 @@ async function buildDeliberativeSupportContext(farmId, userMessage, history = []
 
   if (shouldRequestGwenReview(userMessage)) {
     try {
-      const gwen = await askGwenDirect(
+      const gwen = await askGwenWithTimeout(
         `Review this farmer request and provide a concise grounded answer aid. Focus on the facts that should change E.V.I.E.'s reply, not generic advice. Farmer request: ${String(userMessage || '').slice(0, 1200)}`,
         farmId,
         `evie-review-${farmId}`
@@ -6561,7 +6848,7 @@ async function maybeHandleDirectLayoutRequest({ message, farmId, convId, history
   let gwenNote = '';
   if (layoutOk && /(science|research|airflow|access|light|efficient|optimi[sz]e|spacing)/i.test(String(message || ''))) {
     try {
-      const gwen = await askGwenDirect(
+      const gwen = await askGwenWithTimeout(
         'The farmer asked for a science-based tower distribution in the grow room. In 1-2 short sentences, explain the layout priorities for airflow, ease of access, and even canopy lighting in vertical leafy-greens production.',
         farmId,
         `evie-layout-direct-${farmId}`
@@ -6638,7 +6925,7 @@ async function buildFarmHandPrefetchContext(farmId, userMessage) {
 
   if (/(layout|spacing|tower|zipgrow|airflow|access|walkway|science|optimi[sz]e)/i.test(String(userMessage || ''))) {
     try {
-      const gwen = await askGwenDirect(
+      const gwen = await askGwenWithTimeout(
         'Provide concise research-backed guidance for arranging vertical grow towers in an indoor leafy-greens room. Focus on airflow lanes, access aisles, wall clearance, and even light distribution. Keep it practical and brief.',
         farmId,
         `evie-layout-${farmId}`

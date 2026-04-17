@@ -1200,11 +1200,21 @@
       });
     });
     
+    function normalizePrice(value) {
+      const amount = Number(value);
+      return Number.isFinite(amount) ? amount : 0;
+    }
+
     // Load inventory
     async function loadInventory() {
       try {
         const data = await api('/farm-sales/inventory');
-        inventory = data.inventory;
+        inventory = (data.inventory || []).map(product => ({
+          ...product,
+          retail_price: normalizePrice(product.retail_price ?? product.unit_price ?? product.price),
+          available: Number(product.available ?? product.quantity_available ?? 0) || 0,
+          reserved: Number(product.reserved ?? 0) || 0,
+        }));
         
         // Render product grid
         const grid = document.getElementById('product-grid');
@@ -1228,7 +1238,7 @@
             <td>${product.available}</td>
             <td>${product.reserved}</td>
             <td>${product.unit}</td>
-            <td>$${product.retail_price.toFixed(2)}</td>
+            <td>$${normalizePrice(product.retail_price).toFixed(2)}</td>
             <td>
               ${product.lot_code ? `
                 <span style="font-family: monospace; font-size: 0.85rem; background: var(--accent); padding: 2px 6px; border-radius: 4px;">${product.lot_code}</span>
@@ -1285,8 +1295,8 @@
         container.innerHTML = cart.map(item => `
           <div class="cart-item">
             <div>
-              <div class="cart-item-name">${item.name} <span style="font-size: 0.875rem; color: var(--text-light);">($${item.retail_price.toFixed(2)}/${item.unit})</span></div>
-              <div style="font-size: 0.875rem; color: var(--text-light);">$${item.retail_price.toFixed(2)}</div>
+              <div class="cart-item-name">${item.name} <span style="font-size: 0.875rem; color: var(--text-light);">($${normalizePrice(item.retail_price).toFixed(2)}/${item.unit})</span></div>
+              <div style="font-size: 0.875rem; color: var(--text-light);">$${normalizePrice(item.retail_price).toFixed(2)}</div>
             </div>
             <div class="cart-item-qty">
               <button class="qty-btn" onclick="updateCartQuantity('${item.sku_id}', -1)">−</button>

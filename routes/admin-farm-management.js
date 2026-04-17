@@ -1,6 +1,6 @@
 import express from 'express';
 import jwt from 'jsonwebtoken';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { getJwtSecret } from '../server/utils/secrets-manager.js';
 import { initDatabase, query as dbQuery } from '../lib/database.js';

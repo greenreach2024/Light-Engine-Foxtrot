@@ -1,7 +1,7 @@
 # Cloud Architecture Reference
 
-**Version**: 2.2.0
-**Date**: April 10, 2026
+**Version**: 2.3.0
+**Date**: April 17, 2026
 **Authority**: This document is the canonical source of truth for system architecture. All agents MUST read this before modifying any infrastructure, deployment, data flow, or sensor-related code.
 
 ---
@@ -65,7 +65,7 @@ Agents MUST NOT:
 |----------|-------|
 | **Service** | `greenreach-central` |
 | **URL** | `https://greenreach-central-1029387937866.us-east1.run.app` |
-| **Custom Domain** | `greenreachgreens.com` (pending DNS migration) |
+| **Custom Domain** | `greenreachgreens.com` (active) |
 | **Service Account** | `greenreach-central-sa@project-5d00790f-13a9-4637-a40.iam.gserviceaccount.com` |
 | **Image** | `us-east1-docker.pkg.dev/project-5d00790f-13a9-4637-a40/greenreach/greenreach-central:latest` |
 | **Entry Point** | `node server.js` |
@@ -145,6 +145,43 @@ Both services use **Direct VPC egress** (Gen2 execution environment) on `greenre
 
 No VPC connector is used (the `greenreach-connector` was deleted due to persistent health check failures).
 
+E.V.I.E. WebSocket guidance:
+- Do **not** hardcode `:3001` on LE-hosted pages. Cloud Run serves traffic on the service URL/port only.
+- For LE-hosted UIs, configure `EVIE_WS_URL` when a dedicated realtime endpoint is required.
+- `EVIE_WS_PORT` should be treated as an explicit override for controlled environments only.
+- Same-host WebSocket connections are expected only when the UI is served from Central hosts.
+
+### Nutrient Controller Monitoring (Apr 17, 2026)
+
+The nutrient doser is surfaced as a **monitor-only** MQTT device path for E.V.I.E. and LE device discovery.
+
+Firmware/telemetry behavior in production:
+- Safe defaults are set on controller side to pH target `5.80` and EC target `1300`.
+- Autodose uses deadband and pause/cooldown behavior to prevent rapid oscillation.
+- EC autodose uses sequential A then B mixing with ratio handling in firmware.
+
+Nutrient monitoring endpoints and paths:
+
+| Path | Service | Purpose |
+|------|---------|---------|
+| `GET /data/nutrient-dashboard` | LE | Live nutrient snapshot used by monitor UI |
+| `GET /api/nutrients/mqtt-devices` | LE | Canonical nutrient MQTT device payload from nutrient state |
+| `GET /api/devices/mqtt` | LE | Compatibility route for discovery callers |
+| `POST /discovery/scan` | LE | Includes MQTT nutrient discovery in cloud mode |
+
+MQTT topics used by nutrient controller integration:
+
+| Topic | Direction | Notes |
+|-------|-----------|-------|
+| `sensors/nutrient/reading` | Controller -> LE/clients | Telemetry payload (pH, EC, temperature, targets) |
+| `commands/NutrientRoom` | LE/tools -> Controller | Command channel |
+| `sensors/NutrientRoom/ack` | Controller -> LE/tools | Command acknowledgement |
+
+UI behavior:
+- Device manager groups nutrient devices under **Nutrient Controllers** instead of generic MQTT.
+- MQTT nutrient cards now expose **Monitor** action, which opens live tank status modal sourced from `/data/nutrient-dashboard`.
+- This flow is monitor-first; do not add remote-control actions to this surface without explicit approval.
+
 ### Docker Build Notes
 
 - **ALWAYS** use `--platform linux/amd64` (Apple Silicon builds ARM64 by default, Cloud Run requires amd64)
@@ -167,6 +204,10 @@ The following EB environments are DEPRECATED and will be terminated:
 
 | Date | Service | Revision | Commit | Notes |
 |------|---------|----------|--------|-------|
+| 2026-04-17 | greenreach-central | 00331-j88 | manual-digest-rollout | Nutrient controller monitor UI deployed (MQTT monitor action + Nutrient Controllers grouping) using digest `sha256:586b5c85174b0da7295e80c4569f424b7aeba405fe40f840ccc240e4834a29b7` |
+| 2026-04-17 | light-engine | 00257-vj7 | manual-digest-rollout | Nutrient MQTT discovery + controller inventory endpoint updates deployed using digest `sha256:c82e77187d03f0ff3c5eebb3a2a3f85a056157a8903ef968f565d70e4b23ba9f` |
+| 2026-04-16 | greenreach-central | 00325-2wz | manual-digest-rollout | Deployed digest `sha256:2af8613d2c8b9e2f6fb37a3316f517db1ed77509695f25df36a1b8ccea4eabeb` |
+| 2026-04-16 | light-engine | 00246-2xp | manual-digest-rollout | Deployed digest `sha256:96e172e528e4336afe8be7eabf46978e81b3e87da897021c42d45f172bd89be1` |
 | 2026-04-14 | greenreach-central | 00228-fsz | 10f4f2ff | 3D viewer: drag-and-drop edit mode, heatmap sensor coloring, group dim persistence |
 | 2026-04-14 | light-engine | 00146-blp | 10f4f2ff | 3D viewer synced: drag-and-drop, heatmap fix, persistence fix |
 | 2026-04-14 | greenreach-central | 00227-tsz | 4bf2722b | Bulk group update UI: crop/status dropdowns, Update All X button in 3D viewer |
@@ -175,8 +216,8 @@ The following EB environments are DEPRECATED and will be terminated:
 | 2026-04-14 | light-engine | 00144-2bm | 9a20a4bd | 3D viewer now served from LE public/views/, synced farm-ops + assistant-chat |
 | 2026-04-13 | greenreach-central | 00225-7wr | 48ed95fe | E.V.I.E. bulk alert tools (resolve_all_alerts, resolve_stale_alerts), 48h auto-cleanup, 3D viewer gap corrections |
 | 2026-04-13 | light-engine | 00143-glh | 48ed95fe | Stale alert cleanup (LE system-alerts.json), synced 3D viewer fixes |
-| 2026-04-11 | greenreach-central | 00092-ssg | pending | HYBRID phantom fix: cleanup strips auto from hybrid rows, backfill migration guard, tray enrichment filter |
-| 2026-04-11 | light-engine | 00052-8k2 | pending | Synced farm-inventory.html (effectiveLbs, enrichment filter), HYBRID phantom fix |
+| 2026-04-11 | greenreach-central | 00092-ssg | historical-commit-unavailable | HYBRID phantom fix: cleanup strips auto from hybrid rows, backfill migration guard, tray enrichment filter |
+| 2026-04-11 | light-engine | 00052-8k2 | historical-commit-unavailable | Synced farm-inventory.html (effectiveLbs, enrichment filter), HYBRID phantom fix |
 | 2026-04-10 | greenreach-central | 00090-9f8 | e0b85130 | Phantom inventory elimination: replace recalculateAutoInventoryFromGroups with DELETE-only cleanup (4 call sites) |
 | 2026-04-10 | light-engine | 00050-78q | e0b85130 | Synced phantom inventory elimination fix |
 | 2026-04-10 | greenreach-central | 00087-n7v | bc7853d4 | Fix crop inventory cards: POS doubling dedup, yieldFactor removal, Available Inventory from dbProducts |
@@ -245,28 +286,32 @@ Email is the primary notification channel. Uses Google Workspace SMTP through `i
 - Research beta invite (Light Engine Research)
 - Alert notification (severity-colored for high/critical alerts)
 
-### SMS (Email-to-SMS Gateway)
+### SMS (Twilio Primary + SMTP Gateway Fallback)
 
-SMS is used for critical/high severity alert notifications to the admin. Delivered via carrier email-to-SMS gateways through the same Google Workspace SMTP transport used for email.
+SMS is used for critical/high severity alert notifications to the admin. Delivery is Twilio-first when configured, with carrier email-to-SMS via Google Workspace SMTP as fallback.
 
 | Property | Value |
 |----------|-------|
-| **Provider** | Email-to-SMS via Google Workspace SMTP (carrier gateways) |
-| **Recipient Allowlist** | Hardcoded in `sms-service.js` with carrier gateway mapping (safety gate -- requires code change + deploy) |
-| **Current Approved** | `+16138881031` -> `6138881031@txt.bell.ca` |
-| **Fallback** | Console log stub (SMS not sent if SMTP unavailable) |
+| **Provider** | Twilio (primary) + SMTP carrier gateways (fallback) |
+| **Recipient Allowlist** | Configuration-driven via `SMS_APPROVED_RECIPIENTS` and `SMS_GATEWAY_OVERRIDES` |
+| **Fallback** | Stub logging if neither Twilio nor SMTP transport is available |
 
 **Required env vars for SMS:** Same as email (SMTP_HOST, SMTP_USER, SMTP_PASS). Plus:
 
 | Variable | Purpose |
 |----------|---------|
 | `ADMIN_ALERT_PHONE` | Admin phone for alert SMS notifications |
+| `SMS_APPROVED_RECIPIENTS` | JSON allowlist map: phone -> gateway destination |
+| `SMS_GATEWAY_OVERRIDES` | Optional JSON map for gateway domain overrides |
+| `TWILIO_ACCOUNT_SID` | Twilio primary transport account |
+| `TWILIO_AUTH_TOKEN` | Twilio primary transport auth secret |
+| `TWILIO_PHONE_NUMBER` | Twilio sending number |
 
 **File:** `greenreach-central/services/sms-service.js`
 
 ### Alert Notifier
 
-Dispatches email + SMS when high/critical severity alerts fire. Uses Google Workspace SMTP for email and email-to-SMS gateway for SMS. Rate-limited to one notification per alert type per 15 minutes. Fire-and-forget (errors logged, never thrown).
+Dispatches email + SMS when high/critical severity alerts fire. Uses Google Workspace SMTP for email and the SMS service (Twilio primary, SMTP gateway fallback) for text delivery. Rate-limited to one notification per alert type per 15 minutes. Fire-and-forget (errors logged, never thrown).
 
 **File:** `greenreach-central/services/alert-notifier.js`
 
@@ -532,11 +577,11 @@ Cleared keys include: farm_id, farmId, farm_name, farmName, token, auth_token, f
 
 | Domain | Points To | Status |
 |--------|-----------|--------|
-| `greenreachgreens.com` | Central Cloud Run (pending DNS migration from CloudFront) | MIGRATION PENDING |
+| `greenreachgreens.com` | Google Front End A records for Central Cloud Run (`216.239.32.21`, `216.239.34.21`, `216.239.36.21`, `216.239.38.21`) | ACTIVE |
 | Central Cloud Run | `https://greenreach-central-1029387937866.us-east1.run.app` | ACTIVE |
 | LE Cloud Run | `https://light-engine-1029387937866.us-east1.run.app` | ACTIVE |
 
-**DNS migration TODO**: Map `greenreachgreens.com` to Central Cloud Run via `gcloud run domain-mappings create`.
+**Domain status**: `greenreachgreens.com` is serving over HTTPS and redirects to `/greenreach-org.html`.
 
 ---
 
@@ -546,7 +591,7 @@ Cleared keys include: farm_id, farmId, farm_name, farmName, token, auth_token, f
 |----------|-------|
 | **Farm ID** | `FARM-MLTP9LVH-B0B85039` |
 | **Farm Name** | The Notable Sprout |
-| **Hardware Model** | AWS Cloud (not a physical device) |
+| **Hardware Model** | Google Cloud Run (no physical device) |
 
 ---
 

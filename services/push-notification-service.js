@@ -11,22 +11,40 @@ class PushNotificationService {
     this.enabled = false;
     
     try {
-      // Initialize Firebase Admin SDK
-      const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH;
-      
-      if (serviceAccountPath) {
-        const serviceAccount = JSON.parse(readFileSync(serviceAccountPath, 'utf8'));
-        
-        admin.initializeApp({
-          credential: admin.credential.cert(serviceAccount)
-        });
-        
-        this.messaging = admin.messaging();
-        this.enabled = true;
-        console.log('[Push] Firebase Cloud Messaging initialized');
-      } else {
-        console.log('[Push] Firebase not configured - push notifications disabled');
+      // Initialize Firebase Admin SDK.
+      // Priority: inline JSON -> explicit file path -> keyless ADC.
+      const firebaseEnabled = String(process.env.FIREBASE_ENABLED || 'true').toLowerCase() !== 'false';
+      const serviceAccountPath = String(process.env.FIREBASE_SERVICE_ACCOUNT_PATH || '').trim();
+      const serviceAccountJson = String(process.env.FIREBASE_SERVICE_ACCOUNT_JSON || '').trim();
+
+      if (!firebaseEnabled) {
+        console.log('[Push] Firebase explicitly disabled by FIREBASE_ENABLED=false');
+        return;
       }
+
+      let credential;
+
+      if (serviceAccountJson) {
+        const serviceAccount = JSON.parse(serviceAccountJson);
+        credential = admin.credential.cert(serviceAccount);
+        console.log('[Push] Firebase initialized from FIREBASE_SERVICE_ACCOUNT_JSON');
+      } else if (serviceAccountPath) {
+        const serviceAccount = JSON.parse(readFileSync(serviceAccountPath, 'utf8'));
+        credential = admin.credential.cert(serviceAccount);
+        console.log(`[Push] Firebase initialized from FIREBASE_SERVICE_ACCOUNT_PATH (${serviceAccountPath})`);
+      } else {
+        // Cloud Run and other GCP runtimes should use workload identity / ADC.
+        credential = admin.credential.applicationDefault();
+        console.log('[Push] Firebase initialized via Application Default Credentials');
+      }
+
+      if (!admin.apps.length) {
+        admin.initializeApp({ credential });
+      }
+
+      this.messaging = admin.messaging();
+      this.enabled = true;
+      console.log('[Push] Firebase Cloud Messaging ready');
     } catch (error) {
       console.error('[Push] Initialization failed:', error.message);
     }

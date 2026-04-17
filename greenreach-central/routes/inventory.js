@@ -26,8 +26,8 @@ function getCropRegistry() {
 
 /**
  * Calculate auto_quantity_lbs from groups/trays for a farm.
- * Aggregates: total_plants * yieldFactor * avg_weight_per_plant (from benchmarks or crop defaults).
- * Only updates products that have inventory_source='auto' (does not overwrite manual entries).
+ * Aggregates planted groups into growth-stage-weighted current inventory using
+ * the group's seed date plus crop yield and weight benchmarks.
  */
 export async function recalculateAutoInventoryFromGroups(farmId) {
   if (!isDatabaseAvailable()) return { updated: 0 };
@@ -57,12 +57,17 @@ export async function recalculateAutoInventoryFromGroups(farmId) {
     }
   } catch (_) { /* benchmarks optional */ }
 
-  // Aggregate by crop: total plants, yield factor, weight per plant
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  // Aggregate by crop: total plants and current estimated weight.
   const cropTotals = {};
+  const activeCropNames = new Set();
   for (const group of groups) {
     if (group?.active === false) continue;
     const cropName = group?.crop || group?.recipe || group?.plan;
     if (!cropName || cropName === 'Unknown') continue;
+    activeCropNames.add(cropName);
 
     const totalPlants = Number(group?.plants || 0) || (Number(group?.trays || 0) * 12);
     if (totalPlants <= 0) continue;
@@ -71,18 +76,36 @@ export async function recalculateAutoInventoryFromGroups(farmId) {
     const yieldFactor = cropEntry?.growth?.yieldFactor || 0.85;
     // Weight source priority: farm benchmarks > hardcoded estimate (2 oz per plant avg)
     const avgWeightOz = benchmarks[cropName] || 2.0;
+    const seedDateValue = group?.planConfig?.anchor?.seedDate || group?.seedDate || group?.createdAt || null;
+    const seedDate = seedDateValue ? new Date(seedDateValue) : null;
+    const growDays = cropUtils.getCropGrowDays(cropName)
+      || cropEntry?.growth?.daysToHarvest
+      || cropEntry?.growth?.growDays
+      || cropEntry?.daysToHarvest
+      || 35;
+
+    let growthCurve = 1;
+    if (seedDate && !Number.isNaN(seedDate.getTime()) && growDays > 0) {
+      const normalizedSeedDate = new Date(seedDate);
+      normalizedSeedDate.setHours(0, 0, 0, 0);
+      const daysPostSeed = Math.max(0, Math.floor((today - normalizedSeedDate) / (1000 * 60 * 60 * 24)));
+      const growthPercent = Math.min(1, daysPostSeed / growDays);
+      growthCurve = Math.pow(growthPercent, 1.3);
+    }
+
+    const estimatedOz = totalPlants * yieldFactor * avgWeightOz * growthCurve;
 
     if (!cropTotals[cropName]) {
-      cropTotals[cropName] = { totalPlants: 0, yieldFactor, avgWeightOz };
+      cropTotals[cropName] = { totalPlants: 0, estimatedOz: 0 };
     }
     cropTotals[cropName].totalPlants += totalPlants;
+    cropTotals[cropName].estimatedOz += estimatedOz;
   }
 
   // Upsert weight estimates into farm_inventory
   let updated = 0;
   for (const [cropName, data] of Object.entries(cropTotals)) {
-    const estimatedOz = data.totalPlants * data.yieldFactor * data.avgWeightOz;
-    const estimatedLbs = Math.round((estimatedOz / 16) * 100) / 100;
+    const estimatedLbs = Math.round((data.estimatedOz / 16) * 100) / 100;
 
     const productId = cropName.toLowerCase().replace(/\s+/g, '-');
     const cropPrices = await resolveCropPricing(farmId, cropName);
@@ -98,8 +121,12 @@ export async function recalculateAutoInventoryFromGroups(farmId) {
         quantity_available = EXCLUDED.auto_quantity_lbs + COALESCE(farm_inventory.manual_quantity_lbs, 0) - COALESCE(farm_inventory.sold_quantity_lbs, 0),
         retail_price = CASE WHEN COALESCE(farm_inventory.retail_price, 0) = 0 THEN EXCLUDED.retail_price ELSE farm_inventory.retail_price END,
         wholesale_price = CASE WHEN COALESCE(farm_inventory.wholesale_price, 0) = 0 THEN EXCLUDED.wholesale_price ELSE farm_inventory.wholesale_price END,
+        inventory_source = CASE
+          WHEN COALESCE(farm_inventory.manual_quantity_lbs, 0) > 0 THEN 'hybrid'
+          ELSE 'auto'
+        END,
         last_updated = NOW()
-      WHERE farm_inventory.inventory_source NOT IN ('manual', 'custom') AND COALESCE(farm_inventory.is_custom, FALSE) = FALSE`,
+      WHERE COALESCE(farm_inventory.is_custom, FALSE) = FALSE`,
       [farmId, productId, cropName, estimatedLbs, estimatedLbs, estimatedLbs,
        cropPrices.retailPrice, cropPrices.wholesalePrice]
     );
@@ -109,7 +136,7 @@ export async function recalculateAutoInventoryFromGroups(farmId) {
   // Clean stale auto entries: remove auto-inventory rows for crops that no
   // longer appear in any growth group. This prevents phantom farm value from
   // persisting after crops are removed or groups are emptied.
-  const activeCrops = Object.keys(cropTotals);
+  const activeCrops = [...activeCropNames];
   let cleaned = 0;
   try {
     let delResult;
@@ -120,12 +147,30 @@ export async function recalculateAutoInventoryFromGroups(farmId) {
          AND COALESCE(is_custom, FALSE) = FALSE`,
         [farmId]
       );
+      await query(
+        `UPDATE farm_inventory
+           SET auto_quantity_lbs = 0,
+               quantity = COALESCE(manual_quantity_lbs, 0),
+               quantity_available = GREATEST(0, COALESCE(manual_quantity_lbs, 0) - COALESCE(sold_quantity_lbs, 0)),
+               inventory_source = 'manual'
+         WHERE farm_id = $1 AND inventory_source = 'hybrid' AND COALESCE(is_custom, FALSE) = FALSE`,
+        [farmId]
+      );
     } else {
       delResult = await query(
         `DELETE FROM farm_inventory
          WHERE farm_id = $1 AND inventory_source = 'auto'
          AND COALESCE(is_custom, FALSE) = FALSE
          AND product_name != ALL($2)`,
+        [farmId, activeCrops]
+      );
+      await query(
+        `UPDATE farm_inventory
+           SET auto_quantity_lbs = 0,
+               quantity = COALESCE(manual_quantity_lbs, 0),
+               quantity_available = GREATEST(0, COALESCE(manual_quantity_lbs, 0) - COALESCE(sold_quantity_lbs, 0)),
+               inventory_source = 'manual'
+         WHERE farm_id = $1 AND inventory_source = 'hybrid' AND COALESCE(is_custom, FALSE) = FALSE AND product_name != ALL($2)`,
         [farmId, activeCrops]
       );
     }
@@ -273,6 +318,17 @@ async function loadFarmGroups(farmId) {
 
   if (await isDatabaseAvailable()) {
     try {
+      const currentResult = await query(
+        `SELECT data FROM farm_data WHERE farm_id = $1 AND data_type = $2`,
+        [farmId, 'groups']
+      );
+
+      if (currentResult.rows.length > 0) {
+        const raw = currentResult.rows[0].data;
+        const groups = Array.isArray(raw) ? raw : (raw?.groups || []);
+        if (Array.isArray(groups)) return groups;
+      }
+
       const result = await query(
         `SELECT groups FROM farm_backups WHERE farm_id = $1`,
         [farmId]

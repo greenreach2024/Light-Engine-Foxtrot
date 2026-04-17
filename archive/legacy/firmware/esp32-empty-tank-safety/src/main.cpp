@@ -59,13 +59,21 @@ static const unsigned long WIFI_RECONNECT_INTERVAL_MS = 15UL * 1000UL;  // retry
 static const unsigned long AUTODOSE_CHECK_INTERVAL_MS = 30UL * 1000UL;  // evaluate setpoints every 30s
 
 static const float DEFAULT_EC_DOSE_SECONDS = 2.5f;
+static const float DEFAULT_EC_MIX_B_RATIO = 2.0f;
 static const float DEFAULT_PH_DOWN_DOSE_SECONDS = 1.0f;
+static const float DEFAULT_SAFE_PH_TARGET = 5.80f;
+static const float DEFAULT_SAFE_EC_TARGET = 1300.0f;
+static const bool DEFAULT_SAFE_AUTODOSE_ENABLED = true;
+static const float DEFAULT_SAFE_PH_DEADBAND = 0.15f;
+static const float DEFAULT_SAFE_EC_DEADBAND = 50.0f;
 
 static const float DEFAULT_MIN_DOSE_INTERVAL_SEC = DOSE_WINDOW_COOLDOWN_MS / 1000.0f;
+static const float DEFAULT_SAFE_DOSE_PAUSE_SEC = DEFAULT_MIN_DOSE_INTERVAL_SEC;
 
 // EC sensor configuration
 static const float EC_EMPTY_THRESHOLD = 75.0f;  // uS/cm threshold for empty tank detection
 static const float EC_SENSOR_MIN_VALID = 5.0f;  // reject near-zero readings as sensor fault
+static const unsigned long MQTT_RECONNECT_INTERVAL_MS = 5UL * 1000UL;
 
 // Atlas sensor reading state
 static float lastTempReading = 21.0f;  // Cache temperature for compensation
@@ -82,14 +90,14 @@ static String runtimeMqttHost;
 static int runtimeMqttPort = MQTT_PORT;
 
 struct SetpointState {
-  float phTarget = 6.50f;
-  float phTolerance = 0.15f;
-  float ecTarget = 800.0f;  // uS/cm
-  float ecTolerance = 50.0f;
+  float phTarget = DEFAULT_SAFE_PH_TARGET;
+  float phTolerance = DEFAULT_SAFE_PH_DEADBAND;
+  float ecTarget = DEFAULT_SAFE_EC_TARGET;  // uS/cm
+  float ecTolerance = DEFAULT_SAFE_EC_DEADBAND;
   float ecDoseSeconds = DEFAULT_EC_DOSE_SECONDS;
   float phDownDoseSeconds = DEFAULT_PH_DOWN_DOSE_SECONDS;
-  float minDoseIntervalSec = DEFAULT_MIN_DOSE_INTERVAL_SEC;
-  bool autodoseEnabled = false;
+  float minDoseIntervalSec = DEFAULT_SAFE_DOSE_PAUSE_SEC;
+  bool autodoseEnabled = DEFAULT_SAFE_AUTODOSE_ENABLED;
   unsigned long updatedAtMs = 0;
 };
 
@@ -104,6 +112,8 @@ static bool networkEnabled = false;
 static String serialBuffer;
 static unsigned long lastUsbStopPulseMs = 0;
 static unsigned long lastWifiAttemptMs = 0;
+static unsigned long lastMqttAttemptMs = 0;
+static unsigned long lastDoseActionMs = 0;
 static SetpointState setpoints;
 static PumpGuardState phDownGuard;
 static PumpGuardState ecMixAGuard;
@@ -129,6 +139,7 @@ static bool isSafeToDose(const String &action, float currentEC);
 static void handleCommand(const char *payload);
 static float maxDurationForAction(const String &action);
 static float minDurationForAction(const String &action);
+static float clampDoseDurationForAction(const String &action, float durationSec);
 static void processSerialInput();
 static void handleSerialCommand(const String &command);
 static void loadSetpointsFromStorage();
@@ -142,6 +153,7 @@ static void ensureWifiConnection();
 static void loadNetworkConfig();
 static void saveWifiConfig(const String &ssid, const String &pwd);
 static void saveBrokerConfig(const String &host, int port);
+static bool isControlLinkOnline();
 
 static void mqttCallback(char *topic, byte *payload, unsigned int length) {
   Serial.printf("📨 Message on topic: %s\n", topic);
@@ -216,7 +228,11 @@ void setup() {
       networkEnabled = false;
     }
   } else {
-    Serial.println("🔌 USB-only safe mode: WiFi credentials not configured. Pumps held OFF.");
+    if (setpoints.autodoseEnabled) {
+      Serial.println("🔌 USB/offline mode: using local autodose setpoints (safe fallback active).");
+    } else {
+      Serial.println("🔌 USB-only mode: WiFi not configured and autodose disabled; pumps held OFF.");
+    }
     networkEnabled = false;
   }
 }
@@ -238,8 +254,8 @@ void loop() {
       lastPublish = millis();
     }
   } else {
-    // Pulse stopAllPumps() periodically to guarantee pumps remain off in USB-only mode
-    if (millis() - lastUsbStopPulseMs > 1000UL) {
+    // If local autodose is disabled, pulse stopAllPumps() as a hard safety hold.
+    if (!setpoints.autodoseEnabled && millis() - lastUsbStopPulseMs > 1000UL) {
       stopAllPumps();
       lastUsbStopPulseMs = millis();
     }
@@ -290,28 +306,36 @@ static void ensureWifiConnection() {
 }
 
 static void reconnectMQTT() {
-  while (!mqttClient.connected()) {
-    if (!networkEnabled) {
-      return;
-    }
-    Serial.print("Connecting to MQTT broker...");
-
-    String clientId = "ESP32-NutrientRoom-";
-    clientId += String(random(0xffff), HEX);
-
-    if (mqttClient.connect(clientId.c_str())) {
-      Serial.println(" ✅ Connected");
-
-      if (mqttClient.subscribe(COMMAND_TOPIC)) {
-        Serial.printf("📡 Subscribed to %s\n", COMMAND_TOPIC);
-      } else {
-        Serial.println("❌ Failed to subscribe");
-      }
-    } else {
-      Serial.printf(" ❌ Failed, rc=%d, retrying in 5s\n", mqttClient.state());
-      delay(5000);
-    }
+  if (!networkEnabled || mqttClient.connected()) {
+    return;
   }
+
+  const unsigned long now = millis();
+  if (now - lastMqttAttemptMs < MQTT_RECONNECT_INTERVAL_MS) {
+    return;
+  }
+  lastMqttAttemptMs = now;
+
+  Serial.print("Connecting to MQTT broker...");
+
+  String clientId = "ESP32-NutrientRoom-";
+  clientId += String(random(0xffff), HEX);
+
+  if (mqttClient.connect(clientId.c_str())) {
+    Serial.println(" ✅ Connected");
+
+    if (mqttClient.subscribe(COMMAND_TOPIC)) {
+      Serial.printf("📡 Subscribed to %s\n", COMMAND_TOPIC);
+    } else {
+      Serial.println("❌ Failed to subscribe");
+    }
+  } else {
+    Serial.printf(" ❌ Failed, rc=%d, retrying in 5s\n", mqttClient.state());
+  }
+}
+
+static bool isControlLinkOnline() {
+  return networkEnabled && mqttClient.connected();
 }
 
 static bool isSafeToDose(const String &action, float currentEC) {
@@ -498,17 +522,7 @@ static void executeDosingCommand(const String &action, float durationSec) {
     return;
   }
 
-  float maxDuration = maxDurationForAction(action);
-  float minDuration = minDurationForAction(action);
-  float safeDurationSec = durationSec;
-
-  if (maxDuration > 0.0f && safeDurationSec > maxDuration) {
-    safeDurationSec = maxDuration;
-  }
-
-  if (safeDurationSec < minDuration) {
-    safeDurationSec = minDuration;
-  }
+  const float safeDurationSec = clampDoseDurationForAction(action, durationSec);
 
   Serial.printf("🔛 Activating %s on GPIO%d for %.1fs (requested %.1fs)\n",
                 action.c_str(), gpio, safeDurationSec, durationSec);
@@ -768,7 +782,16 @@ static void publishSensorData() {
 }
 
 static void maybeAutodose() {
-  if (!setpoints.autodoseEnabled) {
+  const bool controlLinkOnline = isControlLinkOnline();
+  const bool usingOfflineFallback = !controlLinkOnline;
+  const bool autodoseEnabled = usingOfflineFallback ? DEFAULT_SAFE_AUTODOSE_ENABLED : setpoints.autodoseEnabled;
+  const float phTarget = usingOfflineFallback ? DEFAULT_SAFE_PH_TARGET : setpoints.phTarget;
+  const float phTolerance = usingOfflineFallback ? DEFAULT_SAFE_PH_DEADBAND : setpoints.phTolerance;
+  const float ecTarget = usingOfflineFallback ? DEFAULT_SAFE_EC_TARGET : setpoints.ecTarget;
+  const float ecTolerance = usingOfflineFallback ? DEFAULT_SAFE_EC_DEADBAND : setpoints.ecTolerance;
+  const float minDoseIntervalSec = usingOfflineFallback ? DEFAULT_SAFE_DOSE_PAUSE_SEC : setpoints.minDoseIntervalSec;
+
+  if (!autodoseEnabled) {
     return;
   }
 
@@ -778,6 +801,13 @@ static void maybeAutodose() {
   }
   lastAutodoseCheckMs = now;
 
+  const unsigned long minPauseMs = minDoseIntervalSec > 0.0f
+    ? static_cast<unsigned long>(minDoseIntervalSec * 1000.0f)
+    : DOSE_WINDOW_COOLDOWN_MS;
+  if (lastDoseActionMs != 0 && (now - lastDoseActionMs) < minPauseMs) {
+    return;
+  }
+
   // Keep Atlas sensors temp compensated before dosing decisions.
   readTemperatureSensor();
   float currentPh = readPHSensor();
@@ -785,30 +815,39 @@ static void maybeAutodose() {
 
   bool actionTaken = false;
 
-  if (!actionTaken && setpoints.ecTarget > 0.0f && setpoints.ecTolerance > 0.0f &&
+  if (!actionTaken && ecTarget > 0.0f && ecTolerance > 0.0f &&
       setpoints.ecDoseSeconds >= MIN_DURATION_SEC) {
-    const float ecLow = std::max(0.0f, setpoints.ecTarget - setpoints.ecTolerance);
+    const float ecLow = std::max(0.0f, ecTarget - ecTolerance);
     if (currentEc > 0.0f && currentEc < ecLow) {
-      const String action = "ecMixA";
+      const String actionA = "ecMixA";
+      const String actionB = "ecMixB";
+      const float ecMixADoseSec = clampDoseDurationForAction(actionA, setpoints.ecDoseSeconds);
+      const float ecMixBDoseSec = clampDoseDurationForAction(actionB, ecMixADoseSec * DEFAULT_EC_MIX_B_RATIO);
       char guardReason[128];
-      if (!checkPumpGuardrails(action, setpoints.ecDoseSeconds, guardReason, sizeof(guardReason))) {
+      if (!checkPumpGuardrails(actionA, ecMixADoseSec, guardReason, sizeof(guardReason))) {
         Serial.printf("🤖 Autodose EC skipped: %s\n", guardReason);
-      } else if (!isSafeToDose(action, currentEc)) {
+      } else if (!checkPumpGuardrails(actionB, ecMixBDoseSec, guardReason, sizeof(guardReason))) {
+        Serial.printf("🤖 Autodose EC skipped: %s\n", guardReason);
+      } else if (!isSafeToDose(actionA, currentEc) || !isSafeToDose(actionB, currentEc)) {
         Serial.println("🤖 Autodose EC blocked by safety guardrail");
       } else {
-        Serial.printf("🤖 Autodose EC: %.1f < target %.1f, dosing %.1fs\n",
-                      currentEc, setpoints.ecTarget, setpoints.ecDoseSeconds);
-        publishAck("auto-start", action, "Autodose triggered", currentEc);
-        executeDosingCommand(action, setpoints.ecDoseSeconds);
-        publishAck("auto-complete", action, "Autodose completed", readECSensor());
+        Serial.printf("🤖 Autodose EC: %.1f < target %.1f, dosing A %.1fs then B %.1fs\n",
+                      currentEc, ecTarget, ecMixADoseSec, ecMixBDoseSec);
+        publishAck("auto-start", actionA, "Autodose EC A triggered", currentEc);
+        executeDosingCommand(actionA, ecMixADoseSec);
+        publishAck("auto-complete", actionA, "Autodose EC A completed", readECSensor());
+        publishAck("auto-start", actionB, "Autodose EC B triggered", readECSensor());
+        executeDosingCommand(actionB, ecMixBDoseSec);
+        lastDoseActionMs = millis();
+        publishAck("auto-complete", actionB, "Autodose EC B completed", readECSensor());
         actionTaken = true;
       }
     }
   }
 
-  if (!actionTaken && setpoints.phTarget > 0.0f && setpoints.phTolerance > 0.0f &&
+  if (!actionTaken && phTarget > 0.0f && phTolerance > 0.0f &&
       setpoints.phDownDoseSeconds >= MIN_DURATION_SEC) {
-    const float phHigh = setpoints.phTarget + setpoints.phTolerance;
+    const float phHigh = phTarget + phTolerance;
     if (currentPh > phHigh) {
       const String action = "phDown";
       char guardReason[128];
@@ -818,16 +857,17 @@ static void maybeAutodose() {
         Serial.println("🤖 Autodose pH blocked by safety guardrail");
       } else {
         Serial.printf("🤖 Autodose pH: %.2f > target %.2f, dosing %.1fs\n",
-                      currentPh, setpoints.phTarget, setpoints.phDownDoseSeconds);
+                      currentPh, phTarget, setpoints.phDownDoseSeconds);
         publishAck("auto-start", action, "Autodose triggered", currentEc);
         executeDosingCommand(action, setpoints.phDownDoseSeconds);
+        lastDoseActionMs = millis();
         publishAck("auto-complete", action, "Autodose completed", readECSensor());
         actionTaken = true;
       }
     }
   }
 
-  if (actionTaken && networkEnabled) {
+  if (actionTaken && controlLinkOnline) {
     publishSensorData();
   }
 }
@@ -865,6 +905,12 @@ static void persistSetpointsToStorage() {
 }
 
 static void attachSetpoints(JsonDocument &doc) {
+  const bool controlLinkOnline = isControlLinkOnline();
+  const bool usingOfflineFallback = !controlLinkOnline;
+  const float effectivePhTolerance = usingOfflineFallback ? DEFAULT_SAFE_PH_DEADBAND : setpoints.phTolerance;
+  const float effectiveEcTolerance = usingOfflineFallback ? DEFAULT_SAFE_EC_DEADBAND : setpoints.ecTolerance;
+  const float effectiveMinDoseIntervalSec = usingOfflineFallback ? DEFAULT_SAFE_DOSE_PAUSE_SEC : setpoints.minDoseIntervalSec;
+
   JsonObject targets = doc.createNestedObject("targets");
   targets["phTarget"] = setpoints.phTarget;
   targets["phTolerance"] = setpoints.phTolerance;
@@ -872,11 +918,18 @@ static void attachSetpoints(JsonDocument &doc) {
   targets["ecTolerance"] = setpoints.ecTolerance;
   targets["updatedAtMs"] = setpoints.updatedAtMs;
   targets["autodoseEnabled"] = setpoints.autodoseEnabled;
+  targets["offlineFallbackActive"] = usingOfflineFallback;
+  targets["effectivePhTarget"] = usingOfflineFallback ? DEFAULT_SAFE_PH_TARGET : setpoints.phTarget;
+  targets["effectiveEcTarget"] = usingOfflineFallback ? DEFAULT_SAFE_EC_TARGET : setpoints.ecTarget;
+  targets["effectivePhTolerance"] = effectivePhTolerance;
+  targets["effectiveEcTolerance"] = effectiveEcTolerance;
+  targets["effectiveAutodoseEnabled"] = usingOfflineFallback ? DEFAULT_SAFE_AUTODOSE_ENABLED : setpoints.autodoseEnabled;
 
   JsonObject dosing = targets.createNestedObject("dosing");
   dosing["ecDoseSeconds"] = setpoints.ecDoseSeconds;
   dosing["phDownDoseSeconds"] = setpoints.phDownDoseSeconds;
   dosing["minDoseIntervalSec"] = setpoints.minDoseIntervalSec;
+  dosing["effectiveMinDoseIntervalSec"] = effectiveMinDoseIntervalSec;
 
   JsonObject guard = doc.createNestedObject("guardrails");
   guard["dailyPhRuntimeSec"] = phDownGuard.dailyRuntimeSec;
@@ -886,6 +939,7 @@ static void attachSetpoints(JsonDocument &doc) {
     ? static_cast<unsigned long>(setpoints.minDoseIntervalSec * 1000.0f)
     : DOSE_WINDOW_COOLDOWN_MS;
   guard["cooldownMs"] = cooldownMs;
+  guard["effectiveCooldownMs"] = static_cast<unsigned long>(effectiveMinDoseIntervalSec * 1000.0f);
 }
 
 static PumpGuardState &guardStateForAction(const String &action) {
@@ -989,6 +1043,22 @@ static float minDurationForAction(const String &action) {
   return MIN_DURATION_SEC;
 }
 
+static float clampDoseDurationForAction(const String &action, float durationSec) {
+  const float minDuration = minDurationForAction(action);
+  const float maxDuration = maxDurationForAction(action);
+
+  float safeDurationSec = durationSec;
+  if (maxDuration > 0.0f && safeDurationSec > maxDuration) {
+    safeDurationSec = maxDuration;
+  }
+
+  if (safeDurationSec < minDuration) {
+    safeDurationSec = minDuration;
+  }
+
+  return safeDurationSec;
+}
+
 static void processSerialInput() {
   while (Serial.available() > 0) {
     char incoming = static_cast<char>(Serial.read());
@@ -1013,11 +1083,45 @@ static void handleSerialCommand(const String &command) {
   }
 
   if (command.equalsIgnoreCase("STATUS")) {
+    const bool controlLinkOnline = isControlLinkOnline();
+    const bool usingOfflineFallback = !controlLinkOnline;
+    const float effectivePhTarget = usingOfflineFallback ? DEFAULT_SAFE_PH_TARGET : setpoints.phTarget;
+    const float effectivePhTolerance = usingOfflineFallback ? DEFAULT_SAFE_PH_DEADBAND : setpoints.phTolerance;
+    const float effectiveEcTarget = usingOfflineFallback ? DEFAULT_SAFE_EC_TARGET : setpoints.ecTarget;
+    const float effectiveEcTolerance = usingOfflineFallback ? DEFAULT_SAFE_EC_DEADBAND : setpoints.ecTolerance;
+    const float effectivePauseSec = usingOfflineFallback ? DEFAULT_SAFE_DOSE_PAUSE_SEC : setpoints.minDoseIntervalSec;
+    const bool effectiveAutodose = usingOfflineFallback ? DEFAULT_SAFE_AUTODOSE_ENABLED : setpoints.autodoseEnabled;
     float ec = readECSensor();
-    Serial.printf("ℹ️  Status → EC: %.1f uS/cm, WiFi: %s, MQTT: %s\n",
+    Serial.printf("ℹ️  Status → EC: %.1f uS/cm, WiFi: %s, MQTT: %s, target pH: %.2f±%.2f, target EC: %.0f±%.0f, pause: %.0fs, autodose: %s, fallback: %s\n",
                   ec,
                   networkEnabled ? (WiFi.status() == WL_CONNECTED ? "connected" : "retrying") : "disabled",
-                  (networkEnabled && mqttClient.connected()) ? "connected" : "offline");
+                  controlLinkOnline ? "connected" : "offline",
+                  effectivePhTarget,
+                  effectivePhTolerance,
+                  effectiveEcTarget,
+                  effectiveEcTolerance,
+                  effectivePauseSec,
+                  effectiveAutodose ? "ENABLED" : "disabled",
+                  usingOfflineFallback ? "ON" : "off");
+    return;
+  }
+
+  if (command.equalsIgnoreCase("SAFE")) {
+    setpoints.phTarget = DEFAULT_SAFE_PH_TARGET;
+    setpoints.ecTarget = DEFAULT_SAFE_EC_TARGET;
+    setpoints.phTolerance = DEFAULT_SAFE_PH_DEADBAND;
+    setpoints.ecTolerance = DEFAULT_SAFE_EC_DEADBAND;
+    setpoints.minDoseIntervalSec = DEFAULT_SAFE_DOSE_PAUSE_SEC;
+    setpoints.autodoseEnabled = DEFAULT_SAFE_AUTODOSE_ENABLED;
+    persistSetpointsToStorage();
+    lastAutodoseCheckMs = 0;
+    lastDoseActionMs = 0;
+    Serial.printf("✅ SAFE profile applied: pH %.2f±%.2f, EC %.0f±%.0f, pause %.0fs, autodose ENABLED\n",
+                  setpoints.phTarget,
+                  setpoints.phTolerance,
+                  setpoints.ecTarget,
+                  setpoints.ecTolerance,
+                  setpoints.minDoseIntervalSec);
     return;
   }
 
@@ -1395,6 +1499,7 @@ static void handleSerialCommand(const String &command) {
   Serial.println("     ECPOWER           - Test EC sensor power control (GPIO 27)");
   Serial.println("     ECCAL ...         - EC calibration (type 'ECCAL HELP')");
   Serial.println("     PHCAL ...         - pH calibration (type 'PHCAL HELP')");
+  Serial.println("     SAFE              - Apply safe defaults (pH 5.80±0.15, EC 1300±50, pause 60s, autodose ON)");
   Serial.println("     WIFI <ssid> <pwd> - Configure WiFi credentials");
   Serial.println("     BROKER <host>     - Configure MQTT broker");
   Serial.println("     PUBLISH           - Force immediate telemetry publish");

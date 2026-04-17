@@ -2644,7 +2644,7 @@ function createDeviceEntryElement(device) {
   info.appendChild(name);
 
   const subline = document.createElement('div');
-  subline.style.cssText = 'font-size:10px;color:#cbd5e1;display:flex;flex-wrap:wrap;gap:6px;align-items:center;';
+  subline.style.cssText = 'font-size:10px;color:var(--text-secondary, #64748b);display:flex;flex-wrap:wrap;gap:6px;align-items:center;';
 
   // Add category badge
   const categoryBadge = document.createElement('span');
@@ -2708,17 +2708,17 @@ function createDeviceEntryElement(device) {
   // Add zone assignment dropdown for SwitchBot sensors (all sensor types, not just WoIOSensor)
   if (isSwitchbotSensor) {
     const zoneSection = document.createElement('div');
-    zoneSection.style.cssText = 'margin-top:10px;padding:8px;background:rgba(15,23,42,0.78);border:1px solid rgba(125,211,252,0.24);border-radius:8px;';
+    zoneSection.style.cssText = 'margin-top:10px;padding:8px;background:rgba(13,125,125,0.08);border:1px solid rgba(13,125,125,0.18);border-radius:8px;';
     
     const zoneLabel = document.createElement('label');
-    zoneLabel.style.cssText = 'display:flex;align-items:center;gap:8px;font-size:12px;color:#bae6fd;font-weight:600;';
+    zoneLabel.style.cssText = 'display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-secondary, #475569);font-weight:600;';
     
     const labelText = document.createElement('span');
     labelText.textContent = 'Zone:';
     zoneLabel.appendChild(labelText);
     
     const zoneSelect = document.createElement('select');
-    zoneSelect.style.cssText = 'padding:4px 8px;border:1px solid rgba(56,189,248,0.4);border-radius:4px;background:rgba(15,23,42,0.92);color:#e2e8f0;font-size:12px;font-weight:500;cursor:pointer;';
+    zoneSelect.style.cssText = 'padding:4px 8px;border:1px solid rgba(13,125,125,0.22);border-radius:4px;background:var(--bg-secondary, #f8fafc);color:var(--text-primary, #0f172a);font-size:12px;font-weight:500;cursor:pointer;';
     zoneSelect.dataset.deviceId = device.id;
     
     // Add unassigned option
@@ -2860,10 +2860,10 @@ function createDeviceEntryElement(device) {
     
     // Add automation control toggle
     const automationRow = document.createElement('div');
-    automationRow.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-top:8px;padding-top:8px;border-top:1px solid rgba(125,211,252,0.24);';
+    automationRow.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-top:8px;padding-top:8px;border-top:1px solid rgba(13,125,125,0.18);';
     
     const automationLabel = document.createElement('label');
-    automationLabel.style.cssText = 'display:flex;align-items:center;gap:8px;font-size:12px;color:#bae6fd;font-weight:600;cursor:pointer;flex:1;';
+    automationLabel.style.cssText = 'display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-secondary, #475569);font-weight:600;cursor:pointer;flex:1;';
     
     const automationCheckbox = document.createElement('input');
     automationCheckbox.type = 'checkbox';
@@ -2902,7 +2902,7 @@ function createDeviceEntryElement(device) {
       info.appendChild(telemetrySection);
     } else {
       const placeholder = document.createElement('div');
-      placeholder.style.cssText = 'margin-top:10px;font-size:11px;color:#94a3b8;';
+      placeholder.style.cssText = 'margin-top:10px;font-size:11px;color:var(--text-secondary, #64748b);';
       placeholder.textContent = 'No telemetry reported yet.';
       info.appendChild(placeholder);
     }
@@ -2912,10 +2912,10 @@ function createDeviceEntryElement(device) {
   const controlledEquipment = getAllEquipment().filter(eq => eq.control === `IoT:${device.deviceId || device.id}`);
   if (controlledEquipment.length > 0) {
     const controlSection = document.createElement('div');
-    controlSection.style.cssText = 'margin-top:10px;padding:8px;background:rgba(15,23,42,0.82);border-radius:8px;border:1px solid rgba(59,130,246,0.2);border-left:3px solid #3b82f6;';
+    controlSection.style.cssText = 'margin-top:10px;padding:8px;background:rgba(59,130,246,0.08);border-radius:8px;border:1px solid rgba(59,130,246,0.16);border-left:3px solid #3b82f6;';
     
     const controlHeader = document.createElement('div');
-    controlHeader.style.cssText = 'font-size:11px;font-weight:600;color:#bfdbfe;margin-bottom:6px;';
+    controlHeader.style.cssText = 'font-size:11px;font-weight:600;color:var(--text-primary, #0f172a);margin-bottom:6px;';
     controlHeader.textContent = `Controls ${controlledEquipment.length} Equipment:`;
     controlSection.appendChild(controlHeader);
     
@@ -2924,11 +2924,11 @@ function createDeviceEntryElement(device) {
     
     controlledEquipment.forEach(eq => {
       const equipItem = document.createElement('div');
-      equipItem.style.cssText = 'font-size:11px;color:#cbd5e1;display:flex;align-items:center;gap:6px;';
+      equipItem.style.cssText = 'font-size:11px;color:var(--text-secondary, #64748b);display:flex;align-items:center;gap:6px;';
       equipItem.innerHTML = `
         <span style="width:6px;height:6px;background:#3b82f6;border-radius:50%;"></span>
         <span style="font-weight:500;">${escapeHtml(eq.name || eq.category || 'Equipment')}</span>
-        ${eq.roomName ? `<span style="color:#94a3b8;">in ${escapeHtml(eq.roomName)}</span>` : ''}
+        ${eq.roomName ? `<span style="color:var(--text-secondary, #64748b);">in ${escapeHtml(eq.roomName)}</span>` : ''}
       `;
       equipList.appendChild(equipItem);
     });
@@ -2989,7 +2989,7 @@ function createDeviceEntryElement(device) {
   const trustValue = String(device.trust || '').toLowerCase();
   if (trustValue && trustValue !== 'unknown') {
     const trustBadge = document.createElement('span');
-    trustBadge.style.cssText = 'font-size:10px;font-weight:600;text-transform:uppercase;color:#cbd5e1;';
+    trustBadge.style.cssText = 'font-size:10px;font-weight:600;text-transform:uppercase;color:var(--text-secondary, #64748b);';
     trustBadge.textContent = `Trust: ${trustValue}`;
     actions.appendChild(trustBadge);
   }
@@ -3012,7 +3012,7 @@ function renderIoTDeviceCards(devices) {
       iotPanelBody.appendChild(list);
       console.warn('[renderIoTDeviceCards] Created missing iotDevicesList container dynamically');
     } else {
-      console.error('[renderIoTDeviceCards] IoT panel body not found; cannot render devices');
+      console.log('[renderIoTDeviceCards] Skipping render; IoT panel is not present on this page');
       return;
     }
   }
@@ -3036,11 +3036,10 @@ function renderIoTDeviceCards(devices) {
   console.log('[renderIoTDeviceCards] Trusted devices:', trustedDevices.length);
   console.log('[renderIoTDeviceCards] Unknown devices:', unknownDevices.length);
   if (unknownDevices.length) {
-    let html = `<h3 style="margin:0 0 8px 0;">Unknown Devices</h3>`;
-    html += `<table class="iot-unknown-table" style="width:100%;border-collapse:collapse;margin-bottom:12px;">
-      <thead><tr style="background:#f1f5f9"><th>Identifier</th><th>Type</th><th>Vendor</th><th>Name</th><th>Location</th><th>Trust</th><th>Actions</th></tr></thead><tbody>`;
+    let html = '<h3 class="iot-panel-heading">Unknown Devices</h3>';
+    html += '<table class="iot-unknown-table"><thead><tr><th>Identifier</th><th>Type</th><th>Vendor</th><th>Name</th><th>Location</th><th>Trust</th><th>Actions</th></tr></thead><tbody>';
     for (const dev of unknownDevices) {
-      html += `<tr data-device-id="${escapeHtml(dev.id)}" style="border-bottom:1px solid #e5e7eb;">
+      html += `<tr data-device-id="${escapeHtml(dev.id)}">
         <td>${escapeHtml(dev.address || dev.id || '—')}</td>
         <td><input type="text" class="iot-unknown-type" value="${escapeHtml(dev.type || '')}" style="width:90px"></td>
         <td><input type="text" class="iot-unknown-vendor" value="${escapeHtml(dev.vendor || '')}" style="width:110px"></td>
@@ -9633,6 +9632,7 @@ class DeviceManagerWindow {
     // Group devices by family/protocol
     const families = {
       switchbot: [],
+      nutrientControllers: [],
       mqtt: [],
       wifi: [],
       ble: [],
@@ -9643,6 +9643,7 @@ class DeviceManagerWindow {
     devices.forEach(dev => {
       const proto = (dev.protocol || '').toLowerCase();
       if (proto.includes('switchbot')) families.switchbot.push(dev);
+      else if (dev.hints?.type === 'nutrient-controller') families.nutrientControllers.push(dev);
       else if (proto.includes('mqtt')) families.mqtt.push(dev);
       else if (proto.includes('wifi')) families.wifi.push(dev);
       else if (proto.includes('ble') || proto.includes('bluetooth')) families.ble.push(dev);
@@ -9660,6 +9661,7 @@ class DeviceManagerWindow {
       this.resultsEl.appendChild(section);
     };
     renderFamilySection('SwitchBot Devices', families.switchbot);
+    renderFamilySection('Nutrient Controllers', families.nutrientControllers);
     renderFamilySection('MQTT Devices', families.mqtt);
     renderFamilySection('Wi-Fi Devices', families.wifi);
     renderFamilySection('Bluetooth/BLE Devices', families.ble);
@@ -9717,7 +9719,7 @@ class DeviceManagerWindow {
     if (proto.includes('switchbot')) {
       familyControls += `<button type="button" class="secondary" data-action="open-switchbot">Pair/Open Manager</button>`;
     } else if (proto.includes('mqtt')) {
-      familyControls += `<button type="button" class="secondary" data-action="mqtt-sub">Subscribe/Unsubscribe</button>`;
+      familyControls += `<button type="button" class="secondary" data-action="mqtt-monitor">Monitor</button>`;
     } else if (proto.includes('wifi')) {
       familyControls += `<div class="tiny">Wi-Fi device: <b>${escapeHtml(device.address || '')}</b></div>`;
     }
@@ -9753,12 +9755,71 @@ class DeviceManagerWindow {
         if (typeof window.openSwitchBotManager === 'function') window.openSwitchBotManager();
       });
     } else if (proto.includes('mqtt')) {
-      card.querySelector('[data-action="mqtt-sub"]').addEventListener('click', () => {
-        showToast({ title: 'MQTT', msg: 'Subscribe/Unsubscribe coming soon.', kind: 'info', icon: '' });
+      card.querySelector('[data-action="mqtt-monitor"]').addEventListener('click', () => {
+        this.openMqttMonitor(device);
       });
     }
     this.renderAssignment(card, device);
     return card;
+  }
+
+  async openMqttMonitor(device) {
+    const modal = document.getElementById('iotEcosystemModal');
+    const modalBody = document.getElementById('iotEcosystemModalBody');
+    if (!modal || !modalBody) {
+      showToast({ title: 'Nutrient Monitor', msg: 'Monitor modal not available.', kind: 'error', icon: '' });
+      return;
+    }
+
+    modalBody.innerHTML = `<h2 style="margin-top:0">Nutrient Monitor</h2><div class="tiny" style="margin-bottom:12px;">Loading live nutrient status for ${escapeHtml(device.name || 'MQTT device')}...</div>`;
+    modal.style.display = 'flex';
+
+    try {
+      const response = await fetch('/data/nutrient-dashboard?refresh=1');
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const snapshot = await response.json();
+      const tanks = snapshot?.tanks && typeof snapshot.tanks === 'object' ? Object.entries(snapshot.tanks) : [];
+      const updatedAt = snapshot?.metadata?.updatedAt || snapshot?.updatedAt || null;
+
+      if (!tanks.length) {
+        modalBody.innerHTML = `<h2 style="margin-top:0">Nutrient Monitor</h2><div class="tiny" style="margin-bottom:12px;">No nutrient tanks are currently available to monitor.</div>`;
+        return;
+      }
+
+      const tankCards = tanks.map(([tankId, tank]) => {
+        const autodose = tank?.autodose || {};
+        const sensors = tank?.sensors || {};
+        return `
+          <div style="border:1px solid #d7e3d4;border-radius:12px;padding:12px;margin-bottom:12px;background:#f6fbf4;">
+            <div style="font-weight:700;color:#244b2a;margin-bottom:6px;">${escapeHtml(tankId)}</div>
+            <div class="tiny" style="margin-bottom:4px;">pH: ${escapeHtml(String(sensors.ph?.current ?? '—'))} | EC: ${escapeHtml(String(sensors.ec?.current ?? '—'))} | Temp: ${escapeHtml(String(sensors.temperature?.current ?? '—'))}</div>
+            <div class="tiny" style="margin-bottom:4px;">Targets: pH ${escapeHtml(String(autodose.phTarget ?? tank.phSetpoint ?? '—'))} ± ${escapeHtml(String(autodose.phTolerance ?? tank.phTolerance ?? '—'))}</div>
+            <div class="tiny" style="margin-bottom:4px;">Targets: EC ${escapeHtml(String(autodose.ecTarget ?? tank.ecSetpoint ?? '—'))} ± ${escapeHtml(String(autodose.ecTolerance ?? tank.ecTolerance ?? '—'))}</div>
+            <div class="tiny">Autodose: ${autodose.autodoseEnabled ? 'ENABLED' : 'disabled'}</div>
+          </div>
+        `;
+      }).join('');
+
+      modalBody.innerHTML = `
+        <h2 style="margin-top:0">Nutrient Monitor</h2>
+        <div class="tiny" style="margin-bottom:12px;">Device: ${escapeHtml(device.name || 'MQTT nutrient controller')}</div>
+        <div class="tiny" style="margin-bottom:12px;">Updated: ${escapeHtml(updatedAt ? new Date(updatedAt).toLocaleString() : 'Unknown')}</div>
+        ${tankCards}
+        <div style="display:flex;gap:8px;justify-content:flex-end;">
+          <button type="button" class="ghost" id="mqttMonitorRefresh">Refresh</button>
+        </div>
+      `;
+
+      const refreshBtn = document.getElementById('mqttMonitorRefresh');
+      if (refreshBtn) {
+        refreshBtn.addEventListener('click', () => this.openMqttMonitor(device));
+      }
+    } catch (error) {
+      modalBody.innerHTML = `<h2 style="margin-top:0">Nutrient Monitor</h2><div class="tiny" style="margin-bottom:12px;">Unable to load nutrient status: ${escapeHtml(error.message || 'Unknown error')}</div>`;
+    }
   }
 
   toggleAssignment(card, device) {
@@ -12877,8 +12938,8 @@ async function loadAllData() {
       loadJSON('./data/equipment.catalog.json', { dehumidifiers: [] }),
       loadJSON('./data/device-manufacturers.json', { manufacturers: [] }),
       loadJSON('./data/farm.json', {}),
-      // Use /api/rooms which reads from database when DB_ENABLED=true, otherwise falls back to rooms.json
-      loadJSON('/api/rooms', []).then(data => ({ rooms: Array.isArray(data) ? data : (data?.rooms || []) })),
+      // Load the full persisted room payload so equipment/category progress survives refresh.
+      loadJSON('/data/rooms.json', { rooms: [] }),
       loadJSON('./data/switchbot-devices.json', { devices: [], summary: null }),
       loadJSON('/data/iot-devices.json', []),
       loadJSON('/data/equipment-metadata.json', {})
@@ -16202,7 +16263,7 @@ function saveEquipmentChanges() {
   }
 }
 
-function renderGrowRoomOverview() {
+function renderGrowRoomOverviewLegacy() {
   const summaryEl = document.getElementById('growOverviewSummary');
   const gridEl = document.getElementById('growOverviewGrid');
   if (!summaryEl || !gridEl) return;
@@ -16309,7 +16370,96 @@ function renderGrowRoomOverview() {
     return 'unknown';
   };
 
-  const buildMetrics = (zone) => {
+  const buildRoomSensorMetrics = (devices) => {
+    if (!Array.isArray(devices) || !devices.length) return '';
+
+    const averageMetric = (getter) => {
+      const values = devices
+        .map((device) => getter(device))
+        .filter((value) => typeof value === 'number' && Number.isFinite(value));
+      if (!values.length) return null;
+      return values.reduce((sum, value) => sum + value, 0) / values.length;
+    };
+
+    const co2Average = averageMetric((device) => toNumericValue(resolveDeviceMetric(device, ['co2', 'co_2', 'carbonDioxide', 'carbondioxide']).value));
+    const metrics = [
+      { label: 'Temp', value: averageMetric(getTemperatureCelsiusNumeric), formatter: (value) => `${value.toFixed(1)}°C` },
+      { label: 'Humidity', value: averageMetric(getHumidityPercentNumeric), formatter: (value) => `${value.toFixed(0)}%` },
+      { label: 'CO2', value: co2Average, formatter: (value) => `${value.toFixed(0)} ppm` },
+      { label: 'VPD', value: averageMetric((device) => {
+          const direct = toNumericValue(resolveDeviceMetric(device, ['vpd', 'vpd_kpa', 'vpdvalue', 'vapor_pressure_deficit', 'vaporpressuredeficit']).value);
+          return direct !== null ? direct : computeVpdFromTempHumidity(device);
+        }), formatter: (value) => `${value.toFixed(2)} kPa` }
+    ].filter((item) => typeof item.value === 'number' && Number.isFinite(item.value));
+
+    return metrics.map((item) => `
+      <div class="grow-room-card__metric grow-room-card__metric--unknown">
+        <span class="grow-room-card__metric-label">${escapeHtml(item.label)}</span>
+        <span class="grow-room-card__metric-value">${escapeHtml(item.formatter(item.value))}</span>
+      </div>`).join('');
+  };
+
+  const collectRoomSensorDevices = (room, zone) => {
+    const roomKeys = collectIdentityKeys(room, zone);
+    if (!roomKeys.size) return [];
+
+    return dedupeDevices(Array.isArray(STATE.iotDevices) ? STATE.iotDevices : [])
+      .filter((device) => {
+        const trust = String(device?.trust || 'trusted').toLowerCase();
+        if (trust && trust !== 'trusted') return false;
+
+        const role = classifySwitchbotDeviceRole(device);
+        const category = getDeviceCategory(device);
+        const hasMetric = getTemperatureCelsiusNumeric(device) !== null ||
+          getHumidityPercentNumeric(device) !== null ||
+          computeVpdFromTempHumidity(device) !== null ||
+          toNumericValue(resolveDeviceMetric(device, ['co2', 'co_2', 'carbonDioxide', 'carbondioxide']).value) !== null;
+
+        if (!(role === 'Sensor' || category === 'sensor' || hasMetric)) return false;
+
+        const deviceKeys = toKeySet(
+          device.id,
+          device.room,
+          device.roomId,
+          device.roomName,
+          device.location,
+          device.zone,
+          device.zoneId,
+          device.telemetry?.room_name,
+          device.telemetry?.roomName,
+          device.telemetry?.zone,
+          device.snapshot?.room,
+          device.snapshot?.zone,
+          device.deviceData?.room,
+          device.deviceData?.room_name,
+          device.deviceData?.zone
+        );
+        for (const key of deviceKeys) {
+          if (roomKeys.has(key)) return true;
+        }
+
+        const roomName = readString(room?.name, room?.id).toLowerCase();
+        const location = readString(device.location, device.telemetry?.room_name, device.snapshot?.room).toLowerCase();
+        return Boolean(roomName && location && location.includes(roomName));
+      })
+      .sort((left, right) => readString(left.name, left.deviceName, left.id).localeCompare(readString(right.name, right.deviceName, right.id)));
+  };
+
+  const buildRoomSensorList = (devices) => {
+    if (!Array.isArray(devices) || !devices.length) return '';
+    const preview = devices.slice(0, 4).map((device) => {
+      const label = readString(device.name, device.deviceName, device.vendor, device.id) || 'Sensor';
+      return `<li class="grow-room-card__device-chip">${escapeHtml(label)}</li>`;
+    }).join('');
+    const extra = devices.length > 4 ? `<li class="grow-room-card__device-chip">+${devices.length - 4} more</li>` : '';
+    return `
+      <div class="grow-room-card__devices">
+        <span class="tiny text-muted">Sensors</span>
+        <ul class="grow-room-card__device-list">${preview}${extra}</ul>
+      </div>`;
+  };
+
+  const buildMetrics = (zone, roomSensors = []) => {
     if (!zone || !zone.sensors) return '';
     const items = metricKeys
       .map((meta) => {
@@ -16325,7 +16475,7 @@ function renderGrowRoomOverview() {
       })
       .filter(Boolean)
       .join('');
-    return items;
+    return items || buildRoomSensorMetrics(roomSensors);
   };
 
   const buildAiSection = () => {
@@ -19711,7 +19861,7 @@ class FreshLightWizard {
       this.setupEventListeners();
       console.log('[FreshLightWizard] Fresh wizard initialized successfully');
     } else {
-      console.error('[FreshLightWizard] Could not find freshLightModal element!');
+      console.log('[FreshLightWizard] Skipping init; freshLightModal is not present on this page');
     }
   }
 
@@ -20838,7 +20988,7 @@ function buildPairingEnvironmentContext(roomWizardInstance) {
 
 const DEVICE_PAIR_WIZARD = new DevicePairWizard();
 
-function findModelByValue(value) {
+function findPairingModelByValue(value) {
   if (!DEVICE_MANUFACTURERS) return null;
   for (const m of DEVICE_MANUFACTURERS) {
     const md = (m.models || []).find(x => x.id === value || x.model === value);
@@ -20855,7 +21005,7 @@ function hookRoomDevicePairing(roomWizardInstance) {
     const modelSel = document.getElementById('roomDeviceModel');
     let modelMeta = null;
     if (modelSel && modelSel.value) {
-      modelMeta = findModelByValue(modelSel.value);
+      modelMeta = findPairingModelByValue(modelSel.value);
       if (modelMeta && modelMeta.connectivity && modelMeta.connectivity.includes('bluetooth')) suggested = 'bluetooth';
     }
     const vendor = document.getElementById('roomDeviceVendor')?.value || '';
@@ -21056,8 +21206,97 @@ function renderGrowRoomOverview() {
     return 'unknown';
   };
 
-  const buildMetrics = (zone) => {
-    if (!zone || !zone.sensors) return '';
+  const buildRoomSensorMetrics = (devices) => {
+    if (!Array.isArray(devices) || !devices.length) return '';
+
+    const averageMetric = (getter) => {
+      const values = devices
+        .map((device) => getter(device))
+        .filter((value) => typeof value === 'number' && Number.isFinite(value));
+      if (!values.length) return null;
+      return values.reduce((sum, value) => sum + value, 0) / values.length;
+    };
+
+    const co2Average = averageMetric((device) => toNumericValue(resolveDeviceMetric(device, ['co2', 'co_2', 'carbonDioxide', 'carbondioxide']).value));
+    const metrics = [
+      { label: 'Temp', value: averageMetric(getTemperatureCelsiusNumeric), formatter: (value) => `${value.toFixed(1)}°C` },
+      { label: 'Humidity', value: averageMetric(getHumidityPercentNumeric), formatter: (value) => `${value.toFixed(0)}%` },
+      { label: 'CO2', value: co2Average, formatter: (value) => `${value.toFixed(0)} ppm` },
+      { label: 'VPD', value: averageMetric((device) => {
+          const direct = toNumericValue(resolveDeviceMetric(device, ['vpd', 'vpd_kpa', 'vpdvalue', 'vapor_pressure_deficit', 'vaporpressuredeficit']).value);
+          return direct !== null ? direct : computeVpdFromTempHumidity(device);
+        }), formatter: (value) => `${value.toFixed(2)} kPa` }
+    ].filter((item) => typeof item.value === 'number' && Number.isFinite(item.value));
+
+    return metrics.map((item) => `
+      <div class="grow-room-card__metric grow-room-card__metric--unknown">
+        <span class="grow-room-card__metric-label">${escapeHtml(item.label)}</span>
+        <span class="grow-room-card__metric-value">${escapeHtml(item.formatter(item.value))}</span>
+      </div>`).join('');
+  };
+
+  const collectRoomSensorDevices = (room, zone) => {
+    const roomKeys = collectIdentityKeys(room, zone);
+    if (!roomKeys.size) return [];
+
+    return dedupeDevices(Array.isArray(STATE.iotDevices) ? STATE.iotDevices : [])
+      .filter((device) => {
+        const trust = String(device?.trust || 'trusted').toLowerCase();
+        if (trust && trust !== 'trusted') return false;
+
+        const role = classifySwitchbotDeviceRole(device);
+        const category = getDeviceCategory(device);
+        const hasMetric = getTemperatureCelsiusNumeric(device) !== null ||
+          getHumidityPercentNumeric(device) !== null ||
+          computeVpdFromTempHumidity(device) !== null ||
+          toNumericValue(resolveDeviceMetric(device, ['co2', 'co_2', 'carbonDioxide', 'carbondioxide']).value) !== null;
+
+        if (!(role === 'Sensor' || category === 'sensor' || hasMetric)) return false;
+
+        const deviceKeys = toKeySet(
+          device.id,
+          device.room,
+          device.roomId,
+          device.roomName,
+          device.location,
+          device.zone,
+          device.zoneId,
+          device.telemetry?.room_name,
+          device.telemetry?.roomName,
+          device.telemetry?.zone,
+          device.snapshot?.room,
+          device.snapshot?.zone,
+          device.deviceData?.room,
+          device.deviceData?.room_name,
+          device.deviceData?.zone
+        );
+        for (const key of deviceKeys) {
+          if (roomKeys.has(key)) return true;
+        }
+
+        const roomName = readString(room?.name, room?.id).toLowerCase();
+        const location = readString(device.location, device.telemetry?.room_name, device.snapshot?.room).toLowerCase();
+        return Boolean(roomName && location && location.includes(roomName));
+      })
+      .sort((left, right) => readString(left.name, left.deviceName, left.id).localeCompare(readString(right.name, right.deviceName, right.id)));
+  };
+
+  const buildRoomSensorList = (devices) => {
+    if (!Array.isArray(devices) || !devices.length) return '';
+    const preview = devices.slice(0, 4).map((device) => {
+      const label = readString(device.name, device.deviceName, device.vendor, device.id) || 'Sensor';
+      return `<li class="grow-room-card__device-chip">${escapeHtml(label)}</li>`;
+    }).join('');
+    const extra = devices.length > 4 ? `<li class="grow-room-card__device-chip">+${devices.length - 4} more</li>` : '';
+    return `
+      <div class="grow-room-card__devices">
+        <span class="tiny text-muted">Sensors</span>
+        <ul class="grow-room-card__device-list">${preview}${extra}</ul>
+      </div>`;
+  };
+
+  const buildMetrics = (zone, roomSensors = []) => {
+    if (!zone || !zone.sensors) return buildRoomSensorMetrics(roomSensors);
     const items = metricKeys
       .map((meta) => {
         const sensor = zone.sensors?.[meta.key];
@@ -21072,7 +21311,7 @@ function renderGrowRoomOverview() {
       })
       .filter(Boolean)
       .join('');
-    return items;
+    return items || buildRoomSensorMetrics(roomSensors);
   };
 
   const buildAiSection = () => {
@@ -21407,6 +21646,7 @@ function renderGrowRoomOverview() {
   if (rooms.length) {
     rooms.forEach((room) => {
       const zone = matchZoneForRoom(room);
+      const roomSensors = collectRoomSensorDevices(room, zone);
       const name = room.name || room.id || 'Grow Room';
       const details = [];
       const zonesList = Array.isArray(room.zones) ? room.zones.filter(Boolean) : [];
@@ -21423,7 +21663,9 @@ function renderGrowRoomOverview() {
       if (zone?.meta?.source) metaParts.push(`Source: ${escapeHtml(zone.meta.source)}`);
       if (typeof zone?.meta?.battery === 'number') metaParts.push(`Battery: ${escapeHtml(`${zone.meta.battery}%`)}`);
       if (typeof zone?.meta?.rssi === 'number') metaParts.push(`RSSI: ${escapeHtml(`${zone.meta.rssi} dBm`)}`);
-      const metrics = buildMetrics(zone);
+      if (roomSensors.length) metaParts.push(`${roomSensors.length} live sensor${roomSensors.length === 1 ? '' : 's'}`);
+      const metrics = buildMetrics(zone, roomSensors);
+      const sensorList = buildRoomSensorList(roomSensors);
       const statusIcons = renderStatusIcons(room, zone);
       cards.push(`
         <article class="grow-room-card">
@@ -21434,6 +21676,7 @@ function renderGrowRoomOverview() {
           ${statusIcons}
           ${details.length ? `<div class="tiny text-muted">${details.join(' • ')}</div>` : ''}
           ${metaParts.length ? `<div class="tiny text-muted">${metaParts.join(' • ')}</div>` : ''}
+          ${sensorList}
           ${metrics ? `<div class="grow-room-card__metrics">${metrics}</div>` : '<p class="tiny text-muted">No telemetry available.</p>'}
           <div class="grow-room-card__ai">
             <span class="tiny text-muted">AI Features</span>
@@ -21771,7 +22014,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       console.warn('[Bootstrap] LightWizard init failed', e);
     }
     try {
-      window.freshLightWizard = new FreshLightWizard();
+      if (document.getElementById('freshLightModal')) {
+        window.freshLightWizard = new FreshLightWizard();
+      }
     } catch (e) {
       console.warn('[Bootstrap] FreshLightWizard init failed', e);
     }

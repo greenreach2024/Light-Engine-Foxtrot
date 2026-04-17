@@ -1,7 +1,7 @@
 # Troubleshooting: Environmental Data Issues
 
-**Version**: 1.0.0
-**Date**: March 19, 2026
+**Version**: 1.1.0
+**Date**: April 17, 2026
 **Purpose**: Step-by-step diagnostic guide for when sensor data appears stale, missing, or incorrect. Follow these steps IN ORDER before making any code changes.
 
 ---
@@ -22,31 +22,30 @@ SwitchBot Cloud -> LE Polling -> EnvStore -> LE /env -> sync-service -> Central 
 This is the #1 cause of stale data. Check first, always.
 
 ```bash
-# Check EB environment variables on LE
-/Users/petergilbert/Library/Python/3.9/bin/eb printenv light-engine-foxtrot-prod-v3 | grep SWITCHBOT
+# Check Cloud Run env/secret wiring on LE
+gcloud run services describe light-engine --region=us-east1 \
+  --format="yaml(spec.template.spec.containers[0].env)" | grep -E "SWITCHBOT_(TOKEN|SECRET)"
 ```
 
 Expected output should show both `SWITCHBOT_TOKEN` and `SWITCHBOT_SECRET`.
 
-If missing, set them:
+If missing, set/update the referenced secrets and roll a new revision:
 ```bash
-/Users/petergilbert/Library/Python/3.9/bin/eb setenv \
-  SWITCHBOT_TOKEN="<token>" \
-  SWITCHBOT_SECRET="<secret>" \
-  -e light-engine-foxtrot-prod-v3
+echo -n "<token>" | gcloud secrets versions add SWITCHBOT_TOKEN --data-file=-
+echo -n "<secret>" | gcloud secrets versions add SWITCHBOT_SECRET --data-file=-
+gcloud run services update light-engine --region=us-east1 \
+  --update-secrets="SWITCHBOT_TOKEN=SWITCHBOT_TOKEN:latest,SWITCHBOT_SECRET=SWITCHBOT_SECRET:latest"
 ```
 
 Also verify `public/data/farm.json` has `integrations.switchbot` with both token and secret.
 
 ---
 
-## Step 2: Verify LE-EB Is Serving Fresh Data
+## Step 2: Verify LE Is Serving Fresh Data
 
 ```bash
-curl -s "http://light-engine-foxtrot-prod-v2.eba-ukiyyqf9.us-east-1.elasticbeanstalk.com/env" | python3 -m json.tool
+curl -s "https://light-engine-1029387937866.us-east1.run.app/env" | python3 -m json.tool
 ```
-
-(Note: URL says "v2" but reaches the v3 environment due to CNAME swap. This is correct.)
 
 **Check:**
 - `lastUpdate` timestamp should be within the last 2 minutes
@@ -57,9 +56,11 @@ curl -s "http://light-engine-foxtrot-prod-v2.eba-ukiyyqf9.us-east-1.elasticbeans
 
 ## Step 3: Verify Sync Service Is Pushing to Central
 
-Check the LE-EB logs for sync activity:
+Check Cloud Run logs for sync activity:
 ```bash
-/Users/petergilbert/Library/Python/3.9/bin/eb logs light-engine-foxtrot-prod-v3 --all | grep -i "sync\|telemetry"
+gcloud logging read \
+  'resource.type="cloud_run_revision" AND resource.labels.service_name="light-engine" AND (textPayload:"sync" OR textPayload:"telemetry")' \
+  --limit=100 --freshness=2h
 ```
 
 Look for:
@@ -85,7 +86,7 @@ curl -s "https://greenreachgreens.com/api/sync/telemetry" \
 
 **Check the response for:**
 - `envSource`: Should be `"sync-service"` (means DB data is being served)
-- If `envSource` is `"le-proxy"`, Central is falling back to proxying to LE-EB (DB may be empty)
+- If `envSource` is `"le-proxy"`, Central is falling back to proxying to LE (DB may be empty)
 - `updatedAt`: Should be recent
 
 ---
@@ -104,9 +105,9 @@ Open browser dev tools (Network tab) and check:
 ### 1. Missing SwitchBot Credentials (Most Common)
 
 **Symptom**: Data frozen at a specific timestamp (usually the last deploy date)
-**Cause**: `SWITCHBOT_TOKEN` / `SWITCHBOT_SECRET` not set on LE-EB
-**Diagnostic**: `eb printenv` shows no SWITCHBOT vars
-**Fix**: `eb setenv SWITCHBOT_TOKEN=... SWITCHBOT_SECRET=... -e light-engine-foxtrot-prod-v3`
+**Cause**: `SWITCHBOT_TOKEN` / `SWITCHBOT_SECRET` not set on LE Cloud Run service
+**Diagnostic**: `gcloud run services describe light-engine ...` shows no SWITCHBOT entries
+**Fix**: add latest secret versions and update service secret references (Step 1)
 **Why it's sneaky**: No error is logged. `ensureSwitchBotConfigured()` returns false silently. The sync loop still runs but just recycles stale env.json values with fresh-looking timestamps.
 
 ### 2. Hub Mini Offline
@@ -125,16 +126,16 @@ Open browser dev tools (Network tab) and check:
 
 ### 4. Central /env Proxy Misconfigured
 
-**Symptom**: Central shows stale data but LE-EB /env returns fresh data
+**Symptom**: Central shows stale data but LE /env returns fresh data
 **Cause**: `FARM_EDGE_URL` on Central points to wrong/old URL, or auth headers wrong
 **Diagnostic**: Central /env response has `envSource: "le-proxy"` with stale data
-**Fix**: Verify `FARM_EDGE_URL` env var on `greenreach-central-prod-v4`
+**Fix**: Verify `FARM_EDGE_URL` on `greenreach-central` Cloud Run service
 
 ### 5. Farm API Key Mismatch
 
 **Symptom**: sync-service runs but Central rejects telemetry (401/403)
 **Cause**: API key in `config/edge-config.json` doesn't match Central's `farm-api-keys.json` or DB
-**Diagnostic**: LE-EB logs show 401 responses from Central
+**Diagnostic**: `light-engine` Cloud Run logs show 401 responses from Central
 **Fix**: Verify key matches in both locations
 
 ### 6. env.json Contains Stale Seed Data
@@ -204,14 +205,14 @@ Reference implementations:
 Test the entire pipeline in one sequence:
 
 ```bash
-# 1. LE-EB direct
-echo "=== LE-EB Direct ===" && \
-curl -s "http://light-engine-foxtrot-prod-v2.eba-ukiyyqf9.us-east-1.elasticbeanstalk.com/env" | python3 -c "import sys,json; d=json.load(sys.stdin); print(f'lastUpdate: {d.get(\"lastUpdate\",\"MISSING\")}')" && \
+# 1. LE direct (Cloud Run)
+echo "=== LE Direct ===" && \
+curl -s "https://light-engine-1029387937866.us-east1.run.app/env" | python3 -c "import sys,json; d=json.load(sys.stdin); print(f'lastUpdate: {d.get(\"lastUpdate\",\"MISSING\")}')" && \
 echo "" && \
 # 2. Central
 echo "=== Central ===" && \
 curl -s "https://greenreachgreens.com/env" -H "X-Farm-ID: FARM-MLTP9LVH-B0B85039" -H "X-API-Key: <greenreach-api-key>" | python3 -c "import sys,json; d=json.load(sys.stdin); print(f'envSource: {d.get(\"envSource\",\"MISSING\")}'); print(f'updatedAt: {d.get(\"updatedAt\",\"MISSING\")}')"
 ```
 
-If LE-EB shows fresh data but Central does not, the problem is in stages 5-7.
-If LE-EB shows stale data, the problem is in stages 1-3 (most likely missing credentials).
+If LE shows fresh data but Central does not, the problem is in stages 5-7.
+If LE shows stale data, the problem is in stages 1-3 (most likely missing credentials).

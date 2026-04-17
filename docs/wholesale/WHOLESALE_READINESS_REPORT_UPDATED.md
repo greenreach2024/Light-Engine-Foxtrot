@@ -223,7 +223,9 @@ TWILIO_AUTH_TOKEN=xxxxxxxxxxxxxxxxxx
 TWILIO_PHONE_NUMBER=+16135551234
 
 # Firebase (Push)
-FIREBASE_SERVICE_ACCOUNT_PATH=/path/to/greenreach-firebase.json
+FIREBASE_ENABLED=true
+# Optional local fallback only:
+# GOOGLE_APPLICATION_CREDENTIALS=/absolute/path/outside/repo/firebase-service-account.json
 
 # Email (already configured)
 SMTP_HOST=smtp.gmail.com
@@ -755,7 +757,7 @@ Files to modify:
 
 # Notifications
 ⏳ Twilio account (ACCOUNT_SID, AUTH_TOKEN, PHONE_NUMBER)
-⏳ Firebase project (service account JSON file)
+⏳ Firebase project (keyless auth configured on Cloud Run/GCP)
 ✅ SMTP credentials (already configured)
 
 # Application
@@ -860,8 +862,8 @@ Major risks mitigated by new systems.
    - Go to console.firebase.google.com
    - Create new project "GreenReach Wholesale"
    - Enable Cloud Messaging
-   - Generate service account JSON
-   - Download and save to `/config/greenreach-firebase.json`
+  - Configure keyless auth on Cloud Run via service account IAM
+  - Local fallback only: store JSON outside repo and set GOOGLE_APPLICATION_CREDENTIALS
 
 3. ⏳ Run database migration
    ```bash
@@ -876,8 +878,10 @@ Major risks mitigated by new systems.
    TWILIO_AUTH_TOKEN=xxxxxxx
    TWILIO_PHONE_NUMBER=+16135551234
    
-   # Add Firebase path
-   FIREBASE_SERVICE_ACCOUNT_PATH=./config/greenreach-firebase.json
+  # Add Firebase (keyless default)
+  FIREBASE_ENABLED=true
+  # Optional local fallback only:
+  # GOOGLE_APPLICATION_CREDENTIALS=/absolute/path/outside/repo/firebase-service-account.json
    ```
 
 5. ⏳ Test notifications end-to-end

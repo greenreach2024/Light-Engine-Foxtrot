@@ -1,15 +1,15 @@
 # Nutrient Management Readiness Report
 
 **Page**: http://localhost:8091/views/nutrient-management.html  
-**Reviewed**: 2026-02-04  
+**Reviewed**: 2026-04-17  
 **Server**: Foxtrot (FARM-TEST-WIZARD-001)  
-**Status**: ✅ **PRODUCTION READY** (with minor notes)
+**Status**: ✅ **PRODUCTION READY** (monitoring live, MQTT-backed nutrient telemetry)
 
 ---
 
 ## Executive Summary
 
-The nutrient management page is a **comprehensive, production-ready system** for monitoring and controlling hydroponic nutrient dosing. The page successfully loads (HTTP 200), all critical data endpoints work, and the interface is feature-complete.
+The nutrient management page is a **comprehensive, production-ready system** for monitoring and controlling hydroponic nutrient dosing. The page successfully loads (HTTP 200), telemetry endpoints return structured nutrient state, and discovery now surfaces the nutrient controller as a dedicated monitorable device family.
 
 **Key Strengths**:
 - ✅ Sophisticated autodose control system with EC/pH management
@@ -19,10 +19,41 @@ The nutrient management page is a **comprehensive, production-ready system** for
 - ✅ Comprehensive nutrient composition database (EZ-GRO formulations)
 - ✅ System configuration with irrigation scheduling
 - ✅ Safety features (dose limits, pail level monitoring)
+- ✅ MQTT nutrient discovery integrated into LE/E.V.I.E. monitor workflow
+- ✅ Dedicated Nutrient Controllers device grouping with live monitor modal
 
 **Minor Issues**:
-- ⚠️ Two write endpoints proxy to Charlie backend (port 8000, not running)
-- 🟡 Manual dosing commands return "invalid-action" for some test commands
+- ⚠️ USB serial output from ESP32 can be noisy/garbled; MQTT payloads are more reliable for numeric readings
+- 🟡 Stale dashboard snapshots can persist if the controller has not published recently
+
+---
+
+## 2026-04-17 Corrections and Live Behavior
+
+This section supersedes older February notes where they conflict with current implementation.
+
+### Current Endpoint Behavior
+
+| Endpoint | Current State |
+|----------|---------------|
+| `GET /data/nutrient-dashboard` | Working, returns nutrient snapshot used by monitor UI |
+| `GET /api/nutrients/mqtt-devices` | Working, returns nutrient controller inventory payload |
+| `GET /api/devices/mqtt` | Working compatibility route for discovery callers |
+| `POST /api/nutrients/targets` | Publishes set targets to MQTT command topic |
+| `POST /api/nutrients/command` | Accepts validated actions (`phDown`, `ecMixA`, `ecMixB`, `stop`, `requestStatus`) |
+
+### Firmware Behavior Reflected in Monitoring
+
+- Safe defaults: pH target `5.80`, EC target `1300`
+- Deadbands: pH `+/- 0.15`, EC `+/- 50`
+- Autodose includes dose-pause cooldown behavior
+- EC correction uses sequential A then B dosing flow
+
+### Discovery and UI Behavior
+
+- `POST /discovery/scan` includes nutrient MQTT devices in cloud mode
+- Device manager groups these under **Nutrient Controllers** (not generic MQTT)
+- MQTT card action is **Monitor**, which opens live tank status from `/data/nutrient-dashboard`
 
 ---
 
@@ -84,7 +115,9 @@ Returns 50 lighting recipes with metadata:
 
 ---
 
-## 3. Write Endpoints (Control Operations)
+## 3. Historical February Findings (Superseded)
+
+The entries below are retained as historical context from the original February review. Use the `2026-04-17 Corrections and Live Behavior` section above as the current source of truth.
 
 ### 🟡 Nutrient Targets (Setpoints)
 ```

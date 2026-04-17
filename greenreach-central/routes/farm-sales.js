@@ -30,6 +30,7 @@ import jwt from 'jsonwebtoken';
 import { randomBytes } from 'crypto';
 import { query, isDatabaseAvailable } from '../config/database.js';
 import { authMiddleware } from '../middleware/auth.js';
+import { recalculateAutoInventoryFromGroups } from './inventory.js';
 
 const router = Router();
 async function ensureDeliveryTables() {
@@ -446,53 +447,13 @@ router.get('/farm-sales/inventory', authMiddleware, async (req, res) => {
     const farmId = req.farmId;
     let inventory = [];
 
-      // Delete-only cleanup: remove auto-inventory rows for crops no longer
-      // in growth groups (avoids UPSERT that creates phantom rows and activity spam)
-      if (farmId && isDatabaseAvailable()) {
-        try {
-          const gRes = await query(
-            'SELECT data FROM farm_data WHERE farm_id = $1 AND data_type = $2',
-            [farmId, 'groups']
-          );
-          const grps = gRes.rows.length > 0
-            ? (Array.isArray(gRes.rows[0].data) ? gRes.rows[0].data : (gRes.rows[0].data?.groups || []))
-            : [];
-          const activeCrops = [...new Set(
-            grps.filter(g => g?.active !== false && (g?.crop || g?.recipe || g?.plan))
-              .map(g => g.crop || g.recipe || g.plan)
-              .filter(Boolean)
-          )];
-          if (activeCrops.length === 0) {
-            await query(
-              `DELETE FROM farm_inventory WHERE farm_id = $1 AND inventory_source = 'auto' AND COALESCE(is_custom, FALSE) = FALSE`,
-              [farmId]
-            );
-            await query(
-              `UPDATE farm_inventory
-                 SET auto_quantity_lbs = 0,
-                     quantity = COALESCE(manual_quantity_lbs, 0),
-                     quantity_available = GREATEST(0, COALESCE(manual_quantity_lbs, 0) - COALESCE(sold_quantity_lbs, 0)),
-                     inventory_source = 'manual'
-               WHERE farm_id = $1 AND inventory_source = 'hybrid' AND COALESCE(is_custom, FALSE) = FALSE`,
-              [farmId]
-            );
-          } else {
-            await query(
-              `DELETE FROM farm_inventory WHERE farm_id = $1 AND inventory_source = 'auto' AND COALESCE(is_custom, FALSE) = FALSE AND product_name != ALL($2)`,
-              [farmId, activeCrops]
-            );
-            await query(
-              `UPDATE farm_inventory
-                 SET auto_quantity_lbs = 0,
-                     quantity = COALESCE(manual_quantity_lbs, 0),
-                     quantity_available = GREATEST(0, COALESCE(manual_quantity_lbs, 0) - COALESCE(sold_quantity_lbs, 0)),
-                     inventory_source = 'manual'
-               WHERE farm_id = $1 AND inventory_source = 'hybrid' AND COALESCE(is_custom, FALSE) = FALSE AND product_name != ALL($2)`,
-              [farmId, activeCrops]
-            );
-          }
-        } catch (e) { console.warn('[FarmSales] Auto-cleanup:', e.message); }
+    if (farmId && isDatabaseAvailable()) {
+      try {
+        await recalculateAutoInventoryFromGroups(farmId);
+      } catch (e) {
+        console.warn('[FarmSales] Auto-refresh:', e.message);
       }
+    }
 
     // Try DB
     if (isDatabaseAvailable() && farmId) {
@@ -532,6 +493,23 @@ router.get('/farm-sales/inventory', authMiddleware, async (req, res) => {
       const stored = await req.farmStore.get(farmId, 'inventory');
       if (Array.isArray(stored)) inventory = stored;
     }
+
+    inventory = (inventory || []).map((item) => {
+      const retailPrice = Number(item.retail_price ?? item.unit_price ?? item.price ?? 0) || 0;
+      const quantityAvailable = Number(item.quantity_available ?? item.qty_available ?? item.quantity ?? 0) || 0;
+      const reserved = Number(item.reserved ?? 0) || 0;
+      return {
+        ...item,
+        retail_price: retailPrice,
+        unit_price: retailPrice,
+        price: retailPrice,
+        quantity_available: quantityAvailable,
+        quantity: quantityAvailable,
+        available: quantityAvailable,
+        reserved,
+        wholesale_price: Number(item.wholesale_price ?? 0) || 0,
+      };
+    });
 
     const inStock = inventory.filter(i => (Number(i.quantity_available ?? i.qty_available ?? i.quantity ?? 0)) > 0).length;
     const lowStock = inventory.filter(i => {

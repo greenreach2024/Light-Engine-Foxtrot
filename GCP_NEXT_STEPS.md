@@ -1,54 +1,50 @@
-# GCP Cloud-Native Migration Status
+# GCP Cloud-Native Status (Current)
 
-Last updated: April 7, 2026
+Last updated: 2026-04-17
 
-## COMPLETED
+Canonical references: `.github/CLOUD_ARCHITECTURE.md`, `.github/GCP_MIGRATION_REMAINING.md`, `.github/SECRET_STATUS.md`
 
-### 1. Google Cloud Storage (GCS) -- DONE
-- Bucket created: gs://greenreach-storage (us-east1, uniform access, public access prevented)
-- Both service accounts granted roles/storage.objectAdmin
-- @google-cloud/storage SDK installed in both packages
-- GCS helper modules created:
-  - greenreach-central/services/gcs-storage.js (central/ prefix)
-  - services/gcs-storage.js (le/ prefix)
-- Auto-detects Cloud Run via K_SERVICE env var; falls back to local filesystem in dev
+## Completed Foundations
 
-### 2. Files Migrated Off Local Filesystem -- DONE
-- custom-products.js: Image uploads now go to GCS via uploadFile() instead of fs.writeFileSync
-- admin-pricing.js: crop-pricing.json and crop-registry.json reads/writes use gcsReadJSON/gcsWriteJSON
-- farm-ops-agent.js: writeJSON() now dual-writes (local + GCS async); audit log persisted to GCS
-- syncMonitor.js: Snapshot persistence uses GCS on Cloud Run, local filesystem in dev
-- assistant-chat.js: System alerts now use AlloyDB as primary (removed local file writes)
+- Cloud Run dual-service architecture is active (`light-engine`, `greenreach-central`).
+- AlloyDB is the relational database backend.
+- `gs://greenreach-storage` is mounted at `/app/data` for persisted file-backed stores.
+- Cloud Scheduler keepalive and sensor sync jobs are active.
+- LE proxy boundary is in place for Central-backed admin and assistant APIs.
+- Branch protection on `main` is enabled with required check `validate-and-test`.
+- E.V.I.E. room/zone LE writeback now uses a durable retry queue with DLQ handling.
+- Secret readiness tracking is centralized in `.github/SECRET_STATUS.md`.
 
-### 3. GCS FUSE Volume Mount -- DONE
-- Both Cloud Run services mount gs://greenreach-storage at /app/data via Cloud Storage FUSE
-- NeDB datastores (21 total in server-foxtrot.js) write to /app/data/ which persists via GCS
-- Env vars set: USE_GCS=true, GCS_BUCKET=greenreach-storage
+## Next Steps
 
-### 4. Cloud Scheduler -- DONE
-- Enabled Cloud Scheduler API
-- Created scheduler-invoker service account with roles/run.invoker on both services
-- 3 jobs created:
-  - sensor-sync-keepalive: GET /api/health on LE every 5 min (keep warm)
-  - central-keepalive: GET /api/health on Central every 5 min (keep warm)
-  - sensor-sync-cron: POST /api/cron/sensor-sync on LE every 2 min (explicit sensor pull)
-- Added /api/cron/sensor-sync endpoint to server-foxtrot.js (validates Cloud Scheduler User-Agent)
+### 1. CI Gate Reliability
 
-## REMAINING
+- Keep `validate-and-test` green on merge commits.
+- Investigate and eliminate flaky checks that create bypass pressure.
+- Periodically verify branch-protection policy drift has not occurred.
 
-### 5. AlloyDB Data Migration (from AWS RDS)
-The AlloyDB cluster (greenreach-db at 10.87.0.2) is running but the database is empty.
-- Need to pg_dump from AWS RDS production database
-- Import schema and data into AlloyDB
-- Verify all migrations run cleanly (029+ migration files)
+### 2. Secrets and Integration Health
 
-### 6. DNS Migration
-- greenreachgreens.com custom domain needs DNS records pointed to Cloud Run
-- Currently pending DNS migration from Route 53 to Cloud DNS (or direct CNAME)
+- Clear remaining placeholder/missing entries tracked in `.github/SECRET_STATUS.md`.
+- Validate production values for SwitchBot, SMTP, Square, Stripe, and QuickBooks.
+- Keep SMS routing configuration explicit (`ADMIN_ALERT_PHONE`, `SMS_APPROVED_RECIPIENTS`, optional `SMS_GATEWAY_OVERRIDES`).
 
-### 7. Secret Manager Placeholders
-Several secrets are still placeholder values (need real production credentials):
-- SWITCHBOT_TOKEN, SWITCHBOT_SECRET (sensor data)
-- SMTP_PASS (email notifications)
-- STRIPE_* keys (payment processing)
-- AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY (SES email -- may migrate to SendGrid/Mailgun)
+### 3. Domain and SSL Validation
+
+- Confirm `greenreachgreens.com` resolves to Central.
+- Confirm SSL status is valid and stable.
+
+### 4. Observability Hardening
+
+- Ensure alert policies exist for 5xx, latency, and instance pressure.
+- Verify scheduler jobs and sensor sync freshness.
+
+### 5. Data Contract Consistency
+
+- Keep `schemaVersion` in shared JSON data contracts across both public data trees.
+- Keep duplicated static assets synchronized between service bundles when required.
+
+## Notes
+
+- This file supersedes older migration-stage notes that referenced AWS-era procedures.
+- For architecture details, use `.github/CLOUD_ARCHITECTURE.md` as source of truth.

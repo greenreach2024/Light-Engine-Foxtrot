@@ -967,10 +967,12 @@
             left: 0;
             width: 100%;
             height: 100%;
+            padding: 24px;
             background: rgba(0, 0, 0, 0.8);
             display: flex;
             align-items: center;
             justify-content: center;
+            overflow-y: auto;
             z-index: 10001;
         }
 
@@ -980,6 +982,12 @@
             border-radius: 12px;
             padding: 0;
             position: relative;
+            width: min(960px, calc(100vw - 32px));
+            max-height: calc(100vh - 32px);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.35);
             animation: modalSlideIn 0.3s ease-out;
         }
 
@@ -1030,6 +1038,7 @@
 
         .modal-body {
             padding: 24px;
+            overflow-y: auto;
         }
 
         .recommendation-card {
@@ -1267,6 +1276,7 @@
       });
     })();
     </script>
+
 
     <!-- INFOTAINMENT NAVIGATION SYSTEM -->
     <div class="infotainment-layout" id="infotainment-layout" style="display: none;">
@@ -1533,6 +1543,8 @@
 
 
 
+
+
                 <!-- KPI Grid -->
                 <div class="kpi-grid">
                     <div class="kpi-card" data-help-title="Active Trays" data-help="These are the number of trays growing plants at your farm. To see more details regarding what, where and when, view your Farm Inventory page or check your Activity Hub." data-help-ai="Utilization is at 84%. Room B has capacity for 12 more trays.">
@@ -1565,11 +1577,54 @@
                             <span id="kpi-harvest-change">Loading...</span>
                         </div>
                     </div>
-                    <div class="kpi-card" data-help-title="Today's Farm Value" data-help="The total estimated retail value of all crops currently in production at your farm. Calculated from current inventory, growth stages, and retail pricing. For detailed breakdown, ask E.V.I.E. or visit Crop Value.">
+                    <div id="dashboard-farm-value-card" class="kpi-card" data-help-title="Today's Farm Value" data-help="The total estimated retail value of all crops currently in production at your farm. Calculated from current inventory, growth stages, and retail pricing. For detailed breakdown, request the crop value PDF report.">
                         <div class="kpi-label">Today's Farm Value</div>
                         <div class="kpi-value" id="kpi-farm-value">--</div>
                         <div class="kpi-change">
                             <span id="kpi-farm-value-change">Loading...</span>
+                        </div>
+                        <button type="button" onclick="openCropValueReport(event)" style="margin-top: 10px; padding: 8px 12px; border: 1px solid rgba(255,255,255,0.22); border-radius: 999px; background: rgba(255,255,255,0.08); color: inherit; font-size: 12px; font-weight: 600; cursor: pointer;">Detailed PDF Report</button>
+                    </div>
+                </div>
+
+                <div class="card" id="dashboard-ai-signals-card" data-help-title="AI Signals" data-help="This section surfaces live harvest readiness, loss risk, learning correlations, experiment activity, network benchmark coverage, and the latest EVIE recommendation using existing farm intelligence endpoints.">
+                    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;margin-bottom:16px;">
+                        <div>
+                            <h2 style="margin:0 0 6px 0;">AI Signals</h2>
+                            <div style="color:#94a3b8;font-size:13px;max-width:720px;">Live operational summaries from harvest readiness, loss prediction, learning, experiments, network benchmarks, and EVIE guidance.</div>
+                        </div>
+                        <button class="header-tab-btn" type="button" onclick="refreshDashboardAISignals()">Refresh AI</button>
+                    </div>
+                    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;">
+                        <div id="dashboard-ai-readiness-card" style="padding:16px;border:1px solid rgba(255,255,255,0.12);border-radius:16px;background:rgba(15,23,42,0.28);min-height:124px;">
+                            <div style="font-size:12px;letter-spacing:0.08em;text-transform:uppercase;color:#94a3b8;margin-bottom:10px;">Harvest Readiness</div>
+                            <div id="dashboard-ai-readiness-value" style="font-size:28px;font-weight:700;color:#f8fafc;margin-bottom:8px;">--</div>
+                            <div id="dashboard-ai-readiness-detail" style="font-size:13px;line-height:1.45;color:#cbd5e1;">Loading live readiness signals...</div>
+                        </div>
+                        <div id="dashboard-ai-loss-card" style="padding:16px;border:1px solid rgba(255,255,255,0.12);border-radius:16px;background:rgba(15,23,42,0.28);min-height:124px;">
+                            <div style="font-size:12px;letter-spacing:0.08em;text-transform:uppercase;color:#94a3b8;margin-bottom:10px;">Loss Risk</div>
+                            <div id="dashboard-ai-loss-value" style="font-size:28px;font-weight:700;color:#f8fafc;margin-bottom:8px;">--</div>
+                            <div id="dashboard-ai-loss-detail" style="font-size:13px;line-height:1.45;color:#cbd5e1;">Loading live loss risk...</div>
+                        </div>
+                        <div id="dashboard-ai-learning-card" style="padding:16px;border:1px solid rgba(255,255,255,0.12);border-radius:16px;background:rgba(15,23,42,0.28);min-height:124px;">
+                            <div style="font-size:12px;letter-spacing:0.08em;text-transform:uppercase;color:#94a3b8;margin-bottom:10px;">Learning Signal</div>
+                            <div id="dashboard-ai-learning-value" style="font-size:28px;font-weight:700;color:#f8fafc;margin-bottom:8px;">--</div>
+                            <div id="dashboard-ai-learning-detail" style="font-size:13px;line-height:1.45;color:#cbd5e1;">Loading learning correlations...</div>
+                        </div>
+                        <div id="dashboard-ai-experiments-card" style="padding:16px;border:1px solid rgba(255,255,255,0.12);border-radius:16px;background:rgba(15,23,42,0.28);min-height:124px;">
+                            <div style="font-size:12px;letter-spacing:0.08em;text-transform:uppercase;color:#94a3b8;margin-bottom:10px;">Experiment Records</div>
+                            <div id="dashboard-ai-experiments-value" style="font-size:28px;font-weight:700;color:#f8fafc;margin-bottom:8px;">--</div>
+                            <div id="dashboard-ai-experiments-detail" style="font-size:13px;line-height:1.45;color:#cbd5e1;">Loading experiment activity...</div>
+                        </div>
+                        <div id="dashboard-ai-benchmarks-card" style="padding:16px;border:1px solid rgba(255,255,255,0.12);border-radius:16px;background:rgba(15,23,42,0.28);min-height:124px;">
+                            <div style="font-size:12px;letter-spacing:0.08em;text-transform:uppercase;color:#94a3b8;margin-bottom:10px;">Network Benchmarks</div>
+                            <div id="dashboard-ai-benchmarks-value" style="font-size:28px;font-weight:700;color:#f8fafc;margin-bottom:8px;">--</div>
+                            <div id="dashboard-ai-benchmarks-detail" style="font-size:13px;line-height:1.45;color:#cbd5e1;">Loading network benchmark coverage...</div>
+                        </div>
+                        <div id="dashboard-ai-insight-card" style="padding:16px;border:1px solid rgba(255,255,255,0.12);border-radius:16px;background:rgba(15,23,42,0.28);min-height:124px;">
+                            <div style="font-size:12px;letter-spacing:0.08em;text-transform:uppercase;color:#94a3b8;margin-bottom:10px;">EVIE Recommendation</div>
+                            <div id="dashboard-ai-insight-value" style="font-size:28px;font-weight:700;color:#f8fafc;margin-bottom:8px;">--</div>
+                            <div id="dashboard-ai-insight-detail" style="font-size:13px;line-height:1.45;color:#cbd5e1;">Loading current AI recommendation...</div>
                         </div>
                     </div>
                 </div>
@@ -5460,6 +5515,7 @@
           <div class="setup-progress-step" data-step="5" style="flex: 1; height: 4px; background: var(--border); border-radius: 2px; transition: all 0.3s;"></div>
           <div class="setup-progress-step" data-step="6" style="flex: 1; height: 4px; background: var(--border); border-radius: 2px; transition: all 0.3s;"></div>
           <div class="setup-progress-step" data-step="7" style="flex: 1; height: 4px; background: var(--border); border-radius: 2px; transition: all 0.3s;"></div>
+                    <div class="setup-progress-step" data-step="8" style="flex: 1; height: 4px; background: var(--border); border-radius: 2px; transition: all 0.3s;"></div>
         </div>
       </div>
       
@@ -5673,8 +5729,35 @@
           </div>
         </div>
         
-        <!-- Step 5: Certifications -->
+                <!-- Step 5: Stock Groups -->
         <div id="setup-step-5" class="setup-step" style="display: none;">
+                    <h3 style="margin: 0 0 10px 0; font-size: 18px; color: var(--text-primary);">Standard Stock Groups</h3>
+                    <p style="margin: 0 0 20px 0; color: var(--text-secondary); font-size: 14px;">Choose standard equipment templates and assign them to rooms so setup can build your first group inventory automatically.</p>
+
+                    <div style="display: flex; flex-direction: column; gap: 14px;">
+                        <div style="padding: 14px 18px; background: rgba(59,130,246,0.08); border: 1px solid rgba(59,130,246,0.25); border-radius: 8px;">
+                            <p style="margin: 0; font-size: 13px; color: var(--text-secondary); line-height: 1.55;">
+                                Central manages this catalog. Fixed templates keep their manufacturer dimensions in the 3D editor, while resizable templates can be stretched on approved axes after setup.
+                            </p>
+                        </div>
+
+                        <div id="setup-stock-group-status" style="display: none; font-size: 13px;"></div>
+
+                        <div style="display: flex; justify-content: space-between; gap: 12px; align-items: center;">
+                            <div style="font-size: 13px; color: var(--text-muted);">Optional. Skip this step if you want to build groups later.</div>
+                            <button type="button" id="setup-add-stock-group-plan" onclick="addSetupStockGroupSelection()" style="padding: 10px 16px; background: var(--accent-blue); border: none; color: white; border-radius: 6px; cursor: pointer; font-weight: 500; white-space: nowrap;">Add Stock Group Plan</button>
+                        </div>
+
+                        <div id="setup-stock-group-empty" style="padding: 28px 20px; text-align: center; color: var(--text-muted); font-size: 14px; border: 1px dashed var(--border); border-radius: 8px; background: var(--bg-secondary);">
+                            No stock-group plans added yet.
+                        </div>
+
+                        <div id="setup-stock-group-list" style="display: flex; flex-direction: column; gap: 12px;"></div>
+                    </div>
+                </div>
+
+                <!-- Step 6: Certifications -->
+                <div id="setup-step-6" class="setup-step" style="display: none;">
           <h3 style="margin: 0 0 10px 0; font-size: 18px; color: var(--text-primary);">Certifications & Practices</h3>
           <p style="margin: 0 0 20px 0; color: var(--text-secondary); font-size: 14px;">Help buyers discover your farm through certifications and practices (optional).</p>
           
@@ -5731,8 +5814,8 @@
           </div>
         </div>
 
-        <!-- Step 6: Network Benchmarks -->
-        <div id="setup-step-6" class="setup-step" style="display: none;">
+                <!-- Step 7: Network Benchmarks -->
+                <div id="setup-step-7" class="setup-step" style="display: none;">
           <h3 style="margin: 0 0 10px 0; font-size: 18px; color: var(--text-primary);">Network Benchmarks</h3>
           <p style="margin: 0 0 20px 0; color: var(--text-secondary); font-size: 14px;">Pulling crop yield and environmental targets from the GreenReach grower network to give your farm starting recipes.</p>
 
@@ -5751,8 +5834,8 @@
           <p style="margin: 16px 0 0; font-size: 12px; color: var(--text-muted);">These targets are recommendations based on network averages. You can adjust them anytime in your room settings.</p>
         </div>
 
-        <!-- Step 7: Activity Hub Setup -->
-        <div id="setup-step-7" class="setup-step" style="display: none;">
+                <!-- Step 8: Activity Hub Setup -->
+                <div id="setup-step-8" class="setup-step" style="display: none;">
           <h3 style="margin: 0 0 10px 0; font-size: 18px; color: var(--text-primary);">📱 Activity Hub Setup</h3>
           <p style="margin: 0 0 20px 0; color: var(--text-secondary); font-size: 14px;">Set up your iPad or tablet to access the Activity Hub on the farm floor.</p>
 

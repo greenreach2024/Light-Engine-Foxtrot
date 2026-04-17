@@ -1,7 +1,7 @@
 # Critical Configuration Reference
 
-**Version**: 2.0.0
-**Date**: April 8, 2026
+**Version**: 2.1.0
+**Date**: April 17, 2026
 **Authority**: Canonical reference for all credentials, API keys, environment variables, and configuration files. Agents MUST NOT modify any value listed here without explicit user approval.
 
 ---
@@ -11,6 +11,7 @@
 **AWS Elastic Beanstalk is DEPRECATED. All environment variables are now managed via Cloud Run env vars and Google Secret Manager.**
 
 See `.github/CLOUD_ARCHITECTURE.md` for the full infrastructure reference.
+See `.github/SECRET_STATUS.md` for canonical active/placeholder/missing secret status tracking.
 
 ---
 
@@ -81,8 +82,10 @@ gcloud run services update light-engine --region=us-east1  # Force new revision
 | `FROM_EMAIL` | Email from address | Env var | `info@greenreachgreens.com` |
 | `ADMIN_ALERT_EMAIL` | Admin alert recipient | Env var | `info@greenreachgreens.com` |
 | `ADMIN_ALERT_PHONE` | Admin alert SMS | Env var | (not set) |
-| `ANTHROPIC_API_KEY` | EVIE fallback LLM | Secret Manager | Claude Sonnet 4 |
-| `OPENAI_API_KEY` | Primary LLM provider | Secret Manager | |
+| `GCP_PROJECT` / `GOOGLE_CLOUD_PROJECT` | Vertex AI project routing | Env var | Required for Gemini in Cloud Run |
+| `GCP_REGION` | Vertex AI region | Env var | `us-east1` |
+| `GEMINI_API_KEY` | Gemini Developer API fallback | Secret Manager / env var | Optional for non-Cloud-Run local dev |
+| `OPENAI_API_KEY` | Legacy/compat AI integrations | Secret Manager | Optional for non-core AI paths |
 
 **To view/set Central env vars:**
 ```bash
@@ -125,17 +128,20 @@ echo -n "APP_PASSWORD_HERE" | gcloud secrets versions add SMTP_PASS --data-file=
 gcloud run services update greenreach-central --region=us-east1
 ```
 
-### SMS (Email-to-SMS Gateway)
+### SMS (Twilio Primary + SMTP Gateway Fallback)
 
-SMS is used for critical/high alert notifications only. Delivered via carrier email-to-SMS gateways through the same Google Workspace SMTP. Recipient allowlist with carrier mapping is hardcoded in `greenreach-central/services/sms-service.js` (requires code change + deploy to modify).
+SMS is used for critical/high alert notifications only. Delivery is Twilio-first when configured, with carrier email-to-SMS via Google Workspace SMTP as fallback. Approved recipients and gateway mappings are configuration-driven via env vars.
 
 | Variable | Value | Notes |
 |----------|-------|-------|
 | `ADMIN_ALERT_PHONE` | (not set) | Admin phone for alert SMS |
+| `SMS_APPROVED_RECIPIENTS` | (not set) | JSON object: phone -> gateway destination |
+| `SMS_GATEWAY_OVERRIDES` | (optional) | JSON object for domain overrides |
+| `TWILIO_ACCOUNT_SID` | (optional) | Enables Twilio primary transport |
+| `TWILIO_AUTH_TOKEN` | (optional) | Twilio auth secret |
+| `TWILIO_PHONE_NUMBER` | (optional) | Twilio sending number |
 
-**Current approved SMS recipients:** `+16138881031` -> `6138881031@txt.bell.ca`
-
-**To add a new SMS recipient:** Edit the `APPROVED_RECIPIENTS` Map in `sms-service.js` with the phone number and carrier gateway address, then deploy.
+**To add a new SMS recipient:** update `SMS_APPROVED_RECIPIENTS` and redeploy Cloud Run revision.
 
 ### Alert Notifier
 
@@ -171,7 +177,7 @@ Rate-limited (1 per alert_type per 15 min). Dispatches email + SMS for `critical
 
 ### `public/data/farm.json` (LE-side)
 
-Contains farm profile and integrations. Git-ignored but deployed via .ebignore.
+Contains farm profile and integrations. Git-ignored and bundled in the LE container image.
 
 **Critical section:**
 ```json
@@ -185,7 +191,7 @@ Contains farm profile and integrations. Git-ignored but deployed via .ebignore.
 }
 ```
 
-This is the secondary credential source for SwitchBot (EB env vars are primary).
+This is the secondary credential source for SwitchBot (Cloud Run secret-backed env vars are primary).
 
 ### `public/data/iot-devices.json` (LE-side, git-tracked)
 

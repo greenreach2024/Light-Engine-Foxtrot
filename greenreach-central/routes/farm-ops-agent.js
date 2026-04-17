@@ -87,90 +87,6 @@ function writeJSON(filename, data) {
   });
 }
 
-async function loadRegisteredDeviceInventory() {
-  const [iotFromGcs, metaFromGcs] = await Promise.all([
-    readJSONAsync('iot-devices.json', null),
-    readJSONAsync('device-meta.json', null)
-  ]);
-  const iotRaw = iotFromGcs ?? readJSON('iot-devices.json', null);
-  const metaRaw = metaFromGcs ?? readJSON('device-meta.json', null);
-
-  const iotDevices = Array.isArray(iotRaw)
-    ? iotRaw
-    : (Array.isArray(iotRaw?.devices) ? iotRaw.devices : []);
-  const metaDevices = metaRaw?.devices && typeof metaRaw.devices === 'object' && !Array.isArray(metaRaw.devices)
-    ? metaRaw.devices
-    : (metaRaw && typeof metaRaw === 'object' && !Array.isArray(metaRaw)
-      ? (() => {
-          const { version, lastUpdated, farmId, ...rest } = metaRaw;
-          return rest;
-        })()
-      : {});
-
-  const merged = new Map();
-
-  Object.entries(metaDevices || {}).forEach(function(entry) {
-    const id = entry[0];
-    const meta = entry[1] || {};
-    if (!id) return;
-    merged.set(id, {
-      id,
-      deviceId: id,
-      name: meta.name || id,
-      type: meta.type || meta.protocol || 'unknown',
-      protocol: meta.protocol || 'unknown',
-      room_id: meta.room_id || null,
-      zone: meta.zone || null,
-      brand: meta.brand || '',
-      model: meta.model || '',
-      status: meta.status || 'unknown',
-      telemetry: meta.telemetry || null,
-      source: 'device-meta'
-    });
-  });
-
-  iotDevices.forEach(function(device) {
-    const id = device?.deviceId || device?.id;
-    if (!id) return;
-    const existing = merged.get(id) || { id, deviceId: id };
-    merged.set(id, {
-      ...existing,
-      id,
-      deviceId: id,
-      name: device.name || existing.name || id,
-      type: device.type || device.deviceType || existing.type || existing.protocol || 'unknown',
-      protocol: device.protocol || existing.protocol || 'unknown',
-      zone: device.zone ?? existing.zone ?? null,
-      brand: device.brand || device.vendor || existing.brand || '',
-      model: device.model || existing.model || '',
-      status: device.status || existing.status || 'unknown',
-      telemetry: device.telemetry || existing.telemetry || null,
-      location: device.location || existing.location || '',
-      source: 'iot-devices'
-    });
-  });
-
-  return Array.from(merged.values());
-}
-
-function normalizeDeviceZone(zone) {
-  if (zone == null || zone === '') return null;
-  const raw = String(zone).trim();
-  if (!raw) return null;
-  if (/^zone[-\s]?\d+$/i.test(raw)) {
-    const number = raw.replace(/\D/g, '');
-    return number ? `zone-${number}` : raw.toLowerCase().replace(/\s+/g, '-');
-  }
-  if (/^\d+$/.test(raw)) return `zone-${raw}`;
-  return raw.toLowerCase().replace(/\s+/g, '-');
-}
-
-function isSensorLikeDevice(device) {
-  const type = String(device?.type || device?.protocol || '').toLowerCase();
-  const name = String(device?.name || '').toLowerCase();
-  return type.includes('sensor') || type.includes('woio') || /^sen\b/.test(name) || name.includes('sensor');
-}
-
 // ---------------------------------------------------------------------------
 // Room resolution helper — matches by ID or human-readable name
 // ---------------------------------------------------------------------------
@@ -183,83 +99,6 @@ function resolveRoom(roomList, roomIdOrName) {
 function resolveRoomId(roomList, roomIdOrName) {
   const r = resolveRoom(roomList, roomIdOrName);
   return r ? (r.id || r.room_id) : null;
-}
-
-function cloneJson(value) {
-  if (value == null) return value;
-  return JSON.parse(JSON.stringify(value));
-}
-
-async function loadMutableRoomMap(farmId, requestedRoomId = null) {
-  const normalizedRoomId = requestedRoomId ? String(requestedRoomId) : '';
-  const legacyRoomMap = await farmStore.get(farmId, 'room_map');
-  const storedPerRoomMaps = await farmStore.get(farmId, 'room_maps');
-  const perRoomMaps = (storedPerRoomMaps && typeof storedPerRoomMaps === 'object' && !Array.isArray(storedPerRoomMaps))
-    ? storedPerRoomMaps
-    : {};
-
-  let roomMap = null;
-  let resolvedRoomId = normalizedRoomId;
-
-  if (normalizedRoomId && perRoomMaps[normalizedRoomId]) {
-    roomMap = cloneJson(perRoomMaps[normalizedRoomId]);
-  } else if (normalizedRoomId && legacyRoomMap && typeof legacyRoomMap === 'object' && !Array.isArray(legacyRoomMap)) {
-    if (!legacyRoomMap.roomId || String(legacyRoomMap.roomId) === normalizedRoomId) {
-      roomMap = cloneJson({ ...legacyRoomMap, roomId: legacyRoomMap.roomId || normalizedRoomId });
-    }
-  } else if (legacyRoomMap && typeof legacyRoomMap === 'object' && !Array.isArray(legacyRoomMap)) {
-    roomMap = cloneJson(legacyRoomMap);
-    resolvedRoomId = legacyRoomMap.roomId ? String(legacyRoomMap.roomId) : resolvedRoomId;
-  } else {
-    const roomIds = Object.keys(perRoomMaps);
-    if (!normalizedRoomId && roomIds.length === 1) {
-      resolvedRoomId = roomIds[0];
-      roomMap = cloneJson(perRoomMaps[resolvedRoomId]);
-    }
-  }
-
-  if (!roomMap) {
-    roomMap = { zones: [], devices: [] };
-  }
-
-  if (resolvedRoomId && !roomMap.roomId) {
-    roomMap.roomId = resolvedRoomId;
-  }
-
-  if (!Array.isArray(roomMap.zones)) roomMap.zones = [];
-  if (!Array.isArray(roomMap.devices)) roomMap.devices = [];
-
-  return { roomMap, roomId: resolvedRoomId || String(roomMap.roomId || '') };
-}
-
-async function persistMutableRoomMap(farmId, roomMap, fallbackRoomId = null) {
-  const resolvedRoomId = String(roomMap?.roomId || fallbackRoomId || '').trim();
-  const payload = cloneJson(roomMap || { zones: [], devices: [] }) || { zones: [], devices: [] };
-
-  if (resolvedRoomId) {
-    payload.roomId = resolvedRoomId;
-    const storedPerRoomMaps = await farmStore.get(farmId, 'room_maps');
-    const perRoomMaps = (storedPerRoomMaps && typeof storedPerRoomMaps === 'object' && !Array.isArray(storedPerRoomMaps))
-      ? { ...storedPerRoomMaps }
-      : {};
-    perRoomMaps[resolvedRoomId] = payload;
-    await farmStore.set(farmId, 'room_maps', perRoomMaps);
-    writeJSON(`room-map-${resolvedRoomId}.json`, payload);
-  }
-
-  const legacyRoomMap = await farmStore.get(farmId, 'room_map');
-  const canUpdateLegacyRoomMap = !legacyRoomMap ||
-    typeof legacyRoomMap !== 'object' ||
-    Array.isArray(legacyRoomMap) ||
-    !legacyRoomMap.roomId ||
-    String(legacyRoomMap.roomId) === resolvedRoomId;
-
-  if (canUpdateLegacyRoomMap) {
-    await farmStore.set(farmId, 'room_map', payload);
-    writeJSON('room-map.json', payload);
-  }
-
-  return resolvedRoomId;
 }
 
 export function inferRoomDimensionsMeters(room = {}, roomMap = {}) {
@@ -1396,39 +1235,20 @@ export const TOOL_CATALOG = {
     required: [],
     optional: [],
     handler: async () => {
-      const devices = await loadRegisteredDeviceInventory();
+      const raw = readJSON('device-meta.json', {});
+      const devices = raw.devices || (Array.isArray(raw) ? {} : (() => { const { version, lastUpdated, farmId, ...rest } = raw; return rest; })());
       const rooms = readJSON('rooms.json', {});
       const roomList = (rooms.rooms || Object.values(rooms).filter(r => r != null && typeof r === 'object'));
-      const enriched = devices.map(function(device) {
-        const normalizedZone = normalizeDeviceZone(device.zone);
-        return {
-          id: device.deviceId || device.id,
-          type: device.type || device.protocol || 'unknown',
-          name: device.name || device.deviceId || device.id,
-          room_id: device.room_id || null,
-          zone: normalizedZone,
-          protocol: device.protocol || 'unknown',
-          status: device.status || 'unknown',
-          source: device.source || 'unknown',
-          is_sensor: isSensorLikeDevice(device)
-        };
-      });
-      const assigned = enriched.filter(function(device) { return device.room_id || device.zone; });
-      const unassigned = enriched.filter(function(device) { return !device.room_id && !device.zone; });
-      const sensors = enriched.filter(function(device) { return device.is_sensor; });
-      const assignedSensors = sensors.filter(function(device) { return device.room_id || device.zone; });
-      const unassignedSensors = sensors.filter(function(device) { return !device.room_id && !device.zone; });
+      const entries = Object.entries(devices);
+      const assigned = entries.filter(([_, d]) => d && d.room_id);
+      const unassigned = entries.filter(([_, d]) => d && !d.room_id);
       return {
         ok: true,
-        total_devices: enriched.length,
+        total_devices: entries.length,
         assigned: assigned.length,
         unassigned: unassigned.length,
-        total_sensors: sensors.length,
-        assigned_sensors: assignedSensors.length,
-        unassigned_sensors: unassignedSensors.length,
-        unassigned_devices: unassigned.map(function(device) { return ({ id: device.id, type: device.type, name: device.name, zone: device.zone, room_id: device.room_id, protocol: device.protocol, is_sensor: device.is_sensor }); }),
-        assigned_devices: assigned.map(function(device) { return ({ id: device.id, type: device.type, name: device.name, room_id: device.room_id, zone: device.zone, protocol: device.protocol, is_sensor: device.is_sensor }); }),
-        sensor_devices: sensors.map(function(device) { return ({ id: device.id, type: device.type, name: device.name, room_id: device.room_id, zone: device.zone, protocol: device.protocol, status: device.status }); }),
+        unassigned_devices: unassigned.map(([id, d]) => ({ id, type: d.type || d.protocol || 'unknown', name: d.name || id })),
+        assigned_devices: assigned.map(([id, d]) => ({ id, type: d.type || d.protocol || 'unknown', name: d.name || id, room_id: d.room_id, zone: d.zone })),
         rooms: roomList.map(r => ({ id: r.id || r.room_id, name: r.name })),
       };
     }
@@ -1807,43 +1627,28 @@ export const TOOL_CATALOG = {
 
   // ── Equipment Management (room-map devices) ──────────────────────────
   'update_equipment': {
-    description: 'Update equipment in the 3D room map — rename, change category, reposition, update fan airflow direction, or bulk-update all matching equipment. Equipment includes fans, ZipGrow towers, lights, dehumidifiers, etc. mapped in the room layout. Use "bulk" mode to rename or retarget all identical devices at once.',
+    description: 'Update equipment in the 3D room map — rename, change category, reposition, or bulk-rename all matching equipment. Equipment includes fans, ZipGrow towers, lights, dehumidifiers, etc. mapped in the room layout. Use "bulk" mode to rename all identical devices at once (e.g., rename all 20 fans to "ZipGrow Tower").',
     category: 'write',
     required: [],
-    optional: ['room_id', 'device_id', 'name', 'category', 'x', 'y', 'z', 'airflow_dir', 'wall_mode', 'match_name', 'match_category', 'bulk', 'farm_id'],
+    optional: ['room_id', 'device_id', 'name', 'category', 'x', 'y', 'z', 'match_name', 'match_category', 'bulk', 'farm_id'],
     undoable: true,
     handler: async (params) => {
       const { room_id, device_id, name, category, x, y, z, match_name, match_category, bulk } = params;
-      const airflowDir = params.airflow_dir != null ? parseInt(String(params.airflow_dir), 10) : (params.airflowDir != null ? parseInt(String(params.airflowDir), 10) : null);
-      const wallMode = params.wall_mode != null ? String(params.wall_mode).toLowerCase() : null;
       const farm_id = params.farm_id || process.env.FARM_ID || 'default';
 
-      if (!name && !category && x == null && y == null && z == null && airflowDir == null) {
-        return { ok: false, error: 'No updates specified. Provide at least one of: name, category, x, y, z, airflow_dir.' };
+      if (!name && !category && x == null && y == null && z == null) {
+        return { ok: false, error: 'No updates specified. Provide at least one of: name, category, x, y, z.' };
       }
 
-      const { roomMap, roomId: activeRoomId } = await loadMutableRoomMap(farm_id, room_id);
+      // Load room_map from DB (single canonical store — same data the 3D viewer uses)
+      const roomMap = await farmStore.get(farm_id, 'room_map') || { zones: [], devices: [] };
       if (!roomMap.devices?.length) {
         return { ok: false, error: 'No devices found in room map. Use the Room Mapper to add equipment first.' };
       }
 
       const isBulk = bulk === true || bulk === 'true';
       const beforeDevices = JSON.parse(JSON.stringify(roomMap.devices));
-      const maxX = Math.max(0, (roomMap.gridSize || 30) - 1);
-      const midpoint = maxX / 2;
       let totalUpdated = 0;
-
-      if (wallMode && !['outer', 'east', 'west'].includes(wallMode)) {
-        return { ok: false, error: 'wall_mode must be one of: outer, east, west.' };
-      }
-
-      const matchesWallMode = (dev) => {
-        if (!wallMode || wallMode === 'outer') return true;
-        const currentX = Number.isFinite(Number(dev.x)) ? Number(dev.x) : midpoint;
-        if (wallMode === 'west') return currentX <= midpoint;
-        if (wallMode === 'east') return currentX > midpoint;
-        return true;
-      };
 
       for (const dev of roomMap.devices) {
         const snap = dev.snapshot || {};
@@ -1866,7 +1671,6 @@ export const TOOL_CATALOG = {
         }
 
         if (!isMatch) continue;
-  if (!matchesWallMode(dev)) continue;
 
         if (!dev.snapshot) dev.snapshot = {};
         if (name) dev.snapshot.name = name;
@@ -1874,7 +1678,6 @@ export const TOOL_CATALOG = {
         if (x != null) dev.x = parseInt(String(x), 10);
         if (y != null) dev.y = parseInt(String(y), 10);
         if (z != null) dev.z = parseFloat(String(z));
-  if (airflowDir != null) dev.airflowDir = ((airflowDir % 360) + 360) % 360;
         totalUpdated++;
 
         if (!isBulk && device_id) break;
@@ -1886,7 +1689,11 @@ export const TOOL_CATALOG = {
       }
 
       roomMap.lastUpdated = new Date().toISOString();
-      const rid = await persistMutableRoomMap(farm_id, roomMap, activeRoomId || room_id);
+      await farmStore.set(farm_id, 'room_map', roomMap);
+      // Also update local files for backward compatibility
+      const rid = roomMap.roomId || room_id || 'default';
+      writeJSON(`room-map-${rid}.json`, roomMap);
+      writeJSON('room-map.json', roomMap);
 
       const changes = [];
       if (name) changes.push(`name -> "${name}"`);
@@ -1894,24 +1701,25 @@ export const TOOL_CATALOG = {
       if (x != null) changes.push(`x -> ${x}`);
       if (y != null) changes.push(`y -> ${y}`);
       if (z != null) changes.push(`z -> ${z}`);
-      if (airflowDir != null) changes.push(`airflow_dir -> ${((airflowDir % 360) + 360) % 360}`);
-      if (wallMode) changes.push(`wall_mode filter -> ${wallMode}`);
 
       return {
         ok: true,
         updated: totalUpdated,
         changes,
         message: `Updated ${totalUpdated} equipment device(s): ${changes.join(', ')}`,
-        _undo_state: { farm_id, beforeDevices, room_id: rid || activeRoomId || room_id || roomMap.roomId || null }
+        _undo_state: { farm_id, beforeDevices }
       };
     },
     undoHandler: async (params, state) => {
       if (!state?.beforeDevices) return { ok: false, error: 'No undo state available' };
       const farm_id = state.farm_id || process.env.FARM_ID || 'default';
-      const { roomMap } = await loadMutableRoomMap(farm_id, state.room_id || params.room_id);
+      const roomMap = await farmStore.get(farm_id, 'room_map') || { zones: [], devices: [] };
       roomMap.devices = state.beforeDevices;
       roomMap.lastUpdated = new Date().toISOString();
-      await persistMutableRoomMap(farm_id, roomMap, state.room_id || params.room_id);
+      await farmStore.set(farm_id, 'room_map', roomMap);
+      const rid = roomMap.roomId || 'default';
+      writeJSON(`room-map-${rid}.json`, roomMap);
+      writeJSON('room-map.json', roomMap);
       return { ok: true, undone: true, message: 'Equipment changes reverted.' };
     }
   },
@@ -1936,7 +1744,7 @@ export const TOOL_CATALOG = {
       const room = resolveRoom(rooms, room_id);
       if (!room) return { ok: false, error: `Room "${room_id}" not found.` };
 
-      const { roomMap, roomId: activeRoomId } = await loadMutableRoomMap(farm_id, room_id);
+      const roomMap = await farmStore.get(farm_id, 'room_map') || { zones: [], devices: [] };
       if (!Array.isArray(roomMap.devices) || roomMap.devices.length === 0) {
         return { ok: false, error: 'No devices found in room map. Use the Room Mapper to add equipment first.' };
       }
@@ -1986,7 +1794,10 @@ export const TOOL_CATALOG = {
       }
 
       roomMap.lastUpdated = new Date().toISOString();
-      const rid = await persistMutableRoomMap(farm_id, roomMap, activeRoomId || room_id);
+      await farmStore.set(farm_id, 'room_map', roomMap);
+      const rid = roomMap.roomId || room_id || 'default';
+      writeJSON(`room-map-${rid}.json`, roomMap);
+      writeJSON('room-map.json', roomMap);
 
       const wallLabel = wallMode === 'outer'
         ? 'east and west walls'
@@ -1998,16 +1809,19 @@ export const TOOL_CATALOG = {
         wall_mode: wallMode,
         placements: placements.slice(0, 20),
         message: `Pinned ${matched.length} equipment device(s) to the ${wallLabel}.`,
-        _undo_state: { farm_id, beforeDevices, room_id: rid || activeRoomId || room_id || roomMap.roomId || null }
+        _undo_state: { farm_id, beforeDevices }
       };
     },
     undoHandler: async (params, state) => {
       if (!state?.beforeDevices) return { ok: false, error: 'No undo state available' };
       const farm_id = state.farm_id || process.env.FARM_ID || 'default';
-      const { roomMap } = await loadMutableRoomMap(farm_id, state.room_id || params.room_id);
+      const roomMap = await farmStore.get(farm_id, 'room_map') || { zones: [], devices: [] };
       roomMap.devices = state.beforeDevices;
       roomMap.lastUpdated = new Date().toISOString();
-      await persistMutableRoomMap(farm_id, roomMap, state.room_id || params.room_id);
+      await farmStore.set(farm_id, 'room_map', roomMap);
+      const rid = roomMap.roomId || params.room_id || 'default';
+      writeJSON(`room-map-${rid}.json`, roomMap);
+      writeJSON('room-map.json', roomMap);
       return { ok: true, undone: true, message: 'Equipment wall alignment reverted.' };
     }
   },
@@ -2127,7 +1941,7 @@ export const TOOL_CATALOG = {
       const room = resolveRoom(rooms, room_id);
       if (!room) return { ok: false, error: `Room "${room_id}" not found.` };
 
-      const { roomMap, roomId: activeRoomId } = await loadMutableRoomMap(farm_id, room_id);
+      const roomMap = await farmStore.get(farm_id, 'room_map') || {};
       const gridSize = roomMap.gridSize || 30;
       const inferredRoom = inferRoomDimensionsMeters(room, roomMap);
       const roomLength = inferredRoom.length_m || gridSize;
@@ -2354,7 +2168,10 @@ export const TOOL_CATALOG = {
 
       // Save
       roomMap.lastUpdated = new Date().toISOString();
-      const rid = await persistMutableRoomMap(farm_id, roomMap, activeRoomId || room_id);
+      await farmStore.set(farm_id, 'room_map', roomMap);
+      const rid = roomMap.roomId || room_id || 'default';
+      writeJSON('room-map-' + rid + '.json', roomMap);
+      writeJSON('room-map.json', roomMap);
 
       await farmStore.set(farm_id, 'groups', groups);
       writeJSON('groups.json', groups);
@@ -2402,16 +2219,18 @@ export const TOOL_CATALOG = {
         },
         layout: placements.slice(0, 20), // First 20 for display
         message: 'Arranged ' + totalPlaced + ' item(s) across the room using ' + layoutLabel + (walkway > 0 ? ' with a ' + walkway + 'm center walkway' : '') + (edgeAlignment === 'walls' ? ', aligned toward the east and west walls' : '') + (explicitSpacing ? ', ' + spacing + 'm spacing' : ', auto-spaced ' + actualSpacingX + 'm x ' + actualSpacingY + 'm to fill room') + '. Science basis: ' + scientificDefaults.rationale.join('; ') + '. Item footprint: ' + footprintX_m + 'm x ' + footprintY_m + 'm (no overlap).',
-        _undo_state: { farm_id, beforeGroups, beforeDevices, roomMapId: rid || activeRoomId || room_id || roomMap.roomId || null }
+        _undo_state: { farm_id, beforeGroups, beforeDevices, roomMapId: rid }
       };
     },
     undoHandler: async (params, state) => {
       if (!state) return { ok: false, error: 'No undo state' };
       const farm_id = state.farm_id || process.env.FARM_ID || 'default';
-      const { roomMap } = await loadMutableRoomMap(farm_id, state.roomMapId || params.room_id);
+      const roomMap = await farmStore.get(farm_id, 'room_map') || {};
       roomMap.devices = state.beforeDevices;
       roomMap.lastUpdated = new Date().toISOString();
-      await persistMutableRoomMap(farm_id, roomMap, state.roomMapId || params.room_id);
+      await farmStore.set(farm_id, 'room_map', roomMap);
+      writeJSON('room-map-' + state.roomMapId + '.json', roomMap);
+      writeJSON('room-map.json', roomMap);
       await farmStore.set(farm_id, 'groups', state.beforeGroups);
       writeJSON('groups.json', state.beforeGroups);
       return { ok: true, undone: true, message: 'Layout changes reverted.' };
@@ -2434,7 +2253,7 @@ export const TOOL_CATALOG = {
       const room = resolveRoom(rooms, room_id);
       if (!room) return { ok: false, error: `Room "${room_id}" not found.` };
 
-      const { roomMap, roomId: activeRoomId } = await loadMutableRoomMap(farm_id, room_id);
+      const roomMap = await farmStore.get(farm_id, 'room_map') || {};
       const gridSize = roomMap.gridSize || 30;
       const zones = roomMap.zones || [];
       if (!zones.length) return { ok: false, error: 'Room has no zones.' };
@@ -2463,7 +2282,10 @@ export const TOOL_CATALOG = {
       if (!changes.length) return { ok: false, error: 'No changes specified. Provide new_name, x1_m, y1_m, x2_m, or y2_m.' };
 
       roomMap.lastUpdated = new Date().toISOString();
-      const rid = await persistMutableRoomMap(farm_id, roomMap, activeRoomId || room_id);
+      await farmStore.set(farm_id, 'room_map', roomMap);
+      const rid = roomMap.roomId || room_id;
+      writeJSON('room-map-' + rid + '.json', roomMap);
+      writeJSON('room-map.json', roomMap);
 
       return {
         ok: true,
@@ -2482,11 +2304,13 @@ export const TOOL_CATALOG = {
     undoHandler: async (params, state) => {
       if (!state) return { ok: false, error: 'No undo state' };
       const farm_id = state.farm_id || process.env.FARM_ID || 'default';
-      const { roomMap } = await loadMutableRoomMap(farm_id, state.rid || params.room_id);
+      const roomMap = await farmStore.get(farm_id, 'room_map') || {};
       const zones = roomMap.zones || [];
       const zone = zones.find(z => (z.name || z.zone) === state.zoneName);
       if (zone) Object.assign(zone, state.before);
-      await persistMutableRoomMap(farm_id, roomMap, state.rid || params.room_id);
+      await farmStore.set(farm_id, 'room_map', roomMap);
+      writeJSON('room-map-' + state.rid + '.json', roomMap);
+      writeJSON('room-map.json', roomMap);
       return { ok: true, undone: true, message: 'Zone reverted.' };
     }
   },
@@ -2508,7 +2332,7 @@ export const TOOL_CATALOG = {
       const room = resolveRoom(rooms, room_id);
       if (!room) return { ok: false, error: `Room "${room_id}" not found.` };
 
-      const { roomMap, roomId: activeRoomId } = await loadMutableRoomMap(farm_id, room_id);
+      const roomMap = await farmStore.get(farm_id, 'room_map') || {};
       const gridSize = roomMap.gridSize || 30;
       let roomLength = roomMap.roomLength || gridSize;
       let roomWidth = roomMap.roomWidth || gridSize;
@@ -2547,7 +2371,10 @@ export const TOOL_CATALOG = {
       }
 
       roomMap.lastUpdated = new Date().toISOString();
-  const rid = await persistMutableRoomMap(farm_id, roomMap, activeRoomId || room_id);
+      await farmStore.set(farm_id, 'room_map', roomMap);
+      const rid = roomMap.roomId || room_id;
+      writeJSON('room-map-' + rid + '.json', roomMap);
+      writeJSON('room-map.json', roomMap);
 
       return {
         ok: true,
@@ -2560,11 +2387,13 @@ export const TOOL_CATALOG = {
     undoHandler: async (params, state) => {
       if (!state) return { ok: false, error: 'No undo state' };
       const farm_id = state.farm_id || process.env.FARM_ID || 'default';
-      const { roomMap } = await loadMutableRoomMap(farm_id, state.rid || params.room_id);
+      const roomMap = await farmStore.get(farm_id, 'room_map') || {};
       const removed = new Set(state.addedIds);
       roomMap.devices = (roomMap.devices || []).filter(d => !removed.has(d.deviceId));
       roomMap.lastUpdated = new Date().toISOString();
-      await persistMutableRoomMap(farm_id, roomMap, state.rid || params.room_id);
+      await farmStore.set(farm_id, 'room_map', roomMap);
+      writeJSON('room-map-' + state.rid + '.json', roomMap);
+      writeJSON('room-map.json', roomMap);
       return { ok: true, undone: true, message: 'Removed ' + state.addedIds.length + ' added device(s).' };
     }
   },
@@ -2585,7 +2414,7 @@ export const TOOL_CATALOG = {
         return { ok: false, error: 'Provide device_id, or match_name/match_category for bulk removal.' };
       }
 
-      const { roomMap, roomId: activeRoomId } = await loadMutableRoomMap(farm_id, room_id);
+      const roomMap = await farmStore.get(farm_id, 'room_map') || {};
       const devices = roomMap.devices || [];
       const beforeDevices = JSON.parse(JSON.stringify(devices));
 
@@ -2618,7 +2447,10 @@ export const TOOL_CATALOG = {
 
       roomMap.devices = devices;
       roomMap.lastUpdated = new Date().toISOString();
-  const rid = await persistMutableRoomMap(farm_id, roomMap, activeRoomId || room_id);
+      await farmStore.set(farm_id, 'room_map', roomMap);
+      const rid = roomMap.roomId || room_id || 'default';
+      writeJSON('room-map-' + rid + '.json', roomMap);
+      writeJSON('room-map.json', roomMap);
 
       return {
         ok: true,
@@ -2631,16 +2463,18 @@ export const TOOL_CATALOG = {
     undoHandler: async (params, state) => {
       if (!state) return { ok: false, error: 'No undo state' };
       const farm_id = state.farm_id || process.env.FARM_ID || 'default';
-      const { roomMap } = await loadMutableRoomMap(farm_id, state.rid || params.room_id);
+      const roomMap = await farmStore.get(farm_id, 'room_map') || {};
       roomMap.devices = state.beforeDevices;
       roomMap.lastUpdated = new Date().toISOString();
-      await persistMutableRoomMap(farm_id, roomMap, state.rid || params.room_id);
+      await farmStore.set(farm_id, 'room_map', roomMap);
+      writeJSON('room-map-' + state.rid + '.json', roomMap);
+      writeJSON('room-map.json', roomMap);
       return { ok: true, undone: true, message: 'Restored ' + state.beforeDevices.length + ' device(s).' };
     }
   },
 
   'scan_devices': {
-    description: 'Unified device discovery scan. Supports wireless (SwitchBot, Light Engine, LEAM BLE/network), wired (bus channel scan), or all modes. Returns a normalized discovery result with asset_kind, source, registration_state, and a discovery_session_id for follow-up actions.',
+    description: 'Unified device discovery scan. Supports wireless (SwitchBot cloud, MQTT/light-engine devices, LEAM BLE/network), wired (bus channel scan), or all modes. Returns a normalized discovery result with asset_kind, source, registration_state, and a discovery_session_id for follow-up actions.',
     category: 'read',
     required: [],
     optional: ['protocol', 'mode', 'bus_type'],
@@ -2761,13 +2595,10 @@ export const TOOL_CATALOG = {
       }
 
       // 3. Check what's already registered to avoid duplicates
-      const registeredInventory = await loadRegisteredDeviceInventory();
-      const existingIds = new Set(registeredInventory.map(function(device) {
-        return device.deviceId || device.id;
-      }).filter(Boolean));
-      const existingNames = new Set(registeredInventory.map(function(device) {
-        return String(device.name || '').toLowerCase();
-      }).filter(Boolean));
+      const raw = readJSON('device-meta.json', { devices: {} });
+      const existingDevices = raw.devices || {};
+      const existingIds = new Set(Object.keys(existingDevices));
+      const existingNames = new Set(Object.values(existingDevices).map(d => (d.name || '').toLowerCase()));
 
       // Also check DB-stored devices via farmStore
       try {
@@ -4731,8 +4562,10 @@ const IDEMPOTENCY_TTL_MS = 30 * 60 * 1000; // 30 minutes
 const undoHistory = [];
 const MAX_UNDO_HISTORY = 50;
 
-// Audit log (in-memory, persisted to GCS on each write)
+// Audit log (in-memory cache, persisted in-order with GCS as authority)
 const AUDIT_LOG_PATH = path.join(DATA_DIR, 'agent-audit-log.json');
+const AUDIT_LOG_GCS_PATH = 'data/agent-audit-log.json';
+let auditWriteQueue = Promise.resolve();
 
 function loadAuditLog() {
   try {
@@ -4743,18 +4576,40 @@ function loadAuditLog() {
   return [];
 }
 
-function appendAuditEntry(entry) {
-  const log = loadAuditLog();
-  log.push(entry);
-  // Keep last 1000 entries
-  const trimmed = log.slice(-1000);
-  // Write locally and persist to GCS
+let auditLogCache = loadAuditLog();
+
+(async () => {
   try {
-    fs.writeFileSync(AUDIT_LOG_PATH, JSON.stringify(trimmed, null, 2));
-  } catch {}
-  gcsWriteJSON('data/agent-audit-log.json', trimmed).catch(err => {
-    console.warn('[farm-ops-agent] GCS audit log write failed:', err.message);
-  });
+    const remote = await gcsReadJSON(AUDIT_LOG_GCS_PATH, null);
+    if (Array.isArray(remote)) {
+      auditLogCache = remote.slice(-1000);
+    }
+  } catch {
+    // Keep local cache fallback if remote read fails.
+  }
+})();
+
+function enqueueAuditPersist(trimmed) {
+  auditWriteQueue = auditWriteQueue
+    .then(async () => {
+      // GCS is authoritative; local file is a best-effort mirror.
+      await gcsWriteJSON(AUDIT_LOG_GCS_PATH, trimmed);
+      try {
+        fs.writeFileSync(AUDIT_LOG_PATH, JSON.stringify(trimmed, null, 2));
+      } catch {
+        // Non-fatal local mirror write failure.
+      }
+    })
+    .catch(err => {
+      console.warn('[farm-ops-agent] GCS audit log write failed:', err.message);
+    });
+}
+
+function appendAuditEntry(entry) {
+  auditLogCache.push(entry);
+  const trimmed = auditLogCache.slice(-1000);
+  auditLogCache = trimmed;
+  enqueueAuditPersist(trimmed);
   return trimmed;
 }
 

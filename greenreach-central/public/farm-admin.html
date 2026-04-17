@@ -1007,9 +1007,9 @@
                         <span class="nav-item-icon">■</span>
                         Crop Pricing
                     </a>
-                    <a href="#crop-value" class="nav-item" data-section="crop-value">
+                    <a href="#dashboard" class="nav-item" data-section="dashboard" data-focus-card="farm-value">
                         <span class="nav-item-icon">■</span>
-                        Crop Value
+                        Farm Value
                     </a>
                     <a href="#users" class="nav-item" data-section="users">
                         <span class="nav-item-icon">■</span>
@@ -1109,11 +1109,11 @@
                             <div class="action-desc">Set pricing for crops & products</div>
                             <div class="card-info-tooltip">Quick tool to update and export crop pricing</div>
                         </a>
-                        <a href="#crop-value" class="action-card card-highlight" data-section="crop-value">
+                        <a id="dashboard-crop-value-action" href="#dashboard" class="action-card card-highlight" data-section="dashboard" data-focus-card="farm-value">
                             <div class="action-icon">CV</div>
-                            <div class="action-title">Crop Value</div>
-                            <div class="action-desc">In the moment snapshot of today's crop value</div>
-                            <div class="card-info-tooltip">Real-time valuation of all crops in production</div>
+                            <div class="action-title">Farm Value</div>
+                            <div class="action-desc">View today's farm value card and request the PDF report</div>
+                            <div class="card-info-tooltip">Real-time valuation on the dashboard with a detailed print-ready report on demand</div>
                         </a>
                         <a href="javascript:void(0)" class="action-card card-highlight" onclick="openAIPricingAssistant()">
                             <div class="action-icon">AI</div>
@@ -2196,122 +2196,21 @@
                 </div>
 
                 <!-- User Management (Admin Only) -->
-                <div id="user-management-section" style="margin-top: 32px;">
+                <div id="section-crop-value" class="content-section" style="display: none;">
+                    <div class="header">
+                        <h1>Farm Value Overview</h1>
+                        <p style="color: var(--text-secondary);">The dedicated crop value page has been retired. Farm value now lives on the dashboard home card, and the detailed report is generated as a print-ready PDF when requested.</p>
+                    </div>
+
                     <div class="card">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                            <h2>Team Members</h2>
-                            <button id="add-user-btn" style="padding: 10px 20px; background: var(--primary); color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
-                                Add User
-                            </button>
-                        </div>
-
-                        <!-- Add User Form (Hidden by default) -->
-                        <div id="add-user-form-container" style="display: none; background: var(--bg-secondary); padding: 20px; border-radius: 8px; margin-bottom: 20px;">
-                            <h3 style="margin-bottom: 15px; font-size: 16px;">Add New User</h3>
-                            <form id="add-user-form" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-                                <div>
-                                    <label style="display: block; margin-bottom: 5px; font-weight: 500; color: var(--text-secondary);">Email</label>
-                                    <input type="email" id="new-user-email" required style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px;">
-                                </div>
-                                <div>
-                                    <label style="display: block; margin-bottom: 5px; font-weight: 500; color: var(--text-secondary);">Full Name</label>
-                                    <input type="text" id="new-user-name" required style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px;">
-                                </div>
-                                <div>
-                                    <label style="display: block; margin-bottom: 5px; font-weight: 500; color: var(--text-secondary);">Role</label>
-                                    <select id="new-user-role" required style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px;">
-                                        <option value="viewer">Viewer (Read-only)</option>
-                                        <option value="operator">Operator (Monitor & Report)</option>
-                                        <option value="admin">Admin (Full Access)</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label style="display: block; margin-bottom: 5px; font-weight: 500; color: var(--text-secondary);">Temporary Password</label>
-                                    <input type="password" id="new-user-password" required minlength="8" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px;">
-                                </div>
-                                <div style="grid-column: 1 / -1; display: flex; gap: 10px; justify-content: flex-end;">
-                                    <button type="button" id="cancel-add-user-btn" style="padding: 10px 20px; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px; font-weight: 600; cursor: pointer;">
-                                        Cancel
-                                    </button>
-                                    <button type="submit" style="padding: 10px 20px; background: var(--primary); color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer;">
-                                        Create User
-                                    </button>
-                                </div>
-                                <div id="add-user-message" style="grid-column: 1 / -1; display: none; padding: 12px; border-radius: 6px; font-size: 14px;"></div>
-                            </form>
-                        </div>
-
-                        <!-- Users Table -->
-                        <div style="overflow-x: auto;">
-                            <table style="width: 100%; border-collapse: collapse;">
-                                <thead>
-                                    <tr style="border-bottom: 2px solid var(--border);">
-                                        <th style="text-align: left; padding: 12px; font-weight: 600; color: var(--text-secondary);">Name</th>
-                                        <th style="text-align: left; padding: 12px; font-weight: 600; color: var(--text-secondary);">Email</th>
-                                        <th style="text-align: left; padding: 12px; font-weight: 600; color: var(--text-secondary);">Role</th>
-                                        <th style="text-align: left; padding: 12px; font-weight: 600; color: var(--text-secondary);">Status</th>
-                                        <th style="text-align: right; padding: 12px; font-weight: 600; color: var(--text-secondary);">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="users-table-body">
-                                    <tr>
-                                        <td colspan="5" style="text-align: center; padding: 40px; color: var(--text-muted);">Loading users...</td>
-                                    </tr>
-                                </tbody>
-                            </table>
+                        <h2>Crop Value Moved</h2>
+                        <p style="color: var(--text-secondary); margin-bottom: 16px;">Use the dashboard card for the live farm value snapshot. When you need documentation, generate the detailed crop value PDF report from there or with the button below.</p>
+                        <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                            <button type="button" class="btn-primary" onclick="navigateToFarmValueOverview()">Go to Dashboard Card</button>
+                            <button type="button" class="btn-secondary" onclick="openCropValueReport(event)">Request PDF Report</button>
                         </div>
                     </div>
                 </div>
-            </div>
-
-            <div id="section-settings" class="content-section" style="display: none;">
-                <div class="header">
-                    <h1>Farm Settings</h1>
-                    <p class="header-subtitle">Configure your farm profile, integrations, and system preferences</p>
-                </div>
-
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 20px; margin-top: 20px;">
-                    <!-- Farm Profile -->
-                    <div class="card">
-                        <h2 style="margin-bottom: 20px;">Farm Profile</h2>
-                        <div style="display: flex; flex-direction: column; gap: 15px;">
-                            <div>
-                                <label style="display: block; margin-bottom: 5px; font-weight: 500; color: var(--text-secondary);">Farm ID</label>
-                                <input type="text" id="settings-farm-id" readonly style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-secondary); color: var(--text-primary); font-family: monospace;">
-                                <small style="color: var(--text-muted);">Read-only identifier from setup wizard</small>
-                            </div>
-                            <div>
-                                <label style="display: block; margin-bottom: 5px; font-weight: 500; color: var(--text-secondary);">Registration Code</label>
-                                <input type="text" id="settings-registration-code" readonly style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-secondary); color: var(--text-primary); font-family: monospace;">
-                                <small style="color: var(--text-muted);">From initial farm registration</small>
-                            </div>
-                            <div>
-                                <label style="display: block; margin-bottom: 5px; font-weight: 500; color: var(--text-secondary);">Network Configuration</label>
-                                <div style="padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-secondary);">
-                                    <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
-                                        <span style="color: var(--text-muted);">Connection:</span>
-                                        <span id="network-type" style="color: var(--text-primary);">-</span>
-                                    </div>
-                                    <div style="display: flex; justify-content: space-between;">
-                                        <span style="color: var(--text-muted);">Status:</span>
-                                        <span id="network-status" style="color: var(--accent-green);">Connected</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Certifications & Practices -->
-                    <div class="card">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                            <h2 style="margin: 0;">Certifications & Practices</h2>
-                            <button class="btn-secondary" onclick="openEditCertificationsModal()" style="padding: 8px 16px; background: rgba(59, 130, 246, 0.2); border: 1px solid var(--accent-blue); color: var(--accent-blue); border-radius: 6px; cursor: pointer; font-size: 14px;">Edit</button>
-                        </div>
-                        <div style="display: flex; flex-direction: column; gap: 20px;">
-                            <div>
-                                <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 10px; color: var(--text-secondary);">Certifications</h3>
-                                <div id="certifications-list" style="display: flex; flex-wrap: wrap; gap: 8px;">
-                                    <!-- Loaded from setup wizard -->
                                 </div>
                             </div>
                             <div>
@@ -2759,7 +2658,7 @@
                 </div>
             </div>
 
-            <div id="section-crop-value" class="content-section" style="display: none;">
+            <div id="section-crop-value-legacy" class="content-section" style="display: none;">
                 <div class="header">
                     <h1>Crop Value Assessment</h1>
                     <p style="color: var(--text-secondary);\">\n                        Insurance valuation based on current inventory, growth stages, and retail pricing.\n                    </p>
@@ -2872,6 +2771,22 @@
                                 <!-- Populated by JavaScript -->
                             </tbody>
                         </table>
+                    </div>
+                </div>
+            </div>
+
+            <div id="section-crop-value" class="content-section" style="display: none;">
+                <div class="header">
+                    <h1>Farm Value Overview</h1>
+                    <p style="color: var(--text-secondary);">The dedicated crop value page has been retired. Farm value now lives on the dashboard home card, and the detailed report is generated as a print-ready PDF when requested.</p>
+                </div>
+
+                <div class="card">
+                    <h2>Crop Value Moved</h2>
+                    <p style="color: var(--text-secondary); margin-bottom: 16px;">Use the dashboard card for the live farm value snapshot. When you need documentation, generate the detailed crop value PDF report from there or with the button below.</p>
+                    <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                        <button type="button" class="btn-primary" onclick="navigateToFarmValueOverview()">Go to Dashboard Card</button>
+                        <button type="button" class="btn-secondary" onclick="openCropValueReport(event)">Request PDF Report</button>
                     </div>
                 </div>
             </div>

@@ -953,13 +953,22 @@
       });
     });
     
+    function normalizePrice(value) {
+      const amount = Number(value);
+      return Number.isFinite(amount) ? amount : 0;
+    }
+
     // Load inventory (filter to Farm Boxes only for now)
     async function loadInventory() {
       try {
         const data = await api('/farm-sales/inventory');
         // Filter to only farm boxes when category is implemented
         // For now, show all available products
-        inventory = data.inventory.filter(p => p.available > 0);
+        inventory = (data.inventory || []).map(product => ({
+          ...product,
+          retail_price: normalizePrice(product.retail_price ?? product.unit_price ?? product.price),
+          available: Number(product.available ?? product.quantity_available ?? 0) || 0,
+        })).filter(p => p.available > 0);
         
         // Render product grid
         const grid = document.getElementById('product-grid');
@@ -969,7 +978,7 @@
           grid.innerHTML = inventory.map(product => `
             <div class="product-card" onclick="addToCart('${product.sku_id}')">
               <h3>${product.name}</h3>
-              <div class="price">$${product.retail_price.toFixed(2)}</div>
+              <div class="price">$${normalizePrice(product.retail_price).toFixed(2)}</div>
               <div class="stock">${product.available} ${product.unit} available</div>
             </div>
           `).join('');
@@ -1022,7 +1031,7 @@
           <div class="cart-item">
             <div>
               <div class="cart-item-name">${item.name}</div>
-              <div style="font-size: 0.875rem; color: var(--text-light);">$${item.retail_price.toFixed(2)}/${item.unit}</div>
+              <div style="font-size: 0.875rem; color: var(--text-light);">$${normalizePrice(item.retail_price).toFixed(2)}/${item.unit}</div>
             </div>
             <div class="cart-item-qty">
               <button class="qty-btn" onclick="updateCartQuantity('${item.sku_id}', -1)">−</button>
@@ -1376,7 +1385,7 @@
       }
       
       select.innerHTML = '<option value="">Select a farm box...</option>' +
-        farmBoxes.map(box => `<option value="${box.sku_id}">${box.name} - $${box.retail_price.toFixed(2)}</option>`).join('');
+        farmBoxes.map(box => `<option value="${box.sku_id}">${box.name} - $${normalizePrice(box.retail_price).toFixed(2)}</option>`).join('');
       
       // Set minimum start date to tomorrow
       const tomorrow = new Date();

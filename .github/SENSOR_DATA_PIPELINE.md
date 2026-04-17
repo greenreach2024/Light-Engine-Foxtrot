@@ -1,7 +1,7 @@
 # Sensor Data Pipeline: End-to-End Reference
 
-**Version**: 2.0.0
-**Date**: April 8, 2026
+**Version**: 2.1.0
+**Date**: April 17, 2026
 **Authority**: Canonical reference for how environmental sensor data flows from physical sensors to the user's dashboard. All agents MUST read this before modifying any code that touches environmental data.
 
 ---
@@ -304,6 +304,41 @@ badges when telemetry is healthy but `status` is omitted.
 
 ---
 
+## Nutrient Dosing Telemetry Pipeline (Atlas EZO ESP32)
+
+The environmental pipeline above is separate from nutrient dosing telemetry. Nutrient telemetry currently flows through MQTT and is surfaced by LE for monitor workflows.
+
+```
+Atlas EZO Sensors (pH/EC/RTD) on ESP32
+  -> ESP32 publishes MQTT telemetry (sensors/nutrient/reading)
+  -> LE nutrient snapshot builder (getNutrientAutomationState)
+  -> LE monitor endpoints (/data/nutrient-dashboard, /api/nutrients/mqtt-devices, /api/devices/mqtt)
+  -> Discovery scan includes MQTT nutrient controller
+  -> Device manager "Nutrient Controllers" section -> Monitor modal
+```
+
+### Nutrient Controller Runtime Defaults
+
+- Safe target pH: `5.80`
+- Safe target EC: `1300`
+- pH tolerance deadband: `+/- 0.15`
+- EC tolerance deadband: `+/- 50`
+- Autodose enabled by default with dose-pause (cooldown) behavior
+
+### Nutrient MQTT Topics
+
+| Topic | Direction | Purpose |
+|-------|-----------|---------|
+| `sensors/nutrient/reading` | ESP32 -> LE/tools | Telemetry packet (pH, EC, temperature, target state) |
+| `commands/NutrientRoom` | LE/tools -> ESP32 | Dosing and status commands |
+| `sensors/NutrientRoom/ack` | ESP32 -> LE/tools | Command acknowledgement |
+
+### Nutrient Monitoring Notes
+
+- Device discovery now classifies nutrient MQTT devices as `Nutrient Controller` (not generic MQTT).
+- Monitor flow is read-oriented; it opens live status from `/data/nutrient-dashboard`.
+- If USB serial output is noisy/garbled, prefer MQTT packet capture for accurate numeric readings.
+
 ## Common Failure Scenarios
 
 ### Scenario: All Sensor Data Stale (No Updates)
@@ -339,6 +374,15 @@ badges when telemetry is healthy but `status` is omitted.
 If steps 1-2 are true and UI still shows offline, the client mapping likely fell
 back to `device.status || 'offline'` instead of derived status.
 
+### Scenario: Nutrient Controller Shows No Fresh Readings
+
+**Check in order:**
+1. Confirm ESP32 is connected to expected broker and scope (`NutrientRoom`)
+2. Confirm broker/topic traffic on `sensors/nutrient/reading` (typically port 1884 in current setup)
+3. Confirm LE endpoint `GET /data/nutrient-dashboard` returns updated `metadata.updatedAt`
+4. Confirm LE discovery returns nutrient device in `POST /discovery/scan` when protocol includes MQTT
+5. If serial text is unreadable, treat MQTT telemetry as source of truth for pH/EC/temperature
+
 ---
 
 ## File Quick Reference
@@ -360,6 +404,9 @@ back to `device.status || 'offline'` instead of derived status.
 | Edge Config | `config/edge-config.json` | `farmId`, `apiKey`, `centralApiUrl` |
 | IoT Devices | `public/data/iot-devices.json` | Device registry (sensors, hub) |
 | Env State | `data/automation/env-state.json` | EnvStore persistence file |
+| Nutrient Snapshot | `server-foxtrot.js` | `getNutrientAutomationState()` |
+| Nutrient MQTT Inventory | `server-foxtrot.js` | `GET /api/nutrients/mqtt-devices`, `GET /api/devices/mqtt` |
+| Nutrient UI Monitor | `public/app.foxtrot.js` | `openMqttMonitor()` and Nutrient Controllers grouping |
 
 ---
 

@@ -4,7 +4,7 @@
  */
 
 import express from 'express';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { generateAdminToken, hashToken, verifyAdminToken, adminAuthMiddleware } from '../middleware/admin-auth.js';
 

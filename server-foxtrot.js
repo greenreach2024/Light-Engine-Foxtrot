@@ -14797,6 +14797,11 @@ app.get('/api/setup-wizard/status', async (req, res) => {
 // Setup wizard router with edge session authentication
 app.use('/api/setup-wizard', setupWizardRouter);
 
+// Backward-compatible alias used by EVIE onboarding helpers.
+app.get('/api/setup/onboarding-status', (req, res) => {
+  res.redirect(307, '/api/setup-wizard/onboarding-status');
+});
+
 /**
  * Farm Sales: Customer Management
  * Customer accounts, store credits, and preferences
@@ -20948,6 +20953,49 @@ app.use('/api/farm/salad-mixes', proxyCorsMiddleware, createProxyMiddleware({
   }
 }));
 
+// Farm-accessible stock-group catalog proxy for setup wizard and planning flows
+app.use('/api/farm/stock-group-catalog', proxyCorsMiddleware, createProxyMiddleware({
+  target: _centralUrl(),
+  router: () => _centralUrl(),
+  changeOrigin: true,
+  xfwd: true,
+  logLevel: 'debug',
+  timeout: 8000,
+  proxyTimeout: 8000,
+  agent: keepAliveHttpsAgent,
+  pathRewrite: (p) => (p.startsWith('/api/farm/stock-group-catalog') ? p : `/api/farm/stock-group-catalog${p}`),
+  onProxyReq(proxyReq, req) {
+    const outgoingPath = req.originalUrl;
+    console.log(`[-> farm/stock-group-catalog] ${req.method} ${outgoingPath} -> ${_centralUrl()}${outgoingPath}`);
+    const apiKey = process.env.GREENREACH_API_KEY;
+    if (apiKey && !proxyReq.getHeader('x-api-key')) {
+      proxyReq.setHeader('x-api-key', apiKey);
+    }
+    const farmId = req.headers['x-farm-id'] || process.env.FARM_ID;
+    if (farmId && !proxyReq.getHeader('x-farm-id')) {
+      proxyReq.setHeader('x-farm-id', farmId);
+    }
+    if (req.headers['authorization']) {
+      proxyReq.setHeader('Authorization', req.headers['authorization']);
+    }
+  },
+  onProxyRes(proxyRes, req) {
+    const origin = req.headers?.origin;
+    if (origin) {
+      proxyRes.headers['access-control-allow-origin'] = origin;
+    } else {
+      proxyRes.headers['access-control-allow-origin'] = '*';
+    }
+    proxyRes.headers['access-control-allow-methods'] = 'GET,OPTIONS';
+    proxyRes.headers['access-control-allow-headers'] = 'Content-Type, Authorization, X-Requested-With, x-farm-id';
+  },
+  onError(err, req, res) {
+    console.warn('[proxy:/api/farm/stock-group-catalog] error:', err?.message || err);
+    res.statusCode = 502;
+    res.end(JSON.stringify({ error: 'proxy_error', target: 'central-stock-group-catalog', detail: String(err) }));
+  }
+}));
+
 app.use('/api/inventory/manual', proxyCorsMiddleware, createProxyMiddleware({
   target: _centralUrl(),
   router: () => _centralUrl(),
@@ -24670,6 +24718,14 @@ app.get('/data/iot-devices.json', async (req, res) => {
 });
 
 app.get('/data/groups.json', (req, res, next) => {
+  const storedGroupsPath = resolveDataReadPath('groups.json');
+  if (fs.existsSync(storedGroupsPath)) {
+    const storedGroups = loadGroupsFile();
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cache-Control', 'no-cache');
+    return res.json({ groups: Array.isArray(storedGroups) ? storedGroups : [] });
+  }
+
   const farm = loadDemoFarmSnapshot();
   if (!farm) return next();
   const groups = [];
@@ -24749,17 +24805,36 @@ app.post('/data/groups.json', (req, res) => {
   if (!Array.isArray(incoming)) {
     return res.status(400).json({ ok: false, error: 'Expected { groups: [...] } or array.' });
   }
-  // Merge: preserve existing fields, overlay gridX/gridY from incoming
+
   const existing = loadGroupsFile();
-  const incomingMap = new Map();
-  for (const g of incoming) { if (g.id) incomingMap.set(g.id, g); }
-  const merged = existing.map(g => {
-    const inc = incomingMap.get(g.id);
-    if (inc) return { ...g, gridX: inc.gridX, gridY: inc.gridY };
-    return g;
+
+  const isGridOnlyPayload = incoming.length > 0 && incoming.every((group) => {
+    if (!group || typeof group !== 'object' || !group.id) return false;
+    const keys = Object.keys(group).filter((key) => group[key] !== undefined);
+    return keys.length > 0 && keys.every((key) => key === 'id' || key === 'gridX' || key === 'gridY');
   });
-  if (saveGroupsFile(merged)) {
-    return res.json({ ok: true, updated: merged.length });
+
+  let nextGroups;
+  if (isGridOnlyPayload) {
+    const incomingMap = new Map();
+    for (const g of incoming) {
+      if (g?.id) incomingMap.set(g.id, g);
+    }
+    nextGroups = existing.map((group) => {
+      const overlay = incomingMap.get(group.id);
+      if (!overlay) return group;
+      return { ...group, gridX: overlay.gridX, gridY: overlay.gridY };
+    });
+  } else {
+    // Full snapshot save path: keep all incoming groups and preserve caller order.
+    // This is used by Build Stock and other flows that add/remove groups.
+    nextGroups = incoming
+      .filter((group) => group && typeof group === 'object' && String(group.id || '').trim())
+      .map((group) => ({ ...group }));
+  }
+
+  if (saveGroupsFile(nextGroups)) {
+    return res.json({ ok: true, updated: nextGroups.length });
   }
   return res.status(500).json({ ok: false, error: 'Failed to save groups.' });
 });

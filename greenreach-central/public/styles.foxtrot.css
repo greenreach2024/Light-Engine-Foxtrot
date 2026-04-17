@@ -57,6 +57,8 @@
   display: none;
   align-items: center;
   justify-content: center;
+  padding: clamp(12px, 3vw, 24px);
+  overflow-y: auto;
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.3s ease;
@@ -76,10 +78,13 @@
   background: var(--gr-surface, #FFFFFF);
   border-radius: var(--radius);
   box-shadow: var(--shadow-lg);
-  max-width: 600px;
-  width: 90vw;
-  max-height: 90vh;
+  max-width: 720px;
+  width: min(720px, calc(100vw - 24px));
+  max-height: calc(100vh - 32px);
   padding: 24px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   pointer-events: auto;
   z-index: 51;
 }
@@ -104,7 +109,7 @@
   pointer-events: auto;
 }
 .pair-step { display: none; }
-.pair-step[data-active] { display: block; }
+.pair-step[data-active] { display: block; overflow-y: auto; }
 
 /* GreenReach Central utility classes (Phase 1 inline-style reduction) */
 .gr-u-flex-center-gap-sm {
@@ -1386,6 +1391,41 @@ h3 { font-size: 1.125rem; }
   font-size: 0.7rem;
   font-weight: 600;
   padding: 4px 8px;
+}
+
+.grow-room-card__details {
+  margin: 8px 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--medium, #475569);
+}
+
+.grow-room-card__devices {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.grow-room-card__device-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.grow-room-card__device-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: rgba(13, 125, 125, 0.08);
+  border: 1px solid rgba(13, 125, 125, 0.16);
+  color: var(--gr-primary, #0d7d7d);
+  font-size: 0.75rem;
+  font-weight: 600;
 }
 
 .cards-grid {
@@ -2811,9 +2851,11 @@ input[type="checkbox"] {
 
 .fresh-light-modal__dialog {
   position: relative;
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+  background: linear-gradient(160deg, rgba(15, 23, 42, 0.98) 0%, rgba(30, 41, 59, 0.96) 100%);
+  color: #e2e8f0;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 12px;
+  box-shadow: 0 24px 48px rgba(2, 6, 23, 0.42);
   max-width: 500px;
   width: 90vw;
   max-height: 80vh;
@@ -4292,6 +4334,37 @@ header {
   color: var(--gr-primary, #0d7d7d);
   font-size: 11px;
   font-weight: 700;
+}
+
+.iot-panel-heading {
+  margin: 0 0 10px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-primary, var(--gr-text, #0f172a));
+}
+
+.iot-unknown-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 12px;
+}
+
+.iot-unknown-table th,
+.iot-unknown-table td {
+  padding: 10px 8px;
+  text-align: left;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+.iot-unknown-table th {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.iot-unknown-table input,
+.iot-unknown-table select {
+  width: 100%;
+  min-width: 0;
 }
 
 .iot-vendor-card__grid {
@@ -6651,11 +6724,12 @@ header {
   display: flex;
   justify-content: space-between;
   gap: 16px;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  background: #ffffff;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 12px;
+  background: linear-gradient(160deg, rgba(15, 23, 42, 0.92) 0%, rgba(30, 41, 59, 0.9) 100%);
   padding: 12px;
   flex-wrap: wrap;
+  box-shadow: 0 14px 28px rgba(2, 6, 23, 0.22);
 }
 .switchbot-device-item__main {
   flex: 1 1 60%;
@@ -6666,7 +6740,7 @@ header {
 .switchbot-device-item__title {
   font-weight: 600;
   font-size: 14px;
-  color: #0f172a;
+  color: #f8fafc;
 }
 .switchbot-device-item__meta,
 .switchbot-device-item__location {

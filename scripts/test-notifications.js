@@ -116,10 +116,21 @@ async function testPush() {
   console.log('');
   console.log('Test 3: Push Notification');
   console.log('─────────────────────────────────────────────────────────────');
-  
-  if (!process.env.FIREBASE_SERVICE_ACCOUNT_PATH) {
-    console.log('⚠️  Skipped: Firebase not configured');
-    console.log('   Run: npm run setup:notifications');
+
+  const firebaseEnabled = String(process.env.FIREBASE_ENABLED || 'true').toLowerCase() !== 'false';
+  const hasServiceAccountPath = Boolean(process.env.FIREBASE_SERVICE_ACCOUNT_PATH);
+  const hasServiceAccountJson = Boolean(process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
+  const hasAdcHint = Boolean(process.env.GOOGLE_APPLICATION_CREDENTIALS || process.env.K_SERVICE);
+
+  if (!firebaseEnabled) {
+    console.log('⚠️  Skipped: Firebase explicitly disabled (FIREBASE_ENABLED=false)');
+    return null;
+  }
+
+  if (!hasServiceAccountPath && !hasServiceAccountJson && !hasAdcHint) {
+    console.log('⚠️  Skipped: Firebase credentials not explicitly configured');
+    console.log('   Cloud Run can use ADC automatically via service account IAM');
+    console.log('   For local testing, set GOOGLE_APPLICATION_CREDENTIALS or FIREBASE_SERVICE_ACCOUNT_PATH');
     return null;
   }
   

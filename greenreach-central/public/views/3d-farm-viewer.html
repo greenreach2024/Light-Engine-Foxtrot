@@ -777,6 +777,7 @@
       isRestoringUndo: false,
       hasUnsavedChanges: false,
       lastFullRefresh: 0,
+      lastLocalStructureChangeAt: 0,
       lastStructureSignature: '',
       undoStack: [],
       displayFilters: { groups: true, sensors: true, equipment: true, lights: true, zones: true },
@@ -855,6 +856,7 @@
     const DEFAULT_DISPLAY_FILTERS = { groups: true, sensors: true, equipment: true, lights: true, zones: true };
     const VIEWER_PREFS_KEY = 'farm3d_viewer_prefs';
     const STRUCTURE_REFRESH_INTERVAL_MS = 180000;
+    const STRUCTURE_REFRESH_GRACE_MS = 10 * 60 * 1000;
     const MAX_UNDO_STEPS = 25;
 
     function toStableNumber(value) {
@@ -1350,9 +1352,74 @@
       return group?.id || group?.group_id || group?.name || null;
     }
 
+    function getPositiveDimension(value) {
+      const num = Number(value);
+      return Number.isFinite(num) && num > 0 ? num : null;
+    }
+
+    function normalizeDimensionObject(value) {
+      const source = value && typeof value === 'object' ? value : {};
+      return {
+        length: getPositiveDimension(source.length),
+        width: getPositiveDimension(source.width),
+        height: getPositiveDimension(source.height)
+      };
+    }
+
+    function normalizeResizeAxes(value) {
+      if (!Array.isArray(value)) return [];
+      return value
+        .map(function(axis) { return String(axis || '').trim().toLowerCase(); })
+        .map(function(axis) {
+          if (axis === 'x') return 'length';
+          if (axis === 'y') return 'width';
+          if (axis === 'z') return 'height';
+          return axis;
+        })
+        .filter(function(axis, index, all) {
+          return ['length', 'width', 'height'].includes(axis) && all.indexOf(axis) === index;
+        });
+    }
+
+    function getGroupDimensionPolicy(group) {
+      const mode = String(group?.dimensionPolicy || 'resizable').toLowerCase() === 'fixed' ? 'fixed' : 'resizable';
+      const resizeAxes = mode === 'fixed'
+        ? []
+        : normalizeResizeAxes(group?.resizeAxes || group?.dimensionConstraints?.resizeAxes || ['length', 'width', 'height']);
+      const defaultDimensions = normalizeDimensionObject(group?.defaultDimensions || {
+        length: group?.length,
+        width: group?.width,
+        height: group?.height
+      });
+      return {
+        mode: mode,
+        resizeAxes: resizeAxes,
+        defaultDimensions: defaultDimensions,
+        minDimensions: normalizeDimensionObject(group?.minDimensions || group?.dimensionConstraints?.min),
+        maxDimensions: normalizeDimensionObject(group?.maxDimensions || group?.dimensionConstraints?.max),
+        canResize: function(axis) {
+          return mode !== 'fixed' && resizeAxes.includes(axis);
+        }
+      };
+    }
+
+    function clampGroupDimensionValue(axis, value, policy) {
+      const defaultValue = getPositiveDimension(policy.defaultDimensions[axis]);
+      if (policy.mode === 'fixed' || !policy.canResize(axis)) {
+        return defaultValue || getPositiveDimension(value) || null;
+      }
+      let nextValue = getPositiveDimension(value) || defaultValue || getPositiveDimension(policy.minDimensions[axis]) || getPositiveDimension(policy.maxDimensions[axis]) || null;
+      const min = getPositiveDimension(policy.minDimensions[axis]);
+      const max = getPositiveDimension(policy.maxDimensions[axis]);
+      if (min != null && nextValue != null && nextValue < min) nextValue = min;
+      if (max != null && nextValue != null && nextValue > max) nextValue = max;
+      return nextValue;
+    }
+
     function getSavedGroupDimensions(group) {
       const gKey = getGroupKey(group);
       const stored = gKey ? (S.groupDimensions[gKey] || {}) : {};
+      const policy = getGroupDimensionPolicy(group);
       const pickNumber = function() {
         for (const value of arguments) {
           const num = Number(value);
@@ -1362,9 +1429,9 @@
       };
       return {
         key: gKey,
-        length: pickNumber(stored.length, group?.length),
-        width: pickNumber(stored.width, group?.width),
-        height: pickNumber(stored.height, group?.height),
+        length: clampGroupDimensionValue('length', pickNumber(stored.length, group?.length, policy.defaultDimensions.length), policy),
+        width: clampGroupDimensionValue('width', pickNumber(stored.width, group?.width, policy.defaultDimensions.width), policy),
+        height: clampGroupDimensionValue('height', pickNumber(stored.height, group?.height, policy.defaultDimensions.height), policy),
         lightOrientation: stored.lightOrientation || group?.lightOrientation || 'out-of-canopy'
       };
     }
@@ -1390,18 +1457,12 @@
       S.groups.forEach(function(g) {
         var gId = getGroupKey(g);
         if (!gId) return;
-        var gd = S.groupDimensions[gId] || {};
-        var localLength = Number(gd.length);
-        var localWidth = Number(gd.width);
-        var localHeight = Number(gd.height);
-        var groupLength = Number(g.length);
-        var groupWidth = Number(g.width);
-        var groupHeight = Number(g.height);
+        var normalized = getSavedGroupDimensions(g);
         S.groupDimensions[gId] = {
-          length: (Number.isFinite(localLength) && localLength > 0) ? localLength : ((Number.isFinite(groupLength) && groupLength > 0) ? groupLength : undefined),
-          width: (Number.isFinite(localWidth) && localWidth > 0) ? localWidth : ((Number.isFinite(groupWidth) && groupWidth > 0) ? groupWidth : undefined),
-          height: (Number.isFinite(localHeight) && localHeight > 0) ? localHeight : ((Number.isFinite(groupHeight) && groupHeight > 0) ? groupHeight : undefined),
-          lightOrientation: gd.lightOrientation || g.lightOrientation
+          length: normalized.length || undefined,
+          width: normalized.width || undefined,
+          height: normalized.height || undefined,
+          lightOrientation: normalized.lightOrientation || g.lightOrientation
         };
       });
     }
@@ -1417,6 +1478,10 @@
       if (timeoutMs) {
         setTimeout(function() { bar.style.color = ''; }, timeoutMs);
       }
+    }
+
+    function markLocalStructureChange() {
+      S.lastLocalStructureChangeAt = Date.now();
     }
 
     function cloneUndoSnapshot() {
@@ -1550,7 +1615,9 @@
 
     async function persistRoomMap(roomId) {
       if (!roomId || !S.roomMaps[roomId]) throw new Error('Missing room map for ' + roomId);
-      return postViewerJson('/data/room-map-' + roomId + '.json', S.roomMaps[roomId]);
+      const result = await postViewerJson('/data/room-map-' + roomId + '.json', S.roomMaps[roomId]);
+      markLocalStructureChange();
+      return result;
     }
 
     async function persistRoomMaps(roomIds) {
@@ -1558,6 +1625,7 @@
         return roomId && S.roomMaps[roomId];
       })));
       await Promise.all(ids.map(function(roomId) { return persistRoomMap(roomId); }));
+      if (ids.length) markLocalStructureChange();
       return true;
     }
 
@@ -1583,9 +1651,11 @@
       const payload = { groups: Array.isArray(groups) ? groups : [] };
       try {
         await postViewerJson('/data/groups.json', payload);
+        markLocalStructureChange();
         return true;
       } catch (err) {
         await postViewerJson('/groups', payload);
+        markLocalStructureChange();
         return true;
       }
     }
@@ -2210,8 +2280,14 @@
       if (!roomId || !S.roomMaps[roomId]) return null;
       var map = S.roomMaps[roomId];
       if (!Array.isArray(map.devices)) map.devices = [];
-      var keys = getViewerDeviceKeys(deviceRef);
-      var persisted = map.devices.find(function(entry) { return deviceMatchesViewerKeys(entry, keys); });
+      var stableKeys = getViewerStableDeviceKeys(deviceRef);
+      var persisted = stableKeys.length
+        ? map.devices.find(function(entry) { return deviceMatchesViewerStableKeys(entry, stableKeys); })
+        : null;
+      if (!persisted) {
+        var keys = getViewerDeviceKeys(deviceRef);
+        persisted = map.devices.find(function(entry) { return deviceMatchesViewerKeys(entry, keys); });
+      }
       if (persisted) return persisted;
 
       persisted = Object.assign({}, deviceRef || {});
@@ -2230,6 +2306,7 @@
     async function persistViewerIotDevices() {
       const payload = Array.isArray(S.iotDevices) ? S.iotDevices : [];
       await postViewerJson('/data/iot-devices.json', payload);
+      markLocalStructureChange();
       return true;
     }
 
@@ -2431,6 +2508,12 @@
 
     async function loadAllData(opts) {
       opts = opts || {};
+      if (opts.reason === 'auto' || opts.reason === 'visible' || opts.reason === 'focus') {
+        const recentLocalChangeAge = Date.now() - (S.lastLocalStructureChangeAt || 0);
+        if (recentLocalChangeAge >= 0 && recentLocalChangeAge < STRUCTURE_REFRESH_GRACE_MS) {
+          return false;
+        }
+      }
       if (hasPendingDetailEdits()) {
         if (opts.reason === 'manual') {
           if (!confirmDiscardDetailEdits('Refresh viewer data and discard unsaved detail panel changes?')) {
@@ -2517,9 +2600,9 @@
             const res = await authFetch('/data/room-map.json?t=' + Date.now());
             if (res.ok) {
               const map = normalizeRoomMapData(await res.json());
-              const rid = data.roomId || 'default-room';
-              S.roomMaps[rid] = data;
-              S.rooms = [{ id: rid, name: data.name || 'Farm', zones: [] }];
+              const rid = map.roomId || 'default-room';
+              S.roomMaps[rid] = map;
+              S.rooms = [{ id: rid, name: map.name || 'Farm', zones: [] }];
             }
           } catch (e) {}
         }
@@ -2785,14 +2868,24 @@
         group?.notes,
         group?.layoutType,
       ].filter(Boolean).join(' ').toLowerCase();
+      if (/ziprack/.test(txt)) return 'ziprack';
+      if (/aero\s*-?\s*tower|aeroponic\s*tower|agrotonomy/.test(txt)) return 'aero-tower';
       if (/zipgrow|vertical|tower/.test(txt)) return 'zipgrow';
+      if (/dwc[\s-]*rack|deep\s*water\s*culture\s*rack/.test(txt)) return 'dwc-rack';
+      if (/nft[\s-]*rack|nft[\s-]*tier/.test(txt)) return 'nft-rack';
+      if (/jv[\s-]*rack|just\s*vertical|grow\s*wall/.test(txt)) return 'jv-rack';
       if (/multi\s*-?\s*level|rack|racking|shelf/.test(txt)) return 'rack';
-      if (/nft|channel|gully|raft/.test(txt)) return 'channel';
+      if (/nft|channel|gully|raft|dwc|deep\s*water/.test(txt)) return 'channel';
       return 'tray';
     }
 
     function formatGroupSystemLabel(type) {
+      if (type === 'ziprack') return 'ZipGrow ZipRack';
+      if (type === 'aero-tower') return 'Aeroponic Tower';
       if (type === 'zipgrow') return 'ZipGrow tower';
+      if (type === 'dwc-rack') return 'DWC Multi-Tier Rack';
+      if (type === 'nft-rack') return 'Vertical NFT Rack';
+      if (type === 'jv-rack') return 'Just Vertical Grow Rack';
       if (type === 'rack') return 'Multi-level rack';
       if (type === 'channel') return 'Channel/NFT line';
       return 'Tray bench';
@@ -2807,7 +2900,12 @@
     }
 
     function getGroupAirflowNote(type, rackLevels) {
+      if (type === 'ziprack') return 'Double-sided vertical draft across 3 tower sections';
+      if (type === 'aero-tower') return 'Radial aeroponic mist with vertical convection';
       if (type === 'zipgrow') return 'Vertical draft with side lane circulation';
+      if (type === 'dwc-rack') return 'Lateral cross-flow across ' + Math.max(2, Number(rackLevels) || 2) + ' DWC tiers';
+      if (type === 'nft-rack') return 'Inline channel flow across ' + Math.max(2, Number(rackLevels) || 3) + ' NFT tiers';
+      if (type === 'jv-rack') return 'Dual-face vertical draft across ' + Math.max(2, Number(rackLevels) || 4) + ' grow levels';
       if (type === 'rack') return 'Cross-flow through ' + Math.max(2, Number(rackLevels) || 2) + ' canopy levels';
       if (type === 'channel') return 'Inline channel flow with edge circulation';
       return 'Open canopy mixing around bench perimeter';
@@ -3159,6 +3257,242 @@
             const sideRailB = sideRailA.clone();
             sideRailB.position.z = gz + sideOffset;
             addDetailMesh(sideRailB);
+          } else if (systemType === 'ziprack') {
+            // ZipRack: Double-sided vertical tower rack with sectioned layout
+            const towerH = Math.max(0.6, gHeight * 0.92);
+            const sectionCount = Number(group?.stockDefaults?.sections) || Math.max(1, Math.min(5, Math.round(Math.max(2, trayCount) / 10)));
+            const sectionSpan = gLength / sectionCount;
+            const totalTowers = Math.max(2, trayCount);
+            const towersPerSection = Math.ceil(totalTowers / sectionCount);
+            const towersPerSide = Math.ceil(towersPerSection / 2);
+            const frontZ = gz - gWidth * 0.25;
+            const backZ = gz + gWidth * 0.25;
+
+            // Section boundary X positions
+            const boundaries = [];
+            for (var bi = 0; bi <= sectionCount; bi++) {
+              boundaries.push(gx - gLength / 2 + bi * sectionSpan);
+            }
+
+            // Frame posts at each section boundary
+            boundaries.forEach(function(bx) {
+              var post = new THREE.Mesh(new THREE.BoxGeometry(0.05, towerH + 0.1, 0.05), frameMat);
+              post.position.set(bx, 0.12 + (towerH + 0.1) / 2, gz);
+              addDetailMesh(post);
+            });
+
+            // Top beam spanning full length
+            var topBeam = new THREE.Mesh(new THREE.BoxGeometry(gLength * 0.96, 0.05, gWidth * 0.5), frameMat);
+            topBeam.position.set(gx, 0.12 + towerH + 0.05, gz);
+            addDetailMesh(topBeam);
+
+            // Base rail spanning full length
+            var baseRailZR = new THREE.Mesh(new THREE.BoxGeometry(gLength * 0.96, 0.04, gWidth * 0.5), detailMat);
+            baseRailZR.position.set(gx, 0.14, gz);
+            addDetailMesh(baseRailZR);
+
+            // Section divider cross-braces at internal boundaries
+            for (var sb = 1; sb < sectionCount; sb++) {
+              var braceX = boundaries[sb];
+              var brace = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.03, gWidth * 0.46), frameMat);
+              brace.position.set(braceX, 0.12 + towerH * 0.5, gz);
+              addDetailMesh(brace);
+            }
+
+            // Towers: double-sided, evenly spaced within each section
+            for (var si = 0; si < sectionCount; si++) {
+              var sectionStart = boundaries[si];
+              var sSpan = sectionSpan * 0.84;
+              var sInset = sectionStart + sectionSpan * 0.08;
+              for (var ti = 0; ti < towersPerSide; ti++) {
+                var tx = towersPerSide > 1
+                  ? sInset + ti * (sSpan / Math.max(1, towersPerSide - 1))
+                  : sInset + sSpan / 2;
+                var towerF = new THREE.Mesh(new THREE.BoxGeometry(0.07, towerH, 0.12), growMat);
+                towerF.position.set(tx, 0.12 + towerH / 2, frontZ);
+                addDetailMesh(towerF);
+                var towerB = new THREE.Mesh(new THREE.BoxGeometry(0.07, towerH, 0.12), growMat);
+                towerB.position.set(tx, 0.12 + towerH / 2, backZ);
+                addDetailMesh(towerB);
+              }
+            }
+
+            // 8 vertical light bars at section boundaries (front + back at each boundary)
+            var lbColor = lightOri === 'intercanopy' ? 0xfbbf24 : 0xa78bfa;
+            var lbMat = new THREE.MeshStandardMaterial({
+              color: lbColor, emissive: lbColor, emissiveIntensity: 0.5,
+              transparent: true, opacity: 0.8
+            });
+            boundaries.forEach(function(bx) {
+              var lbF = new THREE.Mesh(new THREE.BoxGeometry(0.04, towerH * 0.88, 0.06), lbMat);
+              lbF.position.set(bx, 0.12 + towerH * 0.45, frontZ + gWidth * 0.06);
+              lbF.userData = { type: 'light', group: group, orientation: lightOri };
+              S.scene.add(lbF);
+              S.meshes.equipment.push(lbF);
+              var lbB = new THREE.Mesh(new THREE.BoxGeometry(0.04, towerH * 0.88, 0.06), lbMat);
+              lbB.position.set(bx, 0.12 + towerH * 0.45, backZ - gWidth * 0.06);
+              lbB.userData = { type: 'light', group: group, orientation: lightOri };
+              S.scene.add(lbB);
+              S.meshes.equipment.push(lbB);
+            });
+          } else if (systemType === 'dwc-rack') {
+            // DWC Multi-Tier Rack: corner posts, thick DWC tray basins per tier, water line indicators
+            var dwcPostW = 0.07;
+            var dwcHalfL = gLength * 0.46;
+            var dwcHalfW = gWidth * 0.46;
+            var dwcPostH = Math.max(0.8, gHeight);
+            var dwcLevels = Number(group?.stockDefaults?.levels ?? group?.levels ?? group?.tiers) || rackLevels;
+            dwcLevels = Math.max(2, Math.min(3, dwcLevels));
+            var bottomClearance = 0.30; // 12in
+            var tierSpacing = (dwcPostH - bottomClearance - 0.10) / dwcLevels;
+
+            // Corner posts
+            [[-dwcHalfL, -dwcHalfW], [dwcHalfL, -dwcHalfW], [-dwcHalfL, dwcHalfW], [dwcHalfL, dwcHalfW]].forEach(function(p) {
+              var post = new THREE.Mesh(new THREE.BoxGeometry(dwcPostW, dwcPostH, dwcPostW), frameMat);
+              post.position.set(gx + p[0], 0.12 + dwcPostH / 2, gz + p[1]);
+              addDetailMesh(post);
+            });
+
+            // Bottom cross-braces for caster clearance
+            var castersY = 0.12 + 0.06;
+            var casterBraceF = new THREE.Mesh(new THREE.BoxGeometry(gLength * 0.92, 0.04, 0.04), detailMat);
+            casterBraceF.position.set(gx, castersY, gz - dwcHalfW);
+            addDetailMesh(casterBraceF);
+            var casterBraceB = casterBraceF.clone();
+            casterBraceB.position.z = gz + dwcHalfW;
+            addDetailMesh(casterBraceB);
+
+            // Tray basins per tier -- thicker than standard rack shelves to show DWC depth
+            var waterMat = new THREE.MeshStandardMaterial({
+              color: 0x0ea5e9, emissive: 0x0284c7, emissiveIntensity: 0.2,
+              transparent: true, opacity: 0.35, roughness: 0.15, metalness: 0.1
+            });
+            for (var dli = 0; dli < dwcLevels; dli++) {
+              var tierY = 0.12 + bottomClearance + dli * tierSpacing;
+              // Tray basin (thick)
+              var basin = new THREE.Mesh(new THREE.BoxGeometry(gLength * 0.90, 0.10, gWidth * 0.90), growMat);
+              basin.position.set(gx, tierY + 0.05, gz);
+              addDetailMesh(basin);
+              // Basin rim
+              var rimF = new THREE.Mesh(new THREE.BoxGeometry(gLength * 0.92, 0.03, 0.03), frameMat);
+              rimF.position.set(gx, tierY + 0.10, gz - gWidth * 0.44);
+              addDetailMesh(rimF);
+              var rimB = rimF.clone();
+              rimB.position.z = gz + gWidth * 0.44;
+              addDetailMesh(rimB);
+              var rimL = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.03, gWidth * 0.88), frameMat);
+              rimL.position.set(gx - gLength * 0.45, tierY + 0.10, gz);
+              addDetailMesh(rimL);
+              var rimR = rimL.clone();
+              rimR.position.x = gx + gLength * 0.45;
+              addDetailMesh(rimR);
+              // Water surface inside basin
+              var water = new THREE.Mesh(new THREE.BoxGeometry(gLength * 0.88, 0.015, gWidth * 0.88), waterMat);
+              water.position.set(gx, tierY + 0.07, gz);
+              addDetailMesh(water);
+            }
+
+            // Per-tier overhead light fixtures
+            var dwcLightColor = lightOri === 'intercanopy' ? 0xfbbf24 : 0xa78bfa;
+            var dwcLightMat = new THREE.MeshStandardMaterial({
+              color: dwcLightColor, emissive: dwcLightColor, emissiveIntensity: 0.5,
+              transparent: true, opacity: 0.8
+            });
+            for (var dfi = 0; dfi < dwcLevels; dfi++) {
+              var fixtureY = 0.12 + bottomClearance + (dfi + 1) * tierSpacing - 0.06;
+              if (dfi === dwcLevels - 1) fixtureY = 0.12 + dwcPostH - 0.08;
+              // Two fixtures per tier, offset along length
+              var fix1 = new THREE.Mesh(new THREE.BoxGeometry(gLength * 0.38, 0.03, 0.10), dwcLightMat);
+              fix1.position.set(gx - gLength * 0.22, fixtureY, gz);
+              fix1.userData = { type: 'light', group: group, orientation: lightOri };
+              S.scene.add(fix1);
+              S.meshes.equipment.push(fix1);
+              var fix2 = new THREE.Mesh(new THREE.BoxGeometry(gLength * 0.38, 0.03, 0.10), dwcLightMat);
+              fix2.position.set(gx + gLength * 0.22, fixtureY, gz);
+              fix2.userData = { type: 'light', group: group, orientation: lightOri };
+              S.scene.add(fix2);
+              S.meshes.equipment.push(fix2);
+            }
+          } else if (systemType === 'jv-rack') {
+            // Just Vertical Grow Rack: narrow double-sided grow wall with plant port rows on both faces
+            var jvPostW = 0.05;
+            var jvHalfL = gLength * 0.47;
+            var jvHalfW = gWidth * 0.47;
+            var jvPostH = Math.max(0.8, gHeight);
+            var jvLevels = Number(group?.stockDefaults?.levels ?? group?.levels ?? group?.tiers) || 4;
+            jvLevels = Math.max(2, Math.min(6, jvLevels));
+            var jvBottomClearance = 0.25;
+            var jvUsableH = jvPostH - jvBottomClearance - 0.10;
+            var jvTierSpacing = jvUsableH / jvLevels;
+
+            // 4 corner posts
+            [[-jvHalfL, -jvHalfW], [jvHalfL, -jvHalfW], [-jvHalfL, jvHalfW], [jvHalfL, jvHalfW]].forEach(function(p) {
+              var post = new THREE.Mesh(new THREE.BoxGeometry(jvPostW, jvPostH, jvPostW), frameMat);
+              post.position.set(gx + p[0], 0.12 + jvPostH / 2, gz + p[1]);
+              addDetailMesh(post);
+            });
+
+            // Central spine wall (the grow medium panel)
+            var spineMat = new THREE.MeshStandardMaterial({
+              color: 0x334155, roughness: 0.5, metalness: 0.1,
+              transparent: true, opacity: 0.6
+            });
+            var spine = new THREE.Mesh(new THREE.BoxGeometry(gLength * 0.92, jvUsableH, gWidth * 0.18), spineMat);
+            spine.position.set(gx, 0.12 + jvBottomClearance + jvUsableH / 2, gz);
+            addDetailMesh(spine);
+
+            // Plant port rows on both faces (front and back)
+            var portMat = new THREE.MeshStandardMaterial({
+              color: visualState.surfaceColor, roughness: 0.4, metalness: 0.15,
+              transparent: true, opacity: 0.75
+            });
+            var frontFaceZ = gz - gWidth * 0.28;
+            var backFaceZ = gz + gWidth * 0.28;
+            var portsPerRow = Math.max(3, Math.min(8, Math.round(gLength / 0.24)));
+            for (var jli = 0; jli < jvLevels; jli++) {
+              var rowY = 0.12 + jvBottomClearance + (jli + 0.5) * jvTierSpacing;
+
+              // Horizontal rail per level on each face
+              var railF = new THREE.Mesh(new THREE.BoxGeometry(gLength * 0.90, 0.025, 0.03), frameMat);
+              railF.position.set(gx, rowY, frontFaceZ);
+              addDetailMesh(railF);
+              var railB = railF.clone();
+              railB.position.z = backFaceZ;
+              addDetailMesh(railB);
+
+              // Plant port dots on front and back
+              for (var pi = 0; pi < portsPerRow; pi++) {
+                var px = gx - gLength * 0.42 + (pi + 0.5) * (gLength * 0.84 / portsPerRow);
+                var portF = new THREE.Mesh(new THREE.SphereGeometry(0.03, 6, 6), portMat);
+                portF.position.set(px, rowY, frontFaceZ - 0.02);
+                addDetailMesh(portF);
+                var portB = new THREE.Mesh(new THREE.SphereGeometry(0.03, 6, 6), portMat);
+                portB.position.set(px, rowY, backFaceZ + 0.02);
+                addDetailMesh(portB);
+              }
+            }
+
+            // Base tray / drip collection
+            var baseTray = new THREE.Mesh(new THREE.BoxGeometry(gLength * 0.94, 0.04, gWidth * 0.90), detailMat);
+            baseTray.position.set(gx, 0.12 + jvBottomClearance * 0.5, gz);
+            addDetailMesh(baseTray);
+
+            // 5 overhead LED fixtures spaced along the length
+            var jvLightColor = lightOri === 'intercanopy' ? 0xfbbf24 : 0xa78bfa;
+            var jvLightMat = new THREE.MeshStandardMaterial({
+              color: jvLightColor, emissive: jvLightColor, emissiveIntensity: 0.5,
+              transparent: true, opacity: 0.8
+            });
+            var jvLightCount = Number(group?.stockDefaults?.lightsPerRack) || 5;
+            var jvLightY = 0.12 + jvPostH + 0.08;
+            for (var jfi = 0; jfi < jvLightCount; jfi++) {
+              var lfx = gx - gLength * 0.42 + (jfi + 0.5) * (gLength * 0.84 / jvLightCount);
+              var lf = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.03, gWidth * 0.6), jvLightMat);
+              lf.position.set(lfx, jvLightY, gz);
+              lf.userData = { type: 'light', group: group, orientation: lightOri };
+              S.scene.add(lf);
+              S.meshes.equipment.push(lf);
+            }
           } else if (systemType === 'rack') {
             const postW = 0.06;
             const halfL = gLength * 0.46;
@@ -3180,6 +3514,66 @@
                 addDetailMesh(airflowGap);
               }
             }
+          } else if (systemType === 'nft-rack') {
+            // Vertical NFT Rack: corner posts, shallow channel trays per tier, drain manifold, per-tier LED fixtures
+            var nftPostW = 0.06;
+            var nftHalfL = gLength * 0.46;
+            var nftHalfW = gWidth * 0.46;
+            var nftPostH = Math.max(0.8, gHeight);
+            var nftLevels = Number(group?.stockDefaults?.levels ?? group?.levels ?? group?.tiers) || rackLevels;
+            nftLevels = Math.max(2, Math.min(4, nftLevels));
+            var nftBottomClearance = 0.30;
+            var nftTierSpacing = (nftPostH - nftBottomClearance - 0.08) / nftLevels;
+
+            // Corner posts
+            [[-nftHalfL, -nftHalfW], [nftHalfL, -nftHalfW], [-nftHalfL, nftHalfW], [nftHalfL, nftHalfW]].forEach(function(p) {
+              var post = new THREE.Mesh(new THREE.BoxGeometry(nftPostW, nftPostH, nftPostW), frameMat);
+              post.position.set(gx + p[0], 0.12 + nftPostH / 2, gz + p[1]);
+              addDetailMesh(post);
+            });
+
+            // Per-tier: shallow channel tray + individual channels + drain end-cap
+            var channelMat = new THREE.MeshStandardMaterial({
+              color: 0xf1f5f9, roughness: 0.3, metalness: 0.15,
+              transparent: true, opacity: 0.7
+            });
+            for (var nli = 0; nli < nftLevels; nli++) {
+              var tierY = 0.12 + nftBottomClearance + nli * nftTierSpacing;
+
+              // Shelf platform
+              var shelf = new THREE.Mesh(new THREE.BoxGeometry(gLength * 0.92, 0.025, gWidth * 0.92), growMat);
+              shelf.position.set(gx, tierY, gz);
+              addDetailMesh(shelf);
+
+              // Channels on the shelf (4 per tier, running along length)
+              var nftChCount = 4;
+              var chSpacing = gWidth * 0.84 / nftChCount;
+              for (var nci = 0; nci < nftChCount; nci++) {
+                var chZ = gz - gWidth * 0.42 + (nci + 0.5) * chSpacing;
+                var channel = new THREE.Mesh(new THREE.BoxGeometry(gLength * 0.88, 0.04, chSpacing * 0.7), channelMat);
+                channel.position.set(gx, tierY + 0.03, chZ);
+                addDetailMesh(channel);
+              }
+
+              // Drain manifold at one end
+              var drain = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.08, gWidth * 0.86), detailMat);
+              drain.position.set(gx + gLength * 0.44, tierY + 0.02, gz);
+              addDetailMesh(drain);
+
+              // Per-tier LED fixture
+              var nftLightY = tierY + nftTierSpacing - 0.06;
+              if (nli === nftLevels - 1) nftLightY = 0.12 + nftPostH - 0.06;
+              var nftLightColor = lightOri === 'intercanopy' ? 0xfbbf24 : 0xa78bfa;
+              var nftLightMat = new THREE.MeshStandardMaterial({
+                color: nftLightColor, emissive: nftLightColor, emissiveIntensity: 0.5,
+                transparent: true, opacity: 0.8
+              });
+              var fixture = new THREE.Mesh(new THREE.BoxGeometry(gLength * 0.7, 0.03, 0.10), nftLightMat);
+              fixture.position.set(gx, nftLightY, gz);
+              fixture.userData = { type: 'light', group: group, orientation: lightOri };
+              S.scene.add(fixture);
+              S.meshes.equipment.push(fixture);
+            }
           } else if (systemType === 'channel') {
             const channelCount = Math.max(2, Math.min(8, Math.round(gWidth / 0.16)));
             for (let ci = 0; ci < channelCount; ci++) {
@@ -3191,6 +3585,68 @@
             const manifold = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.22, gWidth * 0.94), detailMat);
             manifold.position.set(gx - gLength * 0.44, 0.2, gz);
             addDetailMesh(manifold);
+          } else if (systemType === 'aero-tower') {
+            // Aeroponic Tower: cylindrical reservoir base + central column + radial section rings + 4 vertical light bars
+            var reservoirR = Math.min(gLength, gWidth) * 0.38;
+            var reservoirH = 0.36;
+            var columnR = 0.06;
+            var towerH = Math.max(1.2, gHeight - reservoirH);
+            var sectionCount = Number(group?.stockDefaults?.sectionCount) || Math.max(3, Math.min(13, trayCount));
+
+            // Base reservoir (cylinder)
+            var resMat = new THREE.MeshStandardMaterial({
+              color: 0x475569, roughness: 0.4, metalness: 0.3, transparent: true, opacity: 0.85
+            });
+            var reservoir = new THREE.Mesh(new THREE.CylinderGeometry(reservoirR, reservoirR * 1.05, reservoirH, 20), resMat);
+            reservoir.position.set(gx, 0.12 + reservoirH / 2, gz);
+            addDetailMesh(reservoir);
+
+            // Water level indicator inside reservoir
+            var waterMat = new THREE.MeshStandardMaterial({
+              color: 0x0ea5e9, emissive: 0x0284c7, emissiveIntensity: 0.2,
+              transparent: true, opacity: 0.3, roughness: 0.1
+            });
+            var waterDisc = new THREE.Mesh(new THREE.CylinderGeometry(reservoirR * 0.92, reservoirR * 0.92, 0.02, 18), waterMat);
+            waterDisc.position.set(gx, 0.12 + reservoirH * 0.65, gz);
+            addDetailMesh(waterDisc);
+
+            // Central column
+            var columnBase = 0.12 + reservoirH;
+            var column = new THREE.Mesh(new THREE.CylinderGeometry(columnR, columnR, towerH, 10), frameMat);
+            column.position.set(gx, columnBase + towerH / 2, gz);
+            addDetailMesh(column);
+
+            // Section rings -- radial planting pockets
+            var sectionH = towerH / sectionCount;
+            var ringR = reservoirR * 0.72;
+            for (var si = 0; si < sectionCount; si++) {
+              var ringY = columnBase + (si + 0.5) * sectionH;
+              var ring = new THREE.Mesh(new THREE.TorusGeometry(ringR, 0.035, 6, 16), growMat);
+              ring.position.set(gx, ringY, gz);
+              ring.rotation.x = Math.PI / 2;
+              addDetailMesh(ring);
+            }
+
+            // Top cap
+            var topCap = new THREE.Mesh(new THREE.CylinderGeometry(columnR * 1.8, columnR * 1.8, 0.04, 10), detailMat);
+            topCap.position.set(gx, columnBase + towerH + 0.02, gz);
+            addDetailMesh(topCap);
+
+            // 4 vertical light bars around tower at 90-degree intervals
+            var atLightColor = lightOri === 'intercanopy' ? 0xfbbf24 : 0xa78bfa;
+            var atLightMat = new THREE.MeshStandardMaterial({
+              color: atLightColor, emissive: atLightColor, emissiveIntensity: 0.5,
+              transparent: true, opacity: 0.8
+            });
+            var lightOffset = reservoirR + 0.10;
+            var lightBarH = towerH * 0.85;
+            [[lightOffset, 0], [-lightOffset, 0], [0, lightOffset], [0, -lightOffset]].forEach(function(p) {
+              var lb = new THREE.Mesh(new THREE.BoxGeometry(0.04, lightBarH, 0.04), atLightMat);
+              lb.position.set(gx + p[0], columnBase + lightBarH / 2 + 0.05, gz + p[1]);
+              lb.userData = { type: 'light', group: group, orientation: lightOri };
+              S.scene.add(lb);
+              S.meshes.equipment.push(lb);
+            });
           } else {
             const benchTop = new THREE.Mesh(new THREE.BoxGeometry(gLength * 0.94, 0.06, gWidth * 0.94), growMat);
             benchTop.position.set(gx, 0.22, gz);
@@ -3228,8 +3684,8 @@
           airflowHead.position.set(gx, 0.12 + Math.max(0.3, gHeight * 0.52), gz + airflowLen * 0.5 + 0.06);
           addDetailMesh(airflowHead);
 
-          // Light bar representation
-          if (group.lights?.length) {
+          // Light bar representation (skip for ziprack, dwc-rack, aero-tower, nft-rack, and jv-rack which render their own fixtures)
+          if (group.lights?.length && systemType !== 'ziprack' && systemType !== 'dwc-rack' && systemType !== 'aero-tower' && systemType !== 'nft-rack' && systemType !== 'jv-rack') {
             const lightY = lightOri === 'intercanopy'
               ? gHeight / 2 + 0.12   // at canopy level
               : gHeight + 0.35;       // above canopy
@@ -4841,6 +5297,13 @@
         const d = ud.dims;
         const gId = g.id;
         const gName = g.name || g.id;
+        const dimensionPolicy = getGroupDimensionPolicy(g);
+        const lengthLocked = !dimensionPolicy.canResize('length');
+        const widthLocked = !dimensionPolicy.canResize('width');
+        const heightLocked = !dimensionPolicy.canResize('height');
+        const dimensionPolicyLabel = dimensionPolicy.mode === 'fixed'
+          ? 'Fixed template dimensions'
+          : 'Resizable axes: ' + (dimensionPolicy.resizeAxes.length ? dimensionPolicy.resizeAxes.join(', ') : 'none');
 
         // Find similar groups by stripping trailing number from name (e.g. "ZipGrow Standard 30" -> "ZipGrow Standard")
         const nameBase = gName.replace(/\s*\d+\s*$/, '').trim();
@@ -4903,9 +5366,10 @@
 
         // Editable dimensions
         html += '<div class="dp-section"><div class="dp-label">Equipment Dimensions</div>';
-        html += '<div class="dp-input-row"><label>L</label><input type="number" step="0.1" min="0.1" id="dimL" value="' + d.length.toFixed(1) + '"><span class="unit">m</span>';
-        html += '<label>W</label><input type="number" step="0.1" min="0.1" id="dimW" value="' + d.width.toFixed(1) + '"><span class="unit">m</span>';
-        html += '<label>H</label><input type="number" step="0.1" min="0.1" id="dimH" value="' + d.height.toFixed(1) + '"><span class="unit">m</span></div>';
+        html += '<div class="dp-input-row"><label>L</label><input type="number" step="0.1" min="0.1" id="dimL" value="' + d.length.toFixed(1) + '"' + (lengthLocked ? ' disabled' : '') + '><span class="unit">m</span>';
+        html += '<label>W</label><input type="number" step="0.1" min="0.1" id="dimW" value="' + d.width.toFixed(1) + '"' + (widthLocked ? ' disabled' : '') + '><span class="unit">m</span>';
+        html += '<label>H</label><input type="number" step="0.1" min="0.1" id="dimH" value="' + d.height.toFixed(1) + '"' + (heightLocked ? ' disabled' : '') + '><span class="unit">m</span></div>';
+        html += '<div class="dp-value" style="margin-top:0.45rem">' + dimensionPolicyLabel + '</div>';
         html += '</div>';
 
         // Light orientation
@@ -4959,17 +5423,23 @@
           target.lastModified = new Date().toISOString();
         }
 
+        function getEditedGroupDimensions() {
+          return {
+            length: clampGroupDimensionValue('length', parseFloat(document.getElementById('dimL').value) || d.length, dimensionPolicy),
+            width: clampGroupDimensionValue('width', parseFloat(document.getElementById('dimW').value) || d.width, dimensionPolicy),
+            height: clampGroupDimensionValue('height', parseFloat(document.getElementById('dimH').value) || d.height, dimensionPolicy)
+          };
+        }
+
         document.getElementById('saveGrpOne').addEventListener('click', async () => {
           const btn = document.getElementById('saveGrpOne');
           pushUndoSnapshot('update group ' + (g.name || nameBase || 'group'));
           applyGroupEdits(g);
           // Also save dimensions
-          const l = parseFloat(document.getElementById('dimL').value) || d.length;
-          const w = parseFloat(document.getElementById('dimW').value) || d.width;
-          const h = parseFloat(document.getElementById('dimH').value) || d.height;
+          const nextDims = getEditedGroupDimensions();
           const ori = document.getElementById('lightOri').value;
-          S.groupDimensions[gId] = { length: l, width: w, height: h, lightOrientation: ori };
-          g.length = l; g.width = w; g.height = h; g.lightOrientation = ori;
+          S.groupDimensions[gId] = { length: nextDims.length, width: nextDims.width, height: nextDims.height, lightOrientation: ori };
+          g.length = nextDims.length; g.width = nextDims.width; g.height = nextDims.height; g.lightOrientation = ori;
           saveGroupDimensions();
           try {
             await persistGroupsData(S.groups);
@@ -4991,16 +5461,14 @@
             pushUndoSnapshot('bulk update ' + similarCount + ' groups');
             const newCrop = document.getElementById('grpCrop').value;
             const newStatus = document.getElementById('grpStatus').value;
-            const l = parseFloat(document.getElementById('dimL').value) || d.length;
-            const w = parseFloat(document.getElementById('dimW').value) || d.width;
-            const h = parseFloat(document.getElementById('dimH').value) || d.height;
+            const nextDims = getEditedGroupDimensions();
             const ori = document.getElementById('lightOri').value;
             let updated = 0;
             for (const sg of similarGroups) {
               applyGroupEdits(sg);
               const sgId = getGroupKey(sg);
-              if (sgId) S.groupDimensions[sgId] = { length: l, width: w, height: h, lightOrientation: ori };
-              sg.length = l; sg.width = w; sg.height = h; sg.lightOrientation = ori;
+              if (sgId) S.groupDimensions[sgId] = { length: nextDims.length, width: nextDims.width, height: nextDims.height, lightOrientation: ori };
+              sg.length = nextDims.length; sg.width = nextDims.width; sg.height = nextDims.height; sg.lightOrientation = ori;
               updated++;
             }
             saveGroupDimensions();

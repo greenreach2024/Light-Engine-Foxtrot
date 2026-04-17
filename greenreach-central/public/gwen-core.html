@@ -355,7 +355,7 @@
           dot.className = 'gwen-status-dot gwen-status-degraded';
           label.textContent = 'Degraded';
         }
-        document.getElementById('statModel').textContent = data.primary_llm ? data.primary_llm.split('-').slice(0, 2).join(' ') : 'Fallback';
+        document.getElementById('statModel').textContent = data.llm?.model ? data.llm.model.split('-').slice(0, 2).join(' ') : 'Fallback';
         document.getElementById('statTools').textContent = data.tool_count || '--';
         document.getElementById('statDatabase').textContent = data.database ? 'Connected' : 'Offline';
       } catch (err) {

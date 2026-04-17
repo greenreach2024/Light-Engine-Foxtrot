@@ -177,7 +177,7 @@ function initLogin() {
     if (window.location.search.includes('demo=true') || window.location.search.includes('test=true')) {
         document.getElementById('farmId').value = 'FARM-TEST-WIZARD-001';
         if (document.getElementById('email')) {
-            document.getElementById('email').value = 'admin@greenreachgreens.com';
+            document.getElementById('email').value = 'info@greenreachgreens.com';
         }
         // Test credential auto-fill removed for security
     }
@@ -208,7 +208,7 @@ async function initDashboard() {
                     farmId: payload.farm_id || payload.farmId || existingFarmId,
                     userId: payload.user_id || payload.userId,
                     farmName: localStorage.getItem('farm_name') || payload.name || payload.farmName || 'Light Engine Farm',
-                    email: payload.email || existingEmail || 'admin@greenreachgreens.com',
+                    email: payload.email || existingEmail || 'info@greenreachgreens.com',
                     role: payload.role || 'admin'
                 };
                 grLog(' Using existing session:', currentSession.farmId, currentSession.email);
@@ -220,7 +220,7 @@ async function initDashboard() {
                 token: existingToken,
                 farmId: existingFarmId,
                 farmName: sessionStorage.getItem('farm_name') || localStorage.getItem('farm_name') || 'Light Engine Farm',
-                email: existingEmail || 'admin@greenreachgreens.com',
+                email: existingEmail || 'info@greenreachgreens.com',
                 role: 'admin'
             };
             grLog(' Using existing session (non-JWT):', currentSession.farmId, currentSession.email);
@@ -247,7 +247,7 @@ async function initDashboard() {
             token: 'local-access',
             farmId: 'LOCAL-FARM',
             farmName: currentSession?.farmName || localStorage.getItem('farm_name') || 'My Farm',
-            email: 'admin@greenreachgreens.com',
+            email: 'info@greenreachgreens.com',
             role: 'admin'
         };
         
@@ -484,6 +484,213 @@ async function loadFarmData() {
 /**
  * Load dashboard data
  */
+function getCurrentFarmId() {
+    return currentSession?.farmId
+        || sessionStorage.getItem('farm_id')
+        || sessionStorage.getItem('farmId')
+        || localStorage.getItem('farm_id')
+        || localStorage.getItem('farmId')
+        || null;
+}
+
+function getDashboardAIHeaders(includeFarmId = false) {
+    const headers = getSetupAuthHeaders();
+    const farmId = getCurrentFarmId();
+    if (includeFarmId && farmId) {
+        headers['x-farm-id'] = farmId;
+    }
+    return headers;
+}
+
+function truncateDashboardSignalText(text, maxLength = 110) {
+    if (!text) return '';
+    const normalized = String(text).replace(/\s+/g, ' ').trim();
+    if (normalized.length <= maxLength) return normalized;
+    return `${normalized.slice(0, maxLength - 1).trim()}...`;
+}
+
+function setDashboardAISignal(cardId, valueId, detailId, value, detail, tone = 'neutral') {
+    const toneColors = {
+        good: '#22c55e',
+        warn: '#f59e0b',
+        danger: '#ef4444',
+        info: '#38bdf8',
+        neutral: 'rgba(255,255,255,0.12)'
+    };
+
+    const card = document.getElementById(cardId);
+    const valueEl = document.getElementById(valueId);
+    const detailEl = document.getElementById(detailId);
+    const color = toneColors[tone] || toneColors.neutral;
+
+    if (card) {
+        card.style.borderColor = color;
+    }
+    if (valueEl) {
+        valueEl.textContent = value;
+        valueEl.style.color = tone === 'neutral' ? '#f8fafc' : color;
+    }
+    if (detailEl) {
+        detailEl.textContent = detail;
+    }
+}
+
+function resetDashboardAISignals() {
+    setDashboardAISignal('dashboard-ai-readiness-card', 'dashboard-ai-readiness-value', 'dashboard-ai-readiness-detail', '--', 'Waiting for readiness data', 'neutral');
+    setDashboardAISignal('dashboard-ai-loss-card', 'dashboard-ai-loss-value', 'dashboard-ai-loss-detail', '--', 'Waiting for loss prediction data', 'neutral');
+    setDashboardAISignal('dashboard-ai-learning-card', 'dashboard-ai-learning-value', 'dashboard-ai-learning-detail', '--', 'Waiting for learning correlation data', 'neutral');
+    setDashboardAISignal('dashboard-ai-experiments-card', 'dashboard-ai-experiments-value', 'dashboard-ai-experiments-detail', '--', 'Waiting for experiment record data', 'neutral');
+    setDashboardAISignal('dashboard-ai-benchmarks-card', 'dashboard-ai-benchmarks-value', 'dashboard-ai-benchmarks-detail', '--', 'Waiting for network benchmark data', 'neutral');
+    setDashboardAISignal('dashboard-ai-insight-card', 'dashboard-ai-insight-value', 'dashboard-ai-insight-detail', '--', 'Waiting for current EVIE guidance', 'neutral');
+}
+
+async function fetchDashboardAIJson(url, options) {
+    try {
+        const response = await fetch(url, options);
+        if (!response.ok) return null;
+        return await response.json();
+    } catch (error) {
+        console.warn('[Dashboard AI]', url, error?.message || error);
+        return null;
+    }
+}
+
+async function loadDashboardAISignals() {
+    if (!document.getElementById('dashboard-ai-signals-card')) return;
+
+    const farmId = getCurrentFarmId();
+    const cacheBust = `t=${Date.now()}`;
+    const requestOptions = {
+        cache: 'no-store',
+        headers: getDashboardAIHeaders(true)
+    };
+
+    const [readinessData, lossData, correlationData, experimentData, benchmarkData, insightData] = await Promise.all([
+        fetchDashboardAIJson(`${API_BASE}/api/harvest/readiness?${cacheBust}`, requestOptions),
+        fetchDashboardAIJson(`${API_BASE}/api/losses/predict?${cacheBust}`, requestOptions),
+        fetchDashboardAIJson(`${API_BASE}/api/ai/learning-correlations?${cacheBust}`, requestOptions),
+        fetchDashboardAIJson(`${API_BASE}/api/harvest/experiment-stats?${cacheBust}`, requestOptions),
+        fetchDashboardAIJson(`${API_BASE}/api/crop-benchmarks?${cacheBust}`, requestOptions),
+        farmId
+            ? fetchDashboardAIJson(`${API_BASE}/api/ai-insights/${encodeURIComponent(farmId)}?${cacheBust}`, requestOptions)
+            : Promise.resolve(null)
+    ]);
+
+    const readinessNotifications = Array.isArray(readinessData?.notifications) ? readinessData.notifications : [];
+    const readyNow = readinessNotifications.filter((item) => {
+        const score = Number(item?.readiness_score ?? item?.readiness ?? item?.confidence ?? 0);
+        const daysRemaining = Number(item?.days_remaining);
+        return score >= 0.8 || (Number.isFinite(daysRemaining) && daysRemaining <= 3);
+    }).length;
+    const approachingHarvest = readinessNotifications.filter((item) => {
+        const score = Number(item?.readiness_score ?? item?.readiness ?? item?.confidence ?? 0);
+        const daysRemaining = Number(item?.days_remaining);
+        return score >= 0.6 || (Number.isFinite(daysRemaining) && daysRemaining <= 7);
+    }).length;
+
+    if (readinessNotifications.length === 0) {
+        setDashboardAISignal('dashboard-ai-readiness-card', 'dashboard-ai-readiness-value', 'dashboard-ai-readiness-detail', '--', 'No groups near harvest yet', 'neutral');
+    } else if (readyNow > 0) {
+        const soonCount = Math.max(approachingHarvest - readyNow, 0);
+        setDashboardAISignal(
+            'dashboard-ai-readiness-card',
+            'dashboard-ai-readiness-value',
+            'dashboard-ai-readiness-detail',
+            String(readyNow),
+            soonCount > 0 ? `${readyNow} ready now, ${soonCount} more within 7 days` : `${readyNow} group${readyNow === 1 ? '' : 's'} ready now`,
+            'warn'
+        );
+    } else {
+        setDashboardAISignal('dashboard-ai-readiness-card', 'dashboard-ai-readiness-value', 'dashboard-ai-readiness-detail', String(approachingHarvest), `${approachingHarvest} group${approachingHarvest === 1 ? '' : 's'} within 7 days`, 'info');
+    }
+
+    const lossAlerts = Array.isArray(lossData?.alerts) ? lossData.alerts : [];
+    const highRiskAlerts = lossAlerts.filter((item) => Number(item?.risk_score ?? 0) > 0.7);
+    const watchAlerts = lossAlerts.filter((item) => Number(item?.risk_score ?? 0) > 0.4);
+    if (highRiskAlerts.length > 0) {
+        const topAlert = highRiskAlerts[0];
+        setDashboardAISignal('dashboard-ai-loss-card', 'dashboard-ai-loss-value', 'dashboard-ai-loss-detail', String(highRiskAlerts.length), `${highRiskAlerts.length} high-risk zone${highRiskAlerts.length === 1 ? '' : 's'}${topAlert?.reason ? ` · ${topAlert.reason}` : ''}`, 'danger');
+    } else if (watchAlerts.length > 0) {
+        setDashboardAISignal('dashboard-ai-loss-card', 'dashboard-ai-loss-value', 'dashboard-ai-loss-detail', String(watchAlerts.length), `${watchAlerts.length} zone${watchAlerts.length === 1 ? '' : 's'} need attention`, 'warn');
+    } else {
+        setDashboardAISignal('dashboard-ai-loss-card', 'dashboard-ai-loss-value', 'dashboard-ai-loss-detail', '0', 'No elevated loss risk detected', 'good');
+    }
+
+    const correlations = [];
+    Object.entries(correlationData?.rooms || {}).forEach(([roomId, metrics]) => {
+        Object.entries(metrics || {}).forEach(([metric, rawValue]) => {
+            const coefficient = typeof rawValue === 'number'
+                ? rawValue
+                : Number(rawValue?.coefficient ?? rawValue?.correlation ?? rawValue?.r);
+            if (Number.isFinite(coefficient)) {
+                correlations.push({
+                    roomId,
+                    metric,
+                    coefficient,
+                    samples: rawValue?.samples ?? rawValue?.n ?? null
+                });
+            }
+        });
+    });
+    correlations.sort((left, right) => Math.abs(right.coefficient) - Math.abs(left.coefficient));
+    const strongestCorrelation = correlations[0];
+    if (!strongestCorrelation) {
+        setDashboardAISignal('dashboard-ai-learning-card', 'dashboard-ai-learning-value', 'dashboard-ai-learning-detail', '--', 'No active learning correlations cached', 'neutral');
+    } else {
+        const strength = Math.round(Math.abs(strongestCorrelation.coefficient) * 100);
+        const sampleText = strongestCorrelation.samples != null ? ` · samples ${strongestCorrelation.samples}` : '';
+        const tone = strength >= 75 ? 'good' : strength >= 50 ? 'warn' : 'info';
+        setDashboardAISignal('dashboard-ai-learning-card', 'dashboard-ai-learning-value', 'dashboard-ai-learning-detail', `${strength}%`, `${strongestCorrelation.metric} in room ${strongestCorrelation.roomId}${sampleText}`, tone);
+    }
+
+    const experimentCrops = Array.isArray(experimentData?.crops)
+        ? experimentData.crops
+        : Array.isArray(experimentData?.stats?.crops)
+            ? experimentData.stats.crops
+            : Object.values(experimentData?.stats?.crops || {});
+    const totalExperiments = Number(experimentData?.total_experiments ?? experimentData?.stats?.total ?? 0);
+    const topExperimentCrop = experimentCrops.slice().sort((left, right) => Number(right?.harvest_count ?? 0) - Number(left?.harvest_count ?? 0))[0];
+    if (totalExperiments > 0) {
+        setDashboardAISignal('dashboard-ai-experiments-card', 'dashboard-ai-experiments-value', 'dashboard-ai-experiments-detail', String(totalExperiments), `${experimentCrops.length} crop${experimentCrops.length === 1 ? '' : 's'} tracked${topExperimentCrop?.crop ? ` · top ${topExperimentCrop.crop}` : ''}`, 'info');
+    } else {
+        setDashboardAISignal('dashboard-ai-experiments-card', 'dashboard-ai-experiments-value', 'dashboard-ai-experiments-detail', '--', 'No experiment records available yet', 'neutral');
+    }
+
+    const benchmarks = Array.isArray(benchmarkData?.benchmarks) ? benchmarkData.benchmarks : [];
+    const topBenchmark = benchmarks.slice().sort((left, right) => Number(right?.harvest_count ?? 0) - Number(left?.harvest_count ?? 0))[0];
+    if (benchmarks.length > 0) {
+        setDashboardAISignal('dashboard-ai-benchmarks-card', 'dashboard-ai-benchmarks-value', 'dashboard-ai-benchmarks-detail', String(benchmarks.length), topBenchmark?.crop ? `${topBenchmark.crop} benchmarked across ${topBenchmark.harvest_count} harvests` : 'Network benchmarks available', 'info');
+    } else {
+        setDashboardAISignal('dashboard-ai-benchmarks-card', 'dashboard-ai-benchmarks-value', 'dashboard-ai-benchmarks-detail', '--', 'No network benchmark data available yet', 'neutral');
+    }
+
+    if (!farmId) {
+        setDashboardAISignal('dashboard-ai-insight-card', 'dashboard-ai-insight-value', 'dashboard-ai-insight-detail', '--', 'No farm context available for EVIE guidance', 'neutral');
+        return;
+    }
+
+    const overallStatus = insightData?.insights?.overall_status || '';
+    const topPriorityAction = insightData?.insights?.priority_actions?.[0] || overallStatus || insightData?.message || '';
+    if (!topPriorityAction) {
+        setDashboardAISignal('dashboard-ai-insight-card', 'dashboard-ai-insight-value', 'dashboard-ai-insight-detail', '--', 'No current EVIE recommendation available', 'neutral');
+        return;
+    }
+
+    const stableStatus = /stable|within target/i.test(overallStatus) || /maintain current settings/i.test(topPriorityAction);
+    setDashboardAISignal(
+        'dashboard-ai-insight-card',
+        'dashboard-ai-insight-value',
+        'dashboard-ai-insight-detail',
+        stableStatus ? 'Stable' : 'Action',
+        truncateDashboardSignalText(topPriorityAction),
+        stableStatus ? 'good' : 'warn'
+    );
+}
+
+function refreshDashboardAISignals() {
+    loadDashboardAISignals();
+}
+
 async function loadDashboardData() {
     try {
         console.log(' Loading dashboard data...');
@@ -611,6 +818,8 @@ async function loadDashboardData() {
             document.getElementById('kpi-devices').textContent = '0';
             document.getElementById('kpi-devices-change').textContent = 'No communicating devices';
         }
+
+        await loadDashboardAISignals();
         
         // Load subscription usage
         await loadSubscriptionUsage();
@@ -631,6 +840,7 @@ async function loadDashboardData() {
         document.getElementById('kpi-plants-change').textContent = 'Start your first grow to see live data';
         document.getElementById('kpi-harvest-change').textContent = 'Start your first grow to see live data';
         document.getElementById('kpi-devices-change').textContent = 'No device data yet';
+        resetDashboardAISignals();
     }
 }
 
@@ -6742,8 +6952,306 @@ const totalSetupSteps = 7;
 let setupData = {
     rooms: [],
     trayFormats: [],
-    benchmarks: null
+    benchmarks: null,
+    stockGroupCatalog: [],
+    stockGroupSelections: [],
+    stockGroupCatalogLoading: false,
+    stockGroupCatalogError: ''
 };
+
+function getSetupAuthHeaders(includeJson = false) {
+    const headers = {};
+    const token = currentSession?.token || localStorage.getItem('token') || sessionStorage.getItem('token');
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    if (includeJson) headers['Content-Type'] = 'application/json';
+    return headers;
+}
+
+function normalizeSetupStockGroupTemplate(template) {
+    if (!template || typeof template !== 'object') return null;
+    return {
+        id: template.id || null,
+        catalogKey: template.catalogKey || template.catalog_key || '',
+        name: template.name || 'Unnamed template',
+        description: template.description || '',
+        category: template.category || 'general',
+        systemType: template.systemType || template.system_type || 'rack',
+        dimensionPolicy: template.dimensionPolicy || template.dimension_policy || 'fixed',
+        resizeAxes: Array.isArray(template.resizeAxes)
+            ? template.resizeAxes.slice()
+            : (Array.isArray(template.resize_axes) ? template.resize_axes.slice() : []),
+        defaultDimensions: template.defaultDimensions || template.default_dimensions || {},
+        minDimensions: template.minDimensions || template.min_dimensions || {},
+        maxDimensions: template.maxDimensions || template.max_dimensions || {},
+        defaultTrays: template.defaultTrays ?? template.default_trays ?? 0,
+        defaultLights: template.defaultLights ?? template.default_lights ?? 0,
+        defaultLightOrientation: template.defaultLightOrientation || template.default_light_orientation || 'out-of-canopy',
+        defaultPrefix: template.defaultPrefix || template.default_prefix || template.name || 'Group',
+        defaults: template.defaults || template.templateDefaults || template.template_defaults || {}
+    };
+}
+
+function getSetupStockGroupLocationOptions() {
+    const options = [];
+    (setupData.rooms || []).forEach((room) => {
+        if (!room || !room.name) return;
+        const roomId = room.id || room.roomId || '';
+        const zones = Array.isArray(room.zones) && room.zones.length > 0
+            ? room.zones
+            : [{ id: '', name: 'Main' }];
+        zones.forEach((zone) => {
+            const zoneId = zone?.id || '';
+            const zoneName = zone?.name || zone?.label || 'Main';
+            options.push({
+                key: `${roomId || room.name}::${zoneId || zoneName}`,
+                roomId,
+                roomName: room.name,
+                zoneId,
+                zoneName,
+                label: zoneName && zoneName !== 'Main' ? `${room.name} / ${zoneName}` : room.name
+            });
+        });
+    });
+    return options;
+}
+
+function syncSetupStockGroupSelections() {
+    const locations = getSetupStockGroupLocationOptions();
+    const templates = Array.isArray(setupData.stockGroupCatalog) ? setupData.stockGroupCatalog : [];
+    const fallbackLocation = locations[0] || null;
+    setupData.stockGroupSelections = (setupData.stockGroupSelections || [])
+        .map((selection) => {
+            const template = templates.find((item) => String(item.id) === String(selection.templateId || selection.template?.id)) || selection.template || null;
+            const location = locations.find((item) => item.key === selection.locationKey)
+                || locations.find((item) => item.roomId === selection.roomId && item.zoneId === selection.zoneId)
+                || fallbackLocation;
+            if (!template || !location) return null;
+            return {
+                id: selection.id,
+                templateId: template.id,
+                template,
+                locationKey: location.key,
+                roomId: location.roomId,
+                roomName: location.roomName,
+                zoneId: location.zoneId,
+                zoneName: location.zoneName,
+                prefix: selection.prefix || template.defaultPrefix || template.name || 'Group',
+                count: Math.max(1, parseInt(selection.count, 10) || 1)
+            };
+        })
+        .filter(Boolean);
+}
+
+async function loadSetupStockGroupCatalog(forceRefresh = false) {
+    if (setupData.stockGroupCatalogLoading) return setupData.stockGroupCatalog;
+    if (!forceRefresh && Array.isArray(setupData.stockGroupCatalog) && setupData.stockGroupCatalog.length > 0) {
+        return setupData.stockGroupCatalog;
+    }
+
+    setupData.stockGroupCatalogLoading = true;
+    setupData.stockGroupCatalogError = '';
+    renderSetupStockGroupPlanner();
+
+    try {
+        const response = await fetch('/api/farm/stock-group-catalog', {
+            headers: getSetupAuthHeaders()
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            throw new Error(payload.error || payload.message || `Catalog request failed (${response.status})`);
+        }
+        setupData.stockGroupCatalog = Array.isArray(payload.templates)
+            ? payload.templates.map(normalizeSetupStockGroupTemplate).filter(Boolean)
+            : [];
+        syncSetupStockGroupSelections();
+        return setupData.stockGroupCatalog;
+    } catch (error) {
+        console.error('[Setup] Failed to load stock-group catalog:', error);
+        setupData.stockGroupCatalogError = error.message || 'Could not load stock-group catalog';
+        return [];
+    } finally {
+        setupData.stockGroupCatalogLoading = false;
+        renderSetupStockGroupPlanner();
+    }
+}
+
+function addSetupStockGroupSelection(seed = {}) {
+    const template = seed.template || (setupData.stockGroupCatalog || [])[0] || null;
+    const location = seed.location || getSetupStockGroupLocationOptions()[0] || null;
+    if (!template || !location) {
+        renderSetupStockGroupPlanner();
+        return;
+    }
+
+    setupData.stockGroupSelections = setupData.stockGroupSelections || [];
+    setupData.stockGroupSelections.push({
+        id: seed.id || `stock-plan-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        templateId: template.id,
+        template,
+        locationKey: location.key,
+        roomId: location.roomId,
+        roomName: location.roomName,
+        zoneId: location.zoneId,
+        zoneName: location.zoneName,
+        prefix: seed.prefix || template.defaultPrefix || template.name || 'Group',
+        count: Math.max(1, parseInt(seed.count, 10) || 1)
+    });
+    renderSetupStockGroupPlanner();
+}
+
+function updateSetupStockGroupSelection(selectionId, field, value) {
+    const selection = (setupData.stockGroupSelections || []).find((item) => item.id === selectionId);
+    if (!selection) return;
+
+    if (field === 'templateId') {
+        const template = (setupData.stockGroupCatalog || []).find((item) => String(item.id) === String(value));
+        if (template) {
+            const previousTemplate = selection.template;
+            selection.templateId = template.id;
+            selection.template = template;
+            if (!selection.prefix || selection.prefix === previousTemplate?.defaultPrefix || selection.prefix === previousTemplate?.name) {
+                selection.prefix = template.defaultPrefix || template.name || selection.prefix;
+            }
+        }
+    } else if (field === 'locationKey') {
+        const location = getSetupStockGroupLocationOptions().find((item) => item.key === value);
+        if (location) {
+            selection.locationKey = location.key;
+            selection.roomId = location.roomId;
+            selection.roomName = location.roomName;
+            selection.zoneId = location.zoneId;
+            selection.zoneName = location.zoneName;
+        }
+    } else if (field === 'count') {
+        selection.count = Math.max(1, parseInt(value, 10) || 1);
+    } else if (field === 'prefix') {
+        selection.prefix = String(value || '').trim();
+    }
+
+    renderSetupStockGroupPlanner();
+}
+
+function removeSetupStockGroupSelection(selectionId) {
+    setupData.stockGroupSelections = (setupData.stockGroupSelections || []).filter((item) => item.id !== selectionId);
+    renderSetupStockGroupPlanner();
+}
+
+function getSetupSelectedStockGroupPlans() {
+    return (setupData.stockGroupSelections || [])
+        .map((selection) => {
+            if (!selection?.template || !selection.roomName || !selection.prefix) return null;
+            return {
+                selectionId: selection.id,
+                template: selection.template,
+                templateId: selection.template.id,
+                roomId: selection.roomId || '',
+                roomName: selection.roomName,
+                zoneId: selection.zoneId || '',
+                zoneName: selection.zoneName || 'Main',
+                prefix: selection.prefix.trim(),
+                count: Math.max(1, parseInt(selection.count, 10) || 1)
+            };
+        })
+        .filter(Boolean);
+}
+
+function renderSetupStockGroupPlanner() {
+    const statusEl = document.getElementById('setup-stock-group-status');
+    const emptyEl = document.getElementById('setup-stock-group-empty');
+    const listEl = document.getElementById('setup-stock-group-list');
+    const addBtn = document.getElementById('setup-add-stock-group-plan');
+    if (!statusEl || !emptyEl || !listEl || !addBtn) return;
+
+    const templates = Array.isArray(setupData.stockGroupCatalog) ? setupData.stockGroupCatalog : [];
+    const selections = Array.isArray(setupData.stockGroupSelections) ? setupData.stockGroupSelections : [];
+    const locations = getSetupStockGroupLocationOptions();
+
+    if (setupData.stockGroupCatalogLoading) {
+        statusEl.style.display = 'block';
+        statusEl.style.color = 'var(--text-secondary)';
+        statusEl.textContent = 'Loading stock-group catalog...';
+    } else if (setupData.stockGroupCatalogError) {
+        statusEl.style.display = 'block';
+        statusEl.style.color = '#fca5a5';
+        statusEl.textContent = setupData.stockGroupCatalogError;
+    } else if (!templates.length) {
+        statusEl.style.display = 'block';
+        statusEl.style.color = 'var(--text-secondary)';
+        statusEl.textContent = 'No active stock-group templates are available yet.';
+    } else {
+        statusEl.style.display = selections.length ? 'block' : 'none';
+        statusEl.style.color = 'var(--text-secondary)';
+        statusEl.textContent = selections.length
+            ? `${selections.length} stock-group plan${selections.length === 1 ? '' : 's'} ready for setup.`
+            : '';
+    }
+
+    addBtn.disabled = !templates.length || !locations.length;
+    addBtn.style.opacity = addBtn.disabled ? '0.6' : '1';
+    addBtn.style.cursor = addBtn.disabled ? 'not-allowed' : 'pointer';
+
+    if (!locations.length) {
+        emptyEl.style.display = 'block';
+        emptyEl.textContent = 'Add at least one room before planning stock groups.';
+        listEl.innerHTML = '';
+        return;
+    }
+
+    if (!selections.length) {
+        emptyEl.style.display = 'block';
+        emptyEl.textContent = 'No stock-group plans added yet.';
+        listEl.innerHTML = '';
+        return;
+    }
+
+    emptyEl.style.display = 'none';
+    listEl.innerHTML = selections.map((selection, index) => {
+        const template = selection.template || {};
+        const dimensions = template.defaultDimensions || {};
+        const detailParts = [];
+        if (dimensions.length || dimensions.width || dimensions.height) {
+            detailParts.push(`Footprint ${dimensions.length || '—'} x ${dimensions.width || '—'} x ${dimensions.height || '—'} m`);
+        }
+        if (template.defaultTrays) detailParts.push(`${template.defaultTrays} trays`);
+        if (template.defaultLights) detailParts.push(`${template.defaultLights} lights`);
+
+        return `
+            <div style="border: 1px solid var(--border); border-radius: 8px; padding: 14px; background: var(--bg-card); display: flex; flex-direction: column; gap: 12px;">
+                <div style="display: flex; justify-content: space-between; gap: 12px; align-items: start;">
+                    <div>
+                        <div style="font-size: 13px; color: var(--text-muted); margin-bottom: 4px;">Plan ${index + 1}</div>
+                        <div style="font-weight: 600; color: var(--text-primary);">${escapeHtml(template.name || 'Stock Group')}</div>
+                        <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">${escapeHtml(template.description || '')}</div>
+                    </div>
+                    <button type="button" onclick="removeSetupStockGroupSelection('${selection.id}')" style="padding: 6px 10px; background: var(--bg-secondary); border: 1px solid var(--border); color: var(--error-red); border-radius: 4px; cursor: pointer; font-size: 12px;">Remove</button>
+                </div>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px;">
+                    <label style="display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: var(--text-secondary);">
+                        Template
+                        <select onchange="updateSetupStockGroupSelection('${selection.id}', 'templateId', this.value)" style="padding: 9px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-primary); color: var(--text-primary);">
+                            ${templates.map((item) => `<option value="${item.id}"${String(item.id) === String(selection.templateId) ? ' selected' : ''}>${escapeHtml(item.name)}</option>`).join('')}
+                        </select>
+                    </label>
+                    <label style="display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: var(--text-secondary);">
+                        Room / Zone
+                        <select onchange="updateSetupStockGroupSelection('${selection.id}', 'locationKey', this.value)" style="padding: 9px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-primary); color: var(--text-primary);">
+                            ${locations.map((item) => `<option value="${item.key}"${item.key === selection.locationKey ? ' selected' : ''}>${escapeHtml(item.label)}</option>`).join('')}
+                        </select>
+                    </label>
+                    <label style="display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: var(--text-secondary);">
+                        Group Prefix
+                        <input type="text" value="${escapeHtml(selection.prefix || '')}" oninput="updateSetupStockGroupSelection('${selection.id}', 'prefix', this.value)" style="padding: 9px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-primary); color: var(--text-primary);">
+                    </label>
+                    <label style="display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: var(--text-secondary);">
+                        Count
+                        <input type="number" min="1" step="1" value="${selection.count}" onchange="updateSetupStockGroupSelection('${selection.id}', 'count', this.value)" style="padding: 9px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-primary); color: var(--text-primary);">
+                    </label>
+                </div>
+                <div style="font-size: 12px; color: var(--text-muted);">${escapeHtml(detailParts.join(' • ') || 'Template defaults will be applied during setup.')}</div>
+            </div>
+        `;
+    }).join('');
+}
 
 /**
  * Check if first-time setup is needed
@@ -7153,6 +7661,8 @@ async function showFirstTimeSetup() {
         
         // Start at Step 2 for Cloud customers (skip activation code)
         // Step 0 (intent) is always shown first
+        await loadSetupStockGroupCatalog();
+        syncSetupStockGroupSelections();
         currentSetupStep = 0;
         console.log(`[Setup] Starting wizard at step ${currentSetupStep} (Cloud: ${isCloudPlan})`);
         
@@ -7217,8 +7727,8 @@ async function setupNextStep() {
     
     // Move to next step
     if (currentSetupStep < totalSetupSteps) {
-        // If on Step 5 (certifications), collect selected certifications
-        if (currentSetupStep === 5) {
+        // If on Step 6 (certifications), collect selected certifications
+        if (currentSetupStep === 6) {
             setupData.certifications = Array.from(document.querySelectorAll('input[name="certification"]:checked'))
                 .map(cb => cb.value);
             setupData.practices = Array.from(document.querySelectorAll('input[name="practice"]:checked'))
@@ -7227,14 +7737,20 @@ async function setupNextStep() {
         }
         
         currentSetupStep++;
+
+        if (currentSetupStep === 5) {
+            await loadSetupStockGroupCatalog();
+            syncSetupStockGroupSelections();
+            renderSetupStockGroupPlanner();
+        }
         
-        // If moving to Step 6 (Network Benchmarks), fetch from Central
-        if (currentSetupStep === 6) {
+        // If moving to Step 7 (Network Benchmarks), fetch from Central
+        if (currentSetupStep === 7) {
             await seedBenchmarksStep();
         }
         
-        // If moving to Step 7 (Activity Hub), generate QR codes
-        if (currentSetupStep === 7) {
+        // If moving to Step 8 (Activity Hub), generate QR codes
+        if (currentSetupStep === 8) {
             await generateWizardActivityHubQRCodes();
         }
         
@@ -7890,6 +8406,7 @@ async function completeSetup() {
             .map(cb => cb.value);
         const attributes = Array.from(document.querySelectorAll('input[name="attribute"]:checked'))
             .map(cb => cb.value);
+        const stockGroupPlans = getSetupSelectedStockGroupPlans();
         
         // Submit tray formats before completing setup (skip for sales-only)
         const isSalesOnly = setupData.userIntent === 'sales-only' || setupData.userIntent === 'sales-accounting';
@@ -7903,6 +8420,19 @@ async function completeSetup() {
             }
         } else {
             console.log('[Setup] Sales-only path: skipping tray formats');
+        }
+        
+        let groupsPayload = Array.isArray(window.STATE?.groups) ? window.STATE.groups.slice() : [];
+        let createdStockGroups = 0;
+        let skippedStockGroups = 0;
+        if (!isSalesOnly && stockGroupPlans.length > 0 && typeof window.createGroupsFromStockCatalogSelections === 'function') {
+            const creationResult = await window.createGroupsFromStockCatalogSelections(stockGroupPlans, {
+                existingGroups: groupsPayload,
+                persist: false
+            });
+            groupsPayload = creationResult.groups || groupsPayload;
+            createdStockGroups = creationResult.created || 0;
+            skippedStockGroups = creationResult.skipped || 0;
         }
         
         // Call setup completion API
@@ -7938,6 +8468,17 @@ async function completeSetup() {
                     longitude: longitude ? parseFloat(longitude) : null
                 },
                 rooms: setupData.rooms || [],
+                groups: groupsPayload,
+                stockGroupPlans: stockGroupPlans.map(plan => ({
+                    roomId: plan.roomId,
+                    roomName: plan.roomName,
+                    zoneId: plan.zoneId,
+                    zoneName: plan.zoneName,
+                    templateId: plan.templateId,
+                    templateName: plan.template?.name || '',
+                    count: plan.count,
+                    prefix: plan.prefix
+                })),
                 userIntent: setupData.userIntent || 'full-farm',
                 certifications: {
                     certifications: certifications,
@@ -8001,6 +8542,20 @@ async function completeSetup() {
                     body: JSON.stringify(setupData.rooms)
                 });
             }
+
+            if (groupsPayload.length > 0) {
+                if (!window.STATE) window.STATE = {};
+                window.STATE.groups = groupsPayload;
+                const token = currentSession?.token || sessionStorage.getItem('token') || localStorage.getItem('token');
+                if (!token) {
+                    throw new Error('Missing farm auth token for group persistence');
+                }
+                await fetch('/data/groups.json', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify({ groups: groupsPayload })
+                });
+            }
         } catch (e) {
             console.warn('Could not save to localStorage/backend:', e);
         }
@@ -8012,7 +8567,11 @@ async function completeSetup() {
         const modal = document.getElementById('first-time-setup-modal');
         if (modal) modal.style.display = 'none';
         
-        showToast('Setup complete! Welcome to Light Engine.', 'success');
+        if (createdStockGroups > 0) {
+            showToast(`Setup complete. Built ${createdStockGroups} stock groups${skippedStockGroups > 0 ? ` (${skippedStockGroups} skipped)` : ''}.`, 'success');
+        } else {
+            showToast('Setup complete! Welcome to Light Engine.', 'success');
+        }
         
         // Reload page to show dashboard with setup data
         setTimeout(() => {
@@ -8068,11 +8627,13 @@ function renderSetupRooms() {
     const container = document.getElementById('setup-rooms-list');
     
     if (!setupData.rooms || setupData.rooms.length === 0) {
+        syncSetupStockGroupSelections();
         container.innerHTML = `
             <div style="text-align: center; padding: 40px 20px; color: var(--text-muted); font-size: 14px;">
                 No rooms added yet. Add at least one room to continue.
             </div>
         `;
+        renderSetupStockGroupPlanner();
         return;
     }
     
@@ -8107,6 +8668,9 @@ function renderSetupRooms() {
             ` : ''}
         </div>
     `).join('');
+
+    syncSetupStockGroupSelections();
+    renderSetupStockGroupPlanner();
 }
 
 /**

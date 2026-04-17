@@ -6,7 +6,7 @@
 import express from 'express';
 import jwt from 'jsonwebtoken';
 import validator from 'validator';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -297,6 +297,161 @@ router.get('/status', authenticateToken, async (req, res) => {
       success: true,
       setupCompleted: false,
       error: error.message 
+    });
+  }
+});
+
+/**
+ * GET /api/setup-wizard/onboarding-status
+ * Returns onboarding checklist completion status for EVIE guidance.
+ */
+router.get('/onboarding-status', authenticateToken, async (req, res) => {
+  try {
+    const farmId = req.farmId;
+    let planType = req.edgeMode ? 'edge' : 'cloud';
+    let setupCompleted = false;
+    let farmName = '';
+    let roomCount = 0;
+    let inventoryCount = 0;
+
+    const pool = req.app.locals?.db;
+    if (pool) {
+      try {
+        const farmResult = await pool.query(
+          'SELECT name, plan_type, setup_completed FROM farms WHERE farm_id = $1',
+          [farmId]
+        );
+        const farm = farmResult.rows[0];
+        if (farm) {
+          farmName = farm.name || '';
+          planType = farm.plan_type || planType;
+          setupCompleted = farm.setup_completed === true;
+        }
+      } catch (farmErr) {
+        console.warn('[Setup Wizard] onboarding-status farm query failed:', farmErr.message);
+      }
+
+      try {
+        const roomsResult = await pool.query('SELECT COUNT(*) as count FROM rooms WHERE farm_id = $1', [farmId]);
+        roomCount = parseInt(roomsResult.rows[0]?.count, 10) || 0;
+      } catch (roomErr) {
+        roomCount = 0;
+      }
+
+      try {
+        const inventoryResult = await pool.query('SELECT COUNT(*) as count FROM inventory WHERE farm_id = $1', [farmId]);
+        inventoryCount = parseInt(inventoryResult.rows[0]?.count, 10) || 0;
+      } catch (inventoryErr) {
+        inventoryCount = 0;
+      }
+    } else {
+      // File-based fallback for local/edge environments without DB.
+      try {
+        const farmPath = path.join(process.cwd(), 'public', 'data', 'farm.json');
+        if (fs.existsSync(farmPath)) {
+          const farm = JSON.parse(fs.readFileSync(farmPath, 'utf8'));
+          farmName = farm?.name || '';
+          setupCompleted = farm?.setup_completed === true;
+          planType = farm?.plan_type || planType;
+        }
+      } catch (farmFileErr) {
+        console.warn('[Setup Wizard] onboarding-status farm file read failed:', farmFileErr.message);
+      }
+
+      try {
+        const roomsPath = path.join(process.cwd(), 'public', 'data', 'rooms.json');
+        if (fs.existsSync(roomsPath)) {
+          const parsed = JSON.parse(fs.readFileSync(roomsPath, 'utf8'));
+          const rooms = Array.isArray(parsed) ? parsed : (Array.isArray(parsed?.rooms) ? parsed.rooms : []);
+          roomCount = rooms.length;
+        }
+      } catch (roomsFileErr) {
+        roomCount = 0;
+      }
+
+      try {
+        const inventoryPath = path.join(process.cwd(), 'public', 'data', 'inventory.json');
+        if (fs.existsSync(inventoryPath)) {
+          const parsed = JSON.parse(fs.readFileSync(inventoryPath, 'utf8'));
+          const items = Array.isArray(parsed) ? parsed : (Array.isArray(parsed?.items) ? parsed.items : []);
+          inventoryCount = items.length;
+        }
+      } catch (inventoryFileErr) {
+        inventoryCount = 0;
+      }
+    }
+
+    if (!setupCompleted && roomCount > 0) {
+      setupCompleted = true;
+    }
+
+    const tasks = [
+      {
+        id: 'setup_wizard',
+        label: 'Run setup wizard',
+        completed: setupCompleted,
+        link: '/setup-wizard.html',
+        icon: 'setup'
+      },
+      {
+        id: 'farm_profile',
+        label: 'Complete farm profile',
+        completed: !!farmName,
+        link: '#settings',
+        icon: 'profile'
+      },
+      {
+        id: 'grow_rooms',
+        label: 'Create at least one grow room',
+        completed: roomCount > 0,
+        link: '#iframe-view',
+        linkUrl: '/LE-dashboard.html?panel=grow-rooms',
+        icon: 'rooms'
+      },
+      {
+        id: 'inventory',
+        label: 'Add your first crop to inventory',
+        completed: inventoryCount > 0,
+        link: '#iframe-view',
+        linkUrl: '/views/farm-inventory.html',
+        icon: 'inventory'
+      },
+      {
+        id: 'payment_processing',
+        label: 'Connect payment processing',
+        completed: setupCompleted,
+        link: '#payments',
+        icon: 'payments'
+      },
+      {
+        id: 'online_store',
+        label: 'Configure online store',
+        completed: setupCompleted,
+        link: '#iframe-view',
+        linkUrl: '/LE-dashboard.html?wizard=store-setup',
+        icon: 'store'
+      }
+    ];
+
+    const completedCount = tasks.filter(task => task.completed).length;
+
+    res.json({
+      success: true,
+      farmId,
+      planType,
+      tasks,
+      totalCount: tasks.length,
+      completedCount,
+      remainingCount: tasks.length - completedCount,
+      setupCompleted,
+      roomCount,
+      inventoryCount
+    });
+  } catch (error) {
+    console.error('[Setup Wizard] onboarding-status error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to load onboarding status'
     });
   }
 });

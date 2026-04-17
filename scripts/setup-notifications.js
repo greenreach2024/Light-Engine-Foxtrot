@@ -80,35 +80,43 @@ async function setupFirebase() {
   console.log('  • In project, go to Build → Cloud Messaging');
   console.log('  • Click "Get Started"');
   console.log('');
-  console.log('Step 3: Generate service account');
-  console.log('  • Go to Project Settings (gear icon)');
-  console.log('  • Click "Service Accounts" tab');
-  console.log('  • Click "Generate New Private Key"');
-  console.log('  • Save JSON file as "greenreach-firebase.json"');
+  console.log('Step 3: Configure authentication');
+  console.log('  • Recommended on Cloud Run/GCP: keyless Application Default Credentials (ADC)');
+  console.log('  • Local fallback: service-account JSON stored OUTSIDE this repository');
   console.log('');
   
-  const hasFirebase = await question('Do you have Firebase service account JSON file? (y/n): ');
-  
-  if (hasFirebase.toLowerCase() === 'y') {
-    const filePath = await question('Enter path to JSON file (or press Enter for ./config/greenreach-firebase.json): ');
-    const finalPath = filePath.trim() || './config/greenreach-firebase.json';
-    
-    // Check if file exists
+  const authMode = await question('Choose Firebase auth mode [1=ADC (recommended), 2=JSON path, 3=skip]: ');
+
+  if (authMode.trim() === '1' || authMode.trim() === '') {
+    console.log('✅ Firebase configured for keyless ADC');
+    return {
+      FIREBASE_ENABLED: 'true'
+    };
+  }
+
+  if (authMode.trim() === '2') {
+    const defaultPath = `${process.env.HOME || '~'}/.config/greenreach/firebase-service-account.json`;
+    const filePath = await question(`Enter absolute JSON path (default: ${defaultPath}): `);
+    const finalPath = filePath.trim() || defaultPath;
+
     const absolutePath = path.resolve(finalPath);
     if (fs.existsSync(absolutePath)) {
       console.log(`✅ Found Firebase credentials at ${absolutePath}`);
       return {
+        FIREBASE_ENABLED: 'true',
         FIREBASE_SERVICE_ACCOUNT_PATH: absolutePath
       };
-    } else {
-      console.log(`❌ File not found: ${absolutePath}`);
-      console.log('Please place your Firebase JSON file at that location and run this setup again.');
-      return null;
     }
+
+    console.log(`❌ File not found: ${absolutePath}`);
+    console.log('Store the JSON outside this repository and run setup again.');
+    return null;
   }
   
-  console.log('\n⚠️  Firebase setup skipped. Push notifications will not work.');
-  return null;
+  console.log('\n⚠️  Firebase setup skipped. Push notifications disabled.');
+  return {
+    FIREBASE_ENABLED: 'false'
+  };
 }
 
 async function setupSMTP() {

@@ -1,15 +1,18 @@
-# GreenReach AWS-to-GCP Migration Audit Report
+# GreenReach AWS-to-GCP Migration Audit Report (Historical Snapshot)
 
 **Date:** April 7, 2026
 **Auditor:** Automated Migration Verification Suite
 **Project:** project-5d00790f-13a9-4637-a40
 **Region:** us-east1
 
+> Historical artifact: this report reflects migration-state observations from April 7, 2026.
+> Do not use it as an active operations runbook. Use `.github/CLOUD_ARCHITECTURE.md`, `.github/SENSOR_DATA_PIPELINE.md`, and `.github/GCP_MIGRATION_REMAINING.md` for current-state guidance.
+
 ---
 
 ## Executive Summary
 
-The migration from AWS Elastic Beanstalk to Google Cloud Run is **approximately 85% complete**. Core infrastructure is operational. Both Cloud Run services are healthy, the AlloyDB database has 201 tables, sensor data is streaming live, AI assistants are functional (migrated to Gemini), and the wholesale marketplace is serving catalog data. However, **16 Secret Manager values remain as placeholders**, blocking email, Stripe subscriptions, admin login, and several integrations. The LE-to-Central sync is disconnected, and Square POS is not connected.
+This section is preserved as-of April 7, 2026 and may not reflect the current production state. Treat findings below as historical context only.
 
 ---
 

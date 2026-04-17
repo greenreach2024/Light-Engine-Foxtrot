@@ -1046,6 +1046,11 @@
       updateCart();
     }
     
+    function normalizePrice(value) {
+      const amount = Number(value);
+      return Number.isFinite(amount) ? amount : 0;
+    }
+
     // Load inventory (public access - no auth required for browsing)
     async function loadInventory() {
       if (!selectedFarm) return;
@@ -1062,7 +1067,11 @@
         });
         const data = await response.json();
         
-        inventory = data.inventory.filter(p => p.available > 0);
+        inventory = (data.inventory || []).map(product => ({
+          ...product,
+          retail_price: normalizePrice(product.retail_price ?? product.unit_price ?? product.price),
+          available: Number(product.available ?? product.quantity_available ?? 0) || 0,
+        })).filter(p => p.available > 0);
         renderProducts();
       } catch (error) {
         console.error('Failed to load inventory:', error);
@@ -1110,7 +1119,7 @@
             </div>
             <div class="product-footer">
               <div>
-                <div class="product-price">$${product.retail_price.toFixed(2)}</div>
+                <div class="product-price">$${normalizePrice(product.retail_price).toFixed(2)}</div>
                 <div class="product-unit">per ${product.unit}</div>
               </div>
               <button class="add-to-cart-btn" onclick="addToCart('${product.sku_id}')">

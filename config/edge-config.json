@@ -3,7 +3,7 @@
   "farmId": "FARM-MLTP9LVH-B0B85039",
   "farmName": "The Notable Sprout",
   "apiKey": "3af913fb5fb02060c25bfdbe624ca75ee9075848e554417432d5382ccd3c7fda",
-  "centralApiUrl": "https://greenreachgreens.com",
+  "centralApiUrl": "https://greenreach-central-1029387937866.us-east1.run.app",
   "syncInterval": 300000,
   "heartbeatInterval": 30000,
   "hardwareModel": "AWS Cloud",

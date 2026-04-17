@@ -74,11 +74,14 @@ If you prefer manual setup:
 #### Firebase (Push)
 1. Create project: https://console.firebase.google.com
 2. Enable Cloud Messaging
-3. Generate service account JSON
-4. Save to `./config/greenreach-firebase.json`
+3. Use keyless auth on GCP/Cloud Run (recommended)
+4. For local-only fallback, store service account JSON outside this repo
 5. Add to .env:
    ```bash
-   FIREBASE_SERVICE_ACCOUNT_PATH=./config/greenreach-firebase.json
+   FIREBASE_ENABLED=true
+   # Optional local fallback only:
+   # GOOGLE_APPLICATION_CREDENTIALS=/absolute/path/outside/repo/firebase-service-account.json
+   # FIREBASE_SERVICE_ACCOUNT_PATH=/absolute/path/outside/repo/firebase-service-account.json
    ```
 
 #### Square (Payments)
@@ -387,7 +390,7 @@ SQUARE_LOCATION_ID=...
 TWILIO_ACCOUNT_SID=...
 TWILIO_AUTH_TOKEN=...
 TWILIO_PHONE_NUMBER=...
-FIREBASE_SERVICE_ACCOUNT_PATH=...
+FIREBASE_ENABLED=true
 SMTP_HOST=...
 SMTP_USER=...
 SMTP_PASS=...

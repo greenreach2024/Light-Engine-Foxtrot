@@ -18,7 +18,8 @@ class FarmAssistant {
     this.conversationId = localStorage.getItem('evie_conversation_id') || null;
     this.aiAvailable = null;     // null = unknown, true/false after check
     this.pendingAction = null;   // Pending write action awaiting confirmation
-    window._farmAssistant = this; // Global ref for confirm/cancel button onclick
+    this.recentAction = null;    // Most recent undoable action
+    window._farmAssistant = this; // Global ref for action button onclick
     this.nudgeInterval = null;    // Nudge polling interval
     this.settingsOpen = false;   // Settings panel state
     this._speakGeneration = 0;   // TTS generation counter — prevents overlapping playback
@@ -158,7 +159,7 @@ class FarmAssistant {
         const headers = {};
         if (token) headers['Authorization'] = `Bearer ${token}`;
 
-        const res = await fetch('/api/setup/onboarding-status', { headers });
+        const res = await fetch('/api/setup-wizard/onboarding-status', { headers });
         if (!res.ok) return;
         const data = await res.json();
         if (!data.success) return;
@@ -1033,6 +1034,31 @@ class FarmAssistant {
     }
   }
 
+  clearActionMessages() {
+    const messagesContainer = document.getElementById('chatMessages');
+    const actionMsgs = messagesContainer?.querySelectorAll('.action-message');
+    if (actionMsgs) actionMsgs.forEach(el => el.remove());
+  }
+
+  showActionMessages({ pending_action, recent_action } = {}) {
+    this.pendingAction = pending_action || null;
+    this.recentAction = recent_action || null;
+    this.clearActionMessages();
+
+    const buttons = [];
+    if (this.pendingAction) {
+      buttons.push('<button class="assistant-confirm-btn" onclick="window._farmAssistant.confirmPendingAction()">Confirm</button>');
+      buttons.push('<button class="assistant-cancel-btn" onclick="window._farmAssistant.cancelPendingAction()">Cancel</button>');
+    }
+    if (this.recentAction) {
+      buttons.push('<button class="assistant-undo-btn" onclick="window._farmAssistant.undoRecentAction()">Undo Last Action</button>');
+    }
+
+    if (buttons.length > 0) {
+      this.addMessage(buttons.join(' '), 'action');
+    }
+  }
+
   /**
    * Handle image file upload for crop diagnosis.
    */
@@ -1235,15 +1261,7 @@ class FarmAssistant {
                   });
                 }
 
-                // Handle pending action
-                if (data.pending_action) {
-                  this.pendingAction = data.pending_action;
-                  const actionButtons = `
-                    <button class="assistant-confirm-btn" onclick="window._farmAssistant.confirmPendingAction()">✓ Confirm</button>
-                    <button class="assistant-cancel-btn" onclick="window._farmAssistant.cancelPendingAction()">✕ Cancel</button>
-                  `;
-                  this.addMessage(actionButtons, 'action');
-                }
+                this.showActionMessages(data);
 
                 // Speak the reply
                 if (this.voiceEnabled && fullReply) {
@@ -1309,16 +1327,7 @@ class FarmAssistant {
 
     // Display the AI response
     this.addMessage(data.reply);
-
-    // If a write action is pending confirmation, show Confirm/Cancel buttons
-    if (data.pending_action) {
-      this.pendingAction = data.pending_action;
-      const actionButtons = `
-        <button class="assistant-confirm-btn" onclick="window._farmAssistant.confirmPendingAction()">✓ Confirm</button>
-        <button class="assistant-cancel-btn" onclick="window._farmAssistant.cancelPendingAction()">✕ Cancel</button>
-      `;
-      this.addMessage(actionButtons, 'action');
-    }
+    this.showActionMessages(data);
 
     return true;
   }
@@ -1329,11 +1338,7 @@ class FarmAssistant {
   async confirmPendingAction() {
     if (!this.pendingAction || !this.conversationId) return;
     this.pendingAction = null;
-
-    // Remove the action buttons
-    const messagesContainer = document.getElementById('chatMessages');
-    const actionMsgs = messagesContainer?.querySelectorAll('.action-message');
-    if (actionMsgs) actionMsgs.forEach(el => el.remove());
+    this.clearActionMessages();
 
     this.addMessage('Yes, confirm.', 'user');
     this.setTypingIndicator(true);
@@ -1352,6 +1357,7 @@ class FarmAssistant {
       if (!resp.ok) { this.addMessage('Action failed — please try again.'); return; }
       const data = await resp.json();
       if (data.reply) this.addMessage(data.reply);
+      this.showActionMessages(data);
     } catch (err) {
       this.setTypingIndicator(false);
       this.addMessage('Action failed — please try again.');
@@ -1364,11 +1370,7 @@ class FarmAssistant {
   async cancelPendingAction() {
     if (!this.conversationId) return;
     this.pendingAction = null;
-
-    // Remove the action buttons
-    const messagesContainer = document.getElementById('chatMessages');
-    const actionMsgs = messagesContainer?.querySelectorAll('.action-message');
-    if (actionMsgs) actionMsgs.forEach(el => el.remove());
+    this.clearActionMessages();
 
     this.addMessage('Cancel', 'user');
     this.setTypingIndicator(true);
@@ -1387,9 +1389,39 @@ class FarmAssistant {
       if (!resp.ok) { this.addMessage('Cancelled.'); return; }
       const data = await resp.json();
       if (data.reply) this.addMessage(data.reply);
+      this.showActionMessages(data);
     } catch {
       this.setTypingIndicator(false);
       this.addMessage('Cancelled — no changes made.');
+    }
+  }
+
+  async undoRecentAction() {
+    if (!this.recentAction || !this.conversationId) return;
+    this.recentAction = null;
+    this.clearActionMessages();
+
+    this.addMessage('Undo the last action.', 'user');
+    this.setTypingIndicator(true);
+
+    try {
+      const resp = await this._authFetch('/api/assistant/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: '__undo_action__',
+          conversation_id: this.conversationId,
+          farm_id: window.FARM_ID || undefined
+        })
+      });
+      this.setTypingIndicator(false);
+      if (!resp.ok) { this.addMessage('Undo failed — please try again.'); return; }
+      const data = await resp.json();
+      if (data.reply) this.addMessage(data.reply);
+      this.showActionMessages(data);
+    } catch {
+      this.setTypingIndicator(false);
+      this.addMessage('Undo failed — please try again.');
     }
   }
 
@@ -1503,16 +1535,11 @@ class FarmAssistant {
     }
 
     if (upgradePattern.test(query)) {
-      const planType = localStorage.getItem('plan_type') || 'cloud';
-      if (planType === 'edge') {
-        this.addMessage(`⚡ <strong>You're on the Edge plan</strong> — that's the full hardware suite. You have light control, environment management, nutrient dosing, and auto-discovery all active. Every feature in the platform is available to you.`);
-      } else {
-        this.addMessage(
-          `☁️ <strong>You're currently on the Cloud plan.</strong><br>Cloud gives you inventory, store, POS, wholesale, and environment monitoring. Upgrading to <strong>Edge</strong> adds direct hardware control — automated light recipes, nutrient dosing, and auto-discovery of controllers on your farm network. Edge requires a reTerminal device on-site.`,
-          'assistant',
-          `<button onclick="window.open('/purchase.html?upgrade=edge','_self')" class="action-btn primary">Learn about Edge</button>`
-        );
-      }
+      this.addMessage(
+        `<strong>Light Engine runs fully in the cloud.</strong><br>There is no required on-site edge hardware tier for this deployment. You can use monitoring, inventory, store, POS, wholesale, and assistant workflows directly from your current cloud environment.`,
+        'assistant',
+        `<button onclick="window.location.href='/LE-farm-admin.html#settings'" class="action-btn primary">Open Settings</button>`
+      );
       return true;
     }
 
@@ -1534,7 +1561,7 @@ class FarmAssistant {
       const headers = {};
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      const response = await fetch('/api/setup/onboarding-status', { headers });
+      const response = await fetch('/api/setup-wizard/onboarding-status', { headers });
       if (!response.ok) throw new Error('Could not fetch onboarding status');
       const data = await response.json();
 
@@ -1721,19 +1748,24 @@ class FarmAssistant {
       
       if (data.zones && data.zones.length > 0) {
         // Temperature is in sensors.tempC.current (Celsius), keep as Celsius
-        const temps = data.zones.map(z => {
-          const tempC = parseFloat(z.sensors?.tempC?.current || 0);
-          return tempC; // Keep in Celsius
-        });
-        const humidities = data.zones.map(z => parseFloat(z.sensors?.rh?.current || 0));
+        const temps = data.zones
+          .map(z => parseFloat(z.sensors?.tempC?.current))
+          .filter(v => Number.isFinite(v));
+        const humidities = data.zones
+          .map(z => parseFloat(z.sensors?.rh?.current))
+          .filter(v => Number.isFinite(v));
+
+        if (!temps.length && !humidities.length) {
+          throw new Error('No live temperature or humidity readings available');
+        }
         
-        const avgTemp = (temps.reduce((a, b) => a + b, 0) / temps.length).toFixed(1);
-        const minTemp = Math.min(...temps).toFixed(1);
-        const maxTemp = Math.max(...temps).toFixed(1);
+        const avgTemp = temps.length ? (temps.reduce((a, b) => a + b, 0) / temps.length).toFixed(1) : null;
+        const minTemp = temps.length ? Math.min(...temps).toFixed(1) : null;
+        const maxTemp = temps.length ? Math.max(...temps).toFixed(1) : null;
         
-        const avgHumidity = (humidities.reduce((a, b) => a + b, 0) / humidities.length).toFixed(0);
-        const minHumidity = Math.min(...humidities).toFixed(0);
-        const maxHumidity = Math.max(...humidities).toFixed(0);
+        const avgHumidity = humidities.length ? (humidities.reduce((a, b) => a + b, 0) / humidities.length).toFixed(0) : null;
+        const minHumidity = humidities.length ? Math.min(...humidities).toFixed(0) : null;
+        const maxHumidity = humidities.length ? Math.max(...humidities).toFixed(0) : null;
         
         // Determine what user asked for
         const wantsTemp = /temp|temperature|hot|cold|warm/i.test(query);
@@ -1742,7 +1774,7 @@ class FarmAssistant {
         // Create child-friendly popup content
         let popupContent = '<div class="big-info">';
         
-        if (wantsTemp || (!wantsTemp && !wantsHumidity)) {
+        if ((wantsTemp || (!wantsTemp && !wantsHumidity)) && avgTemp != null) {
           popupContent += `
             <div class="info-item">
               <div class="info-icon">🌡️</div>
@@ -1752,7 +1784,7 @@ class FarmAssistant {
           `;
         }
         
-        if (wantsHumidity || (!wantsTemp && !wantsHumidity)) {
+        if ((wantsHumidity || (!wantsTemp && !wantsHumidity)) && avgHumidity != null) {
           popupContent += `
             <div class="info-item">
               <div class="info-icon">💧</div>
@@ -1765,7 +1797,7 @@ class FarmAssistant {
         popupContent += '</div>';
         
         // Add status message (Celsius thresholds: 20-26°C ideal, <18°C or >29°C warning)
-        if (avgTemp >= 20 && avgTemp <= 26 && avgHumidity >= 50 && avgHumidity <= 70) {
+        if (avgTemp != null && avgHumidity != null && avgTemp >= 20 && avgTemp <= 26 && avgHumidity >= 50 && avgHumidity <= 70) {
           popupContent += '<div class="status-message success">All readings within ideal range</div>';
         } else if (avgTemp < 18 || avgTemp > 29) {
           popupContent += '<div class="status-message warning">Temperature outside ideal range</div>';
@@ -1947,11 +1979,17 @@ class FarmAssistant {
       let message = '<strong>Farm Health Status:</strong><ul>';
       
       if (data.zones && data.zones.length > 0) {
-        const avgTemp = (data.zones.reduce((sum, z) => sum + parseFloat(z.sensors?.tempC?.current || 0), 0) / data.zones.length).toFixed(1);
-        const avgHumidity = (data.zones.reduce((sum, z) => sum + parseFloat(z.sensors?.rh?.current || 0), 0) / data.zones.length).toFixed(0);
+        const temps = data.zones
+          .map(z => parseFloat(z.sensors?.tempC?.current))
+          .filter(v => Number.isFinite(v));
+        const humidities = data.zones
+          .map(z => parseFloat(z.sensors?.rh?.current))
+          .filter(v => Number.isFinite(v));
+        const avgTemp = temps.length ? (temps.reduce((sum, value) => sum + value, 0) / temps.length).toFixed(1) : null;
+        const avgHumidity = humidities.length ? (humidities.reduce((sum, value) => sum + value, 0) / humidities.length).toFixed(0) : null;
         
-        message += `<li>🌡️ Average Temperature: ${avgTemp}°C</li>`;
-        message += `<li>💧 Average Humidity: ${avgHumidity}%</li>`;
+        if (avgTemp != null) message += `<li>🌡️ Average Temperature: ${avgTemp}°C</li>`;
+        if (avgHumidity != null) message += `<li>💧 Average Humidity: ${avgHumidity}%</li>`;
         message += `<li>📊 Active Zones: ${data.zones.length}</li>`;
       }
       
@@ -2223,12 +2261,28 @@ class FarmAssistant {
   // ── WebSocket Client ─────────────────────────────────────────────────────
   _initWebSocket() {
     try {
-      const token = localStorage.getItem('jwt') || localStorage.getItem('token');
+      const token = localStorage.getItem('auth_token') || localStorage.getItem('jwt') || localStorage.getItem('token') || sessionStorage.getItem('token');
       if (!token) { console.debug('[E.V.I.E. WS] No auth token — skipping WebSocket'); return; }
 
       const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsPort = window.EVIE_WS_PORT || 3001;
-      const url = `${proto}//${location.hostname}:${wsPort}?token=${encodeURIComponent(token)}`;
+      const configuredUrl = String(window.EVIE_WS_URL || '').trim();
+      const configuredPort = String(window.EVIE_WS_PORT || '').trim();
+      const isCentralHost = /greenreach-central|greenreachgreens\.com$/i.test(location.hostname);
+
+      let wsBase = '';
+      if (configuredUrl) {
+        wsBase = configuredUrl.replace(/\/$/, '');
+      } else if (configuredPort) {
+        wsBase = `${proto}//${location.hostname}:${configuredPort}`;
+      } else if (isCentralHost) {
+        wsBase = `${proto}//${location.host}`;
+      } else {
+        console.debug('[E.V.I.E. WS] Realtime endpoint not configured for this host — skipping WebSocket');
+        return;
+      }
+
+      const joinChar = wsBase.includes('?') ? '&' : '?';
+      const url = `${wsBase}${joinChar}token=${encodeURIComponent(token)}`;
 
       this._ws = new WebSocket(url);
 

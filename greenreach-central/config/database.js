@@ -4023,7 +4023,7 @@ async function runMigrations(client) {
 
     // --- Admin user bootstrap: seed default admin if table is empty ---
     try {
-      const adminEmail = process.env.ADMIN_EMAIL || 'info@greenreachgreens.com';
+      const adminEmail = process.env.ADMIN_EMAIL || 'admin@greenreachgreens.com';
       const adminPassword = process.env.ADMIN_PASSWORD;
       if (adminPassword) {
         const { rows: existing } = await client.query('SELECT COUNT(*)::int AS cnt FROM admin_users');
@@ -4039,19 +4039,6 @@ async function runMigrations(client) {
       }
     } catch (seedErr) {
       logger.warn('Admin user seed warning:', seedErr.message);
-    }
-
-    // One-time fix: peter@greenreachgreens.com does not exist — update to working address
-    try {
-      const fixResult = await client.query(
-        `UPDATE farms SET email = 'greenreachfarms@gmail.com', updated_at = NOW()
-         WHERE email = 'peter@greenreachgreens.com'`
-      );
-      if (fixResult.rowCount > 0) {
-        logger.info(`Fixed ${fixResult.rowCount} farm(s) with invalid email peter@greenreachgreens.com -> greenreachfarms@gmail.com`);
-      }
-    } catch (fixErr) {
-      logger.warn('Farm email fix warning:', fixErr.message);
     }
 
     logger.info('Database migrations completed');

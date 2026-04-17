@@ -2168,7 +2168,9 @@ async function saveGroupsV2Group(status = 'draft') {
     groupRecord.lights = [];
   }
   
-  if (planId) groupRecord.plan = planId;
+  if (planId) {
+    applyGroupsV2PlanMetadata(groupRecord, plan, planId);
+  }
   if (config) {
     groupRecord.planConfig = config;
     // Compatibility: also persist seed date at top-level for older readers
@@ -3596,6 +3598,61 @@ function getGroupsV2Plans() {
   return (window.STATE && Array.isArray(window.STATE.plans)) ? window.STATE.plans : [];
 }
 
+function hasGroupsV2FormDom() {
+  return !!(
+    document.getElementById('groupsV2ZoneName') &&
+    document.getElementById('groupsV2RoomSelect') &&
+    document.getElementById('groupsV2ZoneSelect')
+  );
+}
+
+function getGroupsV2ScheduleSelectElement() {
+  const element = document.getElementById('groupsV2ScheduleSelect');
+  if (!element) return null;
+  if ((element.tagName || '').toUpperCase() !== 'SELECT') return null;
+  return element;
+}
+
+function resolveGroupsV2PlanCropName(planOverride, planIdOverride) {
+  const plan = planOverride || null;
+  const planId = String(planIdOverride || plan?.id || plan?.key || plan?.name || '').trim();
+  const candidates = [
+    plan?.crop,
+    plan?._derived?.crop,
+    plan?.meta?.crop,
+    plan?.label,
+    plan?.name,
+  ];
+  for (const candidate of candidates) {
+    const raw = typeof candidate === 'string' ? candidate.trim() : '';
+    if (!raw) continue;
+    if (window.cropUtils && typeof window.cropUtils.normalizeCropName === 'function') {
+      const normalized = window.cropUtils.normalizeCropName(raw);
+      if (normalized && normalized !== 'Unknown') return normalized;
+    }
+    return raw;
+  }
+  if (planId && window.cropUtils && typeof window.cropUtils.planIdToCropName === 'function') {
+    const resolved = window.cropUtils.planIdToCropName(planId);
+    if (resolved && resolved !== 'Unknown') return resolved;
+  }
+  return planId;
+}
+
+function applyGroupsV2PlanMetadata(group, planOverride, planIdOverride) {
+  if (!group || typeof group !== 'object') return;
+  const plan = planOverride || null;
+  const planId = String(planIdOverride || plan?.id || plan?.key || plan?.name || '').trim();
+  if (planId) {
+    group.plan = planId;
+  }
+  const cropName = resolveGroupsV2PlanCropName(plan, planId);
+  if (cropName) {
+    group.crop = cropName;
+    group.recipe = cropName;
+  }
+}
+
 function planMatchesSearch(plan, query) {
   if (!query) return true;
   const needle = query.toLowerCase();
@@ -4032,7 +4089,8 @@ function buildGroupsV2PlanConfig(planOverride) {
 
   // Add harvest cycle config from crop registry if applicable
   const planId = plan.id || plan.key || plan.name || '';
-  const syncStrategy = lookupHarvestStrategySync(planId, '');
+  const cropName = resolveGroupsV2PlanCropName(plan, planId);
+  const syncStrategy = lookupHarvestStrategySync(planId, cropName);
   if (syncStrategy && syncStrategy.strategy === 'cut_and_come_again') {
     config.harvestCycle = buildHarvestCycleConfig(syncStrategy);
   }
@@ -4374,7 +4432,7 @@ function applyPlanSelectionToCurrentGroup(planOverride) {
   if (!group) return;
   const targetPlanId = plan.id || plan.key || plan.name || groupsV2FormState.planId || '';
   if (!targetPlanId) return;
-  group.plan = String(targetPlanId);
+  applyGroupsV2PlanMetadata(group, plan, targetPlanId);
   const cfg = buildGroupsV2PlanConfig(plan);
   if (cfg) group.planConfig = cfg; else delete group.planConfig;
   // Persist to server via app's saveGroups helper (deferred to avoid blocking UI)
@@ -6038,7 +6096,7 @@ function renderGroupsV2LightCard(plan, options) {
 }
 
 function populateGroupsV2ScheduleDropdown() {
-  const select = document.getElementById('groupsV2ScheduleSelect');
+  const select = getGroupsV2ScheduleSelectElement();
   if (!select) return;
   
   // Don't repopulate if user is actively interacting with the dropdown
@@ -6058,6 +6116,7 @@ function populateGroupsV2ScheduleDropdown() {
 }
 
 function requestGroupsV2PlanRefresh() {
+  if (!hasGroupsV2FormDom()) return;
   if (!groupsV2DomReady) {
     groupsV2PendingRefresh.planSelectors = true;
     return;
@@ -6066,6 +6125,7 @@ function requestGroupsV2PlanRefresh() {
 }
 
 function requestGroupsV2ScheduleRefresh() {
+  if (!hasGroupsV2FormDom()) return;
   if (!groupsV2DomReady) {
     groupsV2PendingRefresh.scheduleDropdown = true;
     return;
@@ -6074,6 +6134,7 @@ function requestGroupsV2ScheduleRefresh() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  if (!hasGroupsV2FormDom()) return;
   // ...existing code...
   initializeGroupsV2Form();
   requestGroupsV2PlanRefresh();
@@ -6091,11 +6152,13 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 document.addEventListener('plans-updated', () => {
+  if (!hasGroupsV2FormDom()) return;
   console.log('[Groups V2] plans-updated event received');
   requestGroupsV2PlanRefresh();
 });
 
 document.addEventListener('schedules-updated', () => {
+  if (!hasGroupsV2FormDom()) return;
   console.log('[Groups V2] schedules-updated event received');
   requestGroupsV2ScheduleRefresh();
 });
@@ -6826,6 +6889,117 @@ function populateStandardLightDropdown(selectId, emptyLabel) {
   });
 }
 
+function normalizeBsgPrefix(value) {
+  return String(value || '').trim().replace(/\s+/g, ' ');
+}
+
+function parseBsgInteger(value, fallback, min, max) {
+  var parsed = parseInt(value, 10);
+  if (!Number.isFinite(parsed)) return fallback;
+  if (Number.isFinite(min)) parsed = Math.max(min, parsed);
+  if (Number.isFinite(max)) parsed = Math.min(max, parsed);
+  return parsed;
+}
+
+function normalizeBsgSpectrum(value) {
+  if (value && typeof value === 'object') {
+    return {
+      bl: parseBsgInteger(value.bl, 25, 0, 100),
+      cw: parseBsgInteger(value.cw, 25, 0, 100),
+      rd: parseBsgInteger(value.rd, 25, 0, 100),
+      ww: parseBsgInteger(value.ww, 25, 0, 100)
+    };
+  }
+  return { bl: 25, cw: 25, rd: 25, ww: 25 };
+}
+
+function findBsgRoomByValue(value) {
+  if (!window.STATE || !Array.isArray(window.STATE.rooms)) return null;
+  var needle = String(value || '').trim();
+  if (!needle) return null;
+  return window.STATE.rooms.find(function(room) {
+    if (!room) return false;
+    return String(room.name || '') === needle
+      || String(room.id || '') === needle
+      || String(room.roomId || '') === needle;
+  }) || null;
+}
+
+function resolveBsgZoneForRoom(room, zoneValue) {
+  if (!room) return null;
+  var zoneNeedle = String(zoneValue || '').trim();
+  var zones = Array.isArray(room.zones) && room.zones.length > 0
+    ? room.zones
+    : (room.zoneCount
+      ? Array.from({ length: room.zoneCount }, function(_, i) { return { id: String(i + 1), name: 'Zone ' + (i + 1) }; })
+      : [{ id: '1', name: 'Zone 1' }]);
+
+  var normalizedZones = zones.map(function(z) {
+    var zoneId = typeof z === 'string' ? z : (z.id || z.zoneId || z.name || String(z));
+    var zoneName = typeof z === 'string' ? z : (z.name || z.id || z.zoneId || String(z));
+    return {
+      value: String(zoneId),
+      zoneId: String(zoneId),
+      zoneName: String(zoneName)
+    };
+  });
+
+  if (!zoneNeedle) return normalizedZones[0] || null;
+  return normalizedZones.find(function(zone) {
+    return zone.value === zoneNeedle || zone.zoneName === zoneNeedle || zone.zoneId === zoneNeedle;
+  }) || null;
+}
+
+function buildBsgLightRef(source, context) {
+  var base = source || {};
+  var id = base.id || base.serial || base.deviceId || base.name || '';
+  var room = context?.room || '';
+  var zone = context?.zone || '';
+  var roomId = context?.roomId || '';
+  return {
+    id: id,
+    ppf: Number(base.ppf || base.PPF || 0),
+    ppfd: Number(base.ppfd || base.PPFD || 0),
+    name: base.name || base.deviceName || id,
+    room: room,
+    zone: zone,
+    roomId: roomId,
+    roomName: room,
+    vendor: base.vendor || base.manufacturer || '',
+    control: base.control || 'managed-by-le',
+    tunable: base.tunable !== false,
+    dynamicSpectrum: base.dynamicSpectrum !== false,
+    spectrally_tunable: base.spectrally_tunable || (base.tunable ? 'Yes' : 'No'),
+    deviceId: base.deviceId || id,
+    deviceName: base.deviceName || base.name || id,
+    protocol: base.protocol || '',
+    transport: base.transport || 'LAN',
+    spectrum: normalizeBsgSpectrum(base.spectrum),
+    spectrumMode: base.spectrumMode || (base.dynamicSpectrum === false ? 'static' : 'dynamic'),
+    controllerId: base.controllerId || null,
+    controllerIp: base.controllerIp || '',
+    controllerPort: parseBsgInteger(base.controllerPort, 3000, 1, 65535)
+  };
+}
+
+function syncBsgAutoAssignState() {
+  var autoAssignEl = document.getElementById('bsgAutoAssign');
+  var standardLightEl = document.getElementById('bsgStandardLight');
+  if (!autoAssignEl || !standardLightEl) return;
+
+  var hasStandardSelection = String(standardLightEl.value || '').trim().length > 0;
+  autoAssignEl.disabled = hasStandardSelection;
+  if (hasStandardSelection) {
+    autoAssignEl.checked = false;
+  }
+
+  var label = autoAssignEl.closest('label');
+  if (label) {
+    label.style.opacity = hasStandardSelection ? '0.65' : '';
+    label.style.cursor = hasStandardSelection ? 'not-allowed' : 'pointer';
+  }
+}
+
 /**
  * Get list of unassigned lights (not in any group).
  * Reuses the same identifier priority as the main Groups V2 assignment logic.
@@ -6834,12 +7008,30 @@ function populateStandardLightDropdown(selectId, emptyLabel) {
 function getBsgUnassignedLights() {
   const lights = (window.STATE && Array.isArray(window.STATE.lights)) ? window.STATE.lights : [];
   const assignedIds = getGroupsV2AssignedLightIds();
+  const assignedNormalized = new Set(Array.from(assignedIds).map(function(id) {
+    return String(id || '').trim().toLowerCase();
+  }));
+  const seenUnassigned = new Set();
+
   return lights.filter(light => {
     if (!light) return false;
     if (light.isPlug === true || light.deviceType === 'plug' || light.deviceType === 'controller') return false;
-    const identifier = light.id || light.serial || light.deviceId || light.name || null;
-    if (!identifier) return false;
-    if (assignedIds.has(String(identifier))) return false;
+    const identifiers = [light.id, light.serial, light.deviceId, light.name]
+      .map(function(id) { return String(id || '').trim(); })
+      .filter(Boolean);
+    if (!identifiers.length) return false;
+
+    const isAssigned = identifiers.some(function(id) {
+      const normalized = id.toLowerCase();
+      return assignedIds.has(id) || assignedNormalized.has(normalized);
+    });
+    if (isAssigned) return false;
+
+    const canonicalIdentity = String(light.deviceId || light.serial || light.id || light.name || '').trim().toLowerCase();
+    if (!canonicalIdentity) return false;
+    if (seenUnassigned.has(canonicalIdentity)) return false;
+    seenUnassigned.add(canonicalIdentity);
+
     if (light.groupId) return false;
     return true;
   });
@@ -6868,7 +7060,8 @@ function populateBsgModal() {
   // Pre-select the room from the main Groups V2 panel if set
   const mainRoom = document.getElementById('groupsV2RoomSelect');
   if (mainRoom && mainRoom.value) {
-    roomSelect.value = mainRoom.value;
+    const matchedRoom = findBsgRoomByValue(mainRoom.value);
+    roomSelect.value = matchedRoom?.name || mainRoom.value;
   }
 
   // Populate zones for selected room
@@ -6876,6 +7069,7 @@ function populateBsgModal() {
 
   // Populate standard light dropdown
   populateStandardLightDropdown('bsgStandardLight', '(none \u2014 use auto-assign pool)');
+  syncBsgAutoAssignState();
 }
 
 /**
@@ -6891,7 +7085,7 @@ function populateBsgZones() {
 
   if (!roomName || !window.STATE || !Array.isArray(window.STATE.rooms)) return;
 
-  const room = window.STATE.rooms.find(r => r && r.name === roomName);
+  const room = findBsgRoomByValue(roomName);
   if (!room) return;
 
   // Zones can come from room.zones array or be numbered 1..N
@@ -6911,7 +7105,8 @@ function populateBsgZones() {
   // Pre-select zone from main panel
   const mainZone = document.getElementById('groupsV2ZoneSelect');
   if (mainZone && mainZone.value) {
-    zoneSelect.value = mainZone.value;
+    const matchedZone = resolveBsgZoneForRoom(room, mainZone.value);
+    zoneSelect.value = matchedZone?.value || mainZone.value;
   }
 }
 
@@ -6922,14 +7117,15 @@ function updateBsgPreview() {
   const previewEl = document.getElementById('bsgPreview');
   if (!previewEl) return;
 
-  const prefix = (document.getElementById('bsgPrefix')?.value || '').trim();
-  const count = parseInt(document.getElementById('bsgCount')?.value) || 0;
-  const trays = parseInt(document.getElementById('bsgTrays')?.value) || 4;
-  const lightsPerGroup = parseInt(document.getElementById('bsgLightsPerGroup')?.value) || 1;
-  const autoAssign = document.getElementById('bsgAutoAssign')?.checked ?? true;
+  const prefix = normalizeBsgPrefix(document.getElementById('bsgPrefix')?.value || '');
+  const count = parseBsgInteger(document.getElementById('bsgCount')?.value, 0, 0, 100);
+  const trays = parseBsgInteger(document.getElementById('bsgTrays')?.value, 4, 1, 200);
+  const lightsPerGroup = parseBsgInteger(document.getElementById('bsgLightsPerGroup')?.value, 1, 1, 20);
   const room = document.getElementById('bsgRoom')?.value || '';
   const zone = document.getElementById('bsgZone')?.value || '';
   const stdLightId = (document.getElementById('bsgStandardLight')?.value || '').trim();
+  syncBsgAutoAssignState();
+  const autoAssign = document.getElementById('bsgAutoAssign')?.checked ?? true;
 
   if (!prefix || !count || !room) {
     previewEl.innerHTML = '<span style="color:#94a3b8;">Fill in Room, Prefix, and Count to see preview.</span>';
@@ -7045,31 +7241,163 @@ async function refreshBsgDiscoveryPool() {
   }
 }
 
+async function persistGroupsV2Collection(groups) {
+  const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+  if (!token) {
+    throw new Error('Missing farm auth token for group persistence');
+  }
+  const response = await fetch('/data/groups.json', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+    body: JSON.stringify({ groups })
+  });
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Server error ${response.status}: ${errText}`);
+  }
+}
+
+function createTemplateBackedGroupRecord(config) {
+  const template = config.template || {};
+  const dimensions = template.defaultDimensions || {};
+  const groupName = `${config.prefix} ${config.index}`;
+  const zoneName = config.zoneName || 'Main';
+  const groupId = `${config.roomName}:${zoneName}:${groupName}`;
+
+  return {
+    id: groupId,
+    name: groupName,
+    room: config.roomName,
+    zone: zoneName,
+    roomId: config.roomId || '',
+    zoneId: config.zoneId || '',
+    trays: Number(template.defaultTrays) || 0,
+    plants: 0,
+    lights: [],
+    deviceCount: 0,
+    expectedLightCount: Number(template.defaultLights) || 0,
+    active: true,
+    health: 'healthy',
+    status: 'draft',
+    plan: '',
+    crop: '',
+    recipe: '',
+    schedule: '',
+    planConfig: null,
+    systemType: template.systemType || 'rack',
+    stockTemplateId: template.id || null,
+    stockTemplateKey: template.catalogKey || '',
+    stockTemplateName: template.name || '',
+    templateCategory: template.category || '',
+    dimensionPolicy: template.dimensionPolicy || 'fixed',
+    resizeAxes: Array.isArray(template.resizeAxes) ? template.resizeAxes.slice() : [],
+    defaultDimensions: template.defaultDimensions || {},
+    minDimensions: template.minDimensions || {},
+    maxDimensions: template.maxDimensions || {},
+    length: Number(dimensions.length) || undefined,
+    width: Number(dimensions.width) || undefined,
+    height: Number(dimensions.height) || undefined,
+    lightOrientation: template.defaultLightOrientation || 'out-of-canopy',
+    plantSiteCount: Number(template?.defaults?.plantSiteCount) || 0,
+    stockDefaults: template.defaults || {},
+    lastModified: config.now || new Date().toISOString()
+  };
+}
+
+async function createGroupsFromStockCatalogSelections(selections, options) {
+  const opts = options || {};
+  const existingGroups = Array.isArray(opts.existingGroups)
+    ? opts.existingGroups.slice()
+    : (Array.isArray(window.STATE?.groups) ? window.STATE.groups.slice() : []);
+  const persist = opts.persist !== false;
+  const existingIds = new Set(existingGroups.map((group) => group.id));
+  const now = new Date().toISOString();
+  const createdGroups = [];
+  let skipped = 0;
+
+  (Array.isArray(selections) ? selections : []).forEach((selection) => {
+    if (!selection?.template || !selection?.roomName || !selection?.prefix) return;
+    const total = Math.max(1, parseInt(selection.count, 10) || 1);
+    for (let index = 1; index <= total; index++) {
+      const group = createTemplateBackedGroupRecord({
+        template: selection.template,
+        roomId: selection.roomId,
+        roomName: selection.roomName,
+        zoneId: selection.zoneId,
+        zoneName: selection.zoneName,
+        prefix: selection.prefix,
+        index,
+        now
+      });
+      if (existingIds.has(group.id)) {
+        skipped++;
+        continue;
+      }
+      existingGroups.push(group);
+      existingIds.add(group.id);
+      createdGroups.push(group);
+    }
+  });
+
+  if (!window.STATE) window.STATE = {};
+  window.STATE.groups = existingGroups;
+
+  if (persist && createdGroups.length > 0) {
+    await persistGroupsV2Collection(existingGroups);
+    document.dispatchEvent(new Event('groups-updated'));
+    if (typeof populateGroupsV2LoadGroupDropdown === 'function') {
+      populateGroupsV2LoadGroupDropdown();
+    }
+  }
+
+  return {
+    groups: existingGroups,
+    created: createdGroups.length,
+    skipped,
+    createdGroups
+  };
+}
+
+window.createGroupsFromStockCatalogSelections = createGroupsFromStockCatalogSelections;
+
 /**
  * Execute batch creation of stock groups
  * @returns {Promise<{created: number, skipped: number}>}
  */
 async function executeBuildStockGroups() {
-  const room = (document.getElementById('bsgRoom')?.value || '').trim();
-  const zone = (document.getElementById('bsgZone')?.value || '').trim();
-  const prefix = (document.getElementById('bsgPrefix')?.value || '').trim();
-  const count = parseInt(document.getElementById('bsgCount')?.value) || 0;
-  const trays = parseInt(document.getElementById('bsgTrays')?.value) || 4;
-  const lightsPerGroup = parseInt(document.getElementById('bsgLightsPerGroup')?.value) || 1;
-  const autoAssign = document.getElementById('bsgAutoAssign')?.checked ?? true;
+  const roomSelection = (document.getElementById('bsgRoom')?.value || '').trim();
+  const zoneSelection = (document.getElementById('bsgZone')?.value || '').trim();
+  const prefix = normalizeBsgPrefix(document.getElementById('bsgPrefix')?.value || '');
+  const count = parseBsgInteger(document.getElementById('bsgCount')?.value, 0, 1, 100);
+  const trays = parseBsgInteger(document.getElementById('bsgTrays')?.value, 4, 1, 200);
+  const lightsPerGroup = parseBsgInteger(document.getElementById('bsgLightsPerGroup')?.value, 1, 1, 20);
   const standardLightId = (document.getElementById('bsgStandardLight')?.value || '').trim();
+  syncBsgAutoAssignState();
+  const autoAssign = document.getElementById('bsgAutoAssign')?.checked ?? true;
   const standardLightTemplate = standardLightId
     ? getAvailableLightTemplates().find(t => t.id === standardLightId) || null
     : null;
 
+  const roomObj = findBsgRoomByValue(roomSelection);
+  const zoneContext = resolveBsgZoneForRoom(roomObj, zoneSelection);
+  const roomName = roomObj?.name || roomSelection;
+  const roomId = roomObj?.id || roomObj?.roomId || '';
+  const zoneValue = zoneContext?.value || zoneSelection;
+  const zoneName = zoneContext?.zoneName || zoneValue;
+  const zoneId = zoneContext?.zoneId || '';
+
   // Validation
   const missing = [];
-  if (!room) missing.push('Room');
-  if (!zone) missing.push('Zone');
+  if (!roomName) missing.push('Room');
+  if (!zoneValue) missing.push('Zone');
   if (!prefix) missing.push('Group name prefix');
   if (!count || count < 1) missing.push('Number of groups');
   if (missing.length) {
-    alert('Please fill in: ' + missing.join(', '));
+    if (typeof showToast === 'function') {
+      showToast({ title: 'Missing Fields', msg: 'Please fill in: ' + missing.join(', '), kind: 'warn', icon: '' });
+    } else {
+      alert('Please fill in: ' + missing.join(', '));
+    }
     return { created: 0, skipped: 0 };
   }
 
@@ -7082,20 +7410,16 @@ async function executeBuildStockGroups() {
   }
 
   const existingIds = new Set(window.STATE.groups.map(g => g.id));
+  const nextGroups = window.STATE.groups.slice();
   const unassigned = autoAssign ? getBsgUnassignedLights() : [];
   let lightIndex = 0;
   let created = 0;
   let skipped = 0;
   const now = new Date().toISOString();
 
-  // Find roomId from STATE.rooms
-  const roomObj = (window.STATE.rooms || []).find(r => r && r.name === room);
-  const roomId = roomObj?.id || roomObj?.roomId || '';
-  const zoneId = roomId ? `${roomId}-z${zone}` : '';
-
   for (let i = 1; i <= count; i++) {
     const groupName = `${prefix} ${i}`;
-    const id = `${room}:${zone}:${groupName}`;
+    const id = `${roomName}:${zoneValue}:${groupName}`;
 
     // Skip if group with this ID already exists
     if (existingIds.has(id)) {
@@ -7109,49 +7433,20 @@ async function executeBuildStockGroups() {
     if (standardLightTemplate) {
       // Copy the standard light template to this group (one per lightsPerGroup)
       for (let l = 0; l < lightsPerGroup; l++) {
-        groupLights.push({
-          id: standardLightTemplate.id,
-          name: standardLightTemplate.name || standardLightTemplate.id,
-          vendor: standardLightTemplate.vendor || '',
-          ppf: standardLightTemplate.ppf || 0,
-          ppfd: standardLightTemplate.ppfd || 0,
-          spectrum: standardLightTemplate.spectrum || 'Full Spectrum',
-          control: standardLightTemplate.control || '0-10V',
-          dynamicSpectrum: standardLightTemplate.dynamicSpectrum || false,
-          tunable: standardLightTemplate.tunable || false,
-          spectrally_tunable: standardLightTemplate.spectrally_tunable || 'No',
-          room: room,
-          zone: zone,
-          roomId: roomId,
-          roomName: room
-        });
+        groupLights.push(buildBsgLightRef(standardLightTemplate, {
+          room: roomName,
+          zone: zoneValue,
+          roomId: roomId
+        }));
       }
     } else if (autoAssign) {
       for (let l = 0; l < lightsPerGroup && lightIndex < unassigned.length; l++, lightIndex++) {
         const light = unassigned[lightIndex];
-        // Build a light reference object matching canonical group.lights[] format
-        const lightRef = {
-          id: light.id || light.serial || light.deviceId || '',
-          ppf: light.ppf || light.PPF || 0,
-          name: light.name || light.deviceName || light.id || '',
-          room: room,
-          zone: zone,
-          roomId: roomId,
-          vendor: light.vendor || light.manufacturer || '',
-          control: light.control || 'managed-by-le',
-          tunable: light.tunable !== false,
-          deviceId: light.deviceId || light.id || light.serial || '',
-          protocol: light.protocol || '',
-          roomName: room,
-          spectrum: light.spectrum || { bl: 25, cw: 25, rd: 25, ww: 25 },
-          transport: light.transport || 'LAN',
-          deviceName: light.name || light.deviceName || '',
-          controllerId: light.controllerId || null,
-          controllerIp: light.controllerIp || '',
-          spectrumMode: light.spectrumMode || 'dynamic',
-          controllerPort: light.controllerPort || 3000,
-          dynamicSpectrum: light.dynamicSpectrum !== false
-        };
+        const lightRef = buildBsgLightRef(light, {
+          room: roomName,
+          zone: zoneValue,
+          roomId: roomId
+        });
         groupLights.push(lightRef);
       }
     }
@@ -7159,8 +7454,8 @@ async function executeBuildStockGroups() {
     const group = {
       id,
       name: groupName,
-      room,
-      zone,
+      room: roomName,
+      zone: zoneValue,
       roomId,
       zoneId,
       trays,
@@ -7178,36 +7473,29 @@ async function executeBuildStockGroups() {
       lastModified: now
     };
 
-    window.STATE.groups.push(group);
+    nextGroups.push(group);
     existingIds.add(id);
     created++;
   }
 
   if (created === 0) {
     if (typeof showToast === 'function') {
-      showToast({ title: 'No Groups Created', msg: `All ${count} group names already exist.`, kind: 'warn', icon: '⚠️' });
+      showToast({ title: 'No Groups Created', msg: `All ${count} group names already exist.`, kind: 'warn', icon: '' });
     }
     return { created: 0, skipped };
   }
 
   // Persist all groups to server in one write
   try {
-    const response = await fetch('/data/groups.json', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ groups: window.STATE.groups })
-    });
-    if (!response.ok) {
-      const errText = await response.text();
-      throw new Error(`Server error ${response.status}: ${errText}`);
-    }
+    await persistGroupsV2Collection(nextGroups);
+    window.STATE.groups = nextGroups;
     console.log(`[Build Stock] Saved ${created} new groups (${skipped} skipped)`);
   } catch (error) {
     console.error('[Build Stock] Failed to persist groups:', error);
     if (typeof showToast === 'function') {
-      showToast({ title: 'Save Failed', msg: `Groups created in memory but failed to save: ${error.message}`, kind: 'error' });
+      showToast({ title: 'Save Failed', msg: `No groups were saved: ${error.message}`, kind: 'error', icon: '' });
     }
-    return { created, skipped };
+    return { created: 0, skipped };
   }
 
   // Update UI
@@ -7589,6 +7877,7 @@ document.addEventListener('DOMContentLoaded', function() {
 // Wire up Build Stock Groups modal
 document.addEventListener('DOMContentLoaded', () => {
   const dialog = document.getElementById('buildStockGroupModal');
+  const form = document.getElementById('buildStockGroupForm');
   const openBtn = document.getElementById('buildStockGroupsBtn');
   const closeBtn = document.getElementById('buildStockGroupClose');
   const cancelBtn = document.getElementById('buildStockGroupCancel');
@@ -7597,10 +7886,15 @@ document.addEventListener('DOMContentLoaded', () => {
   if (!dialog || !openBtn) return;
 
   // Open modal
-  openBtn.addEventListener('click', () => {
+  openBtn.addEventListener('click', async () => {
     populateBsgModal();
+    const standardLightId = (document.getElementById('bsgStandardLight')?.value || '').trim();
+    const autoAssign = document.getElementById('bsgAutoAssign')?.checked ?? true;
+    if (autoAssign && !standardLightId) {
+      await refreshBsgDiscoveryPool();
+    }
     updateBsgPreview();
-    dialog.showModal();
+    if (!dialog.open) dialog.showModal();
   });
 
   // Close modal
@@ -7618,6 +7912,14 @@ document.addEventListener('DOMContentLoaded', () => {
     if (el) el.addEventListener(el.type === 'checkbox' ? 'change' : 'input', updateBsgPreview);
   });
 
+  const bsgStandardLight = document.getElementById('bsgStandardLight');
+  if (bsgStandardLight) {
+    bsgStandardLight.addEventListener('change', () => {
+      syncBsgAutoAssignState();
+      updateBsgPreview();
+    });
+  }
+
   // Room change → refresh zones + preview
   const bsgRoom = document.getElementById('bsgRoom');
   if (bsgRoom) {
@@ -7627,29 +7929,50 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Create button
-  if (createBtn) {
-    createBtn.addEventListener('click', async () => {
-      createBtn.disabled = true;
-      createBtn.textContent = 'Creating...';
-      try {
-        const result = await executeBuildStockGroups();
-        if (result.created > 0) {
-          dialog.close();
-          if (typeof showToast === 'function') {
-            const msg = result.skipped > 0
-              ? `Created ${result.created} groups (${result.skipped} skipped — already exist).`
-              : `Created ${result.created} groups as drafts. Assign crop plans and deploy individually.`;
-            showToast({ title: 'Stock Groups Built', msg, kind: 'success', icon: '🏗️' }, 4000);
-          }
+  async function handleBsgCreateSubmit() {
+    if (!createBtn || createBtn.disabled) return;
+    createBtn.disabled = true;
+    createBtn.textContent = 'Creating...';
+    try {
+      const result = await executeBuildStockGroups();
+      if (result.created > 0) {
+        dialog.close();
+        if (typeof showToast === 'function') {
+          const msg = result.skipped > 0
+            ? `Created ${result.created} groups (${result.skipped} skipped — already exist).`
+            : `Created ${result.created} groups as drafts. Assign crop plans and deploy individually.`;
+          showToast({ title: 'Stock Groups Built', msg, kind: 'success', icon: '' }, 4000);
         }
-      } catch (error) {
-        console.error('[Build Stock] Error:', error);
-        alert('Failed to create groups: ' + error.message);
-      } finally {
-        createBtn.disabled = false;
-        createBtn.textContent = 'Create Groups';
       }
+    } catch (error) {
+      console.error('[Build Stock] Error:', error);
+      if (typeof showToast === 'function') {
+        showToast({ title: 'Build Failed', msg: error.message || 'Failed to create groups.', kind: 'error', icon: '' });
+      } else {
+        alert('Failed to create groups: ' + error.message);
+      }
+    } finally {
+      createBtn.disabled = false;
+      createBtn.textContent = 'Create Groups';
+    }
+  }
+
+  if (form) {
+    form.addEventListener('keydown', async (event) => {
+      if (event.key !== 'Enter') return;
+      const tag = String(event.target?.tagName || '').toUpperCase();
+      if (tag === 'TEXTAREA') return;
+      event.preventDefault();
+      await handleBsgCreateSubmit();
+    });
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      await handleBsgCreateSubmit();
+    });
+  } else if (createBtn) {
+    createBtn.addEventListener('click', async () => {
+      await handleBsgCreateSubmit();
     });
   }
 });

@@ -2615,10 +2615,10 @@ function createDeviceEntryElement(device) {
   
   // Category-specific colors
   const categoryColors = {
-    'sensor': { border: '#4ade80', accent: '#86efac', icon: '' },
-    'plug': { border: '#f59e0b', accent: '#fbbf24', icon: '🔌' },
-    'controller': { border: '#818cf8', accent: '#a5b4fc', icon: '🎛' },
-    'device': { border: '#94a3b8', accent: '#cbd5e1', icon: '📱' }
+    'sensor': { border: '#4ade80', accent: '#bbf7d0', icon: '' },
+    'plug': { border: '#f59e0b', accent: '#fde68a', icon: '🔌' },
+    'controller': { border: '#818cf8', accent: '#c7d2fe', icon: '🎛' },
+    'device': { border: '#94a3b8', accent: '#e2e8f0', icon: '📱' }
   };
   
   const colors = categoryColors[deviceCategory] || categoryColors['device'];
@@ -2644,15 +2644,15 @@ function createDeviceEntryElement(device) {
   info.appendChild(name);
 
   const subline = document.createElement('div');
-  subline.style.cssText = 'font-size:10px;color:#cbd5e1;display:flex;flex-wrap:wrap;gap:6px;align-items:center;';
+  subline.style.cssText = 'font-size:10px;color:var(--text-secondary, #64748b);display:flex;flex-wrap:wrap;gap:6px;align-items:center;';
 
   // Add category badge
   const categoryBadge = document.createElement('span');
   const categoryBadgeColors = {
-    'sensor': { bg: '#dcfce7', color: '#166534' },
-    'plug': { bg: '#fef3c7', color: '#92400e' },
-    'controller': { bg: '#e0e7ff', color: '#3730a3' },
-    'device': { bg: '#e2e8f0', color: '#334155' }
+    'sensor': { bg: 'rgba(34, 197, 94, 0.18)', color: '#bbf7d0' },
+    'plug': { bg: 'rgba(245, 158, 11, 0.18)', color: '#fde68a' },
+    'controller': { bg: 'rgba(59, 130, 246, 0.18)', color: '#bfdbfe' },
+    'device': { bg: 'rgba(71, 85, 105, 0.35)', color: '#e2e8f0' }
   };
   const catColors = categoryBadgeColors[deviceCategory] || categoryBadgeColors['device'];
   categoryBadge.style.cssText = `background:${catColors.bg};color:${catColors.color};padding:2px 6px;border-radius:999px;font-weight:600;letter-spacing:0.03em;text-transform:uppercase;`;
@@ -2708,17 +2708,17 @@ function createDeviceEntryElement(device) {
   // Add zone assignment dropdown for SwitchBot sensors (all sensor types, not just WoIOSensor)
   if (isSwitchbotSensor) {
     const zoneSection = document.createElement('div');
-    zoneSection.style.cssText = 'margin-top:10px;padding:8px;background:rgba(15,23,42,0.78);border:1px solid rgba(125,211,252,0.24);border-radius:8px;';
+    zoneSection.style.cssText = 'margin-top:10px;padding:8px;background:rgba(13,125,125,0.08);border:1px solid rgba(13,125,125,0.18);border-radius:8px;';
     
     const zoneLabel = document.createElement('label');
-    zoneLabel.style.cssText = 'display:flex;align-items:center;gap:8px;font-size:12px;color:#bae6fd;font-weight:600;';
+    zoneLabel.style.cssText = 'display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-secondary, #475569);font-weight:600;';
     
     const labelText = document.createElement('span');
     labelText.textContent = 'Zone:';
     zoneLabel.appendChild(labelText);
     
     const zoneSelect = document.createElement('select');
-    zoneSelect.style.cssText = 'padding:4px 8px;border:1px solid rgba(56,189,248,0.4);border-radius:4px;background:rgba(15,23,42,0.92);color:#e2e8f0;font-size:12px;font-weight:500;cursor:pointer;';
+    zoneSelect.style.cssText = 'padding:4px 8px;border:1px solid rgba(13,125,125,0.22);border-radius:4px;background:var(--bg-secondary, #f8fafc);color:var(--text-primary, #0f172a);font-size:12px;font-weight:500;cursor:pointer;';
     zoneSelect.dataset.deviceId = device.id;
     
     // Add unassigned option
@@ -2860,10 +2860,10 @@ function createDeviceEntryElement(device) {
     
     // Add automation control toggle
     const automationRow = document.createElement('div');
-    automationRow.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-top:8px;padding-top:8px;border-top:1px solid #bae6fd;';
+    automationRow.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-top:8px;padding-top:8px;border-top:1px solid rgba(13,125,125,0.18);';
     
     const automationLabel = document.createElement('label');
-    automationLabel.style.cssText = 'display:flex;align-items:center;gap:8px;font-size:12px;color:#bae6fd;font-weight:600;cursor:pointer;flex:1;';
+    automationLabel.style.cssText = 'display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-secondary, #475569);font-weight:600;cursor:pointer;flex:1;';
     
     const automationCheckbox = document.createElement('input');
     automationCheckbox.type = 'checkbox';
@@ -2902,7 +2902,7 @@ function createDeviceEntryElement(device) {
       info.appendChild(telemetrySection);
     } else {
       const placeholder = document.createElement('div');
-      placeholder.style.cssText = 'margin-top:10px;font-size:11px;color:#94a3b8;';
+      placeholder.style.cssText = 'margin-top:10px;font-size:11px;color:var(--text-secondary, #64748b);';
       placeholder.textContent = 'No telemetry reported yet.';
       info.appendChild(placeholder);
     }
@@ -2912,10 +2912,10 @@ function createDeviceEntryElement(device) {
   const controlledEquipment = getAllEquipment().filter(eq => eq.control === `IoT:${device.deviceId || device.id}`);
   if (controlledEquipment.length > 0) {
     const controlSection = document.createElement('div');
-    controlSection.style.cssText = 'margin-top:10px;padding:8px;background:rgba(15,23,42,0.82);border-radius:8px;border:1px solid rgba(59,130,246,0.2);border-left:3px solid #3b82f6;';
+    controlSection.style.cssText = 'margin-top:10px;padding:8px;background:rgba(59,130,246,0.08);border-radius:8px;border:1px solid rgba(59,130,246,0.16);border-left:3px solid #3b82f6;';
     
     const controlHeader = document.createElement('div');
-    controlHeader.style.cssText = 'font-size:11px;font-weight:600;color:#bfdbfe;margin-bottom:6px;';
+    controlHeader.style.cssText = 'font-size:11px;font-weight:600;color:var(--text-primary, #0f172a);margin-bottom:6px;';
     controlHeader.textContent = `Controls ${controlledEquipment.length} Equipment:`;
     controlSection.appendChild(controlHeader);
     
@@ -2924,11 +2924,11 @@ function createDeviceEntryElement(device) {
     
     controlledEquipment.forEach(eq => {
       const equipItem = document.createElement('div');
-      equipItem.style.cssText = 'font-size:11px;color:#cbd5e1;display:flex;align-items:center;gap:6px;';
+      equipItem.style.cssText = 'font-size:11px;color:var(--text-secondary, #64748b);display:flex;align-items:center;gap:6px;';
       equipItem.innerHTML = `
         <span style="width:6px;height:6px;background:#3b82f6;border-radius:50%;"></span>
         <span style="font-weight:500;">${escapeHtml(eq.name || eq.category || 'Equipment')}</span>
-        ${eq.roomName ? `<span style="color:#94a3b8;">in ${escapeHtml(eq.roomName)}</span>` : ''}
+        ${eq.roomName ? `<span style="color:var(--text-secondary, #64748b);">in ${escapeHtml(eq.roomName)}</span>` : ''}
       `;
       equipList.appendChild(equipItem);
     });
@@ -2989,7 +2989,7 @@ function createDeviceEntryElement(device) {
   const trustValue = String(device.trust || '').toLowerCase();
   if (trustValue && trustValue !== 'unknown') {
     const trustBadge = document.createElement('span');
-    trustBadge.style.cssText = 'font-size:10px;font-weight:600;text-transform:uppercase;color:#cbd5e1;';
+    trustBadge.style.cssText = 'font-size:10px;font-weight:600;text-transform:uppercase;color:var(--text-secondary, #64748b);';
     trustBadge.textContent = `Trust: ${trustValue}`;
     actions.appendChild(trustBadge);
   }
@@ -3012,7 +3012,7 @@ function renderIoTDeviceCards(devices) {
       iotPanelBody.appendChild(list);
       console.warn('[renderIoTDeviceCards] Created missing iotDevicesList container dynamically');
     } else {
-      console.error('[renderIoTDeviceCards] IoT panel body not found; cannot render devices');
+      console.log('[renderIoTDeviceCards] Skipping render; IoT panel is not present on this page');
       return;
     }
   }
@@ -3036,11 +3036,10 @@ function renderIoTDeviceCards(devices) {
   console.log('[renderIoTDeviceCards] Trusted devices:', trustedDevices.length);
   console.log('[renderIoTDeviceCards] Unknown devices:', unknownDevices.length);
   if (unknownDevices.length) {
-    let html = `<h3 style="margin:0 0 8px 0;">Unknown Devices</h3>`;
-    html += `<table class="iot-unknown-table" style="width:100%;border-collapse:collapse;margin-bottom:12px;">
-      <thead><tr style="background:#f1f5f9"><th>Identifier</th><th>Type</th><th>Vendor</th><th>Name</th><th>Location</th><th>Trust</th><th>Actions</th></tr></thead><tbody>`;
+    let html = '<h3 class="iot-panel-heading">Unknown Devices</h3>';
+    html += '<table class="iot-unknown-table"><thead><tr><th>Identifier</th><th>Type</th><th>Vendor</th><th>Name</th><th>Location</th><th>Trust</th><th>Actions</th></tr></thead><tbody>';
     for (const dev of unknownDevices) {
-      html += `<tr data-device-id="${escapeHtml(dev.id)}" style="border-bottom:1px solid #e5e7eb;">
+      html += `<tr data-device-id="${escapeHtml(dev.id)}">
         <td>${escapeHtml(dev.address || dev.id || '—')}</td>
         <td><input type="text" class="iot-unknown-type" value="${escapeHtml(dev.type || '')}" style="width:90px"></td>
         <td><input type="text" class="iot-unknown-vendor" value="${escapeHtml(dev.vendor || '')}" style="width:110px"></td>
@@ -3119,16 +3118,16 @@ function renderIoTDeviceCards(devices) {
     card.className = 'iot-vendor-card';
 
     const header = document.createElement('h3');
-    header.className = 'iot-vendor-card__title';
+      header.className = 'iot-vendor-card__title';
     header.textContent = `${vendor === 'unknown' ? 'Unknown' : vendor} Devices`;
     const badge = document.createElement('span');
-    badge.className = 'iot-vendor-card__count';
+      badge.className = 'iot-vendor-card__count';
     badge.textContent = byVendor[vendor].length;
     header.appendChild(badge);
     card.appendChild(header);
 
     const container = document.createElement('div');
-    container.className = 'iot-vendor-card__grid';
+      container.className = 'iot-vendor-card__grid';
     byVendor[vendor].forEach(device => {
       console.log('[renderIoTDeviceCards] Creating entry for device:', device.id);
       const entry = createDeviceEntryElement(device);
@@ -4007,27 +4006,27 @@ async function showDeviceSignInForm(device, deviceIndex) {
   
   if (protocol === 'switchbot') {
     formHTML = `
-      <div style="background: white; border-radius: 8px; padding: 24px; max-width: 500px; width: 90%;">
-        <h3 style="margin: 0 0 16px 0; color: #1e293b;">Sign In to SwitchBot</h3>
-        <p style="margin: 0 0 16px 0; color: #64748b; font-size: 14px;">
+      <div style="background: var(--bg-card); border: 1px solid var(--gr-border); border-radius: 12px; padding: 24px; max-width: 500px; width: 90%; box-shadow: 0 20px 40px rgba(2,6,23,0.35); color: var(--text-primary);">
+        <h3 style="margin: 0 0 16px 0; color: var(--text-primary);">Sign In to SwitchBot</h3>
+        <p style="margin: 0 0 16px 0; color: var(--text-secondary); font-size: 14px;">
           Enter your SwitchBot API credentials to add <strong>${escapeHtml(device.name)}</strong>
         </p>
         
         <div style="margin-bottom: 16px;">
-          <label style="display: block; margin-bottom: 4px; font-size: 13px; font-weight: 600; color: #475569;">API Token</label>
+             <label style="display: block; margin-bottom: 4px; font-size: 13px; font-weight: 600; color: var(--text-secondary);">API Token</label>
           <input type="text" id="deviceSignInToken" placeholder="Your SwitchBot API token" 
-                 style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 4px; font-size: 14px;">
+               style="width:100%;padding:10px;border:1px solid rgba(148,163,184,0.28);border-radius:4px;font-size:14px;background:rgba(15,23,42,0.92);color:var(--text-primary);">
         </div>
         
         <div style="margin-bottom: 24px;">
-          <label style="display: block; margin-bottom: 4px; font-size: 13px; font-weight: 600; color: #475569;">API Secret</label>
+             <label style="display: block; margin-bottom: 4px; font-size: 13px; font-weight: 600; color: var(--text-secondary);">API Secret</label>
           <input type="password" id="deviceSignInSecret" placeholder="Your SwitchBot API secret" 
-                 style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 4px; font-size: 14px;">
+               style="width:100%;padding:10px;border:1px solid rgba(148,163,184,0.28);border-radius:4px;font-size:14px;background:rgba(15,23,42,0.92);color:var(--text-primary);">
         </div>
         
         <div style="display: flex; gap: 8px; justify-content: flex-end;">
           <button onclick="closeDeviceSignInModal()" 
-                  style="padding: 10px 20px; background: #e2e8f0; color: #475569; border: none; border-radius: 4px; font-size: 14px; font-weight: 600; cursor: pointer;">
+              style="padding:10px 20px;background:rgba(30,41,59,0.96);color:var(--text-primary);border:1px solid rgba(148,163,184,0.2);border-radius:4px;font-size:14px;font-weight:600;cursor:pointer;">
             Cancel
           </button>
           <button onclick="submitDeviceSignIn(${deviceIndex}, 'switchbot')" 
@@ -4039,27 +4038,27 @@ async function showDeviceSignInForm(device, deviceIndex) {
     `;
   } else if (protocol === 'kasa' || protocol === 'tplink') {
     formHTML = `
-      <div style="background: white; border-radius: 8px; padding: 24px; max-width: 500px; width: 90%;">
-        <h3 style="margin: 0 0 16px 0; color: #1e293b;">Sign In to TP-Link Kasa</h3>
-        <p style="margin: 0 0 16px 0; color: #64748b; font-size: 14px;">
+      <div style="background: var(--bg-card); border: 1px solid var(--gr-border); border-radius: 12px; padding: 24px; max-width: 500px; width: 90%; box-shadow: 0 20px 40px rgba(2,6,23,0.35); color: var(--text-primary);">
+        <h3 style="margin: 0 0 16px 0; color: var(--text-primary);">Sign In to TP-Link Kasa</h3>
+        <p style="margin: 0 0 16px 0; color: var(--text-secondary); font-size: 14px;">
           Enter your Kasa account credentials to add <strong>${escapeHtml(device.name)}</strong>
         </p>
         
         <div style="margin-bottom: 16px;">
-          <label style="display: block; margin-bottom: 4px; font-size: 13px; font-weight: 600; color: #475569;">Email</label>
+             <label style="display: block; margin-bottom: 4px; font-size: 13px; font-weight: 600; color: var(--text-secondary);">Email</label>
           <input type="email" id="deviceSignInEmail" placeholder="your@email.com" 
-                 style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 4px; font-size: 14px;">
+               style="width:100%;padding:10px;border:1px solid rgba(148,163,184,0.28);border-radius:4px;font-size:14px;background:rgba(15,23,42,0.92);color:var(--text-primary);">
         </div>
         
         <div style="margin-bottom: 24px;">
-          <label style="display: block; margin-bottom: 4px; font-size: 13px; font-weight: 600; color: #475569;">Password</label>
+             <label style="display: block; margin-bottom: 4px; font-size: 13px; font-weight: 600; color: var(--text-secondary);">Password</label>
           <input type="password" id="deviceSignInPassword" placeholder="Your password" 
-                 style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 4px; font-size: 14px;">
+               style="width:100%;padding:10px;border:1px solid rgba(148,163,184,0.28);border-radius:4px;font-size:14px;background:rgba(15,23,42,0.92);color:var(--text-primary);">
         </div>
         
         <div style="display: flex; gap: 8px; justify-content: flex-end;">
           <button onclick="closeDeviceSignInModal()" 
-                  style="padding: 10px 20px; background: #e2e8f0; color: #475569; border: none; border-radius: 4px; font-size: 14px; font-weight: 600; cursor: pointer;">
+              style="padding:10px 20px;background:rgba(30,41,59,0.96);color:var(--text-primary);border:1px solid rgba(148,163,184,0.2);border-radius:4px;font-size:14px;font-weight:600;cursor:pointer;">
             Cancel
           </button>
           <button onclick="submitDeviceSignIn(${deviceIndex}, 'kasa')" 
@@ -8762,10 +8761,10 @@ class FarmWizard {
     
     const modalContent = `
       <div id="brandingModalBackdrop" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center">
-        <div style="background:white;border-radius:12px;padding:24px;max-width:500px;margin:20px;box-shadow:0 20px 40px rgba(0,0,0,0.2)" onclick="event.stopPropagation()">
+        <div style="background:var(--bg-card);border:1px solid var(--gr-border);border-radius:12px;padding:24px;max-width:500px;margin:20px;box-shadow:0 20px 40px rgba(2,6,23,0.35);color:var(--text-primary)" onclick="event.stopPropagation()">
           <div style="display:flex;align-items:center;margin-bottom:16px">
             <h3 style="margin:0;flex:1"> Live Branding Preview</h3>
-            <button id="closeBrandingModal" style="background:none;border:none;font-size:24px;cursor:pointer;color:#666">&times;</button>
+            <button id="closeBrandingModal" style="background:none;border:none;font-size:24px;cursor:pointer;color:var(--text-secondary)">&times;</button>
           </div>
           
           <div style="border:1px solid var(--gr-border);border-radius:8px;padding:20px;background:var(--gr-bg);margin-bottom:16px">
@@ -8854,17 +8853,17 @@ class FarmWizard {
     
     const wizardContent = `
       <div id="brandingWizardBackdrop" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:10001;display:flex;align-items:center;justify-content:center">
-        <div style="background:white;border-radius:12px;padding:24px;max-width:600px;width:90%;margin:20px;box-shadow:0 20px 40px rgba(0,0,0,0.2);max-height:80vh;overflow-y:auto" onclick="event.stopPropagation()">
+        <div style="background:var(--bg-card);border:1px solid var(--gr-border);border-radius:12px;padding:24px;max-width:600px;width:90%;margin:20px;box-shadow:0 20px 40px rgba(2,6,23,0.35);max-height:80vh;overflow-y:auto;color:var(--text-primary)" onclick="event.stopPropagation()">
           <div style="display:flex;align-items:center;margin-bottom:20px">
             <h3 style="margin:0;flex:1"> ${farmName} Branding Editor</h3>
-            ${website ? `<div id="autoExtractionStatus" style="padding:6px 12px;margin-right:8px;background:#f3f4f6;color:#6b7280;border:1px solid #d1d5db;border-radius:4px;font-size:12px"> Auto-extracting...</div>` : ''}
-            <button id="closeBrandingWizard" style="background:none;border:none;font-size:24px;cursor:pointer;color:#666">&times;</button>
+            ${website ? `<div id="autoExtractionStatus" style="padding:6px 12px;margin-right:8px;background:rgba(15,23,42,0.55);color:var(--text-secondary);border:1px solid rgba(148,163,184,0.2);border-radius:4px;font-size:12px"> Auto-extracting...</div>` : ''}
+            <button id="closeBrandingWizard" style="background:none;border:none;font-size:24px;cursor:pointer;color:var(--text-secondary)">&times;</button>
           </div>
           
           <!-- Live Preview Section -->
           <div id="brandingLivePreview" style="border:2px solid var(--gr-border);border-radius:8px;padding:16px;margin-bottom:20px;background:var(--gr-bg)">
             <div style="font-weight:600;margin-bottom:8px;color:var(--gr-primary)">Live Preview</div>
-            <div style="display:flex;align-items:center;padding:12px;background:white;border-radius:6px;border:1px solid var(--gr-border)">
+            <div style="display:flex;align-items:center;padding:12px;background:rgba(15,23,42,0.42);border-radius:6px;border:1px solid var(--gr-border)">
               <img id="previewLogo" style="width:32px;height:32px;margin-right:12px;border-radius:4px;display:none">
               <div>
                 <div id="previewFarmName" style="font-size:18px;font-weight:600;color:var(--gr-text)">${farmName}</div>
@@ -8878,11 +8877,11 @@ class FarmWizard {
             <h4 style="margin:0 0 12px;color:var(--gr-text)">Farm Details</h4>
             <div style="margin-bottom:12px">
               <label style="display:block;margin-bottom:4px;font-size:12px;color:var(--medium)">Farm Name</label>
-              <input type="text" id="farmNameInput" value="${farmName}" placeholder="Your Farm Name" style="width:100%;padding:8px;border:1px solid var(--gr-border);border-radius:4px">
+              <input type="text" id="farmNameInput" value="${farmName}" placeholder="Your Farm Name" style="width:100%;padding:8px;border:1px solid rgba(148,163,184,0.28);border-radius:4px;background:rgba(15,23,42,0.92);color:var(--text-primary)">
             </div>
             <div>
               <label style="display:block;margin-bottom:4px;font-size:12px;color:var(--medium)">Tagline</label>
-              <input type="text" id="taglineInput" value="${currentBranding.tagline || 'Growing with technology'}" placeholder="Farm tagline or motto" style="width:100%;padding:8px;border:1px solid var(--gr-border);border-radius:4px">
+              <input type="text" id="taglineInput" value="${currentBranding.tagline || 'Growing with technology'}" placeholder="Farm tagline or motto" style="width:100%;padding:8px;border:1px solid rgba(148,163,184,0.28);border-radius:4px;background:rgba(15,23,42,0.92);color:var(--text-primary)">
             </div>
           </div>
           
@@ -13942,14 +13941,14 @@ function renderRooms() {
         ? planSummaries.map(renderPlanSummaryLine).join('<br>')
         : '—';
       
-      return `<div class="card" style="margin-top:8px">
+      return `<div class="card" style="margin-top:8px;background:linear-gradient(180deg, rgba(30,41,59,0.94) 0%, rgba(15,23,42,0.9) 100%);border:1px solid rgba(148,163,184,0.18);box-shadow:0 16px 32px rgba(2,6,23,0.22);">
         <div class="row" style="justify-content:space-between;align-items:center">
           <div>
-            <h3 style="margin:0">${name}</h3>
-            <div class="tiny" style="color:#475569"><b>Equipment:</b> ${equipmentSummary}</div>
-            <div class="tiny" style="margin:4px 0;display:flex;align-items:center;gap:6px;flex-wrap:wrap"><b style="color:#475569">Zones:</b> ${zoneHtml}</div>
-            <div class="tiny" style="color:#475569"><b>Plans:</b> ${planSummaryHtml}</div>
-            ${numLights > 0 ? `<div class="tiny" style="color:#64748b">Lights: ${numLights} (${lightsList})</div>` : ''}
+            <h3 style="margin:0;color:var(--text-primary)">${name}</h3>
+            <div class="tiny" style="color:var(--text-secondary)"><b>Equipment:</b> ${equipmentSummary}</div>
+            <div class="tiny" style="margin:4px 0;display:flex;align-items:center;gap:6px;flex-wrap:wrap;color:var(--text-secondary)"><b style="color:var(--text-secondary)">Zones:</b> ${zoneHtml}</div>
+            <div class="tiny" style="color:var(--text-secondary)"><b>Plans:</b> ${planSummaryHtml}</div>
+            ${numLights > 0 ? `<div class="tiny" style="color:var(--text-secondary)">Lights: ${numLights} (${lightsList})</div>` : ''}
           </div>
           <div class="row" style="gap:6px">
             <button type="button" class="ghost" data-action="edit-room" data-room-id="${roomId}">Edit</button>
@@ -14036,11 +14035,11 @@ function renderLightSetups() {
       const controlMethod = room.controlMethod || room.control || '—';
       
       return `
-        <div class="card" style="margin-bottom: 16px; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px;">
+        <div class="card" style="margin-bottom:16px;border:1px solid rgba(148,163,184,0.18);border-radius:12px;padding:16px;background:linear-gradient(180deg, rgba(30,41,59,0.94) 0%, rgba(15,23,42,0.9) 100%);box-shadow:0 16px 32px rgba(2,6,23,0.22);">
           <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 12px;">
             <div>
-              <h3 style="margin: 0 0 4px 0; color: #1e293b; font-size: 18px;">${escapeHtml(room.name || 'Unnamed Room')}</h3>
-              <div class="tiny" style="color: #64748b;">Room ID: ${escapeHtml(room.id || 'N/A')}</div>
+              <h3 style="margin:0 0 4px 0;color:var(--text-primary);font-size:18px;">${escapeHtml(room.name || 'Unnamed Room')}</h3>
+              <div class="tiny" style="color:var(--text-secondary);">Room ID: ${escapeHtml(room.id || 'N/A')}</div>
             </div>
             <div style="display: flex; gap: 8px;">
               <button type="button" class="ghost small" onclick="editRoom('${escapeHtml(room.id)}')">
@@ -14048,24 +14047,24 @@ function renderLightSetups() {
               </button>
             </div>
           </div>
-          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; padding: 12px; background: #f8fafc; border-radius: 6px;">
+          <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:12px;padding:12px;background:rgba(15,23,42,0.42);border:1px solid rgba(148,163,184,0.14);border-radius:10px;">
             <div>
-              <div class="tiny" style="color: #64748b; margin-bottom: 4px;">Fixtures</div>
-              <div style="font-weight: 600; color: #1e293b;">${totalFixtures} total</div>
-              <div class="tiny" style="color: #475569; margin-top: 2px;">${fixturesList}</div>
+              <div class="tiny" style="color:var(--text-secondary);margin-bottom:4px;">Fixtures</div>
+              <div style="font-weight:600;color:var(--text-primary);">${totalFixtures} total</div>
+              <div class="tiny" style="color:var(--text-secondary);margin-top:2px;">${fixturesList}</div>
             </div>
             <div>
-              <div class="tiny" style="color: #64748b; margin-bottom: 4px;">Zones</div>
-              <div style="font-weight: 600; color: #1e293b;">${escapeHtml(zones)}</div>
+              <div class="tiny" style="color:var(--text-secondary);margin-bottom:4px;">Zones</div>
+              <div style="font-weight:600;color:var(--text-primary);">${escapeHtml(zones)}</div>
             </div>
             <div>
-              <div class="tiny" style="color: #64748b; margin-bottom: 4px;">Control Method</div>
-              <div style="font-weight: 600; color: #1e293b;">${escapeHtml(controlMethod)}</div>
+              <div class="tiny" style="color:var(--text-secondary);margin-bottom:4px;">Control Method</div>
+              <div style="font-weight:600;color:var(--text-primary);">${escapeHtml(controlMethod)}</div>
             </div>
             ${room.layout ? `
             <div>
-              <div class="tiny" style="color: #64748b; margin-bottom: 4px;">Layout</div>
-              <div style="font-weight: 600; color: #1e293b;">${escapeHtml(room.layout)}</div>
+              <div class="tiny" style="color:var(--text-secondary);margin-bottom:4px;">Layout</div>
+              <div style="font-weight:600;color:var(--text-primary);">${escapeHtml(room.layout)}</div>
             </div>
             ` : ''}
           </div>
@@ -14151,12 +14150,12 @@ function renderLightSetupSummary() {
     const lightsList = Object.keys(room.lights).length ? Object.entries(room.lights).map(([k,v]) => `${escapeHtml(k)} ×${v}`).join(', ') : '—';
     const name = escapeHtml(room.name || room.id);
     const roomId = escapeHtml(room.id);
-    return `<div class="card" style="margin-top:8px">
+    return `<div class="card" style="margin-top:8px;background:linear-gradient(180deg, rgba(30,41,59,0.94) 0%, rgba(15,23,42,0.9) 100%);border:1px solid rgba(148,163,184,0.18);box-shadow:0 16px 32px rgba(2,6,23,0.22);">
       <div class="row" style="justify-content:space-between;align-items:center">
         <div>
-          <h3 style="margin:0">${name}</h3>
-          <div class="tiny" style="color:#475569">Zones: ${zones} • Controls: ${controls}</div>
-          <div class="tiny" style="color:#475569">Lights: ${room.totalLights} (${lightsList})</div>
+          <h3 style="margin:0;color:var(--text-primary)">${name}</h3>
+          <div class="tiny" style="color:var(--text-secondary)">Zones: ${zones} • Controls: ${controls}</div>
+          <div class="tiny" style="color:var(--text-secondary)">Lights: ${room.totalLights} (${lightsList})</div>
         </div>
         <div class="row" style="gap:6px">
           <button type="button" class="ghost" data-action="edit-room" data-room-id="${roomId}">Edit</button>
@@ -14534,7 +14533,7 @@ function renderControllerAssignments() {
     <div class="table-container" style="overflow-x: auto;">
       <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
         <thead>
-          <tr style="background: #f8fafc; border-bottom: 2px solid #e2e8f0;">
+          <tr style="background: rgba(15,23,42,0.72); border-bottom: 1px solid rgba(148,163,184,0.2);">
             <th style="text-align: left; padding: 12px 8px; font-weight: 600;">Type</th>
             <th style="text-align: left; padding: 12px 8px; font-weight: 600;">Make</th>
             <th style="text-align: left; padding: 12px 8px; font-weight: 600;">Model</th>
@@ -14562,7 +14561,7 @@ function renderControllerAssignments() {
               <td style="padding: 12px 8px;">${item.room}</td>
               <td style="padding: 12px 8px;">${item.zone}</td>
               <td style="padding: 12px 8px;">
-                <code style="background: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-family: 'Monaco', monospace; font-size: 12px;">${item.uniqueId}</code>
+                <code style="background: rgba(15,23,42,0.78); color: var(--text-primary); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(148,163,184,0.16); font-family: 'Monaco', monospace; font-size: 12px;">${item.uniqueId}</code>
               </td>
               <td style="padding: 12px 8px;">
                 <span class="chip tiny" style="background: #ecfdf5; color: #059669;">${item.controlMethod}</span>
@@ -14574,7 +14573,7 @@ function renderControllerAssignments() {
                 }
               </td>
               <td style="padding: 12px 8px;">
-                <select class="controller-select" data-equipment-index="${index}" style="padding: 4px 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px;">
+                <select class="controller-select" data-equipment-index="${index}" style="padding:4px 8px;border:1px solid rgba(148,163,184,0.28);border-radius:4px;font-size:13px;background:rgba(15,23,42,0.92);color:var(--text-primary);">
                   <option value="">Select Controller...</option>
                   <option value="hub-001">Main Hub (HUB-001)</option>
                   <option value="controller-001">Zone Controller 1 (CTRL-001)</option>
@@ -14591,7 +14590,7 @@ function renderControllerAssignments() {
       </table>
     </div>
     
-    <div style="margin-top: 16px; padding: 12px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;">
+    <div style="margin-top:16px;padding:12px;background:rgba(15,23,42,0.42);border-radius:8px;border:1px solid rgba(148,163,184,0.16);">
       <div class="row" style="justify-content: space-between; align-items: center;">
         <div>
           <strong>${equipment.length}</strong> equipment item${equipment.length !== 1 ? 's' : ''} requiring controller assignment
@@ -14649,16 +14648,16 @@ function editControllerAssignment(index) {
         <div class="modal-body">
           <div class="form-group">
             <label>Equipment Details</label>
-            <div style="background: #f8fafc; padding: 16px; border-radius: 8px; margin-bottom: 16px;">
+            <div style="background: rgba(15,23,42,0.42); padding: 16px; border-radius: 8px; margin-bottom: 16px; border: 1px solid rgba(148,163,184,0.14);">
               <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 14px;">
                 <div><strong>Type:</strong> ${item.type}</div>
                 <div><strong>Make:</strong> ${item.make}</div>
                 <div><strong>Model:</strong> ${item.model}</div>
                 <div><strong>Room:</strong> 
-                  <select id="editRoomDropdown" style="width: 90%; padding: 4px 8px; border-radius: 4px;">${roomOptions}</select>
+                  <select id="editRoomDropdown" style="width:90%;padding:4px 8px;border-radius:4px;background:rgba(15,23,42,0.92);color:var(--text-primary);border:1px solid rgba(148,163,184,0.28);">${roomOptions}</select>
                 </div>
                 <div><strong>Zone:</strong> 
-                  <select id="editZoneDropdown" style="width: 90%; padding: 4px 8px; border-radius: 4px;">${zoneOptions}</select>
+                  <select id="editZoneDropdown" style="width:90%;padding:4px 8px;border-radius:4px;background:rgba(15,23,42,0.92);color:var(--text-primary);border:1px solid rgba(148,163,184,0.28);">${zoneOptions}</select>
                 </div>
                 <div><strong>Control:</strong> ${item.controlMethod}</div>
                 ${item.serial ? `<div><strong>Serial:</strong> ${item.serial}</div>` : ''}
@@ -14670,7 +14669,7 @@ function editControllerAssignment(index) {
           
           <div class="form-group">
             <label for="assignedController">Assign Controller</label>
-            <select id="assignedController" style="width: 100%; padding: 12px; border: 1px solid #d1d5db; border-radius: 8px;">
+            <select id="assignedController" style="width:100%;padding:12px;border:1px solid rgba(148,163,184,0.28);border-radius:8px;background:rgba(15,23,42,0.92);color:var(--text-primary);">
               <option value="">Select Controller...</option>
               <option value="hub-001" ${item.controller === 'hub-001' ? 'selected' : ''}>Main Hub (HUB-001)</option>
               <option value="controller-001" ${item.controller === 'controller-001' ? 'selected' : ''}>Zone Controller 1 (CTRL-001)</option>
@@ -16202,7 +16201,7 @@ function saveEquipmentChanges() {
   }
 }
 
-function renderGrowRoomOverview() {
+function renderGrowRoomOverviewLegacy() {
   const summaryEl = document.getElementById('growOverviewSummary');
   const gridEl = document.getElementById('growOverviewGrid');
   if (!summaryEl || !gridEl) return;
@@ -16309,7 +16308,96 @@ function renderGrowRoomOverview() {
     return 'unknown';
   };
 
-  const buildMetrics = (zone) => {
+  const buildRoomSensorMetrics = (devices) => {
+    if (!Array.isArray(devices) || !devices.length) return '';
+
+    const averageMetric = (getter) => {
+      const values = devices
+        .map((device) => getter(device))
+        .filter((value) => typeof value === 'number' && Number.isFinite(value));
+      if (!values.length) return null;
+      return values.reduce((sum, value) => sum + value, 0) / values.length;
+    };
+
+    const co2Average = averageMetric((device) => toNumericValue(resolveDeviceMetric(device, ['co2', 'co_2', 'carbonDioxide', 'carbondioxide']).value));
+    const metrics = [
+      { label: 'Temp', value: averageMetric(getTemperatureCelsiusNumeric), formatter: (value) => `${value.toFixed(1)}°C` },
+      { label: 'Humidity', value: averageMetric(getHumidityPercentNumeric), formatter: (value) => `${value.toFixed(0)}%` },
+      { label: 'CO2', value: co2Average, formatter: (value) => `${value.toFixed(0)} ppm` },
+      { label: 'VPD', value: averageMetric((device) => {
+          const direct = toNumericValue(resolveDeviceMetric(device, ['vpd', 'vpd_kpa', 'vpdvalue', 'vapor_pressure_deficit', 'vaporpressuredeficit']).value);
+          return direct !== null ? direct : computeVpdFromTempHumidity(device);
+        }), formatter: (value) => `${value.toFixed(2)} kPa` }
+    ].filter((item) => typeof item.value === 'number' && Number.isFinite(item.value));
+
+    return metrics.map((item) => `
+      <div class="grow-room-card__metric grow-room-card__metric--unknown">
+        <span class="grow-room-card__metric-label">${escapeHtml(item.label)}</span>
+        <span class="grow-room-card__metric-value">${escapeHtml(item.formatter(item.value))}</span>
+      </div>`).join('');
+  };
+
+  const collectRoomSensorDevices = (room, zone) => {
+    const roomKeys = collectIdentityKeys(room, zone);
+    if (!roomKeys.size) return [];
+
+    return dedupeDevices(Array.isArray(STATE.iotDevices) ? STATE.iotDevices : [])
+      .filter((device) => {
+        const trust = String(device?.trust || 'trusted').toLowerCase();
+        if (trust && trust !== 'trusted') return false;
+
+        const role = classifySwitchbotDeviceRole(device);
+        const category = getDeviceCategory(device);
+        const hasMetric = getTemperatureCelsiusNumeric(device) !== null ||
+          getHumidityPercentNumeric(device) !== null ||
+          computeVpdFromTempHumidity(device) !== null ||
+          toNumericValue(resolveDeviceMetric(device, ['co2', 'co_2', 'carbonDioxide', 'carbondioxide']).value) !== null;
+
+        if (!(role === 'Sensor' || category === 'sensor' || hasMetric)) return false;
+
+        const deviceKeys = toKeySet(
+          device.id,
+          device.room,
+          device.roomId,
+          device.roomName,
+          device.location,
+          device.zone,
+          device.zoneId,
+          device.telemetry?.room_name,
+          device.telemetry?.roomName,
+          device.telemetry?.zone,
+          device.snapshot?.room,
+          device.snapshot?.zone,
+          device.deviceData?.room,
+          device.deviceData?.room_name,
+          device.deviceData?.zone
+        );
+        for (const key of deviceKeys) {
+          if (roomKeys.has(key)) return true;
+        }
+
+        const roomName = readString(room?.name, room?.id).toLowerCase();
+        const location = readString(device.location, device.telemetry?.room_name, device.snapshot?.room).toLowerCase();
+        return Boolean(roomName && location && location.includes(roomName));
+      })
+      .sort((left, right) => readString(left.name, left.deviceName, left.id).localeCompare(readString(right.name, right.deviceName, right.id)));
+  };
+
+  const buildRoomSensorList = (devices) => {
+    if (!Array.isArray(devices) || !devices.length) return '';
+    const preview = devices.slice(0, 4).map((device) => {
+      const label = readString(device.name, device.deviceName, device.vendor, device.id) || 'Sensor';
+      return `<li class="grow-room-card__device-chip">${escapeHtml(label)}</li>`;
+    }).join('');
+    const extra = devices.length > 4 ? `<li class="grow-room-card__device-chip">+${devices.length - 4} more</li>` : '';
+    return `
+      <div class="grow-room-card__devices">
+        <span class="tiny text-muted">Sensors</span>
+        <ul class="grow-room-card__device-list">${preview}${extra}</ul>
+      </div>`;
+  };
+
+  const buildMetrics = (zone, roomSensors = []) => {
     if (!zone || !zone.sensors) return '';
     const items = metricKeys
       .map((meta) => {
@@ -16325,7 +16413,7 @@ function renderGrowRoomOverview() {
       })
       .filter(Boolean)
       .join('');
-    return items;
+    return items || buildRoomSensorMetrics(roomSensors);
   };
 
   const buildAiSection = () => {
@@ -19711,7 +19799,7 @@ class FreshLightWizard {
       this.setupEventListeners();
       console.log('[FreshLightWizard] Fresh wizard initialized successfully');
     } else {
-      console.error('[FreshLightWizard] Could not find freshLightModal element!');
+      console.log('[FreshLightWizard] Skipping init; freshLightModal is not present on this page');
     }
   }
 
@@ -20838,7 +20926,7 @@ function buildPairingEnvironmentContext(roomWizardInstance) {
 
 const DEVICE_PAIR_WIZARD = new DevicePairWizard();
 
-function findModelByValue(value) {
+function findPairingModelByValue(value) {
   if (!DEVICE_MANUFACTURERS) return null;
   for (const m of DEVICE_MANUFACTURERS) {
     const md = (m.models || []).find(x => x.id === value || x.model === value);
@@ -20855,7 +20943,7 @@ function hookRoomDevicePairing(roomWizardInstance) {
     const modelSel = document.getElementById('roomDeviceModel');
     let modelMeta = null;
     if (modelSel && modelSel.value) {
-      modelMeta = findModelByValue(modelSel.value);
+      modelMeta = findPairingModelByValue(modelSel.value);
       if (modelMeta && modelMeta.connectivity && modelMeta.connectivity.includes('bluetooth')) suggested = 'bluetooth';
     }
     const vendor = document.getElementById('roomDeviceVendor')?.value || '';
@@ -21056,8 +21144,97 @@ function renderGrowRoomOverview() {
     return 'unknown';
   };
 
-  const buildMetrics = (zone) => {
-    if (!zone || !zone.sensors) return '';
+  const buildRoomSensorMetrics = (devices) => {
+    if (!Array.isArray(devices) || !devices.length) return '';
+
+    const averageMetric = (getter) => {
+      const values = devices
+        .map((device) => getter(device))
+        .filter((value) => typeof value === 'number' && Number.isFinite(value));
+      if (!values.length) return null;
+      return values.reduce((sum, value) => sum + value, 0) / values.length;
+    };
+
+    const co2Average = averageMetric((device) => toNumericValue(resolveDeviceMetric(device, ['co2', 'co_2', 'carbonDioxide', 'carbondioxide']).value));
+    const metrics = [
+      { label: 'Temp', value: averageMetric(getTemperatureCelsiusNumeric), formatter: (value) => `${value.toFixed(1)}°C` },
+      { label: 'Humidity', value: averageMetric(getHumidityPercentNumeric), formatter: (value) => `${value.toFixed(0)}%` },
+      { label: 'CO2', value: co2Average, formatter: (value) => `${value.toFixed(0)} ppm` },
+      { label: 'VPD', value: averageMetric((device) => {
+          const direct = toNumericValue(resolveDeviceMetric(device, ['vpd', 'vpd_kpa', 'vpdvalue', 'vapor_pressure_deficit', 'vaporpressuredeficit']).value);
+          return direct !== null ? direct : computeVpdFromTempHumidity(device);
+        }), formatter: (value) => `${value.toFixed(2)} kPa` }
+    ].filter((item) => typeof item.value === 'number' && Number.isFinite(item.value));
+
+    return metrics.map((item) => `
+      <div class="grow-room-card__metric grow-room-card__metric--unknown">
+        <span class="grow-room-card__metric-label">${escapeHtml(item.label)}</span>
+        <span class="grow-room-card__metric-value">${escapeHtml(item.formatter(item.value))}</span>
+      </div>`).join('');
+  };
+
+  const collectRoomSensorDevices = (room, zone) => {
+    const roomKeys = collectIdentityKeys(room, zone);
+    if (!roomKeys.size) return [];
+
+    return dedupeDevices(Array.isArray(STATE.iotDevices) ? STATE.iotDevices : [])
+      .filter((device) => {
+        const trust = String(device?.trust || 'trusted').toLowerCase();
+        if (trust && trust !== 'trusted') return false;
+
+        const role = classifySwitchbotDeviceRole(device);
+        const category = getDeviceCategory(device);
+        const hasMetric = getTemperatureCelsiusNumeric(device) !== null ||
+          getHumidityPercentNumeric(device) !== null ||
+          computeVpdFromTempHumidity(device) !== null ||
+          toNumericValue(resolveDeviceMetric(device, ['co2', 'co_2', 'carbonDioxide', 'carbondioxide']).value) !== null;
+
+        if (!(role === 'Sensor' || category === 'sensor' || hasMetric)) return false;
+
+        const deviceKeys = toKeySet(
+          device.id,
+          device.room,
+          device.roomId,
+          device.roomName,
+          device.location,
+          device.zone,
+          device.zoneId,
+          device.telemetry?.room_name,
+          device.telemetry?.roomName,
+          device.telemetry?.zone,
+          device.snapshot?.room,
+          device.snapshot?.zone,
+          device.deviceData?.room,
+          device.deviceData?.room_name,
+          device.deviceData?.zone
+        );
+        for (const key of deviceKeys) {
+          if (roomKeys.has(key)) return true;
+        }
+
+        const roomName = readString(room?.name, room?.id).toLowerCase();
+        const location = readString(device.location, device.telemetry?.room_name, device.snapshot?.room).toLowerCase();
+        return Boolean(roomName && location && location.includes(roomName));
+      })
+      .sort((left, right) => readString(left.name, left.deviceName, left.id).localeCompare(readString(right.name, right.deviceName, right.id)));
+  };
+
+  const buildRoomSensorList = (devices) => {
+    if (!Array.isArray(devices) || !devices.length) return '';
+    const preview = devices.slice(0, 4).map((device) => {
+      const label = readString(device.name, device.deviceName, device.vendor, device.id) || 'Sensor';
+      return `<li class="grow-room-card__device-chip">${escapeHtml(label)}</li>`;
+    }).join('');
+    const extra = devices.length > 4 ? `<li class="grow-room-card__device-chip">+${devices.length - 4} more</li>` : '';
+    return `
+      <div class="grow-room-card__devices">
+        <span class="tiny text-muted">Sensors</span>
+        <ul class="grow-room-card__device-list">${preview}${extra}</ul>
+      </div>`;
+  };
+
+  const buildMetrics = (zone, roomSensors = []) => {
+    if (!zone || !zone.sensors) return buildRoomSensorMetrics(roomSensors);
     const items = metricKeys
       .map((meta) => {
         const sensor = zone.sensors?.[meta.key];
@@ -21072,7 +21249,7 @@ function renderGrowRoomOverview() {
       })
       .filter(Boolean)
       .join('');
-    return items;
+    return items || buildRoomSensorMetrics(roomSensors);
   };
 
   const buildAiSection = () => {
@@ -21407,6 +21584,7 @@ function renderGrowRoomOverview() {
   if (rooms.length) {
     rooms.forEach((room) => {
       const zone = matchZoneForRoom(room);
+      const roomSensors = collectRoomSensorDevices(room, zone);
       const name = room.name || room.id || 'Grow Room';
       const details = [];
       const zonesList = Array.isArray(room.zones) ? room.zones.filter(Boolean) : [];
@@ -21423,7 +21601,9 @@ function renderGrowRoomOverview() {
       if (zone?.meta?.source) metaParts.push(`Source: ${escapeHtml(zone.meta.source)}`);
       if (typeof zone?.meta?.battery === 'number') metaParts.push(`Battery: ${escapeHtml(`${zone.meta.battery}%`)}`);
       if (typeof zone?.meta?.rssi === 'number') metaParts.push(`RSSI: ${escapeHtml(`${zone.meta.rssi} dBm`)}`);
-      const metrics = buildMetrics(zone);
+      if (roomSensors.length) metaParts.push(`${roomSensors.length} live sensor${roomSensors.length === 1 ? '' : 's'}`);
+      const metrics = buildMetrics(zone, roomSensors);
+      const sensorList = buildRoomSensorList(roomSensors);
       const statusIcons = renderStatusIcons(room, zone);
       cards.push(`
         <article class="grow-room-card">
@@ -21434,6 +21614,7 @@ function renderGrowRoomOverview() {
           ${statusIcons}
           ${details.length ? `<div class="tiny text-muted">${details.join(' • ')}</div>` : ''}
           ${metaParts.length ? `<div class="tiny text-muted">${metaParts.join(' • ')}</div>` : ''}
+          ${sensorList}
           ${metrics ? `<div class="grow-room-card__metrics">${metrics}</div>` : '<p class="tiny text-muted">No telemetry available.</p>'}
           <div class="grow-room-card__ai">
             <span class="tiny text-muted">AI Features</span>
@@ -21771,7 +21952,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       console.warn('[Bootstrap] LightWizard init failed', e);
     }
     try {
-      window.freshLightWizard = new FreshLightWizard();
+      if (document.getElementById('freshLightModal')) {
+        window.freshLightWizard = new FreshLightWizard();
+      }
     } catch (e) {
       console.warn('[Bootstrap] FreshLightWizard init failed', e);
     }

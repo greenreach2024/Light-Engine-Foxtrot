@@ -95,16 +95,18 @@ curl -X POST http://localhost:8091/api/test/sms \
 
 **Step 2: Get Service Account**
 ```bash
+# Cloud Run/GCP recommended: use keyless ADC via service account IAM
 # Firebase Console → Project Settings → Service Accounts
-# Click "Generate New Private Key"
-# Download JSON file
-# Save as: /config/firebase-service-account.json
+# Only for local fallback, generate JSON and store OUTSIDE this repo
 ```
 
 **Step 3: Configure Environment**
 ```bash
 # Add to .env
-FIREBASE_SERVICE_ACCOUNT_PATH=/Users/petergilbert/Light-Engine-Foxtrot/config/firebase-service-account.json
+FIREBASE_ENABLED=true
+# Optional local fallback only:
+# GOOGLE_APPLICATION_CREDENTIALS=/absolute/path/outside/repo/firebase-service-account.json
+# FIREBASE_SERVICE_ACCOUNT_PATH=/absolute/path/outside/repo/firebase-service-account.json
 ```
 
 **Step 4: Install Packages**
