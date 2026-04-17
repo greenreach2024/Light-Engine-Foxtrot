@@ -5463,10 +5463,11 @@
 
           <div style="margin-bottom: 1rem;">
             <label style="display: block; color: #e2e8f0; font-weight: 600; margin-bottom: 4px;">Crop / Recipe *</label>
-            <input type="text" id="seedCrop" placeholder="e.g., Butterhead Lettuce" required
+            <input type="text" id="seedCrop" list="cropSuggestions" placeholder="e.g., Butterhead Lettuce" required autocomplete="off"
               style="width: 100%; padding: 12px; border-radius: 14px; border: 1px solid #334155; background: #1e293b; color: #f8fafc; font-size: 1rem;">
+            <datalist id="cropSuggestions"></datalist>
             <div id="seedAiHint" style="font-size: 0.8rem; color: #f1f5f9; margin-top: 4px;">
-              🤖 AI is selecting the best crop suggestion...
+              Loading crop list...
             </div>
           </div>
 
@@ -5509,7 +5510,24 @@
         </div>
       `;
       scanResult.style.display = 'block';
+      loadCropDatalist();
       loadSuggestedSeedCrop(trayId);
+    }
+
+    // ── G1 Fix: Populate crop datalist from crop-registry ─────────────────
+    async function loadCropDatalist() {
+      try {
+        const res = await fetch('/api/crops?active=true');
+        if (!res.ok) return;
+        const data = await res.json();
+        const dl = document.getElementById('cropSuggestions');
+        if (!dl) return;
+        dl.innerHTML = (data.crops || []).map(c => '<option value="' + c.name + '">').join('');
+        const hintEl = document.getElementById('seedAiHint');
+        if (hintEl && hintEl.textContent === 'Loading crop list...') {
+          hintEl.textContent = data.crops.length + ' crops available -- type to filter';
+        }
+      } catch (e) { /* non-fatal */ }
     }
 
     async function loadSuggestedSeedCrop(trayId) {

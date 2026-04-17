@@ -20807,19 +20807,37 @@ function extractCropDisplayName(planId) {
 }
 
 function getCropHarvestDays(planId) {
-  if (!planId) return 45;
+  if (!planId) return 30; // Conservative default for unknown crops (not 45)
   
   try {
+    // ── G19 Fix: Try crop-registry.json first (canonical source) ────────
+    const registryPath = path.join(PUBLIC_DIR, 'data/crop-registry.json');
+    if (fs.existsSync(registryPath)) {
+      const registry = JSON.parse(fs.readFileSync(registryPath, 'utf8'));
+      const crops = registry.crops || {};
+      const slug = planId.replace(/^crop-/, '').toLowerCase();
+      const regEntry = Object.entries(crops).find(([name, crop]) => {
+        const normalized = name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+        if (normalized === slug || slug.includes(normalized)) return true;
+        return (crop.planIds || []).some(p => p.toLowerCase() === planId.toLowerCase());
+      });
+      if (regEntry && regEntry[1].growth?.daysToHarvest) {
+        console.log(`[getCropHarvestDays] ${planId} -> ${regEntry[0]} -> ${regEntry[1].growth.daysToHarvest} days (from crop-registry)`);
+        return regEntry[1].growth.daysToHarvest;
+      }
+    }
+
+    // Fallback: lighting-recipes.json schedule (max day)
     const recipesPath = path.join(PUBLIC_DIR, 'data/lighting-recipes.json');
     if (!fs.existsSync(recipesPath)) {
       console.warn('[getCropHarvestDays] lighting-recipes.json not found');
-      return 45;
+      return 30;
     }
     
     const recipesData = JSON.parse(fs.readFileSync(recipesPath, 'utf8'));
-    if (!recipesData.crops) return 45;
+    if (!recipesData.crops) return 30;
     
-    // Extract crop name from plan ID: "crop-bibb-butterhead" → "Bibb Butterhead"
+    // Extract crop name from plan ID: "crop-bibb-butterhead" -> "Bibb Butterhead"
     const cropSlug = planId.replace(/^crop-/, '');
     
     // Find matching crop (case-insensitive, handle variations)
@@ -20832,15 +20850,15 @@ function getCropHarvestDays(planId) {
       const schedule = cropEntry[1];
       // Get the max day value (final harvest day)
       const maxDay = Math.max(...schedule.map(d => Number(d.day) || 0));
-      console.log(`[getCropHarvestDays] ${planId} → ${cropEntry[0]} → ${maxDay} days`);
+      console.log(`[getCropHarvestDays] ${planId} -> ${cropEntry[0]} -> ${maxDay} days`);
       return Math.ceil(maxDay);
     }
     
     console.warn(`[getCropHarvestDays] No recipe found for planId: ${planId}`);
-    return 45;
+    return 30;
   } catch (err) {
     console.error('[getCropHarvestDays] Error:', err.message);
-    return 45;
+    return 30;
   }
 }
 
@@ -23022,9 +23040,40 @@ app.post('/api/trays/register', (req, res) => {
     console.log('[inventory] Demo mode: Tray registered:', trayId);
     return res.json({ success: true, trayId, message: 'Tray registered (demo mode)' });
   }
-  
-  // TODO: Implement production tray registration
-  res.json({ success: true, trayId });
+
+  // ── G12 Fix: Production tray registration ─────────────────────────────
+  try {
+    const existing = await traysDB.findOne({ tray_id: trayId });
+    if (existing) {
+      return res.json({ success: true, trayId, message: 'Tray already registered', tray: existing });
+    }
+
+    // Resolve format metadata if provided
+    let formatData = null;
+    if (format) {
+      formatData = await trayFormatsDB.findOne({
+        $or: [{ trayFormatId: format }, { name: format }, { _id: format }]
+      }).catch(() => null);
+    }
+
+    const tray = {
+      tray_id: trayId,
+      format_id: format || null,
+      format_name: formatData?.name || null,
+      plant_site_count: parseInt(plantCount) || formatData?.plantSiteCount || null,
+      status: 'available',
+      registered_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    await traysDB.insert(tray);
+    console.log(`[inventory] Tray registered: ${trayId} format=${format || 'none'} plants=${tray.plant_site_count || 'unknown'}`);
+
+    res.json({ success: true, trayId, message: 'Tray registered', tray });
+  } catch (err) {
+    console.error('[inventory] Tray registration error:', err.message);
+    res.status(500).json({ error: 'Tray registration failed', details: err.message });
+  }
 });
 
 /**
@@ -23044,6 +23093,29 @@ app.post('/api/trays/:trayId/seed', async (req, res) => {
 
   if (!recipe) {
     return res.status(400).json({ error: 'recipe (crop) is required' });
+  }
+
+  // ── G1 Fix: Validate recipe against crop-registry.json ────────────────
+  try {
+    const registryPath = path.join(PUBLIC_DIR, 'data/crop-registry.json');
+    const registryData = JSON.parse(fs.readFileSync(registryPath, 'utf8'));
+    const crops = registryData.crops || {};
+    const recipeLower = recipe.toLowerCase().trim();
+    const matched = Object.entries(crops).find(([name, crop]) => {
+      if (name.toLowerCase() === recipeLower) return true;
+      if ((crop.aliases || []).some(a => a.toLowerCase() === recipeLower)) return true;
+      if ((crop.planIds || []).some(p => p.toLowerCase() === recipeLower)) return true;
+      return false;
+    });
+    if (!matched) {
+      return res.status(400).json({
+        error: `Unknown crop recipe: "${recipe}". Must match a crop in crop-registry.json.`,
+        hint: 'Use GET /api/crops to see valid crop names',
+        valid_crops: Object.keys(crops).slice(0, 10)
+      });
+    }
+  } catch (regErr) {
+    console.warn('[tray-runs] Could not validate recipe against crop-registry (non-fatal):', regErr.message);
   }
 
   try {

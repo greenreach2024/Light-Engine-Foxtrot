@@ -1,6 +1,6 @@
 {
   "version": "2026-03-08-v1",
-  "description": "Canonical crop metadata registry — single source of truth for all crop data across Light Engine",
+  "description": "Canonical crop metadata registry \u2014 single source of truth for all crop data across Light Engine",
   "crops": {
     "Bibb Butterhead": {
       "aliases": [
@@ -21,7 +21,8 @@
         "harvestStrategy": "cut_and_come_again",
         "regrowthDays": 14,
         "maxHarvests": 4,
-        "regrowthYieldFactor": 0.85
+        "regrowthYieldFactor": 0.85,
+        "germinationDays": 4
       },
       "pricing": {
         "retailPerOz": 1.47,
@@ -57,7 +58,8 @@
         "harvestStrategy": "cut_and_come_again",
         "regrowthDays": 14,
         "maxHarvests": 4,
-        "regrowthYieldFactor": 0.85
+        "regrowthYieldFactor": 0.85,
+        "germinationDays": 4
       },
       "pricing": {
         "retailPerOz": 1.47,
@@ -95,7 +97,8 @@
         "harvestStrategy": "cut_and_come_again",
         "regrowthDays": 14,
         "maxHarvests": 4,
-        "regrowthYieldFactor": 0.85
+        "regrowthYieldFactor": 0.85,
+        "germinationDays": 5
       },
       "pricing": {
         "retailPerOz": 1.47,
@@ -131,7 +134,8 @@
         "harvestStrategy": "cut_and_come_again",
         "regrowthDays": 12,
         "maxHarvests": 4,
-        "regrowthYieldFactor": 0.8
+        "regrowthYieldFactor": 0.8,
+        "germinationDays": 3
       },
       "pricing": {
         "retailPerOz": 1.47,
@@ -167,7 +171,8 @@
         "harvestStrategy": "cut_and_come_again",
         "regrowthDays": 14,
         "maxHarvests": 4,
-        "regrowthYieldFactor": 0.85
+        "regrowthYieldFactor": 0.85,
+        "germinationDays": 4
       },
       "pricing": {
         "retailPerOz": 1.47,
@@ -203,7 +208,8 @@
         "harvestStrategy": "cut_and_come_again",
         "regrowthDays": 14,
         "maxHarvests": 4,
-        "regrowthYieldFactor": 0.85
+        "regrowthYieldFactor": 0.85,
+        "germinationDays": 5
       },
       "pricing": {
         "retailPerOz": 1.47,
@@ -239,7 +245,8 @@
         "harvestStrategy": "cut_and_come_again",
         "regrowthDays": 14,
         "maxHarvests": 4,
-        "regrowthYieldFactor": 0.85
+        "regrowthYieldFactor": 0.85,
+        "germinationDays": 5
       },
       "pricing": {
         "retailPerOz": 1.47,
@@ -277,7 +284,8 @@
         "harvestStrategy": "cut_and_come_again",
         "regrowthDays": 14,
         "maxHarvests": 4,
-        "regrowthYieldFactor": 0.85
+        "regrowthYieldFactor": 0.85,
+        "germinationDays": 5
       },
       "pricing": {
         "retailPerOz": 1.47,
@@ -313,7 +321,8 @@
         "harvestStrategy": "cut_and_come_again",
         "regrowthDays": 14,
         "maxHarvests": 4,
-        "regrowthYieldFactor": 0.85
+        "regrowthYieldFactor": 0.85,
+        "germinationDays": 5
       },
       "pricing": {
         "retailPerOz": 1.47,
@@ -349,7 +358,8 @@
         "harvestStrategy": "cut_and_come_again",
         "regrowthDays": 14,
         "maxHarvests": 4,
-        "regrowthYieldFactor": 0.85
+        "regrowthYieldFactor": 0.85,
+        "germinationDays": 5
       },
       "pricing": {
         "retailPerOz": 1.47,
@@ -384,7 +394,8 @@
         "harvestStrategy": "cut_and_come_again",
         "regrowthDays": 14,
         "maxHarvests": 4,
-        "regrowthYieldFactor": 0.85
+        "regrowthYieldFactor": 0.85,
+        "germinationDays": 4
       },
       "pricing": {
         "retailPerOz": 1.47,
@@ -421,7 +432,8 @@
         "harvestStrategy": "cut_and_come_again",
         "regrowthDays": 14,
         "maxHarvests": 4,
-        "regrowthYieldFactor": 0.85
+        "regrowthYieldFactor": 0.85,
+        "germinationDays": 5
       },
       "pricing": {
         "retailPerOz": 1.47,
@@ -456,7 +468,8 @@
         "harvestStrategy": "cut_and_come_again",
         "regrowthDays": 14,
         "maxHarvests": 4,
-        "regrowthYieldFactor": 0.85
+        "regrowthYieldFactor": 0.85,
+        "germinationDays": 5
       },
       "pricing": {
         "retailPerOz": 1.47,
@@ -495,7 +508,8 @@
         "harvestStrategy": "cut_and_come_again",
         "regrowthDays": 14,
         "maxHarvests": 3,
-        "regrowthYieldFactor": 0.8
+        "regrowthYieldFactor": 0.8,
+        "germinationDays": 3
       },
       "pricing": {
         "retailPerOz": 1.47,
@@ -531,7 +545,8 @@
         "harvestStrategy": "cut_and_come_again",
         "regrowthDays": 14,
         "maxHarvests": 3,
-        "regrowthYieldFactor": 0.8
+        "regrowthYieldFactor": 0.8,
+        "germinationDays": 3
       },
       "pricing": {
         "retailPerOz": 1.47,
@@ -550,12 +565,12 @@
       "active": false,
       "unit": "weight"
     },
-    "Frisée Endive": {
+    "Fris\u00e9e Endive": {
       "aliases": [
         "frisee",
-        "frisée",
+        "fris\u00e9e",
         "endive",
-        "frisée endive"
+        "fris\u00e9e endive"
       ],
       "planIds": [
         "crop-frisee-endive"
@@ -569,7 +584,8 @@
         "harvestStrategy": "cut_and_come_again",
         "regrowthDays": 14,
         "maxHarvests": 3,
-        "regrowthYieldFactor": 0.82
+        "regrowthYieldFactor": 0.82,
+        "germinationDays": 5
       },
       "pricing": {
         "retailPerOz": 1.57,
@@ -583,7 +599,7 @@
         "lastUpdated": "2026-03-08"
       },
       "market": {
-        "resolveAs": "Frisée Endive"
+        "resolveAs": "Fris\u00e9e Endive"
       },
       "active": false,
       "unit": "weight"
@@ -604,7 +620,8 @@
         "harvestStrategy": "cut_and_come_again",
         "regrowthDays": 14,
         "maxHarvests": 3,
-        "regrowthYieldFactor": 0.82
+        "regrowthYieldFactor": 0.82,
+        "germinationDays": 5
       },
       "pricing": {
         "retailPerOz": 1.57,
@@ -639,7 +656,8 @@
         "harvestStrategy": "cut_and_come_again",
         "regrowthDays": 12,
         "maxHarvests": 4,
-        "regrowthYieldFactor": 0.8
+        "regrowthYieldFactor": 0.8,
+        "germinationDays": 5
       },
       "pricing": {
         "retailPerOz": 1.47,
@@ -674,7 +692,8 @@
         "harvestStrategy": "cut_and_come_again",
         "regrowthDays": 12,
         "maxHarvests": 4,
-        "regrowthYieldFactor": 0.8
+        "regrowthYieldFactor": 0.8,
+        "germinationDays": 5
       },
       "pricing": {
         "retailPerOz": 1.47,
@@ -710,7 +729,8 @@
         "harvestStrategy": "cut_and_come_again",
         "regrowthDays": 12,
         "maxHarvests": 4,
-        "regrowthYieldFactor": 0.8
+        "regrowthYieldFactor": 0.8,
+        "germinationDays": 5
       },
       "pricing": {
         "retailPerOz": 1.47,
@@ -745,7 +765,8 @@
         "harvestStrategy": "cut_and_come_again",
         "regrowthDays": 12,
         "maxHarvests": 4,
-        "regrowthYieldFactor": 0.8
+        "regrowthYieldFactor": 0.8,
+        "germinationDays": 5
       },
       "pricing": {
         "retailPerOz": 1.47,
@@ -780,7 +801,8 @@
         "harvestStrategy": "cut_and_come_again",
         "regrowthDays": 12,
         "maxHarvests": 4,
-        "regrowthYieldFactor": 0.8
+        "regrowthYieldFactor": 0.8,
+        "germinationDays": 5
       },
       "pricing": {
         "retailPerOz": 1.47,
@@ -816,7 +838,8 @@
         "harvestStrategy": "cut_and_come_again",
         "regrowthDays": 12,
         "maxHarvests": 4,
-        "regrowthYieldFactor": 0.8
+        "regrowthYieldFactor": 0.8,
+        "germinationDays": 5
       },
       "pricing": {
         "retailPerOz": 1.47,
@@ -853,7 +876,8 @@
         "harvestStrategy": "cut_and_come_again",
         "regrowthDays": 14,
         "maxHarvests": 4,
-        "regrowthYieldFactor": 0.9
+        "regrowthYieldFactor": 0.9,
+        "germinationDays": 5
       },
       "pricing": {
         "retailPerOz": 2.7,
@@ -888,7 +912,8 @@
         "harvestStrategy": "cut_and_come_again",
         "regrowthDays": 14,
         "maxHarvests": 4,
-        "regrowthYieldFactor": 0.9
+        "regrowthYieldFactor": 0.9,
+        "germinationDays": 7
       },
       "pricing": {
         "retailPerOz": 2.7,
@@ -923,7 +948,8 @@
         "harvestStrategy": "cut_and_come_again",
         "regrowthDays": 14,
         "maxHarvests": 4,
-        "regrowthYieldFactor": 0.9
+        "regrowthYieldFactor": 0.9,
+        "germinationDays": 5
       },
       "pricing": {
         "retailPerOz": 2.7,
@@ -958,7 +984,8 @@
         "harvestStrategy": "cut_and_come_again",
         "regrowthDays": 14,
         "maxHarvests": 4,
-        "regrowthYieldFactor": 0.9
+        "regrowthYieldFactor": 0.9,
+        "germinationDays": 5
       },
       "pricing": {
         "retailPerOz": 2.7,
@@ -994,7 +1021,8 @@
         "harvestStrategy": "cut_and_come_again",
         "regrowthDays": 14,
         "maxHarvests": 4,
-        "regrowthYieldFactor": 0.9
+        "regrowthYieldFactor": 0.9,
+        "germinationDays": 5
       },
       "pricing": {
         "retailPerOz": 2.7,
@@ -1029,7 +1057,8 @@
         "harvestStrategy": "cut_and_come_again",
         "regrowthDays": 14,
         "maxHarvests": 4,
-        "regrowthYieldFactor": 0.9
+        "regrowthYieldFactor": 0.9,
+        "germinationDays": 5
       },
       "pricing": {
         "retailPerOz": 2.7,
@@ -1062,7 +1091,8 @@
         "regrowCycles": 0,
         "yieldPerPlantOz": 4,
         "retailPricePerLb": 23.52,
-        "wholesalePricePerLb": 16.46
+        "wholesalePricePerLb": 16.46,
+        "germinationDays": 5
       },
       "pricing": {
         "retailPerOz": 1.47,
@@ -1084,7 +1114,8 @@
         "regrowCycles": 0,
         "yieldPerPlantOz": 4,
         "retailPricePerLb": 23.52,
-        "wholesalePricePerLb": 16.46
+        "wholesalePricePerLb": 16.46,
+        "germinationDays": 5
       },
       "pricing": {
         "retailPerOz": 1.47,
@@ -1106,7 +1137,8 @@
         "regrowCycles": 2,
         "yieldPerPlantOz": 2,
         "retailPricePerLb": 23.52,
-        "wholesalePricePerLb": 16.46
+        "wholesalePricePerLb": 16.46,
+        "germinationDays": 5
       },
       "pricing": {
         "retailPerOz": 1.47,

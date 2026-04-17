@@ -2058,6 +2058,16 @@
           return group;
         });
         
+        // ── G17 Fix: Load crop-registry for per-crop germination days ──────
+        try {
+          const regRes = await fetch('/data/crop-registry.json');
+          if (regRes.ok) {
+            const regData = await regRes.json();
+            state.cropRegistry = regData.crops || {};
+            console.log(`Loaded crop registry: ${Object.keys(state.cropRegistry).length} crops`);
+          }
+        } catch (e) { console.warn('Could not load crop-registry:', e.message); }
+
         state.trays = processTrays(traysData);
 
         // Calculate seeding tasks
@@ -2449,9 +2459,13 @@
           latest: new Date(currentHarvestDate)
         } : null;
 
-        // Calculate seeding window (default germination times for leafy greens)
-        const germMax = 10; // days
-        const germMin = 7;  // days
+        // Calculate seeding window using per-crop germination days from crop-registry
+        const regCrop = state.cropRegistry ? Object.entries(state.cropRegistry).find(([name]) =>
+          name.toLowerCase() === (cropName || '').toLowerCase()
+        ) : null;
+        const cropGermDays = regCrop?.[1]?.growth?.germinationDays || 5;
+        const germMax = cropGermDays + 2; // days (crop-specific + buffer)
+        const germMin = Math.max(2, cropGermDays - 1); // days
         
         const earliestSeedDate = new Date(slotFreeDate);
         earliestSeedDate.setDate(earliestSeedDate.getDate() - germMax);
