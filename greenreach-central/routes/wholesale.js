@@ -133,12 +133,19 @@ function trimField(val) {
 import { requireFarmApiKey, loadFarmApiKeys } from '../middleware/farmApiKeyAuth.js';
 import { transitionOrderStatus } from '../services/orderStateMachine.js';
 
+let devWholesaleJwtSecret = null;
+
 function getWholesaleJwtSecret() {
   const secret = process.env.WHOLESALE_JWT_SECRET || process.env.JWT_SECRET;
   if (secret) return secret;
 
   // Dev-only fallback; production should set a real secret.
-  if (process.env.NODE_ENV !== 'production') return crypto.randomBytes(32).toString('hex');
+  if (process.env.NODE_ENV !== 'production') {
+    if (!devWholesaleJwtSecret) {
+      devWholesaleJwtSecret = crypto.randomBytes(32).toString('hex');
+    }
+    return devWholesaleJwtSecret;
+  }
   return null;
 }
 

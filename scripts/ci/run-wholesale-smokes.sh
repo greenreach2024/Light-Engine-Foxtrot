@@ -14,6 +14,8 @@ CHECKOUT_SKU="${CHECKOUT_SKU:-SKU-AUDIT-GENOVESE-BASIL-5LB}"
 
 FOXTROT_PID=""
 CENTRAL_PID=""
+TEMP_FARM_JSON_CREATED="false"
+FARM_JSON_PATH="public/data/farm.json"
 
 log() {
   printf '[smoke] %s\n' "$1"
@@ -33,8 +35,30 @@ cleanup() {
     kill "$CENTRAL_PID" >/dev/null 2>&1 || true
     wait "$CENTRAL_PID" >/dev/null 2>&1 || true
   fi
+  if [[ "$TEMP_FARM_JSON_CREATED" == "true" ]]; then
+    rm -f "$FARM_JSON_PATH"
+  fi
 }
 trap cleanup EXIT
+
+ensure_smoke_prereqs() {
+  if [[ ! -f "$FARM_JSON_PATH" ]]; then
+    log "Seeding temporary farm.json for smoke startup"
+    mkdir -p "$(dirname "$FARM_JSON_PATH")"
+    cat > "$FARM_JSON_PATH" <<'EOF'
+{
+  "farmId": "CI-SMOKE-FARM",
+  "name": "CI Smoke Farm"
+}
+EOF
+    TEMP_FARM_JSON_CREATED="true"
+  fi
+
+  if [[ ! -d "greenreach-central/node_modules" ]]; then
+    log "Installing Central dependencies for smoke startup"
+    npm ci --prefix greenreach-central >/dev/null
+  fi
+}
 
 wait_for_url() {
   local url="$1"
@@ -63,6 +87,7 @@ assert_json_field() {
 }
 
 log "Starting Foxtrot on port ${FOXTROT_PORT}"
+ensure_smoke_prereqs
 PORT="$FOXTROT_PORT" node server-foxtrot.js > /tmp/foxtrot-ci-smoke.log 2>&1 &
 FOXTROT_PID=$!
 

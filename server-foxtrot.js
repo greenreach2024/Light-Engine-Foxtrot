@@ -13622,7 +13622,7 @@ const wholesaleCentralProxy = createProxyMiddleware({
 
 // Paths that must stay local on LE (handled by wholesaleOrdersRouter / wholesaleSyncRouter)
 const WHOLESALE_LOCAL_PATHS = [
-  '/inventory/reserve', '/inventory/release', '/inventory/confirm',
+  '/inventory/reserve', '/inventory/release', '/inventory/confirm', '/inventory/reservations',
   '/orders/farm-verify', '/orders/create', '/orders/buyer-review',
   '/orders/confirm-pickup', '/orders/pending-verification'
 ];
