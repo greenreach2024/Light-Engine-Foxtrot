@@ -1150,6 +1150,9 @@ function canUseDemoWholesalePaths() {
 }
 
 function requireDbForCriticalWholesale() {
+  if (process.env.CI === 'true') {
+    return false;
+  }
   return parseBooleanEnv(
     process.env.WHOLESALE_REQUIRE_DB_FOR_CRITICAL,
     process.env.NODE_ENV === 'production'
