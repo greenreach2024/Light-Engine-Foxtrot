@@ -125,8 +125,8 @@ G.W.E.N.  ──(outside research bubble)─────────────
 
 - `conversation_history` is a **tenant table** (farm_id-scoped, RLS-enabled)
 - Rolling window: last ~30 messages per conversation (`MAX_LLM_MESSAGES`)
-- Tool loop cap: `MAX_TOOL_LOOPS` (12 for G.W.E.N., 8 for smaller agents) — prevents runaway tool cascades
-- Max tokens per reply: `MAX_TOKENS` (4096 default)
+- Tool loop cap: `MAX_TOOL_LOOPS` — `12` in G.W.E.N. (`gwen-research-agent.js:63`); `10` in E.V.I.E. (`assistant-chat.js:6684`), F.A.Y.E. (`admin-assistant.js:82`), S.C.O.T.T. (`scott-marketing-agent.js:51`). Prevents runaway tool cascades.
+- Max tokens per reply: `MAX_TOKENS` — `4096` for G.W.E.N. (`gwen-research-agent.js:64`); `2048` for F.A.Y.E. (`admin-assistant.js:83`) and S.C.O.T.T. (`scott-marketing-agent.js:52`); E.V.I.E. does not define a module-level constant and varies per call.
 - Briefings: E.V.I.E. generates daily briefings persisted per farm
 
 ## 9. Multi-agent contribution process (humans + AI)
