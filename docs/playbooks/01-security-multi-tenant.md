@@ -166,7 +166,7 @@ When building new research endpoints, every sub-resource handler must verify par
 
 ## 10. Rate limiting & abuse controls
 
-- Central global limit: **500 req / 15 min** per IP (skips `/api/debug/*` only; `/api/sync/*` is **not** exempt \u2014 see `greenreach-central/server.js` ~L1889)
+- Central global limit: **500 req / 15 min** per IP (skips `/api/debug/*` only; `/api/sync/*` is **not** exempt — see `greenreach-central/server.js` ~L1889)
 - Per-route overrides on AI chat endpoints (20 req/min per farm)
 - OAuth state tokens: HMAC-SHA256 signed, 15-minute TTL, nonce-based
 - Admin login: lockout after repeated failures (`admin_users` lockout columns)
