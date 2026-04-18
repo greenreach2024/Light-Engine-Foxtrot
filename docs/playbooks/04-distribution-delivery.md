@@ -55,11 +55,10 @@ All three are **tenant tables** with RLS `gr_tenant_isolation`.
 ## 4. Key files
 
 ### 4.1 Central
-- `greenreach-central/routes/admin-delivery.js` — admin CRUD for zones, windows, fees, driver applications
+- `greenreach-central/routes/admin-delivery.js` — admin CRUD for zones, windows, fees, driver applications (sub-mounted under `/api/admin` via `routes/admin.js`; see Playbook 09 §9)
 - `greenreach-central/routes/wholesale.js` — reads delivery settings at checkout
-- `greenreach-central/public/views/admin-delivery.html` — admin UI
-- `greenreach-central/public/driver-application.html` — driver intake
-- `greenreach-central/public/driver-enrollment.html` — enrollment details
+- Admin delivery UI lives as a **view/tab inside `greenreach-central/public/GR-central-admin.html`**, not a standalone `admin-delivery.html` page
+- `greenreach-central/public/driver-enrollment.html` — public driver intake form (the `driver-application.html` filename from earlier drafts does not exist in the tree)
 
 ### 4.2 LE
 - `routes/farm-sales/delivery.js` — farm-side delivery settings endpoints

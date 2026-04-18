@@ -14,16 +14,20 @@ The Light Engine (LE) is the **per-tenant farm runtime** that operators use ever
 
 | Page | URL | What it does |
 |---|---|---|
-| Farm Admin | `/LE-farm-admin.html` | Home with cards for env, tasks, AI chat, actions |
-| Environment | `/environment.html` | Live VPD, temp/RH/CO₂ by zone; target ranges |
-| Grow Management | `/grow-management.html` | Tray lifecycle, room assignments |
-| Planting Scheduler | `/planting-scheduler.html` | Schedule next seeding |
-| Tray Inventory | `/tray-inventory.html` | Active tray inventory by room |
-| Inventory | `/inventory.html` + `/farm-inventory.html` | Crop + supplies |
+| Farm Admin (shell) | `/LE-farm-admin.html` | Tesla-style tabbed shell (Operations / Growing / Business / Assistant); loads the sub-views below via iframe |
+| Environment | `/views/environment.html` (iframe inside Farm Admin) | Live VPD, temp/RH/CO₂ by zone; target ranges |
+| Activity Hub | `/views/tray-inventory.html` (iframe) | Tray lifecycle / movements / harvests (this is the current "grow management" surface) |
+| Planning | `/views/planning.html` (iframe) | Schedule next seeding + multi-week plan |
+| Nutrient Management | `/views/nutrient-management.html` (iframe) | Nutrient targets and dosing |
+| Farm Summary | `/views/farm-summary.html` (iframe) | Real-time zone dashboard (temp/RH/VPD/CO₂ + alerts) |
+| Inventory | `/views/inventory.html` + `/views/farm-inventory.html` (iframes) | Crop + supplies |
+| Supplies | `/views/supplies.html` (iframe) | Consumables / reorder |
 | Calendar | `/calendar.html` | Task + harvest + delivery calendar |
 | POS | `/farm-sales-pos.html` | In-person sales (Square terminal) |
 | Wholesale Orders | `/LE-wholesale-orders.html` | Accept/fulfill wholesale orders |
 | Assistant (E.V.I.E.) | `/evie-core.html` | Chat, briefings, ambient presence |
+
+The shell nav-item `data-url` attributes in `public/LE-farm-admin.html` are the source of truth for which sub-view opens in which tab.
 
 Many of the pages listed in `.github/UI_CONSOLIDATION_ROADMAP.md` are being folded into these via E.V.I.E.
 
@@ -156,7 +160,7 @@ E.V.I.E. surfaces this to the farm on the home page and in briefings.
 | `automation/` | Automation routines (photoperiod, CO₂ dosing, alerts) |
 | `routes/farm-sales/*.js` | DTC + POS |
 | `routes/wholesale-*.js`, `routes/wholesale/*.js` | Wholesale LE endpoints |
-| `public/LE-farm-admin.html`, `public/environment.html`, `public/grow-management.html`, `public/planting-scheduler.html` | Operator UIs |
+| `public/LE-farm-admin.html` + `public/views/*.html` (environment, planning, tray-inventory, farm-summary, nutrient-management, inventory, supplies, …) | Operator UI shell + iframe sub-views |
 
 ## 12. Security & tenancy rules
 

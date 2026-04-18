@@ -62,7 +62,7 @@ When a request hits Central, farm context is resolved in this exact order:
 3. Subdomain slug from `Host` header → DB lookup on `farms.farm_slug` (**planned path**; see §7 — subdomain routing is not live in production today)
 4. `FARM_ID` env var (single-farm mode)
 
-Implementation: `middleware/tenant.js` / farmStore `farmIdFromReq(req)`.
+Implementation (LE side): `server/middleware/multi-tenant.js` (`extractTenantId(req)` → `req.tenant = { slug, farmId }`) + `lib/farm-store.js` `farmIdFromReq(req)`. There is no `middleware/tenant.js`; Central has no equivalent tenant middleware today (requests to Central arrive with explicit `X-Farm-ID` / JWT farm_id or admin bypass).
 
 ## 5. Row-Level Security (RLS) — Phase A
 
@@ -139,7 +139,7 @@ When the subdomain rollout happens, the planned activation steps are: (a) create
 
 ## 8. Feature gates
 
-Plan tiers are modeled in the feature flags registry (`config/feature-flags.js`), enforced via `autoEnforceFeatures()` middleware.
+Plan tiers and the `autoEnforceFeatures()` / `requireFeature()` guards live in `server/middleware/feature-flags.js` (LE-side; imported by `server-foxtrot.js` ~L211). Per-farm overrides are stored in the `feature_flags` table. See Playbook 09 §6 for the Central-side C1 gap.
 
 | Tier | Enables |
 |---|---|
@@ -162,7 +162,7 @@ Even within the research bubble, sharing is explicit:
 - Roles (ORCID-linked): PI, Co-PI, Postdoc, Grad Student, Technician, Collaborator, Viewer
 - Dataset exports require a matching data-sharing agreement
 
-When building new research endpoints, every sub-resource handler must verify parent ownership (`C2` remediation in the research audit: 62/84 endpoints originally skipped this and were subsequently patched via `middleware/research-tenant.js`).
+When building new research endpoints, every sub-resource handler must verify parent ownership (`C2` remediation in the research audit: 62/84 endpoints originally skipped this and were subsequently patched via `greenreach-central/middleware/research-tenant.js`).
 
 ## 10. Rate limiting & abuse controls
 
@@ -197,7 +197,7 @@ When building new research endpoints, every sub-resource handler must verify par
 | `GREENREACH_API_KEY` | Central→LE proxy API key |
 | `TOKEN_ENCRYPTION_KEY` | At-rest encryption of stored OAuth tokens |
 
-Do **not** log secrets; `utils/logger.js` redacts well-known keys but cannot save you from a `console.log(process.env)`.
+Do **not** log secrets; `greenreach-central/utils/logger.js` redacts well-known keys but cannot save you from a `console.log(process.env)`. LE-side logging uses `lib/logger.cjs`.
 
 ## 13. Audit logging
 
@@ -235,7 +235,7 @@ Before merging any change that touches auth, RLS, or tenancy:
 - **Feature gate fail-open** on DB outage (documented tradeoff)
 - **Client-side dual-storage** (localStorage + sessionStorage) — drift risk when only one is cleared; keep both in sync
 - **Legacy AWS artifacts** (`.ebextensions/`, `.platform/`, `aws-*/`) still in repo; banned from use but could mislead new agents
-- **`config/farm-api-keys.json` fallback** — should be retired once all farms have DB-stored API keys
+- **`public/data/farm-api-keys.json` (root) + `greenreach-central/public/data/farm-api-keys.json` dual-deployed fallback** — should be retired once all farms have DB-stored API keys
 
 ## 17. References
 
@@ -244,4 +244,4 @@ Before merging any change that touches auth, RLS, or tenancy:
 - `docs/architecture/MULTI_TENANT_ARCHITECTURE.md`
 - `docs/security/SECURITY.md`, `SECURITY_AUDIT_REPORT.md`, `SECURITY_HARDENING.md`, `PRODUCTION_SECURITY_CONFIG.md`
 - `greenreach-central/config/database.js` — query wrapper
-- `greenreach-central/middleware/auth.js`, `admin-auth.js`, `tenant.js`, `feature-gate.js`, `research-tenant.js`
+- `greenreach-central/middleware/auth.js`, `adminAuth.js`, `farmApiKeyAuth.js`, `farm-data.js`, `feature-gate.js`, `research-tenant.js`, `agent-enforcement.js`, `webhook-signature.js` (there is no `greenreach-central/middleware/tenant.js` — tenant context is resolved LE-side by `server/middleware/multi-tenant.js` or supplied explicitly to Central via `X-Farm-ID` / JWT)

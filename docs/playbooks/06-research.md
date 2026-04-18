@@ -123,7 +123,7 @@ if (!grant.rows.length) return res.status(404).json({ error: 'not found' });
 // Proceed with budget query
 ```
 
-Before remediation, **62 of 84** research endpoints skipped this check. All are now patched via `middleware/research-tenant.js` (`requireResearchOwnership`).
+Before remediation, **62 of 84** research endpoints skipped this check. All are now patched via `greenreach-central/middleware/research-tenant.js` (`requireResearchOwnership`).
 
 ### 7.2 Cross-institution sharing
 - Sharing requires a row in `research_sharing_agreements`

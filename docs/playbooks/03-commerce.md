@@ -157,7 +157,7 @@ quantity_available = auto_quantity_lbs + manual_quantity_lbs
 ## 8. Stripe subscriptions
 
 - Used for platform subscriptions (plan tiers: `full`, `inventory-only`, `research`)
-- Route: `greenreach-central/routes/billing.js`, `routes/stripe-connect-control.js`
+- Route: `greenreach-central/routes/billing.js`, `greenreach-central/routes/stripe-connect-control.js`
 - Webhook: `/api/webhooks/stripe`, signature validated via `STRIPE_WEBHOOK_SECRET`
 - Events handled: `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.payment_failed`
 - On payment failure: farm is downgraded to read-only until resolved
@@ -222,7 +222,7 @@ Webhooks are **idempotent**: every handler checks an event ID against a dedupe s
 
 - `.github/PAYMENT_WORKFLOW.md` (canonical — 780+ lines)
 - `.github/COMPLETE_SYSTEM_MAP.md` §6.5 (Wholesale order flow), §15 (Inventory workflow)
-- `docs/wholesale/WHOLESALE_INTEGRATION_GUIDE.md`
+- `docs/WHOLESALE_INTEGRATION_GUIDE.md`, `docs/wholesale/WHOLESALE_INTEGRATION.md` (two companion docs; the `docs/wholesale/WHOLESALE_INTEGRATION_GUIDE.md` path from earlier drafts does not exist)
 - `docs/billing/`
 - `routes/wholesale/checkout.js`, `routes/wholesale-orders.js`, `routes/wholesale/square-oauth.js`
 - `greenreach-central/routes/wholesale.js`, `square-oauth-proxy.js`, `billing.js`, `accounting.js`, `payment-webhooks.js`, `stripe-connect-control.js`

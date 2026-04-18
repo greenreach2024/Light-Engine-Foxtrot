@@ -102,14 +102,14 @@ This is actually **two tightly linked surfaces** that share a backend and the ma
 **C.1 Marketing Platform**
 - **Public landing pages**: `landing-*.html`, `about.html`, `greenreach-grow.html`, `id-buy-local.html`, blog, etc.
 - **Marketing agent (S.C.O.T.T.)**: `greenreach-central/routes/scott-marketing-agent.js` — "Social Content Optimization, Trends & Targeting." Generates social posts per platform, runs rule-engine auto-approval (`marketing-rules-engine.js`), publishes via `marketing-platforms.js`, tracks AI cost via `ai-usage-tracker.js`. Explicitly positioned as "junior to F.A.Y.E." with escalation.
-- **Admin surface**: `/api/admin/marketing` (`routes/admin-marketing.js`), campaigns (`routes/campaign.js`), marketing skills registry (`services/marketing-skills.js`).
+- **Admin surface**: `/api/admin/marketing` (`greenreach-central/routes/admin-marketing.js`), campaigns (`greenreach-central/routes/campaign.js`), marketing skills registry (`greenreach-central/services/marketing-skills.js`).
 - **Branding (planned):** per-farm subdomain stores (`*.greenreachgreens.com`) are the **intended** public face of each tenant; today the farm shop is reached via the LE Cloud Run URL or (once migrated) relative paths under Central's domain. Wildcard DNS and TLS for `*.greenreachgreens.com` are **not** configured in production today.
 
 **C.2 Distribution / Wholesale / Delivery**
-- **Wholesale marketplace**: `GR-wholesale.html`, buyer portal, driver-applications, catalog aggregation across farms. Backend: `routes/wholesale.js`, `routes/admin-wholesale.js`, `routes/wholesale-fulfillment.js`, `routes/wholesale-exports.js`, `routes/wholesale-donations.js`.
+- **Wholesale marketplace**: `GR-wholesale.html`, buyer portal, driver-applications, catalog aggregation across farms. Backend (all under `greenreach-central/routes/`): `wholesale.js`, `admin-wholesale.js`, `wholesale-fulfillment.js`, `wholesale-exports.js`, `wholesale-donations.js`. LE also exposes companion wholesale surfaces at root `routes/wholesale/` and `routes/wholesale-*.js` for the farm-side of checkout and fulfillment.
 - **Commission engine**: 12% broker commission (`WHOLESALE_COMMISSION_RATE=0.12`), implemented via Square `app_fee_money` — this is GreenReach's stated revenue model and must not change.
-- **Delivery service**: `routes/admin-delivery.js`, driver enrollment, per-farm delivery settings, zones/windows, delivery orders. Architecture: MVP in `docs/delivery/DELIVERY_SERVICE_ARCHITECTURE_PLAN.md`.
-- **Farm sales**: per-farm POS at `farm-sales-pos.html` (embedded into LE farm admin), direct-to-consumer shop at `farm-sales-shop.html` (served by LE Cloud Run; per-farm subdomain branding is planned, not live), Square OAuth per farm via `payment-setup.html` + `routes/square-oauth-proxy.js`.
+- **Delivery service**: `greenreach-central/routes/admin-delivery.js`, driver enrollment (`greenreach-central/public/driver-enrollment.html`), per-farm delivery settings, zones/windows, delivery orders. Architecture: MVP in `docs/delivery/DELIVERY_SERVICE_ARCHITECTURE_PLAN.md`.
+- **Farm sales**: per-farm POS at `farm-sales-pos.html` (embedded into LE farm admin), direct-to-consumer shop at `farm-sales-shop.html` (served by LE Cloud Run; per-farm subdomain branding is planned, not live), Square OAuth per farm via `payment-setup.html` + `greenreach-central/routes/square-oauth-proxy.js`.
 
 ### 3.4 App D — Research Workspace
 - **Who:** Farms on the research tier, plus external collaborators (PIs, Co-PIs, postdocs, grad students, technicians, viewers).
@@ -180,13 +180,13 @@ Foxtrot is an explicitly **multi-agent** system. Every agent has a defined audie
 
 | Agent | Nickname meaning | Scope | Audience | LLM | Authority | Backend file |
 |---|---|---|---|---|---|---|
-| **E.V.I.E.** | Environmental Vision & Intelligence Engine | **One farm** | Growers, visitors, demo viewers | OpenAI GPT-4o (primary) + Anthropic Claude (fallback) | Farm-scoped read/suggest + act via Farm-Ops tool gateway | `routes/assistant-chat.js` |
+| **E.V.I.E.** | Environmental Vision & Intelligence Engine | **One farm** | Growers, visitors, demo viewers | OpenAI GPT-4o (primary) + Anthropic Claude (fallback) | Farm-scoped read/suggest + act via Farm-Ops tool gateway | `greenreach-central/routes/assistant-chat.js` |
 | **Farm-Ops-Agent** | Deterministic ops engine | One farm | Backend / E.V.I.E. tool-gateway | Deterministic + GPT-4o for NL parsing | Executes scored daily tasks, tool catalog, audit log | `routes/farm-ops-agent.js` |
-| **Setup-Agent** | Farm setup orchestrator | One farm | New farms onboarding with E.V.I.E. | GPT-4o | 12-phase setup progress, fills farm profile, rooms, zones, groups, crops | `routes/setup-agent.js` |
-| **F.A.Y.E.** | Farm Autonomy & Yield Engine | **All farms** | Platform admins / ops | GPT-4o primary | Observe, learn, recommend, progressively automate across network; receives escalations from E.V.I.E. and S.C.O.T.T.; safe-patch approval authority | `routes/admin-assistant.js` |
-| **Admin-Ops-Agent** | Platform ops agent | Platform-wide | Admins | GPT-4o | Ops runbooks, system health, revenue analysis, feature management | `routes/admin-ops-agent.js` |
-| **G.W.E.N.** | Grants, Workplans, Evidence & Navigation | Research bubble (across farms per study) | Researchers, PIs, HQP | Gemini 2.5 Pro (Vertex AI) | Research workspace actions, DMPs, grants, governance; `execute_code` disabled by default in cloud unless `GWEN_EXECUTE_CODE_ENABLED=true` | `routes/gwen-research-agent.js` |
-| **S.C.O.T.T.** | Social Content Optimization, Trends & Targeting | Marketing | Marketing/ops users | Gemini 2.5 Flash (Vertex AI) | Generates + publishes social posts, rules-based auto-approval, multi-platform; junior to F.A.Y.E. | `routes/scott-marketing-agent.js` |
+| **Setup-Agent** | Farm setup orchestrator | One farm | New farms onboarding with E.V.I.E. | GPT-4o | 12-phase setup progress, fills farm profile, rooms, zones, groups, crops | `greenreach-central/routes/setup-agent.js` |
+| **F.A.Y.E.** | Farm Autonomy & Yield Engine | **All farms** | Platform admins / ops | GPT-4o primary | Observe, learn, recommend, progressively automate across network; receives escalations from E.V.I.E. and S.C.O.T.T.; safe-patch approval authority | `greenreach-central/routes/admin-assistant.js` |
+| **Admin-Ops-Agent** | Platform ops agent | Platform-wide | Admins | GPT-4o | Ops runbooks, system health, revenue analysis, feature management | `greenreach-central/routes/admin-ops-agent.js` |
+| **G.W.E.N.** | Grants, Workplans, Evidence & Navigation | Research bubble (across farms per study) | Researchers, PIs, HQP | Gemini 2.5 Pro (Vertex AI) | Research workspace actions, DMPs, grants, governance; `execute_code` disabled by default in cloud unless `GWEN_EXECUTE_CODE_ENABLED=true` | `greenreach-central/routes/gwen-research-agent.js` |
+| **S.C.O.T.T.** | Social Content Optimization, Trends & Targeting | Marketing | Marketing/ops users | Gemini 2.5 Flash (Vertex AI) | Generates + publishes social posts, rules-based auto-approval, multi-platform; junior to F.A.Y.E. | `greenreach-central/routes/scott-marketing-agent.js` |
 
 **Orchestration primitives**
 - **Tool-gateway + audit log:** all consequential actions go through `farm-ops-agent.js`' tool gateway (`/tool-gateway`, `/tool-catalog`, `/parse-command`, `/audit-log`) with schema-validated calls.
@@ -246,7 +246,7 @@ Every 5 min + daily 2 AM + manual trigger: LE static JSON (`groups.json`, `rooms
 Buyer browses `GR-wholesale.html` → Central aggregates catalog across farms (fallback: direct `farm_inventory` query) → `POST /api/wholesale/checkout` → Square (12% `app_fee_money` commission) → `wholesale_orders` INSERT + inventory reservation → farm sees order in `LE-wholesale-orders.html` → farm accepts/fulfills → `/api/wholesale/orders/:id/fulfill`.
 
 ### 7.4 Per-farm point of sale
-Farm opens `farm-sales-pos.html` (iframe inside LE farm admin, auto-login from admin session) → transactions go through Square using the farm's own OAuth tokens (`routes/square-oauth-proxy.js`) → customer & payment records stay in farm tenant.
+Farm opens `farm-sales-pos.html` (iframe inside LE farm admin, auto-login from admin session) → transactions go through Square using the farm's own OAuth tokens (`greenreach-central/routes/square-oauth-proxy.js`) → customer & payment records stay in farm tenant.
 
 ### 7.5 Recipe deployment (cross-farm research → farm)
 Research creates `recipe_versions` (draft → review → approved_beta → live) → `recipe_deployments` targets farm + zone → farm operator acknowledges (`recipe_operator_acks`) → rollback supported. All governed through COI declarations, signoffs, and approval chains.
@@ -277,7 +277,7 @@ Use this as the canonical taxonomy when building features or briefing new agents
 - Wholesale marketplace: catalog aggregation, checkout, 12% broker commission, fulfillment, exports, donations
 - Pricing: `crop-pricing.js`, `admin-pricing.js`, cost surveys, pricing intelligence
 - Inventory (two domains): supplies (inputs, JSONB in `farm_data`) vs. crop/product inventory (`farm_inventory` table, dual-quantity auto + manual)
-- Custom products: `routes/custom-products.js` with image upload
+- Custom products: `greenreach-central/routes/custom-products.js` with image upload
 - Salad mixes: trait-based mix components, per-farm overrides (`farm_mix_overrides`)
 
 ### 8.3 Payments & Accounting (Central-owned)

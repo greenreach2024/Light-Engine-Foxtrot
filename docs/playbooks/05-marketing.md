@@ -34,7 +34,7 @@ Foxtrot's marketing layer produces, schedules, auto-approves, and publishes cont
 | GET | `/state` | Current marketing state snapshot |
 | GET | `/history/:conversationId` | Conversation history |
 
-### 3.2 Tool capabilities (via `services/marketing-ai-agent.js`)
+### 3.2 Tool capabilities (via `greenreach-central/services/marketing-ai-agent.js`)
 - `generateSocialPost(platform, brief)` — single-platform copy
 - `generateMultiPlatformPosts(brief, platforms[])` — platform-aware variants
 - `checkCompliance(content)` — flags disallowed claims
@@ -78,13 +78,15 @@ Foxtrot's marketing layer produces, schedules, auto-approves, and publishes cont
 
 ## 5. Public-facing pages
 
-- `public/landing-*.html` — marketing landing pages (features, pricing, "buy local")
-- `public/about.html` — company/mission
-- `public/greenreach-grow.html`, `id-buy-local.html` — programmatic + local campaigns
-- `public/blog.html`, `blog-post.html` — blog system
-- `public/faye-demo.html` — demo surface showing F.A.Y.E. (marketing asset)
+All marketing/landing pages are owned by Central and live under `greenreach-central/public/`. LE serves these by falling through to Central's `public/` tree (see Playbook 00 §4 and Playbook 08 §4). Do not add standalone copies at repo root `public/` unless the page needs to render before Central's middleware runs.
 
-All landing pages use the shared theme tokens in `public/styles/` — do not fork styles.
+- `greenreach-central/public/landing-*.html` — marketing landing pages (home, cloud, edge, purchase-success, downloads, main)
+- `greenreach-central/public/about.html` — company/mission
+- `greenreach-central/public/greenreach-grow.html`, `id-buy-local.html` — programmatic + local campaigns
+- `greenreach-central/public/blog.html`, `blog-post.html`, plus per-post content under `greenreach-central/public/blog/*/content.html` — blog system
+- `greenreach-central/public/faye-demo.html`, `evie-demo.html`, `gwen-demo.html` — agent demo surfaces used as marketing assets (demo files `faye-demo.html`, `evie-core.html`, `gwen-core.html`, etc. are dual-deployed and also exist at repo root `public/`)
+
+All landing pages use the shared theme tokens in `greenreach-central/public/styles/` — do not fork styles.
 
 ## 6. Per-farm branding (planned subdomain product)
 
@@ -102,7 +104,7 @@ Per-farm subdomain storefronts (see Playbook 01 §7) are the **intended** public
 | Transactional email | Google Workspace SMTP (`info@greenreachgreens.com`) | Order confirmations, password resets, alerts |
 | Marketing broadcasts | Same SMTP + audience lists | Farm newsletters, campaigns |
 | SMS (critical alerts only) | Email-to-SMS gateway via SMTP | Sensor outages, payment failures |
-| Templates | `greenreach-central/templates/` | Handlebars-style HTML email |
+| Templates | `greenreach-central/services/email-new-templates.js` (consumed via `greenreach-central/services/email.js`) | Inline HTML/text email templates (no separate `templates/` directory today) |
 
 Unsubscribe handling: every marketing email includes a one-click unsubscribe link tied to the recipient's audience-list entry.
 
