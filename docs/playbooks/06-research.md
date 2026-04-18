@@ -98,10 +98,10 @@ All research tables are **tenant-scoped by `farm_id`** and RLS-protected by `gr_
 |---|---|---|
 | `/api/research/studies` | `research-studies.js` | Study CRUD |
 | `/api/research/eln` | `research-eln.js` | ELN entries |
-| `/api/research/datasets` | `research-datasets.js` | Dataset manifests |
-| `/api/research/recipes` | `research-recipes-v2.js` | Recipe versions + comparisons |
+| `/api/research/datasets` | `research-data.js` | Dataset manifests, observations, provenance |
+| `/api/research/recipes` | `research-recipes.js` | Recipe versions + comparisons |
 | `/api/research/grants` | `research-grants.js` | Grant applications + budgets + milestones + reports + publications + HQP |
-| `/api/research/metadata` | `research-metadata.js` | Metadata registry + data dictionary |
+| `/api/research/studies/:id/metadata`, `/data-dictionary`, `/dmp`, `/retention`, `/budgets` | `research-compliance.js` | Metadata registry, data dictionary, DMP, retention, per-study budgets |
 | `/api/research/partners` | `research-partners.js` | Partner institutions |
 | `/api/research/security` | `research-security.js` | Access policies, incident log |
 | `/api/research/audit` | `research-audit.js` | Audit events, COI, signoffs, approval chains, contributions |

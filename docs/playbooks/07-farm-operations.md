@@ -53,16 +53,20 @@ Additional operational stores are JSONB keys under `farm_data` (e.g., `crop-regi
 ```
 SwitchBot Cloud API (polled every 30s)
    ↓
-SwitchBotClient (lib/switchbot-client.js)
+`setupLiveSensorSync()` in `server-foxtrot.js` — polls SwitchBot API v1.1 per device
    ↓
-EnvStore (lib/env-store.js) — normalizes, writes env_cache + SwitchBot history
+`preEnvStore` (in-memory) + `data/automation/env-state.json` (file persistence)
    ↓
-LE Central proxy (/env) — Central clients read per-zone snapshots
+LE `GET /env` — serves current snapshot to local UI and to Central
    ↓
-VPD + target-range evaluation (spectrum_env_math.js)
+`lib/sync-service.js` (LE) → Central `POST /api/sync/telemetry` → AlloyDB `farm_data.telemetry`
+   ↓
+VPD + target-range evaluation (`public/spectrum_env_math.js` browser-side; server-side equivalents)
    ↓
 Alert detection + automation triggers
 ```
+
+(See `.github/SENSOR_DATA_PIPELINE.md` for the canonical stage-by-stage reference. Note: a separate `automation/drivers/switchbot-driver.js` exists for PlugManager relay control; it is **not** the primary sensor poller — sensor polling is inline in `server-foxtrot.js`.)
 
 ### 4.1 Credentials
 - `SWITCHBOT_TOKEN`, `SWITCHBOT_SECRET` in Secret Manager
@@ -143,7 +147,9 @@ E.V.I.E. surfaces this to the farm on the home page and in briefings.
 | Path | Purpose |
 |---|---|
 | `server-foxtrot.js` | LE entrypoint (~30k lines; under decomposition) |
-| `lib/switchbot-client.js`, `lib/env-store.js` | Sensor pipeline |
+| `server-foxtrot.js` `setupLiveSensorSync()`, `data/automation/env-state.json` (GCS FUSE-mounted on Cloud Run) | Sensor polling + persistence (primary sensor pipeline — inline, not a separate module) |
+| `automation/drivers/switchbot-driver.js` | SwitchBot relay control for PlugManager (not the sensor poller) |
+| `automation/env-store.js` | Room/zone target + scope state store |
 | `lib/schedule-executor.js` | Schedule engine |
 | `lib/sync-service.js` | LE ↔ Central sync |
 | `lib/farm-store.js` | Per-farm Maps + JSONB accessors |
