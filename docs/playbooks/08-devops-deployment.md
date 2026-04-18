@@ -145,7 +145,7 @@ All secrets live in **Google Secret Manager** and are injected to Cloud Run via 
 - Database: `greenreach_central`
 - Private IP: `10.87.0.2`
 - Access: both Cloud Run services reach AlloyDB over **Direct VPC egress (Gen2)** on `greenreach-vpc`; no public IP and **no VPC connector** (see §8 and `.github/CLOUD_ARCHITECTURE.md`)
-- Migrations: run automatically on boot via `config/database.js` → `runMigrations()`
+- Migrations: run automatically on Central boot via `greenreach-central/config/database.js` → `runMigrations()` (LE's `config/database.js` does not own the schema)
 - Migration failure is **non-fatal** at startup (warn + continue); hard failures in initial connection block startup
 
 ## 8. Networking
