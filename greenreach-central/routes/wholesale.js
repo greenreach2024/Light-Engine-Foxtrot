@@ -1458,10 +1458,13 @@ router.get('/catalog', async (req, res, next) => {
 
       let items = catalog.items || catalog.skus || [];
 
-      // Strip out fallback-seeded demo items — only show real farm inventory
-      items = items.filter(it =>
-        !(it.farms || []).every(f => (f.quality_flags || []).includes('fallback_seeded'))
-      );
+      // Strip out fallback-seeded demo items in normal operation, but keep them
+      // in demo-enabled environments so CI/dev smoke runs have a deterministic catalog.
+      if (!canUseDemoWholesalePaths()) {
+        items = items.filter(it =>
+          !(it.farms || []).every(f => (f.quality_flags || []).includes('fallback_seeded'))
+        );
+      }
 
       // Database fallback: when the network aggregate is empty, build catalog
       // items directly from farm_inventory so the admin dashboard shows products
