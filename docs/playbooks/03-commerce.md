@@ -58,14 +58,16 @@ Env vars: `SQUARE_ACCESS_TOKEN`, `SQUARE_LOCATION_ID`.
 
 **File:** `greenreach-central/routes/wholesale.js`
 
-### 4.1 SKU factor
+### 4.1 SKU factor (wholesale base)
 `wholesale_base = retail_price * sku_factor`
-- Production value: `WHOLESALE_DEFAULT_SKU_FACTOR=0.65` (set in `gcp/deploy-cloud-run.sh` ~L171)
-- Code fallback when env var is unset: `0.75` (`getDefaultSkuFactor()` in `greenreach-central/routes/wholesale.js` ~L397)
-- Allowed range: 0.50–0.75 (clamped by `getDefaultSkuFactor()`)
+- **Design base: `0.75`** — code default in `getDefaultSkuFactor()` at `greenreach-central/routes/wholesale.js:397`.
+- Env override: `WHOLESALE_DEFAULT_SKU_FACTOR` in `gcp/deploy-cloud-run.sh:171`. If not `0.75`, Central is running below the design base (see §14 Known gaps).
+- Allowed range: `0.50`–`0.75` (clamped by `getDefaultSkuFactor()` at L399).
 
-### 4.2 Buyer discount ladder (90-day rolling average order value)
-| Rolling avg | Discount |
+### 4.2 Buyer volume tiers (90-day rolling average order value)
+Tiers are **selected, not stacked**: a buyer gets exactly one discount rate based on their rolling-average band, applied once to the base wholesale price (<code>finalWholesale = baseWholesale × (1 − discountRate)</code> at `wholesale.js:637`). Tiers do not accumulate.
+
+| Rolling avg | Discount off base |
 |---|---|
 | $0–$749 | 0% |
 | $750–$1,499 | 2% |
@@ -73,7 +75,7 @@ Env vars: `SQUARE_ACCESS_TOKEN`, `SQUARE_LOCATION_ID`.
 | $3,000–$4,999 | 6% |
 | $5,000+ | 8% |
 
-Rolling average excludes cancelled, failed, and refunded orders.
+Source: `getBuyerDiscountRateFromRollingAverage()` at `greenreach-central/routes/wholesale.js:402–409`. Rolling average excludes cancelled, failed, and refunded orders.
 
 ### 4.3 Commission
 - `WHOLESALE_COMMISSION_RATE=0.12` (hard-coded default; **do not change without business signoff**)
@@ -197,7 +199,7 @@ Webhooks are **idempotent**: every handler checks an event ID against a dedupe s
 | `SQUARE_WEBHOOK_SIGNATURE_KEY` | Webhook verification |
 | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | Subscription billing |
 | `WHOLESALE_COMMISSION_RATE` (0.12) | Platform commission |
-| `WHOLESALE_DEFAULT_SKU_FACTOR` (prod: `0.65` via `gcp/deploy-cloud-run.sh`; code fallback `0.75`) | Default wholesale base factor (clamped 0.50–0.75) |
+| `WHOLESALE_DEFAULT_SKU_FACTOR` (design: `0.75`; code default `0.75`; clamped 0.50–0.75) | Wholesale base factor. Must equal `0.75` unless business explicitly approves a lower base. |
 | `TOKEN_ENCRYPTION_KEY` | Encrypts OAuth tokens at rest |
 | `QUICKBOOKS_*` | QuickBooks OAuth (optional) |
 
@@ -218,6 +220,7 @@ Webhooks are **idempotent**: every handler checks an event ID against a dedupe s
 - Buyer discount ladder is global; no per-farm override yet
 - Dispute/chargeback flow is manual through Square dashboard
 - `app_fee_money` pathway requires farm Square account; direct-charge fallback accrues commission differently in accounting
+- **Production `WHOLESALE_DEFAULT_SKU_FACTOR` is below design base.** `gcp/deploy-cloud-run.sh:171` sets `0.65`; design base is `0.75`. Needs a config-only PR updating the deploy script + Central redeploy to bring prod in line with design.
 
 ## 15. References
 
