@@ -14,7 +14,7 @@ Foxtrot is the working name for GreenReach's cloud-native, multi-tenant indoor f
 
 - **Light Engine (LE)** = "the farm" runtime. One logical instance per farm operator tenant; sensor polling, device control, farm dashboards, local E.V.I.E. UI.
 - **GreenReach Central (GR-Central)** = "the hub". Multi-farm PostgreSQL/AlloyDB backend, admin + marketing + wholesale/distribution backends, AI assistant APIs, research platform, payments.
-- **Data model is deliberately split**: each farm's **financial, customer, and business data is tenant-isolated** (RLS + farm_id scoping + subdomain-per-farm); **growing-environment, crop, and research data is sharable** with researchers and cross-farm intelligence.
+- **Data model is deliberately split**: each farm's **financial, customer, and business data is tenant-isolated** (RLS + farm_id scoping + JWT-resolved tenant context); **growing-environment, crop, and research data is sharable** with researchers and cross-farm intelligence.
 - **GreenReach Central is the business**: distribution, admin, billing, marketing, wholesale marketplace, and network intelligence all live here.
 
 ---
@@ -27,7 +27,7 @@ Operate an AI-first indoor farming network where individual growers run an opini
 ### 1.2 Strategic goals (explicit in the code + docs)
 1. **AI-first operations.** E.V.I.E. is the primary grower interface; dedicated pages consolidate into conversational/generated views over time (`.github/AI_FIRST_VISION.md`).
 2. **Full cloud, no edge hardware.** "The LE Cloud Run service IS the farm." No Pi, no on-prem. Legacy "edge" terms are artifacts (`.github/CLOUD_ARCHITECTURE.md`).
-3. **Multi-tenant SaaS with per-farm branding.** Each farm gets a subdomain slug (`sunrise-acres.greenreachgreens.com`) with wildcard DNS and strict tenant isolation (`docs/architecture/MULTI_TENANT_ARCHITECTURE.md`).
+3. **Multi-tenant SaaS, per-tenant isolation first.** Every farm has a `farm_slug` in the `farms` table and strict tenant isolation (RLS + JWT). Per-farm **`<slug>.greenreachgreens.com` subdomain routing is planned but NOT live in production today** — it is documented as a target in `docs/architecture/MULTI_TENANT_ARCHITECTURE.md`. At runtime right now, `greenreachgreens.com` is **Central's** custom domain (pending DNS migration from CloudFront), LE has no custom domain, and agents must **not** assume `<anything>.greenreachgreens.com` resolves to LE.
 4. **Shared research, private finances.** Environmental/agronomic data and research artifacts are shared (with governance); financial/customer/wholesale data are tenant-private.
 5. **GreenReach Central as the business layer.** Central runs admin, billing, marketing, wholesale marketplace, delivery/distribution, grant wizard, and cross-farm "network intelligence."
 6. **Agent-mediated actions.** All consequential actions (device control, bulk updates, recipe deployments) route through an agent tool-gateway with audit + trust tiers, not ad-hoc UI logic.
@@ -41,8 +41,10 @@ Operate an AI-first indoor farming network where individual growers run an opini
                             |
            ┌────────────────┴────────────────┐
            |                                 |
- <slug>.greenreachgreens.com        greenreachgreens.com
- (per-farm subdomain → LE)          (central hub → GR-Central)
+ light-engine-*.run.app               greenreachgreens.com
+ (LE Cloud Run URL; no custom         (Central's custom domain,
+  domain today)                        pending DNS migration
+                                       → greenreach-central-*.run.app)
            |                                 |
            ▼                                 ▼
  ┌─────────────────────────┐      ┌─────────────────────────┐
@@ -82,7 +84,7 @@ Foxtrot can be read as **four customer-facing apps** sharing one backend:
 ### 3.1 App A — Farm Operator App ("Light Engine" UI)
 - **Who:** Individual farm owner + their roles (`admin`, `manager`, `operator`, `viewer`).
 - **Where served:** LE Cloud Run, main page `LE-farm-admin.html`, login at `farm-admin-login.html`.
-- **Tenant URL:** `<farm-slug>.greenreachgreens.com`.
+- **Tenant URL:** LE Cloud Run default URL today (no custom domain). Per-farm `<slug>.greenreachgreens.com` routing is a **planned** future state — see `docs/architecture/MULTI_TENANT_ARCHITECTURE.md`. Do **not** assume `foxtrot.greenreachgreens.com` or `<slug>.greenreachgreens.com` resolves.
 - **Primary agent:** E.V.I.E. (farm-scoped) with Farm-Ops-Agent tool gateway and Setup-Agent for onboarding.
 - **Capabilities:** environment monitoring, device + lighting + plug + SwitchBot control, automation rules, schedules, groups, zones, rooms, tray/planting lifecycle, harvest, inventory, farm-sales POS, wholesale order fulfillment, alerts, notifications, grant wizard, research workspace (if tier includes it), accounting & billing (their own), onboarding wizards.
 - **Data:** private to the farm (financial, customers, orders); telemetry synced upstream; recipes pulled from Central.
@@ -101,13 +103,13 @@ This is actually **two tightly linked surfaces** that share a backend and the ma
 - **Public landing pages**: `landing-*.html`, `about.html`, `greenreach-grow.html`, `id-buy-local.html`, blog, etc.
 - **Marketing agent (S.C.O.T.T.)**: `greenreach-central/routes/scott-marketing-agent.js` — "Social Content Optimization, Trends & Targeting." Generates social posts per platform, runs rule-engine auto-approval (`marketing-rules-engine.js`), publishes via `marketing-platforms.js`, tracks AI cost via `ai-usage-tracker.js`. Explicitly positioned as "junior to F.A.Y.E." with escalation.
 - **Admin surface**: `/api/admin/marketing` (`routes/admin-marketing.js`), campaigns (`routes/campaign.js`), marketing skills registry (`services/marketing-skills.js`).
-- **Branding**: per-farm subdomain stores (`*.greenreachgreens.com`) are the public face of each tenant.
+- **Branding (planned):** per-farm subdomain stores (`*.greenreachgreens.com`) are the **intended** public face of each tenant; today the farm shop is reached via the LE Cloud Run URL or (once migrated) relative paths under Central's domain. Wildcard DNS and TLS for `*.greenreachgreens.com` are **not** configured in production today.
 
 **C.2 Distribution / Wholesale / Delivery**
 - **Wholesale marketplace**: `GR-wholesale.html`, buyer portal, driver-applications, catalog aggregation across farms. Backend: `routes/wholesale.js`, `routes/admin-wholesale.js`, `routes/wholesale-fulfillment.js`, `routes/wholesale-exports.js`, `routes/wholesale-donations.js`.
 - **Commission engine**: 12% broker commission (`WHOLESALE_COMMISSION_RATE=0.12`), implemented via Square `app_fee_money` — this is GreenReach's stated revenue model and must not change.
 - **Delivery service**: `routes/admin-delivery.js`, driver enrollment, per-farm delivery settings, zones/windows, delivery orders. Architecture: MVP in `docs/delivery/DELIVERY_SERVICE_ARCHITECTURE_PLAN.md`.
-- **Farm sales**: per-farm POS at `farm-sales-pos.html` (embedded into LE farm admin), direct-to-consumer shop at `farm-sales-shop.html` on the farm's subdomain, Square OAuth per farm via `payment-setup.html` + `routes/square-oauth-proxy.js`.
+- **Farm sales**: per-farm POS at `farm-sales-pos.html` (embedded into LE farm admin), direct-to-consumer shop at `farm-sales-shop.html` (served by LE Cloud Run; per-farm subdomain branding is planned, not live), Square OAuth per farm via `payment-setup.html` + `routes/square-oauth-proxy.js`.
 
 ### 3.4 App D — Research Workspace
 - **Who:** Farms on the research tier, plus external collaborators (PIs, Co-PIs, postdocs, grad students, technicians, viewers).
@@ -134,7 +136,9 @@ This is actually **two tightly linked surfaces** that share a backend and the ma
   middleware/                          ← LE middleware (auth, tenant, rate-limit)
   automation/                          ← Env. automation engine (env-store, VPD, rules)
   config/                              ← edge-config.json, feature flags, database
-  public/                              ← LE static assets (served by LE only)
+  public/                              ← Root LE static assets (NOTE: at runtime LE serves
+                                          greenreach-central/public/ FIRST, then falls back
+                                          to this root public/ — see server-foxtrot.js ~L25173)
   scripts/                             ← maintenance, deploy, migrations, smoke tests
 
   greenreach-central/                  ← GR-Central deploy root (independent image)
@@ -161,7 +165,7 @@ This is actually **two tightly linked surfaces** that share a backend and the ma
 
 **Absolute rules** (from CONTRIBUTING.md and copilot-instructions.md):
 - LE and Central **share no runtime imports** across the boundary, with exactly three audited exceptions (the three AI route files: `assistant-chat.js`, `admin-assistant.js`, `admin-ops-agent.js`).
-- Two `public/` directories exist; edit in `greenreach-central/public/` first, then copy the "dual-deploy file registry" items to root `public/`.
+- Two `public/` directories exist. **At runtime, LE's Express static stack serves `greenreach-central/public/` FIRST, then falls back to root `public/`** (`server-foxtrot.js` ~L25173–L25194). So for any file that exists in both trees, the Central copy is the effective source of truth at request time. The "dual-deploy file registry" rule is: edit `greenreach-central/public/` first, then mirror listed files into root `public/` — but Central's copy wins if they drift.
 - Never redirect UI page requests cross-origin between the two services — it breaks iframes, CSP, and HTTPS.
 
 ---
@@ -197,7 +201,7 @@ The product goal is explicit: **each Light Engine is operated by a unique user; 
 
 | Data class | Examples | Isolation mechanism |
 |---|---|---|
-| **Farm-private business data** | `farm_users`, `wholesale_orders`, `payment_records`, `accounting_*`, `farm_inventory`, `products`, `delivery_orders`, `producer_accounts`, `farm_alerts`, POS transactions, Square OAuth tokens | PostgreSQL **Row-Level Security** (`gr_tenant_isolation` policy) on 19 tenant-scoped tables, enforced via `set_config('app.current_farm_id', ...)` in the query wrapper; client-side `clearFarmStorage()` on login/expiry; subdomain-scoped auth |
+| **Farm-private business data** | `farm_users`, `wholesale_orders`, `payment_records`, `accounting_*`, `farm_inventory`, `products`, `delivery_orders`, `producer_accounts`, `farm_alerts`, POS transactions, Square OAuth tokens | PostgreSQL **Row-Level Security** (`gr_tenant_isolation` policy) on 19 tenant-scoped tables, enforced via `set_config('app.current_farm_id', ...)` in the query wrapper; client-side `clearFarmStorage()` on login/expiry; tenant resolved from JWT (subdomain-based resolution is a planned future input, not live) |
 | **Farm-owned operational data** | `groups`, `rooms`, `schedules`, `devices`, `tray_runs`, `harvest_events`, `lot_records` | `farm_id` scoping + farmStore per-farm Maps; sync auth via `X-API-Key` + `X-Farm-ID` for LE ↔ Central |
 | **Network-shared / aggregate data** | `crop_benchmarks`, `demand_signals`, `recipe_modifiers`, `risk_alerts`, `environment_benchmarks`, `pricing_intelligence`, network anomaly correlations, energy benchmarks, performance leaderboards | Aggregated in Central; exposed via `/api/network/*`; **admin-only** for cross-farm raw views (`/api/network/benchmarking` returns 403 to non-admins after Phase A hardening) |
 | **Research data (shared with governance)** | `studies`, `datasets`, `recipe_versions`, `protocol_design_elements`, `data_dictionary_entries`, `metadata_registry`, `event_markers`, `batch_traceability`, `grant_applications`, `grant_publications`, `data_quality_alerts` | Still `farm_id`-scoped by default, but sharable via `research-partners`, `research-collaboration`, `research-security` (classifications + policies), and data-sharing agreements; governed by ORCID-linked roles (PI, Co-PI, postdoc, technician, viewer) |
@@ -211,7 +215,7 @@ The product goal is explicit: **each Light Engine is operated by a unique user; 
 | Admin auth | JWT (Bearer) + MFA + lockout | 12h | `localStorage.admin_token` | GR-Central admin, F.A.Y.E. |
 | LE ↔ Central sync | `X-API-Key` + `X-Farm-ID` | None | `config/edge-config.json` / `farms.api_key` | `sync-service.js`, cross-server proxies |
 
-Farm context extraction priority (Central): JWT → `X-Farm-ID` header → subdomain slug → env default (`FARM_ID`).
+Farm context extraction priority (Central): JWT → `X-Farm-ID` header → subdomain slug (only when subdomain routing is activated per the multi-tenant architecture plan — NOT live today) → env default (`FARM_ID`).
 
 ### 6.3 Feature gates
 - Plan tiers: `full`, `inventory-only`, `research`, etc., enforced via `autoEnforceFeatures()` middleware.
@@ -263,7 +267,7 @@ Use this as the canonical taxonomy when building features or briefing new agents
 - ML: anomaly detection, SARIMAX forecasting, LED aging, harvest date prediction
 
 ### 8.2 Commerce (Central + LE split)
-- Farm sales (DTC): POS, shop, store, subdomain storefront
+- Farm sales (DTC): POS, shop, store (per-farm subdomain storefront planned, not live)
 - Wholesale marketplace: catalog aggregation, checkout, 12% broker commission, fulfillment, exports, donations
 - Pricing: `crop-pricing.js`, `admin-pricing.js`, cost surveys, pricing intelligence
 - Inventory (two domains): supplies (inputs, JSONB in `farm_data`) vs. crop/product inventory (`farm_inventory` table, dual-quantity auto + manual)
@@ -291,7 +295,7 @@ Use this as the canonical taxonomy when building features or briefing new agents
 - Public landing pages (`landing-*.html`)
 - S.C.O.T.T. marketing agent (multi-platform social)
 - Campaign management (`campaign.js`, `admin-marketing.js`)
-- Per-farm subdomain storefronts (branding as marketing)
+- Per-farm subdomain storefronts (branding as marketing — **planned**, not live today)
 - Email via Google Workspace SMTP (`SMTP_*`), Email-to-SMS gateway for critical alerts
 - Blog system (`blog.html`, `blog-post.html`)
 
@@ -312,7 +316,7 @@ Use this as the canonical taxonomy when building features or briefing new agents
 - Cross-farm anomaly correlation (weekly job)
 
 ### 8.8 Platform & Admin (Central-owned)
-- Farm registration + subdomain slug provisioning
+- Farm registration + `farm_slug` allocation (DNS / subdomain activation pending the multi-tenant rollout)
 - User management (farm + admin)
 - Feature flags + plan tiers
 - AI monitoring + cost accounting
@@ -379,7 +383,7 @@ Kept in `.github/` at the repo root — treat as source of truth; do not paraphr
 8. `.github/RESEARCH_PLATFORM_AUDIT.md` — Research tenancy + security gaps and status
 9. `greenreach-central/EVIE_VISION.md` — E.V.I.E. tone, visual identity, modes
 10. `greenreach-central/FAYE_VISION.md` — F.A.Y.E. positioning, autonomy roadmap
-11. `docs/architecture/MULTI_TENANT_ARCHITECTURE.md` — Subdomain multi-tenancy plan
+11. `docs/architecture/MULTI_TENANT_ARCHITECTURE.md` — Subdomain multi-tenancy **plan** (target state, not current runtime)
 12. `docs/security/` — Security audits + hardening
 13. `CONTRIBUTING.md` — Workflow, dual-deploy rules, conventions
 14. `docs/ai-agents/` — Agent capabilities, skill framework updates, forensic reports
@@ -428,4 +432,4 @@ Worth tracking alongside this playbook:
 
 ## 13. Elevator Pitch for New Team Members / Agents
 
-> Foxtrot is a two-service Cloud Run monorepo. `light-engine` is each farm's operator app (sensors, devices, E.V.I.E.). `greenreach-central` is the business: admin, wholesale, marketing, delivery, payments, research, grants, and network intelligence across farms. Farms are isolated by `farm_id` with PostgreSQL RLS; each gets a branded subdomain. Financial data stays private to the farm; environmental and research data is sharable under explicit governance. Actions flow through a family of named AI agents — E.V.I.E. for the farm, F.A.Y.E. for the platform, G.W.E.N. for research, S.C.O.T.T. for marketing, plus Setup-Agent, Farm-Ops-Agent, and Admin-Ops-Agent — all routed through a tool-gateway with audit and trust tiers. AWS is deprecated; everything runs on Google Cloud Run + AlloyDB + Secret Manager. Read the files in `.github/` before you change anything.
+> Foxtrot is a two-service Cloud Run monorepo. `light-engine` is each farm's operator app (sensors, devices, E.V.I.E.). `greenreach-central` is the business: admin, wholesale, marketing, delivery, payments, research, grants, and network intelligence across farms. `greenreachgreens.com` is **Central's** custom domain (pending DNS migration); LE has no custom domain today and per-farm `<slug>.greenreachgreens.com` routing is planned, not live. Farms are isolated by `farm_id` with PostgreSQL RLS. Financial data stays private to the farm; environmental and research data is sharable under explicit governance. Actions flow through a family of named AI agents — E.V.I.E. for the farm, F.A.Y.E. for the platform, G.W.E.N. for research, S.C.O.T.T. for marketing, plus Setup-Agent, Farm-Ops-Agent, and Admin-Ops-Agent — all routed through a tool-gateway with audit and trust tiers. AWS is deprecated; everything runs on Google Cloud Run + AlloyDB + Secret Manager. Read the files in `.github/` before you change anything.

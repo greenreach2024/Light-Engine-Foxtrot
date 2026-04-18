@@ -47,7 +47,7 @@ Phases (high level):
 2. Business legal + tax
 3. Square OAuth connection (Playbook 03)
 4. Stripe subscription selection
-5. Subdomain slug selection + reservation
+5. `farm_slug` selection + reservation (the slug is reserved today; DNS / `<slug>.greenreachgreens.com` activation is pending the subdomain rollout — see Playbook 01 §7)
 6. Hardware registry (SwitchBot devices + mapping)
 7. Rooms + groups (physical + logical layout)
 8. Crop registry + target ranges

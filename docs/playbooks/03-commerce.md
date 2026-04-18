@@ -17,7 +17,7 @@ Foxtrot operates a **multi-tenant wholesale marketplace** where buyers purchase 
 | Stream | Server | Payment rail | Commission |
 |---|---|---|---|
 | Wholesale marketplace | Central aggregates, LE fulfills | Square (per-farm OAuth or direct-charge fallback) | 12% via `app_fee_money` |
-| Farm DTC sales (online shop) | LE per-subdomain | Per-farm Square OAuth | Varies (farm keeps net) |
+| Farm DTC sales (online shop) | LE Cloud Run (per-farm subdomain branding planned, not live) | Per-farm Square OAuth | Varies (farm keeps net) |
 | Farm in-person POS | LE (`farm-sales-pos.html`) | Per-farm Square OAuth | Varies |
 | Platform subscriptions | Central | Stripe | Flat subscription fees |
 | Delivery fees | Central | Same rail as wholesale | Delivery fee line item |
@@ -119,11 +119,12 @@ Fallback (v1.3.0): Direct DB query on `farm_inventory WHERE available_for_wholes
 
 ## 6. Farm DTC sales
 
-### 6.1 Shop (subdomain-branded)
+### 6.1 Shop (per-farm branding planned)
 - Page: `public/farm-sales-shop.html`
-- URL: `<farm-slug>.greenreachgreens.com/farm-sales-shop.html`
+- URL today: served by LE Cloud Run at its default URL (`https://light-engine-*.run.app/farm-sales-shop.html`). Per-farm `<slug>.greenreachgreens.com/farm-sales-shop.html` is the **target** URL once subdomain multi-tenancy is live (see Playbook 01 §7); do not assume it resolves today.
 - Uses the farm's own Square OAuth (no GreenReach commission by default)
 - Inventory: `farm_inventory WHERE available_for_farm_sales = true`
+- Square OAuth redirect URIs must track whichever host actually serves the shop — update them when the domain migration happens.
 
 ### 6.2 In-person POS
 - Page: `public/farm-sales-pos.html`

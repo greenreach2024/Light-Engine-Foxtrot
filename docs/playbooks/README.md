@@ -11,7 +11,7 @@ This directory holds category-specific playbooks for the Light Engine Foxtrot pl
 | 02 | [AI Agent Platform](./02-ai-agent-platform.md) | All seven agents, tool gateway, enforcement, escalation, cost | F.A.Y.E. |
 | 03 | [Commerce (Wholesale, Farm Sales, Payments)](./03-commerce.md) | Square OAuth per farm, 12% commission, wholesale checkout, Stripe, accounting | Central admin |
 | 04 | [Distribution & Delivery](./04-distribution-delivery.md) | Delivery settings, zones, drivers, farm-to-door MVP | Central admin |
-| 05 | [Marketing Platform](./05-marketing.md) | S.C.O.T.T., campaigns, public pages, email/SMS, subdomain branding | Central admin / marketing |
+| 05 | [Marketing Platform](./05-marketing.md) | S.C.O.T.T., campaigns, public pages, email/SMS, per-farm branding (subdomain storefront **planned**, not live) | Central admin / marketing |
 | 06 | [Research Platform](./06-research.md) | Four-phase research workspace, G.W.E.N., governance, partners | Research tier farms |
 | 07 | [Farm Operations (LE runtime)](./07-farm-operations.md) | SwitchBot, EnvStore, VPD, automation, tray lifecycle, harvest, ML | Farm operators |
 | 08 | [DevOps & Deployment](./08-devops-deployment.md) | Cloud Run, AlloyDB, Secret Manager, dual-deploy registry, banned commands | Platform engineers |

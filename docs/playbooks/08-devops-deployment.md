@@ -17,19 +17,23 @@ Foxtrot is **100% cloud-based** on Google Cloud, deployed as **two independent C
                   │  Google Cloud (project-5d00790f-13a9-...)   │
                   │  Region: us-east1                            │
                   │                                              │
-   *.greenreachgreens.com   ┌─────────────────────────┐          │
-           │                │ Cloud Run: light-engine │          │
-           │──► Cloud Run ─▶│ 1029387937866.us-east1  │──┐       │
-           │   (LE)         └─────────────────────────┘  │       │
-           │                                             ▼       │
-           │                ┌─────────────────────────┐ ┌──────┐ │
-           └───────────────▶│ Cloud Run: greenreach-  │─│AlloyDB│ │
-                            │ central                 │ │greenreach-db│
-                            └─────────────────────────┘ │private IP  │
-                                                        │10.87.0.2   │
-                              Artifact Registry         └──────┘
-                              Cloud Scheduler          Cloud Storage
-                              Secret Manager           Cloud Logging
+   light-engine-*.run.app    ┌─────────────────────────┐          │
+   (LE Cloud Run URL;        │ Cloud Run: light-engine │          │
+    LE has no custom         │ 1029387937866.us-east1  │──┐       │
+    domain today)            └─────────────────────────┘  │       │
+                                                          ▼       │
+   greenreachgreens.com      ┌─────────────────────────┐ ┌──────┐ │
+   (Central's custom      ──▶│ Cloud Run: greenreach-  │─│AlloyDB│ │
+    domain, pending DNS      │ central                 │ │greenreach-db│
+    migration from CloudFront└─────────────────────────┘ │private IP  │
+    to Central Cloud Run)                                │10.87.0.2   │
+                                                         └──────┘
+   *.greenreachgreens.com                                            │
+   (per-farm subdomain                                               │
+    routing — PLANNED,                                               │
+    not live today)           Artifact Registry          Cloud Storage
+                              Cloud Scheduler            Cloud Logging
+                              Secret Manager
 ```
 
 ## 3. Service URLs
@@ -38,7 +42,8 @@ Foxtrot is **100% cloud-based** on Google Cloud, deployed as **two independent C
 |---|---|---|
 | Light Engine | `https://light-engine-1029387937866.us-east1.run.app` | Farm runtime (LE) |
 | GreenReach Central | `https://greenreach-central-1029387937866.us-east1.run.app` | Admin + wholesale + marketing + research |
-| Public | `*.greenreachgreens.com` | Per-farm subdomain routing (→ Cloud Run) |
+| Central custom domain | `greenreachgreens.com` | Pending DNS migration from CloudFront → greenreach-central Cloud Run |
+| Per-farm `<slug>.greenreachgreens.com` | **Planned**, not live | Wildcard DNS + wildcard TLS + Cloud Run domain mapping not configured today; see `docs/architecture/MULTI_TENANT_ARCHITECTURE.md` and Playbook 01 §7 |
 
 ## 4. Monorepo layout + dual-deploy rule
 
@@ -124,8 +129,8 @@ All secrets live in **Google Secret Manager** and are injected to Cloud Run via 
 - VPC connector connects Central's Cloud Run to AlloyDB private IP
 - LE uses HTTPS egress to Central (public URL)
 - Cloud Run services are **public** (auth enforced in-app, not at ingress)
-- CORS allowlist: `greenreachgreens.com`, `*.greenreachgreens.com`, `urbanyeild.ca`, `localhost`
-- Wildcard TLS cert for `*.greenreachgreens.com`
+- CORS allowlist (live today): `greenreachgreens.com`, `urbanyeild.ca`, `localhost`
+- `*.greenreachgreens.com` may be listed in the allowlist in anticipation of subdomain multi-tenancy, but **no wildcard DNS, no wildcard TLS cert, and no Cloud Run domain mapping for `*.greenreachgreens.com` exist in production today.** Do not assume any `<slug>.greenreachgreens.com` URL resolves.
 
 ## 9. Cloud Scheduler jobs
 
@@ -188,11 +193,13 @@ Local dev connects to AlloyDB through the Cloud SQL Auth Proxy or a dev PostgreS
 - Bypass the DB `query()` wrapper (Playbook 01 §5.3)
 - Run destructive `gcloud` commands (`run services delete`, `sql instances delete`) on production
 - Change `WHOLESALE_COMMISSION_RATE` without business + accounting signoff (Playbook 03)
-- Change per-farm subdomain slugs once live (breaks bookmarks, SEO, Square OAuth redirects)
+- Change a `farm_slug` once the subdomain rollout goes live (it will break bookmarks, SEO, Square OAuth redirects). Today, changing a slug only affects internal identifiers, but treat it as immutable from day one.
 
 ## 15. Known gaps / open items
 
 - Legacy AWS artifacts still present in repo (`.ebextensions/`, `.platform/`, `aws-*/`) even though banned in prod
+- Per-farm subdomain multi-tenancy (`<slug>.greenreachgreens.com`) remains an unshipped plan — DNS wildcard, wildcard TLS, Cloud Run domain mapping, and CORS activation still to do
+- `greenreachgreens.com` DNS is still on CloudFront; migration to Central Cloud Run pending (see `.github/CLOUD_ARCHITECTURE.md` §DNS/Custom Domains)
 - No formal GitHub Actions release pipeline described; deploys are `gcloud run deploy` today
 - Migration retention / baseline strategy should be formalized (large `runMigrations` block on boot)
 - Secrets rotation cadence not codified (JWT_SECRET, DB_PASSWORD, OAuth app secret)

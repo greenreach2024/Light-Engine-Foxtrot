@@ -8,14 +8,14 @@
 
 ## 1. Purpose & scope
 
-Foxtrot's marketing layer produces, schedules, auto-approves, and publishes content across multiple social platforms, runs campaigns, serves public landing pages, and powers the per-farm subdomain storefront experience. Read this before adding a new platform integration, new S.C.O.T.T. tool, new campaign type, or new landing page template.
+Foxtrot's marketing layer produces, schedules, auto-approves, and publishes content across multiple social platforms, runs campaigns, serves public landing pages, and — once subdomain multi-tenancy ships — will power the per-farm branded storefront experience. Read this before adding a new platform integration, new S.C.O.T.T. tool, new campaign type, or new landing page template.
 
 ## 2. Surfaces
 
 | Surface | Audience | Entry point |
 |---|---|---|
 | Public landing pages | Prospective farms, buyers, investors | `landing-*.html`, `about.html`, `greenreach-grow.html`, `blog.html` |
-| Per-farm subdomain storefront | Retail buyers | `<slug>.greenreachgreens.com/farm-sales-shop.html` |
+| Per-farm storefront (subdomain branding **planned**, not live) | Retail buyers | `public/farm-sales-shop.html` on LE Cloud Run today; target URL `<slug>.greenreachgreens.com/farm-sales-shop.html` once subdomain routing ships (see Playbook 01 §7) |
 | Admin Marketing | GreenReach marketing ops | `GR-central-admin.html` → Marketing tab |
 | S.C.O.T.T. chat + publish UI | Admin / F.A.Y.E. delegation | S.C.O.T.T. panel in admin UI |
 | Email + SMS alerts (also marketing broadcasts) | Farms + buyers | Google Workspace SMTP + Email-to-SMS gateway |
@@ -86,12 +86,14 @@ Foxtrot's marketing layer produces, schedules, auto-approves, and publishes cont
 
 All landing pages use the shared theme tokens in `public/styles/` — do not fork styles.
 
-## 6. Subdomain branding (marketing as a product)
+## 6. Per-farm branding (planned subdomain product)
 
-Per-farm subdomains (see Playbook 01 §7) are the public face of each tenant. Every marketing rollout must consider:
-- Does the farm's storefront inherit the new content/theme correctly?
-- Does the wildcard TLS cert still cover the subdomain?
-- Does the auto-injected `api-config.js` still resolve under the subdomain?
+Per-farm subdomain storefronts (see Playbook 01 §7) are the **intended** public face of each tenant but are **not live in production today** — `greenreachgreens.com` is Central's custom domain (pending DNS migration) and LE has no custom domain. Marketing designs and copy must still be produced against the target state, but before shipping anything that depends on a subdomain being live, verify:
+- Has the subdomain rollout happened (Cloud Run domain mapping + wildcard TLS + DNS wildcard)?
+- If not, does the rollout path use LE's Cloud Run URL or a path under Central's domain as a fallback?
+- Does the farm's storefront inherit the new content/theme correctly under whichever host is actually serving it?
+- Does the auto-injected `api-config.js` resolve under that host?
+- Are Square OAuth redirect URIs aligned with the real live host?
 
 ## 7. Email & SMS
 

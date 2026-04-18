@@ -7,7 +7,7 @@
 
 ## 1. Purpose & scope
 
-This playbook governs how Foxtrot keeps one farm's business data **private to that farm**, while still allowing growing-environment and research data to be **shared with researchers and network intelligence**. Read this before you touch any of: auth middleware, DB query wrappers, JWT issuance, feature gates, API-key sync, subdomain routing, or RLS policies.
+This playbook governs how Foxtrot keeps one farm's business data **private to that farm**, while still allowing growing-environment and research data to be **shared with researchers and network intelligence**. Read this before you touch any of: auth middleware, DB query wrappers, JWT issuance, feature gates, API-key sync, tenant context resolution, or RLS policies.
 
 ## 2. The central design rule
 
@@ -59,7 +59,7 @@ Foxtrot runs **three** distinct authentication systems. Never mix them.
 When a request hits Central, farm context is resolved in this exact order:
 1. JWT `Authorization: Bearer <token>` → farm_id from payload
 2. `X-Farm-ID` header (API key auth path)
-3. Subdomain slug from `Host` header → DB lookup on `farms.farm_slug`
+3. Subdomain slug from `Host` header → DB lookup on `farms.farm_slug` (**planned path**; see §7 — subdomain routing is not live in production today)
 4. `FARM_ID` env var (single-farm mode)
 
 Implementation: `middleware/tenant.js` / farmStore `farmIdFromReq(req)`.
@@ -119,17 +119,23 @@ On login and token expiry, all farm-scoped browser storage keys are cleared. Thi
 
 Testing rule: after logout, opening devtools → Application → localStorage should show **no** `farm:*`, `groups:*`, `schedules:*`, `sales:*`, or `inventory:*` keys.
 
-## 7. Subdomain multi-tenancy
+## 7. Subdomain multi-tenancy (PLANNED — not live today)
 
-Each farm gets a slug and is served from `<slug>.greenreachgreens.com`.
+Per-farm `<slug>.greenreachgreens.com` routing is the target multi-tenant topology described in `docs/architecture/MULTI_TENANT_ARCHITECTURE.md`. **It is not live in production today.** Current runtime facts:
 
-- Slug generated during setup via `lib/slug-generator.js`; stored in `farms.farm_slug` (UNIQUE)
-- Wildcard DNS `*.greenreachgreens.com` → Cloud Run
-- Wildcard TLS certificate for `*.greenreachgreens.com`
-- Middleware: `server/middleware/multi-tenant.js` → `extractTenantId(req)` → `req.tenant = { slug, farmId }`
-- `validateTenant` enforces that the resolved farm exists and is active
+- `greenreachgreens.com` is **Central's** custom domain (pending DNS migration from CloudFront; `.github/CLOUD_ARCHITECTURE.md` §Cloud Run Services and §DNS/Custom Domains).
+- LE has **no** custom domain. LE is reached via its Cloud Run default URL (`https://light-engine-*.run.app`).
+- `*.greenreachgreens.com` wildcard DNS and wildcard TLS are **not** configured in production today.
+- Do **not** assume `foxtrot.greenreachgreens.com` (or any `<slug>.greenreachgreens.com`) resolves — see `.github/copilot-instructions.md` "DO NOT assume `foxtrot.greenreachgreens.com` resolves (it does not)."
 
-Local dev override: `X-Tenant-Id` header.
+What **is** real in the code today:
+
+- Slug generated during setup via `lib/slug-generator.js`; stored in `farms.farm_slug` (UNIQUE).
+- Middleware `server/middleware/multi-tenant.js` → `extractTenantId(req)` → `req.tenant = { slug, farmId }` exists and is exercised for requests that already carry tenant signals (JWT / `X-Farm-ID` / `X-Tenant-Id`).
+- `validateTenant` enforces that the resolved farm exists and is active.
+- Local dev override: `X-Tenant-Id` header.
+
+When the subdomain rollout happens, the planned activation steps are: (a) create Cloud Run domain mapping(s) / Cloud Load Balancer + wildcard cert, (b) enable `Host`-header tenant resolution in `multi-tenant.js`, (c) extend CORS/CSP allowlists to cover `*.greenreachgreens.com`, (d) propagate subdomain-aware URLs to Square OAuth redirect URIs and marketing assets.
 
 ## 8. Feature gates
 
@@ -169,7 +175,7 @@ When building new research endpoints, every sub-resource handler must verify par
 - Helmet with a **strict CSP** (iframe sources explicitly listed)
 - HTTPS redirect in cloud mode
 - HSTS enabled in production
-- CORS allowlist: `greenreachgreens.com`, `*.greenreachgreens.com`, `urbanyeild.ca`, `localhost`
+- CORS allowlist today: `greenreachgreens.com`, `urbanyeild.ca`, `localhost`. `*.greenreachgreens.com` is listed in the registry in anticipation of the subdomain rollout but **no subdomains resolve in production today** (see §7).
 - Never redirect UI page requests cross-origin between `light-engine` and `greenreach-central` — breaks CSP, iframes, session cookies
 
 ## 12. Secrets management
