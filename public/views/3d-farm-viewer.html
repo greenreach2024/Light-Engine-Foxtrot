@@ -749,7 +749,10 @@
       const keys = Object.keys(crops);
       const lowered = raw.toLowerCase();
       const matchKey = keys.find(function(k) { return String(k).toLowerCase() === lowered; });
-      const entry = matchKey ? crops[matchKey] : null;
+      const matched = matchKey ? [matchKey, crops[matchKey]] : (keys.map(function(k) { return [k, crops[k]]; }).find(function(pair) {
+        return String(pair[1]?.planId || '').toLowerCase() === lowered;
+      }) || [null, null]);
+      const entry = matched[1];
       const resolvedName = (entry && entry.name) ? entry.name : (matchKey || raw);
       const planId = (entry && entry.planId) ? entry.planId : ('crop-' + resolvedName.toLowerCase().replace(/\s+/g, '-'));
       return { resolvedName, planId };
