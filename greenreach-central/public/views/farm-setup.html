@@ -5,18 +5,22 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Farm Setup - Light Engine</title>
   <link rel="stylesheet" href="/styles.foxtrot.css">
+  <link rel="stylesheet" href="/styles/le-foundation.css">
   <link rel="stylesheet" href="/styles/le-dashboard-theme.css">
   <link rel="stylesheet" href="/styles/switchbot-manager.css">
   <link rel="stylesheet" href="/styles/iot-manager.css">
   <link rel="stylesheet" href="/styles/nav-color-palette.css">
   <link rel="stylesheet" href="/css/setup-orchestrator.css">
   <style>
-    /* ===== FARM SETUP - DARK GLASSMORPHIC OVERRIDES ===== */
+    /* ===== FARM SETUP — LE dark cinematic overrides =====
+       Reads tokens from /styles/le-foundation.css. The !important walls that
+       used to live here are still necessary where we are fighting the
+       globally-loaded foxtrot light theme (/styles.foxtrot.css), but every
+       hardcoded color now routes through a token so the palette stays
+       consistent and can be tuned in one place. */
     *, *::before, *::after { box-sizing: border-box; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-      color: #f1f5f9;
+      background: linear-gradient(135deg, var(--surface-0, #0f172a) 0%, var(--surface-1, #1e293b) 100%);
       min-height: 100vh;
       overflow-x: hidden;
       margin: 0;
@@ -30,16 +34,16 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+      border-bottom: 1px solid var(--border-subtle, rgba(148, 163, 184, 0.12));
       backdrop-filter: blur(10px);
       position: sticky;
       top: 0;
       z-index: 100;
     }
     .fs-header h1 {
-      font-size: 1.75rem;
+      font-size: var(--font-size-2xl, 1.5rem);
       font-weight: 700;
-      color: #f1f5f9;
+      color: var(--text-1, #f1f5f9);
       letter-spacing: -0.5px;
       margin: 0;
     }
@@ -54,20 +58,20 @@
     .fs-progress-bar {
       flex: 1;
       height: 6px;
-      background: rgba(30, 41, 59, 0.8);
+      background: var(--surface-2, rgba(30, 41, 59, 0.7));
       border-radius: 3px;
       overflow: hidden;
     }
     .fs-progress-fill {
       height: 100%;
-      background: linear-gradient(90deg, #3b82f6, #10b981);
+      background: linear-gradient(90deg, var(--accent-blue, #3b82f6), var(--accent-green, #10b981));
       border-radius: 3px;
-      transition: width 0.5s ease;
+      transition: width var(--motion-slow, 400ms) var(--motion-easing, ease);
       width: 0%;
     }
     .fs-progress-label {
-      font-size: 0.8rem;
-      color: #64748b;
+      font-size: var(--font-size-sm, 0.8125rem);
+      color: var(--text-4, #64748b);
       white-space: nowrap;
     }
 
@@ -80,16 +84,15 @@
 
     /* ---- Expandable Card (using details/summary) ---- */
     .fs-card {
-      background: rgba(15, 23, 42, 0.95);
-      border: 1px solid rgba(59, 130, 246, 0.2);
-      border-radius: 16px;
+      background: var(--surface-1, #1e293b);
+      border: 1px solid var(--border-subtle, rgba(148, 163, 184, 0.12));
+      border-radius: var(--radius-lg, 16px);
       margin-bottom: 1rem;
-      backdrop-filter: blur(10px);
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+      box-shadow: var(--elevation-3, 0 8px 32px rgba(0, 0, 0, 0.35));
       overflow: hidden;
     }
     .fs-card[open] {
-      border-color: rgba(59, 130, 246, 0.35);
+      border-color: var(--border-focus, rgba(59, 130, 246, 0.55));
     }
     .fs-card summary {
       padding: 1.25rem 1.5rem;
@@ -99,7 +102,7 @@
       gap: 12px;
       list-style: none;
       user-select: none;
-      transition: background 0.2s ease;
+      transition: background var(--motion-fast, 150ms) var(--motion-easing, ease);
     }
     .fs-card summary::-webkit-details-marker { display: none; }
     .fs-card summary::before {
@@ -107,43 +110,40 @@
       display: inline-block;
       width: 8px;
       height: 8px;
-      border-right: 2px solid #94a3b8;
-      border-bottom: 2px solid #94a3b8;
+      border-right: 2px solid var(--text-3, #94a3b8);
+      border-bottom: 2px solid var(--text-3, #94a3b8);
       transform: rotate(-45deg);
-      transition: transform 0.3s ease;
+      transition: transform var(--motion-normal, 250ms) var(--motion-easing, ease);
       flex-shrink: 0;
     }
     .fs-card[open] summary::before {
       transform: rotate(45deg);
     }
     .fs-card summary:hover {
-      background: rgba(59, 130, 246, 0.05);
+      background: var(--accent-blue-soft, rgba(59, 130, 246, 0.05));
     }
     .fs-card summary h2 {
-      font-size: 1.125rem;
+      font-size: var(--font-size-lg, 1.0625rem);
       font-weight: 600;
-      color: #f1f5f9;
+      color: var(--text-1, #f1f5f9);
       margin: 0;
       flex: 1;
     }
     .fs-card summary .fs-card-badge {
-      font-size: 0.75rem;
+      font-size: var(--font-size-xs, 0.75rem);
       padding: 3px 10px;
-      border-radius: 20px;
+      border-radius: var(--radius-pill, 9999px);
       font-weight: 600;
-      background: rgba(59, 130, 246, 0.15);
-      color: #93c5fd;
-      border: 1px solid rgba(59, 130, 246, 0.25);
+      background: var(--accent-blue-soft, rgba(59, 130, 246, 0.14));
+      color: var(--accent-blue, #60a5fa);
+      border: 1px solid var(--accent-blue-edge, rgba(59, 130, 246, 0.35));
     }
     .fs-card-body {
       padding: 0 1.5rem 1.5rem;
     }
 
     /* ---- Override foxtrot card/panel styles inside our container ---- */
-    /* Force all data-panel sections visible inside our card layout */
-    .fs-container [data-panel] {
-      display: block !important;
-    }
+    .fs-container [data-panel] { display: block !important; }
     .fs-container .card,
     .fs-container [class*="card--compact"] {
       background: transparent !important;
@@ -160,38 +160,24 @@
       margin-bottom: 1rem;
       flex-wrap: wrap;
     }
-    .fs-container .panel-header h2 {
-      display: none; /* Title is in the summary */
-    }
-    .fs-container .panel-body {
-      padding: 0 !important;
-    }
-    .fs-container .card-header {
-      display: none; /* Title is in the summary */
-    }
-    .fs-container .hint {
-      display: none; /* Tips in summary badge instead */
-    }
+    .fs-container .panel-header h2 { display: none; }
+    .fs-container .panel-body { padding: 0 !important; }
+    .fs-container .card-header { display: none; }
+    .fs-container .hint { display: none; }
 
-    /* ---- Text colors ---- */
+    /* ---- Text colors (fighting foxtrot light palette) ---- */
     .fs-container label,
     .fs-container .tiny {
-      color: #94a3b8 !important;
+      color: var(--text-3, #94a3b8) !important;
     }
     .fs-container h2,
     .fs-container h3,
     .fs-container strong {
-      color: #f1f5f9 !important;
+      color: var(--text-1, #f1f5f9) !important;
     }
-    .fs-container .text-muted {
-      color: #64748b !important;
-    }
-    .fs-container p {
-      color: #94a3b8;
-    }
-    .fs-container .section-title {
-      color: #f1f5f9 !important;
-    }
+    .fs-container .text-muted { color: var(--text-4, #64748b) !important; }
+    .fs-container p { color: var(--text-3, #94a3b8); }
+    .fs-container .section-title { color: var(--text-1, #f1f5f9) !important; }
 
     /* ---- Form controls ---- */
     .fs-container select,
@@ -201,28 +187,28 @@
     .fs-container input[type="time"],
     .fs-container input[type="range"],
     .fs-container textarea {
-      background: rgba(15, 23, 42, 0.6) !important;
-      border: 2px solid rgba(59, 130, 246, 0.3) !important;
-      border-radius: 10px !important;
-      color: #f1f5f9 !important;
+      background: var(--surface-3, rgba(15, 23, 42, 0.6)) !important;
+      border: 2px solid var(--accent-blue-edge, rgba(59, 130, 246, 0.35)) !important;
+      border-radius: var(--radius-md, 10px) !important;
+      color: var(--text-1, #f1f5f9) !important;
       padding: 0.5rem 0.75rem !important;
-      font-size: 0.9rem !important;
+      font-size: var(--font-size-md, 0.9375rem) !important;
     }
     .fs-container select:focus,
     .fs-container input:focus {
       outline: none !important;
-      border-color: #3b82f6 !important;
+      border-color: var(--accent-blue, #3b82f6) !important;
       box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15) !important;
     }
     .fs-container select option {
-      background: #1e293b;
-      color: #f1f5f9;
+      background: var(--surface-1, #1e293b);
+      color: var(--text-1, #f1f5f9);
     }
     .fs-container code {
-      background: rgba(59, 130, 246, 0.1);
-      color: #93c5fd;
+      background: var(--accent-blue-soft, rgba(59, 130, 246, 0.14));
+      color: var(--accent-blue, #60a5fa);
       padding: 2px 6px;
-      border-radius: 4px;
+      border-radius: var(--radius-sm, 6px);
     }
 
     /* ---- Buttons ---- */
@@ -230,16 +216,17 @@
     .fs-container button.primary,
     .fs-container .btn--primary {
       background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
-      color: white !important;
+      color: #ffffff !important;
       border: none !important;
-      border-radius: 10px !important;
+      border-radius: var(--radius-md, 10px) !important;
       padding: 0.6rem 1.25rem !important;
       font-weight: 600 !important;
       cursor: pointer;
-      transition: all 0.3s ease;
+      transition: transform var(--motion-fast, 150ms) var(--motion-easing, ease),
+                  box-shadow var(--motion-fast, 150ms) var(--motion-easing, ease);
       box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
       text-decoration: none;
-      font-size: 0.875rem;
+      font-size: var(--font-size-sm, 0.875rem);
     }
     .fs-container .primary:hover,
     .fs-container .btn--primary:hover {
@@ -248,34 +235,42 @@
     }
     .fs-container .ghost,
     .fs-container button.ghost {
-      background: rgba(30, 41, 59, 0.6) !important;
-      color: #94a3b8 !important;
-      border: 1px solid rgba(148, 163, 184, 0.2) !important;
-      border-radius: 10px !important;
+      background: var(--surface-2, rgba(30, 41, 59, 0.7)) !important;
+      color: var(--text-3, #94a3b8) !important;
+      border: 1px solid var(--border-strong, rgba(148, 163, 184, 0.24)) !important;
+      border-radius: var(--radius-md, 10px) !important;
       padding: 0.5rem 1rem !important;
       cursor: pointer;
-      transition: all 0.3s ease;
+      transition: background var(--motion-fast, 150ms) var(--motion-easing, ease),
+                  border-color var(--motion-fast, 150ms) var(--motion-easing, ease),
+                  color var(--motion-fast, 150ms) var(--motion-easing, ease);
     }
     .fs-container .ghost:hover {
       background: rgba(30, 41, 59, 0.9) !important;
-      border-color: rgba(59, 130, 246, 0.4) !important;
-      color: #f1f5f9 !important;
+      border-color: var(--accent-blue-edge, rgba(59, 130, 246, 0.35)) !important;
+      color: var(--text-1, #f1f5f9) !important;
     }
 
-    /* ---- SwitchBot card overrides ---- */
-    .fs-container .switchbot-card {
-      background: rgba(30, 41, 59, 0.6) !important;
-      border: 1px solid rgba(59, 130, 246, 0.15) !important;
-      border-radius: 12px !important;
+    /* ---- SwitchBot card overrides ----
+       Both class aliases catch the dynamic markup variants emitted by the
+       SwitchBot manager (.switchbot-card in some paths, .switchbot-manager-card
+       in others — see switchbot-manager.css for the shared baseline). */
+    .fs-container .switchbot-card,
+    .fs-container .switchbot-manager-card {
+      background: var(--surface-2, rgba(30, 41, 59, 0.7)) !important;
+      border: 1px solid var(--border-subtle, rgba(148, 163, 184, 0.12)) !important;
+      border-radius: var(--radius-md, 12px) !important;
       padding: 16px !important;
       margin-bottom: 16px;
-      color: #f1f5f9 !important;
+      color: var(--text-1, #f1f5f9) !important;
     }
-    .fs-container .switchbot-card__title strong {
-      color: #f1f5f9 !important;
+    .fs-container .switchbot-card__title strong,
+    .fs-container .switchbot-manager-card strong {
+      color: var(--text-1, #f1f5f9) !important;
     }
-    .fs-container .switchbot-card .tiny {
-      color: #94a3b8 !important;
+    .fs-container .switchbot-card .tiny,
+    .fs-container .switchbot-manager-card .tiny {
+      color: var(--text-3, #94a3b8) !important;
     }
 
     /* ---- Dynamically rendered lists ---- */
@@ -283,10 +278,10 @@
     .fs-container #lightSetupsList > div,
     .fs-container #iotDevicesList > div,
     .fs-container #addedIoTDevicesList > div {
-      background: rgba(30, 41, 59, 0.6) !important;
-      border: 1px solid rgba(59, 130, 246, 0.15) !important;
-      border-radius: 12px !important;
-      color: #f1f5f9 !important;
+      background: var(--surface-2, rgba(30, 41, 59, 0.7)) !important;
+      border: 1px solid var(--border-subtle, rgba(148, 163, 184, 0.12)) !important;
+      border-radius: var(--radius-md, 12px) !important;
+      color: var(--text-1, #f1f5f9) !important;
       padding: 12px !important;
       margin-bottom: 8px;
     }
@@ -294,76 +289,76 @@
     .fs-container #lightSetupsList span,
     .fs-container #iotDevicesList span,
     .fs-container #addedIoTDevicesList span {
-      color: #f1f5f9 !important;
+      color: var(--text-1, #f1f5f9) !important;
     }
     .fs-container #roomsList small,
     .fs-container #lightSetupsList small,
     .fs-container #addedIoTDevicesList small {
-      color: #94a3b8 !important;
+      color: var(--text-3, #94a3b8) !important;
     }
 
     /* ---- Panel summary chip ---- */
     .fs-container .summary-chip {
-      background: rgba(59, 130, 246, 0.15) !important;
-      color: #93c5fd !important;
-      border: 1px solid rgba(59, 130, 246, 0.25) !important;
-      border-radius: 20px !important;
+      background: var(--accent-blue-soft, rgba(59, 130, 246, 0.14)) !important;
+      color: var(--accent-blue, #60a5fa) !important;
+      border: 1px solid var(--accent-blue-edge, rgba(59, 130, 246, 0.35)) !important;
+      border-radius: var(--radius-pill, 9999px) !important;
       padding: 2px 10px !important;
     }
     .fs-container .panel-callout {
-      background: rgba(30, 41, 59, 0.5) !important;
-      border: 1px solid rgba(59, 130, 246, 0.15) !important;
-      border-radius: 10px !important;
+      background: var(--surface-2, rgba(30, 41, 59, 0.7)) !important;
+      border: 1px solid var(--border-subtle, rgba(148, 163, 184, 0.12)) !important;
+      border-radius: var(--radius-md, 10px) !important;
       padding: 12px !important;
-      color: #94a3b8 !important;
+      color: var(--text-3, #94a3b8) !important;
     }
 
     /* ---- Modals ---- */
     .fs-container .modal > div,
     #iotEcosystemModalContent {
-      background: #1e293b !important;
-      border: 1px solid rgba(59, 130, 246, 0.3) !important;
-      border-radius: 16px !important;
-      color: #f1f5f9 !important;
+      background: var(--surface-1, #1e293b) !important;
+      border: 1px solid var(--border-strong, rgba(148, 163, 184, 0.24)) !important;
+      border-radius: var(--radius-lg, 16px) !important;
+      color: var(--text-1, #f1f5f9) !important;
     }
     #iotEcosystemModalContent button[style*="font-size:1.5em"] {
-      color: #94a3b8 !important;
+      color: var(--text-3, #94a3b8) !important;
     }
 
     /* ---- Details inside cards ---- */
     .fs-container details summary {
-      color: #f1f5f9;
-      background: rgba(30, 41, 59, 0.4);
-      border-radius: 8px;
+      color: var(--text-1, #f1f5f9);
+      background: var(--surface-2, rgba(30, 41, 59, 0.4));
+      border-radius: var(--radius-sm, 8px);
       padding: 8px 12px;
       cursor: pointer;
-      font-size: 13px;
+      font-size: var(--font-size-sm, 0.8125rem);
       font-weight: 600;
     }
     .fs-container details > div {
-      background: rgba(15, 23, 42, 0.4) !important;
-      border: 1px solid rgba(59, 130, 246, 0.1) !important;
-      border-radius: 8px !important;
+      background: var(--surface-3, rgba(15, 23, 42, 0.6)) !important;
+      border: 1px solid var(--border-subtle, rgba(148, 163, 184, 0.12)) !important;
+      border-radius: var(--radius-sm, 8px) !important;
     }
 
-    /* ---- Info boxes ---- */
+    /* ---- Info boxes (inline-style overrides) ---- */
     .fs-container [style*="background: #f0f9ff"],
     .fs-container [style*="background:#f0f9ff"] {
-      background: rgba(59, 130, 246, 0.1) !important;
-      border-color: rgba(59, 130, 246, 0.25) !important;
-      color: #93c5fd !important;
+      background: var(--accent-blue-soft, rgba(59, 130, 246, 0.14)) !important;
+      border-color: var(--accent-blue-edge, rgba(59, 130, 246, 0.35)) !important;
+      color: var(--accent-blue, #60a5fa) !important;
     }
     .fs-container [style*="background: #ffffff"],
     .fs-container [style*="background:#fff"],
     .fs-container [style*="background: white"],
     .fs-container [style*="background:white"] {
-      background: rgba(15, 23, 42, 0.5) !important;
+      background: var(--surface-3, rgba(15, 23, 42, 0.5)) !important;
     }
 
     /* Scan results table */
     #universalScanResultsTable {
-      background: rgba(15, 23, 42, 0.5) !important;
-      border-color: rgba(59, 130, 246, 0.15) !important;
+      background: var(--surface-3, rgba(15, 23, 42, 0.5)) !important;
+      border-color: var(--border-subtle, rgba(148, 163, 184, 0.12)) !important;
     }
 
     /* ---- Row utilities ---- */
@@ -376,18 +371,18 @@
 
     /* ---- Farm badge ---- */
     .farm-summary {
-      background: rgba(30, 41, 59, 0.5) !important;
-      border: 1px solid rgba(59, 130, 246, 0.15) !important;
-      border-radius: 12px !important;
+      background: var(--surface-2, rgba(30, 41, 59, 0.7)) !important;
+      border: 1px solid var(--border-subtle, rgba(148, 163, 184, 0.12)) !important;
+      border-radius: var(--radius-md, 12px) !important;
       padding: 12px !important;
-      color: #f1f5f9 !important;
+      color: var(--text-1, #f1f5f9) !important;
     }
 
     /* ---- Scrollbar ---- */
     ::-webkit-scrollbar { width: 6px; }
     ::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.3); }
-    ::-webkit-scrollbar-thumb { background: rgba(59, 130, 246, 0.3); border-radius: 3px; }
-    ::-webkit-scrollbar-thumb:hover { background: rgba(59, 130, 246, 0.5); }
+    ::-webkit-scrollbar-thumb { background: var(--accent-blue-edge, rgba(59, 130, 246, 0.35)); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--accent-blue, #60a5fa); }
 
     /* ---- Pulse animation for CTA ---- */
     .pulse-button { animation: cta-pulse 2s ease-in-out infinite; }
@@ -396,14 +391,12 @@
       50% { box-shadow: 0 0 0 8px rgba(59, 130, 246, 0); }
     }
     .is-hidden { display: none !important; }
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
+    @keyframes spin { to { transform: rotate(360deg); } }
 
     /* Responsive */
     @media (max-width: 768px) {
       .fs-header { padding: 1rem; }
-      .fs-header h1 { font-size: 1.25rem; }
+      .fs-header h1 { font-size: var(--font-size-xl, 1.25rem); }
       .fs-container { padding: 0.75rem; }
       .fs-card summary { padding: 1rem; }
       .fs-card-body { padding: 0 1rem 1rem; }
