@@ -60,8 +60,9 @@ Env vars: `SQUARE_ACCESS_TOKEN`, `SQUARE_LOCATION_ID`.
 
 ### 4.1 SKU factor
 `wholesale_base = retail_price * sku_factor`
-- Default: `WHOLESALE_DEFAULT_SKU_FACTOR=0.75`
-- Allowed range: 0.50–0.75 (clamped in `getDefaultSkuFactor()` — `greenreach-central/routes/wholesale.js` ~L397)
+- Production value: `WHOLESALE_DEFAULT_SKU_FACTOR=0.65` (set in `gcp/deploy-cloud-run.sh` ~L171)
+- Code fallback when env var is unset: `0.75` (`getDefaultSkuFactor()` in `greenreach-central/routes/wholesale.js` ~L397)
+- Allowed range: 0.50–0.75 (clamped by `getDefaultSkuFactor()`)
 
 ### 4.2 Buyer discount ladder (90-day rolling average order value)
 | Rolling avg | Discount |
@@ -196,7 +197,7 @@ Webhooks are **idempotent**: every handler checks an event ID against a dedupe s
 | `SQUARE_WEBHOOK_SIGNATURE_KEY` | Webhook verification |
 | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | Subscription billing |
 | `WHOLESALE_COMMISSION_RATE` (0.12) | Platform commission |
-| `WHOLESALE_DEFAULT_SKU_FACTOR` (0.75) | Default wholesale base factor (clamped 0.50–0.75) |
+| `WHOLESALE_DEFAULT_SKU_FACTOR` (prod: `0.65` via `gcp/deploy-cloud-run.sh`; code fallback `0.75`) | Default wholesale base factor (clamped 0.50–0.75) |
 | `TOKEN_ENCRYPTION_KEY` | Encrypts OAuth tokens at rest |
 | `QUICKBOOKS_*` | QuickBooks OAuth (optional) |
 
