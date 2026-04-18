@@ -144,7 +144,7 @@ All secrets live in **Google Secret Manager** and are injected to Cloud Run via 
 - Cluster: `greenreach-db`
 - Database: `greenreach_central`
 - Private IP: `10.87.0.2`
-- Access: Central service via VPC connector, no public IP
+- Access: both Cloud Run services reach AlloyDB over **Direct VPC egress (Gen2)** on `greenreach-vpc`; no public IP and **no VPC connector** (see §8 and `.github/CLOUD_ARCHITECTURE.md`)
 - Migrations: run automatically on boot via `config/database.js` → `runMigrations()`
 - Migration failure is **non-fatal** at startup (warn + continue); hard failures in initial connection block startup
 
@@ -188,12 +188,12 @@ Configure jobs via `gcloud scheduler jobs create http ...` pointing at authentic
 ```bash
 # Root-level LE
 npm install
-npm run dev   # node --watch server-foxtrot.js
+node --watch server-foxtrot.js   # root package.json exposes only `npm start`; there is no `npm run dev` script today
 
 # Central
 cd greenreach-central
 npm install
-npm run dev   # node --watch server.js
+npm run dev   # greenreach-central/package.json defines `dev` as `NODE_ENV=development nodemon server.js`
 ```
 
 Local dev connects to AlloyDB through the Cloud SQL Auth Proxy or a dev PostgreSQL; see `.env.example`.
@@ -202,7 +202,7 @@ Local dev connects to AlloyDB through the Cloud SQL Auth Proxy or a dev PostgreS
 
 - [ ] `npm run lint` passes on both services
 - [ ] No cross-service imports introduced
-- [ ] Dual-deploy manifest updated if `public/` files changed in both trees
+- [ ] If a file under `public/` also exists under `greenreach-central/public/`, both copies updated in the same PR and the duplicate called out in the PR description (there is no dedicated sync-manifest; the rule is §4.2: edit Central's copy first, mirror in root, Central wins at runtime)
 - [ ] Migrations are idempotent and Phase-A-safe (no FORCE RLS)
 - [ ] New secrets added to Secret Manager + `--set-secrets`
 - [ ] CORS / CSP allowlist still covers all origins
