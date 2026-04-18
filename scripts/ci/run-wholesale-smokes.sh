@@ -115,7 +115,7 @@ REG_CODE=$(curl -sS -o /tmp/ci-smoke-register.json -w "%{http_code}" \
   -X POST "${CENTRAL_BASE}/api/wholesale/buyers/register" \
   -H 'content-type: application/json' \
   -d "{\"businessName\":\"CI Smoke\",\"contactName\":\"CI Buyer\",\"email\":\"${EMAIL}\",\"password\":\"${PASS}\",\"buyerType\":\"restaurant\",\"location\":{\"zip\":\"12345\",\"state\":\"NY\",\"lat\":40.73,\"lng\":-73.93}}")
-[[ "$REG_CODE" == "200" ]] || fail "Buyer register failed with HTTP ${REG_CODE}"
+[[ "$REG_CODE" == "200" ]] || fail "Buyer register failed with HTTP ${REG_CODE}: $(cat /tmp/ci-smoke-register.json 2>/dev/null || true)"
 
 REG_JSON="$(cat /tmp/ci-smoke-register.json)"
 TOKEN="$(node -e "const payload = JSON.parse(process.argv[1]); const token = payload?.data?.token; if (!token) process.exit(2); process.stdout.write(token);" "$REG_JSON")"
