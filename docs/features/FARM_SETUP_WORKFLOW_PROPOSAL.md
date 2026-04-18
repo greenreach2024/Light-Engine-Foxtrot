@@ -15,6 +15,12 @@ recommend where light / IoT / controller assignments should live.
 > logic lives in the cloud service — never an edge PLC running local
 > automation.
 
+> **Reviewer note.** The cloud-only architecture point is correct, but the
+> current repo still includes direct controller and wired-device surfaces
+> such as GROW3, DMX, and wired bus-channel scans. So the implementation
+> model is broader than vendor cloud APIs alone, even though orchestration
+> remains cloud-hosted.
+
 ---
 
 ## 1. What the repo actually has today
@@ -24,9 +30,14 @@ slightly different mental model. That's the root of the ordering question.
 
 ### 1a. Linear Setup Wizard (top-down, first-run)
 
-Files: `routes/setup-wizard.js`, `public/setup-wizard.html`,
+Files: `routes/setup-wizard.js`, UI surfaced via the current setup views
+(`public/views/farm-setup.html` and related onboarding docs),
 `docs/onboarding/FIRST_RUN_GUIDE.md`,
 `docs/features/SETUP_WIZARD_RECOMMENDATION.md`.
+
+> **Reviewer note.** `public/setup-wizard.html` is not present in the repo at
+> the time of review, so this section intentionally points to the current
+> routed/setup surfaces rather than a non-existent standalone page.
 
 Order: `password → farm profile → certifications → desktop app → cloud
 features → Activity Hub QR`. Rooms / zones / equipment are **not** in the
@@ -85,6 +96,11 @@ cooling tons, pump W per 10k plants, reservoir gallons. It currently lives
 inside the **Grant Wizard** (`greenreach-central/routes/grant-wizard.js`),
 not the setup flow. These formulas are the natural engine for a
 "build the farm" step.
+
+> **Reviewer note.** The specification is clearly aligned with Grant Wizard
+> planning, but the formulas are documented in the spec and planned integration
+> path; they are not yet implemented as active load-math code inside
+> `greenreach-central/routes/grant-wizard.js`.
 
 ### 1e. What's missing / loosely modelled
 
