@@ -1710,6 +1710,9 @@
         if ((entry.planIds || []).some(planId => String(planId).trim().toLowerCase() === target)) {
           return { key, entry };
         }
+        if (String(entry.planId || '').trim().toLowerCase() === target) {
+          return { key, entry };
+        }
       }
       return { key: '', entry: null };
     }
