@@ -3286,7 +3286,11 @@
           ecDoseSeconds: clamp(payload.ecDoseSeconds, 0.5, 20),
           phDownDoseSeconds: clamp(payload.phDownDoseSeconds, 0.5, 5),
           minDoseIntervalSec: clamp(payload.minDoseIntervalSec, 30, 3600),
-          autodoseEnabled: payload.autodoseEnabled
+          autodoseEnabled: payload.autodoseEnabled,
+          // P0: identify which tank these setpoints are for so the server can
+          // record pending/applied under the right scope. Without this every
+          // Tank 1 push used to overwrite Tank 2's store entry.
+          tankScope: BACKEND_TANK_IDS[tankId] || BACKEND_TANK_IDS.tank2
         };
 
         if (!Number.isFinite(sanitized.phTarget) || !Number.isFinite(sanitized.ecTarget)) {
@@ -3659,18 +3663,20 @@
       const match = detectTankProfile(uiTankId);
       state.profileMatch[uiTankId] = match;
       if (match?.profile) {
-        chips.push(`<span style="color: #93c5fd;">Profile: ${match.profile.name}</span>`);
+        // Profile + crop names flow in from nutrient-profiles.json and groups.json,
+        // both of which are writable through the API, so escape before innerHTML.
+        chips.push(`<span style="color: #93c5fd;">Profile: ${escapeHtmlForAlert(match.profile.name)}</span>`);
         const compat = evaluateProfileCompatibility(match);
         if (compat) {
           if (compat.worst === 'incompatible') {
-            const names = compat.incompatibleCrops.map((c) => c.name).join(', ');
+            const names = compat.incompatibleCrops.map((c) => escapeHtmlForAlert(c.name)).join(', ');
             chips.push(`<span style="color: #fca5a5;">&#9888; Incompatible pairings: ${names} — move crop to the other tank</span>`);
           } else if (compat.worst === 'poor') {
             chips.push(`<span style="color: #fcd34d;">Poor pairing — consider moving mismatched crops</span>`);
           }
         }
         if (compat && compat.unknownCrops.length) {
-          const names = compat.unknownCrops.map((c) => c.name).join(', ');
+          const names = compat.unknownCrops.map((c) => escapeHtmlForAlert(c.name)).join(', ');
           chips.push(`<span style="color: var(--neutral-400);">No profile for: ${names}</span>`);
         }
       }

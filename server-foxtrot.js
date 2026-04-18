@@ -17383,13 +17383,24 @@ app.post('/api/nutrients/targets', requireEdgeForControl, async (req, res) => {
     // Atlas controller publishes an ack on sensors/NutrientRoom/ack. The ack
     // handler in NutrientStore promotes pending → applied. We also mark applied
     // optimistically in test mode where no ack will ever arrive.
+    //
+    // The UI POSTs setpoints for BOTH tanks through this one endpoint, so the
+    // caller must tell us which tank the payload is for — otherwise a Tank 1
+    // push overwrites Tank 2's record and the Tank 1 status bar can never show
+    // "Last applied". We accept `tankScope` (preferred) or `tank` and fall back
+    // to NUTRIENT_SCOPE_ID for older clients.
+    const ALLOWED_TANK_SCOPES = new Set(['tank-1', 'tank-2', NUTRIENT_SCOPE_ID]);
+    const rawScope = typeof body.tankScope === 'string' && body.tankScope.trim()
+      ? body.tankScope.trim()
+      : (typeof body.tank === 'string' && body.tank.trim() ? body.tank.trim() : null);
+    const tankScope = rawScope && ALLOWED_TANK_SCOPES.has(rawScope) ? rawScope : NUTRIENT_SCOPE_ID;
     try {
-      nutrientStore.recordPendingTargets(NUTRIENT_SCOPE_ID, payload.targets, {
+      nutrientStore.recordPendingTargets(tankScope, payload.targets, {
         source: req.headers['x-requested-by'] || 'api',
         topic: publishResult?.topic || topic
       });
       if (publishResult?.testMode) {
-        nutrientStore.recordAppliedTargets(NUTRIENT_SCOPE_ID, payload.targets, {
+        nutrientStore.recordAppliedTargets(tankScope, payload.targets, {
           source: 'test-mode'
         });
       }
@@ -17404,8 +17415,9 @@ app.post('/api/nutrients/targets', requireEdgeForControl, async (req, res) => {
       translated: Boolean(publishResult?.translated),
       payload,
       config,
-      pendingTargets: nutrientStore.getPendingTargets(NUTRIENT_SCOPE_ID),
-      appliedTargets: nutrientStore.getAppliedTargets(NUTRIENT_SCOPE_ID)
+      tankScope,
+      pendingTargets: nutrientStore.getPendingTargets(tankScope),
+      appliedTargets: nutrientStore.getAppliedTargets(tankScope)
     });
   } catch (error) {
     console.error('[nutrients] Failed to publish setTargets:', error?.message || error);
