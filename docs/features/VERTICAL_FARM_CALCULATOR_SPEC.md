@@ -435,7 +435,7 @@ export async function calculateFarmModel(req, res) {
     trays: numTrays * 15,
     lighting: numTrays * 119,
     pumps: Math.ceil(plants / 10000) * 1200,
-    hvac: (plants * 1.32 / 12000) * 1500,
+    hvac: (plants * 2.91 / 12000) * 1500, // corrected: latent heat is 2326 BTU/kg, not 1055 (1055 is BTU/lb)
     automation: 5000,
     total: 0 // sum above
   };
