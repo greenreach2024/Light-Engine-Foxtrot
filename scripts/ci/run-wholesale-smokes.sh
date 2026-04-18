@@ -11,6 +11,7 @@ CENTRAL_WS_PORT="${CENTRAL_WS_PORT:-13101}"
 FOXTROT_BASE="http://127.0.0.1:${FOXTROT_PORT}"
 CENTRAL_BASE="http://127.0.0.1:${CENTRAL_PORT}"
 CHECKOUT_SKU="${CHECKOUT_SKU:-SKU-AUDIT-GENOVESE-BASIL-5LB}"
+NETWORK_BOOTSTRAP_KEY="${GREENREACH_API_KEY:-ci-smoke-network-key}"
 
 FOXTROT_PID=""
 CENTRAL_PID=""
@@ -95,6 +96,7 @@ log "Starting Central on ports ${CENTRAL_PORT}/${CENTRAL_WS_PORT}"
 (
   cd greenreach-central
   NODE_ENV=development \
+  GREENREACH_API_KEY="$NETWORK_BOOTSTRAP_KEY" \
   WHOLESALE_REQUIRE_DB_FOR_CRITICAL=false \
   WHOLESALE_ALLOW_DEMO_PATHS=true \
   WHOLESALE_USE_NETWORK_ALLOCATION=false \
@@ -142,6 +144,13 @@ FARM_AUTH="$(node -e "const fs = require('fs'); const map = JSON.parse(fs.readFi
 FARM_ID="$(printf '%s' "$FARM_AUTH" | awk '{print $1}')"
 API_KEY="$(printf '%s' "$FARM_AUTH" | awk '{print $2}')"
 ORDER_ID="ci-smoke-$(date +%s)"
+
+BOOTSTRAP_CODE=$(curl -sS -o /tmp/ci-smoke-bootstrap.json -w "%{http_code}" \
+  -X POST "${CENTRAL_BASE}/api/wholesale/network/bootstrap" \
+  -H "X-API-Key: ${NETWORK_BOOTSTRAP_KEY}" \
+  -H 'content-type: application/json' \
+  -d "{\"farm_id\":\"${FARM_ID}\",\"farm_name\":\"CI Smoke Farm\",\"api_url\":\"${FOXTROT_BASE}\",\"auth_farm_id\":\"${FARM_ID}\",\"api_key\":\"${API_KEY}\",\"location\":{\"latitude\":40.73,\"longitude\":-73.93}}")
+[[ "$BOOTSTRAP_CODE" == "200" ]] || fail "Network bootstrap failed with HTTP ${BOOTSTRAP_CODE}"
 
 # Cleanup any stale active reservations from prior runs so reserve checks stay deterministic.
 RES_CLEAN_CODE=$(curl -sS -o /tmp/ci-smoke-reservations-preclean.json -w "%{http_code}" \
