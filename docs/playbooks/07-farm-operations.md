@@ -22,7 +22,7 @@ The Light Engine (LE) is the **per-tenant farm runtime** that operators use ever
 | Farm Summary | `/views/farm-summary.html` (iframe) | Real-time zone dashboard (temp/RH/VPD/CO₂ + alerts) |
 | Inventory | `/views/inventory.html` + `/views/farm-inventory.html` (iframes) | Crop + supplies |
 | Supplies | `/views/supplies.html` (iframe) | Consumables / reorder |
-| Calendar | `/calendar.html` | Task + harvest + delivery calendar |
+| Calendar | `/views/calendar.html` | Task + harvest + delivery calendar |
 | POS | `/farm-sales-pos.html` | In-person sales (Square terminal) |
 | Wholesale Orders | `/LE-wholesale-orders.html` | Accept/fulfill wholesale orders |
 | Assistant (E.V.I.E.) | `/evie-core.html` | Chat, briefings, ambient presence |
