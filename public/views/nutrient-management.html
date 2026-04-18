@@ -3465,6 +3465,19 @@
       }
     }
 
+    // Escape a string for safe insertion into an HTML innerHTML template. Alert
+    // fields originate from MQTT payloads, which we must treat as untrusted;
+    // otherwise a crafted `type`/`message` could execute JS in the operator UI.
+    function escapeHtmlForAlert(value) {
+      if (value === null || value === undefined) return '';
+      return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
     // P0 #4: render alert banner + per-tank alert badge. Uses only alerts that
     // are unacknowledged. Clicking "Show details" exposes the full list.
     function renderNutrientAlerts() {
@@ -3509,12 +3522,16 @@
           const ackBtn = idAttr
             ? `<button type="button" class="nutrient-alert-ack" data-alert-id="${idAttr}" style="margin-left: 0.75rem; padding: 0.15rem 0.5rem; background: rgba(148, 163, 184, 0.2); border: 1px solid var(--card-border); border-radius: 8px; color: var(--neutral-200); font-size: 0.72rem; cursor: pointer;">Acknowledge</button>`
             : '';
+          const typeText = escapeHtmlForAlert(a.type || 'alert');
+          const tankText = a.tank ? ` · ${escapeHtmlForAlert(a.tank)}` : '';
+          const messageText = escapeHtmlForAlert(a.message || '');
+          const receivedText = escapeHtmlForAlert(receivedAt);
           return `
             <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 0.75rem; padding: 0.5rem 0; border-top: 1px solid rgba(148, 163, 184, 0.12);">
               <div style="flex: 1;">
-                <div style="color: ${color}; font-weight: 600; font-size: 0.85rem;">${a.type || 'alert'}${a.tank ? ` · ${a.tank}` : ''}</div>
-                <div style="color: var(--neutral-200); font-size: 0.82rem;">${a.message || ''}</div>
-                <div style="color: var(--neutral-400); font-size: 0.72rem; margin-top: 0.15rem;">${receivedAt}</div>
+                <div style="color: ${color}; font-weight: 600; font-size: 0.85rem;">${typeText}${tankText}</div>
+                <div style="color: var(--neutral-200); font-size: 0.82rem;">${messageText}</div>
+                <div style="color: var(--neutral-400); font-size: 0.72rem; margin-top: 0.15rem;">${receivedText}</div>
               </div>
               ${ackBtn}
             </div>
@@ -3546,8 +3563,12 @@
         };
       }
 
+      // Alerts without a `tank` field are system-wide (Atlas controller, MQTT,
+      // reconciliation) — surface them in the top banner only, not on either
+      // per-tank badge, so operators aren't misled into thinking a tankless
+      // alert is Tank 2-specific.
       const tank1HasAlert = active.some((a) => a.tank === BACKEND_TANK_IDS.tank1 || a.tank === 'tank1' || a.tank === 'tank-1');
-      const tank2HasAlert = active.some((a) => !a.tank || a.tank === BACKEND_TANK_IDS.tank2 || a.tank === 'tank2' || a.tank === 'tank-2');
+      const tank2HasAlert = active.some((a) => a.tank === BACKEND_TANK_IDS.tank2 || a.tank === 'tank2' || a.tank === 'tank-2');
       if (tank1Badge) tank1Badge.style.display = tank1HasAlert ? '' : 'none';
       if (tank2Badge) tank2Badge.style.display = tank2HasAlert ? '' : 'none';
     }

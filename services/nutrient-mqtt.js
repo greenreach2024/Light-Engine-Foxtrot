@@ -212,10 +212,13 @@ class NutrientStore extends EventEmitter {
   recordAlert(alert) {
     if (!alert) return;
     const now = new Date().toISOString();
+    // Spread incoming payload FIRST so the computed defaults below override
+    // any null/falsy values on the raw alert (e.g. `"id": null` from JSON) —
+    // otherwise `acknowledgeAlert(alertId)` can't find the record.
     this.state.alerts.push({
+      ...alert,
       id: alert.id || `alert-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       severity: alert.severity || alert.level || 'warning',
-      ...alert,
       receivedAt: now,
       acknowledged: alert.acknowledged === true
     });
@@ -505,7 +508,7 @@ class NutrientMqttSubscriber extends EventEmitter {
       brokerUrl: this.brokerUrl,
       reconnectCount: this._reconnectCount,
       scopeId: this.scopeId,
-      subscribedTopics: [...TELEMETRY_TOPICS, ...EVENT_TOPICS]
+      subscribedTopics: [...TELEMETRY_TOPICS, ...EVENT_TOPICS, ...ACK_TOPICS]
     };
   }
 }

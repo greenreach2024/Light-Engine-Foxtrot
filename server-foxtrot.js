@@ -16643,6 +16643,21 @@ function resolveRecipeNutrientTargetsFromDisk({ aggregator = 'weighted', now } =
   };
 }
 
+// P0/P1 helper: the stored target envelopes use Atlas's wire format
+// ({ecTarget: µS/cm, phTarget, ...}). diffNutrientTargets and every downstream
+// comparator expect a normalised {ec: mS/cm, ph} pair. Centralising the
+// translation here keeps the reconcile loop and the /applied/:scope endpoint
+// in lockstep and prevents silent "no drift" bugs when the shapes disagree.
+function normaliseAtlasTargetsForDiff(targets) {
+  if (!targets || typeof targets !== 'object') return { ec: null, ph: null };
+  const rawEc = Number(targets.ecTarget);
+  const rawPh = Number(targets.phTarget);
+  return {
+    ec: Number.isFinite(rawEc) ? rawEc / 1000 : null,
+    ph: Number.isFinite(rawPh) ? rawPh : null
+  };
+}
+
 // P1 #6: compare the live applied setpoints in NutrientStore against what the
 // active recipes would call for today. Runs on every nutrient poll; emits an
 // alert (stored in nutrientStore.alerts) when drift exceeds tolerance and the
@@ -16658,16 +16673,8 @@ function reconcileRecipeNutrientTargets() {
     const report = { calculatedAt: resolved.calculatedAt, tanks: {} };
     for (const { tankId, tankKey, resolved: tankResolved } of tankAssignments) {
       const applied = nutrientStore.getAppliedTargets(tankId);
-      const appliedTargets = applied?.targets || null;
-      // Atlas payload uses ecTarget in microsiemens (\u00b5S/cm). Convert to mS/cm.
-      const appliedEc = appliedTargets && Number.isFinite(Number(appliedTargets.ecTarget))
-        ? Number(appliedTargets.ecTarget) / 1000
-        : null;
-      const appliedPh = appliedTargets && Number.isFinite(Number(appliedTargets.phTarget))
-        ? Number(appliedTargets.phTarget)
-        : null;
+      const appliedPair = normaliseAtlasTargetsForDiff(applied?.targets || null);
       const resolvedPair = { ec: tankResolved?.ec ?? null, ph: tankResolved?.ph ?? null };
-      const appliedPair = { ec: appliedEc, ph: appliedPh };
       const diff = diffNutrientTargets(appliedPair, resolvedPair, { ecTolerance: 0.1, phTolerance: 0.1 });
       report.tanks[tankKey] = {
         tankId,
@@ -17726,8 +17733,15 @@ app.get('/api/nutrients/applied/:scope', async (req, res) => {
       applied,
       pending,
       hasPendingAck: Boolean(pending && !applied),
+      // The stored target envelopes use Atlas's wire format
+      // ({ecTarget: µS/cm, phTarget}). diffNutrientTargets expects {ec: mS/cm, ph}
+      // so we normalise both sides before diffing; otherwise every diff reports
+      // `changed: false` because ec/ph are always undefined on these objects.
       driftFromPending: pending && applied
-        ? diffNutrientTargets(applied.targets, pending.targets)
+        ? diffNutrientTargets(
+            normaliseAtlasTargetsForDiff(applied.targets),
+            normaliseAtlasTargetsForDiff(pending.targets)
+          )
         : null
     });
   } catch (error) {
