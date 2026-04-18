@@ -428,7 +428,7 @@ export async function calculateFarmModel(req, res) {
   // Calculations
   const plants = numTrays * cropData[cropType].plantsPerTray;
   const lightingKwh = numTrays * 96; // per month
-  const hvacKwh = (plants * 2.91 * 24 * 30) / 3412; // BTU → kWh (corrected: latent heat is 2326 BTU/kg, not 1055)
+  const hvacKwh = (plants * 2.91 * 1.3 / 12000) * 1.2 * 24 * 30; // cooling tons × 1.2 kW/ton (EER 10) × hours; latent × 1.3 sensible; 2326 BTU/kg (not 1055 BTU/lb)
   const totalKwh = lightingKwh + hvacKwh;
   const electricityCost = totalKwh * electricityRates[province];
   
@@ -450,7 +450,7 @@ export async function calculateFarmModel(req, res) {
     trays: numTrays * 15,
     lighting: numTrays * 119,
     pumps: Math.ceil(plants / 10000) * 1200,
-    hvac: (plants * 2.91 / 12000) * 1500, // corrected: latent heat is 2326 BTU/kg, not 1055 (1055 is BTU/lb)
+    hvac: (plants * 2.91 * 1.3 / 12000) * 1500, // cooling tons × $1500/ton; latent × 1.3 sensible; 2326 BTU/kg (not 1055 BTU/lb)
     automation: 5000,
     total: 0 // sum above
   };
