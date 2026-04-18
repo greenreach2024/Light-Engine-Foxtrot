@@ -6,6 +6,15 @@ model with the new template + agent-driven "build the farm" approach, and
 recommend where light / IoT / controller assignments should live.
 **Mode:** Analysis only — no code changes in this pass.
 
+> **Architecture note.** This proposal assumes the established 100%-cloud
+> architecture (see `CONTRIBUTING.md` and `.github/copilot-instructions.md`):
+> Light Engine and GreenReach Central run on Google Cloud Run; there is no
+> Raspberry Pi, no on-premise edge server, and no local orchestrator. All
+> "controllers" referenced below are **vendor cloud APIs** (SwitchBot Cloud,
+> Kasa cloud, Code3 cloud, etc.) or cloud-managed gateway devices whose
+> logic lives in the cloud service — never an edge PLC running local
+> automation.
+
 ---
 
 ## 1. What the repo actually has today
@@ -130,11 +139,13 @@ as a **room build plan** (a reservation / bill of materials).
 Now bind real hardware into the slots Phase A reserved.
 
 ```
-6. Device discovery         run the existing multi-protocol scanner
-                            (BLE, mDNS, SSDP, Kasa UDP, SwitchBot Cloud,
-                            Code3) → discovered devices are matched to
-                            reserved slots by category + channel count.
-                            Unmatched devices become ad-hoc additions.
+6. Device discovery         pull inventory from the vendor cloud APIs
+                            (SwitchBot Cloud, Kasa cloud, Code3 cloud,
+                            DMX registrations) and any legacy mDNS
+                            helpers that surface to the cloud. Matched
+                            to reserved slots by category + channel
+                            count. Unmatched devices become ad-hoc
+                            additions.
 7. Zones                    auto-suggested from the template geometry
                             (per rack row / per tier / per bench), or
                             manually drawn. Zone sensors attach here.
@@ -154,8 +165,8 @@ Now bind real hardware into the slots Phase A reserved.
   room size. Template + quantity + room size is the smallest input set that
   unlocks everything.
 - **Phase B keeps identity discovery late.** Users should never type MAC
-  addresses or DMX universes into a wizard; discovery does it for them
-  and slots the result into the reservation.
+  addresses or DMX universes into a wizard; the cloud vendor-API pull
+  does it for them and slots the result into the reservation.
 - **The top-down FK chain is preserved** — Room rows still exist before
   Zone rows, groups still live under zones. You are only changing
   *when the equipment decisions happen relative to the hierarchy*, not the
@@ -171,7 +182,7 @@ Now bind real hardware into the slots Phase A reserved.
 | Concern | Data home | Why |
 |---|---|---|
 | Footprint, tier count, trays/tier, irrigation type (NFT/DWC/aero/flood), pump sizing curve, transpiration g/plant/day, default fixture **class** (PPFD/DLI), default controller **class** (DMX-4 / 0-10V / Modbus / smart-plug), required channel counts | **`public/data/grow-systems.json` (new registry)** | These are design-time invariants of the physical growing apparatus. They drive load math. They do **not** hold device identities. |
-| Dimensions, ceiling, envelope class, installed `systems[]` (templateId × quantity × position), **room build plan** (computed load + accepted equipment list + reserved controller slots), room-level controller (edge PLC / mesh hub / gateway), electrical panel | **`rooms.json` (extend schema)** | Everything that depends on the *room as a whole* — HVAC sizing, dehum sizing, supply fans, panel load, edge/gateway controllers — belongs here, not on the template. |
+| Dimensions, ceiling, envelope class, installed `systems[]` (templateId × quantity × position), **room build plan** (computed load + accepted equipment list + reserved controller slots), room-level cloud gateway (SwitchBot hub / Kasa account / Code3 gateway / DMX universe), electrical panel | **`rooms.json` (extend schema)** | Everything that depends on the *room as a whole* — HVAC sizing, dehum sizing, supply fans, panel load, the vendor-cloud gateway the room's devices report through — belongs here, not on the template. All control logic stays in the cloud service; "gateway" here means the vendor-managed hub/account a physical device reports through, not an edge compute node. |
 | Climate envelope boundary, zone sensor(s), zone-level overrides (sub-controller, extra fans), recipe-derived env targets | **zones** (already in `groups.zone` / `rooms.zones[]` / `target_ranges.zones`) | Zones are the finest-grained climate control boundary. This is already where recipe targets resolve. |
 | Light fixture binding, light schedule, crop + recipe assignment, group-level controller channel map | **groups** (`groups.json` + `groups-v2`) | Group is where "which crop, which recipe, which fixtures, which channels" converges. The setup agent already reads `g.lights` for the `lights` phase — keep it here. |
 | Tray format, seed date, QR, planted site count, tray placement | **tray_runs + tray_placements** (already defined in `RECIPE_BASED_ENVIRONMENTAL_CONTROL.md`) | Unchanged. |
