@@ -102,7 +102,7 @@ Injects `ENFORCEMENT_PROMPT_BLOCK` into every agent system prompt. Key invariant
 **File:** `greenreach-central/lib/ai-usage-tracker.js`
 
 - Every agent call records: agent name, conversation ID, model, prompt tokens, completion tokens, estimated cost
-- Helper: `estimateChatCost(model, usage)` for OpenAI/Anthropic, `estimateGeminiCost(model, usage)` for Vertex
+- Cost helpers: `estimateChatCost(model, promptTokens, completionTokens)` and `estimateTtsCost(model, charCount)` live in `greenreach-central/lib/ai-usage-tracker.js`; `estimateGeminiCost(model, promptTokens, completionTokens)` lives in `greenreach-central/lib/gemini-client.js` alongside the Vertex client
 - Exposed to admins via `/api/ai-monitoring` (`routes/admin-ai-monitoring.js`)
 - Budget alerts are **not** automated today — consider this a future F.A.Y.E. tool
 
