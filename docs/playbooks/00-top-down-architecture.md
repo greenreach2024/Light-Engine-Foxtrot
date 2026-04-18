@@ -192,7 +192,7 @@ Foxtrot is an explicitly **multi-agent** system. Every agent has a defined audie
 - **Tool-gateway + audit log:** all consequential actions go through `farm-ops-agent.js`' tool gateway (`/tool-gateway`, `/tool-catalog`, `/parse-command`, `/audit-log`) with schema-validated calls.
 - **Trust tiers:** tools declare tiers such as `quick_confirm`, used for example on bulk alert resolution.
 - **Inter-agent escalation:** E.V.I.E. → F.A.Y.E. when confidence low or authority exceeded; S.C.O.T.T. → F.A.Y.E.; G.W.E.N. stays inside research bubble, F.A.Y.E. guards its perimeter.
-- **Enforcement middleware:** `middleware/agent-enforcement.js` injects an `ENFORCEMENT_PROMPT_BLOCK` into agent responses to keep them within sanctioned behavior.
+- **Enforcement middleware:** `greenreach-central/middleware/agent-enforcement.js` injects an `ENFORCEMENT_PROMPT_BLOCK` into agent responses to keep them within sanctioned behavior.
 - **AI usage accounting:** `greenreach-central/lib/ai-usage-tracker.js` (exports `trackAiUsage`, `estimateChatCost`, `estimateTtsCost`) plus `greenreach-central/lib/gemini-client.js` `estimateGeminiCost` record token/cost per agent conversation (visible in `/api/ai-monitoring`).
 
 ---

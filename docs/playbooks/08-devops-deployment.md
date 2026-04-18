@@ -171,7 +171,7 @@ Configure jobs via `gcloud scheduler jobs create http ...` pointing at authentic
 
 ## 10. Logging, monitoring, alerting
 
-- **Logs:** Cloud Logging (stdout from Cloud Run); structured via `utils/logger.js` (Winston)
+- **Logs:** Cloud Logging (stdout from Cloud Run); structured via `greenreach-central/utils/logger.js` (Winston) on Central; LE logs via `console` + Cloud Run's default capture
 - **Metrics:** Cloud Run built-in metrics; AI-spend custom metrics via `/api/ai-monitoring`
 - **Error reporting:** Cloud Error Reporting auto-ingests stack traces
 - **Uptime checks:** against LE + Central health endpoints
