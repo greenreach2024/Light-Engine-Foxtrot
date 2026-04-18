@@ -739,19 +739,31 @@
     }
 
     // Resolve a crop-name selection against S.cropRegistry (already loaded from
-    // /data/crop-registry.json) and return { resolvedName, planId }. Mirrors the
-    // logic EVIE uses in greenreach-central/routes/assistant-chat.js
-    // update_group_crop so both paths produce the same group record shape.
+    // /data/crop-registry.json) and return { resolvedName, planId }. The
+    // registry stores the canonical name as the object key and plan IDs in a
+    // `planIds` array (see public/js/crop-utils.js), so we key off that.
+    // Falls back to a slugified 'crop-<name>' so unregistered crops still get a
+    // plan anchor. Aliases like "Bok Choy" → "Mei Qing Pak Choi" are resolved
+    // by scanning entry.aliases before giving up.
     function resolveCropRegistryEntry(cropName) {
       const raw = String(cropName || '').trim();
       if (!raw) return { resolvedName: '', planId: '' };
       const crops = (S.cropRegistry && typeof S.cropRegistry === 'object') ? S.cropRegistry : {};
       const keys = Object.keys(crops);
       const lowered = raw.toLowerCase();
-      const matchKey = keys.find(function(k) { return String(k).toLowerCase() === lowered; });
+      let matchKey = keys.find(function(k) { return String(k).toLowerCase() === lowered; });
+      if (!matchKey) {
+        matchKey = keys.find(function(k) {
+          const e = crops[k];
+          if (!e || !Array.isArray(e.aliases)) return false;
+          return e.aliases.some(function(a) { return String(a || '').toLowerCase().trim() === lowered; });
+        }) || null;
+      }
       const entry = matchKey ? crops[matchKey] : null;
-      const resolvedName = (entry && entry.name) ? entry.name : (matchKey || raw);
-      const planId = (entry && entry.planId) ? entry.planId : ('crop-' + resolvedName.toLowerCase().replace(/\s+/g, '-'));
+      const resolvedName = matchKey || raw;
+      const planId = (entry && Array.isArray(entry.planIds) && entry.planIds[0])
+        ? entry.planIds[0]
+        : ('crop-' + resolvedName.toLowerCase().replace(/\s+/g, '-'));
       return { resolvedName, planId };
     }
 
