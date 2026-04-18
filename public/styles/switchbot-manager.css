@@ -1,44 +1,66 @@
-/* SwitchBot Manager Styles */
-.switchbot-manager-card {
-  border: 1px solid var(--gr-border, #dce5e5);
-  border-radius: 12px;
-  background: var(--gr-surface, #ffffff);
-  padding: 16px;
+/* SwitchBot Manager Styles
+   --------------------------------------------------------------
+   Consumes tokens from public/styles/le-foundation.css. Fallbacks
+   target dark LE surfaces so a missed token never causes a white
+   brick on a dark page.
+
+   Both class names (.switchbot-card, .switchbot-manager-card) are
+   styled here so inline overrides in farm-setup.html and
+   dynamically rendered markup from the SwitchBot manager both
+   resolve to the same visual treatment.
+   -------------------------------------------------------------- */
+
+.switchbot-manager-card,
+.switchbot-card {
+  border: 1px solid var(--border-subtle, rgba(148, 163, 184, 0.12));
+  border-radius: var(--radius-lg, 16px);
+  background: var(--surface-1, #1e293b);
+  color: var(--text-1, #f1f5f9);
+  padding: 1rem 1.25rem;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 0.75rem;
+  box-shadow: var(--elevation-1, 0 1px 2px rgba(0, 0, 0, 0.25));
 }
 
 .device-type-badge {
   display: inline-block;
-  padding: 2px 8px;
-  border-radius: 12px;
-  background: var(--gr-primary-light, #e0f2f2);
-  color: var(--gr-primary, #0d7d7d);
-  font-size: 12px;
+  padding: 0.15rem 0.6rem;
+  border-radius: var(--radius-pill, 9999px);
+  background: var(--accent-teal-soft, rgba(94, 234, 212, 0.14));
+  color: var(--accent-teal, #5eead4);
+  border: 1px solid rgba(94, 234, 212, 0.35);
+  font-size: var(--font-size-xs, 0.75rem);
   font-weight: 600;
-  margin-right: 8px;
+  letter-spacing: 0.02em;
+  margin-right: 0.5rem;
 }
 
 .switchbot-manager-assignment {
   display: flex;
-  gap: 8px;
+  gap: 0.5rem;
 }
 
 .switchbot-manager-assignment select {
   flex: 1;
-  padding: 6px 8px;
-  border-radius: 6px;
-  border: 1px solid var(--gr-border, #dce5e5);
-  background: var(--gr-surface, #ffffff);
-  font-size: 13px;
-  color: var(--gr-text, #0b1220);
+  padding: 0.4rem 0.6rem;
+  border-radius: var(--radius-sm, 6px);
+  border: 1px solid var(--border-subtle, rgba(148, 163, 184, 0.12));
+  background: var(--surface-3, rgba(15, 23, 42, 0.6));
+  font-size: var(--font-size-sm, 0.8125rem);
+  color: var(--text-1, #f1f5f9);
+}
+
+.switchbot-manager-assignment select:focus {
+  outline: none;
+  border-color: var(--border-focus, rgba(59, 130, 246, 0.55));
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
 }
 
 .switchbot-controls {
   display: flex;
-  gap: 4px;
-  margin-top: 8px;
+  gap: 0.25rem;
+  margin-top: 0.5rem;
 }
 
 .switchbot-controls button {
