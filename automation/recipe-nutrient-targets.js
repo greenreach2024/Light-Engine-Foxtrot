@@ -126,7 +126,10 @@ function weightedAverage(values) {
   let weight = 0;
   for (const v of values) {
     const val = toFiniteNumber(v?.value);
-    const w = toFiniteNumber(v?.weight) || 1;
+    // Use ?? not || so a legitimate weight of 0 (e.g. planted_site_count = 0 on
+    // a group that's been set up but not yet seeded) stays 0 instead of being
+    // inflated to 1 and skewing the weighted average.
+    const w = toFiniteNumber(v?.weight) ?? 1;
     if (val == null) continue;
     sum += val * w;
     weight += w;

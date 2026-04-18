@@ -17732,7 +17732,10 @@ app.get('/api/nutrients/applied/:scope', async (req, res) => {
       scope,
       applied,
       pending,
-      hasPendingAck: Boolean(pending && !applied),
+      // `pending` is only ever cleared by recordAppliedTargets(), so the mere
+      // existence of a pending entry means there's still an unacked publish —
+      // even if an older applied state is sitting alongside it.
+      hasPendingAck: Boolean(pending),
       // The stored target envelopes use Atlas's wire format
       // ({ecTarget: µS/cm, phTarget}). diffNutrientTargets expects {ec: mS/cm, ph}
       // so we normalise both sides before diffing; otherwise every diff reports
