@@ -94,7 +94,13 @@ FOXTROT_PID=$!
 log "Starting Central on ports ${CENTRAL_PORT}/${CENTRAL_WS_PORT}"
 (
   cd greenreach-central
-  WHOLESALE_USE_NETWORK_ALLOCATION=false PORT="$CENTRAL_PORT" WS_PORT="$CENTRAL_WS_PORT" node server.js > /tmp/central-ci-smoke.log 2>&1
+  NODE_ENV=development \
+  WHOLESALE_REQUIRE_DB_FOR_CRITICAL=false \
+  WHOLESALE_ALLOW_DEMO_PATHS=true \
+  WHOLESALE_USE_NETWORK_ALLOCATION=false \
+  PORT="$CENTRAL_PORT" \
+  WS_PORT="$CENTRAL_WS_PORT" \
+  node server.js > /tmp/central-ci-smoke.log 2>&1
 ) &
 CENTRAL_PID=$!
 
