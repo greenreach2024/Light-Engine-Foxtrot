@@ -44,7 +44,7 @@ so the calculator can resolve a crop to its class.
 |---|---|---|---|
 | `id` | string (slug) | yes | Stable identifier. Rooms reference templates by `id`. |
 | `name` | string | yes | Human-readable label. |
-| `category` | enum | yes | `nft_rack | dwc_pond | vertical_tier | microgreen_shelf | flood_table | ebb_flow_bench` |
+| `category` | enum | yes | `nft_rack | dwc_pond | vertical_tier | microgreen_shelf | flood_table | ebb_flow_bench | drip_rail` |
 | `description` | string | yes | One-line summary. |
 | `suitableCropClasses` | `cropClasses[]` | yes | Which crop classes this apparatus can host. Drives UI filtering. |
 | `footprintM` | `{ length, width }` | yes | Outer footprint in metres. Used for room-area bookkeeping. |

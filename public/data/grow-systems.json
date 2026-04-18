@@ -322,7 +322,7 @@
     {
       "id": "drip-rail-fruiting-8ft",
       "name": "Drip Rail, Fruiting (8 ft)",
-      "category": "ebb_flow_bench",
+      "category": "drip_rail",
       "description": "Single-level drip-irrigated rail for trellised fruiting crops (strawberry, tomato, pepper). Individual emitters per slab, high PPFD.",
       "suitableCropClasses": ["fruiting"],
       "footprintM": { "length": 2.4, "width": 0.9 },
