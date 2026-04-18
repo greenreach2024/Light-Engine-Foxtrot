@@ -119,43 +119,58 @@ Monthly Energy: 3.2 kWh × 30 days = 96 kWh/month/tray
 ### Transpiration Load
 **Fundamental**: Plants transpire ~30g water/day (leafy greens, mature stage)
 
-**Latent Heat Formula**:
+**Latent Heat Formula** (corrected):
 ```
-BTU/hour = (plants × 30g/day × 1055 BTU/kg) / 24 hours
-        = plants × 1.32 BTU/hour
+BTU/hour = (plants × 30g/day × 2326 BTU/kg) / 24 hours
+        = plants × 2.91 BTU/hour
 ```
+
+> **Physics correction (2026-04).** Earlier revisions of this spec used
+> `1055 BTU/kg` for water's latent heat of vaporization. That's actually the
+> BTU-per-**pound** value (1055 BTU/lb ≈ 2326 BTU/kg). The correct BTU/kg
+> constant at ~20°C is `2326` (2454 kJ/kg ÷ 1.05506 kJ/BTU). Using the right
+> constant roughly **doubles** the cooling tonnage vs. the old worked
+> examples below. The formula is enforced in `lib/farm-load-calculator.js`
+> and cross-checked by `tests/farm-load-calculator.test.mjs`; any new
+> grant-wizard / quote numbers should be re-derived from the corrected
+> table.
 
 **Example** (10,000 plants):
 ```
-10,000 × 1.32 = 13,200 BTU/hour latent load
-Add 30% sensible heat (lights, pumps) = 17,160 BTU/hour total
-Convert to tons: 17,160 / 12,000 = 1.43 tons cooling
+10,000 × 2.91 = 29,100 BTU/hour latent load
+Add 30% sensible heat (lights, pumps) = 37,800 BTU/hour total
+Convert to tons: 37,800 / 12,000 = 3.15 tons cooling
 ```
 
 ### HVAC Sizing by Scale
 
-| Plants | Transpiration (kg/day) | Cooling (tons) | Dehumid (L/day) | Estimated Cost |
-|--------|------------------------|----------------|-----------------|----------------|
-| 5,000  | 150                    | 0.7            | 150             | $3,500         |
-| 10,000 | 300                    | 1.4            | 300             | $6,000         |
-| 20,000 | 600                    | 2.9            | 600             | $10,000        |
-| 50,000 | 1,500                  | 7.1            | 1,500           | $22,000        |
+Cooling-tons column reflects the corrected latent-heat constant. Cost
+estimates are left from the previous revision and should be re-quoted
+against the larger unit sizing (and removed from this doc if they start
+diverging from vendor quotes).
+
+| Plants | Transpiration (kg/day) | Cooling (tons) | Dehumid (L/day) | Estimated Cost (re-quote) |
+|--------|------------------------|----------------|-----------------|---------------------------|
+| 5,000  | 150                    | 1.57           | 150             | TBD (re-quote)            |
+| 10,000 | 300                    | 3.15           | 300             | TBD (re-quote)            |
+| 20,000 | 600                    | 6.30           | 600             | TBD (re-quote)            |
+| 50,000 | 1,500                  | 15.74          | 1,500           | TBD (re-quote)            |
 
 **Dehumidification**:
 - Standalone dehumidifiers: $1,500-3,000 for 150L/day capacity
 - Integrated HVAC with dehumid: +30% cost vs. cooling-only
 
-**Electrical Load**:
+**Electrical Load** (corrected):
 - 1 ton cooling ≈ 1,200W (EER 10)
-- 10,000 plants: 1.4 tons × 1,200W = 1,680W continuous
-- Monthly: 1,680W × 24h × 30d = 1,210 kWh
+- 10,000 plants: 3.15 tons × 1,200W = 3,780W continuous
+- Monthly: 3,780W × 24h × 30d = 2,722 kWh
 
 ### Climate Control Costs (Operational)
 ```
 10,000 plants, Ontario ($0.12/kWh):
-HVAC: 1,210 kWh × $0.12 = $145/month
+HVAC: 2,722 kWh × $0.12 = $327/month
 Dehumid: 300L/day requires ~400W avg = 288 kWh = $35/month
-Total: $180/month
+Total: $362/month
 ```
 
 ---
@@ -413,7 +428,7 @@ export async function calculateFarmModel(req, res) {
   // Calculations
   const plants = numTrays * cropData[cropType].plantsPerTray;
   const lightingKwh = numTrays * 96; // per month
-  const hvacKwh = (plants * 1.32 * 24 * 30) / 3412; // BTU → kWh
+  const hvacKwh = (plants * 2.91 * 24 * 30) / 3412; // BTU → kWh (corrected: latent heat is 2326 BTU/kg, not 1055)
   const totalKwh = lightingKwh + hvacKwh;
   const electricityCost = totalKwh * electricityRates[province];
   

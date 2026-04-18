@@ -241,12 +241,16 @@ describe('computePumpLoad', () => {
 // ============================================================================
 
 describe('computeTranspirationLoad', () => {
-  it('matches VFC worked example: 10k leafy plants → 1.43 cooling tons, 300 L/day', () => {
-    // VFC: 10,000 plants × 30 g/day = 300 kg/day water
-    // Latent: 300 × 1055 / 24 = 13,187.5 BTU/hr
-    // × 1.3 (sensible factor) = 17,143.75 BTU/hr
-    // / 12000 = 1.429 tons
-    // Dehum: 300 L/day
+  it('matches corrected VFC worked example: 10k leafy plants → 3.15 cooling tons, 300 L/day', () => {
+    // 10,000 plants × 30 g/day = 300 kg/day water
+    // Latent: 300 kg × 2326 BTU/kg / 24 h = 29,075 BTU/hr
+    // × 1.3 (sensible factor)            = 37,797.5 BTU/hr total
+    // / 12000 BTU/hr/ton                 = 3.1498 tons
+    // Dehum: 300 L/day (1 kg water ≈ 1 L)
+    //
+    // The original VFC spec said 1.43 tons because it treated 1055 BTU/lb as
+    // if it were BTU/kg. Fixed alongside this calculator — see header comment
+    // in lib/farm-load-calculator.js.
     const q = 10000 / (nft.tierCount * nft.traysPerTier * nft.plantsPerTrayByClass.leafy_greens);
     const load = computeTranspirationLoad({
       template: nft,
@@ -255,9 +259,9 @@ describe('computeTranspirationLoad', () => {
     });
     approx(load.plants, 10000, 1e-6);
     approx(load.dailyWaterKg, 300, 1e-6);
-    approx(load.latentBTUperHr, (300 * 1055) / 24, 1e-6);
-    approx(load.totalBTUperHr, ((300 * 1055) / 24) * 1.3, 1e-6);
-    approx(load.coolingTons, 1.4296, 1e-3);
+    approx(load.latentBTUperHr, (300 * 2326) / 24, 1e-6);
+    approx(load.totalBTUperHr, ((300 * 2326) / 24) * 1.3, 1e-6);
+    approx(load.coolingTons, 3.1498, 1e-3);
     approx(load.dehumLPerDay, 300, 1e-6);
   });
 
