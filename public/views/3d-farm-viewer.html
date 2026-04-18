@@ -504,6 +504,24 @@
       // Persisted dimensions keyed by group/room id
       groupDimensions: {},   // groupId -> { length, width, height, lightOrientation }
       roomDimensions: {},    // roomId  -> { length, width, height }
+      // --- Version-aware refresh (Option B + C) ---
+      // Per-entity dirty bookkeeping: entries are cleared once the server echoes a
+      // lastModified >= ours. Used by loadAllData() to skip clobbering a local
+      // edit with a stale server read.
+      dirtyGroups: new Map(),      // groupId -> { lastModified: ISO, snapshot }
+      dirtyRoomMaps: new Map(),    // roomId  -> { lastModified: ISO, snapshot }
+      dirtyIotDevices: new Map(),  // deviceId -> { lastModified: ISO, snapshot }
+      // How long to hold a local edit if the server has NOT yet echoed it.
+      // Protects against a lost/429'd save — beyond this window we trust the server.
+      dirtyTtlMs: 5 * 60 * 1000,
+      // SSE connection state (Option C)
+      eventSource: null,
+      eventSourceStatus: 'idle', // 'idle' | 'open' | 'closed' | 'error'
+      lastEventSeq: 0,
+      sseReconnectDelayMs: 2000,
+      sseReconnectTimer: null,
+      pendingReloadTimer: null,
+      pendingReloadKinds: new Set(),
     };
 
     const ZONE_PALETTE = [0x6366f1, 0x8b5cf6, 0x3b82f6, 0x06b6d4, 0x10b981, 0xf59e0b, 0xef4444, 0xec4899, 0x14b8a6, 0xa855f7];
@@ -701,6 +719,23 @@
       return group?.id || group?.group_id || group?.name || null;
     }
 
+    // Resolve a crop-name selection against S.cropRegistry (already loaded from
+    // /data/crop-registry.json) and return { resolvedName, planId }. Mirrors the
+    // logic EVIE uses in greenreach-central/routes/assistant-chat.js
+    // update_group_crop so both paths produce the same group record shape.
+    function resolveCropRegistryEntry(cropName) {
+      const raw = String(cropName || '').trim();
+      if (!raw) return { resolvedName: '', planId: '' };
+      const crops = (S.cropRegistry && typeof S.cropRegistry === 'object') ? S.cropRegistry : {};
+      const keys = Object.keys(crops);
+      const lowered = raw.toLowerCase();
+      const matchKey = keys.find(function(k) { return String(k).toLowerCase() === lowered; });
+      const entry = matchKey ? crops[matchKey] : null;
+      const resolvedName = (entry && entry.name) ? entry.name : (matchKey || raw);
+      const planId = (entry && entry.planId) ? entry.planId : ('crop-' + resolvedName.toLowerCase().replace(/\s+/g, '-'));
+      return { resolvedName, planId };
+    }
+
     function getSavedGroupDimensions(group) {
       const gKey = getGroupKey(group);
       const stored = gKey ? (S.groupDimensions[gKey] || {}) : {};
@@ -787,9 +822,168 @@
       return result;
     }
 
+    // ---- Dirty tracking + per-entity merge (Option B) ---------
+    function tsToMillis(value) {
+      if (!value) return 0;
+      const t = Date.parse(value);
+      return Number.isFinite(t) ? t : 0;
+    }
+
+    function pruneDirtyMap(map) {
+      if (!map || !map.size) return;
+      const cutoff = Date.now() - (S.dirtyTtlMs || 300000);
+      for (const [key, entry] of map.entries()) {
+        if (!entry || tsToMillis(entry.lastModified) < cutoff) map.delete(key);
+      }
+    }
+
+    function markGroupDirty(id, lastModifiedIso, snapshot) {
+      if (!id) return;
+      S.dirtyGroups.set(id, {
+        lastModified: lastModifiedIso || new Date().toISOString(),
+        snapshot: snapshot || null,
+      });
+    }
+
+    function markRoomMapDirty(roomId, lastModifiedIso) {
+      if (!roomId) return;
+      S.dirtyRoomMaps.set(roomId, {
+        lastModified: lastModifiedIso || new Date().toISOString(),
+      });
+    }
+
+    function markIotDeviceDirty(deviceId, lastModifiedIso) {
+      if (!deviceId) return;
+      S.dirtyIotDevices.set(deviceId, {
+        lastModified: lastModifiedIso || new Date().toISOString(),
+      });
+    }
+
+    // Merge a new server-side group list with the current S.groups using the
+    // per-entity dirty map: if we have a pending local edit whose lastModified
+    // is newer than the server's, keep the local copy; otherwise accept server.
+    function mergeGroupsFromServer(serverGroups) {
+      pruneDirtyMap(S.dirtyGroups);
+      const serverArr = Array.isArray(serverGroups) ? serverGroups : [];
+      const byId = new Map();
+      serverArr.forEach(function(g) {
+        const id = getGroupKey(g);
+        if (id) byId.set(id, g);
+      });
+
+      const localById = new Map();
+      (S.groups || []).forEach(function(g) {
+        const id = getGroupKey(g);
+        if (id) localById.set(id, g);
+      });
+
+      const merged = [];
+      // 1. Prefer server order, but swap in dirty-local for any id where local is newer
+      const seen = new Set();
+      serverArr.forEach(function(serverGroup) {
+        const id = getGroupKey(serverGroup);
+        if (!id) { merged.push(serverGroup); return; }
+        seen.add(id);
+        const dirty = S.dirtyGroups.get(id);
+        const local = localById.get(id);
+        if (dirty && local) {
+          const serverTs = tsToMillis(serverGroup.lastModified);
+          const localTs = tsToMillis(dirty.lastModified);
+          if (serverTs >= localTs) {
+            // Server caught up to or passed our local edit — accept server + clear dirty.
+            S.dirtyGroups.delete(id);
+            merged.push(serverGroup);
+          } else {
+            // Local edit is newer — keep local for this refresh cycle.
+            merged.push(local);
+          }
+        } else {
+          merged.push(serverGroup);
+        }
+      });
+      // 2. Append any locally-dirty groups that the server hasn't seen yet (creation race)
+      for (const [id, dirty] of S.dirtyGroups.entries()) {
+        if (seen.has(id)) continue;
+        const local = localById.get(id);
+        if (local) merged.push(local);
+        else if (dirty.snapshot) merged.push(dirty.snapshot);
+      }
+      return merged;
+    }
+
+    // Merge incoming room-map objects keyed by roomId with dirty-protected copies.
+    function mergeRoomMapsFromServer(serverMaps) {
+      pruneDirtyMap(S.dirtyRoomMaps);
+      const out = {};
+      const incoming = serverMaps && typeof serverMaps === 'object' ? serverMaps : {};
+      // Start from incoming — this is the wholesale replacement shape the old
+      // code used, now filtered through the dirty map.
+      for (const [roomId, serverMap] of Object.entries(incoming)) {
+        const dirty = S.dirtyRoomMaps.get(roomId);
+        const local = S.roomMaps[roomId];
+        if (dirty && local) {
+          const serverTs = tsToMillis(serverMap && serverMap.lastModified);
+          const localTs = tsToMillis(dirty.lastModified);
+          if (serverTs >= localTs) {
+            S.dirtyRoomMaps.delete(roomId);
+            out[roomId] = serverMap;
+          } else {
+            out[roomId] = local;
+          }
+        } else {
+          out[roomId] = serverMap;
+        }
+      }
+      // Keep any locally-dirty room-map the server didn't return (edit-before-create).
+      for (const [roomId, dirty] of S.dirtyRoomMaps.entries()) {
+        if (out[roomId]) continue;
+        if (S.roomMaps[roomId]) out[roomId] = S.roomMaps[roomId];
+        else if (dirty && dirty.snapshot) out[roomId] = dirty.snapshot;
+      }
+      return out;
+    }
+
+    function mergeIotDevicesFromServer(serverDevices) {
+      pruneDirtyMap(S.dirtyIotDevices);
+      const serverArr = Array.isArray(serverDevices) ? serverDevices : [];
+      if (!S.dirtyIotDevices.size) return serverArr;
+      const getKey = function(d) { return d && (d.id || d.deviceId || d.key || d.uuid) || null; };
+      const localById = new Map();
+      (S.iotDevices || []).forEach(function(d) { const k = getKey(d); if (k) localById.set(k, d); });
+      const out = serverArr.map(function(serverDev) {
+        const k = getKey(serverDev);
+        if (!k) return serverDev;
+        const dirty = S.dirtyIotDevices.get(k);
+        if (!dirty) return serverDev;
+        const serverTs = tsToMillis(serverDev.lastModified);
+        const localTs = tsToMillis(dirty.lastModified);
+        if (serverTs >= localTs) { S.dirtyIotDevices.delete(k); return serverDev; }
+        return localById.get(k) || serverDev;
+      });
+      // Preserve locally-dirty devices the server didn't return yet.
+      const seen = new Set(out.map(getKey).filter(Boolean));
+      for (const k of S.dirtyIotDevices.keys()) {
+        if (seen.has(k)) continue;
+        const local = localById.get(k);
+        if (local) out.push(local);
+      }
+      return out;
+    }
+
     async function persistRoomMap(roomId) {
       if (!roomId || !S.roomMaps[roomId]) throw new Error('Missing room map for ' + roomId);
-      return postViewerJson('/data/room-map-' + roomId + '.json', S.roomMaps[roomId]);
+      const nowIso = new Date().toISOString();
+      S.roomMaps[roomId].lastModified = nowIso;
+      // Mark the whole room-map dirty so the next auto/SSE refresh keeps our copy
+      // until the server echoes back a lastModified >= nowIso.
+      markRoomMapDirty(roomId, nowIso);
+      try {
+        return await postViewerJson('/data/room-map-' + roomId + '.json', S.roomMaps[roomId]);
+      } catch (err) {
+        // Keep the dirty marker so a subsequent refresh does not clobber the edit
+        // we just failed to push — user can retry.
+        throw err;
+      }
     }
 
     async function persistRoomMaps(roomIds) {
@@ -819,18 +1013,52 @@
     }
 
     async function persistGroupsData(groups) {
-      const payload = { groups: Array.isArray(groups) ? groups : [] };
-      let lastError = null;
+      const safeGroups = Array.isArray(groups) ? groups : [];
+      const nowIso = new Date().toISOString();
+      // Stamp lastModified on every group we're about to send so the server and
+      // the local dirty map agree on the clock. Also remember which ids we just
+      // wrote — we'll mark them dirty regardless of which endpoint succeeds.
+      const touchedIds = [];
+      safeGroups.forEach(function(g) {
+        if (!g || typeof g !== 'object') return;
+        g.lastModified = nowIso;
+        const gid = getGroupKey(g);
+        if (gid) {
+          touchedIds.push(gid);
+          markGroupDirty(gid, nowIso, g);
+        }
+      });
+      const payload = { groups: safeGroups };
 
+      // Preferred path: POST /groups runs full validation and parseIncomingGroup.
       try {
         await postViewerJson('/groups', payload);
         return true;
-      } catch (err) {
-        lastError = err;
+      } catch (primaryErr) {
+        console.warn('[3D] POST /groups failed, using fallback /data/groups.json:', primaryErr);
+        setStatusBarMessage(
+          'Saved via fallback path — primary save rejected (' + (primaryErr.message || 'unknown') + ')',
+          '#f59e0b',
+          6000
+        );
       }
 
-      await postViewerJson('/data/groups.json', payload);
-      return true;
+      // Fallback: POST /data/groups.json — now non-destructive (merges all fields).
+      try {
+        await postViewerJson('/data/groups.json', payload);
+        return true;
+      } catch (fallbackErr) {
+        console.error('[3D] Fallback /data/groups.json save failed:', fallbackErr);
+        // Keep dirty markers intact so we don't lose the edit on next refresh.
+        setStatusBarMessage(
+          'Save failed: ' + (fallbackErr.message || 'server unreachable') + ' — changes will retry on next save',
+          '#f87171',
+          8000
+        );
+        const wrappedErr = new Error('persistGroupsData failed: ' + (fallbackErr.message || 'unknown'));
+        wrappedErr.ids = touchedIds;
+        throw wrappedErr;
+      }
     }
 
     async function saveRoomDimensions(roomIds) {
@@ -1083,21 +1311,34 @@
           authFetch('/data/crop-registry.json?t=' + Date.now()),
         ]);
 
-        S.roomMaps = {};
+        // Room list: still a wholesale replace — this list rarely changes and
+        // has no per-entity dirty tracking.
         if (roomsRes.ok) { const d = await roomsRes.json(); S.rooms = d.rooms || d || []; }
-        if (groupsRes.ok) { const d = await groupsRes.json(); S.groups = Array.isArray(d) ? d : (d.groups || []); }
-        if (iotRes.ok) { const d = await iotRes.json(); S.iotDevices = Array.isArray(d) ? d : (d.devices || []); }
+        // Groups + IoT devices: merge through per-entity dirty maps so a local
+        // edit that hasn't round-tripped yet is preserved across refresh cycles.
+        if (groupsRes.ok) {
+          const d = await groupsRes.json();
+          const serverGroups = Array.isArray(d) ? d : (d.groups || []);
+          S.groups = mergeGroupsFromServer(serverGroups);
+        }
+        if (iotRes.ok) {
+          const d = await iotRes.json();
+          const serverDevices = Array.isArray(d) ? d : (d.devices || []);
+          S.iotDevices = mergeIotDevicesFromServer(serverDevices);
+        }
         if (envRes.ok) { S.envData = await envRes.json(); }
         if (regRes.ok) { const d = await regRes.json(); S.cropRegistry = d.crops || d || {}; }
 
         status('Loading room layouts...');
+        const freshRoomMaps = {};
         for (const room of S.rooms) {
           try {
             let res = await authFetch('/data/room-map-' + room.id + '.json?t=' + Date.now());
             if (!res.ok) res = await authFetch('/data/room-map.json?t=' + Date.now());
-            if (res.ok) S.roomMaps[room.id] = await res.json();
+            if (res.ok) freshRoomMaps[room.id] = await res.json();
           } catch (e) {}
         }
+        S.roomMaps = mergeRoomMapsFromServer(freshRoomMaps);
         if (S.rooms.length === 0) {
           try {
             const res = await authFetch('/data/room-map.json?t=' + Date.now());
@@ -3361,12 +3602,30 @@
         html += '<button class="dp-save-btn" id="saveGrpOne" style="margin-top:0.3rem">' + (similarCount > 1 ? 'Update This One Only' : 'Save Changes') + '</button>';
         content.innerHTML = html;
 
-        // Save handler for single group
+        // Save handler for single group. When a crop is picked, we resolve the
+        // same downstream fields EVIE's update_group_crop tool sets (see
+        // greenreach-central/routes/assistant-chat.js) so the environment daily
+        // resolver and the nutrient management UI can actually key off the group
+        // after a save. Previously the viewer only set `crop` + `status`, which
+        // left `plan`/`planId`/`planConfig.anchor.seedDate` missing and downstream
+        // systems blind to the change.
         function applyGroupEdits(target) {
           const newCrop = document.getElementById('grpCrop').value;
           const newStatus = document.getElementById('grpStatus').value;
-          if (newCrop) target.crop = newCrop;
           if (newStatus) target.status = newStatus;
+          if (newCrop) {
+            const resolved = resolveCropRegistryEntry(newCrop);
+            target.crop = resolved.resolvedName;
+            target.recipe = resolved.resolvedName;
+            target.plan = resolved.planId;
+            target.planId = resolved.planId;
+            if (!target.planConfig || typeof target.planConfig !== 'object') target.planConfig = {};
+            if (!target.planConfig.anchor || typeof target.planConfig.anchor !== 'object') target.planConfig.anchor = {};
+            // Only stamp seedDate if not already set (preserve a real seed date from tray-seed).
+            if (!target.planConfig.anchor.seedDate) {
+              target.planConfig.anchor.seedDate = new Date().toISOString().slice(0, 10);
+            }
+          }
           target.lastModified = new Date().toISOString();
         }
 
@@ -3398,17 +3657,14 @@
         const bulkGrpBtn = document.getElementById('saveGrpAll');
         if (bulkGrpBtn) {
           bulkGrpBtn.addEventListener('click', async () => {
-            const newCrop = document.getElementById('grpCrop').value;
-            const newStatus = document.getElementById('grpStatus').value;
             const l = parseFloat(document.getElementById('dimL').value) || d.length;
             const w = parseFloat(document.getElementById('dimW').value) || d.width;
             const h = parseFloat(document.getElementById('dimH').value) || d.height;
             const ori = document.getElementById('lightOri').value;
             let updated = 0;
             for (const sg of similarGroups) {
-              if (newCrop) sg.crop = newCrop;
-              if (newStatus) sg.status = newStatus;
-              sg.lastModified = new Date().toISOString();
+              // Reuse applyGroupEdits so bulk saves also populate plan/planId/etc.
+              applyGroupEdits(sg);
               const sgId = getGroupKey(sg);
               if (sgId) S.groupDimensions[sgId] = { length: l, width: w, height: h, lightOrientation: ori };
               sg.length = l; sg.width = w; sg.height = h; sg.lightOrientation = ori;
@@ -4042,6 +4298,70 @@
       document.getElementById('gwenFab').addEventListener('click', openGwenWithContext);
     }
 
+    // ---- SSE event stream (Option C) -------------------------
+    // Schedule a targeted refresh in response to a server-push event. We debounce
+    // bursts (e.g. a big zone-cascade save) into a single loadAllData call.
+    function scheduleEventDrivenReload(kind) {
+      if (kind) S.pendingReloadKinds.add(kind);
+      if (S.pendingReloadTimer) return;
+      S.pendingReloadTimer = setTimeout(function() {
+        S.pendingReloadTimer = null;
+        const kinds = Array.from(S.pendingReloadKinds);
+        S.pendingReloadKinds.clear();
+        if (document.hidden || S.editMode || S.isDragging || S.isLoadingData || hasPendingDetailEdits()) return;
+        loadAllData({ reason: 'sse:' + kinds.join(','), silent: true, skipRebuildIfUnchanged: true });
+      }, 400); // coalesce bursts within 400ms
+    }
+
+    function handleDataChangeEvent(envelope) {
+      if (!envelope || typeof envelope !== 'object') return;
+      if (typeof envelope.seq === 'number') S.lastEventSeq = envelope.seq;
+      const kind = String(envelope.kind || 'data');
+      // Ignore events that only reflect our own in-flight writes already merged
+      // into S; loadAllData's merge still handles them safely, but skipping saves
+      // a round trip when we know the server just echoed us.
+      scheduleEventDrivenReload(kind);
+    }
+
+    function startEventStream() {
+      if (!('EventSource' in window)) {
+        console.warn('[3D] EventSource unsupported; falling back to polling.');
+        return;
+      }
+      if (S.eventSource) { try { S.eventSource.close(); } catch (_) {} }
+      // The /events endpoint is open (no pin guard) because EventSource cannot
+      // send Authorization headers. All payloads only carry { kind, ids, ts }
+      // pointers — subscribers still have to authenticate their follow-up fetches.
+      const es = new EventSource('/events');
+      S.eventSource = es;
+      S.eventSourceStatus = 'connecting';
+      es.addEventListener('open', function() {
+        S.eventSourceStatus = 'open';
+        S.sseReconnectDelayMs = 2000; // reset backoff on healthy reconnect
+      });
+      es.addEventListener('hello', function(ev) {
+        try { const d = JSON.parse(ev.data); if (typeof d.seq === 'number') S.lastEventSeq = d.seq; } catch (_) {}
+      });
+      es.addEventListener('data-change', function(ev) {
+        try { handleDataChangeEvent(JSON.parse(ev.data)); } catch (err) {
+          console.warn('[3D] Bad SSE data-change payload:', err);
+        }
+      });
+      es.addEventListener('error', function() {
+        S.eventSourceStatus = 'error';
+        // EventSource reconnects on its own; only force-recreate if it closed.
+        if (es.readyState === 2 /* CLOSED */) {
+          if (S.sseReconnectTimer) return;
+          const delay = Math.min(S.sseReconnectDelayMs, 30000);
+          S.sseReconnectTimer = setTimeout(function() {
+            S.sseReconnectTimer = null;
+            S.sseReconnectDelayMs = Math.min(delay * 2, 30000);
+            startEventStream();
+          }, delay);
+        }
+      });
+    }
+
     // ---- Auto-refresh ----------------------------------------
     function startAutoRefresh() {
       S.lastEnvUpdate = Date.now();
@@ -4060,10 +4380,14 @@
           }
         }).catch(function(){});
       }, 120000);
+      // Safety-net poll for full data. The primary refresh mechanism is now the
+      // /events SSE stream (see startEventStream). This low-frequency poll only
+      // exists to catch edge cases where SSE is blocked (firewall, buffering
+      // proxy) or where the process restarted without notifying us.
       setInterval(function() {
         if (document.hidden || S.editMode || S.isDragging || S.isLoadingData || hasPendingDetailEdits()) return;
         loadAllData({ reason: 'auto', silent: true, skipRebuildIfUnchanged: true });
-      }, 30000);
+      }, 120000);
       document.addEventListener('visibilitychange', function() {
         if (document.hidden || S.editMode || S.isLoadingData || hasPendingDetailEdits()) return;
         loadAllData({ reason: 'visible', silent: true, skipRebuildIfUnchanged: true });
@@ -4090,6 +4414,7 @@
       bindEvents();
       updatePlaybackControls();
       loadAllData({ reason: 'initial', skipRebuildIfUnchanged: false });
+      startEventStream();
       startAutoRefresh();
     });
 

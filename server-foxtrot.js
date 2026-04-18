@@ -707,6 +707,27 @@ async function writeJsonQueued(fullPath, jsonString) {
   return next;
 }
 
+// ─── Data-change event bus (SSE push channel) ────────────────────────────────
+// Used by the 3D viewer and any other UI that wants targeted refresh instead of
+// polling /data/*.json on a 30s timer. Each change to groups.json, room-map*.json,
+// or iot-devices.json is broadcast to all connected SSE clients as a small JSON
+// envelope: { kind, ids?, roomId?, updatedAt, source? }.
+const __dataEventClients = new Set(); // Set<{ id, res, lastPing }>
+let __dataEventSeq = 0;
+
+function emitDataChange(payload) {
+  if (!payload || typeof payload !== 'object') return;
+  const envelope = {
+    seq: ++__dataEventSeq,
+    ts: new Date().toISOString(),
+    ...payload,
+  };
+  const line = `event: data-change\ndata: ${JSON.stringify(envelope)}\n\n`;
+  for (const client of __dataEventClients) {
+    try { client.res.write(line); } catch (_) { /* dropped; will be cleaned up on next ping */ }
+  }
+}
+
 // In-memory caches for hot data paths
 let __envCache = null; // { zones: [...], updatedAt?: ISO }
 let __envWriteInFlight = false;
@@ -23090,8 +23111,10 @@ app.post('/api/trays/:trayId/seed', async (req, res) => {
           const seedDateStr = now.toISOString().slice(0, 10);
           targetGroup.planConfig.anchor.seedDate = seedDateStr;
           if (!targetGroup.crop) targetGroup.crop = recipe;
+          targetGroup.lastModified = new Date().toISOString();
           fs.writeFileSync(groupsPath, JSON.stringify(groupsData, null, 2));
           console.log(`[tray-runs] Synced seed date ${seedDateStr} + crop ${recipe} to group ${groupId}`);
+          try { emitDataChange({ kind: 'groups', ids: [groupId], updatedAt: targetGroup.lastModified, source: 'tray-seed' }); } catch (_) {}
         }
       } catch (syncErr) {
         console.warn(`[tray-runs] Seed date sync to group failed (non-fatal):`, syncErr.message);
@@ -24596,9 +24619,13 @@ app.get('/data/groups.json', (req, res, next) => {
   return res.json({ groups });
 });
 
-// POST /data/groups.json -- write-back from Central optimize_layout tool.
-// Saves updated groups (with gridX, gridY layout positions) to LE flat file
-// so subsequent LE->Central syncs preserve those positions.
+// POST /data/groups.json -- non-destructive merge writer.
+// Originally added as a write-back path for Central's optimize_layout tool, which
+// only needs gridX/gridY to round-trip. The 3D viewer also falls back to this
+// endpoint when `POST /groups` errors (expired PIN, unknown light id, etc.), so
+// the payload can be a full group record: { id, crop, plan, planId, planConfig,
+// status, dimensions, ... }. We merge field-by-field rather than whitelisting
+// gridX/gridY so neither caller silently drops operator edits.
 app.post('/data/groups.json', (req, res) => {
   setCors(req, res);
   const body = req.body || {};
@@ -24606,17 +24633,34 @@ app.post('/data/groups.json', (req, res) => {
   if (!Array.isArray(incoming)) {
     return res.status(400).json({ ok: false, error: 'Expected { groups: [...] } or array.' });
   }
-  // Merge: preserve existing fields, overlay gridX/gridY from incoming
   const existing = loadGroupsFile();
   const incomingMap = new Map();
-  for (const g of incoming) { if (g.id) incomingMap.set(g.id, g); }
-  const merged = existing.map(g => {
+  for (const g of incoming) { if (g && g.id) incomingMap.set(g.id, g); }
+  const existingIds = new Set();
+  const nowIso = new Date().toISOString();
+  const touchedIds = [];
+  const merged = existing.map((g) => {
+    if (!g || !g.id) return g;
+    existingIds.add(g.id);
     const inc = incomingMap.get(g.id);
-    if (inc) return { ...g, gridX: inc.gridX, gridY: inc.gridY };
-    return g;
+    if (!inc) return g;
+    touchedIds.push(g.id);
+    return {
+      ...g,
+      ...inc,
+      lastModified: inc.lastModified || nowIso,
+    };
   });
+  // Append brand-new groups the incoming payload introduced.
+  for (const inc of incoming) {
+    if (inc && inc.id && !existingIds.has(inc.id)) {
+      touchedIds.push(inc.id);
+      merged.push({ ...inc, lastModified: inc.lastModified || nowIso });
+    }
+  }
   if (saveGroupsFile(merged)) {
-    return res.json({ ok: true, updated: merged.length });
+    emitDataChange({ kind: 'groups', ids: touchedIds, updatedAt: nowIso, source: 'data-groups-post' });
+    return res.json({ ok: true, updated: merged.length, touched: touchedIds.length });
   }
   return res.status(500).json({ ok: false, error: 'Failed to save groups.' });
 });
@@ -25606,6 +25650,41 @@ function setCors(req, res) {
 app.options('/brand/extract', (req, res) => { setCors(req, res); res.status(204).end(); });
 app.options('/farm', (req, res) => { setCors(req, res); res.status(204).end(); });
 
+// ─── SSE: live data-change stream ────────────────────────────────────────────
+// UIs subscribe with EventSource('/events'). The server emits a `data-change`
+// event whenever groups.json, room-map*.json, or iot-devices.json are written.
+// Clients use these to do targeted refreshes instead of periodic full re-fetches.
+app.get('/events', (req, res) => {
+  setCors(req, res);
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no'); // disable proxy buffering
+  res.flushHeaders?.();
+
+  const client = { id: crypto.randomBytes(6).toString('hex'), res, lastPing: Date.now() };
+  __dataEventClients.add(client);
+
+  // Initial hello so clients can confirm the channel is open.
+  try {
+    res.write(`event: hello\ndata: ${JSON.stringify({ clientId: client.id, seq: __dataEventSeq })}\n\n`);
+  } catch (_) { /* ignore */ }
+
+  // Heartbeat every 25s (under typical 30s proxy idle timeouts).
+  const heartbeat = setInterval(() => {
+    try { res.write(`: ping ${Date.now()}\n\n`); client.lastPing = Date.now(); }
+    catch (_) { clearInterval(heartbeat); __dataEventClients.delete(client); }
+  }, 25000);
+
+  const cleanup = () => {
+    clearInterval(heartbeat);
+    __dataEventClients.delete(client);
+    try { res.end(); } catch (_) {}
+  };
+  req.on('close', cleanup);
+  req.on('error', cleanup);
+});
+
 // Helper: safe JSON read
 function readJSONSafe(fullPath, fallback = null) {
   try {
@@ -26383,14 +26462,18 @@ app.post("/data/:name", (req, res) => {
     if (!name.endsWith(".json")) return res.status(400).json({ ok: false, error: "Only .json files allowed" });
     const baseName = path.basename(name);
     const full = path.join(DATA_DIR, baseName);
+    const nowIso = new Date().toISOString();
+    const isRoomMap = /^room-map(.*)?\.json$/.test(baseName);
+    const isIotDevices = baseName === 'iot-devices.json';
+    // Stamp lastModified on room-map/iot-devices saves so UIs can merge on refresh.
+    if (req.body && typeof req.body === 'object' && !Array.isArray(req.body) && (isRoomMap || isIotDevices)) {
+      req.body.lastModified = req.body.lastModified || nowIso;
+    }
     const payload = JSON.stringify(req.body, null, 2);
 
     // Persist the requested file first
     writeJsonQueued(full, payload)
       .then(async () => {
-        // If this is a room map save, perform additional side-effects so Room Mapper becomes source of truth
-        const isRoomMap = /^room-map(.*)?\.json$/.test(baseName);
-        const isIotDevices = baseName === 'iot-devices.json';
         if (isRoomMap) {
           try {
             // While multi-room support is evolving, mirror room-map-<roomId>.json to legacy room-map.json
@@ -26425,6 +26508,22 @@ app.post("/data/:name", (req, res) => {
           }
         }
 
+        // Broadcast a data-change event so subscribers (3D viewer, etc.) can do
+        // a targeted refresh instead of relying on the 30s full-data poll.
+        if (isRoomMap) {
+          const roomIdMatch = baseName.match(/^room-map-(.+)\.json$/);
+          const roomId = roomIdMatch ? roomIdMatch[1] : (req.body?.roomId || null);
+          emitDataChange({ kind: 'room-map', roomId, file: baseName, updatedAt: nowIso, source: 'data-post' });
+        } else if (isIotDevices) {
+          emitDataChange({ kind: 'iot-devices', updatedAt: nowIso, source: 'data-post' });
+        } else if (baseName === 'groups.json') {
+          // The specialized /data/groups.json handler runs earlier in the route table,
+          // but if anything else hits this generic path we still want subscribers notified.
+          emitDataChange({ kind: 'groups', updatedAt: nowIso, source: 'data-post-generic' });
+        } else {
+          emitDataChange({ kind: 'data', file: baseName, updatedAt: nowIso, source: 'data-post-generic' });
+        }
+
         return res.json({ ok: true, name: baseName, refreshed: isRoomMap || isIotDevices || false });
       })
       .catch((e) => res.status(500).json({ ok: false, error: e.message }));
@@ -26457,13 +26556,19 @@ app.post('/groups', pinGuard, async (req, res) => {
     return res.status(400).json({ ok: false, error: 'Expected { groups: [...] } payload.' });
   }
   try {
+    const nowIso = new Date().toISOString();
     // Under tests, skip controller validation for repeatable runs
     const knownIds = RUNNING_UNDER_NODE_TEST ? null : await fetchKnownDeviceIds();
     const parsed = incoming.map((g) => parseIncomingGroup(g, knownIds));
-    const stored = parsed.map((item) => item.stored);
+    const stored = parsed.map((item) => {
+      if (item.stored && !item.stored.lastModified) item.stored.lastModified = nowIso;
+      return item.stored;
+    });
     if (!saveGroupsFile(stored)) {
       return res.status(500).json({ ok: false, error: 'Failed to persist groups.' });
     }
+    const touchedIds = stored.map((g) => g?.id).filter(Boolean);
+    emitDataChange({ kind: 'groups', ids: touchedIds, updatedAt: nowIso, source: 'groups-post' });
     return res.json({ ok: true, groups: parsed.map((item) => item.response) });
   } catch (err) {
     return res.status(400).json({ ok: false, error: err.message });
@@ -26478,13 +26583,16 @@ app.put('/groups/:id', pinGuard, async (req, res) => {
   const idx = existing.findIndex((group) => String(group?.id || '').trim() === id);
   if (idx === -1) return res.status(404).json({ ok: false, error: `Group '${id}' not found.` });
   try {
-    const merged = { ...req.body, id };
+    const nowIso = new Date().toISOString();
+    const merged = { ...req.body, id, lastModified: req.body?.lastModified || nowIso };
     const knownIds = RUNNING_UNDER_NODE_TEST ? null : await fetchKnownDeviceIds();
     const { stored, response } = parseIncomingGroup(merged, knownIds);
+    if (stored && !stored.lastModified) stored.lastModified = nowIso;
     existing[idx] = stored;
     // Async queued write to avoid blocking I/O
     const payload = JSON.stringify({ groups: existing }, null, 2);
     await writeJsonQueued(GROUPS_PATH, payload);
+    emitDataChange({ kind: 'groups', ids: [id], updatedAt: nowIso, source: 'groups-put' });
     return res.json({ ok: true, group: response });
   } catch (err) {
     return res.status(400).json({ ok: false, error: err.message });
