@@ -1031,18 +1031,28 @@
       });
     }
 
-    async function persistGroupsData(groups) {
+    async function persistGroupsData(groups, options) {
       const safeGroups = Array.isArray(groups) ? groups : [];
+      const opts = options || {};
       const nowIso = new Date().toISOString();
-      // Stamp lastModified on every group we're about to send so the server and
-      // the local dirty map agree on the clock. Also remember which ids we just
-      // wrote — we'll mark them dirty regardless of which endpoint succeeds.
+      // Only stamp lastModified + mark dirty on groups the caller actually
+      // edited. All three callers today already know which group(s) they
+      // touched (drag-drop = 1, detail-panel save = 1, bulk = similarGroups),
+      // so they pass changedIds. Groups outside that set keep whatever
+      // lastModified they already had; they're still sent to the server
+      // because /groups and /data/groups.json both want the full array, but
+      // their timestamps stay meaningful to downstream consumers and they
+      // don't get pointlessly inserted into S.dirtyGroups.
+      const changedIds = opts.changedIds instanceof Set
+        ? opts.changedIds
+        : new Set(Array.isArray(opts.changedIds) ? opts.changedIds : []);
       const touchedIds = [];
       safeGroups.forEach(function(g) {
         if (!g || typeof g !== 'object') return;
-        g.lastModified = nowIso;
         const gid = getGroupKey(g);
-        if (gid) {
+        if (!gid) return;
+        if (changedIds.size === 0 || changedIds.has(gid)) {
+          g.lastModified = nowIso;
           touchedIds.push(gid);
           markGroupDirty(gid, nowIso, g);
         }
@@ -3478,9 +3488,11 @@
           }
         }
 
-        // Save all groups (captures all previously moved groups too)
+        // Save all groups (captures all previously moved groups too) but only
+        // stamp/dirty the one we actually just dragged.
+        const draggedId = getGroupKey(group);
         try {
-          await persistGroupsData(S.groups);
+          await persistGroupsData(S.groups, { changedIds: draggedId ? [draggedId] : [] });
           setStatusBarMessage((group.name || 'Group') + ' position saved (' + group.gridX + ', ' + group.gridY + ')', '#4ade80', 2000);
         } catch (err) {
           console.error('[3D] Group position save error:', err);
@@ -3675,7 +3687,7 @@
           g.length = l; g.width = w; g.height = h; g.lightOrientation = ori;
           saveGroupDimensions();
           try {
-            await persistGroupsData(S.groups);
+            await persistGroupsData(S.groups, { changedIds: gId ? [gId] : [] });
             markDetailDirty(false);
             btn.textContent = 'Saved'; btn.classList.add('saved');
           } catch (err) {
@@ -3705,8 +3717,9 @@
               updated++;
             }
             saveGroupDimensions();
+            const bulkIds = similarGroups.map(getGroupKey).filter(Boolean);
             try {
-              await persistGroupsData(S.groups);
+              await persistGroupsData(S.groups, { changedIds: bulkIds });
               markDetailDirty(false);
               bulkGrpBtn.textContent = 'Updated ' + updated + ' unit' + (updated !== 1 ? 's' : '');
               bulkGrpBtn.classList.add('saved');
