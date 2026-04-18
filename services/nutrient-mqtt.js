@@ -29,6 +29,18 @@ const EVENT_TOPICS = [
   'sensors/nutrient/event/+'
 ];
 
+// Ack topics — Atlas publishes a command ack after applying setpoints / calibration /
+// manual dose commands. The Arduino-flavored firmware uses `sensors/NutrientRoom/ack`
+// (see `scripts/mqtt-nutrient-monitor-unified.py`); the generic form mirrors the
+// telemetry topic shape. We subscribe to all known variants so whichever firmware
+// is on the wire ends up persisting its ack.
+const ACK_TOPICS = [
+  'sensors/NutrientRoom/ack',
+  'sensors/nutrient/ack',
+  'sensors/nutrient/+/ack',
+  'sensors/nutrient/event/ack'
+];
+
 class NutrientStore extends EventEmitter {
   constructor({ dataDir, fileName = 'nutrient-store.json' } = {}) {
     super();
@@ -39,6 +51,14 @@ class NutrientStore extends EventEmitter {
       dosingHistory: [],
       calibrations: {},
       alerts: [],
+      // appliedTargets[tankId] tracks the most recent setTargets payload the
+      // Atlas controller has acknowledged so the UI can display "Last applied"
+      // and the reconcile loop can diff against recipe-resolved targets.
+      appliedTargets: {},
+      // pendingTargets[tankId] tracks a publish for which we have not yet seen
+      // an ack. The server writes to this from publishNutrientCommand before
+      // emitting to MQTT; the ack handler promotes it to appliedTargets.
+      pendingTargets: {},
       updatedAt: null
     };
     this._persistTimer = null;
@@ -56,6 +76,8 @@ class NutrientStore extends EventEmitter {
             dosingHistory: Array.isArray(parsed.dosingHistory) ? parsed.dosingHistory.slice(-MAX_DOSING_HISTORY) : [],
             calibrations: parsed.calibrations || {},
             alerts: Array.isArray(parsed.alerts) ? parsed.alerts : [],
+            appliedTargets: parsed.appliedTargets && typeof parsed.appliedTargets === 'object' ? parsed.appliedTargets : {},
+            pendingTargets: parsed.pendingTargets && typeof parsed.pendingTargets === 'object' ? parsed.pendingTargets : {},
             updatedAt: parsed.updatedAt || null
           };
         }
@@ -191,8 +213,11 @@ class NutrientStore extends EventEmitter {
     if (!alert) return;
     const now = new Date().toISOString();
     this.state.alerts.push({
+      id: alert.id || `alert-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      severity: alert.severity || alert.level || 'warning',
       ...alert,
-      receivedAt: now
+      receivedAt: now,
+      acknowledged: alert.acknowledged === true
     });
     if (this.state.alerts.length > 50) {
       this.state.alerts = this.state.alerts.slice(-50);
@@ -200,6 +225,69 @@ class NutrientStore extends EventEmitter {
     this.state.updatedAt = now;
     this._schedulePersist();
     this.emit('alert', alert);
+  }
+
+  /**
+   * Record that the server has just published a setTargets command. This is
+   * called from publishNutrientCommand (server-foxtrot.js) BEFORE the MQTT
+   * publish so the UI can render "Pending ack" even if the ack never arrives.
+   */
+  recordPendingTargets(tankId, targets, meta = {}) {
+    if (!tankId || !targets || typeof targets !== 'object') return;
+    const now = new Date().toISOString();
+    this.state.pendingTargets[tankId] = {
+      targets: JSON.parse(JSON.stringify(targets)),
+      requestedAt: now,
+      source: meta.source || 'api',
+      correlationId: meta.correlationId || null,
+      topic: meta.topic || null
+    };
+    this.state.updatedAt = now;
+    this._schedulePersist();
+    this.emit('pending-targets', { tankId, targets });
+  }
+
+  /**
+   * Record a confirmed/applied setpoint state. This is called either from the
+   * ack handler (preferred) or from a fallback timer in the server when no ack
+   * topic is configured on the controller. `appliedTargets[tankId]` is the
+   * source of truth the reconcile loop diffs against.
+   */
+  recordAppliedTargets(tankId, targets, meta = {}) {
+    if (!tankId || !targets || typeof targets !== 'object') return;
+    const now = new Date().toISOString();
+    this.state.appliedTargets[tankId] = {
+      targets: JSON.parse(JSON.stringify(targets)),
+      appliedAt: meta.appliedAt || now,
+      source: meta.source || 'ack',
+      correlationId: meta.correlationId || null
+    };
+    // Clear any matching pending entry — the publish has landed.
+    delete this.state.pendingTargets[tankId];
+    this.state.updatedAt = now;
+    this._schedulePersist();
+    this.emit('applied-targets', { tankId, targets });
+  }
+
+  /**
+   * Receive a raw ack payload from Atlas and, if it describes an applied
+   * setTargets, promote pending → applied. Non-setTargets acks (dose, calibration)
+   * are recorded in dosingHistory/calibrations by the calling code path.
+   */
+  recordAck(tankId, ack) {
+    if (!ack || typeof ack !== 'object') return;
+    const action = String(ack.action || ack.type || '').toLowerCase();
+    const resolvedTank = tankId || ack.tank || ack.scope || 'unknown';
+    if (action === 'settargets' || action === 'set_targets' || action === 'targets') {
+      const targets = ack.targets || ack.applied || ack.payload || null;
+      if (targets && typeof targets === 'object') {
+        this.recordAppliedTargets(resolvedTank, targets, {
+          source: 'ack',
+          appliedAt: ack.appliedAt || ack.timestamp
+        });
+      }
+    }
+    this.emit('ack', { tankId: resolvedTank, ack });
   }
 
   getTank(tankId) {
@@ -221,8 +309,34 @@ class NutrientStore extends EventEmitter {
       scope: tankId,
       sensors: tank.sensors,
       updatedAt: tank.updatedAt,
-      stale: tank.updatedAt ? (Date.now() - new Date(tank.updatedAt).getTime()) > STALE_THRESHOLD_MS : true
+      stale: tank.updatedAt ? (Date.now() - new Date(tank.updatedAt).getTime()) > STALE_THRESHOLD_MS : true,
+      appliedTargets: this.state.appliedTargets[tankId] || null,
+      pendingTargets: this.state.pendingTargets[tankId] || null
     };
+  }
+
+  getAppliedTargets(tankId) {
+    return this.state.appliedTargets[tankId] || null;
+  }
+
+  getPendingTargets(tankId) {
+    return this.state.pendingTargets[tankId] || null;
+  }
+
+  getAlerts({ limit = 50, includeAcknowledged = true } = {}) {
+    const list = Array.isArray(this.state.alerts) ? this.state.alerts : [];
+    const filtered = includeAcknowledged ? list : list.filter(a => !a.acknowledged);
+    return filtered.slice(-limit);
+  }
+
+  acknowledgeAlert(alertId) {
+    if (!alertId) return false;
+    const alert = (this.state.alerts || []).find(a => a.id === alertId);
+    if (!alert) return false;
+    alert.acknowledged = true;
+    alert.acknowledgedAt = new Date().toISOString();
+    this._schedulePersist();
+    return true;
   }
 
   getHistory(tankId, sensor, limit = 50) {
@@ -279,7 +393,7 @@ class NutrientMqttSubscriber extends EventEmitter {
       this._reconnectCount = 0;
       console.log('[nutrient-mqtt] Connected to Atlas MQTT broker');
 
-      const allTopics = [...TELEMETRY_TOPICS, ...EVENT_TOPICS];
+      const allTopics = [...TELEMETRY_TOPICS, ...EVENT_TOPICS, ...ACK_TOPICS];
       this.client.subscribe(allTopics, { qos: 1 }, (err, granted) => {
         if (err) {
           console.error('[nutrient-mqtt] Subscribe failed:', err?.message);
@@ -358,6 +472,13 @@ class NutrientMqttSubscriber extends EventEmitter {
     // Alert events
     if (topic.includes('/event/alert')) {
       this.store.recordAlert(payload);
+      return;
+    }
+
+    // Ack topics — correlate to a pending setTargets publish or record misc acks.
+    if (topic.endsWith('/ack') || topic.includes('/ack')) {
+      const tankId = payload.scope || payload.tank || this.scopeId;
+      this.store.recordAck(tankId, payload);
       return;
     }
   }
