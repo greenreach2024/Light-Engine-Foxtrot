@@ -19,7 +19,9 @@
        hardcoded color now routes through a token so the palette stays
        consistent and can be tuned in one place. */
     *, *::before, *::after { box-sizing: border-box; }
-    body {
+    /* Matches le-foundation.css `body.le-theme` specificity (0,1,1) so the
+       gradient wins over the flat `--surface-0` background set there. */
+    body.le-theme {
       background: linear-gradient(135deg, var(--surface-0, #0f172a) 0%, var(--surface-1, #1e293b) 100%);
       min-height: 100vh;
       overflow-x: hidden;
