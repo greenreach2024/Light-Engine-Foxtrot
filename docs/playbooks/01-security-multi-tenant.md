@@ -62,7 +62,9 @@ When a request hits Central, farm context is resolved in this exact order:
 3. Subdomain slug from `Host` header → DB lookup on `farms.farm_slug` (**planned path**; see §7 — subdomain routing is not live in production today)
 4. `FARM_ID` env var (single-farm mode)
 
-Implementation (LE side): `server/middleware/multi-tenant.js` (`extractTenantId(req)` → `req.tenant = { slug, farmId }`) + `lib/farm-store.js` `farmIdFromReq(req)`. There is no `middleware/tenant.js`; Central has no equivalent tenant middleware today (requests to Central arrive with explicit `X-Farm-ID` / JWT farm_id or admin bypass).
+Implementation:
+- **LE side:** `server/middleware/multi-tenant.js` (`extractTenantId(req)` → `req.tenant = { slug, farmId }`); LE's `lib/farm-store.js` exports `FarmScopedStore` / `farmStores` / `ensureFarmInitialized` (no `farmIdFromReq` helper).
+- **Central side:** `greenreach-central/lib/farm-data-store.js` exports `farmStore.farmIdFromReq(req)` (used throughout `greenreach-central/server.js`); there is no `middleware/tenant.js` and no request-middleware-based extraction — routes call `farmIdFromReq` inline. `X-Farm-ID` / JWT farm_id arrives from the client (or admin bypass is used).
 
 ## 5. Row-Level Security (RLS) — Phase A
 
