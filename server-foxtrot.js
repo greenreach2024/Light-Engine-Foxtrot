@@ -2363,6 +2363,33 @@ const pinGuard = (req, res, next) => {
   next();
 };
 
+// Accept a valid PIN OR a matching X-API-Key (used by Central's server-to-server
+// calls, which don't know the operator PIN). Behaves exactly like pinGuard when
+// neither credential surface is configured in env.
+function needPinOrApiKey(req, res) {
+  const configuredPin = process.env.FARM_PIN || process.env.CTRL_PIN || '';
+  const configuredKey = process.env.GREENREACH_API_KEY || process.env.EDGE_API_KEY || '';
+  if (!configuredPin && !configuredKey) return false;
+  if (configuredPin) {
+    const providedPin = (req.body && (req.body.pin || req.body.PIN))
+      || req.headers['x-farm-pin']
+      || req.query.pin;
+    if (providedPin && String(providedPin) === configuredPin) return false;
+  }
+  if (configuredKey) {
+    const providedKey = req.headers['x-api-key']
+      || (req.headers['authorization'] || '').replace(/^Bearer\s+/i, '');
+    if (providedKey && String(providedKey) === configuredKey) return false;
+  }
+  res.status(403).json({ ok: false, error: 'pin-or-api-key-required' });
+  return true;
+}
+
+const pinOrApiKeyGuard = (req, res, next) => {
+  if (needPinOrApiKey(req, res)) return;
+  next();
+};
+
 const readEnv = () => readJSON(envPath, { rooms: {}, targets: {}, control: {} }) || { rooms: {}, targets: {}, control: {} };
 const writeEnv = (obj) => writeJSON(envPath, obj);
 
@@ -24626,7 +24653,7 @@ app.get('/data/groups.json', (req, res, next) => {
 // the payload can be a full group record: { id, crop, plan, planId, planConfig,
 // status, dimensions, ... }. We merge field-by-field rather than whitelisting
 // gridX/gridY so neither caller silently drops operator edits.
-app.post('/data/groups.json', (req, res) => {
+app.post('/data/groups.json', pinOrApiKeyGuard, (req, res) => {
   setCors(req, res);
   const body = req.body || {};
   const incoming = Array.isArray(body) ? body : (body.groups || null);
@@ -26465,9 +26492,24 @@ app.post("/data/:name", (req, res) => {
     const nowIso = new Date().toISOString();
     const isRoomMap = /^room-map(.*)?\.json$/.test(baseName);
     const isIotDevices = baseName === 'iot-devices.json';
-    // Stamp lastModified on room-map/iot-devices saves so UIs can merge on refresh.
+    // Stamp lastModified so UIs can merge on refresh.
+    // - room-map*.json payloads are always objects (top-level lastModified).
+    // - iot-devices.json is sometimes a bare array; stamp lastModified on each
+    //   device so the viewer's per-entity dirty merge has something to compare.
     if (req.body && typeof req.body === 'object' && !Array.isArray(req.body) && (isRoomMap || isIotDevices)) {
       req.body.lastModified = req.body.lastModified || nowIso;
+    }
+    if (isIotDevices) {
+      const list = Array.isArray(req.body)
+        ? req.body
+        : (req.body && Array.isArray(req.body.devices) ? req.body.devices : null);
+      if (list) {
+        for (const dev of list) {
+          if (dev && typeof dev === 'object' && !dev.lastModified) {
+            dev.lastModified = nowIso;
+          }
+        }
+      }
     }
     const payload = JSON.stringify(req.body, null, 2);
 

@@ -1100,6 +1100,17 @@
 
     async function persistViewerIotDevices() {
       const payload = Array.isArray(S.iotDevices) ? S.iotDevices : [];
+      // Stamp each device with a client-side lastModified and mark it dirty so
+      // the next merge refresh doesn't clobber our write with a stale server read.
+      const nowIso = new Date().toISOString();
+      const getKey = function(d) { return d && (d.id || d.deviceId || d.key || d.uuid) || null; };
+      for (const dev of payload) {
+        if (dev && typeof dev === 'object') {
+          dev.lastModified = nowIso;
+          const k = getKey(dev);
+          if (k) markIotDeviceDirty(k, nowIso);
+        }
+      }
       await postViewerJson('/data/iot-devices.json', payload);
       return true;
     }
@@ -1290,7 +1301,11 @@
           if (!confirmDiscardDetailEdits('Refresh viewer data and discard unsaved detail panel changes?')) {
             return false;
           }
-        } else if (opts.reason === 'auto' || opts.reason === 'visible' || opts.reason === 'focus') {
+        } else {
+          // Any non-manual reason (auto/visible/focus/sse:*/initial-as-background)
+          // should never clobber unsaved detail-panel edits. This is the
+          // authoritative guard — upstream callers also pre-filter, but we don't
+          // want a new reason string to silently bypass it.
           return false;
         }
       }
