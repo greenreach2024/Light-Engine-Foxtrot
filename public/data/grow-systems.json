@@ -243,7 +243,7 @@
     {
       "id": "flood-bench-4x8",
       "name": "Ebb-and-Flow Bench, 4x8",
-      "category": "flood_table",
+      "category": "ebb_flow_bench",
       "description": "Single-level flood/drain bench for herbs and compact fruiting trials. 12 trays, centralized reservoir.",
       "suitableCropClasses": ["herbs", "leafy_greens", "fruiting"],
       "footprintM": { "length": 2.4, "width": 1.2 },
