@@ -2363,22 +2363,25 @@ const pinGuard = (req, res, next) => {
   next();
 };
 
-// Accept a valid PIN OR a matching X-API-Key (used by Central's server-to-server
-// calls, which don't know the operator PIN). Behaves exactly like pinGuard when
-// neither credential surface is configured in env.
+// Mirrors pinGuard's gating behaviour (no-op unless FARM_PIN/CTRL_PIN is set)
+// but also accepts a matching GREENREACH_API_KEY / EDGE_API_KEY via X-API-Key
+// or Authorization: Bearer so Central's server-to-server callers (which don't
+// know the operator PIN) still pass. This keeps /data/groups.json exactly as
+// permissive as POST /groups for clients that already authenticate via PIN,
+// without adding a new auth surface that breaks the viewer's JWT-only fetches
+// when only FARM_PIN is unset.
 function needPinOrApiKey(req, res) {
   const configuredPin = process.env.FARM_PIN || process.env.CTRL_PIN || '';
+  if (!configuredPin) return false; // same passthrough as pinGuard
+  const providedPin = (req.body && (req.body.pin || req.body.PIN))
+    || req.headers['x-farm-pin']
+    || req.query.pin;
+  if (providedPin && String(providedPin) === configuredPin) return false;
   const configuredKey = process.env.GREENREACH_API_KEY || process.env.EDGE_API_KEY || '';
-  if (!configuredPin && !configuredKey) return false;
-  if (configuredPin) {
-    const providedPin = (req.body && (req.body.pin || req.body.PIN))
-      || req.headers['x-farm-pin']
-      || req.query.pin;
-    if (providedPin && String(providedPin) === configuredPin) return false;
-  }
   if (configuredKey) {
+    const rawAuth = req.headers['authorization'] || '';
     const providedKey = req.headers['x-api-key']
-      || (req.headers['authorization'] || '').replace(/^Bearer\s+/i, '');
+      || (rawAuth.toLowerCase().startsWith('bearer ') ? rawAuth.slice(7) : '');
     if (providedKey && String(providedKey) === configuredKey) return false;
   }
   res.status(403).json({ ok: false, error: 'pin-or-api-key-required' });
