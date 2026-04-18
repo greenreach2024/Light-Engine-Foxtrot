@@ -93,6 +93,35 @@ describe('countPlants', () => {
       /cropClass "not_a_class"/
     );
   });
+
+  it('throws on missing quantity rather than propagating NaN', () => {
+    assert.throws(
+      () => countPlants({ template: nft, cropClass: 'leafy_greens' }),
+      /quantity must be a positive finite number.*undefined/
+    );
+  });
+
+  it('throws on zero or negative quantity', () => {
+    assert.throws(
+      () => countPlants({ template: nft, quantity: 0, cropClass: 'leafy_greens' }),
+      /quantity must be a positive finite number/
+    );
+    assert.throws(
+      () => countPlants({ template: nft, quantity: -1, cropClass: 'leafy_greens' }),
+      /quantity must be a positive finite number/
+    );
+  });
+
+  it('throws on non-numeric quantity (NaN, string) rather than propagating NaN', () => {
+    assert.throws(
+      () => countPlants({ template: nft, quantity: NaN, cropClass: 'leafy_greens' }),
+      /quantity must be a positive finite number/
+    );
+    assert.throws(
+      () => countPlants({ template: nft, quantity: '2', cropClass: 'leafy_greens' }),
+      /quantity must be a positive finite number/
+    );
+  });
 });
 
 // ============================================================================
@@ -589,6 +618,36 @@ describe('resolveInstalledSystems', () => {
     assert.throws(
       () => resolveInstalledSystems(bad, registry, () => 'leafy_greens'),
       /templateId "nope" not found.*installedSystems\[0\]/
+    );
+  });
+
+  it('throws when installedSystems entry is missing quantity (prevents NaN propagation)', () => {
+    const bad = {
+      id: 'r1',
+      installedSystems: [{ templateId: 'nft-rack-3tier' }]
+    };
+    assert.throws(
+      () => resolveInstalledSystems(bad, registry, () => 'leafy_greens'),
+      /quantity must be a positive finite number.*installedSystems\[0\].*undefined/
+    );
+  });
+
+  it('throws on non-numeric or non-positive quantity', () => {
+    const zero = {
+      id: 'r1',
+      installedSystems: [{ templateId: 'nft-rack-3tier', quantity: 0 }]
+    };
+    const nan = {
+      id: 'r1',
+      installedSystems: [{ templateId: 'nft-rack-3tier', quantity: NaN }]
+    };
+    assert.throws(
+      () => resolveInstalledSystems(zero, registry, () => 'leafy_greens'),
+      /quantity must be a positive finite number/
+    );
+    assert.throws(
+      () => resolveInstalledSystems(nan, registry, () => 'leafy_greens'),
+      /quantity must be a positive finite number/
     );
   });
 
