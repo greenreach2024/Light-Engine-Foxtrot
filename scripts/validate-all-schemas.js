@@ -14,7 +14,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { validateGroups, validateFarm, validateRooms, validateWithErrors } from '../lib/schema-validator.js';
+import { validateGroups, validateFarm, validateRooms, validateGrowSystems, validateWithErrors } from '../lib/schema-validator.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -174,6 +174,11 @@ function main() {
       path: path.join(dataDir, 'rooms.json'),
       validator: validateRooms,
       type: 'rooms'
+    },
+    {
+      path: path.join(dataDir, 'grow-systems.json'),
+      validator: validateGrowSystems,
+      type: 'grow-systems'
     }
   ];
   

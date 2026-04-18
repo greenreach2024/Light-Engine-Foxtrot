@@ -25,12 +25,43 @@ Formula references point back to
 
 ```jsonc
 {
+  "schemaVersion": "1.0.0",
   "version": "string, ISO date + suffix",
   "description": "string",
   "cropClasses": ["leafy_greens", "microgreens", "herbs", "fruiting"],
   "templates": [ /* Template[] */ ]
 }
 ```
+
+### Schema enforcement
+
+A JSON Schema for this file is compiled in `lib/schema-validator.js`
+(`validateGrowSystems`) and run by `npm run validate-schemas` as part
+of the `validate-and-test` CI job. The schema enforces the invariants
+below at CI time:
+
+- `cropClasses` is a closed, ordered enum of exactly
+  `["leafy_greens", "microgreens", "herbs", "fruiting"]`.
+- Every `*ByClass` map (`plantsPerTrayByClass`,
+  `transpiration.gPerPlantPerDayByClass`, `defaultFixtureClass.*ByClass`)
+  is `additionalProperties: false` with all four cropClass keys
+  required. Missing keys or stray keys fail the build.
+- Every template subobject (`footprintM`, `trayFormat`, `irrigation`,
+  `transpiration`, `defaultFixtureClass`, `defaultControllerClass`,
+  `requiredChannels`, `powerClassW`) is `additionalProperties: false`,
+  so device-identity fields (MAC, DMX universe, SwitchBot/Kasa/Modbus
+  deviceIds, cloud tenant IDs, firmware strings) cannot be introduced
+  without an explicit schema change.
+- `category`, `irrigation.type`, and each `defaultControllerClass.*.type`
+  are closed enums.
+
+To extend the file in a compatible way (new template category, new
+controller class, new field on an existing subobject), update the
+schema in `lib/schema-validator.js` first, then update this doc, then
+add the data. Contract changes that break existing readers (removing
+a field, adding a new required field, shrinking an enum) should bump
+`schemaVersion` following the process in
+[DATA_FORMAT_STANDARDS.md](../architecture/DATA_FORMAT_STANDARDS.md).
 
 `cropClasses` is the closed enum used as a key in every per-class map
 below. It is the **grow-system-side** vocabulary — chosen to describe

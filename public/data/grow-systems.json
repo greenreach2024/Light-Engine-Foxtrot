@@ -1,4 +1,5 @@
 {
+  "schemaVersion": "1.0.0",
   "version": "2026-04-18-v1",
   "description": "Class-level catalog of physical growing apparatuses. Templates declare class and required channel counts only; device identities live in iot-devices.json. Consumers are documented in docs/features/GROW_SYSTEMS_TEMPLATE_SCHEMA.md. Formula sources are in docs/features/VERTICAL_FARM_CALCULATOR_SPEC.md.",
   "cropClasses": ["leafy_greens", "microgreens", "herbs", "fruiting"],
