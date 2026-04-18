@@ -80,9 +80,14 @@ function findScheduleDay(days, currentDay) {
 
 function classifyStage(stageName, currentDay) {
   const stage = String(stageName || '').trim().toLowerCase();
+  // Order MUST match the UI's determineGroupStage()
+  // (public/views/nutrient-management.html around line 2399): earlyFlowering is
+  // tested before heavyFruiting so ambiguous names like "early fruit" or
+  // "heavy flowering" classify the same way on both sides. If the two diverge,
+  // reconcileRecipeNutrientTargets() will emit spurious drift alerts.
   if (currentDay <= 14) return 'establishment';
-  if (HEAVY_FRUITING_RX.test(stage)) return 'heavyFruiting';
   if (EARLY_FLOWERING_RX.test(stage)) return 'earlyFlowering';
+  if (HEAVY_FRUITING_RX.test(stage)) return 'heavyFruiting';
   if (FRUITING_STAGE_RX.test(stage)) return 'earlyFlowering';
   return 'vegetative';
 }
