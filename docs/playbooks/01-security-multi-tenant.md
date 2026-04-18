@@ -20,7 +20,7 @@ Every schema decision, route, and middleware in this repo must be compatible wit
 
 | Class | Examples | Isolation mechanism |
 |---|---|---|
-| **Farm-private** | `farm_users`, `wholesale_orders`, `payment_records`, `accounting_*`, `farm_inventory`, `products`, `delivery_orders`, `producer_accounts`, `farm_alerts`, POS transactions, Square OAuth tokens | PostgreSQL Row-Level Security + `farm_id` scoping + subdomain auth |
+| **Farm-private** | `farm_users`, `wholesale_orders`, `payment_records`, `accounting_*`, `farm_inventory`, `products`, `delivery_orders`, `producer_accounts`, `farm_alerts`, POS transactions, Square OAuth tokens | PostgreSQL Row-Level Security + `farm_id` scoping + JWT / `X-Farm-ID` / middleware-derived tenant context (subdomain-based resolution is **planned**, not live today — see §7) |
 | **Farm-owned operational** | `groups`, `rooms`, `schedules`, `devices`, `tray_runs`, `harvest_events`, `lot_records`, `farm_data` | `farm_id` scoping + farmStore per-farm Maps |
 | **Network-shared aggregates** | `crop_benchmarks`, `demand_signals`, `recipe_modifiers`, `risk_alerts`, `environment_benchmarks`, `pricing_intelligence` | Admin-only cross-farm views; `/api/network/*` |
 | **Research (governed sharing)** | `studies`, `datasets`, `recipe_versions`, `metadata_registry`, `data_dictionary_entries`, `grant_applications`, `grant_publications` | `farm_id` scoping + data-sharing agreements + ORCID-linked research roles |
@@ -148,7 +148,9 @@ Plan tiers are modeled in the feature flags registry (`config/feature-flags.js`)
 | `research` | Research workspace + G.W.E.N. |
 | (ad hoc) | Per-farm feature flags override tier defaults |
 
-**Known gap:** feature gate is intentionally **fail-open** when DB is unavailable (availability-first tradeoff). This is documented in `.github/RESEARCH_PLATFORM_AUDIT.md`; close before activating paid research tier to external customers.
+**Known gaps (from `.github/RESEARCH_PLATFORM_AUDIT.md`):**
+- **C1 (open):** `autoEnforceFeatures()` is applied in LE (`server-foxtrot.js`) but **not** in `greenreach-central/server.js`. A direct import was attempted and reverted because Central's deploy bundle excludes the LE `server/middleware/` path. The audit's resolution path is: (a) duplicate the middleware under `greenreach-central/middleware/`, (b) extract it to a shared package, or (c) add inline `requireFeature('research_workspace')` checks at each Central research-route mount. Today, direct `/api/research/*` calls on Central are only gated by `authMiddleware`, not by tier — do not activate the research tier externally until this is resolved.
+- **Secondary:** even when the gate is present, it is intentionally **fail-open** on DB outage (availability-first tradeoff). Close both issues before activating paid research tier to external customers.
 
 ## 9. Research platform governance (data sharing layer)
 

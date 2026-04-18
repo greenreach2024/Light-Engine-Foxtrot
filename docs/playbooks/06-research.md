@@ -139,7 +139,9 @@ Before remediation, **62 of 84** research endpoints skipped this check. All are 
 ### 7.4 Feature gating
 Research features are tier-locked (`research` tier). Farms without the tier should see the Research page disabled.
 
-**Known gap:** feature gate is fail-open on DB outage (see Playbook 01 §8). Close before activating paid research tier externally.
+**Known gaps (from `.github/RESEARCH_PLATFORM_AUDIT.md`):**
+- **C1 (open):** Central-side research feature enforcement is not in place. `autoEnforceFeatures()` is applied in LE but **not** in `greenreach-central/server.js` (the import was attempted and reverted because Central's deploy bundle excludes LE's `server/middleware/`). Until one of the audit's resolution paths lands — (a) duplicate the middleware in `greenreach-central/middleware/`, (b) extract to a shared package, or (c) add inline `requireFeature('research_workspace')` at each research-route mount — direct `/api/research/*` calls on Central are only gated by `authMiddleware`, not by tier. Do not activate the research tier externally until this is resolved.
+- **Secondary:** when enforcement is present, the gate is fail-open on DB outage (see Playbook 01 §8). Close both before activating paid research tier externally.
 
 ## 8. Data classification (recap)
 
@@ -199,7 +201,8 @@ PI finalizes results → POST /api/research/grants/publications
 ## 12. Known gaps / open items (from March 2026 audit)
 
 - RLS Phase B (FORCE) not yet applied to research tables
-- Feature gate fail-open on DB outage
+- Central-side research feature enforcement open (C1) — `autoEnforceFeatures()` not applied in `greenreach-central/server.js`; needs Central-local middleware or explicit `requireFeature()` guards
+- Feature gate fail-open on DB outage (secondary)
 - G.W.E.N. `execute_code` sandbox requires per-farm opt-in
 - Partner data-sharing agreements need UI parity (DB schema is complete; admin UI sparse)
 - Publication metrics (citations, impact) fetched manually; no automated service yet

@@ -164,7 +164,11 @@ This is actually **two tightly linked surfaces** that share a backend and the ma
 ```
 
 **Absolute rules** (from CONTRIBUTING.md and copilot-instructions.md):
-- LE and Central **share no runtime imports** across the boundary, with exactly three audited exceptions (the three AI route files: `assistant-chat.js`, `admin-assistant.js`, `admin-ops-agent.js`).
+- LE and Central **share no runtime imports** across the boundary as the default rule. A small set of explicitly audited exceptions exists today — treat this as the whitelist, do not add new ones without review:
+  - `server-foxtrot.js` imports `./greenreach-central/services/notification-store.js` (notification storage used by LE).
+  - `services/alternative-farm-service.js` and `lib/wholesale/reservation-manager.js` dynamically import `greenreach-central/services/networkFarmsStore.js` for wholesale/network farm lookup.
+  - Any additional whitelisted Central dependencies bundled into LE are documented in `.github/CLOUD_ARCHITECTURE.md`; that doc is the source of truth.
+- LE and Central must **not** cross-import each other's `routes/**`.
 - Two `public/` directories exist. **At runtime, LE's Express static stack serves `greenreach-central/public/` FIRST, then falls back to root `public/`** (`server-foxtrot.js` ~L25173–L25194). So for any file that exists in both trees, the Central copy is the effective source of truth at request time. The "dual-deploy file registry" rule is: edit `greenreach-central/public/` first, then mirror listed files into root `public/` — but Central's copy wins if they drift.
 - Never redirect UI page requests cross-origin between the two services — it breaks iframes, CSP, and HTTPS.
 
@@ -218,8 +222,10 @@ The product goal is explicit: **each Light Engine is operated by a unique user; 
 Farm context extraction priority (Central): JWT → `X-Farm-ID` header → subdomain slug (only when subdomain routing is activated per the multi-tenant architecture plan — NOT live today) → env default (`FARM_ID`).
 
 ### 6.3 Feature gates
-- Plan tiers: `full`, `inventory-only`, `research`, etc., enforced via `autoEnforceFeatures()` middleware.
-- **Known open risk (Apr 2026):** feature-gate is fail-open when DB is unavailable — acceptance is documented in `.github/RESEARCH_PLATFORM_AUDIT.md` as an availability-first tradeoff. Track and close when moving research tier GA.
+- Plan tiers: `full`, `inventory-only`, `research`, etc.
+- `autoEnforceFeatures()` middleware is applied in **LE** (`server-foxtrot.js`), but per `.github/RESEARCH_PLATFORM_AUDIT.md` (C1) it is **not** applied in `greenreach-central/server.js`, because Central's deploy bundle excludes the LE `server/middleware/` path and a direct import was attempted and reverted.
+- **Known open risk (C1, Apr 2026):** Central-side research feature enforcement is the unresolved blocker for activating the research tier externally. The audit's resolution path is one of: (a) duplicate the middleware inside `greenreach-central/middleware/`, (b) extract it to a shared package, or (c) add inline `requireFeature('research_workspace')` checks to each research route mount. Until one of those lands, direct `/api/research/*` calls on Central are gated only by `authMiddleware`, not by tier.
+- Secondary known risk: when enforcement is present, it is intentionally **fail-open** on DB outage (availability-first tradeoff, documented in the same audit). Close both issues before activating paid research tier to external customers.
 
 ### 6.4 Data-residency and secrets
 - All secrets in **Google Secret Manager** (`JWT_SECRET`, `ALLOYDB_PASSWORD`, `SQUARE_*`, `SWITCHBOT_*`, `SMTP_PASS`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GREENREACH_API_KEY`, `TOKEN_ENCRYPTION_KEY`).

@@ -65,38 +65,62 @@ Light-Engine-Foxtrot/
 ```
 
 ### 4.1 The no-cross-import rule
-- `server-foxtrot.js` → must not import from `greenreach-central/routes/**`
-- `greenreach-central/server.js` → must not import from `<repo>/routes/**`
-- Shared helpers go in `shared-libs/` (small and intentional)
+- `server-foxtrot.js` → must not import from `greenreach-central/routes/**`.
+- `greenreach-central/server.js` → must not import from `<repo>/routes/**`.
+- Known audited cross-boundary imports today (treat as the whitelist, do not add new ones without review):
+  - `server-foxtrot.js` imports `./greenreach-central/services/notification-store.js` (LE → Central service module).
+  - `services/alternative-farm-service.js` and `lib/wholesale/reservation-manager.js` dynamically import `greenreach-central/services/networkFarmsStore.js` (LE wholesale/network farm lookup).
+  - See also `.github/CLOUD_ARCHITECTURE.md` for any additional whitelisted Central dependencies bundled into LE.
+- There is **no** `shared-libs/` directory in this repo. If genuinely shared code is needed in the future, propose the extraction mechanism in a PR — do not assume a `shared-libs/` path exists.
 
-### 4.2 Dual-deploy file registry
-When the same file exists in both `public/` trees (e.g., `api-config.js`), it is listed in a **sync manifest** and PR review must confirm both copies are updated. Files not in the manifest must only exist in one tree.
+### 4.2 Dual-deploy files
+Some files exist in both `public/` trees (e.g. `api-config.js`). There is **no dedicated `sync-manifest.json`-style workflow** today. The operational rule is the one stated in Playbook 00 §4 and `.github/copilot-instructions.md`: at runtime LE serves `greenreach-central/public/` FIRST and only falls back to root `public/` (`server-foxtrot.js` ~L25173), so the Central copy is the effective source of truth. Edit `greenreach-central/public/` first; if a file is also deployed from root `public/`, update it in the same PR and call out the duplicate in the description so reviewers can check both copies. Central's Dockerfile also produces a generated `shared-public-data` artifact; do not hand-edit generated outputs.
 
 ## 5. Deploy commands
 
-### 5.1 Light Engine
+Production deploys are **image-based**: build + push to Artifact Registry, then point the Cloud Run service at the new image. Do **not** use `gcloud run deploy --source ...` for production — it conflicts with the image-based rollout discipline documented in `.github/CLOUD_ARCHITECTURE.md` and `.github/copilot-instructions.md`, and those canonical docs are the source of truth for release path. Deploys also require the explicit `APPROVED FOR DEPLOYMENT` user confirmation (see `.github/copilot-instructions.md`).
+
+Artifact Registry: `us-east1-docker.pkg.dev/project-5d00790f-13a9-4637-a40/greenreach` (images: `light-engine`, `greenreach-central`).
+
+### 5.1 Build and push images
 ```bash
-gcloud run deploy light-engine \
-  --source . \
-  --region us-east1 \
-  --project project-5d00790f-13a9-4637-a40 \
-  --allow-unauthenticated \
-  --set-env-vars NODE_ENV=production
+# ALWAYS use --platform linux/amd64 (Apple Silicon default is ARM64; Cloud Run requires amd64)
+
+# Central
+docker buildx build --platform linux/amd64 \
+  -t us-east1-docker.pkg.dev/project-5d00790f-13a9-4637-a40/greenreach/greenreach-central:latest \
+  --push ./greenreach-central/
+
+# Light Engine
+docker buildx build --platform linux/amd64 \
+  -t us-east1-docker.pkg.dev/project-5d00790f-13a9-4637-a40/greenreach/light-engine:latest \
+  --push .
 ```
 
-### 5.2 GreenReach Central
+### 5.2 Deploy the new image
 ```bash
-gcloud run deploy greenreach-central \
-  --source greenreach-central \
-  --region us-east1 \
-  --project project-5d00790f-13a9-4637-a40 \
-  --allow-unauthenticated \
-  --set-env-vars NODE_ENV=production
+gcloud run services update greenreach-central \
+  --region=us-east1 \
+  --image=us-east1-docker.pkg.dev/project-5d00790f-13a9-4637-a40/greenreach/greenreach-central:latest
+
+gcloud run services update light-engine \
+  --region=us-east1 \
+  --image=us-east1-docker.pkg.dev/project-5d00790f-13a9-4637-a40/greenreach/light-engine:latest
 ```
 
-### 5.3 Artifact Registry
-- Registry: `us-east1-docker.pkg.dev/project-5d00790f-13a9-4637-a40/greenreach`
-- Cloud Run `--source` builds push here automatically
+### 5.3 Env / secrets updates
+```bash
+# Safe env var update (creates new revision)
+gcloud run services update SERVICE_NAME --region=us-east1 --update-env-vars="KEY=value"
+
+# After rotating a secret version, force a new revision so the service picks it up
+gcloud run services update SERVICE_NAME --region=us-east1
+```
+
+### 5.4 Notes
+- Never deploy without `--platform linux/amd64`.
+- `gcloud run deploy --source ...` is **not** the production path; use the build → push → `services update` sequence above.
+- See `.github/DEPLOYMENT_CHECKLIST.md` for the full pre-deploy checklist.
 
 ## 6. Secrets management
 
@@ -126,7 +150,8 @@ All secrets live in **Google Secret Manager** and are injected to Cloud Run via 
 
 ## 8. Networking
 
-- VPC connector connects Central's Cloud Run to AlloyDB private IP
+- Both Cloud Run services use **Direct VPC egress (Gen2)** on `greenreach-vpc` to reach AlloyDB at private IP `10.87.0.2` (see `.github/CLOUD_ARCHITECTURE.md` §Networking, `.github/copilot-instructions.md`).
+- **No VPC connector is used.** The old connector has been deleted; do **not** create a new VPC connector or document one as part of the architecture. `.github/copilot-instructions.md` explicitly bans creating or using VPC connectors.
 - LE uses HTTPS egress to Central (public URL)
 - Cloud Run services are **public** (auth enforced in-app, not at ingress)
 - CORS allowlist (live today): `greenreachgreens.com`, `urbanyeild.ca`, `localhost`
