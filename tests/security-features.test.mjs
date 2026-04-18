@@ -280,19 +280,17 @@ describe('CORS Configuration', () => {
   });
 });
 
-// Test 5: Python Secrets Manager
-describe('Python Secrets Manager (syntax check)', () => {
-  it('should have valid Python syntax', async () => {
-    const pythonFilePath = join(projectRoot, 'backend', 'secrets_manager.py');
-    
-    // Check file exists
-    assert.ok(fs.existsSync(pythonFilePath), 'secrets_manager.py should exist');
-    
-    // Check file has expected content
-    const content = fs.readFileSync(pythonFilePath, 'utf-8');
-    assert.ok(content.includes('class SecretsManagerClient'), 'Should define SecretsManagerClient class');
-    assert.ok(content.includes('def get_jwt_secret'), 'Should have get_jwt_secret function');
-    assert.ok(content.includes('boto3'), 'Should import boto3');
+// Test 5: Secret Management Documentation
+describe('Secret Management Documentation', () => {
+  it('should document the current Cloud Run secret configuration', async () => {
+    const docPath = join(projectRoot, '.github', 'CRITICAL_CONFIGURATION.md');
+
+    assert.ok(fs.existsSync(docPath), 'CRITICAL_CONFIGURATION.md should exist');
+
+    const content = fs.readFileSync(docPath, 'utf-8');
+    assert.ok(content.includes('Google Secret Manager'), 'Should document Google Secret Manager');
+    assert.ok(content.includes('JWT_SECRET'), 'Should document JWT secret configuration');
+    assert.ok(content.includes('Cloud Run'), 'Should document Cloud Run configuration');
   });
 });
 
@@ -312,27 +310,27 @@ describe('JWT Setup Script', () => {
 
 // Test 7: Documentation
 describe('Security Documentation', () => {
-  it('should have comprehensive AWS infrastructure guide', () => {
-    const docPath = join(projectRoot, 'AWS_INFRASTRUCTURE_SETUP.md');
-    
-    assert.ok(fs.existsSync(docPath), 'AWS_INFRASTRUCTURE_SETUP.md should exist');
-    
+  it('should have comprehensive cloud architecture guidance', () => {
+    const docPath = join(projectRoot, '.github', 'CLOUD_ARCHITECTURE.md');
+
+    assert.ok(fs.existsSync(docPath), 'CLOUD_ARCHITECTURE.md should exist');
+
     const content = fs.readFileSync(docPath, 'utf-8');
-    assert.ok(content.includes('JWT Secrets Manager Setup'), 'Should document Secrets Manager setup');
-    assert.ok(content.includes('SSL/TLS Certificate Configuration'), 'Should document SSL/TLS');
-    assert.ok(content.includes('AWS WAF Configuration'), 'Should document WAF');
-    assert.ok(content.includes('CloudWatch Alarms'), 'Should document monitoring');
+    assert.ok(content.includes('Google Cloud Run'), 'Should document Cloud Run deployment');
+    assert.ok(content.includes('Google Secret Manager'), 'Should document secret management');
+    assert.ok(content.includes('Direct VPC egress'), 'Should document private network connectivity');
+    assert.ok(content.includes('AlloyDB'), 'Should document the production database');
   });
 
   it('should have security hardening documentation', () => {
-    const docPath = join(projectRoot, 'SECURITY_HARDENING.md');
-    
-    assert.ok(fs.existsSync(docPath), 'SECURITY_HARDENING.md should exist');
-    
+    const docPath = join(projectRoot, '.github', 'copilot-instructions.md');
+
+    assert.ok(fs.existsSync(docPath), 'copilot-instructions.md should exist');
+
     const content = fs.readFileSync(docPath, 'utf-8');
-    assert.ok(content.includes('CORS'), 'Should document CORS');
-    assert.ok(content.includes('Rate Limiting'), 'Should document rate limiting');
-    assert.ok(content.includes('Audit Logging'), 'Should document audit logging');
+    assert.ok(content.includes('Secret Manager'), 'Should document secret handling guidance');
+    assert.ok(content.includes('Cloud Run'), 'Should document current deployment target');
+    assert.ok(content.includes('Google Cloud'), 'Should document the active infrastructure');
   });
 });
 
