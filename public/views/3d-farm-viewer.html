@@ -761,9 +761,19 @@
       }
       const entry = matchKey ? crops[matchKey] : null;
       const resolvedName = matchKey || raw;
-      const planId = (entry && Array.isArray(entry.planIds) && entry.planIds[0])
-        ? entry.planIds[0]
-        : ('crop-' + resolvedName.toLowerCase().replace(/\s+/g, '-'));
+      // Most entries carry plan IDs in a `planIds` array, but a handful of
+      // legacy rows (e.g. "Breen Pelleted Organic", "Truchas Pelleted Organic",
+      // "Seaside F1 Spinach (baby leaf)") still use the singular `planId`
+      // field. Honour both before slugifying, so groups assigned those crops
+      // land with the registry's canonical planId.
+      let planId = '';
+      if (entry && Array.isArray(entry.planIds) && entry.planIds[0]) {
+        planId = entry.planIds[0];
+      } else if (entry && typeof entry.planId === 'string' && entry.planId.trim()) {
+        planId = entry.planId.trim();
+      } else {
+        planId = 'crop-' + resolvedName.toLowerCase().replace(/\s+/g, '-');
+      }
       return { resolvedName, planId };
     }
 
