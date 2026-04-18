@@ -33,8 +33,17 @@ Formula references point back to
 ```
 
 `cropClasses` is the closed enum used as a key in every per-class map
-below. Values align with `crop-registry.json → crops[].nutrientProfile`
-so the calculator can resolve a crop to its class.
+below. It is the **grow-system-side** vocabulary — chosen to describe
+the physical apparatus (which template suits which class of crop) and
+to key the load-math inputs (transpiration / PPFD / photoperiod per
+class).
+
+It is **not** the same vocabulary as
+`crop-registry.json → crops[].nutrientProfile`, which describes fertigation
+recipes. Those overlap but do not coincide — see the crop-class
+glossary below for the explicit mapping. The planned calculator library
+is responsible for translating a crop's `nutrientProfile` into a
+`cropClass` before reading any per-class fields in this file.
 
 ---
 
@@ -134,15 +143,35 @@ capacity and to feed OPEX.
 
 ## Crop class glossary
 
-| Class | Example crops | Nutrient profile (crop-registry) |
-|---|---|---|
-| `leafy_greens` | Butter lettuce, bibb, pak choi, kale (baby) | `leafy_greens` |
-| `microgreens` | Sunflower, radish, pea shoots | `microgreens` |
-| `herbs` | Basil, cilantro, mint | `herbs` |
-| `fruiting` | Strawberry, tomato, pepper | `fruiting` |
+`cropClass` is the grow-system-side vocabulary. `nutrientProfile` is the
+fertigation vocabulary in `public/data/crop-registry.json`. These
+overlap but are not identical and must be translated by the calculator
+library, not by direct key lookup.
 
-The registry may grow, but class additions must be coordinated with the
-calculator library so every per-class map in this file stays complete.
+| `cropClass` (grow-systems) | Example crops | `nutrientProfile` (crop-registry) it maps from |
+|---|---|---|
+| `leafy_greens` | Butter lettuce, bibb, spinach, pak choi (baby leaf) | `leafy_greens`; also crops with no `nutrientProfile` that resolve to a leafy lettuce (e.g. `Breen Pelleted Organic`, `Truchas Pelleted Organic`, `Seaside F1 Spinach`) |
+| `leafy_greens` | Kale, mustard, arugula, bok choi (mature heads) | `brassicas` — mapped into `leafy_greens` because the physical apparatus and PPFD / transpiration envelope are the same as lettuce for our template set |
+| `herbs` | Basil, cilantro, mint, parsley | `herbs_culinary` — translated from the registry's fertigation name |
+| `microgreens` | Sunflower shoots, radish shoots, pea shoots, sprouting brassicas | **Not yet represented in `crop-registry.json`.** The registry will need a `microgreens` profile added (or an explicit per-crop override) before the calculator can resolve microgreen runs. |
+| `fruiting` | Strawberry, tomato, pepper | **Not yet represented in `crop-registry.json`.** Same gap — a `fruiting` profile (or per-crop override) has to land before the calculator can size a fruiting room from registry data alone. |
+
+Invariants that follow from this mapping:
+
+- Every template still has to populate **all four** `cropClass` keys in
+  `plantsPerTrayByClass`, `transpiration.gPerPlantPerDayByClass`, and
+  each `defaultFixtureClass.*ByClass` map, even when the template's
+  `suitableCropClasses` excludes one. This keeps the calculator safe
+  from missing-key errors if a user forces an unsupported class onto a
+  template.
+- The calculator library owns the `nutrientProfile → cropClass`
+  translation table. When new fertigation profiles are added to
+  `crop-registry.json`, the translation table — not this file — is
+  the place to extend them. The `cropClasses` enum here should change
+  rarely.
+- Adding a new `cropClass` to this enum is a breaking change: every
+  template must add the corresponding entries to every `*ByClass` map
+  in the same PR.
 
 ---
 
