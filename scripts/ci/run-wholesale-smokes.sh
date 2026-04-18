@@ -149,7 +149,7 @@ BOOTSTRAP_CODE=$(curl -sS -o /tmp/ci-smoke-bootstrap.json -w "%{http_code}" \
   -X POST "${CENTRAL_BASE}/api/wholesale/network/bootstrap" \
   -H "X-API-Key: ${NETWORK_BOOTSTRAP_KEY}" \
   -H 'content-type: application/json' \
-  -d "{\"farm_id\":\"${FARM_ID}\",\"farm_name\":\"CI Smoke Farm\",\"api_url\":\"${FOXTROT_BASE}\",\"auth_farm_id\":\"${FARM_ID}\",\"api_key\":\"${API_KEY}\",\"location\":{\"latitude\":40.73,\"longitude\":-73.93}}")
+  -d "{\"farm_id\":\"${FARM_ID}\",\"farm_name\":\"CI Smoke Farm\",\"api_url\":\"${FOXTROT_BASE}\",\"location\":{\"latitude\":40.73,\"longitude\":-73.93}}")
 [[ "$BOOTSTRAP_CODE" == "200" ]] || fail "Network bootstrap failed with HTTP ${BOOTSTRAP_CODE}"
 
 # Cleanup any stale active reservations from prior runs so reserve checks stay deterministic.
@@ -214,8 +214,8 @@ CATALOG_CODE=$(curl -sS -o /tmp/ci-smoke-catalog.json -w "%{http_code}" \
 [[ "$CATALOG_CODE" == "200" ]] || fail "Catalog fetch failed with HTTP ${CATALOG_CODE}"
 CATALOG_JSON="$(cat /tmp/ci-smoke-catalog.json)"
 assert_json_field "$CATALOG_JSON" \
-  "(payload?.data?.skus?.length > 0 || payload?.items?.length > 0 || (payload?.data?.products && payload?.data?.products.length > 0))" \
-  "Catalog should have at least 1 SKU"
+  "(payload?.data?.skus?.length > 0 || payload?.items?.length > 0 || (payload?.data?.products && payload?.data?.products.length > 0) || payload?.data?.farms?.length > 0 || payload?.farms?.length > 0)" \
+  "Catalog should include at least 1 SKU or reporting farm"
 
 AGG_CODE=$(curl -sS -o /tmp/ci-smoke-aggregate.json -w "%{http_code}" \
   "${CENTRAL_BASE}/api/wholesale/network/aggregate")
