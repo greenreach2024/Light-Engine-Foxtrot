@@ -789,7 +789,7 @@
     }
 
     .checklist-item.completed .checkbox::after {
-      content: '[OK]';
+      content: '+';
       position: absolute;
       top: 50%;
       left: 50%;
@@ -2341,7 +2341,7 @@
         
         document.getElementById('pairingResult').innerHTML = `
           <div style="text-align: center; padding: 2rem;">
-            <div style="font-size: 4rem; color: #10b981; margin-bottom: 1rem;">[OK]</div>
+            <div style="font-size: 4rem; color: #10b981; margin-bottom: 1rem;">+</div>
             <div style="font-size: 1.5rem; font-weight: 700; color: #10b981; margin-bottom: 0.5rem;">Paired Successfully!</div>
             <div style="font-size: 1.1rem; color: #cbd5e1;">${fName}</div>
             <div style="color: #64748b; margin-top: 1rem; font-size: 0.9rem;">Farm ID: ${fId}</div>
@@ -2357,7 +2357,7 @@
         console.error('Pairing error:', error);
         document.getElementById('pairingResult').innerHTML = `
           <div style="color: #f87171; padding: 1rem; background: rgba(239, 68, 68, 0.1); border-radius: 14px;">
-            [WARN]️ ${error.message || 'Pairing failed. Please try again.'}
+            [WARN] ${error.message || 'Pairing failed. Please try again.'}
           </div>
         `;
         
@@ -2793,7 +2793,7 @@
         
         document.getElementById('scanResult').innerHTML = `
           <div style="text-align: center; padding: 1.5rem; background: rgba(16, 185, 129, 0.1); border: 2px solid #10b981; border-radius: 12px;">
-            <div style="font-size: 2rem; color: #10b981; margin-bottom: 0.5rem;">[OK]</div>
+            <div style="font-size: 2rem; color: #10b981; margin-bottom: 0.5rem;">+</div>
             <div style="font-weight: 700; color: #10b981; margin-bottom: 0.5rem;">Tray Scanned</div>
             <div style="color: #cbd5e1; margin-bottom: 1rem;">Tray: ${trayId}</div>
             <div style="font-size: 1.1rem; color: #f1f5f9;">Now scan the position QR code</div>
@@ -2833,7 +2833,7 @@
         if (response.ok) {
           document.getElementById('scanResult').innerHTML = `
             <div style="text-align: center; padding: 2rem;">
-              <div style="font-size: 3rem; color: #10b981; margin-bottom: 1rem;">[OK]</div>
+              <div style="font-size: 3rem; color: #10b981; margin-bottom: 1rem;">+</div>
               <div style="font-size: 1.5rem; font-weight: 700; color: #10b981; margin-bottom: 0.5rem;">Move Complete</div>
               <div style="font-size: 1.1rem; color: #cbd5e1;">Tray ${quickMoveTrayId} → Position ${positionCode}</div>
               <button onclick="closeScanModal()" class="button button-primary" style="margin-top: 1.5rem;">Done</button>
@@ -2850,7 +2850,7 @@
         console.error('Quick move error:', error);
         document.getElementById('scanResult').innerHTML = `
           <div style="text-align: center; padding: 2rem; color: #f87171;">
-            <div style="font-size: 3rem; margin-bottom: 1rem;">[WARN]</div>
+            <div style="font-size: 3rem; margin-bottom: 1rem;">!</div>
             <div style="font-size: 1.3rem;">Move Failed</div>
             <button onclick="closeScanModal()" class="button button-secondary" style="margin-top: 1.5rem;">Close</button>
           </div>
@@ -2905,7 +2905,7 @@
               </div>
               <div style="text-align: right;">
                 <div style="color: ${textColor}; font-weight: 700; font-size: 1.1rem;">
-                  ${isUrgent ? '[WARN]️ URGENT' : Math.floor(hoursRemaining) + 'h left'}
+                  ${isUrgent ? '[WARN] URGENT' : Math.floor(hoursRemaining) + 'h left'}
                 </div>
                 <div style="color: #94a3b8; font-size: 0.9rem;">Deadline: ${deadlineStr}</div>
               </div>
@@ -3378,7 +3378,7 @@
         if (response.ok) {
           document.getElementById('orderVerifyContent').innerHTML = `
             <div style="text-align: center; padding: 3rem;">
-              <div style="font-size: 4rem; color: #10b981; margin-bottom: 1rem;">[OK]</div>
+              <div style="font-size: 4rem; color: #10b981; margin-bottom: 1rem;">+</div>
               <h3 style="color: #10b981; margin-bottom: 1rem;">Order Verified</h3>
               <p style="color: #cbd5e1;">Order ${orderId} is ready for pickup</p>
               <button onclick="closeOrderVerifyModal()" class="button button-primary" style="margin-top: 2rem;">Close</button>
@@ -4900,7 +4900,7 @@
       const orderCountEl = document.getElementById('orderCount');
       
       if (urgentCount > 0) {
-        urgentIndicator.textContent = `[WARN]️ ${urgentCount} URGENT`;
+        urgentIndicator.textContent = `[WARN] ${urgentCount} URGENT`;
         urgentIndicator.style.display = 'block';
         priorityCard.classList.add('urgent-pulse');
         orderCountEl.style.color = '#ef4444';
@@ -4923,7 +4923,7 @@
             <div class="order-header">
               <div class="order-id">${order.sub_order_id || order.order_id}</div>
               <div class="order-deadline">
-                ${isUrgent ? '[WARN]️ ' : ''}${Math.floor(hoursRemaining)}h remaining
+                ${isUrgent ? '[WARN] ' : ''}${Math.floor(hoursRemaining)}h remaining
               </div>
             </div>
             <div class="order-buyer">${order.buyer_name || 'Buyer'}</div>
@@ -5158,7 +5158,7 @@
         if (weighInTray) {
           scanResult.innerHTML = `
             <div style="text-align: center; padding: 1.5rem;">
-              <div style="font-size: 2rem; color: #10b981; margin-bottom: 0.5rem;">[OK]</div>
+              <div style="font-size: 2rem; color: #10b981; margin-bottom: 0.5rem;">+</div>
               <div style="font-size: 1.3rem; font-weight: 700; color: #10b981; margin-bottom: 1rem;">
                 ${successful} trays harvested${failed > 0 ? `, ${failed} failed` : ''}
               </div>
@@ -5170,7 +5170,7 @@
                 margin-bottom: 1rem;
               ">
                 <div style="font-size: 1.1rem; font-weight: 700; color: #f59e0b; margin-bottom: 0.5rem;">
-                  [WEIGH]️ Weigh-In Selected
+                  [WEIGH] Weigh-In Selected
                 </div>
                 <div style="font-size: 0.95rem; color: #cbd5e1;">
                   Tray <strong>${weighInTray.trayRunId}</strong> (Lot: ${weighInTray.lotCode}) has been selected for a full weigh-in.
@@ -5183,14 +5183,14 @@
                   border: none; border-radius: 12px; padding: 0.75rem 2rem;
                   font-size: 1.1rem; font-weight: 700; color: white; cursor: pointer;
                 "
-              >[WEIGH]️ Record Weight</button>
+              >[WEIGH] Record Weight</button>
               <button onclick="closeScanModal()" class="button" style="margin-top: 0.75rem;">Skip & Done</button>
             </div>
           `;
         } else {
           scanResult.innerHTML = `
           <div style="text-align: center; padding: 2rem;">
-            <div style="font-size: 3rem; color: #10b981; margin-bottom: 1rem;">[OK]</div>
+            <div style="font-size: 3rem; color: #10b981; margin-bottom: 1rem;">+</div>
             <div style="font-size: 1.5rem; font-weight: 700; color: #10b981; margin-bottom: 1rem;">
               Batch Harvest Complete
             </div>
@@ -5320,7 +5320,7 @@
           
           document.getElementById('scanResult').innerHTML = `
             <div style="text-align: center; padding: 1.5rem; background: rgba(16, 185, 129, 0.1); border: 2px solid #10b981; border-radius: 12px;">
-              <div style="font-size: 2rem; color: #10b981; margin-bottom: 0.5rem;">[OK]</div>
+              <div style="font-size: 2rem; color: #10b981; margin-bottom: 0.5rem;">+</div>
               <div style="font-weight: 700; color: #10b981; margin-bottom: 0.5rem;">Tray Added</div>
               <div style="color: #cbd5e1;">Tray ${decodedText}</div>
               <div style="color: #94a3b8; font-size: 0.9rem; margin-top: 0.5rem;">Total: ${batchHarvestTrays.length} trays</div>
@@ -5334,7 +5334,7 @@
         } else {
           document.getElementById('scanResult').innerHTML = `
             <div style="text-align: center; padding: 1.5rem; background: rgba(245, 158, 11, 0.1); border: 2px solid #f59e0b; border-radius: 12px;">
-              <div style="font-size: 2rem; color: #f59e0b; margin-bottom: 0.5rem;">[WARN]</div>
+              <div style="font-size: 2rem; color: #f59e0b; margin-bottom: 0.5rem;">!</div>
               <div style="font-weight: 700; color: #f59e0b; margin-bottom: 0.5rem;">Already Scanned</div>
               <div style="color: #cbd5e1;">Tray ${decodedText} is already in the batch</div>
             </div>
@@ -5499,7 +5499,7 @@
         if (Object.keys(harvestGroups).length === 0) {
           html += `
             <div style="text-align: center; padding: 3rem; color: #64748b;">
-              <div style="font-size: 3rem; margin-bottom: 1rem; opacity: 0.5;">[OK]</div>
+              <div style="font-size: 3rem; margin-bottom: 1rem; opacity: 0.5;">+</div>
               <div style="font-size: 1.3rem;">Nothing due soon</div>
             </div>
           `;
@@ -5554,7 +5554,7 @@
         console.error('Error loading inventory:', error);
         container.innerHTML = `
           <div style="text-align: center; padding: 3rem; color: #f87171;">
-            <div style="font-size: 3rem; margin-bottom: 1rem;">[WARN]</div>
+            <div style="font-size: 3rem; margin-bottom: 1rem;">!</div>
             <div style="font-size: 1.3rem;">Failed to load inventory</div>
           </div>
         `;
@@ -5692,7 +5692,7 @@
         // Show target weight info if assigned
         const weightInfo = data.target_weight_oz
           ? `<div style="color: #f1f5f9; font-size: 0.9rem; margin-top: 0.5rem;">
-               [WEIGH]️ Target: ${data.target_weight_oz} oz/plant
+               [WEIGH] Target: ${data.target_weight_oz} oz/plant
                (${data.target_weight_source === 'benchmark' ? 'verified from weigh-ins' : 'from tray format'})
              </div>`
           : '';
@@ -5700,7 +5700,7 @@
         const scanResult = document.getElementById('scanResult');
         scanResult.innerHTML = `
           <div style="text-align: center; padding: 2rem;">
-            <div style="font-size: 3rem; color: #10b981;">[OK]</div>
+            <div style="font-size: 3rem; color: #10b981;">+</div>
             <div style="font-size: 1.5rem; font-weight: 700; color: #10b981; margin: 0.5rem 0;">Seeding Recorded</div>
             <div style="color: #cbd5e1;">${crop}${document.getElementById('seedVariety').value ? ' (' + document.getElementById('seedVariety').value + ')' : ''}</div>
             ${weightInfo}
@@ -5793,7 +5793,7 @@
         const scanResult = document.getElementById('scanResult');
         scanResult.innerHTML = `
           <div style="text-align: center; padding: 2rem; color: #ef4444;">
-            <div style="font-size: 2rem; margin-bottom: 1rem;">[ERR]</div>
+            <div style="font-size: 2rem; margin-bottom: 1rem;">x</div>
             <div style="font-size: 1.3rem; font-weight: 700; margin-bottom: 0.5rem;">
               Harvest Failed
             </div>
@@ -5811,7 +5811,7 @@
       const scanResult = document.getElementById('scanResult');
       scanResult.innerHTML = `
         <div style="text-align: center; padding: 2rem;">
-          <div style="font-size: 3rem; color: #10b981; margin-bottom: 1rem;">[OK]</div>
+          <div style="font-size: 3rem; color: #10b981; margin-bottom: 1rem;">+</div>
           <div style="font-size: 1.5rem; font-weight: 700; color: #10b981; margin-bottom: 0.5rem;">
             Harvest Recorded
           </div>
@@ -5876,7 +5876,7 @@
 
         statusEl.textContent = '[OK] Label sent to thermal printer.';
       } catch (error) {
-        statusEl.textContent = '[WARN]️ Auto-print failed. Use "Print Harvest Label" to retry.';
+        statusEl.textContent = '[WARN] Auto-print failed. Use "Print Harvest Label" to retry.';
         console.warn('[Print] Harvest auto-print failed:', error.message);
       }
     }
@@ -5889,7 +5889,7 @@
       const scanResult = document.getElementById('scanResult');
       scanResult.innerHTML = `
         <div style="text-align: center; padding: 1.5rem;">
-          <div style="font-size: 2.5rem; margin-bottom: 0.75rem;">[WEIGH]️</div>
+          <div style="font-size: 2.5rem; margin-bottom: 0.75rem;">=</div>
           <div style="font-size: 1.4rem; font-weight: 700; color: #f59e0b; margin-bottom: 0.5rem;">
             Weigh-In Required
           </div>
@@ -5970,7 +5970,7 @@
                 min-width: 160px;
               "
             >
-              [WEIGH]️ Record Weight
+              [WEIGH] Record Weight
             </button>
             <button
               onclick="skipWeighIn('${trayRunId}', ${JSON.stringify(harvestData).replace(/'/g, "\\'")})"
@@ -6079,7 +6079,7 @@
 
         scanResult.innerHTML = `
           <div style="text-align: center; padding: 1.5rem;">
-            <div style="font-size: 2.5rem; color: #10b981; margin-bottom: 0.5rem;">[WEIGH]️ [OK]</div>
+            <div style="font-size: 2.5rem; color: #10b981; margin-bottom: 0.5rem;">[WEIGH] [OK]</div>
             <div style="font-size: 1.4rem; font-weight: 700; color: #10b981; margin-bottom: 0.5rem;">
               Weigh-In Recorded
             </div>
@@ -6131,7 +6131,7 @@
         console.error('Weigh-in error:', error);
         scanResult.innerHTML = `
           <div style="text-align: center; padding: 2rem; color: #ef4444;">
-            <div style="font-size: 2rem;">[ERR]</div>
+            <div style="font-size: 2rem;">x</div>
             <div style="font-size: 1.2rem; font-weight: 700; margin: 0.5rem 0;">Weigh-In Failed</div>
             <div style="font-size: 1rem;">${error.message}</div>
             <button onclick="closeScanModal()" class="button" style="margin-top: 1rem;">Close</button>
@@ -6780,7 +6780,7 @@
         <!-- Help Text -->
         <div style="margin-top: 1.5rem; padding: 1rem; background: rgba(250, 204, 21, 0.1); border-radius: 12px; border-left: 4px solid #fbbf24;">
           <div style="display: flex; align-items: flex-start; gap: 0.75rem;">
-            <div style="font-size: 1.5rem; line-height: 1;">[INFO]</div>
+            <div style="font-size: 1.5rem; line-height: 1;">*</div>
             <div>
               <div style="color: #fbbf24; font-weight: 700; margin-bottom: 0.25rem; font-size: 0.95rem;">Need Help?</div>
               <div style="color: #cbd5e1; font-size: 0.9rem; line-height: 1.5;">
@@ -6862,7 +6862,7 @@
       const resultDiv = document.getElementById('manualPairingResult');
       
       if (!code) {
-        resultDiv.innerHTML = '<div style="color: #f87171; padding: 1rem; background: rgba(239, 68, 68, 0.1); border-radius: 14px; text-align: center;">[WARN]️ Please enter a pairing code</div>';
+        resultDiv.innerHTML = '<div style="color: #f87171; padding: 1rem; background: rgba(239, 68, 68, 0.1); border-radius: 14px; text-align: center;">[WARN] Please enter a pairing code</div>';
         resultDiv.style.display = 'block';
         return;
       }
@@ -6873,7 +6873,7 @@
       try {
         await onPairingScanSuccess(code);
       } catch (error) {
-        resultDiv.innerHTML = `<div style="color: #f87171; padding: 1rem; background: rgba(239, 68, 68, 0.1); border-radius: 14px; text-align: center;">[WARN]️ ${error.message || 'Invalid pairing code'}</div>`;
+        resultDiv.innerHTML = `<div style="color: #f87171; padding: 1rem; background: rgba(239, 68, 68, 0.1); border-radius: 14px; text-align: center;">[WARN] ${error.message || 'Invalid pairing code'}</div>`;
       }
     }
   </script> -->

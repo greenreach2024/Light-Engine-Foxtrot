@@ -5,7 +5,7 @@
     { "id": "nutrients", "name": "Nutrients & Fertilizers", "icon": "🧪", "sortOrder": 1 },
     { "id": "seeds", "name": "Seeds & Propagation", "icon": "🌱", "sortOrder": 2 },
     { "id": "growing-media", "name": "Growing Media & Substrates", "icon": "🌿", "sortOrder": 3 },
-    { "id": "lighting", "name": "Lighting & Fixtures", "icon": "[INFO]", "sortOrder": 4 },
+    { "id": "lighting", "name": "Lighting & Fixtures", "icon": "💡", "sortOrder": 4 },
     { "id": "equipment", "name": "Equipment & Hardware", "icon": "🔧", "sortOrder": 5 },
     { "id": "pumps", "name": "Pumps & Plumbing", "icon": "💧", "sortOrder": 6 },
     { "id": "hvac", "name": "HVAC & Climate Control", "icon": "🌡️", "sortOrder": 7 },

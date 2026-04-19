@@ -7194,7 +7194,7 @@ async function executeBuildStockGroups() {
 
   if (created === 0) {
     if (typeof showToast === 'function') {
-      showToast({ title: 'No Groups Created', msg: `All ${count} group names already exist.`, kind: 'warn', icon: '[WARN]️' });
+      showToast({ title: 'No Groups Created', msg: `All ${count} group names already exist.`, kind: 'warn', icon: '[WARN]' });
     }
     return { created: 0, skipped };
   }

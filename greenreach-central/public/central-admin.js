@@ -3538,7 +3538,7 @@ async function viewZoneDetail(farmId, roomId, zoneId) {
         const title = document.getElementById('zone-detail-title');
         if (title) {
             title.innerHTML = `
-                <span style="color: var(--accent-red);">[WARN]️ Error Loading Zone Data</span>
+                <span style="color: var(--accent-red);">[WARN] Error Loading Zone Data</span>
                 <div style="font-size: 14px; font-weight: normal; color: var(--text-secondary); margin-top: 8px;">
                     ${error.message || 'Failed to load zone information. Check console for details.'}
                 </div>
@@ -6285,7 +6285,7 @@ async function showFarmLogs() {
                                 🔌 Device Connections (${logs.filter(l => l.type === 'device_connection').length})
                             </button>
                             <button class="log-filter-btn" onclick="filterLogs('warning')" data-filter="warning">
-                                [WARN]️ Errors & Warnings (${logs.filter(l => l.level === 'warning' || l.level === 'error').length})
+                                [WARN] Errors & Warnings (${logs.filter(l => l.level === 'warning' || l.level === 'error').length})
                             </button>
                             <button class="log-filter-btn" onclick="filterLogs('user_activity')" data-filter="user_activity">
                                 👤 User Activity (${logs.filter(l => l.type === 'user_activity').length})
@@ -6424,7 +6424,7 @@ function generateLogsRows(logs) {
 function getLevelIcon(level) {
     switch (level) {
         case 'error': return '🔴';
-        case 'warning': return '[WARN]️';
+        case 'warning': return '[WARN]';
         case 'info': return '✅';
         default: return '📝';
     }
@@ -8569,7 +8569,7 @@ async function loadFarmEnvironmentalData(farmId, farmData) {
             // Fallback to basic insights if AI fails
             document.getElementById('env-insights').innerHTML = `
                 <div class="metric-row">
-                    <div class="metric-label">[WARN]️ AI Insights Unavailable</div>
+                    <div class="metric-label">[WARN] AI Insights Unavailable</div>
                     <div class="metric-value" style="color: var(--text-secondary);">${escapeHtml(aiError.message)}</div>
                 </div>
                 <div class="metric-row">
@@ -9927,7 +9927,7 @@ async function resetUserPassword(userId, userEmail) {
         const tempPassword = data.temp_password;
         const userInfo = data.user || {};
         
-        alert(`✅ Password Reset Successful!\n\nUser: ${userInfo.email || userEmail}\nFarm ID: ${userInfo.farm_id || 'N/A'}\n\nTemporary Password:\n${tempPassword}\n\n[WARN]️ Copy this password now! The user must use this to log in at:\nhttps://greenreachgreens.com/login.html`);
+        alert(`✅ Password Reset Successful!\n\nUser: ${userInfo.email || userEmail}\nFarm ID: ${userInfo.farm_id || 'N/A'}\n\nTemporary Password:\n${tempPassword}\n\n[WARN] Copy this password now! The user must use this to log in at:\nhttps://greenreachgreens.com/login.html`);
         
     } catch (error) {
         console.error('Error resetting password:', error);
@@ -10617,7 +10617,7 @@ document.addEventListener('DOMContentLoaded', () => {
             openAddUserModal();
         });
     } else {
-        console.warn('📌 [DOM] [WARN]️ add-user-btn element not found!');
+        console.warn('📌 [DOM] [WARN] add-user-btn element not found!');
     }
 
     const usersTbody = document.getElementById('users-tbody');
@@ -10649,7 +10649,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     } else {
-        console.warn('📌 [DOM] [WARN]️ users-tbody element not found!');
+        console.warn('📌 [DOM] [WARN] users-tbody element not found!');
     }
     
     console.log('📌 [DOM] User management event listeners setup complete');

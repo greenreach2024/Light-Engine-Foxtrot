@@ -98,7 +98,7 @@
     }
 
     .step.completed .step-circle::after {
-      content: '[OK]';
+      content: '+';
     }
 
     .step-label {
@@ -282,15 +282,15 @@
     }
 
     .validation-item.success::before {
-      content: '[OK]';
+      content: '+';
     }
 
     .validation-item.error::before {
-      content: '[ERR]';
+      content: 'x';
     }
 
     .validation-item.warning::before {
-      content: '[WARN]';
+      content: '!';
     }
 
     .progress-bar {
@@ -504,7 +504,7 @@
         <div class="wizard-step" data-step="4">
           <h2>Migration Complete!</h2>
 
-          <div class="completion-icon">[OK]</div>
+          <div class="completion-icon">+</div>
 
           <div class="success-box info-box">
             <h3>Successfully Migrated</h3>

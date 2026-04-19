@@ -2559,7 +2559,7 @@ function persistIotDevices(devices) {
         const saved = await verifyResp.json();
         const savedArr = Array.isArray(saved) ? saved : (saved.devices || []);
         if (savedArr.length !== payload.length) {
-          console.error('[persistIotDevices] [WARN]️ VERIFICATION MISMATCH! Saved:', payload.length, 'Read back:', savedArr.length);
+          console.error('[persistIotDevices] [WARN] VERIFICATION MISMATCH! Saved:', payload.length, 'Read back:', savedArr.length);
         } else {
           console.log('[persistIotDevices] ✅ Verified: read back', savedArr.length, 'devices from server');
         }
@@ -2575,10 +2575,10 @@ function persistIotDevices(devices) {
       console.warn('[persistIotDevices] Failed to dispatch iot-devices-updated:', err);
     }
   }).catch(err => {
-    console.error('[IoT] [WARN]️ Failed to persist devices to server:', err);
+    console.error('[IoT] [WARN] Failed to persist devices to server:', err);
     // Show user-visible warning since devices may not survive navigation
     if (typeof showToast === 'function') {
-      showToast({ title: 'Save Warning', msg: 'IoT devices saved locally but server save failed. They may not persist after page reload.', kind: 'warn', icon: '[WARN]️', duration: 8000 });
+      showToast({ title: 'Save Warning', msg: 'IoT devices saved locally but server save failed. They may not persist after page reload.', kind: 'warn', icon: '[WARN]', duration: 8000 });
     }
   });
 }
@@ -12892,7 +12892,7 @@ async function loadAllData() {
       console.log('[loadAllData] First group:', STATE.groups[0]);
       console.log('[loadAllData] All group IDs:', STATE.groups.map(g => g.id));
     } else {
-      console.error('[loadAllData] [WARN]️ NO GROUPS LOADED! Raw response:', groups);
+      console.error('[loadAllData] [WARN] NO GROUPS LOADED! Raw response:', groups);
     }
     const iotDevicesData = Array.isArray(storedIotDevices) ? storedIotDevices : [];
     

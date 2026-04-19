@@ -2267,7 +2267,7 @@ class FarmAssistant {
       const severityClass = data.alert_type === 'critical' ? 'alert-critical'
         : data.alert_type === 'warning' ? 'alert-warning' : '';
       const icon = data.alert_type === 'critical' ? '🚨'
-        : data.alert_type === 'predictive' ? '🔮' : '[WARN]️';
+        : data.alert_type === 'predictive' ? '🔮' : '[WARN]';
 
       const html = `<div class="evie-ws-alert ${severityClass}">
         <span>${icon}</span>

@@ -1770,7 +1770,7 @@
           detailsSpan.textContent = `${count} SKU(s) have insufficient inventory: ${skus}${more}`;
           alertBanner.style.display = 'block';
           
-          console.warn('[WARN]️ Overselling detected:', data.items);
+          console.warn('[WARN] Overselling detected:', data.items);
         } else {
           alertBanner.style.display = 'none';
         }

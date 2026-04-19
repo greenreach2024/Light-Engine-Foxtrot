@@ -144,7 +144,7 @@ export class SuccessionPlanner {
     const daysUntilSeed = Math.ceil((new Date(nextBatch.seedDate) - new Date()) / (1000 * 60 * 60 * 24));
     
     const priorityClass = priority === 'high' ? 'danger' : priority === 'medium' ? 'warning' : 'info';
-    const priorityIcon = priority === 'high' ? '🚨' : priority === 'medium' ? '[WARN]️' : '[INFO]';
+    const priorityIcon = priority === 'high' ? '🚨' : priority === 'medium' ? '[WARN]' : '[INFO]';
 
     return `
       <div class="succession-card succession-card--compact alert alert-${priorityClass}" data-group-id="${group.id}">
