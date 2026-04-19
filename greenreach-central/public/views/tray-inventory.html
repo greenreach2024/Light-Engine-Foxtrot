@@ -1690,7 +1690,7 @@
   </div>
 
   <!-- Voice Assistant Button -->
-  <button class="voice-assistant-btn" onclick="toggleVoiceAssistant()" id="voiceBtn" aria-label="Voice assistant">
+  <button class="voice-assistant-btn" onclick="toggleVoiceAssistant()" id="voiceAssistantBtn" aria-label="Voice assistant">
     <svg class="voice-icon" xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="12" rx="3"></rect><path d="M5 10v1a7 7 0 0 0 14 0v-1"></path><line x1="12" y1="18" x2="12" y2="22"></line><line x1="8" y1="22" x2="16" y2="22"></line></svg>
   </button>
 
@@ -4058,7 +4058,7 @@
 
       document.getElementById('voiceStatus').textContent = 'Listening...';
       document.getElementById('voiceStatus').classList.add('listening');
-      document.getElementById('voiceBtn').classList.add('listening');
+      document.getElementById('voiceAssistantBtn').classList.add('listening');
       document.getElementById('voiceTranscript').textContent = '';
       document.getElementById('voiceResponse').classList.remove('active');
       
@@ -4069,7 +4069,7 @@
     function stopListening() {
       document.getElementById('voiceStatus').textContent = 'Processing...';
       document.getElementById('voiceStatus').classList.remove('listening');
-      document.getElementById('voiceBtn').classList.remove('listening');
+      document.getElementById('voiceAssistantBtn').classList.remove('listening');
       isListening = false;
     }
 
