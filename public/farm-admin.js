@@ -838,6 +838,7 @@ function renderEmbeddedView(url, title) {
         try {
             const parsed = new URL(url, window.location.origin);
             parsed.searchParams.set('embedded', '1');
+            parsed.searchParams.set('_iframeBust', String(Date.now()));
             return parsed.pathname + parsed.search + parsed.hash;
         } catch {
             return url;

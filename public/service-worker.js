@@ -3,7 +3,7 @@
  * Provides offline support and caching
  */
 
-const CACHE_VERSION = 'v1.0.10';
+const CACHE_VERSION = 'v1.0.11';
 const CACHE_NAME = `light-engine-${CACHE_VERSION}`;
 
 // Files to cache immediately on install - only actual files that exist
@@ -18,7 +18,7 @@ const CRITICAL_NETWORK_FIRST = [
   '/farm-admin.js'
 ];
 
-const NETWORK_FIRST_DESTINATIONS = new Set(['document', 'script', 'style']);
+const NETWORK_FIRST_DESTINATIONS = new Set(['document', 'iframe', 'script', 'style']);
 
 // API routes that should be network-first
 // NOTE: /data/ added to ensure fresh groups, rooms, etc. after changes
