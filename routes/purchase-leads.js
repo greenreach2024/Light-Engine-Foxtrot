@@ -8,12 +8,13 @@ import express from 'express';
 import crypto from 'crypto';
 import Datastore from '@seald-io/nedb';
 import eventBus from '../lib/event-bus.js';
+import { resolveRuntimeStatePath } from '../lib/runtime-state.js';
 
 const router = express.Router();
 
 // Persistent storage — NeDB backed (replaces volatile in-memory Map)
 const leadsDB = new Datastore({
-  filename: './data/purchase-leads.db',
+  filename: resolveRuntimeStatePath('data/purchase-leads.db'),
   autoload: true,
   timestampData: true
 });
