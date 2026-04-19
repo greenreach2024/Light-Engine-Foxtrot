@@ -102,6 +102,26 @@ New rule:
 - The bootstrap uses the canonical production farm identity and any present `SWITCHBOT_TOKEN` / `SWITCHBOT_SECRET` env vars.
 - The framework validator still blocks startup if an existing `farm.json` is malformed, missing `farmId`, or contains a demo farm ID.
 
+### Second deployment blocker discovered after merge
+
+After PR 22 merged, the first GitHub-backed LE rebuild produced revision `light-engine-00312-h4k`, which still failed to roll out cleanly even though startup and liveness probes succeeded.
+
+What happened:
+
+- Cloud Run launched the new revision alongside the still-serving LE revision during rollout.
+- Both revisions mounted the same GCS FUSE-backed runtime files.
+- The warming revision started LE operational services immediately after `app.listen()`, which triggered writes to hot runtime files such as automation state, NeDB stores, device-health data, and sync-related local state.
+- GCS FUSE logged precondition and stale-handle write conflicts while the old revision was still writing the same objects.
+- The new revision then exited after becoming healthy, so the rollout was rejected even though `/api/health` itself was not the failing dependency.
+
+Corrective action:
+
+- LE now keeps probe-safe HTTP startup separate from write-heavy operational startup on Cloud Run.
+- When running on Cloud Run, operational services are deferred until the revision handles real non-health traffic.
+- Health endpoints remain available for startup and liveness probes without immediately starting the shared-file writers that collide during rollout.
+
+This distinguishes the second blocker from the original GitHub drift issue: the first issue was source-of-truth drift and a hidden `farm.json` dependency, while the second was rollout-time shared-storage contention inside Cloud Run.
+
 ## Deployment Notes
 
 Cloud Run deploys must use the digest reported by Artifact Registry, not the truncated digest shown in local Docker output.
