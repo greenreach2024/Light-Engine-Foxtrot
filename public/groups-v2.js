@@ -6038,8 +6038,17 @@ function renderGroupsV2LightCard(plan, options) {
 }
 
 function populateGroupsV2ScheduleDropdown() {
-  const select = document.getElementById('groupsV2ScheduleSelect');
+  let select = document.getElementById('groupsV2ScheduleSelect');
   if (!select) return;
+
+  if (!(select instanceof HTMLSelectElement)) {
+    const replacement = document.createElement('select');
+    replacement.id = 'groupsV2ScheduleSelect';
+    replacement.style.cssText = select.getAttribute('style') || 'display:none;';
+    replacement.innerHTML = '<option value="">(select schedule)</option>';
+    select.replaceWith(replacement);
+    select = replacement;
+  }
   
   // Don't repopulate if user is actively interacting with the dropdown
   if (document.activeElement === select) {
