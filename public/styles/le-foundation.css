@@ -129,7 +129,14 @@ body.le-theme {
   --gr-accent-soft:   var(--accent-teal-soft);
   --gr-shadow:        var(--elevation-2);
   --gr-shadow-lg:     var(--elevation-3);
+}
 
+/* Aesthetic defaults — wrapped in :where() so they resolve at specificity
+   (0,0,0) and do NOT override a page's own `body { background: ... }` rule.
+   Many LE pages ship cinematic gradients in their own <style> blocks; those
+   remain in effect. Pages that don't set their own body styling fall through
+   to these foundation defaults. */
+:where(body.le-theme) {
   background: var(--surface-0);
   color: var(--text-1);
   font-family: var(--font-stack);
