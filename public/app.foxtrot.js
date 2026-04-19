@@ -2145,9 +2145,9 @@ function buildInfoGrid(entries, options = {}) {
   const columns = options.columns || 2;
   const grid = document.createElement('div');
   grid.style.cssText = `margin-top:${options.compact ? '6px' : '10px'};display:grid;grid-template-columns:repeat(${columns}, minmax(0, 1fr));gap:${options.compact ? '6px' : '10px'};`; 
-  const cellStyle = options.cellStyle || 'background:var(--surface-2, #f1f5f9);border:1px solid var(--border-subtle, #e2e8f0);border-radius:6px;padding:8px;display:flex;flex-direction:column;gap:2px;';
-  const labelStyle = options.labelStyle || 'font-size:10px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;color:var(--text-3, #475569);';
-  const valueStyle = options.valueStyle || 'font-size:12px;color:var(--text-1, #0f172a);font-weight:500;word-break:break-word;';
+  const cellStyle = options.cellStyle || 'background:var(--surface-2, rgba(15,23,42,0.88));border:1px solid var(--border-subtle, rgba(148,163,184,0.18));border-radius:8px;padding:8px;display:flex;flex-direction:column;gap:2px;box-shadow:inset 0 1px 0 rgba(255,255,255,0.04);';
+  const labelStyle = options.labelStyle || 'font-size:10px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;color:var(--text-4, #94a3b8);';
+  const valueStyle = options.valueStyle || 'font-size:12px;color:var(--text-1, #f8fafc);font-weight:500;word-break:break-word;';
   items.forEach(entry => {
     const cell = document.createElement('div');
     cell.style.cssText = cellStyle;
@@ -2559,7 +2559,7 @@ function persistIotDevices(devices) {
         const saved = await verifyResp.json();
         const savedArr = Array.isArray(saved) ? saved : (saved.devices || []);
         if (savedArr.length !== payload.length) {
-          console.error('[persistIotDevices] ⚠️ VERIFICATION MISMATCH! Saved:', payload.length, 'Read back:', savedArr.length);
+          console.error('[persistIotDevices] [WARN] VERIFICATION MISMATCH! Saved:', payload.length, 'Read back:', savedArr.length);
         } else {
           console.log('[persistIotDevices] ✅ Verified: read back', savedArr.length, 'devices from server');
         }
@@ -2575,10 +2575,10 @@ function persistIotDevices(devices) {
       console.warn('[persistIotDevices] Failed to dispatch iot-devices-updated:', err);
     }
   }).catch(err => {
-    console.error('[IoT] ⚠️ Failed to persist devices to server:', err);
+    console.error('[IoT] [WARN] Failed to persist devices to server:', err);
     // Show user-visible warning since devices may not survive navigation
     if (typeof showToast === 'function') {
-      showToast({ title: 'Save Warning', msg: 'IoT devices saved locally but server save failed. They may not persist after page reload.', kind: 'warn', icon: '⚠️', duration: 8000 });
+      showToast({ title: 'Save Warning', msg: 'IoT devices saved locally but server save failed. They may not persist after page reload.', kind: 'warn', icon: '[WARN]', duration: 8000 });
     }
   });
 }
@@ -2617,10 +2617,10 @@ function createDeviceEntryElement(device) {
   // LE dark pages (body.le-theme loads le-foundation.css) resolve to bright-on-dark,
   // non-LE pages fall back to the original dark-on-light foxtrot palette.
   const categoryColors = {
-    'sensor': { bg: 'var(--surface-1, #ffffff)', border: 'var(--accent-green, #4ade80)', accent: 'var(--accent-green, #166534)', icon: '' },
-    'plug': { bg: 'var(--surface-1, #ffffff)', border: 'var(--accent-amber, #f59e0b)', accent: 'var(--accent-amber, #92400e)', icon: '🔌' },
-    'controller': { bg: 'var(--surface-1, #ffffff)', border: 'var(--accent-indigo, #818cf8)', accent: 'var(--accent-indigo, #3730a3)', icon: '🎛' },
-    'device': { bg: 'var(--surface-1, #ffffff)', border: 'var(--border-strong, #cbd5e1)', accent: 'var(--text-2, #334155)', icon: '📱' }
+  'sensor': { bg: 'var(--surface-1, rgba(15,23,42,0.82))', border: 'var(--accent-green, #4ade80)', accent: 'var(--text-1, #bbf7d0)', icon: '' },
+  'plug': { bg: 'var(--surface-1, rgba(15,23,42,0.82))', border: 'var(--accent-amber, #f59e0b)', accent: 'var(--text-1, #fde68a)', icon: '🔌' },
+  'controller': { bg: 'var(--surface-1, rgba(15,23,42,0.82))', border: 'var(--accent-indigo, #818cf8)', accent: 'var(--text-1, #c7d2fe)', icon: '🎛' },
+  'device': { bg: 'var(--surface-1, rgba(15,23,42,0.82))', border: 'var(--border-strong, #94a3b8)', accent: 'var(--text-1, #e2e8f0)', icon: '📱' }
   };
   
   const colors = categoryColors[deviceCategory] || categoryColors['device'];
@@ -2645,15 +2645,15 @@ function createDeviceEntryElement(device) {
   info.appendChild(name);
 
   const subline = document.createElement('div');
-  subline.style.cssText = 'font-size:10px;color:var(--text-3, #475569);display:flex;flex-wrap:wrap;gap:6px;align-items:center;';
+  subline.style.cssText = 'font-size:10px;color:var(--text-3, #cbd5e1);display:flex;flex-wrap:wrap;gap:6px;align-items:center;';
 
   // Add category badge
   const categoryBadge = document.createElement('span');
   const categoryBadgeColors = {
-    'sensor': { bg: 'var(--accent-green-soft, #dcfce7)', color: 'var(--accent-green, #166534)' },
-    'plug': { bg: 'var(--accent-amber-soft, #fef3c7)', color: 'var(--accent-amber, #92400e)' },
-    'controller': { bg: 'var(--accent-purple-soft, #e0e7ff)', color: 'var(--accent-indigo, #3730a3)' },
-    'device': { bg: 'var(--surface-3, #e2e8f0)', color: 'var(--text-2, #334155)' }
+  'sensor': { bg: 'var(--accent-green-soft, rgba(34, 197, 94, 0.18))', color: 'var(--text-1, #bbf7d0)' },
+  'plug': { bg: 'var(--accent-amber-soft, rgba(245, 158, 11, 0.18))', color: 'var(--text-1, #fde68a)' },
+  'controller': { bg: 'var(--accent-purple-soft, rgba(59, 130, 246, 0.18))', color: 'var(--text-1, #bfdbfe)' },
+  'device': { bg: 'var(--surface-3, rgba(71, 85, 105, 0.35))', color: 'var(--text-1, #e2e8f0)' }
   };
   const catColors = categoryBadgeColors[deviceCategory] || categoryBadgeColors['device'];
   categoryBadge.style.cssText = `background:${catColors.bg};color:${catColors.color};padding:2px 6px;border-radius:999px;font-weight:600;letter-spacing:0.03em;text-transform:uppercase;`;
@@ -2661,13 +2661,13 @@ function createDeviceEntryElement(device) {
   subline.appendChild(categoryBadge);
 
   const protocolBadge = document.createElement('span');
-  protocolBadge.style.cssText = 'background:var(--accent-blue-soft, #e0e7ff);color:var(--accent-blue, #1d4ed8);padding:2px 6px;border-radius:999px;font-weight:600;letter-spacing:0.03em;text-transform:uppercase;';
+  protocolBadge.style.cssText = 'background:var(--accent-blue-soft, rgba(59,130,246,0.18));color:var(--text-1, #bfdbfe);padding:2px 6px;border-radius:999px;font-weight:600;letter-spacing:0.03em;text-transform:uppercase;border:1px solid rgba(96,165,250,0.22);';
   protocolBadge.textContent = device.protocol || 'unknown';
   subline.appendChild(protocolBadge);
 
   if (device.type && device.type !== device.protocol) {
     const typeBadge = document.createElement('span');
-  typeBadge.style.cssText = 'background:var(--surface-3, #e2e8f0);color:var(--text-1, #1f2937);padding:2px 6px;border-radius:999px;font-weight:500;text-transform:uppercase;letter-spacing:0.03em;';
+  typeBadge.style.cssText = 'background:var(--surface-3, rgba(148,163,184,0.16));color:var(--text-1, #e2e8f0);padding:2px 6px;border-radius:999px;font-weight:500;text-transform:uppercase;letter-spacing:0.03em;border:1px solid rgba(148,163,184,0.2);';
     typeBadge.textContent = device.type;
     subline.appendChild(typeBadge);
   }
@@ -2861,10 +2861,10 @@ function createDeviceEntryElement(device) {
     
     // Add automation control toggle
     const automationRow = document.createElement('div');
-    automationRow.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-top:8px;padding-top:8px;border-top:1px solid var(--border-subtle, #bae6fd);';
+  automationRow.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-top:8px;padding-top:8px;border-top:1px solid var(--border-subtle, rgba(125,211,252,0.24));';
     
-    const automationLabel = document.createElement('label');
-    automationLabel.style.cssText = 'display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-1, #0c4a6e);font-weight:600;cursor:pointer;flex:1;';
+  const automationLabel = document.createElement('label');
+  automationLabel.style.cssText = 'display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-1, #bae6fd);font-weight:600;cursor:pointer;flex:1;';
     
     const automationCheckbox = document.createElement('input');
     automationCheckbox.type = 'checkbox';
@@ -2884,7 +2884,7 @@ function createDeviceEntryElement(device) {
     
     // Add status badge
     const statusBadge = document.createElement('span');
-    statusBadge.style.cssText = `padding:2px 8px;border-radius:12px;font-size:10px;font-weight:600;${device.automationControl ? 'background:var(--accent-green-soft, #dcfce7);color:var(--accent-green, #166534);' : 'background:var(--surface-3, #f3f4f6);color:var(--text-3, #6b7280);'}`;
+  statusBadge.style.cssText = `padding:2px 8px;border-radius:12px;font-size:10px;font-weight:600;${device.automationControl ? 'background:var(--accent-green-soft, rgba(34,197,94,0.18));color:var(--text-1, #bbf7d0);border:1px solid rgba(34,197,94,0.24);' : 'background:var(--surface-3, rgba(71,85,105,0.35));color:var(--text-3, #cbd5e1);border:1px solid rgba(148,163,184,0.18);'}`;
     statusBadge.textContent = device.automationControl ? 'Active' : 'Monitor Only';
     
     automationRow.appendChild(automationLabel);
@@ -2913,10 +2913,10 @@ function createDeviceEntryElement(device) {
   const controlledEquipment = getAllEquipment().filter(eq => eq.control === `IoT:${device.deviceId || device.id}`);
   if (controlledEquipment.length > 0) {
     const controlSection = document.createElement('div');
-    controlSection.style.cssText = 'margin-top:10px;padding:8px;background:var(--surface-2, #f1f5f9);border-radius:6px;border-left:3px solid var(--accent-blue, #3b82f6);';
+  controlSection.style.cssText = 'margin-top:10px;padding:8px;background:var(--surface-2, rgba(15,23,42,0.82));border-radius:8px;border:1px solid rgba(59,130,246,0.2);border-left:3px solid var(--accent-blue, #3b82f6);';
     
-    const controlHeader = document.createElement('div');
-    controlHeader.style.cssText = 'font-size:11px;font-weight:600;color:var(--accent-blue, #1e40af);margin-bottom:6px;';
+  const controlHeader = document.createElement('div');
+  controlHeader.style.cssText = 'font-size:11px;font-weight:600;color:var(--text-1, #bfdbfe);margin-bottom:6px;';
     controlHeader.textContent = `Controls ${controlledEquipment.length} Equipment:`;
     controlSection.appendChild(controlHeader);
     
@@ -2925,7 +2925,7 @@ function createDeviceEntryElement(device) {
     
     controlledEquipment.forEach(eq => {
       const equipItem = document.createElement('div');
-      equipItem.style.cssText = 'font-size:11px;color:var(--text-3, #475569);display:flex;align-items:center;gap:6px;';
+  equipItem.style.cssText = 'font-size:11px;color:var(--text-3, #cbd5e1);display:flex;align-items:center;gap:6px;';
       equipItem.innerHTML = `
         <span style="width:6px;height:6px;background:var(--accent-blue, #3b82f6);border-radius:50%;"></span>
         <span style="font-weight:500;">${escapeHtml(eq.name || eq.category || 'Equipment')}</span>
@@ -2990,7 +2990,7 @@ function createDeviceEntryElement(device) {
   const trustValue = String(device.trust || '').toLowerCase();
   if (trustValue && trustValue !== 'unknown') {
     const trustBadge = document.createElement('span');
-    trustBadge.style.cssText = 'font-size:10px;font-weight:600;text-transform:uppercase;color:var(--text-3, #475569);';
+  trustBadge.style.cssText = 'font-size:10px;font-weight:600;text-transform:uppercase;color:var(--text-3, #cbd5e1);';
     trustBadge.textContent = `Trust: ${trustValue}`;
     actions.appendChild(trustBadge);
   }
@@ -3692,7 +3692,7 @@ window.runUniversalScan = async function() {
 
       if (connectedEdge) {
         console.log('[UniversalScan] Local Light Engine detected at', connectedEdge);
-        if (status) status.textContent = '✓ Local Light Engine connected — scanning network devices...';
+        if (status) status.textContent = '[OK] Local Light Engine connected — scanning network devices...';
 
         try {
           const edgeResp = await fetch(connectedEdge + '/discovery/scan', {
@@ -4196,7 +4196,7 @@ async function addDeviceToIoT(device, deviceIndex, credentials = null) {
       title: 'Device Added Successfully', 
       msg: successMsg, 
       kind: 'success', 
-      icon: '✓',
+      icon: '[OK]',
       duration: 5000
     });
     
@@ -12892,7 +12892,7 @@ async function loadAllData() {
       console.log('[loadAllData] First group:', STATE.groups[0]);
       console.log('[loadAllData] All group IDs:', STATE.groups.map(g => g.id));
     } else {
-      console.error('[loadAllData] ⚠️ NO GROUPS LOADED! Raw response:', groups);
+      console.error('[loadAllData] [WARN] NO GROUPS LOADED! Raw response:', groups);
     }
     const iotDevicesData = Array.isArray(storedIotDevices) ? storedIotDevices : [];
     
@@ -13181,7 +13181,7 @@ async function loadAllData() {
     try {
       console.log(`[loadAllData] About to dispatch groups-updated event with ${STATE.groups.length} groups`);
       document.dispatchEvent(new Event('groups-updated'));
-      console.log('[loadAllData] ✓ Dispatched groups-updated event');
+      console.log('[loadAllData] [OK] Dispatched groups-updated event');
     } catch (err) {
       console.error('[loadAllData] ❌ Failed to dispatch groups-updated:', err);
     }
@@ -20298,7 +20298,7 @@ class DevicePairWizard {
         }
 
         if (connectedEdge) {
-          if (this.scanStatus) this.scanStatus.textContent = '✓ Local Light Engine connected — scanning...';
+          if (this.scanStatus) this.scanStatus.textContent = '[OK] Local Light Engine connected — scanning...';
           try {
             const edgeResp = await fetch(connectedEdge + '/discovery/scan', {
               method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -21822,9 +21822,30 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (typeof wireGlobalEvents === 'function') wireGlobalEvents();
     // initializeSidebarNavigation is called at the end of DOMContentLoaded - removed duplicate call
 
-    document.getElementById('btnLaunchPairWizard')?.addEventListener('click', () => {
-      if (typeof DEVICE_PAIR_WIZARD !== 'undefined' && DEVICE_PAIR_WIZARD?.open) DEVICE_PAIR_WIZARD.open();
-    });
+      const openFarmSetupDeviceManager = () => {
+        try {
+          window.deviceManagerWindow = window.deviceManagerWindow || new DeviceManagerWindow();
+          if (window.deviceManagerWindow?.open) {
+            window.deviceManagerWindow.open();
+            return true;
+          }
+        } catch (error) {
+          console.warn('Failed to open Device Manager from Farm Setup', error);
+        }
+        return false;
+      };
+
+      document.getElementById('btnOpenDeviceManagerPairing')?.addEventListener('click', () => {
+        if (!openFarmSetupDeviceManager()) {
+          showToast({ title: 'Device Manager unavailable', msg: 'Try refreshing the page and opening Device Manager again.', kind: 'warn', icon: '' }, 5000);
+        }
+      });
+
+      document.getElementById('btnOpenDeviceManagerIntegrations')?.addEventListener('click', () => {
+        if (!openFarmSetupDeviceManager()) {
+          showToast({ title: 'Device Manager unavailable', msg: 'Try refreshing the page and opening Device Manager again.', kind: 'warn', icon: '' }, 5000);
+        }
+      });
 
     document.getElementById('btnPairWizardDocs')?.addEventListener('click', () => {
       showToast({
@@ -22089,17 +22110,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       calWizard.close();
     });
 
-    // Wire Add Device button in Integrations panel to open Pair Devices panel
-    document.getElementById('btnAddDeviceIntegrations')?.addEventListener('click', () => {
-      try {
-        setActivePanel('pair-devices');
-        // If a modal-based pairing wizard is available, open it as well for convenience
-        const openWizard = typeof DEVICE_PAIR_WIZARD !== 'undefined' && DEVICE_PAIR_WIZARD?.open;
-        if (openWizard) DEVICE_PAIR_WIZARD.open();
-      } catch (e) {
-        console.warn('Failed to navigate to Pair Devices panel from Integrations', e);
-      }
-    });
+      document.getElementById('btnLaunchPairWizard')?.addEventListener('click', () => {
+        if (typeof DEVICE_PAIR_WIZARD !== 'undefined' && DEVICE_PAIR_WIZARD?.open) DEVICE_PAIR_WIZARD.open();
+      });
 
     document.getElementById('btnRefreshSmartPlugs')?.addEventListener('click', () => loadSmartPlugs());
     document.getElementById('btnDiscoverSmartPlugs')?.addEventListener('click', () => discoverSmartPlugs());
@@ -23232,11 +23245,11 @@ document.addEventListener('DOMContentLoaded', () => {
       // Update status text
       const statusEl = document.getElementById('integrationsStatus');
       const parts = [];
-      if (data.switchbot?.configured) parts.push('SwitchBot ✓');
-      if (data.kasa?.configured)      parts.push('Kasa ✓');
+      if (data.switchbot?.configured) parts.push('SwitchBot [OK]');
+      if (data.kasa?.configured)      parts.push('Kasa [OK]');
       if (statusEl) statusEl.textContent = parts.length ? parts.join(' · ') : 'No integrations configured';
 
-      btn.textContent = 'Saved ✓';
+      btn.textContent = 'Saved [OK]';
       setTimeout(() => { btn.textContent = 'Save Integrations'; btn.disabled = false; }, 2000);
     } catch (err) {
       console.error('[integrations] Save failed:', err);
@@ -23253,8 +23266,8 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!data.ok) return;
       const statusEl = document.getElementById('integrationsStatus');
       const parts = [];
-      if (data.switchbot?.configured) parts.push('SwitchBot ✓');
-      if (data.kasa?.configured)      parts.push('Kasa ✓');
+      if (data.switchbot?.configured) parts.push('SwitchBot [OK]');
+      if (data.kasa?.configured)      parts.push('Kasa [OK]');
       if (statusEl) statusEl.textContent = parts.length ? parts.join(' · ') : 'No integrations configured';
     })
     .catch(() => {});

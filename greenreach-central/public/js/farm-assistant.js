@@ -1182,7 +1182,7 @@ class FarmAssistant {
                 if (progEls?.length > 0) {
                   const last = progEls[progEls.length - 1];
                   last.classList.add(data.success ? 'done' : 'failed');
-                  last.textContent = last.textContent.replace('…', data.success ? ' ✓' : ' ✗');
+                  last.textContent = last.textContent.replace('…', data.success ? ' [OK]' : ' [ERR]');
                 }
               } else if (eventType === 'token') {
                 this.setTypingIndicator(false);
@@ -1239,7 +1239,7 @@ class FarmAssistant {
                 if (data.pending_action) {
                   this.pendingAction = data.pending_action;
                   const actionButtons = `
-                    <button class="assistant-confirm-btn" onclick="window._farmAssistant.confirmPendingAction()">✓ Confirm</button>
+                    <button class="assistant-confirm-btn" onclick="window._farmAssistant.confirmPendingAction()">[OK] Confirm</button>
                     <button class="assistant-cancel-btn" onclick="window._farmAssistant.cancelPendingAction()">✕ Cancel</button>
                   `;
                   this.addMessage(actionButtons, 'action');
@@ -1314,7 +1314,7 @@ class FarmAssistant {
     if (data.pending_action) {
       this.pendingAction = data.pending_action;
       const actionButtons = `
-        <button class="assistant-confirm-btn" onclick="window._farmAssistant.confirmPendingAction()">✓ Confirm</button>
+        <button class="assistant-confirm-btn" onclick="window._farmAssistant.confirmPendingAction()">[OK] Confirm</button>
         <button class="assistant-cancel-btn" onclick="window._farmAssistant.cancelPendingAction()">✕ Cancel</button>
       `;
       this.addMessage(actionButtons, 'action');
@@ -1864,7 +1864,7 @@ class FarmAssistant {
         
         if (isLocateQuery) {
           // Child-friendly response: blink lights
-          this.addMessage(`Certainly! Let me blink the lights where the ${cropName} is! 💡`, 'assistant');
+          this.addMessage(`Certainly! Let me blink the lights where the ${cropName} is! [INFO]`, 'assistant');
           
           // Blink lights for each location
           found.forEach(item => {
@@ -1884,7 +1884,7 @@ class FarmAssistant {
           });
           
           popupContent += `
-                <p class="location-hint">Watch for the blinking lights! 💡</p>
+                <p class="location-hint">Watch for the blinking lights! [INFO]</p>
               </div>
             </div>
           `;
@@ -2267,7 +2267,7 @@ class FarmAssistant {
       const severityClass = data.alert_type === 'critical' ? 'alert-critical'
         : data.alert_type === 'warning' ? 'alert-warning' : '';
       const icon = data.alert_type === 'critical' ? '🚨'
-        : data.alert_type === 'predictive' ? '🔮' : '⚠️';
+        : data.alert_type === 'predictive' ? '🔮' : '[WARN]';
 
       const html = `<div class="evie-ws-alert ${severityClass}">
         <span>${icon}</span>

@@ -3538,7 +3538,7 @@ async function viewZoneDetail(farmId, roomId, zoneId) {
         const title = document.getElementById('zone-detail-title');
         if (title) {
             title.innerHTML = `
-                <span style="color: var(--accent-red);">⚠️ Error Loading Zone Data</span>
+                <span style="color: var(--accent-red);">[WARN] Error Loading Zone Data</span>
                 <div style="font-size: 14px; font-weight: normal; color: var(--text-secondary); margin-top: 8px;">
                     ${error.message || 'Failed to load zone information. Check console for details.'}
                 </div>
@@ -4397,19 +4397,19 @@ async function saveFarmInfo() {
         const statusMessages = {
             'synced': {
                 type: 'success',
-                text: '✓ Changes saved and synced to farm device'
+                text: '[OK] Changes saved and synced to farm device'
             },
             'sync_error': {
                 type: 'warning',
-                text: '⚠ Changes saved to Central. Could not reach farm device - will sync on next heartbeat'
+                text: '[WARN] Changes saved to Central. Could not reach farm device - will sync on next heartbeat'
             },
             'sync_failed': {
                 type: 'warning',
-                text: '⚠ Changes saved to Central. Farm device returned error - check device status'
+                text: '[WARN] Changes saved to Central. Farm device returned error - check device status'
             },
             'no_api_url': {
                 type: 'warning',
-                text: '⚠ Changes saved to Central. No device URL configured - manual sync required'
+                text: '[WARN] Changes saved to Central. No device URL configured - manual sync required'
             },
             'not_attempted': {
                 type: 'info',
@@ -5204,7 +5204,7 @@ async function submitRecipeRequest() {
         const result = await response.json();
         if (statusEl) {
             statusEl.style.color = '#10b981';
-            statusEl.textContent = '✓ Request submitted! GreenReach Central will review it.';
+            statusEl.textContent = '[OK] Request submitted! GreenReach Central will review it.';
         }
         // Clear form
         document.getElementById('recipe-request-crop').value = '';
@@ -6048,7 +6048,7 @@ async function showFarmConfig() {
                             <div class="config-grid">
                                 <div class="config-item">
                                     <label>Active Keys:</label>
-                                    <span>${config.apiKeys.count} ${config.apiKeys.hasActive ? '✓ Active' : '⚠ No active keys'}</span>
+                                    <span>${config.apiKeys.count} ${config.apiKeys.hasActive ? '[OK] Active' : '[WARN] No active keys'}</span>
                                 </div>
                                 <div class="config-item">
                                     <label>Actions:</label>
@@ -6076,11 +6076,11 @@ async function showFarmConfig() {
                             <div class="config-grid">
                                 <div class="config-item">
                                     <label>Square Payments:</label>
-                                    <span>${config.integrations.square ? '✓ Connected' : '✗ Not connected'}</span>
+                                    <span>${config.integrations.square ? '[OK] Connected' : '[ERR] Not connected'}</span>
                                 </div>
                                 <div class="config-item">
                                     <label>Wholesale API:</label>
-                                    <span>${config.integrations.wholesale ? '✓ Enabled' : '✗ Disabled'}</span>
+                                    <span>${config.integrations.wholesale ? '[OK] Enabled' : '[ERR] Disabled'}</span>
                                 </div>
                             </div>
                         </div>
@@ -6285,7 +6285,7 @@ async function showFarmLogs() {
                                 🔌 Device Connections (${logs.filter(l => l.type === 'device_connection').length})
                             </button>
                             <button class="log-filter-btn" onclick="filterLogs('warning')" data-filter="warning">
-                                ⚠️ Errors & Warnings (${logs.filter(l => l.level === 'warning' || l.level === 'error').length})
+                                [WARN] Errors & Warnings (${logs.filter(l => l.level === 'warning' || l.level === 'error').length})
                             </button>
                             <button class="log-filter-btn" onclick="filterLogs('user_activity')" data-filter="user_activity">
                                 👤 User Activity (${logs.filter(l => l.type === 'user_activity').length})
@@ -6424,7 +6424,7 @@ function generateLogsRows(logs) {
 function getLevelIcon(level) {
     switch (level) {
         case 'error': return '🔴';
-        case 'warning': return '⚠️';
+        case 'warning': return '[WARN]';
         case 'info': return '✅';
         default: return '📝';
     }
@@ -8569,7 +8569,7 @@ async function loadFarmEnvironmentalData(farmId, farmData) {
             // Fallback to basic insights if AI fails
             document.getElementById('env-insights').innerHTML = `
                 <div class="metric-row">
-                    <div class="metric-label">⚠️ AI Insights Unavailable</div>
+                    <div class="metric-label">[WARN] AI Insights Unavailable</div>
                     <div class="metric-value" style="color: var(--text-secondary);">${escapeHtml(aiError.message)}</div>
                 </div>
                 <div class="metric-row">
@@ -9927,7 +9927,7 @@ async function resetUserPassword(userId, userEmail) {
         const tempPassword = data.temp_password;
         const userInfo = data.user || {};
         
-        alert(`✅ Password Reset Successful!\n\nUser: ${userInfo.email || userEmail}\nFarm ID: ${userInfo.farm_id || 'N/A'}\n\nTemporary Password:\n${tempPassword}\n\n⚠️ Copy this password now! The user must use this to log in at:\nhttps://greenreachgreens.com/login.html`);
+        alert(`✅ Password Reset Successful!\n\nUser: ${userInfo.email || userEmail}\nFarm ID: ${userInfo.farm_id || 'N/A'}\n\nTemporary Password:\n${tempPassword}\n\n[WARN] Copy this password now! The user must use this to log in at:\nhttps://greenreachgreens.com/login.html`);
         
     } catch (error) {
         console.error('Error resetting password:', error);
@@ -10040,7 +10040,7 @@ function renderAiRulesList() {
         // Status colors
         const statusColor = rule.enabled ? '#10b981' : '#6b7280';
         const reviewBadge = rule.requiresReview ? `<span style="display: inline-block; margin-left: 8px; padding: 3px 10px; border-radius: 12px; background: #f59e0b20; color: #f59e0b; font-weight: 600; font-size: 11px;">REVIEW</span>` : '';
-        const statusBadge = `<span style="color: ${statusColor}; font-weight: 500;">${rule.enabled ? '✓ Enabled' : 'Disabled'}</span>${reviewBadge}`;
+        const statusBadge = `<span style="color: ${statusColor}; font-weight: 500;">${rule.enabled ? '[OK] Enabled' : 'Disabled'}</span>${reviewBadge}`;
         
         return `
             <tr class="ai-rules-row ${activeClass}" onclick="selectAiRule('${escapeHtml(rule.id)}')">
@@ -10617,7 +10617,7 @@ document.addEventListener('DOMContentLoaded', () => {
             openAddUserModal();
         });
     } else {
-        console.warn('📌 [DOM] ⚠️ add-user-btn element not found!');
+        console.warn('📌 [DOM] [WARN] add-user-btn element not found!');
     }
 
     const usersTbody = document.getElementById('users-tbody');
@@ -10649,7 +10649,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     } else {
-        console.warn('📌 [DOM] ⚠️ users-tbody element not found!');
+        console.warn('📌 [DOM] [WARN] users-tbody element not found!');
     }
     
     console.log('📌 [DOM] User management event listeners setup complete');
@@ -12510,8 +12510,8 @@ function renderMarketingPostPreview(post) {
         : '<span class="badge badge-warning">Draft</span>';
     const violations = post.complianceViolations || post.compliance_issues || [];
     const complianceHtml = violations.length > 0
-        ? `<div style="color:#ef4444;margin-top:8px;font-size:12px;">⚠ Compliance: ${violations.join(', ')}</div>`
-        : '<div style="color:var(--accent-green);margin-top:8px;font-size:12px;">✓ Compliance clear</div>';
+        ? `<div style="color:#ef4444;margin-top:8px;font-size:12px;">[WARN] Compliance: ${violations.join(', ')}</div>`
+        : '<div style="color:var(--accent-green);margin-top:8px;font-size:12px;">[OK] Compliance clear</div>';
 
     return `<div class="stat-card" style="margin-bottom:12px;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
@@ -12885,7 +12885,7 @@ async function loadMarketingSettings() {
         platformNames.forEach(name => {
             const status = platforms[name];
             const connected = status?.connected;
-            const icon = connected ? '✓' : '✗';
+            const icon = connected ? '[OK]' : '[ERR]';
             const color = connected ? 'var(--accent-green)' : '#ef4444';
             const mode = status?.mode || 'stub';
             html += `<div class="stat-card" style="text-align:center;">
@@ -13032,7 +13032,7 @@ async function testMktConnection(platform) {
             const info = details.pageName || details.username || details.name || details.id || '';
             showToast(`${platform} connection verified${info ? ': ' + info : ''}`, 'success');
             if (badge) {
-                badge.textContent = 'Verified ✓';
+                badge.textContent = 'Verified [OK]';
                 badge.style.background = 'rgba(72,187,120,0.15)';
                 badge.style.color = 'var(--accent-green)';
             }

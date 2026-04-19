@@ -99,6 +99,10 @@ import { exec } from 'child_process';
 import axios from 'axios';
 import SyncServiceClass from './services/sync-service.js';
 import { NutrientStore, NutrientMqttSubscriber } from './services/nutrient-mqtt.js';
+import {
+  resolveTankTargets as resolveRecipeNutrientTankTargets,
+  diffTargets as diffNutrientTargets
+} from './automation/recipe-nutrient-targets.js';
 import { hydrateAutomationStorageCache } from './automation/utils/file-storage.js';
 import { hydrateRuntimeStateJson, resolveRuntimeStatePath } from './lib/runtime-state.js';
 
@@ -1069,6 +1073,9 @@ async function startOperationalServices(trigger = 'startup') {
         brokerUrl: DEFAULT_NUTRIENT_MQTT_URL,
         store: nutrientStore,
         scopeId: NUTRIENT_SCOPE_ID
+      });
+      nutrientSubscriber.on('error', (error) => {
+        console.warn('[nutrient-mqtt] Subscriber error (non-fatal):', error?.message || error);
       });
       nutrientSubscriber.start();
       // Pipe telemetry from MQTT into env store for dashboard integration
@@ -16861,24 +16868,6 @@ app.get('/api/weather/current', async (req, res) => {
 
 // ===== NUTRIENT MANAGEMENT API (MQTT-backed) =====
 
-// Note: Charlie backend (port 8000) deprecated - all nutrient endpoints use MQTT directly
-// Legacy fetchPythonBackend function kept for compatibility but not used
-async function fetchPythonBackend(endpoint, options = {}) {
-  // DEPRECATED: This function is no longer used (nutrients use MQTT)
-  const url = `http://localhost:8000${endpoint}`;
-  
-  try {
-    const response = await fetch(url, {
-      timeout: 5000,
-      ...options
-    });
-    return response;
-  } catch (error) {
-    console.warn(`[Nutrient API] Python backend unavailable at ${url}:`, error.message);
-    return null;
-  }
-}
-
 async function publishNutrientCommand(payload, {
   brokerUrl = DEFAULT_NUTRIENT_MQTT_URL,
   topic = DEFAULT_NUTRIENT_COMMAND_TOPIC,
@@ -16957,8 +16946,130 @@ const nutrientAutomationState = {
   failure: null,
   dashboardCache: null,
   dashboardCacheAt: 0,
-  dashboardWriteTimer: null
+  dashboardWriteTimer: null,
+  // P1 #6: per-tank recipe drift bookkeeping. Each key is a tank id; the value
+  // is the ISO timestamp of the most recent "recipe-drift" alert so we don't
+  // spam the alert feed every 20 s when the operator hasn't reacted yet.
+  driftAlerts: {}
 };
+
+// P1 #5: Enrich raw groups (from groups.json) with `plan.days[]` by joining on
+// the plans document the UI already uses. This is a server-side mirror of the
+// UI's `enrichGroupsWithPlans()`.
+function enrichGroupsWithPlansForNutrients() {
+  try {
+    const groups = loadGroupsFile();
+    const plansDoc = loadPlansDocument();
+    const plans = Array.isArray(plansDoc?.plans) ? plansDoc.plans : [];
+    const plansMap = new Map();
+    for (const plan of plans) {
+      if (plan?.id) plansMap.set(plan.id, plan);
+      if (plan?.key && plan.key !== plan.id) plansMap.set(plan.key, plan);
+    }
+    return groups.map((group) => {
+      if (!group || typeof group.plan !== 'string' || !group.plan.trim()) return group;
+      const planData = plansMap.get(group.plan);
+      if (!planData) return group;
+      return {
+        ...group,
+        plan: {
+          id: planData.id,
+          name: planData.name || planData.crop || planData.id,
+          startDate: group.planConfig?.anchor?.seedDate || null,
+          days: Array.isArray(planData.light?.days) ? planData.light.days : (Array.isArray(planData.days) ? planData.days : [])
+        }
+      };
+    });
+  } catch (error) {
+    console.warn('[nutrients] Failed to enrich groups with plans:', error?.message || error);
+    return [];
+  }
+}
+
+// P1 #5: File-backed wrapper around the pure resolver in
+// automation/recipe-nutrient-targets.js. Exposed via GET /api/nutrients/resolved-targets.
+function resolveRecipeNutrientTargetsFromDisk({ aggregator = 'weighted', now } = {}) {
+  const groups = enrichGroupsWithPlansForNutrients();
+  const resolved = resolveRecipeNutrientTankTargets(groups, { aggregator, now });
+  return {
+    ...resolved,
+    groupCount: groups.length,
+    enrichedGroupCount: groups.filter((g) => g?.plan && Array.isArray(g.plan.days) && g.plan.days.length).length
+  };
+}
+
+// P0/P1 helper: the stored target envelopes use Atlas's wire format
+// ({ecTarget: µS/cm, phTarget, ...}). diffNutrientTargets and every downstream
+// comparator expect a normalised {ec: mS/cm, ph} pair. Centralising the
+// translation here keeps the reconcile loop and the /applied/:scope endpoint
+// in lockstep and prevents silent "no drift" bugs when the shapes disagree.
+function normaliseAtlasTargetsForDiff(targets) {
+  if (!targets || typeof targets !== 'object') return { ec: null, ph: null };
+  const rawEc = Number(targets.ecTarget);
+  const rawPh = Number(targets.phTarget);
+  return {
+    ec: Number.isFinite(rawEc) ? rawEc / 1000 : null,
+    ph: Number.isFinite(rawPh) ? rawPh : null
+  };
+}
+
+// P1 #6: compare the live applied setpoints in NutrientStore against what the
+// active recipes would call for today. Runs on every nutrient poll; emits an
+// alert (stored in nutrientStore.alerts) when drift exceeds tolerance and the
+// same tank hasn't been alerted in the last DRIFT_ALERT_COOLDOWN_MS window.
+const DRIFT_ALERT_COOLDOWN_MS = 30 * 60 * 1000; // 30 min
+function reconcileRecipeNutrientTargets() {
+  try {
+    const resolved = resolveRecipeNutrientTargetsFromDisk({ aggregator: 'weighted' });
+    const tankAssignments = [
+      { tankId: 'tank-1', tankKey: 'tank1', resolved: resolved.tank1 },
+      { tankId: NUTRIENT_SCOPE_ID, tankKey: 'tank2', resolved: resolved.tank2 }
+    ];
+    const report = { calculatedAt: resolved.calculatedAt, tanks: {} };
+    for (const { tankId, tankKey, resolved: tankResolved } of tankAssignments) {
+      const applied = nutrientStore.getAppliedTargets(tankId);
+      const appliedPair = normaliseAtlasTargetsForDiff(applied?.targets || null);
+      const resolvedPair = { ec: tankResolved?.ec ?? null, ph: tankResolved?.ph ?? null };
+      const diff = diffNutrientTargets(appliedPair, resolvedPair, { ecTolerance: 0.1, phTolerance: 0.1 });
+      report.tanks[tankKey] = {
+        tankId,
+        applied: appliedPair,
+        resolved: resolvedPair,
+        reason: tankResolved?.reason || null,
+        sources: tankResolved?.sources || [],
+        diff,
+        drift: diff.changed
+      };
+
+      if (diff.changed && applied) {
+        const lastAlertAt = nutrientAutomationState.driftAlerts[tankId];
+        const now = Date.now();
+        if (!lastAlertAt || (now - new Date(lastAlertAt).getTime()) > DRIFT_ALERT_COOLDOWN_MS) {
+          nutrientStore.recordAlert({
+            severity: 'warning',
+            type: 'recipe-drift',
+            tank: tankId,
+            message: `Recipe targets drifted from applied setpoints on ${tankKey} (EC ${diff.ec.from}\u2192${diff.ec.to} mS/cm, pH ${diff.ph.from}\u2192${diff.ph.to})`,
+            diff,
+            resolved: resolvedPair,
+            applied: appliedPair,
+            sourceGroups: (tankResolved?.sources || []).map((s) => ({
+              id: s.groupId,
+              name: s.name,
+              day: s.day,
+              stage: s.stage
+            }))
+          });
+          nutrientAutomationState.driftAlerts[tankId] = new Date().toISOString();
+        }
+      }
+    }
+    return report;
+  } catch (error) {
+    console.warn('[nutrients] Recipe reconciliation failed:', error?.message || error);
+    return null;
+  }
+}
 
 function clone(value) {
   if (value === null || value === undefined) return null;
@@ -17425,6 +17536,10 @@ async function refreshNutrientAutomation({ force = false, reason = 'interval' } 
       || fallbackDoc?.metadata?.updatedAt
       || metadata.derivedAt;
 
+    // P1 #6: reconcile applied setpoints vs. recipe-resolved targets every
+    // poll. Emits drift alerts into nutrientStore.alerts when they disagree.
+    const reconcileReport = reconcileRecipeNutrientTargets();
+
     const snapshot = {
       ok: Boolean(mergedTelemetry),
       scopeId: NUTRIENT_SCOPE_ID,
@@ -17434,7 +17549,8 @@ async function refreshNutrientAutomation({ force = false, reason = 'interval' } 
       targets,
       mix,
       dosing,
-      metadata
+      metadata,
+      recipeReconcile: reconcileReport
     };
 
     updateNutrientDashboardSnapshot(fallbackDoc, snapshot);
@@ -17596,8 +17712,18 @@ app.post('/api/nutrients/targets', requireEdgeForControl, async (req, res) => {
       return res.status(400).json({ ok: false, error: 'invalid-targets' });
     }
 
+    const ALLOWED_TANK_SCOPES = new Set(['tank-1', 'tank-2', NUTRIENT_SCOPE_ID]);
+    const rawScope = typeof body.tankScope === 'string' && body.tankScope.trim()
+      ? body.tankScope.trim()
+      : (typeof body.tank === 'string' && body.tank.trim() ? body.tank.trim() : null);
+    const tankScope = rawScope && ALLOWED_TANK_SCOPES.has(rawScope) ? rawScope : NUTRIENT_SCOPE_ID;
+
     const payload = {
       action: 'setTargets',
+      // Include the selected tank scope on the wire so controllers that echo
+      // command metadata back in their ack can be matched to the right tank.
+      scope: tankScope,
+      tank: tankScope,
       targets: {
         phTarget: Number(config.phTarget.toFixed(2)),
         phTolerance: Number(config.phTolerance.toFixed(2)),
@@ -17618,13 +17744,40 @@ app.post('/api/nutrients/targets', requireEdgeForControl, async (req, res) => {
 
     const publishResult = await publishNutrientCommand(payload, { brokerUrl, topic });
 
+    // P0: record pending targets so the UI can render "Pending ack" until the
+    // Atlas controller publishes an ack on sensors/NutrientRoom/ack. The ack
+    // handler in NutrientStore promotes pending → applied. We also mark applied
+    // optimistically in test mode where no ack will ever arrive.
+    //
+    // The UI POSTs setpoints for BOTH tanks through this one endpoint, so the
+    // caller must tell us which tank the payload is for — otherwise a Tank 1
+    // push overwrites Tank 2's record and the Tank 1 status bar can never show
+    // "Last applied". We accept `tankScope` (preferred) or `tank` and fall back
+    // to NUTRIENT_SCOPE_ID for older clients.
+    try {
+      nutrientStore.recordPendingTargets(tankScope, payload.targets, {
+        source: req.headers['x-requested-by'] || 'api',
+        topic: publishResult?.topic || topic
+      });
+      if (publishResult?.testMode) {
+        nutrientStore.recordAppliedTargets(tankScope, payload.targets, {
+          source: 'test-mode'
+        });
+      }
+    } catch (recordError) {
+      console.warn('[nutrients] Failed to record pending targets:', recordError?.message || recordError);
+    }
+
     res.json({
       ok: true,
       brokerUrl: publishResult?.brokerUrl || brokerUrl,
       topic: publishResult?.topic || topic,
       translated: Boolean(publishResult?.translated),
       payload,
-      config
+      config,
+      tankScope,
+      pendingTargets: nutrientStore.getPendingTargets(tankScope),
+      appliedTargets: nutrientStore.getAppliedTargets(tankScope)
     });
   } catch (error) {
     console.error('[nutrients] Failed to publish setTargets:', error?.message || error);
@@ -17640,7 +17793,7 @@ app.options('/api/nutrients/pump-calibration', (req, res) => {
   res.status(204).end();
 });
 
-app.post('/api/nutrients/pump-calibration', async (req, res) => {
+app.post('/api/nutrients/pump-calibration', requireEdgeForControl, async (req, res) => {
   try {
     setCors(req, res);
     const body = req.body || {};
@@ -17707,7 +17860,7 @@ app.options('/api/nutrients/sensor-calibration', (req, res) => {
   res.status(204).end();
 });
 
-app.post('/api/nutrients/sensor-calibration', async (req, res) => {
+app.post('/api/nutrients/sensor-calibration', requireEdgeForControl, async (req, res) => {
   try {
     setCors(req, res);
     const body = req.body || {};
@@ -17906,7 +18059,10 @@ app.get('/api/nutrients/history/:scope/:sensor', async (req, res) => {
 });
 
 // Manual ingest endpoint (for testing with mosquitto_pub simulation)
-app.post('/api/nutrients/ingest', async (req, res) => {
+// P0: guarded by requireEdgeForControl for consistency with /targets and /command —
+// this endpoint accepts telemetry payloads that the store treats as ground truth,
+// so unauthenticated writes would let an attacker spoof pH/EC readings.
+app.post('/api/nutrients/ingest', requireEdgeForControl, async (req, res) => {
   try {
     setCors(req, res);
     const payload = req.body;
@@ -17930,6 +18086,90 @@ app.post('/api/nutrients/ingest', async (req, res) => {
     res.json({ ok: true, scope: tankId, ingested: true });
   } catch (error) {
     res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// P0 #1/#2: Read-only "what did Atlas actually apply?" endpoint. The UI uses
+// this to render "Last applied 12 s ago \u2713" vs "Pending ack" on the tank card.
+// It differs from /latest/:scope in that it returns only setpoint state, so
+// the header is small enough to poll frequently without dragging sensor history.
+app.get('/api/nutrients/applied/:scope', async (req, res) => {
+  try {
+    setCors(req, res);
+    const scope = decodeURIComponent(req.params.scope);
+    const applied = nutrientStore.getAppliedTargets(scope);
+    const pending = nutrientStore.getPendingTargets(scope);
+    res.json({
+      ok: true,
+      scope,
+      applied,
+      pending,
+      // `pending` is only ever cleared by recordAppliedTargets(), so the mere
+      // existence of a pending entry means there's still an unacked publish —
+      // even if an older applied state is sitting alongside it.
+      hasPendingAck: Boolean(pending),
+      // The stored target envelopes use Atlas's wire format
+      // ({ecTarget: µS/cm, phTarget}). diffNutrientTargets expects {ec: mS/cm, ph}
+      // so we normalise both sides before diffing; otherwise every diff reports
+      // `changed: false` because ec/ph are always undefined on these objects.
+      driftFromPending: pending && applied
+        ? diffNutrientTargets(
+            normaliseAtlasTargetsForDiff(applied.targets),
+            normaliseAtlasTargetsForDiff(pending.targets)
+          )
+        : null
+    });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// P0 #4: Alert feed for the UI banner. Atlas publishes alerts via
+// `sensors/nutrient/event/alert`; the reconcile loop adds "recipe drift"
+// alerts here too. `includeAcknowledged=false` hides alerts the operator has
+// dismissed.
+app.get('/api/nutrients/alerts', async (req, res) => {
+  try {
+    setCors(req, res);
+    const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 200);
+    const includeAcknowledged = String(req.query.includeAcknowledged ?? 'true') !== 'false';
+    const alerts = nutrientStore.getAlerts({ limit, includeAcknowledged });
+    res.json({ ok: true, count: alerts.length, alerts });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+app.options('/api/nutrients/alerts/:id/acknowledge', (req, res) => {
+  setCors(req, res);
+  res.status(204).end();
+});
+
+app.post('/api/nutrients/alerts/:id/acknowledge', async (req, res) => {
+  try {
+    setCors(req, res);
+    const alertId = decodeURIComponent(req.params.id);
+    const ok = nutrientStore.acknowledgeAlert(alertId);
+    if (!ok) return res.status(404).json({ ok: false, error: 'alert-not-found' });
+    res.json({ ok: true, alertId });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// P1 #5: Server-side recipe-driven nutrient targets. Consumes the same
+// enriched groups the UI does (via loadGroupsFile + loadPlansDocument) and
+// returns per-tank {ec, ph} so callers don't have to re-implement the math.
+// Accepts `?aggregator=max` to mimic the current UI aggregation exactly.
+app.get('/api/nutrients/resolved-targets', async (req, res) => {
+  try {
+    setCors(req, res);
+    const aggregator = req.query.aggregator === 'max' ? 'max' : 'weighted';
+    const resolved = resolveRecipeNutrientTargetsFromDisk({ aggregator });
+    res.json({ ok: true, ...resolved });
+  } catch (error) {
+    console.error('[nutrients] resolved-targets failed:', error?.message || error);
+    res.status(500).json({ ok: false, error: error?.message || 'resolve-failed' });
   }
 });
 

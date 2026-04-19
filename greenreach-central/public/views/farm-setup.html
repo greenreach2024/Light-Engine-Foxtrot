@@ -161,11 +161,24 @@
       gap: 12px;
       margin-bottom: 1rem;
       flex-wrap: wrap;
+      background: rgba(15, 23, 42, 0.82) !important;
+      border: 1px solid rgba(59, 130, 246, 0.14) !important;
+      border-radius: 12px !important;
+      padding: 12px !important;
     }
-    .fs-container .panel-header h2 { display: none; }
-    .fs-container .panel-body { padding: 0 !important; }
-    .fs-container .card-header { display: none; }
-    .fs-container .hint { display: none; }
+    .fs-container .panel-header h2 {
+      display: none; /* Title is in the summary */
+    }
+    .fs-container .panel-body {
+      padding: 0 !important;
+      background: transparent !important;
+    }
+    .fs-container .card-header {
+      display: none; /* Title is in the summary */
+    }
+    .fs-container .hint {
+      display: none; /* Tips in summary badge instead */
+    }
 
     /* ---- Text colors (fighting foxtrot light palette) ---- */
     .fs-container label,
@@ -290,6 +303,15 @@
       padding: 12px !important;
       margin-bottom: 8px;
     }
+    .fs-container #lightsPanelBody,
+    .fs-container #iotPanel .panel-body,
+    .fs-container #addedIoTDevicesContainer,
+    .fs-container #addedIoTDevicesList,
+    .fs-container #iotDevicesList,
+    .fs-container #lightSetupsList {
+      background: transparent !important;
+      color: #f1f5f9 !important;
+    }
     .fs-container #roomsList span,
     .fs-container #lightSetupsList span,
     .fs-container #iotDevicesList span,
@@ -357,10 +379,16 @@
       color: var(--accent-blue, #60a5fa) !important;
     }
     .fs-container [style*="background: #ffffff"],
+    .fs-container [style*="background: #f8fafc"],
+    .fs-container [style*="background:#f8fafc"],
+    .fs-container [style*="background: #f1f5f9"],
+    .fs-container [style*="background:#f1f5f9"],
     .fs-container [style*="background:#fff"],
     .fs-container [style*="background: white"],
     .fs-container [style*="background:white"] {
-      background: var(--surface-3, rgba(15, 23, 42, 0.5)) !important;
+  background: var(--surface-3, rgba(15, 23, 42, 0.5)) !important;
+  color: var(--text-1, #f1f5f9) !important;
+  border-color: var(--border-subtle, rgba(148, 163, 184, 0.18)) !important;
     }
 
     /* Scan results table */
@@ -414,7 +442,7 @@
   <script src="/js/light-engine-help.js" defer></script>
   <script src="/js/net.guard.js" defer></script>
   <script src="/js/iot-manager.js" defer></script>
-  <script src="/app.foxtrot.js" defer></script>
+  <script src="/app.foxtrot.js?v=20260415-dark-card-fix" defer></script>
 </head>
 <body class="le-theme">
 
@@ -535,36 +563,16 @@
       <div class="fs-card-body">
         <section id="integrationsPanel" class="card card--compact" data-panel="integrations">
           <div class="panel-body">
-            <!-- Universal Device Scanner -->
-            <div class="switchbot-card" id="universalScannerCard" style="margin-bottom:16px;">
-              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-                <div style="display:flex;align-items:center;gap:8px;">
-                  <span class="switchbot-dot"></span>
-                  <strong>Universal Device Scanner</strong>
+              <div class="switchbot-card" style="margin-bottom:16px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:8px;">
+                  <div style="display:flex;align-items:center;gap:8px;">
+                    <span class="switchbot-dot"></span>
+                    <strong>Device Discovery</strong>
+                  </div>
+                  <button id="btnOpenDeviceManagerIntegrations" type="button" class="primary">Open Device Manager</button>
                 </div>
-                <button id="btnUniversalScan" type="button" class="primary">Start Scan</button>
+                <div class="tiny" style="color:#94a3b8;">Discovery and add-to-farm actions now run through Device Manager so Farm Setup does not expose parallel scanner and pairing tools.</div>
               </div>
-              <div class="tiny" style="color:#94a3b8;">Multi-protocol discovery: BLE, mDNS, SSDP, Kasa UDP, SwitchBot Cloud</div>
-              <div id="universalScanProgress" style="display:none;margin-top:12px;">
-                <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
-                  <div style="width:16px;height:16px;border:2px solid #3b82f6;border-top-color:transparent;border-radius:50%;animation:spin 1s linear infinite;"></div>
-                  <span id="universalScanStatus" style="font-size:13px;color:#94a3b8;">Scanning networks...</span>
-                </div>
-                <div style="background:rgba(30,41,59,0.8);border-radius:4px;height:6px;overflow:hidden;">
-                  <div id="universalScanProgressBar" style="background:linear-gradient(90deg,#3b82f6,#10b981);height:100%;width:0%;transition:width 0.3s ease;border-radius:4px;"></div>
-                </div>
-              </div>
-              <div id="universalScanResults" style="display:none;margin-top:12px;">
-                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
-                  <h3 style="margin:0;font-size:14px;font-weight:600;">Discovered Devices</h3>
-                  <span id="universalScanCount" style="font-size:12px;color:#64748b;"></span>
-                </div>
-                <div id="universalScanResultsTable" style="max-height:400px;overflow-y:auto;border-radius:8px;"></div>
-              </div>
-            </div>
-            <div style="display:flex;justify-content:flex-start;margin:8px 0 16px;">
-              <button id="btnAddDeviceIntegrations" type="button" class="primary">Add Device</button>
-            </div>
 
             <!-- Code3 Controller Card -->
             <div class="switchbot-card" id="code3ControllerCard" style="margin-bottom:16px;">
@@ -631,10 +639,10 @@
       <div class="fs-card-body">
         <section id="pairDevicesPanel" class="card" data-panel="pair-devices">
           <div style="margin-bottom:12px;">
-            <p class="tiny">Walk through Wi-Fi, Bluetooth, and wired pairing with contextual AI assistance. Detects network details, confirms hub requirements, and documents installation notes.</p>
+              <p class="tiny">Use Device Manager for discovery, assignment, and vendor-specific setup. Pairing notes stay here, but the standalone scanner and add-device shortcuts have been removed from Farm Setup.</p>
           </div>
           <div class="row row--gap-sm row--wrap">
-            <button id="btnLaunchPairWizard" type="button" class="primary">Start Pairing Wizard</button>
+              <button id="btnOpenDeviceManagerPairing" type="button" class="primary">Open Device Manager</button>
             <button id="btnPairWizardDocs" type="button" class="ghost">Pairing checklist</button>
           </div>
           <span id="pairDevicesStatus" class="tiny" aria-live="polite" style="color:#94a3b8;"></span>
@@ -1163,8 +1171,8 @@
     <div class="device-manager__window" role="dialog" aria-modal="true" aria-labelledby="deviceManagerTitle">
       <header class="device-manager__header">
         <div>
-          <h2 id="deviceManagerTitle">Device Manager</h2>
-          <p class="tiny" id="deviceManagerSubtitle">Scan Wi‑Fi, BLE, and MQTT sources to bring devices into the farm.</p>
+            <h2 id="deviceManagerTitle">Device Manager (LEAM)</h2>
+            <p class="tiny" id="deviceManagerSubtitle">Run discovery, review devices, and add them to the farm from one LEAM-managed workflow.</p>
         </div>
         <button type="button" id="deviceManagerClose" class="ghost" aria-label="Close">×</button>
       </header>

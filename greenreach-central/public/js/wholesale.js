@@ -1257,7 +1257,7 @@
         var label = '$' + tier.min_avg.toLocaleString() + '+ avg/' + windowDays + 'd';
         html += '<span class="discount-tag ' + cls + '">'
               + '<strong>' + pct + '% volume discount</strong>'
-              + '<span class="discount-tag__label">' + label + (isActive ? ' ✓ Active' : '') + '</span>'
+              + '<span class="discount-tag__label">' + label + (isActive ? ' [OK] Active' : '') + '</span>'
               + '</span>';
       }
       html += '</div>';

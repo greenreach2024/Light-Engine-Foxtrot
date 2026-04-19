@@ -98,7 +98,7 @@
     }
 
     .step.completed .step-circle::after {
-      content: '✓';
+      content: '+';
     }
 
     .step-label {
@@ -282,15 +282,15 @@
     }
 
     .validation-item.success::before {
-      content: '✓';
+      content: '+';
     }
 
     .validation-item.error::before {
-      content: '✗';
+      content: 'x';
     }
 
     .validation-item.warning::before {
-      content: '⚠';
+      content: '!';
     }
 
     .progress-bar {
@@ -439,7 +439,7 @@
           </div>
 
           <div class="warning-box info-box">
-            <h3>⚠ Important Notes</h3>
+            <h3>[WARN] Important Notes</h3>
             <ul>
               <li>Export may take several minutes for large farms</li>
               <li>Your cloud deployment will remain active</li>
@@ -483,7 +483,7 @@
           <div id="import-preview" class="stats-grid"></div>
 
           <div class="warning-box info-box">
-            <h3>⚠ Before You Continue</h3>
+            <h3>[WARN] Before You Continue</h3>
             <ul>
               <li>Ensure your farm server has sufficient storage space</li>
               <li>A backup will be created automatically for rollback</li>
@@ -504,7 +504,7 @@
         <div class="wizard-step" data-step="4">
           <h2>Migration Complete!</h2>
 
-          <div class="completion-icon">✓</div>
+          <div class="completion-icon">+</div>
 
           <div class="success-box info-box">
             <h3>Successfully Migrated</h3>
@@ -613,7 +613,7 @@
         exportData = result.data;
 
         statusDiv.className = 'success-box info-box';
-        statusDiv.innerHTML = '<h3>✓ Export Successful</h3><p>Your data has been exported and is ready for validation.</p>';
+        statusDiv.innerHTML = '<h3>[OK] Export Successful</h3><p>Your data has been exported and is ready for validation.</p>';
 
         // Show stats
         statsDiv.className = 'stats-grid';
@@ -642,7 +642,7 @@
 
       } catch (error) {
         statusDiv.className = 'error-box info-box';
-        statusDiv.innerHTML = `<h3>✗ Export Failed</h3><p>${error.message}</p>`;
+        statusDiv.innerHTML = `<h3>[ERR] Export Failed</h3><p>${error.message}</p>`;
         btnNext.disabled = false;
         btnNext.textContent = 'Retry Export';
       }
@@ -731,7 +731,7 @@
 
       } catch (error) {
         resultsDiv.className = 'error-box info-box';
-        resultsDiv.innerHTML = `<h3>✗ Validation Failed</h3><p>${error.message}</p>`;
+        resultsDiv.innerHTML = `<h3>[ERR] Validation Failed</h3><p>${error.message}</p>`;
       }
     }
 

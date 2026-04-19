@@ -778,7 +778,7 @@ function renderProducts(products) {
         <div class="add-to-cart-row">
           <input type="number" class="qty-input" value="${qty}" min="1" max="999" id="qty-${p.sku}">
           <button class="btn btn-primary btn-sm" onclick="addToCart('${p.sku}')" ${!p.inStock ? 'disabled' : ''}>
-            ${cartItem ? '✓ Update' : '+ Add'}
+            ${cartItem ? '[OK] Update' : '+ Add'}
           </button>
           ${cartItem ? `<button class="btn btn-danger btn-sm" onclick="removeFromCart('${p.sku}')">✕</button>` : ''}
         </div>

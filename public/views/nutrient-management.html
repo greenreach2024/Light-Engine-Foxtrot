@@ -734,6 +734,22 @@
   </header>
 
   <main>
+    <!-- P0 #4: Nutrient alert banner. Rendered when /api/nutrients/alerts has
+         unacknowledged entries (controller alarms, reconciliation drift, etc). -->
+    <section id="nutrientAlertsBanner" class="card" style="display: none; border-color: rgba(248, 113, 113, 0.35); background: rgba(248, 113, 113, 0.08);">
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 1rem;">
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+          <span style="font-size: 1.5rem;">&#9888;</span>
+          <div>
+            <h2 style="margin: 0; font-size: 1.05rem; color: #fecaca;">Active Nutrient Alerts</h2>
+            <p id="nutrientAlertsSummary" style="margin: 0.25rem 0 0; font-size: 0.85rem; color: var(--neutral-300);">&mdash;</p>
+          </div>
+        </div>
+        <button type="button" id="nutrientAlertsToggle" style="padding: 0.5rem 1rem; background: rgba(248, 113, 113, 0.2); border: 1px solid rgba(248, 113, 113, 0.4); border-radius: 10px; color: #fecaca; font-weight: 600; cursor: pointer;">Show details</button>
+      </div>
+      <div id="nutrientAlertsList" style="display: none; margin-top: 1rem; max-height: 280px; overflow-y: auto;"></div>
+    </section>
+
     <section class="card" id="systemConfigCard">
       <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: 0.75rem;">
         <h2>System Configuration</h2>
@@ -780,7 +796,12 @@
 
     <!-- Tank 1: Vegetative System -->
     <section class="card" id="tank1Card">
-      <h2>Tank 1 - Vegetative</h2>
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 1rem;">
+        <h2 style="margin: 0;">Tank 1 - Vegetative</h2>
+        <div id="tank1AlertBadge" style="display: none; padding: 0.25rem 0.6rem; border-radius: 999px; font-size: 0.75rem; font-weight: 600; background: rgba(248, 113, 113, 0.15); color: #fecaca; border: 1px solid rgba(248, 113, 113, 0.35);">&#9888; Alert</div>
+      </div>
+      <!-- P0 #1/#2: last-applied setpoints + pending-ack indicator; P1 #7: detected nutrient profile & compatibility. -->
+      <div id="tank1StatusBar" style="display: none; margin-top: 0.75rem; padding: 0.75rem 1rem; border-radius: 12px; background: rgba(15, 23, 42, 0.55); border: 1px solid var(--card-border); font-size: 0.82rem; color: var(--neutral-300);"></div>
       
       <!-- Nutrient Provider & Status -->
       <div style="display: flex; gap: 1.5rem; align-items: center; margin-bottom: 1.5rem;">
@@ -938,7 +959,12 @@
 
     <!-- Tank 2: Live Fruiting System -->
     <section class="card" id="tank2Card">
-      <h2>Tank 2 - Fruiting</h2>
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 1rem;">
+        <h2 style="margin: 0;">Tank 2 - Fruiting</h2>
+        <div id="tank2AlertBadge" style="display: none; padding: 0.25rem 0.6rem; border-radius: 999px; font-size: 0.75rem; font-weight: 600; background: rgba(248, 113, 113, 0.15); color: #fecaca; border: 1px solid rgba(248, 113, 113, 0.35);">&#9888; Alert</div>
+      </div>
+      <!-- P0 #1/#2 + P1 #7 status bar: last-applied, pending ack, profile compatibility -->
+      <div id="tank2StatusBar" style="display: none; margin-top: 0.75rem; padding: 0.75rem 1rem; border-radius: 12px; background: rgba(15, 23, 42, 0.55); border: 1px solid var(--card-border); font-size: 0.82rem; color: var(--neutral-300);"></div>
       
       <!-- Nutrient Provider & Status -->
       <div style="display: flex; gap: 1.5rem; align-items: center; margin-bottom: 1.5rem;">
@@ -1118,6 +1144,13 @@
   const COMMAND_ENDPOINT = '/api/nutrients/command';
     const GROUPS_ENDPOINT = '/data/groups.json';
     const PLANS_ENDPOINT = '/plans';
+    // P0 + P1: control-loop & recipe-aware endpoints
+    const ALERTS_ENDPOINT = '/api/nutrients/alerts';
+    const APPLIED_ENDPOINT = '/api/nutrients/applied';
+    const NUTRIENT_PROFILES_ENDPOINT = '/data/nutrient-profiles.json';
+    // Tank id used by the backend NutrientStore. Keep in sync with
+    // NUTRIENT_SCOPE_ID on the server side (default: tank-2).
+    const BACKEND_TANK_IDS = { tank1: 'tank-1', tank2: 'tank-2' };
     const PAIL_LOW_THRESHOLD = 0.8; // 80%
     const HISTORY_LIMIT = 48;
 
@@ -1249,7 +1282,15 @@
         loading: false
       },
       snapshot: null,
-      legacyCache: null
+      legacyCache: null,
+      // P0 #4: nutrient alerts (from /api/nutrients/alerts).
+      alerts: [],
+      // P0 #1/#2: applied + pending targets keyed by UI tank id ('tank1','tank2').
+      applied: { tank1: null, tank2: null },
+      pending: { tank1: null, tank2: null },
+      // P1 #7: nutrient-profiles.json compatibility metadata.
+      nutrientProfiles: null,
+      profileMatch: { tank1: null, tank2: null }
     };
 
     const wizardOverlay = document.getElementById('wizardOverlay');
@@ -2792,7 +2833,7 @@
       warnings.forEach((warning) => {
         const div = document.createElement('div');
         div.className = 'warning';
-        const badge = warning.level === 'critical' ? '⚠️' : '⚡️';
+        const badge = warning.level === 'critical' ? '[WARN]' : '⚡️';
         div.innerHTML = `<strong>${badge} ${warning.title}</strong><span>${warning.detail}</span>`;
         host.appendChild(div);
       });
@@ -3246,7 +3287,11 @@
           ecDoseSeconds: clamp(payload.ecDoseSeconds, 0.5, 20),
           phDownDoseSeconds: clamp(payload.phDownDoseSeconds, 0.5, 5),
           minDoseIntervalSec: clamp(payload.minDoseIntervalSec, 30, 3600),
-          autodoseEnabled: payload.autodoseEnabled
+          autodoseEnabled: payload.autodoseEnabled,
+          // P0: identify which tank these setpoints are for so the server can
+          // record pending/applied under the right scope. Without this every
+          // Tank 1 push used to overwrite Tank 2's store entry.
+          tankScope: BACKEND_TANK_IDS[tankId] || BACKEND_TANK_IDS.tank2
         };
 
         if (!Number.isFinite(sanitized.phTarget) || !Number.isFinite(sanitized.ecTarget)) {
@@ -3425,6 +3470,226 @@
       }
     }
 
+    // Escape a string for safe insertion into an HTML innerHTML template. Alert
+    // fields originate from MQTT payloads, which we must treat as untrusted;
+    // otherwise a crafted `type`/`message` could execute JS in the operator UI.
+    function escapeHtmlForAlert(value) {
+      if (value === null || value === undefined) return '';
+      return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    // P0 #4: render alert banner + per-tank alert badge. Uses only alerts that
+    // are unacknowledged. Clicking "Show details" exposes the full list.
+    function renderNutrientAlerts() {
+      const banner = document.getElementById('nutrientAlertsBanner');
+      const summary = document.getElementById('nutrientAlertsSummary');
+      const list = document.getElementById('nutrientAlertsList');
+      const toggle = document.getElementById('nutrientAlertsToggle');
+      const tank1Badge = document.getElementById('tank1AlertBadge');
+      const tank2Badge = document.getElementById('tank2AlertBadge');
+      const alerts = Array.isArray(state.alerts) ? state.alerts : [];
+      const active = alerts.filter((a) => !a.acknowledged);
+
+      if (tank1Badge) tank1Badge.style.display = 'none';
+      if (tank2Badge) tank2Badge.style.display = 'none';
+
+      if (!active.length) {
+        if (banner) banner.style.display = 'none';
+        if (list) { list.style.display = 'none'; list.innerHTML = ''; }
+        if (toggle) toggle.textContent = 'Show details';
+        return;
+      }
+
+      const severityCounts = active.reduce((acc, a) => {
+        const sev = (a.severity || 'info').toLowerCase();
+        acc[sev] = (acc[sev] || 0) + 1;
+        return acc;
+      }, {});
+      const severityParts = [];
+      ['critical', 'warning', 'info'].forEach((sev) => {
+        if (severityCounts[sev]) severityParts.push(`${severityCounts[sev]} ${sev}`);
+      });
+
+      if (banner) banner.style.display = '';
+      if (summary) summary.textContent = `${active.length} active (${severityParts.join(', ') || 'info'}) — latest: ${active[0].message || active[0].type || 'see details'}`;
+
+      if (list) {
+        list.innerHTML = active.map((a) => {
+          const sev = (a.severity || 'info').toLowerCase();
+          const color = sev === 'critical' ? '#fca5a5' : sev === 'warning' ? '#fcd34d' : '#93c5fd';
+          const receivedAt = a.receivedAt || a.timestamp || '';
+          const idAttr = a.id ? encodeURIComponent(a.id) : '';
+          const ackBtn = idAttr
+            ? `<button type="button" class="nutrient-alert-ack" data-alert-id="${idAttr}" style="margin-left: 0.75rem; padding: 0.15rem 0.5rem; background: rgba(148, 163, 184, 0.2); border: 1px solid var(--card-border); border-radius: 8px; color: var(--neutral-200); font-size: 0.72rem; cursor: pointer;">Acknowledge</button>`
+            : '';
+          const typeText = escapeHtmlForAlert(a.type || 'alert');
+          const tankText = a.tank ? ` · ${escapeHtmlForAlert(a.tank)}` : '';
+          const messageText = escapeHtmlForAlert(a.message || '');
+          const receivedText = escapeHtmlForAlert(receivedAt);
+          return `
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 0.75rem; padding: 0.5rem 0; border-top: 1px solid rgba(148, 163, 184, 0.12);">
+              <div style="flex: 1;">
+                <div style="color: ${color}; font-weight: 600; font-size: 0.85rem;">${typeText}${tankText}</div>
+                <div style="color: var(--neutral-200); font-size: 0.82rem;">${messageText}</div>
+                <div style="color: var(--neutral-400); font-size: 0.72rem; margin-top: 0.15rem;">${receivedText}</div>
+              </div>
+              ${ackBtn}
+            </div>
+          `;
+        }).join('');
+        list.querySelectorAll('.nutrient-alert-ack').forEach((btn) => {
+          btn.addEventListener('click', async () => {
+            const id = btn.getAttribute('data-alert-id');
+            if (!id) return;
+            try {
+              const response = await fetch(`${ALERTS_ENDPOINT}/${id}/acknowledge`, { method: 'POST' });
+              if (response.ok) {
+                state.alerts = await fetchNutrientAlerts();
+                renderNutrientAlerts();
+              }
+            } catch (err) {
+              console.warn('[nutrient] ack failed:', err);
+            }
+          });
+        });
+      }
+
+      if (toggle) {
+        toggle.onclick = () => {
+          if (!list) return;
+          const visible = list.style.display !== 'none';
+          list.style.display = visible ? 'none' : '';
+          toggle.textContent = visible ? 'Show details' : 'Hide details';
+        };
+      }
+
+      // Alerts without a `tank` field are system-wide (Atlas controller, MQTT,
+      // reconciliation) — surface them in the top banner only, not on either
+      // per-tank badge, so operators aren't misled into thinking a tankless
+      // alert is Tank 2-specific.
+      const tank1HasAlert = active.some((a) => a.tank === BACKEND_TANK_IDS.tank1 || a.tank === 'tank1' || a.tank === 'tank-1');
+      const tank2HasAlert = active.some((a) => a.tank === BACKEND_TANK_IDS.tank2 || a.tank === 'tank2' || a.tank === 'tank-2');
+      if (tank1Badge) tank1Badge.style.display = tank1HasAlert ? '' : 'none';
+      if (tank2Badge) tank2Badge.style.display = tank2HasAlert ? '' : 'none';
+    }
+
+    // Human-friendly "12 s ago" formatting for applied/pending timestamps.
+    function formatRelativeTime(iso) {
+      if (!iso) return 'unknown';
+      const then = new Date(iso).getTime();
+      if (!Number.isFinite(then)) return 'unknown';
+      const delta = Math.round((Date.now() - then) / 1000);
+      if (delta < 0) return 'in the future';
+      if (delta < 60) return `${delta}s ago`;
+      if (delta < 3600) return `${Math.floor(delta / 60)}m ago`;
+      if (delta < 86400) return `${Math.floor(delta / 3600)}h ago`;
+      return `${Math.floor(delta / 86400)}d ago`;
+    }
+
+    // P1 #7: pick the nutrient profile whose compatible_crops list contains the
+    // group's crop id. Returns { profileKey, profile, crops: [{name, cropId, profileKey}] }.
+    function detectTankProfile(uiTankId) {
+      const profilesDoc = state.nutrientProfiles;
+      if (!profilesDoc || !profilesDoc.profiles) return null;
+      const groups = uiTankId === 'tank1' ? state.computed?.vegetativeGroups : state.computed?.fruitingGroups;
+      if (!Array.isArray(groups) || !groups.length) return null;
+      const cropToProfile = new Map();
+      Object.entries(profilesDoc.profiles).forEach(([key, profile]) => {
+        (profile.compatible_crops || []).forEach((cropId) => cropToProfile.set(cropId, key));
+      });
+      const crops = groups.map((g) => {
+        const cropId = g.plan?.id || g.plan || g.crop || null;
+        return { name: g.name || 'Unnamed', cropId, profileKey: cropId ? cropToProfile.get(cropId) || null : null };
+      });
+      const profileCounts = new Map();
+      crops.forEach((c) => {
+        if (c.profileKey) profileCounts.set(c.profileKey, (profileCounts.get(c.profileKey) || 0) + 1);
+      });
+      let dominant = null;
+      profileCounts.forEach((count, key) => {
+        if (!dominant || count > dominant.count) dominant = { key, count };
+      });
+      return {
+        profileKey: dominant?.key || null,
+        profile: dominant ? profilesDoc.profiles[dominant.key] : null,
+        crops
+      };
+    }
+
+    // P1 #7: evaluate the compatibility matrix for the detected profile against
+    // each crop's profile. Returns { worst: 'incompatible'|'poor'|'acceptable'|'good'|'perfect', incompatibleCrops, unknownCrops }.
+    function evaluateProfileCompatibility(match) {
+      if (!match || !match.profileKey || !state.nutrientProfiles?.compatibility_matrix) return null;
+      const matrix = state.nutrientProfiles.compatibility_matrix[match.profileKey] || {};
+      const order = ['incompatible', 'poor', 'acceptable', 'good', 'perfect'];
+      let worstIndex = order.indexOf('perfect');
+      const incompatibleCrops = [];
+      const unknownCrops = [];
+      match.crops.forEach((c) => {
+        if (!c.profileKey) {
+          unknownCrops.push(c);
+          return;
+        }
+        const compat = matrix[c.profileKey] || 'acceptable';
+        const idx = order.indexOf(compat);
+        if (idx >= 0 && idx < worstIndex) worstIndex = idx;
+        if (compat === 'incompatible') incompatibleCrops.push(c);
+      });
+      return { worst: order[worstIndex], incompatibleCrops, unknownCrops };
+    }
+
+    // P0 #1/#2 + P1 #7: render the per-tank status bar with last-applied state,
+    // pending-ack indicator, detected nutrient profile, and any compatibility warnings.
+    function renderTankStatusBar(uiTankId) {
+      const bar = document.getElementById(`${uiTankId}StatusBar`);
+      if (!bar) return;
+      const applied = state.applied[uiTankId];
+      const pending = state.pending[uiTankId];
+      const chips = [];
+
+      if (applied?.appliedAt) {
+        chips.push(`<span style="color: #6ee7b7;">&#10003; Last applied ${formatRelativeTime(applied.appliedAt)}</span>`);
+      } else {
+        chips.push(`<span style="color: var(--neutral-400);">No applied setpoints on record</span>`);
+      }
+      if (pending?.requestedAt) {
+        chips.push(`<span style="color: #fcd34d;">&#8987; Pending ack (sent ${formatRelativeTime(pending.requestedAt)})</span>`);
+      }
+
+      const match = detectTankProfile(uiTankId);
+      state.profileMatch[uiTankId] = match;
+      if (match?.profile) {
+        // Profile + crop names flow in from nutrient-profiles.json and groups.json,
+        // both of which are writable through the API, so escape before innerHTML.
+        chips.push(`<span style="color: #93c5fd;">Profile: ${escapeHtmlForAlert(match.profile.name)}</span>`);
+        const compat = evaluateProfileCompatibility(match);
+        if (compat) {
+          if (compat.worst === 'incompatible') {
+            const names = compat.incompatibleCrops.map((c) => escapeHtmlForAlert(c.name)).join(', ');
+            chips.push(`<span style="color: #fca5a5;">&#9888; Incompatible pairings: ${names} — move crop to the other tank</span>`);
+          } else if (compat.worst === 'poor') {
+            chips.push(`<span style="color: #fcd34d;">Poor pairing — consider moving mismatched crops</span>`);
+          }
+        }
+        if (compat && compat.unknownCrops.length) {
+          const names = compat.unknownCrops.map((c) => escapeHtmlForAlert(c.name)).join(', ');
+          chips.push(`<span style="color: var(--neutral-400);">No profile for: ${names}</span>`);
+        }
+      }
+
+      if (!chips.length) {
+        bar.style.display = 'none';
+        return;
+      }
+      bar.style.display = '';
+      bar.innerHTML = chips.map((c) => `<div style="display: inline-block; margin-right: 1rem; margin-bottom: 0.25rem;">${c}</div>`).join('');
+    }
+
     async function initialize() {
       computeState(state.raw);
       
@@ -3498,6 +3763,13 @@
       renderAutodoseSummary('tank1');
       renderAutodoseSummary('tank2');
       renderSystemConfig();
+
+      // P0 #1/#2 + P0 #4 + P1 #7: surface control-loop closure, alerts, and
+      // profile compatibility after the rest of the dashboard has been rendered
+      // so computeState() has populated fruitingGroups/vegetativeGroups.
+      renderNutrientAlerts();
+      renderTankStatusBar('tank1');
+      renderTankStatusBar('tank2');
     }
 
     async function fetchGroups() {
@@ -3572,15 +3844,64 @@
       });
     }
 
+    // P0 #4: fetch and cache the current nutrient alert feed.
+    async function fetchNutrientAlerts() {
+      try {
+        const response = await fetch(`${ALERTS_ENDPOINT}?t=${Date.now()}&includeAcknowledged=false`);
+        if (!response.ok) return [];
+        const data = await response.json();
+        return Array.isArray(data?.alerts) ? data.alerts : [];
+      } catch (error) {
+        console.warn('[nutrient] alerts fetch failed:', error);
+        return [];
+      }
+    }
+
+    // P0 #1/#2: fetch last-applied setpoints for one backend tank scope.
+    async function fetchAppliedTargets(backendScope) {
+      try {
+        const response = await fetch(`${APPLIED_ENDPOINT}/${encodeURIComponent(backendScope)}?t=${Date.now()}`);
+        if (!response.ok) return null;
+        const data = await response.json();
+        return { applied: data?.applied || null, pending: data?.pending || null };
+      } catch (error) {
+        console.warn('[nutrient] applied fetch failed:', error);
+        return null;
+      }
+    }
+
+    // P1 #7: crop -> profile + profile compatibility matrix.
+    async function fetchNutrientProfiles() {
+      try {
+        const response = await fetch(`${NUTRIENT_PROFILES_ENDPOINT}?t=${Date.now()}`);
+        if (!response.ok) return null;
+        return await response.json();
+      } catch (error) {
+        console.warn('[nutrient] profiles fetch failed:', error);
+        return null;
+      }
+    }
+
     async function hydrate() {
       try {
         const ts = Date.now();
-        const [snapshotResponse, legacyResponse, groupsData, plansData] = await Promise.all([
+        const [snapshotResponse, legacyResponse, groupsData, plansData, alertsData, tank1Applied, tank2Applied, profilesData] = await Promise.all([
           fetch(`${API_ENDPOINT}?t=${ts}`),
           fetch(`${LEGACY_CACHE_ENDPOINT}?t=${ts}`),
           fetchGroups(),
-          fetchPlans()
+          fetchPlans(),
+          fetchNutrientAlerts(),
+          fetchAppliedTargets(BACKEND_TANK_IDS.tank1),
+          fetchAppliedTargets(BACKEND_TANK_IDS.tank2),
+          fetchNutrientProfiles()
         ]);
+
+        state.alerts = Array.isArray(alertsData) ? alertsData : [];
+        state.applied.tank1 = tank1Applied?.applied || null;
+        state.pending.tank1 = tank1Applied?.pending || null;
+        state.applied.tank2 = tank2Applied?.applied || null;
+        state.pending.tank2 = tank2Applied?.pending || null;
+        state.nutrientProfiles = profilesData || null;
 
         state.legacyCache = legacyResponse?.ok ? await legacyResponse.json().catch(() => null) : null;
 

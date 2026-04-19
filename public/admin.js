@@ -27,7 +27,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     // Check authentication - redirect if not authenticated
     if (!isAuthenticated()) {
-        console.warn('⚠️ Not authenticated, redirecting to login...');
+        console.warn('[WARN] Not authenticated, redirecting to login...');
         window.location.href = '/login.html?redirect=' + encodeURIComponent(window.location.pathname);
         return;
     }
@@ -88,12 +88,12 @@ async function autoAuthenticateLocal() {
             localStorage.removeItem('farmId');
             console.log('✅ Auto-authentication successful');
         } else {
-            console.warn('⚠️ Auto-authentication failed');
+            console.warn('[WARN] Auto-authentication failed');
             // Redirect to login if auto-auth fails
             window.location.href = '/login.html';
         }
     } catch (error) {
-        console.warn('⚠️ Auto-authentication error:', error.message);
+        console.warn('[WARN] Auto-authentication error:', error.message);
         window.location.href = '/login.html';
     }
 }
