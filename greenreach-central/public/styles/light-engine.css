@@ -9,12 +9,16 @@
   --text-primary: #f1f5f9;
   --text-secondary: #94a3b8;
   --text-muted: #64748b;
-  --accent-blue: #3b82f6;
-  --accent-green: #10b981;
-  --accent-yellow: #f59e0b;
-  --accent-red: #ef4444;
-  --accent-purple: #8b5cf6;
-  --accent-indigo: #6366f1;
+  /* Accents aligned with public/styles/le-foundation.css (Tailwind-400 shades).
+     Legacy --accent-yellow kept as a back-compat alias for --accent-amber. */
+  --accent-blue:   #60a5fa;
+  --accent-green:  #34d399;
+  --accent-amber:  #fbbf24;
+  --accent-yellow: var(--accent-amber);
+  --accent-red:    #f87171;
+  --accent-purple: #a78bfa;
+  --accent-indigo: #818cf8;
+  --accent-teal:   #5eead4;
   --glass-card: linear-gradient(145deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 41, 59, 0.9) 100%);
   --glass-border: 1px solid rgba(148, 163, 184, 0.12);
   --glow-indigo: 0 0 20px rgba(99, 102, 241, 0.08);

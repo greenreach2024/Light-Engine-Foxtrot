@@ -775,6 +775,7 @@ const _htmlDirs = [
 app.use((req, res, next) => {
   // Only intercept .html requests (skip API routes, data files, JS/CSS/images)
   const reqPath = req.path;
+  if (reqPath === '/LE-dashboard.html' || reqPath === '/farm-admin.html') return next();
   if (!reqPath.endsWith('.html')) return next();
 
   // Find the HTML file in our static directories
@@ -800,6 +801,18 @@ app.use((req, res, next) => {
     return;
   }
   next();
+});
+
+app.get('/LE-dashboard.html', (req, res) => {
+  const queryIndex = req.originalUrl.indexOf('?');
+  const queryString = queryIndex >= 0 ? req.originalUrl.slice(queryIndex) : '';
+  res.redirect(302, `/views/farm-setup.html${queryString}`);
+});
+
+app.get('/farm-admin.html', (req, res) => {
+  const queryIndex = req.originalUrl.indexOf('?');
+  const queryString = queryIndex >= 0 ? req.originalUrl.slice(queryIndex) : '';
+  res.redirect(302, `/LE-farm-admin.html${queryString}`);
 });
 
 // Static UI — non-HTML assets (JS, CSS, images, JSON, fonts)
