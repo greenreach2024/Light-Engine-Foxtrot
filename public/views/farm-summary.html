@@ -10,6 +10,8 @@
   <link rel="stylesheet" href="../styles/le-dashboard-theme.css?v=2025-12-20-01">
   <link rel="stylesheet" href="/styles/nav-color-palette.css">
   <link rel="stylesheet" href="/styles/light-engine.css">
+  <link rel="stylesheet" href="/styles/le-foundation.css">
+  <link rel="stylesheet" href="/styles/le-dailytodo.css">
   <link rel="stylesheet" href="/styles/evie-core.css">
   <style>
     html { height: 100%; }
@@ -231,13 +233,12 @@
 
     /* Card Styles */
     .card {
-      background: rgba(30, 41, 59, 0.6);
-      border-radius: 16px;
+      background: var(--surface-1, rgba(30, 41, 59, 0.6));
+      border-radius: var(--radius-lg, 16px);
       padding: 2rem;
       padding-top: 1.25rem;
-      border: 1px solid rgba(59, 130, 246, 0.2);
-      backdrop-filter: blur(10px);
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+      border: 1px solid var(--border-subtle, rgba(148, 163, 184, 0.12));
+      box-shadow: var(--elevation-3, 0 8px 32px rgba(0, 0, 0, 0.3));
       display: flex;
       flex-direction: column;
       position: relative;
@@ -298,9 +299,9 @@
     .card h2 {
       font-size: 1.5rem;
       margin-bottom: 1rem;
-      color: #f1f5f9;
+      color: var(--text-1, #f1f5f9);
       font-weight: 600;
-      border-bottom: 2px solid rgba(59, 130, 246, 0.3);
+      border-bottom: 1px solid var(--border-strong, rgba(148, 163, 184, 0.24));
       padding-bottom: 0.75rem;
       line-height: 1.4;
     }
@@ -1694,7 +1695,7 @@
       overflow: hidden;
     ">
       <div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;" onclick="toggleMLInsights()">
-        <h2 style="color: #e2e8f0; margin: 0; font-size: 1.25rem;">📊 ML Insights Dashboard</h2>
+        <h2 style="color: #e2e8f0; margin: 0; font-size: 1.25rem;">ML Insights Dashboard</h2>
         <span id="mlInsightsToggleIcon" style="font-size:0.75rem;color:#94a3b8;">▶ expand</span>
       </div>
       <div id="mlInsightsContent" style="display:none; margin-top: 1rem;">
@@ -1764,11 +1765,9 @@
     <!-- Daily To-Do — Farm Ops Agent -->
     <div class="card" id="dailyTodoCard">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
-        <h2 style="margin:0;display:flex;align-items:center;gap:0.5rem;">
-          <span style="font-size:1.1rem;">📋</span> Today's Tasks
-        </h2>
+        <h2 style="margin:0;">Today's Tasks</h2>
         <div style="display:flex;gap:0.5rem;align-items:center;">
-          <select id="todoFilterCategory" style="background:#1e293b;color:#94a3b8;border:1px solid #334155;border-radius:6px;padding:0.35rem 0.6rem;font-size:0.8rem;cursor:pointer;">
+          <select id="todoFilterCategory" class="le-field" aria-label="Filter tasks by category">
             <option value="">All</option>
             <option value="wholesale">Wholesale</option>
             <option value="harvest">Harvest</option>
@@ -1777,11 +1776,11 @@
             <option value="environment">Environment</option>
             <option value="ai-recommendation">AI Recs</option>
           </select>
-          <button class="refresh-btn" onclick="loadDailyTodo()" style="background:#334155;border:none;color:#94a3b8;padding:0.375rem 0.75rem;border-radius:6px;cursor:pointer;font-size:0.8rem;">↻</button>
+          <button class="le-iconbtn" onclick="loadDailyTodo()" title="Refresh tasks" aria-label="Refresh tasks">↻</button>
         </div>
       </div>
       <div id="dailyTodoContent" style="display:flex;flex-direction:column;gap:0.5rem;">
-        <span style="color:#64748b;font-size:0.9rem;">Loading tasks...</span>
+        <span style="color:var(--text-3);font-size:var(--font-size-sm);">Loading tasks...</span>
       </div>
     </div>
 
@@ -1858,7 +1857,7 @@
     <!-- Harvest Readiness Cards (S4.2) — collapsed by default, expand for recipe details -->
     <div class="card" id="harvestReadinessCard" style="display:none;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.25rem;">
-        <h2 style="margin:0;cursor:pointer;" onclick="toggleHarvestReadinessPanel()">🌾 Harvest Readiness <span id="hrToggleIcon" style="font-size:0.75rem;color:#94a3b8;">▶ expand</span></h2>
+        <h2 style="margin:0;cursor:pointer;" onclick="toggleHarvestReadinessPanel()">Harvest Readiness <span id="hrToggleIcon" style="font-size:0.75rem;color:#94a3b8;">▶ expand</span></h2>
         <div style="display:flex;gap:0.5rem;align-items:center;">
           <span id="hrSummaryBadge" style="font-size:0.8rem;color:#94a3b8;"></span>
           <button class="refresh-btn" onclick="loadHarvestReadiness()" style="background:#334155;border:none;color:#94a3b8;padding:0.375rem 0.75rem;border-radius:6px;cursor:pointer;font-size:0.8rem;">↻</button>
@@ -1870,7 +1869,7 @@
     <!-- Loss Prediction Alerts (S4.3) -->
     <div class="card" id="lossPredictionCard" style="display:none;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
-        <h2 style="margin:0;">⚠️ Loss Risk Alerts</h2>
+        <h2 style="margin:0;">⚠ Loss Risk Alerts</h2>
         <button class="refresh-btn" onclick="loadLossPredictions()" style="background:#334155;border:none;color:#94a3b8;padding:0.375rem 0.75rem;border-radius:6px;cursor:pointer;font-size:0.8rem;">↻</button>
       </div>
       <div id="lossPredictionContent"></div>
@@ -1879,7 +1878,7 @@
     <!-- Learning Correlations Panel (Phase D) -->
     <div class="card" id="learningCorrelationCard" style="display:none;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
-        <h2 style="margin:0;">📈 Learning Correlations</h2>
+        <h2 style="margin:0;">Learning Correlations</h2>
         <button class="refresh-btn" onclick="loadLearningCorrelations()" style="background:#334155;border:none;color:#94a3b8;padding:0.375rem 0.75rem;border-radius:6px;cursor:pointer;font-size:0.8rem;">↻</button>
       </div>
       <div id="learningCorrelationContent"></div>
@@ -1888,7 +1887,7 @@
     <!-- Experiment Record Visibility (Phase D) -->
     <div class="card" id="experimentRecordCard" style="display:none;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
-        <h2 style="margin:0;">🧪 Experiment Records</h2>
+        <h2 style="margin:0;">Experiment Records</h2>
         <button class="refresh-btn" onclick="loadExperimentRecords()" style="background:#334155;border:none;color:#94a3b8;padding:0.375rem 0.75rem;border-radius:6px;cursor:pointer;font-size:0.8rem;">↻</button>
       </div>
       <div id="experimentRecordContent"></div>
@@ -1897,7 +1896,7 @@
     <!-- Recipe Modifier Panel (S4.1) -->
     <div class="card" id="recipeModifierCard" style="display:none;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
-        <h2 style="margin:0;">🧬 Recipe Modifiers</h2>
+        <h2 style="margin:0;">Recipe Modifiers</h2>
         <button class="refresh-btn" onclick="loadRecipeModifiers()" style="background:#334155;border:none;color:#94a3b8;padding:0.375rem 0.75rem;border-radius:6px;cursor:pointer;font-size:0.8rem;">↻</button>
       </div>
       <div id="recipeModifierContent" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:0.75rem;"></div>
@@ -1905,7 +1904,7 @@
 
     <!-- AI Feature Cards (S4.5) -->
     <div class="card" id="aiFeatureCards" style="display:none;">
-      <h2 style="margin:0 0 1rem 0;">🤖 AI Intelligence Summary</h2>
+      <h2 style="margin:0 0 1rem 0;">AI Intelligence Summary</h2>
       <div id="aiFeatureContent" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:0.75rem;"></div>
     </div>
 
@@ -1954,7 +1953,7 @@
         <div class="chart" id="chartContainer">
           <canvas id="trendChart"></canvas>
           <div class="chart-empty" id="chartEmptyState" hidden>
-            <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">🌡️</div>
+            <div style="font-size: 1.5rem; margin-bottom: 0.5rem;"></div>
             <div>Connect environmental sensors to review data</div>
           </div>
         </div>
@@ -2236,7 +2235,7 @@
         const testResponse = await fetchWithFarmAuth('/env?hours=1');
         if (testResponse.status === 403 || testResponse.status === 404) {
           isCloudMode = true;
-          console.log('[Farm Summary] ☁️ Cloud mode detected - no sensor data available');
+          console.log('[Farm Summary] ☁ Cloud mode detected - no sensor data available');
           showCloudModeNotice();
         }
       } catch (e) {
@@ -2382,7 +2381,7 @@
         color: #93c5fd;
       `;
       notice.innerHTML = `
-        <div style="font-size: 2rem; margin-bottom: 0.5rem;">🌡️</div>
+        <div style="font-size: 2rem; margin-bottom: 0.5rem;"></div>
         <div style="font-size: 1.25rem; font-weight: 600; margin-bottom: 0.5rem;">Connect environmental sensors to review data</div>
         <div style="font-size: 0.95rem; opacity: 0.9;">
           Link sensors to the Light Engine and assign them to zones via the Room Mapper.
@@ -2399,7 +2398,7 @@
       // Show "connect sensors" message in each ML widget
       const sensorMsg = `
         <div style="text-align: center; padding: 1.5rem 1rem;">
-          <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">🌡️</div>
+          <div style="font-size: 1.5rem; margin-bottom: 0.5rem;"></div>
           <div style="color: #94a3b8; font-weight: 600; font-size: 0.85rem;">Connect sensors to enable</div>
         </div>`;
       
@@ -2439,7 +2438,7 @@
       if (healthContent) {
         healthContent.innerHTML = `
           <div style="text-align: center; padding: 2rem 1rem;">
-            <div style="font-size: 2rem; margin-bottom: 0.5rem;">🌡️</div>
+            <div style="font-size: 2rem; margin-bottom: 0.5rem;"></div>
             <div style="color: #94a3b8; font-weight: 600;">Connect environmental sensors to review data</div>
             <div style="color: #64748b; font-size: 0.85rem; margin-top: 0.5rem;">Health scoring requires live sensor readings from your zones</div>
           </div>`;
@@ -2450,7 +2449,7 @@
       if (envGrid) {
         envGrid.innerHTML = `
           <div style="grid-column: 1 / -1; padding: 2rem; text-align: center;">
-            <div style="font-size: 2rem; margin-bottom: 0.5rem;">🌡️</div>
+            <div style="font-size: 2rem; margin-bottom: 0.5rem;"></div>
             <div style="color: #94a3b8; font-weight: 600;">Connect environmental sensors to review data</div>
             <div style="color: #64748b; font-size: 0.85rem; margin-top: 0.5rem;">Link sensors via the Room Mapper to see live readings here</div>
           </div>`;
@@ -3019,7 +3018,7 @@
         const grid = document.getElementById('envGrid');
         if (grid) {
           grid.innerHTML = `<div style="grid-column: 1 / -1; padding: 2rem; text-align: center;">
-            <div style="font-size: 2rem; margin-bottom: 0.5rem;">🌡️</div>
+            <div style="font-size: 2rem; margin-bottom: 0.5rem;"></div>
             <div style="color: #94a3b8; font-weight: 600;">Connect environmental sensors to review data</div>
             <div style="color: #64748b; font-size: 0.85rem; margin-top: 0.5rem;">Link sensors via the Room Mapper to see live readings here</div>
           </div>`;
@@ -3382,13 +3381,13 @@
                     const nextHarvest = harvestCycle.currentHarvest + 1;
                     
                     if (regrowDaysLeft <= 0) {
-                      harvestStatus = `🔄 Ready for Cut ${nextHarvest} of ${harvestCycle.maxHarvests}`;
+                      harvestStatus = `Ready for Cut ${nextHarvest} of ${harvestCycle.maxHarvests}`;
                       harvestColor = '#ef4444';
                     } else if (regrowDaysLeft <= 3) {
-                      harvestStatus = `🔄 Regrowth: ${regrowDaysLeft} day${regrowDaysLeft !== 1 ? 's' : ''} to harvest ${nextHarvest}/${harvestCycle.maxHarvests}`;
+                      harvestStatus = `Regrowth: ${regrowDaysLeft} day${regrowDaysLeft !== 1 ? 's' : ''} to harvest ${nextHarvest}/${harvestCycle.maxHarvests}`;
                       harvestColor = '#f59e0b';
                     } else {
-                      harvestStatus = `🔄 Regrowing: ${regrowDaysLeft} day${regrowDaysLeft !== 1 ? 's' : ''} to harvest ${nextHarvest}/${harvestCycle.maxHarvests}`;
+                      harvestStatus = `Regrowing: ${regrowDaysLeft} day${regrowDaysLeft !== 1 ? 's' : ''} to harvest ${nextHarvest}/${harvestCycle.maxHarvests}`;
                       harvestColor = '#0369a1';
                     }
                   } else if (daysToHarvest > 7) {
@@ -3487,7 +3486,7 @@
                             ${harvestStatus}
                           </div>
                           ${currentStage ? `<div class="harvest-stage">Day ${currentDay} • ${currentStage}${isRegrowing ? ' (Regrowth)' : ''}</div>` : ''}
-                          ${isCCA ? `<div style="margin-top:4px;font-size:0.8rem;padding:2px 8px;border-radius:4px;background:${isRegrowing ? '#fef3c7' : '#eff6ff'};color:${isRegrowing ? '#92400e' : '#1e40af'};display:inline-block;">🔄 Cut & Come Again ${harvestCycle.currentHarvest}/${harvestCycle.maxHarvests} harvests</div>` : ''}
+                          ${isCCA ? `<div style="margin-top:4px;font-size:0.8rem;padding:2px 8px;border-radius:4px;background:${isRegrowing ? '#fef3c7' : '#eff6ff'};color:${isRegrowing ? '#92400e' : '#1e40af'};display:inline-block;">Cut & Come Again ${harvestCycle.currentHarvest}/${harvestCycle.maxHarvests} harvests</div>` : ''}
                           <div id="ai-prediction-${group.id}" style="margin-top: 8px;">
                             <!-- AI Prediction Badge will be inserted here -->
                           </div>
@@ -3500,13 +3499,13 @@
                             class="harvest-button" 
                             onclick="harvestToday('${group.id}', ${currentDay}, ${maxDay}, '${plan.id}')"
                             title="Cut harvest — crop will ${(harvestCycle.currentHarvest + 1 >= harvestCycle.maxHarvests) ? 'be removed after final cut' : 'regrow for next harvest'}">
-                            ${(harvestCycle.currentHarvest + 1 >= harvestCycle.maxHarvests) ? '🌾 Final Harvest' : '✂️ Cut Harvest'} (${harvestCycle.currentHarvest + 1}/${harvestCycle.maxHarvests})
+                            ${(harvestCycle.currentHarvest + 1 >= harvestCycle.maxHarvests) ? 'Final Harvest' : '✂ Cut Harvest'} (${harvestCycle.currentHarvest + 1}/${harvestCycle.maxHarvests})
                           </button>` : `
                           <button 
                             class="harvest-button ${daysToHarvest < 0 ? 'overdue' : ''}" 
                             onclick="harvestToday('${group.id}', ${currentDay}, ${maxDay}, '${plan.id}')"
                             title="Record harvest and log variance from plan">
-                            ${isCCA ? '✂️ Cut Harvest (1/' + harvestCycle.maxHarvests + ')' : 'Harvest Today'}
+                            ${isCCA ? '✂ Cut Harvest (1/' + harvestCycle.maxHarvests + ')' : 'Harvest Today'}
                           </button>`}
                           ${(!isRegrowing || harvestCycle.currentHarvest + 1 >= harvestCycle.maxHarvests) ? `
                           <button 
@@ -3891,7 +3890,7 @@
           if (hasWarning) {
             const warnings = [];
             if (hasBatteryIssue) {
-              warnings.push('🔋 Dead battery');
+              warnings.push('Dead battery');
             } else {
               if (isStale) warnings.push('Stale data');
               if (tempInvalid) warnings.push('Invalid temp');
@@ -3918,7 +3917,7 @@
               <!-- Zone Environmental Metrics (shown first) -->
               ${!Number.isFinite(temp) && !Number.isFinite(humidity) ? `
                 <div style="margin-bottom: 20px; padding: 20px; background: rgba(59, 130, 246, 0.08); border: 2px dashed rgba(59, 130, 246, 0.4); border-radius: 12px; text-align: center;">
-                  <div style="font-size: 1.5rem; margin-bottom: 8px;">🌡️</div>
+                  <div style="font-size: 1.5rem; margin-bottom: 8px;"></div>
                   <div style="color: #64748b; font-weight: 600; font-size: 0.95rem;">Connect environmental sensors to review data</div>
                   <div style="color: #94a3b8; font-size: 0.8rem; margin-top: 6px;">Link sensors via the Room Mapper to see live readings</div>
                 </div>
@@ -4030,7 +4029,7 @@
 
           if (riskAlerts.length > 0 || experiments.length > 0) {
             let centralHtml = '<div style="margin-top:16px;padding:12px;background:#f0f7ff;border-radius:8px;border-left:4px solid #2d5016;">';
-            centralHtml += '<h4 style="margin:0 0 8px;color:#2d5016;font-size:0.9rem;">📡 Central Network Suggestions</h4>';
+            centralHtml += '<h4 style="margin:0 0 8px;color:#2d5016;font-size:0.9rem;">Central Network Suggestions</h4>';
 
             riskAlerts.forEach(alert => {
               const color = alert.severity === 'high' ? '#c0392b' : alert.severity === 'medium' ? '#e67e22' : '#7f8c8d';
@@ -4044,7 +4043,7 @@
 
             experiments.forEach(exp => {
               centralHtml += `<div style="padding:8px;margin-bottom:6px;background:white;border-radius:4px;border-left:3px solid #8e44ad;">`;
-              centralHtml += `<span style="font-size:0.82rem;">🧪 <strong>A/B Experiment:</strong> ${exp.crop} — ${exp.hypothesis || 'spectrum test'}</span>`;
+              centralHtml += `<span style="font-size:0.82rem;"><strong>A/B Experiment:</strong> ${exp.crop} — ${exp.hypothesis || 'spectrum test'}</span>`;
               centralHtml += `<div style="margin-top:4px;display:flex;gap:6px;">`;
               centralHtml += `<button onclick="this.textContent='Accepted ✓';this.disabled=true;this.style.background='#d5f5e3'" style="font-size:0.75rem;padding:2px 8px;border:1px solid #8e44ad;background:#f5eef8;border-radius:4px;cursor:pointer;">Accept Experiment</button>`;
               centralHtml += `<button onclick="this.closest('div[style]').remove()" style="font-size:0.75rem;padding:2px 8px;border:1px solid #ccc;background:#f9f9f9;border-radius:4px;cursor:pointer;">Dismiss</button>`;
@@ -4973,7 +4972,7 @@
         if (!healthData.zones || healthData.zones.length === 0) {
           container.innerHTML = `
             <div style="text-align: center; padding: 2rem 1rem;">
-              <div style="font-size: 2rem; margin-bottom: 0.5rem;">🌡️</div>
+              <div style="font-size: 2rem; margin-bottom: 0.5rem;"></div>
               <div style="color: #94a3b8; font-weight: 600;">Connect environmental sensors to review data</div>
               <div style="color: #64748b; font-size: 0.85rem; margin-top: 0.5rem;">Health scoring requires live sensor readings from your zones</div>
             </div>
@@ -5019,15 +5018,15 @@
         if (healthData.insights && healthData.insights.length > 0) {
           insightsHTML = `
             <div class="health-insights">
-              <h3>💡 Insights & Recommendations</h3>
+              <h3>Insights & Recommendations</h3>
               ${healthData.insights.map(insight => {
                 const message = typeof insight === 'string' ? insight : insight.message || '';
                 const recommendation = (typeof insight === 'object' && insight.recommendation) ? 
                   `<div style="margin-top: 0.25rem; font-size: 0.875rem; color: #3b82f6;">→ ${insight.recommendation}</div>` : '';
                 const source = (typeof insight === 'object' && insight.source) ?
-                  `<div style="margin-top: 0.25rem; font-size: 0.75rem; color: #10b981; font-weight: 600;">🤖 ${insight.source}</div>` : '';
+                  `<div style="margin-top: 0.25rem; font-size: 0.75rem; color: #10b981; font-weight: 600;">${insight.source}</div>` : '';
                 const priority = (typeof insight === 'object' && insight.priority === 'high') ?
-                  `<span style="color: #ef4444; font-weight: 700; margin-left: 0.5rem;">⚠️ HIGH PRIORITY</span>` : '';
+                  `<span style="color: #ef4444; font-weight: 700; margin-left: 0.5rem;">⚠ HIGH PRIORITY</span>` : '';
                 return `<div class="health-insight-item">${message}${priority}${recommendation}${source}</div>`;
               }).join('')}
             </div>
@@ -5050,10 +5049,10 @@
             <div style="text-align: right; color: #94a3b8; font-size: 0.875rem;">
               <div style="margin-bottom: 0.5rem;"><strong>${summary.total_zones}</strong> zones monitored</div>
               <div style="display: flex; gap: 1rem; justify-content: flex-end;">
-                <span>🟢 ${summary.excellent} excellent</span>
-                <span>🔵 ${summary.good} good</span>
-                <span>🟠 ${summary.fair} fair</span>
-                <span>🔴 ${summary.poor} poor</span>
+                <span>${summary.excellent} excellent</span>
+                <span>${summary.good} good</span>
+                <span>${summary.fair} fair</span>
+                <span>${summary.poor} poor</span>
               </div>
             </div>
           </div>
@@ -5080,7 +5079,7 @@
         console.error('[Health] Failed to load:', error);
         container.innerHTML = `
           <div class="health-no-data">
-            <div style="font-size: 2rem; margin-bottom: 1rem;">⚠️</div>
+            <div style="font-size: 2rem; margin-bottom: 1rem;">⚠</div>
             <div style="font-size: 1rem; font-weight: 600; margin-bottom: 0.5rem;">Failed to Load Health Data</div>
             <div style="font-size: 0.875rem;">${error.message}</div>
           </div>
@@ -5134,8 +5133,10 @@
       const detail = document.getElementById('task-detail-' + taskId);
       const arrow = document.getElementById('task-arrow-' + taskId);
       if (!detail) return;
+      // .le-task-detail is display:flex + gap, so expanding must restore flex
+      // (not block) or the child gap collapses to zero.
       const hidden = detail.style.display === 'none';
-      detail.style.display = hidden ? 'block' : 'none';
+      detail.style.display = hidden ? 'flex' : 'none';
       if (arrow) arrow.textContent = hidden ? '▼' : '▶';
     }
 
@@ -5155,34 +5156,38 @@
       if (el) { el.style.opacity = '0.3'; el.style.pointerEvents = 'none'; }
     }
 
-    /** Render a single expandable task row */
+    /**
+     * Render a single expandable task row.
+     * `style` comes from the category map below and provides `chip` (2-letter code)
+     * and `accent` (one of the 6 LE accents: blue/green/amber/red/purple/teal).
+     */
     function renderTodoTask(task, style) {
       const s = style;
       const scorePct = Math.round((task.score || 0) * 100);
-      const scoreColor = scorePct >= 70 ? '#f87171' : scorePct >= 40 ? '#fbbf24' : '#4ade80';
+      const priorityClass = scorePct >= 70 ? 'le-badge--critical' : scorePct >= 40 ? 'le-badge--warning' : 'le-badge--ok';
       const safeId = (task.id || '').replace(/[^a-zA-Z0-9_-]/g, '_');
       const whyText = typeof task.why === 'object' ? (task.why.message || task.why.error || JSON.stringify(task.why)) : (task.why || '');
       const actions = Array.isArray(task.actions) ? task.actions : [];
       const severityBadge = task.category === 'anomaly'
-        ? `<span style="font-size:0.65rem;font-weight:700;text-transform:uppercase;padding:1px 5px;border-radius:3px;margin-left:6px;${scorePct >= 70 ? 'background:rgba(239,68,68,0.2);color:#ef4444;' : 'background:rgba(251,191,36,0.2);color:#fbbf24;'}">${scorePct >= 70 ? 'critical' : 'warning'}</span>`
+        ? `<span class="le-badge ${scorePct >= 70 ? 'le-badge--critical' : 'le-badge--warning'}">${scorePct >= 70 ? 'critical' : 'warning'}</span>`
         : '';
 
       return `
-        <div id="todo-task-${safeId}" style="background:${s.bg};border:1px solid ${s.border};border-radius:8px;padding:0.6rem 0.85rem;transition:opacity 0.3s;">
-          <div style="display:flex;gap:0.6rem;align-items:center;cursor:pointer;" onclick="toggleTaskDetail('${safeId}')">
-            <span style="font-size:1rem;flex-shrink:0;">${s.icon}</span>
-            <span id="task-arrow-${safeId}" style="font-size:0.65rem;color:#64748b;flex-shrink:0;width:12px;">▶</span>
-            <span style="flex:1;min-width:0;font-weight:600;color:${s.text};font-size:0.85rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${task.title}</span>
+        <div id="todo-task-${safeId}">
+          <div class="le-task-row" onclick="toggleTaskDetail('${safeId}')">
+            <span class="le-chip le-chip--${s.accent}" aria-label="${s.label}">${s.chip}</span>
+            <span id="task-arrow-${safeId}" class="le-task-row__arrow">▶</span>
+            <span class="le-task-row__title">${task.title}</span>
             ${severityBadge}
-            <span style="flex-shrink:0;font-size:0.65rem;font-weight:700;color:${scoreColor};background:rgba(0,0,0,0.25);padding:1px 5px;border-radius:4px;" title="Priority score">${scorePct}%</span>
+            <span class="le-badge ${priorityClass}" title="Priority score">${scorePct}%</span>
           </div>
-          <div id="task-detail-${safeId}" style="display:none;margin-top:0.5rem;padding-left:2.2rem;">
-            ${whyText ? `<div style="font-size:0.8rem;color:#94a3b8;line-height:1.4;margin-bottom:0.4rem;">${whyText}</div>` : ''}
-            ${task.estimated_minutes ? `<div style="font-size:0.7rem;color:#64748b;margin-bottom:0.5rem;">⏱ ~${task.estimated_minutes} min</div>` : ''}
-            ${actions.length > 0 ? `
-              <div style="display:flex;gap:0.4rem;flex-wrap:wrap;">
-                ${actions.map(a => `<button onclick="event.stopPropagation();this.textContent='Done ✓';this.disabled=true;this.style.opacity='0.5';" style="font-size:0.7rem;padding:3px 10px;border:1px solid ${s.border};background:${s.bg};color:${s.text};border-radius:5px;cursor:pointer;font-weight:500;">${a}</button>`).join('')}
-                ${task.category === 'anomaly' ? `<button onclick="event.stopPropagation();dismissTodoAlert('${safeId}');" style="font-size:0.7rem;padding:3px 10px;border:1px solid #475569;background:transparent;color:#64748b;border-radius:5px;cursor:pointer;">Dismiss</button>` : ''}
+          <div id="task-detail-${safeId}" class="le-task-detail" style="display:none;">
+            ${whyText ? `<div class="le-task-detail__why">${whyText}</div>` : ''}
+            ${task.estimated_minutes ? `<div class="le-task-detail__meta">~${task.estimated_minutes} min</div>` : ''}
+            ${actions.length > 0 || task.category === 'anomaly' ? `
+              <div class="le-task-detail__actions">
+                ${actions.map(a => `<button class="le-task-detail__action" onclick="event.stopPropagation();this.textContent='Done';this.disabled=true;">${a}</button>`).join('')}
+                ${task.category === 'anomaly' ? `<button class="le-task-detail__action le-task-detail__action--dismiss" onclick="event.stopPropagation();dismissTodoAlert('${safeId}');">Dismiss</button>` : ''}
               </div>` : ''}
           </div>
         </div>`;
@@ -5201,20 +5206,22 @@
         const data = await resp.json();
 
         if (!data.tasks || data.tasks.length === 0) {
-          container.innerHTML = '<div style="text-align:center;padding:1.5rem;color:#64748b;font-size:0.9rem;">✅ No tasks for today — you\'re all caught up!</div>';
+          container.innerHTML = '<div style="text-align:center;padding:1.5rem;color:var(--text-3);font-size:var(--font-size-sm);">No tasks for today — you\'re all caught up.</div>';
           if (card) card.style.display = '';
           return;
         }
 
+        // Map categories to the 6 LE accents + a 2-letter chip code.
+        // See public/styles/le-dailytodo.css for chip styling.
         const categoryColors = {
-          wholesale: { bg: 'rgba(251,146,60,0.12)', border: 'rgba(251,146,60,0.4)', text: '#fb923c', icon: '📦' },
-          harvest: { bg: 'rgba(74,222,128,0.12)', border: 'rgba(74,222,128,0.4)', text: '#4ade80', icon: '🌾' },
-          seeding: { bg: 'rgba(96,165,250,0.12)', border: 'rgba(96,165,250,0.4)', text: '#60a5fa', icon: '🌱' },
-          anomaly: { bg: 'rgba(248,113,113,0.12)', border: 'rgba(248,113,113,0.4)', text: '#f87171', icon: '⚠️' },
-          environment: { bg: 'rgba(244,114,182,0.12)', border: 'rgba(244,114,182,0.4)', text: '#f472b6', icon: '🌡️' },
-          'ai-recommendation': { bg: 'rgba(167,139,250,0.12)', border: 'rgba(167,139,250,0.4)', text: '#a78bfa', icon: '🤖' }
+          wholesale:           { accent: 'amber',  chip: 'WS', label: 'Wholesale' },
+          harvest:             { accent: 'green',  chip: 'HV', label: 'Harvest' },
+          seeding:             { accent: 'blue',   chip: 'SD', label: 'Seeding' },
+          anomaly:             { accent: 'red',    chip: 'AL', label: 'Alert' },
+          environment:         { accent: 'purple', chip: 'EN', label: 'Environment' },
+          'ai-recommendation': { accent: 'teal',   chip: 'AI', label: 'AI Recommendation' }
         };
-        const defaultStyle = { bg: 'rgba(148,163,184,0.08)', border: 'rgba(148,163,184,0.3)', text: '#94a3b8', icon: '📌' };
+        const defaultStyle = { accent: 'blue', chip: 'TK', label: 'Task' };
 
         // Separate anomaly/alert tasks from actionable tasks
         const alertTasks = data.tasks.filter(t => t.category === 'anomaly');
@@ -5233,32 +5240,32 @@
           const criticalCount = alertTasks.filter(t => Math.round((t.score || 0) * 100) >= 70).length;
           const warningCount = alertTasks.length - criticalCount;
           const summaryParts = [];
-          if (criticalCount > 0) summaryParts.push(`<span style="color:#ef4444;font-weight:700;">${criticalCount} critical</span>`);
-          if (warningCount > 0) summaryParts.push(`<span style="color:#fbbf24;font-weight:700;">${warningCount} warning</span>`);
+          if (criticalCount > 0) summaryParts.push(`<span style="color:var(--accent-red);font-weight:700;">${criticalCount} critical</span>`);
+          if (warningCount > 0) summaryParts.push(`<span style="color:var(--accent-amber);font-weight:700;">${warningCount} warning</span>`);
 
           html += `
-            <div style="background:rgba(248,113,113,0.06);border:1px solid rgba(248,113,113,0.25);border-radius:8px;overflow:hidden;">
-              <div onclick="toggleAlertsGroup()" style="display:flex;align-items:center;gap:0.5rem;padding:0.6rem 0.85rem;cursor:pointer;user-select:none;">
-                <span style="font-size:1rem;">⚠️</span>
-                <span id="todo-alerts-arrow" style="font-size:0.65rem;color:#64748b;width:12px;">▶</span>
-                <span style="flex:1;font-weight:600;color:#f87171;font-size:0.85rem;">Alerts (${alertTasks.length})</span>
-                <span style="font-size:0.75rem;color:#94a3b8;">${summaryParts.join(' · ')}</span>
+            <div class="le-alerts-group">
+              <div class="le-alerts-group__header" onclick="toggleAlertsGroup()">
+                <span class="le-chip le-chip--red" aria-hidden="true">AL</span>
+                <span id="todo-alerts-arrow" class="le-task-row__arrow">▶</span>
+                <span class="le-alerts-group__title">Alerts (${alertTasks.length})</span>
+                <span class="le-alerts-group__count">${summaryParts.join(' · ')}</span>
               </div>
-              <div id="todo-alerts-list" style="display:none;padding:0 0.5rem 0.5rem;display:none;flex-direction:column;gap:0.35rem;">
+              <div id="todo-alerts-list" class="le-alerts-group__list" style="display:none;">
                 ${alertTasks.map(t => renderTodoTask(t, categoryColors.anomaly)).join('')}
               </div>
             </div>`;
         }
 
         if (data.task_count > 10 + alertTasks.length) {
-          html += `<div style="text-align:center;padding:0.5rem;color:#64748b;font-size:0.8rem;">${data.task_count - 10 - alertTasks.length} more task(s) not shown</div>`;
+          html += `<div style="text-align:center;padding:0.5rem;color:var(--text-3);font-size:var(--font-size-xs);">${data.task_count - 10 - alertTasks.length} more task(s) not shown</div>`;
         }
 
         container.innerHTML = html;
         if (card) card.style.display = '';
       } catch (err) {
         console.warn('[Daily Todo]', err.message);
-        container.innerHTML = '<div style="color:#64748b;font-size:0.85rem;padding:0.75rem;text-align:center;">Daily tasks unavailable</div>';
+        container.innerHTML = '<div style="color:var(--text-3);font-size:var(--font-size-sm);padding:0.75rem;text-align:center;">Daily tasks unavailable</div>';
         if (card) card.style.display = '';
       }
     }
@@ -5500,7 +5507,7 @@
         el.innerHTML = alerts.slice(0, 5).map(a => {
           const sev = (a.risk_score || 0) > 0.7 ? '#ef4444' : (a.risk_score || 0) > 0.4 ? '#f59e0b' : '#3b82f6';
           return `<div style="display:flex;align-items:center;gap:0.75rem;padding:0.75rem;background:#1e293b;border-radius:8px;margin-bottom:0.5rem;border-left:3px solid ${sev};">
-            <span style="font-size:1.25rem;">${(a.risk_score || 0) > 0.7 ? '🔴' : '🟡'}</span>
+            <span style="font-size:1.25rem;">${(a.risk_score || 0) > 0.7 ? '' : ''}</span>
             <div style="flex:1;">
               <div style="color:#f1f5f9;font-weight:600;">${a.group_name || a.zone || 'Zone'}</div>
               <div style="color:#94a3b8;font-size:0.75rem;">${a.factors ? a.factors.join(', ') : a.message || 'Elevated risk'}</div>
@@ -5680,10 +5687,10 @@
         const harvestData = harvestResp.status === 'fulfilled' ? harvestResp.value : null;
         const lossData = lossResp.status === 'fulfilled' ? lossResp.value : null;
         const autoData = autonomousResp.status === 'fulfilled' ? autonomousResp.value : null;
-        if (modData) { const n = (modData.local || []).length + (modData.network || []).length; features.push({ icon: '🧬', label: 'Recipe Modifiers', value: n + ' active', color: n > 0 ? '#22c55e' : '#64748b' }); }
-        if (harvestData) { const groups = harvestData.notifications || harvestData.groups || harvestData.data || []; const ready = groups.filter(g => (g.readiness_score || g.readiness || g.confidence || 0) >= 0.8).length; features.push({ icon: '🌾', label: 'Harvest Ready', value: ready + '/' + groups.length, color: ready > 0 ? '#f59e0b' : '#64748b' }); }
-        if (lossData) { const alerts = lossData.alerts || []; const high = alerts.filter(a => (a.risk_score || 0) > 0.7).length; features.push({ icon: '⚠️', label: 'Loss Risk', value: high > 0 ? high + ' high risk' : 'Clear', color: high > 0 ? '#ef4444' : '#22c55e' }); }
-        if (autoData) { features.push({ icon: '🤖', label: 'Autonomous', value: autoData.enabled ? 'Active' : 'Inactive', color: autoData.enabled ? '#3b82f6' : '#64748b' }); }
+        if (modData) { const n = (modData.local || []).length + (modData.network || []).length; features.push({ icon: '', label: 'Recipe Modifiers', value: n + ' active', color: n > 0 ? '#22c55e' : '#64748b' }); }
+        if (harvestData) { const groups = harvestData.notifications || harvestData.groups || harvestData.data || []; const ready = groups.filter(g => (g.readiness_score || g.readiness || g.confidence || 0) >= 0.8).length; features.push({ icon: '', label: 'Harvest Ready', value: ready + '/' + groups.length, color: ready > 0 ? '#f59e0b' : '#64748b' }); }
+        if (lossData) { const alerts = lossData.alerts || []; const high = alerts.filter(a => (a.risk_score || 0) > 0.7).length; features.push({ icon: '⚠', label: 'Loss Risk', value: high > 0 ? high + ' high risk' : 'Clear', color: high > 0 ? '#ef4444' : '#22c55e' }); }
+        if (autoData) { features.push({ icon: '', label: 'Autonomous', value: autoData.enabled ? 'Active' : 'Inactive', color: autoData.enabled ? '#3b82f6' : '#64748b' }); }
         if (features.length === 0) { if (card) card.style.display = 'none'; return; }
         card.style.display = '';
         el.innerHTML = features.map(f => `<div style="background:#1e293b;border-radius:8px;padding:1rem;text-align:center;">
@@ -7775,7 +7782,7 @@
           localStorage.setItem('harvestLogs', JSON.stringify(harvestLogs));
           try { await fetch('/api/harvest', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(harvestEntry) }); } catch(e) {}
 
-          alert(`✂️ Cut Harvest ${nextHarvest} of ${maxHarvests} recorded!\n\nCrop will regrow for ${regrowthDays} days.\nHarvests remaining: ${maxHarvests - nextHarvest}`);
+          alert(`✂ Cut Harvest ${nextHarvest} of ${maxHarvests} recorded!\n\nCrop will regrow for ${regrowthDays} days.\nHarvests remaining: ${maxHarvests - nextHarvest}`);
           location.reload();
           return;
         }
@@ -7792,7 +7799,7 @@
         } else if (variance < 0) {
           confirmMessage += `Status: ${Math.abs(variance)} day${Math.abs(variance) !== 1 ? 's' : ''} EARLY ⏰\n`;
         } else {
-          confirmMessage += `Status: ${variance} day${variance !== 1 ? 's' : ''} LATE 📅\n`;
+          confirmMessage += `Status: ${variance} day${variance !== 1 ? 's' : ''} LATE\n`;
         }
         
         confirmMessage += `\nThis will update inventory and cannot be easily undone.\n\nClick OK to proceed or Cancel to abort.`;
@@ -7877,16 +7884,16 @@
         let details = '';
         
         if (isCCA) {
-          message = `🌾 Final harvest (${maxHarvests}/${maxHarvests}) complete!`;
+          message = `Final harvest (${maxHarvests}/${maxHarvests}) complete!`;
           details = `Crop cycle finished. Group archived and ready for reseed.`;
         } else if (variance === 0) {
-          message = '🎯 Harvest recorded on schedule!';
+          message = 'Harvest recorded on schedule!';
           details = 'Perfect timing - no variance from plan.';
         } else if (variance < 0) {
           message = `⏰ Harvest recorded ${Math.abs(variance)} day${Math.abs(variance) !== 1 ? 's' : ''} early`;
           details = `This data will help optimize future schedules.`;
         } else {
-          message = `📅 Harvest recorded ${variance} day${variance !== 1 ? 's' : ''} late`;
+          message = `Harvest recorded ${variance} day${variance !== 1 ? 's' : ''} late`;
           details = `This data will help optimize future schedules.`;
         }
         
@@ -8379,7 +8386,7 @@
 
       } catch (error) {
         console.error('Failed to create new planting:', error);
-        alert(`❌ Failed to create planting: ${error.message}\n\nPlease try again or contact support.`);
+        alert(`✗ Failed to create planting: ${error.message}\n\nPlease try again or contact support.`);
       }
     }
 
