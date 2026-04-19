@@ -88,6 +88,14 @@ function getPostLoginRedirectPath() {
     return safePath;
 }
 
+function hasExplicitAdminReturnPath() {
+    const params = new URLSearchParams(window.location.search);
+    if (!params.has('return')) return false;
+
+    const redirectPath = getPostLoginRedirectPath();
+    return redirectPath !== '/LE-farm-admin.html' || redirectPath.includes('#');
+}
+
 /**
  * Initialize on page load
  */
@@ -379,10 +387,15 @@ async function handleLogin(e) {
             // Store setupCompleted in localStorage to prevent future false redirects
             if (data.setupCompleted) {
                 localStorage.setItem('setup_completed', 'true');
+                sessionStorage.setItem('setup_completed', 'true');
             }
+
+            const explicitAdminReturnPath = hasExplicitAdminReturnPath();
             
             setTimeout(() => {
-                if (needsFullSetup) {
+                if (explicitAdminReturnPath) {
+                    window.location.href = getPostLoginRedirectPath();
+                } else if (needsFullSetup) {
                     // Full wizard: password change + farm profile + rooms
                     window.location.href = '/setup-wizard.html';
                 } else if (needsPasswordChange) {
@@ -6780,9 +6793,13 @@ async function checkFirstTimeSetup() {
         if (!data.setupCompleted) {
             // Double-check: if localStorage has setup_completed=true, don't redirect
             // This prevents redirect loops for farms that completed setup but DB flag is stale
-            const localSetupDone = localStorage.getItem('setup_completed') === 'true';
+            const localSetupDone = localStorage.getItem('setup_completed') === 'true' || sessionStorage.getItem('setup_completed') === 'true';
             if (localSetupDone) {
                 console.log('[setup-wizard] DB says not complete but localStorage says done — skipping redirect');
+                return;
+            }
+            if (window.location.hash && window.location.hash !== '#dashboard') {
+                console.log('[setup-wizard] Explicit hash route detected, skipping standalone wizard redirect');
                 return;
             }
             console.log('[setup-wizard] Setup not complete, redirecting to wizard');
