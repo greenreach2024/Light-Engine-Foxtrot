@@ -4061,22 +4061,8 @@ Download QuickBooks CSV
 
     <!-- Crop registry utilities (Phase 2b migration — unified grow-day source) -->
     <script src="/js/crop-utils.js"></script>
-    <script>
-      // Bootstrap crop registry synchronously so farm-admin.js can use cropUtils
-      (function() {
-        try {
-          var xhr = new XMLHttpRequest();
-          xhr.open('GET', '/data/crop-registry.json', false); // sync
-          xhr.send();
-          if (xhr.status === 200) {
-            var reg = JSON.parse(xhr.responseText);
-            if (window.cropUtils && reg) cropUtils.setRegistry(reg);
-          }
-        } catch (e) {
-          console.warn('crop-registry.json bootstrap failed:', e);
-        }
-      })();
-    </script>
+    <!-- No defer: sync XHR below must complete before /farm-admin.js runs -->
+    <script src="/js/admin/crop-registry-bootstrap.js"></script>
     <script src="/farm-admin.js?v=20260410-organic-discount"></script>
     <script src="/js/plan-features.js?v=20260313"></script>
     <script src="/js/onboarding-checklist.js?v=20260313"></script>
