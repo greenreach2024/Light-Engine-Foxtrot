@@ -1,4 +1,14 @@
-/* IoT Devices Manager Styles */
+/* IoT Devices Manager Styles
+   --------------------------------------------------------------
+   Consumes tokens from public/styles/le-foundation.css.
+
+   Fallback values on every var() are deliberately LIGHT-palette.
+   Pages that load le-foundation.css (farm-setup.html,
+   LE-switchbot.html, etc.) override these tokens to dark values
+   via :root; pages that don't (e.g. LE-dashboard.html, which still
+   inherits the foxtrot light theme) get opaque light cards instead
+   of the transparent washout they rendered on main.
+   -------------------------------------------------------------- */
 
 .iot-devices-list {
   padding: 1rem;
@@ -20,9 +30,11 @@
 }
 
 .iot-device-group {
-  background: var(--surface);
-  border-radius: 0.5rem;
-  padding: 1rem;
+  background: var(--surface-1, #ffffff);
+  border: 1px solid var(--border-subtle, #e2e8f0);
+  border-radius: var(--radius-lg, 16px);
+  padding: 1rem 1.25rem;
+  box-shadow: var(--elevation-1, 0 1px 2px rgba(15, 23, 42, 0.08));
 }
 
 .device-group-header {
@@ -30,118 +42,127 @@
   align-items: center;
   gap: 0.5rem;
   margin-bottom: 1rem;
-  font-size: 1rem;
+  font-size: var(--font-size-md, 0.9375rem);
   font-weight: 600;
-  color: var(--text-primary);
+  color: var(--text-1, #0f172a);
 }
 
 .protocol-icon {
   width: 24px;
   height: 24px;
-  border-radius: 4px;
-  background: var(--surface-alt);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--surface-2, #f1f5f9);
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
 .device-count {
-  color: var(--text-secondary);
-  font-size: 0.875rem;
+  color: var(--text-3, #64748b);
+  font-size: var(--font-size-sm, 0.8125rem);
   font-weight: normal;
 }
 
+/* Grid: intrinsic sizing so it flows naturally across phone / tablet /
+   laptop / 4K without magic breakpoints. */
 .device-list {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   gap: 0.75rem;
 }
 
 .iot-device-card {
-  background: var(--surface-alt);
-  border-radius: 0.375rem;
-  border-left: 3px solid var(--border);
-  padding: 0.75rem;
+  background: var(--surface-1, #ffffff);
+  border: 1px solid var(--border-subtle, #e2e8f0);
+  border-left: 3px solid var(--border-strong, #cbd5e1);
+  border-radius: var(--radius-md, 10px);
+  padding: 0.875rem 1rem;
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
-  transition: all 0.2s ease;
+  color: var(--text-1, #0f172a);
+  box-shadow: var(--elevation-1, 0 1px 2px rgba(15, 23, 42, 0.08));
+  transition: transform var(--motion-fast, 150ms) var(--motion-easing, ease),
+              box-shadow var(--motion-fast, 150ms) var(--motion-easing, ease),
+              border-color var(--motion-fast, 150ms) var(--motion-easing, ease);
 }
 
 .iot-device-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--elevation-2, 0 4px 12px rgba(15, 23, 42, 0.12));
+  border-color: var(--border-strong, #cbd5e1);
 }
 
-/* Device type color coding */
+/* Device type color coding — left stripe identifies protocol/kind at a glance.
+   Cards keep a solid background so text never floats over the page. */
 .iot-device-card[data-device-type*="plug"],
 .iot-device-card[data-device-type*="Plug"] {
-  border-left-color: #f59e0b;
-  background: linear-gradient(135deg, rgba(245, 158, 11, 0.05) 0%, var(--surface-alt) 100%);
+  border-left-color: var(--accent-amber, #d97706);
 }
 
 .iot-device-card[data-device-type*="sensor"],
 .iot-device-card[data-device-type*="Sensor"],
 .iot-device-card[data-device-type*="Meter"],
 .iot-device-card[data-device-type*="meter"] {
-  border-left-color: #3b82f6;
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.05) 0%, var(--surface-alt) 100%);
-}
-
-/* Responsive - single column on smaller screens */
-@media (max-width: 1200px) {
-  .device-list {
-    grid-template-columns: 1fr;
-  }
+  border-left-color: var(--accent-blue, #2563eb);
 }
 
 .device-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   gap: 0.5rem;
 }
 
 .device-name {
-  font-size: 0.9rem;
+  font-size: var(--font-size-md, 0.9375rem);
   font-weight: 600;
   margin: 0;
+  color: var(--text-1, #0f172a);
+  line-height: var(--line-height-tight, 1.25);
+  /* Wrap long names to 2 lines instead of silently truncating. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   flex: 1;
 }
 
 .device-type {
-  font-size: 0.7rem;
-  padding: 0.2rem 0.5rem;
-  border-radius: 1rem;
-  background: var(--surface);
-  color: var(--text-secondary);
+  font-size: var(--font-size-xs, 0.75rem);
+  padding: 0.2rem 0.6rem;
+  border-radius: var(--radius-pill, 9999px);
+  background: var(--surface-2, #f1f5f9);
+  color: var(--text-2, #334155);
   white-space: nowrap;
   flex-shrink: 0;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  border: 1px solid var(--border-subtle, #e2e8f0);
 }
 
-/* Type badge color coding */
+/* Type badge color coding — WCAG AA compliant text on tinted surfaces.
+   Fallback values target the foxtrot light palette (dark text on tinted
+   background); le-foundation.css overrides the tokens to bright-on-dark. */
 .iot-device-card[data-device-type*="plug"] .device-type,
 .iot-device-card[data-device-type*="Plug"] .device-type {
-  background: rgba(245, 158, 11, 0.2);
-  color: #f59e0b;
-  border: 1px solid rgba(245, 158, 11, 0.3);
+  background: var(--accent-amber-soft, rgba(245, 158, 11, 0.14));
+  color: var(--accent-amber, #b45309);
+  border-color: var(--accent-amber-edge, rgba(245, 158, 11, 0.35));
 }
 
 .iot-device-card[data-device-type*="sensor"] .device-type,
 .iot-device-card[data-device-type*="Sensor"] .device-type,
 .iot-device-card[data-device-type*="Meter"] .device-type,
 .iot-device-card[data-device-type*="meter"] .device-type {
-  background: rgba(59, 130, 246, 0.2);
-  color: #3b82f6;
-  border: 1px solid rgba(59, 130, 246, 0.3);
+  background: var(--accent-blue-soft, rgba(59, 130, 246, 0.14));
+  color: var(--accent-blue, #1d4ed8);
+  border-color: var(--accent-blue-edge, rgba(59, 130, 246, 0.35));
 }
 
 .device-info {
-  font-size: 0.75rem;
-  color: var(--text-secondary);
+  font-size: var(--font-size-sm, 0.8125rem);
+  color: var(--text-3, #64748b);
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
@@ -161,12 +182,18 @@
 
 .device-assignments select {
   width: 100%;
-  padding: 0.3rem 0.4rem;
-  border-radius: 0.25rem;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--text-primary);
-  font-size: 0.75rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: var(--radius-sm, 6px);
+  border: 1px solid var(--border-subtle, #e2e8f0);
+  background: var(--surface-3, #ffffff);
+  color: var(--text-1, #0f172a);
+  font-size: var(--font-size-sm, 0.8125rem);
+}
+
+.device-assignments select:focus {
+  outline: none;
+  border-color: var(--border-focus, rgba(59, 130, 246, 0.55));
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
 }
 
 .device-footer {
@@ -177,27 +204,14 @@
 }
 
 .device-footer .button {
-  font-size: 0.75rem;
-  padding: 0.3rem 0.6rem;
+  font-size: var(--font-size-sm, 0.8125rem);
+  padding: 0.35rem 0.7rem;
 }
 
-/* Protocol-specific icons */
-.protocol-icon.switchbot {
-  background-color: #0066cc;
-}
-
-.protocol-icon.kasa {
-  background-color: #00aa55;
-}
-
-.protocol-icon.shelly {
-  background-color: #ff6b6b;
-}
-
-.protocol-icon.mqtt {
-  background-color: #9c27b0;
-}
-
-.protocol-icon.unknown {
-  background-color: #757575;
-}
+/* Protocol-specific icons — solid brand colors kept as literals since they
+   represent external products (SwitchBot blue, Kasa green, etc.). */
+.protocol-icon.switchbot { background-color: #0066cc; }
+.protocol-icon.kasa      { background-color: #00aa55; }
+.protocol-icon.shelly    { background-color: #ff6b6b; }
+.protocol-icon.mqtt      { background-color: #9c27b0; }
+.protocol-icon.unknown   { background-color: #757575; }

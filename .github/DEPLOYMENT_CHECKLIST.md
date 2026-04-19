@@ -7,6 +7,14 @@
 
 ## PRE-DEPLOYMENT VERIFICATION (YOU MUST DO THESE)
 
+### 0. GitHub Parity Check ✅
+- [ ] `git status` is clean for the branch being deployed
+- [ ] The branch being deployed has been pushed to GitHub
+- [ ] The exact production fixes exist on GitHub, not only in local branches or local `main`
+- [ ] If fixes came from multiple branches, they were merged or cherry-picked before deploy
+- [ ] A report was added under `docs/operations/` for any production drift reconciliation
+- [ ] For `main` deploys: `git rev-list --left-right --count origin/main...main` shows no local-only commits
+
 ### 1. Framework Knowledge Check ✅
 - [ ] **I have read** `.github/AGENT_SKILLS_FRAMEWORK.md` section "Investigation-First Methodology"
 - [ ] **I understand** why demo data violations happened and what prevents them
@@ -99,11 +107,13 @@ curl -s -X POST http://localhost:8091/api/farm/auth/login \
   - `(Multi-agent review completed)` - For coordinated changes
 
 ### 8. Final Verification ✅
-Before you `git push`:
+Before you deploy:
 - [ ] All tests pass locally
 - [ ] Pre-commit hook ran successfully (no blocks)
 - [ ] Commit message is clear and includes review notation
 - [ ] You can explain what changed and why
+- [ ] GitHub contains the same commit(s) you are deploying
+- [ ] Artifact Registry digest was resolved from `gcloud artifacts docker images list ... --include-tags`
 
 ---
 
