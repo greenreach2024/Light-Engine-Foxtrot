@@ -14,7 +14,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { validateGroups, validateFarm, validateRooms, validateWithErrors } from '../lib/schema-validator.js';
+import { validateGroups, validateFarm, validateRooms, validateGrowSystems, validateWithErrors } from '../lib/schema-validator.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -150,6 +150,81 @@ function validateFile(filePath, validator, dataType) {
 }
 
 /**
+ * Cross-file reference checks
+ *
+ * Rooms reference grow-system templates by `templateId`. When a template is
+ * renamed or removed, stale references must fail CI rather than silently
+ * slipping through per-file schema validation.
+ */
+function runCrossFileChecks(dataDir) {
+  const results = [];
+  const roomsPath = path.join(dataDir, 'rooms.json');
+  const growSystemsPath = path.join(dataDir, 'grow-systems.json');
+
+  if (!fs.existsSync(roomsPath) || !fs.existsSync(growSystemsPath)) {
+    return results;
+  }
+
+  console.log(`\n${colorize('●', 'blue')} Cross-file checks: ${colorize('rooms.json → grow-systems.json', 'bold')}`);
+
+  let rooms;
+  let growSystems;
+  try {
+    rooms = JSON.parse(fs.readFileSync(roomsPath, 'utf8'));
+    growSystems = JSON.parse(fs.readFileSync(growSystemsPath, 'utf8'));
+  } catch (err) {
+    console.log(`  ${colorize('✗', 'red')} Parse error during cross-file check: ${err.message}`);
+    results.push({ status: 'error', file: 'cross-file:rooms→grow-systems', error: err.message });
+    return results;
+  }
+
+  const templateIds = new Set((growSystems?.templates || []).map((t) => t.id));
+  const dangling = [];
+
+  for (const room of rooms?.rooms || []) {
+    const installed = Array.isArray(room?.installedSystems) ? room.installedSystems : [];
+    installed.forEach((sys, idx) => {
+      if (sys?.templateId && !templateIds.has(sys.templateId)) {
+        dangling.push(`room "${room.id}" installedSystems[${idx}].templateId = "${sys.templateId}"`);
+      }
+    });
+
+    const accepted = Array.isArray(room?.buildPlan?.acceptedEquipment)
+      ? room.buildPlan.acceptedEquipment
+      : [];
+    accepted.forEach((item, idx) => {
+      if (item?.templateId && !templateIds.has(item.templateId)) {
+        dangling.push(`room "${room.id}" buildPlan.acceptedEquipment[${idx}].templateId = "${item.templateId}"`);
+      }
+    });
+
+    const reserved = Array.isArray(room?.buildPlan?.reservedControllerSlots)
+      ? room.buildPlan.reservedControllerSlots
+      : [];
+    reserved.forEach((slot, idx) => {
+      if (slot?.templateId && !templateIds.has(slot.templateId)) {
+        dangling.push(`room "${room.id}" buildPlan.reservedControllerSlots[${idx}].templateId = "${slot.templateId}"`);
+      }
+    });
+  }
+
+  if (dangling.length > 0) {
+    console.log(`  ${colorize('✗', 'red')} Dangling templateId references:`);
+    dangling.forEach((d) => console.log(`    ${colorize('→', 'red')} ${d}`));
+    results.push({
+      status: 'invalid',
+      file: 'cross-file:rooms→grow-systems',
+      errors: dangling.map((message) => ({ field: '/', message }))
+    });
+    return results;
+  }
+
+  console.log(`  ${colorize('✓', 'green')} All rooms.json templateId references resolve`);
+  results.push({ status: 'valid', file: 'cross-file:rooms→grow-systems' });
+  return results;
+}
+
+/**
  * Main validation routine
  */
 function main() {
@@ -174,13 +249,25 @@ function main() {
       path: path.join(dataDir, 'rooms.json'),
       validator: validateRooms,
       type: 'rooms'
+    },
+    {
+      path: path.join(dataDir, 'grow-systems.json'),
+      validator: validateGrowSystems,
+      type: 'grow-systems'
     }
   ];
   
   const results = files.map(({ path, validator, type }) => 
     validateFile(path, validator, type)
   );
-  
+
+  // Cross-file checks: rooms.json installedSystems[].templateId must resolve
+  // against grow-systems.json templates[].id, and reservedControllerSlots[]
+  // and acceptedEquipment[] templateId references must too. This catches
+  // stale references when a template is renamed or removed.
+  const crossFileResults = runCrossFileChecks(dataDir);
+  results.push(...crossFileResults);
+
   // Summary
   console.log(colorize('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'blue'));
   console.log(colorize('  Validation Summary', 'bold'));
