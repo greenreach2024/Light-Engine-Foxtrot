@@ -3,7 +3,7 @@
  * Provides offline support and caching
  */
 
-const CACHE_VERSION = 'v1.0.10';
+const CACHE_VERSION = 'v1.0.11';
 const CACHE_NAME = `light-engine-${CACHE_VERSION}`;
 
 // Files to cache immediately on install - only actual files that exist
@@ -17,8 +17,10 @@ const STATIC_CACHE = [
 const CRITICAL_NETWORK_FIRST = [
   '/LE-farm-admin.html',
   '/views/farm-setup.html',
+  '/views/grow-management.html',
   '/app.foxtrot.js',
-  '/farm-admin.js'
+  '/farm-admin.js',
+  '/groups-v2.js'
 ];
 
 // API routes that should be network-first
