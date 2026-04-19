@@ -166,12 +166,34 @@ diverging from vendor quotes).
 - Monthly: 3,780W × 24h × 30d = 2,722 kWh
 
 ### Climate Control Costs (Operational)
+
+**Dehumidifier electrical draw (corrected 2026-04).** The original spec said
+"300 L/day → ~400W" without a vendor citation. Re-benchmarking against
+commercial datasheets (Quest 155 Dual, Quest 335, Anden A95, Anden A710V1,
+Aprilaire E100) gives a mid-size commercial cluster of **6-7 W per L/day** of
+rated capacity, i.e. **~2,000W peak draw for a 300 L/day unit**. That's the
+number used in `lib/farm-load-calculator.js` (`DEHUM_KW_PER_LPD = 2/300`)
+because `totalCircuitKW` is a breaker-sizing figure and must reflect peak,
+not average, draw.
+
+Monthly kWh is a separate question — commercial dehumidifiers cycle based on
+the room humidistat, so continuous-duty math (2 kW × 24 h × 30 d = 1,440 kWh)
+is the worst case. A steady-state transpiring room typically runs ~70% duty
+cycle; that's the number used in the example below.
+
 ```
 10,000 plants, Ontario ($0.12/kWh):
-HVAC: 2,722 kWh × $0.12 = $327/month
-Dehumid: 300L/day requires ~400W avg = 288 kWh = $35/month
-Total: $362/month
+HVAC:    2,722 kWh × $0.12             = $327/month
+Dehumid: 2.0 kW × 24h × 30d × 0.70 duty
+         = 1,008 kWh × $0.12           = $121/month
+Total:                                   $448/month
 ```
+
+> **Historical note.** The original spec had `Dehumid: ~400W avg = 288 kWh =
+> $35/month` with no vendor citation. Commercial units draw 2.5-5× that.
+> The $35/mo figure was carried forward from the 2025 draft and was part of
+> the under-sizing family of errors that also included the 1055 BTU/kg
+> latent-heat mistake (see §HVAC physics correction).
 
 ---
 

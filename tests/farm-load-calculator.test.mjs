@@ -370,12 +370,16 @@ describe('computeClimateElectricalKW', () => {
     approx(hvacKW, 1.68, 1e-9);
   });
 
-  it('matches VFC: 300 L/day dehum → 400W ≈ 0.4 kW', () => {
+  it('matches commercial benchmark: 300 L/day dehum → ~2 kW peak', () => {
+    // 6.67 W/L/day × 300 L/day = 2.0 kW peak/rated draw. Benchmarked against
+    // Quest 335 (158 L/day @ 960W), Anden A710V1 (335 L/day @ 1,175W), etc.
+    // See DEHUM_KW_PER_LPD comment in lib/farm-load-calculator.js for the
+    // full datasheet roll-up that motivated the 2026-04 re-benchmark.
     const { dehumKW } = computeClimateElectricalKW({
       coolingTons: 0,
       dehumLPerDay: 300
     });
-    approx(dehumKW, 0.8, 1e-9); // 300/150 * 0.4 = 0.8 kW (spec says "~400W avg" which is stricter)
+    approx(dehumKW, 2.0, 1e-9);
   });
 
   it('scales linearly', () => {
