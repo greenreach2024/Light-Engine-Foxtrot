@@ -429,17 +429,21 @@
     /* Bulk edit / Build stock modals */
     #bulkEditGroupModal,
     #buildStockGroupModal {
+      display: none;
       position: fixed;
       top: 0; left: 0; right: 0; bottom: 0;
       background: rgba(0, 0, 0, 0.7);
       backdrop-filter: blur(4px);
       z-index: 200;
+    }
+    #bulkEditGroupModal[open],
+    #buildStockGroupModal[open] {
       display: flex;
       align-items: center;
       justify-content: center;
     }
-    #bulkEditGroupModal > div,
-    #buildStockGroupModal > div {
+    #bulkEditGroupModal > form,
+    #buildStockGroupModal > form {
       background: #1e293b !important;
       border: 1px solid rgba(59, 130, 246, 0.3) !important;
       border-radius: 16px !important;
@@ -478,9 +482,9 @@
   </style>
   <script src="/js/console-wrapper.js"></script>
   <script src="/js/net.guard.js" defer></script>
-  <script src="/app.foxtrot.js" defer></script>
-  <script src="/groups-v2.js" defer></script>
-<link rel="stylesheet" href="/styles/le-foundation.css">
+  <script src="/app.foxtrot.js?v=20260419-standalone-panel-fix" defer></script>
+  <script src="/groups-v2.js?v=20260419-groupsv2-runtime-fix" defer></script>
+  <link rel="stylesheet" href="/styles/le-foundation.css">
 </head>
 <body class="le-theme">
 
@@ -635,7 +639,9 @@
           </div>
 
           <div id="groupsV2ScheduleSummary" class="tiny text-muted"></div>
-          <div id="groupsV2ScheduleSelect" style="display:none;"></div>
+          <select id="groupsV2ScheduleSelect" style="display:none;">
+            <option value="">(select schedule)</option>
+          </select>
 
           <!-- ===== TARGET TEMP / HUMIDITY ===== -->
           <div class="gm-targets-box">
