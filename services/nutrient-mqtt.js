@@ -283,9 +283,27 @@ class NutrientStore extends EventEmitter {
   recordAck(tankId, ack) {
     if (!ack || typeof ack !== 'object') return;
     const action = String(ack.action || ack.type || '').toLowerCase();
-    const resolvedTank = tankId || ack.tank || ack.scope || 'unknown';
+    const explicitTankId = tankId || ack.tank || ack.scope || null;
+    const targets = ack.targets || ack.applied || ack.payload || null;
+    let resolvedTank = explicitTankId;
+
+    if (!resolvedTank) {
+      const pendingEntries = Object.entries(this.state.pendingTargets || {});
+      if (pendingEntries.length === 1) {
+        resolvedTank = pendingEntries[0][0];
+      } else if (targets && pendingEntries.length > 1) {
+        const serializedTargets = JSON.stringify(targets);
+        const matchingScopes = pendingEntries
+          .filter(([, entry]) => JSON.stringify(entry?.targets || null) === serializedTargets)
+          .map(([scopeId]) => scopeId);
+        if (matchingScopes.length === 1) {
+          resolvedTank = matchingScopes[0];
+        }
+      }
+    }
+
+    resolvedTank = resolvedTank || 'unknown';
     if (action === 'settargets' || action === 'set_targets' || action === 'targets') {
-      const targets = ack.targets || ack.applied || ack.payload || null;
       if (targets && typeof targets === 'object') {
         this.recordAppliedTargets(resolvedTank, targets, {
           source: 'ack',
@@ -483,7 +501,7 @@ class NutrientMqttSubscriber extends EventEmitter {
 
     // Ack topics — correlate to a pending setTargets publish or record misc acks.
     if (topic.endsWith('/ack') || topic.includes('/ack')) {
-      const tankId = payload.scope || payload.tank || this.scopeId;
+      const tankId = payload.scope || payload.tank || null;
       this.store.recordAck(tankId, payload);
       return;
     }

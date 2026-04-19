@@ -17727,8 +17727,18 @@ app.post('/api/nutrients/targets', requireEdgeForControl, async (req, res) => {
       return res.status(400).json({ ok: false, error: 'invalid-targets' });
     }
 
+    const ALLOWED_TANK_SCOPES = new Set(['tank-1', 'tank-2', NUTRIENT_SCOPE_ID]);
+    const rawScope = typeof body.tankScope === 'string' && body.tankScope.trim()
+      ? body.tankScope.trim()
+      : (typeof body.tank === 'string' && body.tank.trim() ? body.tank.trim() : null);
+    const tankScope = rawScope && ALLOWED_TANK_SCOPES.has(rawScope) ? rawScope : NUTRIENT_SCOPE_ID;
+
     const payload = {
       action: 'setTargets',
+      // Include the selected tank scope on the wire so controllers that echo
+      // command metadata back in their ack can be matched to the right tank.
+      scope: tankScope,
+      tank: tankScope,
       targets: {
         phTarget: Number(config.phTarget.toFixed(2)),
         phTolerance: Number(config.phTolerance.toFixed(2)),
@@ -17759,11 +17769,6 @@ app.post('/api/nutrients/targets', requireEdgeForControl, async (req, res) => {
     // push overwrites Tank 2's record and the Tank 1 status bar can never show
     // "Last applied". We accept `tankScope` (preferred) or `tank` and fall back
     // to NUTRIENT_SCOPE_ID for older clients.
-    const ALLOWED_TANK_SCOPES = new Set(['tank-1', 'tank-2', NUTRIENT_SCOPE_ID]);
-    const rawScope = typeof body.tankScope === 'string' && body.tankScope.trim()
-      ? body.tankScope.trim()
-      : (typeof body.tank === 'string' && body.tank.trim() ? body.tank.trim() : null);
-    const tankScope = rawScope && ALLOWED_TANK_SCOPES.has(rawScope) ? rawScope : NUTRIENT_SCOPE_ID;
     try {
       nutrientStore.recordPendingTargets(tankScope, payload.targets, {
         source: req.headers['x-requested-by'] || 'api',
@@ -18155,7 +18160,7 @@ app.options('/api/nutrients/alerts/:id/acknowledge', (req, res) => {
   res.status(204).end();
 });
 
-app.post('/api/nutrients/alerts/:id/acknowledge', requireEdgeForControl, async (req, res) => {
+app.post('/api/nutrients/alerts/:id/acknowledge', async (req, res) => {
   try {
     setCors(req, res);
     const alertId = decodeURIComponent(req.params.id);
