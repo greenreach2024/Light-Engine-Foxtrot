@@ -4,15 +4,17 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Grow Management - Light Engine</title>
-  <!--
-    Cascade-layer strategy (see public/styles/grow-management.css header):
-    foxtrot.css is loaded into the "foxtrot-base" layer so the unlayered
-    grow-management.css rules below can override its light-theme defaults
-    without needing !important. Do not drop the layer= attribute.
-  -->
-  <link rel="stylesheet" href="/styles.foxtrot.css" layer="foxtrot-base">
+  <link rel="stylesheet" href="/styles.foxtrot.css">
   <link rel="stylesheet" href="/styles/le-dashboard-theme.css">
   <link rel="stylesheet" href="/styles/nav-color-palette.css">
+  <!--
+    grow-management.css must load AFTER styles.foxtrot.css. foxtrot.css has
+    ~49 !important rules targeting selectors used on this page (#lightInfoCard,
+    #iotPanel, .groups-v2-card, #groupsV2Panel descendants, etc., roughly
+    foxtrot.css lines 6315–6470). grow-management.css also uses !important
+    on competing properties; same-origin source order resolves the tie.
+    See public/styles/grow-management.css header for background.
+  -->
   <link rel="stylesheet" href="/styles/grow-management.css">
   <script src="/js/console-wrapper.js"></script>
   <script src="/js/net.guard.js" defer></script>

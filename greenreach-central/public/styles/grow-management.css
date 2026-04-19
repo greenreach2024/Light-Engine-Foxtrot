@@ -1,31 +1,31 @@
 /*
  * Grow Management — dark glassmorphic page styles.
  *
- * Extracted from the inline <style> block in public/views/grow-management.html
- * (PR-4a of the LE consistency sweep).
+ * Extracted verbatim from the inline <style> block formerly at the top of
+ * public/views/grow-management.html (PR-4a of the LE consistency sweep).
  *
- * Layer strategy:
- *   grow-management.html loads styles.foxtrot.css into a cascade layer named
- *   "foxtrot-base" via <link rel="stylesheet" href="/styles.foxtrot.css"
- *   layer="foxtrot-base">. The rules in THIS file are intentionally unlayered
- *   so that they win against foxtrot.css's layered !important rules without
- *   needing !important themselves.
+ * Why !important is preserved here:
+ *   styles.foxtrot.css has 49 !important declarations targeting the same
+ *   selectors this page uses (#lightInfoCard, #groupsV2Panel descendants,
+ *   #iotPanel, .groups-v2-card, etc., roughly lines 6315–6470 of foxtrot.css).
+ *   Per CSS Cascading Level 5, !important in same-origin unlayered rules is
+ *   resolved by source order — and this file is loaded AFTER foxtrot.css, so
+ *   its !important wins.
  *
- *   Cascade order (highest → lowest priority) per CSS Cascading Level 5:
- *     1. inline style="" with !important
- *     2. author !important (unlayered)
- *     3. author !important inside a layer
- *     4. author normal (unlayered)           ← grow-management.css lives here
- *     5. author normal inside a layer         ← styles.foxtrot.css lives here
+ *   We initially tried loading foxtrot.css into a cascade layer so this file
+ *   could drop !important entirely, but per MDN and CSS Cascading Level 5
+ *   "unlayered !important has the LOWEST precedence of all !important
+ *   declarations" — i.e. foxtrot.css's layered !important would have BEATEN
+ *   an unlayered non-important rule here. Reversed from what we assumed.
+ *   See PR #31 review discussion for the full trace.
  *
- *   This means the 121 !important declarations that previously existed in the
- *   inline <style> block have been dropped. If you add a new override here
- *   and the foxtrot.css light-theme defaults bleed through, it usually means
- *   foxtrot.css is being loaded without the layer= attribute — fix the HTML,
- *   do NOT re-add !important here.
+ * Deleting foxtrot.css's competing !important rules (~20 rules in the
+ * 6315–6470 block) is a separate PR because those rules also apply to other
+ * LE pages (farm-setup, farm-admin, LE-dashboard's IoT grid, etc.) and need
+ * a per-page regression check before they can safely be relaxed.
  */
 
-/* ===== GROW MANAGEMENT — DARK GLASSMORPHIC OVERRIDES ===== */
+/* ===== GROW MANAGEMENT - DARK GLASSMORPHIC OVERRIDES ===== */
 *, *::before, *::after { box-sizing: border-box; }
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
@@ -135,15 +135,15 @@ body {
 /* ---- Form overrides inside groupsV2Panel ---- */
 #groupsV2Panel label,
 #groupsV2Panel .tiny {
-  color: #94a3b8;
+  color: #94a3b8 !important;
 }
 #groupsV2Panel h2,
 #groupsV2Panel h3,
 #groupsV2Panel strong {
-  color: #f1f5f9;
+  color: #f1f5f9 !important;
 }
 #groupsV2Panel .text-muted {
-  color: #64748b;
+  color: #64748b !important;
 }
 #groupsV2Panel select,
 #groupsV2Panel input[type="text"],
@@ -151,21 +151,21 @@ body {
 #groupsV2Panel input[type="date"],
 #groupsV2Panel input[type="time"],
 #groupsV2Panel textarea {
-  background: rgba(15, 23, 42, 0.6);
-  border: 2px solid rgba(59, 130, 246, 0.3);
-  border-radius: 10px;
-  color: #f1f5f9;
-  padding: 0.5rem 0.75rem;
-  font-size: 0.9rem;
-  min-height: 36px;
+  background: rgba(15, 23, 42, 0.6) !important;
+  border: 2px solid rgba(59, 130, 246, 0.3) !important;
+  border-radius: 10px !important;
+  color: #f1f5f9 !important;
+  padding: 0.5rem 0.75rem !important;
+  font-size: 0.9rem !important;
+  min-height: 36px !important;
   transition: all 0.2s ease;
 }
 #groupsV2Panel select:focus,
 #groupsV2Panel input:focus {
-  outline: none;
-  border-color: #3b82f6;
-  background: rgba(15, 23, 42, 0.8);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+  outline: none !important;
+  border-color: #3b82f6 !important;
+  background: rgba(15, 23, 42, 0.8) !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15) !important;
 }
 #groupsV2Panel select option {
   background: #1e293b;
@@ -175,101 +175,101 @@ body {
 /* ---- Button overrides ---- */
 #groupsV2Panel .primary,
 #groupsV2Panel button.primary {
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-  color: white;
-  border: none;
-  border-radius: 10px;
-  padding: 0.6rem 1.25rem;
-  font-weight: 600;
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
+  color: white !important;
+  border: none !important;
+  border-radius: 10px !important;
+  padding: 0.6rem 1.25rem !important;
+  font-weight: 600 !important;
   cursor: pointer;
   transition: all 0.3s ease;
   box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
 }
 #groupsV2Panel .primary:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4) !important;
 }
 #groupsV2Panel .ghost,
 #groupsV2Panel button.ghost {
-  background: rgba(30, 41, 59, 0.6);
-  color: #94a3b8;
-  border: 1px solid rgba(148, 163, 184, 0.2);
-  border-radius: 10px;
-  padding: 0.5rem 1rem;
+  background: rgba(30, 41, 59, 0.6) !important;
+  color: #94a3b8 !important;
+  border: 1px solid rgba(148, 163, 184, 0.2) !important;
+  border-radius: 10px !important;
+  padding: 0.5rem 1rem !important;
   cursor: pointer;
   transition: all 0.3s ease;
 }
 #groupsV2Panel .ghost:hover {
-  background: rgba(30, 41, 59, 0.9);
-  border-color: rgba(59, 130, 246, 0.4);
-  color: #f1f5f9;
+  background: rgba(30, 41, 59, 0.9) !important;
+  border-color: rgba(59, 130, 246, 0.4) !important;
+  color: #f1f5f9 !important;
 }
 
 /* Named action buttons with accent borders */
 #groupsV2SaveAndDeploy {
-  border-color: #10b981;
-  color: #10b981;
+  border-color: #10b981 !important;
+  color: #10b981 !important;
 }
 #groupsV2SaveAndDeploy:hover {
-  background: rgba(16, 185, 129, 0.15);
+  background: rgba(16, 185, 129, 0.15) !important;
 }
 #groupsV2HarvestBtn {
-  border-color: #f59e0b;
-  color: #f59e0b;
+  border-color: #f59e0b !important;
+  color: #f59e0b !important;
 }
 #groupsV2HarvestBtn:hover {
-  background: rgba(245, 158, 11, 0.15);
+  background: rgba(245, 158, 11, 0.15) !important;
 }
 #groupsV2PrintLabels {
-  border-color: #8b5cf6;
-  color: #8b5cf6;
+  border-color: #8b5cf6 !important;
+  color: #8b5cf6 !important;
 }
 #groupsV2PrintLabels:hover {
-  background: rgba(139, 92, 246, 0.15);
+  background: rgba(139, 92, 246, 0.15) !important;
 }
 #buildStockGroupsBtn {
-  border-color: #6366f1;
-  color: #6366f1;
+  border-color: #6366f1 !important;
+  color: #6366f1 !important;
 }
 #buildStockGroupsBtn:hover {
-  background: rgba(99, 102, 241, 0.15);
+  background: rgba(99, 102, 241, 0.15) !important;
 }
 #groupsV2DeleteGroup {
-  color: #ef4444;
-  border-color: rgba(239, 68, 68, 0.3);
+  color: #ef4444 !important;
+  border-color: rgba(239, 68, 68, 0.3) !important;
 }
 #groupsV2DeleteGroup:hover {
-  background: rgba(239, 68, 68, 0.15);
+  background: rgba(239, 68, 68, 0.15) !important;
 }
 
 /* ---- Section cards (gr-card overrides) ---- */
 #groupsV2Panel .gr-card,
 #groupsV2Panel [class*="gr-card"] {
-  background: rgba(15, 23, 42, 0.8);
-  border-color: rgba(59, 130, 246, 0.15);
-  color: #f1f5f9;
+  background: rgba(15, 23, 42, 0.8) !important;
+  border-color: rgba(59, 130, 246, 0.15) !important;
+  color: #f1f5f9 !important;
 }
 
 /* Plan Form card */
 #groupsV2PlanForm {
-  background: rgba(15, 23, 42, 0.6);
-  border: 1px solid rgba(59, 130, 246, 0.25);
-  border-radius: 16px;
+  background: rgba(15, 23, 42, 0.6) !important;
+  border: 1px solid rgba(59, 130, 246, 0.25) !important;
+  border-radius: 16px !important;
 }
 
 /* Plan Preview */
 #groupsV2PlanPreview {
-  background: rgba(15, 23, 42, 0.4);
-  border: 1px dashed rgba(56, 189, 248, 0.4);
-  border-radius: 12px;
-  color: #f1f5f9;
+  background: rgba(15, 23, 42, 0.4) !important;
+  border: 1px dashed rgba(56, 189, 248, 0.4) !important;
+  border-radius: 12px !important;
+  color: #f1f5f9 !important;
 }
 
 /* Cycle boxes */
 .gm-cycle-box {
-  background: rgba(15, 23, 42, 0.5);
-  border: 1px solid rgba(59, 130, 246, 0.25);
-  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.5) !important;
+  border: 1px solid rgba(59, 130, 246, 0.25) !important;
+  border-radius: 12px !important;
   padding: 12px;
   display: flex;
   flex-direction: column;
@@ -279,9 +279,9 @@ body {
 
 /* Target temp/humidity box */
 .gm-targets-box {
-  background: rgba(16, 185, 129, 0.08);
-  border: 1px solid rgba(16, 185, 129, 0.3);
-  border-radius: 12px;
+  background: rgba(16, 185, 129, 0.08) !important;
+  border: 1px solid rgba(16, 185, 129, 0.3) !important;
+  border-radius: 12px !important;
   padding: 12px;
 }
 .gm-targets-box .target-readout {
@@ -297,9 +297,9 @@ body {
 
 /* Group list section */
 #groupsV2GroupListSection {
-  background: rgba(15, 23, 42, 0.6);
-  border: 1px solid rgba(59, 130, 246, 0.15);
-  border-radius: 16px;
+  background: rgba(15, 23, 42, 0.6) !important;
+  border: 1px solid rgba(59, 130, 246, 0.15) !important;
+  border-radius: 16px !important;
 }
 #groupsV2GroupListBody {
   display: grid;
@@ -311,75 +311,75 @@ body {
 /* Dynamically-created group cards */
 #groupsV2GroupListBody > div,
 #groupsV2GroupListBody > button {
-  background: rgba(30, 41, 59, 0.8);
-  border: 1px solid rgba(59, 130, 246, 0.15);
-  border-radius: 12px;
-  color: #f1f5f9;
-  padding: 12px;
+  background: rgba(30, 41, 59, 0.8) !important;
+  border: 1px solid rgba(59, 130, 246, 0.15) !important;
+  border-radius: 12px !important;
+  color: #f1f5f9 !important;
+  padding: 12px !important;
   cursor: pointer;
   transition: all 0.2s ease;
 }
 #groupsV2GroupListBody > div:hover,
 #groupsV2GroupListBody > button:hover {
-  border-color: rgba(59, 130, 246, 0.4);
-  background: rgba(30, 41, 59, 1);
+  border-color: rgba(59, 130, 246, 0.4) !important;
+  background: rgba(30, 41, 59, 1) !important;
   transform: translateY(-2px);
 }
 #groupsV2GroupListBody span,
 #groupsV2GroupListBody small,
 #groupsV2GroupListBody div {
-  color: #f1f5f9;
+  color: #f1f5f9 !important;
 }
 #groupsV2GroupListBody small,
 #groupsV2GroupListBody .text-muted {
-  color: #94a3b8;
+  color: #94a3b8 !important;
 }
 #groupsV2GroupListBody button[data-action="edit"] {
-  border-color: #3b82f6;
-  color: #60a5fa;
-  background: transparent;
+  border-color: #3b82f6 !important;
+  color: #60a5fa !important;
+  background: transparent !important;
 }
 #groupsV2GroupListBody button[data-action="edit"]:hover {
-  background: rgba(59, 130, 246, 0.15);
+  background: rgba(59, 130, 246, 0.15) !important;
 }
 #groupsV2GroupListBody button[data-action="delete"] {
-  border-color: #ef4444;
-  color: #f87171;
-  background: transparent;
+  border-color: #ef4444 !important;
+  color: #f87171 !important;
+  background: transparent !important;
 }
 #groupsV2GroupListBody button[data-action="delete"]:hover {
-  background: rgba(239, 68, 68, 0.15);
+  background: rgba(239, 68, 68, 0.15) !important;
 }
 
 /* Editing indicator */
 #groupsV2EditingIndicator {
-  background: rgba(59, 130, 246, 0.1);
-  border: 1px solid rgba(59, 130, 246, 0.3);
-  border-radius: 10px;
-  color: #93c5fd;
+  background: rgba(59, 130, 246, 0.1) !important;
+  border: 1px solid rgba(59, 130, 246, 0.3) !important;
+  border-radius: 10px !important;
+  color: #93c5fd !important;
 }
 #groupsV2ClearEditing {
-  color: #94a3b8;
+  color: #94a3b8 !important;
 }
 
 /* Light assignment section */
 #lightInfoCard {
-  background: rgba(15, 23, 42, 0.8);
-  border: 1px solid rgba(59, 130, 246, 0.2);
-  color: #f1f5f9;
+  background: rgba(15, 23, 42, 0.8) !important;
+  border: 1px solid rgba(59, 130, 246, 0.2) !important;
+  color: #f1f5f9 !important;
 }
 
 /* Plan vs Light comparison */
 #groupsV2Comparison > div {
-  background: rgba(15, 23, 42, 0.8);
-  border-radius: 12px;
-  color: #f1f5f9;
+  background: rgba(15, 23, 42, 0.8) !important;
+  border-radius: 12px !important;
+  color: #f1f5f9 !important;
 }
 #groupsV2Comparison > div:first-child {
-  border: 2px solid rgba(56, 189, 248, 0.3);
+  border: 2px solid rgba(56, 189, 248, 0.3) !important;
 }
 #groupsV2Comparison > div:last-child {
-  border: 2px solid rgba(167, 139, 250, 0.3);
+  border: 2px solid rgba(167, 139, 250, 0.3) !important;
 }
 
 /* Assigned lights grid */
@@ -390,32 +390,32 @@ body {
 }
 #groupLightList > div,
 #groupLightList > label {
-  background: rgba(30, 41, 59, 0.8);
-  border: 1px solid rgba(59, 130, 246, 0.15);
-  border-radius: 12px;
-  color: #f1f5f9;
-  padding: 10px;
+  background: rgba(30, 41, 59, 0.8) !important;
+  border: 1px solid rgba(59, 130, 246, 0.15) !important;
+  border-radius: 12px !important;
+  color: #f1f5f9 !important;
+  padding: 10px !important;
 }
 
 /* Running/Testing indicators */
 #groupsV2RunningIndicator {
-  background: #10b981;
+  background: #10b981 !important;
 }
 #groupsV2TestingIndicator {
-  background: #f59e0b;
+  background: #f59e0b !important;
 }
 
 /* Harvest strategy indicator */
 #groupsV2HarvestStrategyIndicator {
-  background: rgba(245, 158, 11, 0.12);
-  border: 1px solid rgba(245, 158, 11, 0.3);
-  color: #fcd34d;
+  background: rgba(245, 158, 11, 0.12) !important;
+  border: 1px solid rgba(245, 158, 11, 0.3) !important;
+  color: #fcd34d !important;
 }
 
 /* Calibration card */
 .gm-calibration-card {
-  background: rgba(245, 158, 11, 0.08);
-  border: 1px solid rgba(245, 158, 11, 0.25);
+  background: rgba(245, 158, 11, 0.08) !important;
+  border: 1px solid rgba(245, 158, 11, 0.25) !important;
   border-radius: 16px;
   padding: 1.25rem;
   text-align: center;
@@ -428,19 +428,19 @@ body {
 
 /* Schedule summary */
 #groupsV2ScheduleSummary {
-  color: #94a3b8;
+  color: #94a3b8 !important;
 }
 
 /* Anchor toggle buttons */
 #groupsV2AnchorToggle button[aria-pressed="true"] {
-  background: rgba(59, 130, 246, 0.3);
-  border-color: #3b82f6;
-  color: #f1f5f9;
+  background: rgba(59, 130, 246, 0.3) !important;
+  border-color: #3b82f6 !important;
+  color: #f1f5f9 !important;
 }
 #groupsV2AnchorToggle button[aria-pressed="false"] {
-  background: rgba(30, 41, 59, 0.6);
-  border: 1px solid rgba(148, 163, 184, 0.2);
-  color: #94a3b8;
+  background: rgba(30, 41, 59, 0.6) !important;
+  border: 1px solid rgba(148, 163, 184, 0.2) !important;
+  color: #94a3b8 !important;
 }
 
 /* Bulk edit / Build stock modals */
@@ -457,10 +457,10 @@ body {
 }
 #bulkEditGroupModal > div,
 #buildStockGroupModal > div {
-  background: #1e293b;
-  border: 1px solid rgba(59, 130, 246, 0.3);
-  border-radius: 16px;
-  color: #f1f5f9;
+  background: #1e293b !important;
+  border: 1px solid rgba(59, 130, 246, 0.3) !important;
+  border-radius: 16px !important;
+  color: #f1f5f9 !important;
   max-width: 600px;
   width: 90%;
   padding: 2rem;
@@ -489,6 +489,6 @@ body {
 
 /* ---- Danger button class ---- */
 .danger {
-  color: #ef4444;
-  border-color: rgba(239, 68, 68, 0.3);
+  color: #ef4444 !important;
+  border-color: rgba(239, 68, 68, 0.3) !important;
 }
