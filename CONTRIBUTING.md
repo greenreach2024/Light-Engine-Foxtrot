@@ -72,12 +72,12 @@ Central requires PostgreSQL and the environment variables listed in [.github/CRI
 	- Check GitHub for side branches that may hold part of the production fix
 	- Merge or cherry-pick side-branch fixes into one deploy branch
 	- Confirm GitHub contains the exact code you will deploy before any image build
-5. If direct push to `main` is blocked by branch protection, push the deploy branch and open a PR to `main`
-6. Build and deploy from the pushed branch or PR head commit
-7. Merge the PR after validation so `main` stays aligned with production
-8. Stage all changes: `git add -A`
-9. Commit with descriptive message
-10. Push to GitHub
+5. Stage all changes: `git add -A`
+6. Commit with descriptive message
+7. Push to GitHub
+8. If direct push to `main` is blocked by branch protection, push the deploy branch and open a PR to `main`
+9. Build and deploy from the pushed branch or PR head commit
+10. Merge the PR after validation so `main` stays aligned with production
 
 ### Branch Management Rules
 

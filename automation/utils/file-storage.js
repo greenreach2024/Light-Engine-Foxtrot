@@ -1,6 +1,11 @@
 import fs from 'fs';
 import path from 'path';
-import { hydrateRuntimeStateJson, resolveRuntimeStatePath, scheduleRuntimeJsonMirror } from '../../lib/runtime-state.js';
+import {
+  hydrateRuntimeStateJson,
+  normalizeProjectRelativePath,
+  resolveRuntimeStatePath,
+  scheduleRuntimeJsonMirror,
+} from '../../lib/runtime-state.js';
 
 const AUTOMATION_RUNTIME_FILES = [
   { path: 'data/automation/env-state.json', fallback: { scopes: {}, targets: {}, rooms: {}, updatedAt: null } },
@@ -9,7 +14,7 @@ const AUTOMATION_RUNTIME_FILES = [
 ];
 
 function resolveStoragePath(filePath) {
-  return resolveRuntimeStatePath(filePath);
+  return resolveRuntimeStatePath(normalizeProjectRelativePath(filePath));
 }
 
 export async function hydrateAutomationStorageCache() {
@@ -47,19 +52,21 @@ export function readJsonFileSync(filePath, defaultValue) {
 }
 
 export function writeJsonFileSync(filePath, data) {
-  const runtimePath = resolveStoragePath(filePath);
+  const storageKey = normalizeProjectRelativePath(filePath);
+  const runtimePath = resolveStoragePath(storageKey);
   const dir = path.dirname(runtimePath);
   ensureDirSync(dir);
   try {
     fs.writeFileSync(runtimePath, JSON.stringify(data, null, 2));
-    scheduleRuntimeJsonMirror(filePath, data);
+    scheduleRuntimeJsonMirror(storageKey, data);
   } catch (error) {
     console.warn(`[automation] Failed to write JSON file ${filePath}:`, error.message);
   }
 }
 
 export function appendNdjsonLine(filePath, payload) {
-  const runtimePath = resolveStoragePath(filePath);
+  const storageKey = normalizeProjectRelativePath(filePath);
+  const runtimePath = resolveStoragePath(storageKey);
   const dir = path.dirname(runtimePath);
   ensureDirSync(dir);
   const line = typeof payload === 'string' ? payload : JSON.stringify(payload);
