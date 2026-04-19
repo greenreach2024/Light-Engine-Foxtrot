@@ -421,16 +421,17 @@
         }
     </style>
   <link rel="stylesheet" href="/styles/farm-assistant.css">
+<link rel="stylesheet" href="/styles/le-foundation.css">
 </head>
 <body class="le-theme">
     <div class="container">
         <div class="header">
-            <h1>💳 Billing & Subscription</h1>
-            <span class="sandbox-badge">🧪 SANDBOX MODE</span>
+            <h1>Billing & Subscription</h1>
+            <span class="sandbox-badge">SANDBOX MODE</span>
         </div>
 
         <div class="alert alert-info">
-            <span>ℹ️</span>
+            <span>ℹ</span>
             <div>
                 <strong>Sandbox Testing Mode:</strong> This is a test environment using Square sandbox credentials. No real charges will be made. Use test card: <code>4111 1111 1111 1111</code>
             </div>
@@ -438,10 +439,10 @@
 
         <!-- Current Subscription Section -->
         <div class="card" id="current-subscription">
-            <h2>📊 Current Subscription</h2>
+            <h2>Current Subscription</h2>
             <div id="subscription-details">
                 <div class="empty-state">
-                    <div class="empty-state-icon">📭</div>
+                    <div class="empty-state-icon"></div>
                     <p>No active subscription</p>
                     <button class="btn btn-primary" onclick="showPlanSelection()">Subscribe Now</button>
                 </div>
@@ -469,7 +470,7 @@
 
         <!-- Usage Details -->
         <div class="card" id="usage-details" style="display: none;">
-            <h2>📈 Usage Details</h2>
+            <h2>Usage Details</h2>
             <div class="usage-meter">
                 <div class="usage-label">
                     <span>Devices</span>
@@ -498,7 +499,7 @@
                 </div>
             </div>
             <div id="overage-warning" class="alert alert-warning" style="display: none; margin-top: 20px;">
-                <span>⚠️</span>
+                <span>⚠</span>
                 <div>
                     <strong>Usage Warning:</strong>
                     <span id="overage-message"></span>
@@ -526,7 +527,7 @@
         <div class="modal" id="payment-modal">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h2>💳 Payment Details</h2>
+                    <h2>Payment Details</h2>
                     <button class="close-btn" onclick="closePaymentModal()">×</button>
                 </div>
                 
@@ -576,14 +577,14 @@
                 <div class="payment-status" id="payment-status"></div>
 
                 <p style="font-size: 12px; color: #9ca3af; margin-top: 15px; text-align: center;">
-                    🔒 Secured by Square • Sandbox Mode • No real charges
+Secured by Square • Sandbox Mode • No real charges
                 </p>
             </div>
         </div>
 
         <!-- Invoice History -->
         <div class="card">
-            <h2>🧾 Invoice History</h2>
+            <h2>Invoice History</h2>
             <table class="invoice-table" id="invoice-table">
                 <thead>
                     <tr>
@@ -596,7 +597,7 @@
                 <tbody id="invoice-tbody">
                     <tr>
                         <td colspan="4" class="empty-state">
-                            <div class="empty-state-icon">📭</div>
+                            <div class="empty-state-icon"></div>
                             <p>No invoices yet</p>
                         </td>
                     </tr>
