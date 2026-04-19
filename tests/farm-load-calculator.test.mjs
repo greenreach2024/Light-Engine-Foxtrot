@@ -188,6 +188,41 @@ describe('computeLightingLoad', () => {
     assert.equal(load.photoperiodHours, 18);
     approx(load.dailyLightingKWh, 0.6 * 18);
   });
+
+  it('throws on undefined quantity', () => {
+    assert.throws(
+      () => computeLightingLoad({ template: nft, cropClass: 'leafy_greens' }),
+      /computeLightingLoad: quantity must be a positive finite number.*undefined/
+    );
+  });
+
+  it('throws on NaN quantity', () => {
+    assert.throws(
+      () => computeLightingLoad({ template: nft, quantity: NaN, cropClass: 'leafy_greens' }),
+      /computeLightingLoad: quantity must be a positive finite number/
+    );
+  });
+
+  it('throws on zero quantity', () => {
+    assert.throws(
+      () => computeLightingLoad({ template: nft, quantity: 0, cropClass: 'leafy_greens' }),
+      /computeLightingLoad: quantity must be a positive finite number/
+    );
+  });
+
+  it('throws on negative quantity', () => {
+    assert.throws(
+      () => computeLightingLoad({ template: nft, quantity: -1, cropClass: 'leafy_greens' }),
+      /computeLightingLoad: quantity must be a positive finite number/
+    );
+  });
+
+  it('throws on string quantity', () => {
+    assert.throws(
+      () => computeLightingLoad({ template: nft, quantity: '5', cropClass: 'leafy_greens' }),
+      /computeLightingLoad: quantity must be a positive finite number/
+    );
+  });
 });
 
 // ============================================================================
