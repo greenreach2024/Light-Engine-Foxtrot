@@ -775,6 +775,7 @@ const _htmlDirs = [
 app.use((req, res, next) => {
   // Only intercept .html requests (skip API routes, data files, JS/CSS/images)
   const reqPath = req.path;
+  if (reqPath === '/LE-dashboard.html') return next();
   if (!reqPath.endsWith('.html')) return next();
 
   // Find the HTML file in our static directories
