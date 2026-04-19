@@ -22,21 +22,21 @@ Read these documents in order:
 
 This monorepo contains two independently deployed Node.js applications:
 
-- **Light Engine (LE)**: `server-foxtrot.js` at repo root, deploys to `light-engine-foxtrot-prod-v3`
-- **GreenReach Central**: `greenreach-central/server.js`, deploys to `greenreach-central-prod-v4`
+- **Light Engine (LE)**: `server-foxtrot.js` at repo root, deploys to Cloud Run service `light-engine`
+- **GreenReach Central**: `greenreach-central/server.js`, deploys to Cloud Run service `greenreach-central`
 
-They share NO runtime imports across boundaries. Do NOT import from `greenreach-central/routes/` into `server-foxtrot.js` (it will crash EB due to dependency chains).
+They share NO runtime imports across boundaries. Do NOT import from `greenreach-central/routes/` into `server-foxtrot.js` (it will crash LE due to dependency chains).
 
 ### The Farm Is 100% Cloud
 
-There is no physical device, no Raspberry Pi, no edge hardware. The LE Elastic Beanstalk instance IS the farm. References to "edge," "Pi," or "hardware" in old code are legacy artifacts.
+There is no physical device, no Raspberry Pi, no edge hardware. The LE Cloud Run service IS the farm. References to "edge," "Pi," or "hardware" in old code are legacy artifacts.
 
 ### Two public/ Directories
 
 | Directory | Served By | Deploy Target |
 |-----------|-----------|---------------|
-| `public/` (root) | LE only | `light-engine-foxtrot-prod-v3` |
-| `greenreach-central/public/` | Central only | `greenreach-central-prod-v4` |
+| `public/` (root) | LE only | `light-engine` |
+| `greenreach-central/public/` | Central only | `greenreach-central` |
 
 Both servers serve the same UI files (e.g., `LE-farm-admin.html`) to avoid cross-origin issues. When editing shared UI files, edit in `greenreach-central/public/` first, then copy to root `public/`.
 
@@ -67,9 +67,14 @@ Central requires PostgreSQL and the environment variables listed in [.github/CRI
 1. Create a feature branch from `main`
 2. Make your changes
 3. Test locally
-4. Stage all changes: `git add -A`
-5. Commit with descriptive message
-6. Deploy to the correct environment(s)
+4. Reconcile Git history before deploy:
+	- Ensure required production fixes are not stranded on local branches or local `main`
+	- Merge or cherry-pick side-branch fixes into the branch you will push
+	- Confirm GitHub contains the exact code you will deploy
+5. Stage all changes: `git add -A`
+6. Commit with descriptive message
+7. Push to GitHub
+8. Deploy to the correct environment(s)
 
 ### Deploying
 
@@ -82,15 +87,23 @@ Central requires PostgreSQL and the environment variables listed in [.github/CRI
 | Shared UI files (exist in both public/ dirs) | BOTH |
 
 ```bash
-# Deploy Central
-cd greenreach-central
-eb deploy greenreach-central-prod-v4 --staged
+# Build and push Central
+docker buildx build --platform linux/amd64 \
+	-t us-east1-docker.pkg.dev/project-5d00790f-13a9-4637-a40/greenreach/greenreach-central:latest \
+	--push ./greenreach-central/
 
-# Deploy LE (from repo root)
-eb deploy light-engine-foxtrot-prod-v3 --staged
+# Build and push LE
+docker buildx build --platform linux/amd64 \
+	-t us-east1-docker.pkg.dev/project-5d00790f-13a9-4637-a40/greenreach/light-engine:latest \
+	--push .
+
+# Resolve the authoritative digest from Artifact Registry, then deploy by digest
+gcloud run services update greenreach-central --region=us-east1 --image=REGISTRY_DIGEST
+gcloud run services update light-engine --region=us-east1 --image=REGISTRY_DIGEST
 ```
 
-**Never deploy during business hours without coordination.** Deployments cause brief downtime (~30-60 seconds).
+**GitHub parity is mandatory before deploy.** Never deploy production-relevant local-only commits.
+**Never deploy during business hours without coordination.**
 
 ---
 

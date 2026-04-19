@@ -1,6 +1,6 @@
 # Light Engine Foxtrot
 
-Cloud-native indoor farming platform by GreenReach Farms. Production system running on AWS Elastic Beanstalk (us-east-1).
+Cloud-native indoor farming platform by GreenReach Farms. Production system running on Google Cloud Run (`us-east1`).
 
 **Live at**: [greenreachgreens.com](https://greenreachgreens.com)
 
@@ -8,14 +8,14 @@ Cloud-native indoor farming platform by GreenReach Farms. Production system runn
 
 ## Architecture
 
-Two independent Node.js applications deployed to separate AWS Elastic Beanstalk environments from a single monorepo:
+Two independent Node.js applications deployed to separate Google Cloud Run services from a single monorepo:
 
 ### Light Engine (LE) -- The Farm
 
 | Property | Value |
 |----------|-------|
 | Entry point | `server-foxtrot.js` |
-| EB environment | `light-engine-foxtrot-prod-v3` |
+| Cloud Run service | `light-engine` |
 | Serves | Farm admin UI, sensor polling, device APIs, E.V.I.E. frontend |
 | Deploys from | Repository root |
 
@@ -26,7 +26,7 @@ LE polls SwitchBot Cloud API every 30 seconds for environmental sensor data (tem
 | Property | Value |
 |----------|-------|
 | Entry point | `greenreach-central/server.js` |
-| EB environment | `greenreach-central-prod-v4` |
+| Cloud Run service | `greenreach-central` |
 | Custom domain | `greenreachgreens.com` |
 | Serves | Multi-farm data hub, PostgreSQL backend, admin dashboards, AI assistants (E.V.I.E. + F.A.Y.E.), wholesale marketplace, research platform |
 | Deploys from | `greenreach-central/` subdirectory |
@@ -44,7 +44,7 @@ SwitchBot Cloud API  -->  LE (sensor polling)  -->  Central (telemetry sync)
                                                     Research platform
 ```
 
-**There is no physical farm device.** The LE Elastic Beanstalk instance IS the farm. All references to "edge," "Pi," or "hardware" in the codebase are legacy artifacts.
+**There is no physical farm device.** The LE Cloud Run service IS the farm. All references to "edge," "Pi," or "hardware" in the codebase are legacy artifacts.
 
 ---
 
@@ -54,8 +54,8 @@ SwitchBot Cloud API  -->  LE (sensor polling)  -->  Central (telemetry sync)
 /
   server-foxtrot.js          # LE entry point (~30K lines)
   package.json               # LE dependencies
-  Procfile                   # EB process definition
-  .ebignore                  # LE deploy exclusions
+  Procfile                   # Legacy artifact, not used by Cloud Run
+  .ebignore                  # Legacy artifact, not used by Cloud Run
 
   routes/                    # LE API routes (wholesale, farm-sales, auth, etc.)
   lib/                       # LE libraries (automation, sync, database, etc.)
@@ -74,7 +74,7 @@ SwitchBot Cloud API  -->  LE (sensor polling)  -->  Central (telemetry sync)
     lib/                     # Shared libraries (payments, data store)
     migrations/              # PostgreSQL schema migrations
     public/                  # Central static assets (dashboards, admin UIs)
-    .ebignore                # Central deploy exclusions
+    .ebignore                # Legacy artifact, not used by Cloud Run
 
   docs/                      # Organized documentation
     architecture/            # System architecture docs
@@ -84,7 +84,7 @@ SwitchBot Cloud API  -->  LE (sensor polling)  -->  Central (telemetry sync)
     security/                # Security audit and hardening docs
     ai-agents/               # E.V.I.E., F.A.Y.E., G.W.E.N. docs
     billing/                 # Payment and billing docs
-    deployment/              # AWS, EB, domain setup docs
+    deployment/              # Deployment and domain setup docs
     features/                # Feature-specific documentation
     operations/              # Monitoring, troubleshooting, runbooks
     research/                # Research platform docs
@@ -106,12 +106,12 @@ SwitchBot Cloud API  -->  LE (sensor polling)  -->  Central (telemetry sync)
 
 ## Key Technologies
 
-- **Runtime**: Node.js 20 on Amazon Linux 2023
+- **Runtime**: Node.js 20 on Cloud Run
 - **Database**: PostgreSQL (via Central)
 - **Sensors**: SwitchBot WoIOSensor (4x) via SwitchBot Cloud API v1.1
 - **Payments**: Square (POS + wholesale), Stripe (subscriptions)
 - **AI**: OpenAI GPT-4o + Anthropic Claude Sonnet 4 (fallback)
-- **Infrastructure**: AWS Elastic Beanstalk, Route53, CloudFront, SES
+- **Infrastructure**: Google Cloud Run, Artifact Registry, Secret Manager, AlloyDB
 
 ---
 
@@ -127,19 +127,25 @@ SwitchBot Cloud API  -->  LE (sensor polling)  -->  Central (telemetry sync)
 
 ## Deployment
 
-Both environments deploy independently via `eb deploy` with `--staged` flag (deploys from git staging area).
+Both services deploy independently via Docker Buildx and Cloud Run.
+
+**GitHub is the deployable source of truth.** Production-relevant code must be committed and pushed before building Cloud Run images.
 
 **Central:**
 ```bash
-cd greenreach-central
-eb deploy greenreach-central-prod-v4 --staged
+docker buildx build --platform linux/amd64 \
+  -t us-east1-docker.pkg.dev/project-5d00790f-13a9-4637-a40/greenreach/greenreach-central:latest \
+  --push ./greenreach-central/
 ```
 
 **Light Engine:**
 ```bash
-# From repo root
-eb deploy light-engine-foxtrot-prod-v3 --staged
+docker buildx build --platform linux/amd64 \
+  -t us-east1-docker.pkg.dev/project-5d00790f-13a9-4637-a40/greenreach/light-engine:latest \
+  --push .
 ```
+
+Resolve the authoritative digest from Artifact Registry, then deploy with `gcloud run services update ... --image=...@sha256:...`.
 
 Changes to `greenreach-central/` require deploying Central. Changes to root-level code require deploying LE. Changes to shared UI files (e.g., `LE-farm-admin.html`) require deploying BOTH.
 
