@@ -28,6 +28,8 @@ The farm runs entirely on Google Cloud Run. The Light Engine Cloud Run service I
 7. **NO cross-origin redirects between LE and Central.** Never redirect UI page requests from one server to the other -- it breaks iframes, CSP, and HTTPS. Both servers serve the same static UI files directly.
 8. **AWS/EB is DEPRECATED.** Do not reference EB environments, use `eb deploy`, or use any `aws elasticbeanstalk` commands. All infrastructure is Google Cloud Run. See `.github/CLOUD_ARCHITECTURE.md`.
 9. **GCP Project**: `project-5d00790f-13a9-4637-a40`, region `us-east1`. Artifact Registry: `us-east1-docker.pkg.dev/project-5d00790f-13a9-4637-a40/greenreach`.
+10. **GitHub is the deployable source of truth.** Do not leave production fixes only in local branches or local `main`. Before any Cloud Run deploy, commit and push the exact code being deployed.
+11. **Production drift reconciliation is mandatory.** If the expected production fixes live on feature, salvage, or local-only branches, merge or cherry-pick them into the branch that will be pushed to GitHub first. Record the source branches and commit SHAs in `docs/operations/`.
 
 ### Recent Fixes (Apr 14, 2026)
 
