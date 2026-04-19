@@ -2649,9 +2649,9 @@ Live Branding Preview
       if (!token) {
         // Not an exceptional error in many contexts (e.g., public pages or private browsing)
         grLog('[Dashboard] ✗ No token found in sessionStorage or localStorage');
-        grLog('[Dashboard]Private browsing mode? Token may not persist across pages');
-        grLog('[Dashboard]Please log in at: ' + window.location.origin + '/farm-admin-login.html');
-        grLog('[Dashboard]Redirecting to login page in 2 seconds...');
+        grLog('[Dashboard] Private browsing mode? Token may not persist across pages');
+        grLog('[Dashboard] Please log in at: ' + window.location.origin + '/farm-admin-login.html');
+        grLog('[Dashboard] Redirecting to login page in 2 seconds...');
         
         setTimeout(() => {
           window.location.href = '/farm-admin-login.html';
