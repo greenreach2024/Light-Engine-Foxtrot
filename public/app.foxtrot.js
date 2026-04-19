@@ -21822,9 +21822,30 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (typeof wireGlobalEvents === 'function') wireGlobalEvents();
     // initializeSidebarNavigation is called at the end of DOMContentLoaded - removed duplicate call
 
-    document.getElementById('btnLaunchPairWizard')?.addEventListener('click', () => {
-      if (typeof DEVICE_PAIR_WIZARD !== 'undefined' && DEVICE_PAIR_WIZARD?.open) DEVICE_PAIR_WIZARD.open();
-    });
+      const openFarmSetupDeviceManager = () => {
+        try {
+          window.deviceManagerWindow = window.deviceManagerWindow || new DeviceManagerWindow();
+          if (window.deviceManagerWindow?.open) {
+            window.deviceManagerWindow.open();
+            return true;
+          }
+        } catch (error) {
+          console.warn('Failed to open Device Manager from Farm Setup', error);
+        }
+        return false;
+      };
+
+      document.getElementById('btnOpenDeviceManagerPairing')?.addEventListener('click', () => {
+        if (!openFarmSetupDeviceManager()) {
+          showToast({ title: 'Device Manager unavailable', msg: 'Try refreshing the page and opening Device Manager again.', kind: 'warn', icon: '' }, 5000);
+        }
+      });
+
+      document.getElementById('btnOpenDeviceManagerIntegrations')?.addEventListener('click', () => {
+        if (!openFarmSetupDeviceManager()) {
+          showToast({ title: 'Device Manager unavailable', msg: 'Try refreshing the page and opening Device Manager again.', kind: 'warn', icon: '' }, 5000);
+        }
+      });
 
     document.getElementById('btnPairWizardDocs')?.addEventListener('click', () => {
       showToast({
@@ -22089,17 +22110,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       calWizard.close();
     });
 
-    // Wire Add Device button in Integrations panel to open Pair Devices panel
-    document.getElementById('btnAddDeviceIntegrations')?.addEventListener('click', () => {
-      try {
-        setActivePanel('pair-devices');
-        // If a modal-based pairing wizard is available, open it as well for convenience
-        const openWizard = typeof DEVICE_PAIR_WIZARD !== 'undefined' && DEVICE_PAIR_WIZARD?.open;
-        if (openWizard) DEVICE_PAIR_WIZARD.open();
-      } catch (e) {
-        console.warn('Failed to navigate to Pair Devices panel from Integrations', e);
-      }
-    });
+      document.getElementById('btnLaunchPairWizard')?.addEventListener('click', () => {
+        if (typeof DEVICE_PAIR_WIZARD !== 'undefined' && DEVICE_PAIR_WIZARD?.open) DEVICE_PAIR_WIZARD.open();
+      });
 
     document.getElementById('btnRefreshSmartPlugs')?.addEventListener('click', () => loadSmartPlugs());
     document.getElementById('btnDiscoverSmartPlugs')?.addEventListener('click', () => discoverSmartPlugs());
