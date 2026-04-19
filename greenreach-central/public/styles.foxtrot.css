@@ -6358,6 +6358,117 @@ header {
   background: transparent !important;
 }
 
+/* LE device management dark-surface overrides */
+#iotPanel .panel-body,
+#integrationsPanel .panel-body,
+#iotPanel .panel-body > .tiny,
+#integrationsPanel .tiny,
+#integrationsPanel label,
+#integrationsPanel summary,
+#grow3Status,
+#universalScanStatus,
+#addedIoTDevicesCount,
+#universalScanCount {
+  color: var(--text-secondary, var(--gr-muted, #94a3b8)) !important;
+}
+
+#iotPanel h3,
+#integrationsPanel h3,
+#integrationsPanel strong,
+#integrationsPanel th,
+#grow3StatusText,
+#hexPreview,
+#iotEcosystemModalBody,
+#lightInfoCardBody {
+  color: var(--text-primary, var(--gr-text, #f1f5f9)) !important;
+}
+
+#addedIoTDevicesContainer > div,
+#universalScanResults > div,
+#code3ControllerCard details > div,
+#code3ControllerCard details > summary,
+#universalScanResultsTable,
+#lightInfoCard,
+#iotEcosystemModalContent {
+  background: linear-gradient(180deg, rgba(30, 41, 59, 0.94) 0%, rgba(15, 23, 42, 0.9) 100%) !important;
+  color: var(--text-primary, var(--gr-text, #f1f5f9)) !important;
+  border-color: rgba(148, 163, 184, 0.18) !important;
+  box-shadow: 0 16px 32px rgba(2, 6, 23, 0.22) !important;
+}
+
+#code3ControllerCard details > summary,
+#addedIoTDevicesContainer > div,
+#universalScanResults > div:first-child {
+  border-radius: 10px;
+}
+
+#iotEcosystemModalContent {
+  border: 1px solid rgba(148, 163, 184, 0.18) !important;
+}
+
+#closeIotEcosystemModal {
+  color: var(--text-secondary, var(--gr-muted, #94a3b8)) !important;
+}
+
+#universalScanResults > div,
+#code3ControllerCard details > div,
+#lightInfoCard {
+  border: 1px solid rgba(148, 163, 184, 0.18) !important;
+}
+
+#universalScanResultsTable,
+#grow3FixturesTable thead tr,
+#grow3FixturesTable tbody tr,
+#code3ControllerCard code,
+#hexBreakdown,
+#code3ControllerCard select,
+#grow3TargetDevice,
+#code3ControllerCard input[type="time"],
+#code3ControllerCard input[type="number"] {
+  color: var(--text-primary, var(--gr-text, #f1f5f9)) !important;
+}
+
+#grow3FixturesTable thead tr,
+#grow3FixturesTable tbody tr {
+  border-color: rgba(148, 163, 184, 0.18) !important;
+}
+
+#code3ControllerCard code,
+#hexPreview,
+#hexBreakdown,
+#cwValue,
+#wwValue,
+#blueValue,
+#redValue {
+  background: rgba(15, 23, 42, 0.72) !important;
+  border-radius: 6px;
+}
+
+#code3ControllerCard select,
+#grow3TargetDevice {
+  background: rgba(15, 23, 42, 0.72) !important;
+  border: 1px solid rgba(148, 163, 184, 0.18) !important;
+}
+
+#code3ControllerCard input[type="range"] {
+  background: rgba(148, 163, 184, 0.24) !important;
+}
+
+#universalScanResults > div:nth-child(2) p,
+#code3ControllerCard .tiny,
+#code3ControllerCard label,
+#code3ControllerCard td,
+#code3ControllerCard span,
+#code3ControllerCard summary,
+#integrationsPanel .tiny.text-muted,
+#iotPanel .tiny.text-muted {
+  color: var(--text-secondary, var(--gr-muted, #94a3b8)) !important;
+}
+
+#universalScanProgress > div:last-child {
+  background: rgba(148, 163, 184, 0.18) !important;
+}
+
 .groupsv2-unassigned-card__header h3 {
   margin: 0;
   font-size: 1.2rem;
