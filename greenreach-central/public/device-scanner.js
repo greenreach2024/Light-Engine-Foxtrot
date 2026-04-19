@@ -167,7 +167,7 @@ class DeviceScanner {
 
     return `<div class="device-list">${devices.map(d => `
       <div class="device-item">
-        <span class="device-icon">${d.type === 'grow3' ? '💡' : d.type === 'dmx' ? '🎛️' : '📡'}</span>
+        <span class="device-icon">${d.type === 'grow3' ? '[LIGHT]' : d.type === 'dmx' ? '[DMX]' : '[NET]'}</span>
         <div class="device-info">
           <div class="device-name">${d.name || d.type || 'Unknown Device'}</div>
           <div class="device-meta">${d.ip || d.address || '—'} · ${d.protocol || d.type || '—'}${d.manufacturer ? ` · ${d.manufacturer}` : ''}</div>
