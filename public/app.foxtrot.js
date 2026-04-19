@@ -2145,9 +2145,9 @@ function buildInfoGrid(entries, options = {}) {
   const columns = options.columns || 2;
   const grid = document.createElement('div');
   grid.style.cssText = `margin-top:${options.compact ? '6px' : '10px'};display:grid;grid-template-columns:repeat(${columns}, minmax(0, 1fr));gap:${options.compact ? '6px' : '10px'};`; 
-  const cellStyle = options.cellStyle || 'background:#f1f5f9;border:1px solid #e2e8f0;border-radius:6px;padding:8px;display:flex;flex-direction:column;gap:2px;';
-  const labelStyle = options.labelStyle || 'font-size:10px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;color:#475569;';
-  const valueStyle = options.valueStyle || 'font-size:12px;color:#0f172a;font-weight:500;word-break:break-word;';
+  const cellStyle = options.cellStyle || 'background:var(--surface-2, #f1f5f9);border:1px solid var(--border-subtle, #e2e8f0);border-radius:6px;padding:8px;display:flex;flex-direction:column;gap:2px;';
+  const labelStyle = options.labelStyle || 'font-size:10px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;color:var(--text-3, #475569);';
+  const valueStyle = options.valueStyle || 'font-size:12px;color:var(--text-1, #0f172a);font-weight:500;word-break:break-word;';
   items.forEach(entry => {
     const cell = document.createElement('div');
     cell.style.cssText = cellStyle;
@@ -2468,15 +2468,15 @@ function buildSwitchbotSnapshot(device) {
   const grid = buildInfoGrid(entries, {
     columns: isPlug ? 3 : (entries.length > 2 ? 3 : 2),
     compact: true,
-    cellStyle: 'background:#ffffff;border:1px solid #cbd5e1;border-radius:8px;padding:8px;display:flex;flex-direction:column;gap:2px;box-shadow:inset 0 1px 0 rgba(255,255,255,0.7);',
-    labelStyle: 'font-size:10px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:#64748b;',
-    valueStyle: 'font-size:12px;color:#0f172a;font-weight:600;word-break:break-word;'
+    cellStyle: 'background:var(--surface-2, #ffffff);border:1px solid var(--border-subtle, #cbd5e1);border-radius:8px;padding:8px;display:flex;flex-direction:column;gap:2px;box-shadow:var(--elevation-1, inset 0 1px 0 rgba(255,255,255,0.7));',
+    labelStyle: 'font-size:10px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:var(--text-3, #64748b);',
+    valueStyle: 'font-size:12px;color:var(--text-1, #0f172a);font-weight:600;word-break:break-word;'
   });
   if (!grid) return null;
   const wrapper = document.createElement('div');
   wrapper.style.cssText = 'margin-top:8px;display:flex;flex-direction:column;gap:6px;';
   const heading = document.createElement('span');
-  heading.style.cssText = 'font-size:10px;font-weight:700;color:#166534;letter-spacing:0.04em;text-transform:uppercase;';
+  heading.style.cssText = 'font-size:10px;font-weight:700;color:var(--accent-green, #166534);letter-spacing:0.04em;text-transform:uppercase;';
   heading.textContent = 'SwitchBot Snapshot';
   wrapper.appendChild(heading);
   wrapper.appendChild(grid);
