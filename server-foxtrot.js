@@ -1074,6 +1074,9 @@ async function startOperationalServices(trigger = 'startup') {
         store: nutrientStore,
         scopeId: NUTRIENT_SCOPE_ID
       });
+      nutrientSubscriber.on('error', (error) => {
+        console.warn('[nutrient-mqtt] Subscriber error (non-fatal):', error?.message || error);
+      });
       nutrientSubscriber.start();
       // Pipe telemetry from MQTT into env store for dashboard integration
       nutrientStore.on('telemetry', ({ tankId, reading }) => {
