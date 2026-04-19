@@ -5788,7 +5788,7 @@ async function testSquareConnection() {
  */
 function navigateToPaymentWizard() {
     // Navigate to Setup & Update page, then trigger the payment wizard from its sidebar
-    const navItem = document.querySelector('.nav-item[data-url="/LE-dashboard.html"]');
+    const navItem = document.querySelector('.nav-item[data-url="/views/farm-setup.html"]');
     if (navItem) {
         navItem.click();
         // After LE-dashboard loads in the iframe, open the payment wizard

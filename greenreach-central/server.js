@@ -802,6 +802,12 @@ app.use((req, res, next) => {
   next();
 });
 
+app.get('/LE-dashboard.html', (req, res) => {
+  const queryIndex = req.originalUrl.indexOf('?');
+  const queryString = queryIndex >= 0 ? req.originalUrl.slice(queryIndex) : '';
+  res.redirect(302, `/views/farm-setup.html${queryString}`);
+});
+
 // Static UI — non-HTML assets (JS, CSS, images, JSON, fonts)
 // ── Static asset caching (#21) ──
 const staticCacheOptions = {

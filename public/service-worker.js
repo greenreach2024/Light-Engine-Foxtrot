@@ -3,12 +3,12 @@
  * Provides offline support and caching
  */
 
-const CACHE_VERSION = 'v1.0.11';
+const CACHE_VERSION = 'v1.0.12';
 const CACHE_NAME = `light-engine-${CACHE_VERSION}`;
 
 // Files to cache immediately on install - only actual files that exist
 const STATIC_CACHE = [
-  '/LE-dashboard.html',
+  '/LE-farm-admin.html',
   '/manifest.json'
 ];
 

@@ -24479,6 +24479,12 @@ app.get('/', (req, res) => {
   res.redirect(302, `/LE-farm-admin.html${queryString}`);
 });
 
+app.get('/LE-dashboard.html', (req, res) => {
+  const queryIndex = req.originalUrl.indexOf('?');
+  const queryString = queryIndex >= 0 ? req.originalUrl.slice(queryIndex) : '';
+  res.redirect(302, `/views/farm-setup.html${queryString}`);
+});
+
 // Legacy routes — redirect to admin for bookmarks/links that still reference old pages
 app.get('/index.charlie.html', (req, res) => {
   res.redirect(302, '/LE-farm-admin.html');
