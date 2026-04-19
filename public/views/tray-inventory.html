@@ -210,9 +210,11 @@
         font-size: 1.25rem;
       }
       /* Remove desktop hover-jitter on coarse pointers — taps provide feedback
-         via :active states already. */
+         via :active states already. .priority-card / .action-btn are omitted
+         here because their :active transform (scale-down) IS the tap feedback
+         on touch devices; !important would override it. */
       .nav-button, .nav-link-button, .dropdown-item,
-      .priority-card, .checkpoint-btn {
+      .checkpoint-btn {
         transform: none !important;
       }
     }
@@ -3802,7 +3804,12 @@
       if (!navItems.length) return;
 
       const closeAll = (except) => {
-        navItems.forEach((item) => { if (item !== except) item.classList.remove('open'); });
+        navItems.forEach((item) => {
+          if (item === except) return;
+          item.classList.remove('open');
+          const trigger = item.querySelector('.nav-button');
+          if (trigger) trigger.setAttribute('aria-expanded', 'false');
+        });
       };
 
       navItems.forEach((item) => {
