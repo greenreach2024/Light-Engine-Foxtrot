@@ -1,5 +1,5 @@
 // Groups V2 Script Loading
-g2debug('[Groups V2] 📄 Script loading...');
+g2debug('[Groups V2] Script loading...');
 
 // Helper: safely escape HTML to prevent XSS
 function escapeHtml(text) {
@@ -266,7 +266,7 @@ function getHarvestCycleStatus(group) {
   if (hc.currentHarvest > 0 && regrowthDay !== null) {
     const daysLeft = Math.max(0, hc.regrowthDays - regrowthDay);
     return {
-      label: `🔄 Regrowth Day ${regrowthDay} of ${hc.regrowthDays} — Harvest ${hc.currentHarvest + 1} of ${hc.maxHarvests} in ${daysLeft} day${daysLeft !== 1 ? 's' : ''}`,
+      label: `Regrowth Day ${regrowthDay} of ${hc.regrowthDays} — Harvest ${hc.currentHarvest + 1} of ${hc.maxHarvests} in ${daysLeft} day${daysLeft !== 1 ? 's' : ''}`,
       color: '#f59e0b',
       isRegrowing: true,
       harvestNumber: hc.currentHarvest,
@@ -275,7 +275,7 @@ function getHarvestCycleStatus(group) {
       regrowthDays: hc.regrowthDays
     };
   }
-  return { label: `🌱 Cut & Come Again (${hc.maxHarvests} harvests)`, color: '#0369a1', isRegrowing: false, harvestNumber: 0, maxHarvests: hc.maxHarvests, regrowthDay: null, regrowthDays: hc.regrowthDays };
+  return { label: `Cut & Come Again (${hc.maxHarvests} harvests)`, color: '#0369a1', isRegrowing: false, harvestNumber: 0, maxHarvests: hc.maxHarvests, regrowthDay: null, regrowthDays: hc.regrowthDays };
 }
 
 // Pre-fetch crop registry on load
@@ -317,17 +317,17 @@ function updateHarvestStrategyIndicator(group) {
       // Currently in regrowth
       const regrowthDay = strategy.regrowthStartDate ? getRegrowthDayNumber(strategy) : null;
       const daysLeft = regrowthDay !== null ? Math.max(0, days - regrowthDay) : days;
-      indicator.innerHTML = `🔄 Regrowing — Harvest ${currentHarvest + 1} of ${harvests} in ${daysLeft} day${daysLeft !== 1 ? 's' : ''}`;
+      indicator.innerHTML = `Regrowing — Harvest ${currentHarvest + 1} of ${harvests} in ${daysLeft} day${daysLeft !== 1 ? 's' : ''}`;
       indicator.style.background = 'rgba(245, 158, 11, 0.16)';
       indicator.style.color = '#fde68a';
       indicator.style.border = '1px solid rgba(245, 158, 11, 0.28)';
     } else if (currentHarvest >= harvests) {
-      indicator.innerHTML = `✅ All ${harvests} harvests complete`;
+      indicator.innerHTML = `All ${harvests} harvests complete`;
       indicator.style.background = 'rgba(239, 68, 68, 0.16)';
       indicator.style.color = '#fecaca';
       indicator.style.border = '1px solid rgba(248, 113, 113, 0.28)';
     } else {
-      indicator.innerHTML = `🔄 Cut & Come Again — ${harvests} harvests, ${days}-day regrowth`;
+      indicator.innerHTML = `Cut & Come Again — ${harvests} harvests, ${days}-day regrowth`;
       indicator.style.background = 'rgba(59, 130, 246, 0.16)';
       indicator.style.color = '#bfdbfe';
       indicator.style.border = '1px solid rgba(96, 165, 250, 0.28)';
@@ -1078,7 +1078,7 @@ document.addEventListener('DOMContentLoaded', () => {
             title: 'Assignments Saved', 
             msg: `Light assignments for ${groupLabel} have been saved.`, 
             kind: 'success',
-            icon: '💾'
+            icon: ''
           });
         }
       } catch (error) {
@@ -1479,10 +1479,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (typeof showToast === 'function') {
           if (errorCount === 0) {
             showToast({ 
-              title: 'All Lights Online ✨', 
+              title: 'All Lights Online', 
               msg: ` All ${successCount} light(s) in ${groupLabel} blinked successfully!`, 
               kind: 'success',
-              icon: '🔦'
+              icon: ''
             }, 3000);
           } else if (successCount === 0) {
             showToast({ 
@@ -1513,7 +1513,7 @@ document.addEventListener('DOMContentLoaded', () => {
       } finally {
         // Re-enable button
         testGroupLightsBtn.disabled = false;
-        testGroupLightsBtn.textContent = '🔦 Test Group Lights';
+        testGroupLightsBtn.textContent = 'Test Group Lights';
         
         // Hide testing indicator if still visible
         if (testingIndicator) {
@@ -2251,7 +2251,7 @@ async function saveGroupsV2Group(status = 'draft') {
   // Show success toast
   if (typeof showToast === 'function') {
     const statusLabel = status === 'deployed' ? 'Deployed' : 'Saved as Draft';
-    const statusIcon = status === 'deployed' ? '' : '💾';
+    const statusIcon = status === 'deployed' ? '' : '';
     const details = [`${groupName} (${room}:${zone})`];
     if (planId) details.push(`Plan ${plan?.name || planId}`);
     
@@ -2420,7 +2420,7 @@ document.addEventListener('DOMContentLoaded', () => {
               title: `Cut Harvest ${nextHarvest} of ${maxHarvests}`, 
               msg: `${group.name} will regrow for ${hc.regrowthDays} days until next harvest`, 
               kind: 'success', 
-              icon: '✂️' 
+              icon: '' 
             }, 4000);
           }
 
@@ -2473,7 +2473,7 @@ document.addEventListener('DOMContentLoaded', () => {
               title: isCCA ? 'Final Harvest Complete' : 'Harvest Complete', 
               msg: `${group.name} has been harvested and archived`, 
               kind: 'success', 
-              icon: '🌾' 
+              icon: '' 
             }, 3000);
           }
 
@@ -2588,7 +2588,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Persist to server
-        console.log('[Groups V2] 🔄 About to POST delete to server, groups count:', window.STATE.groups.length);
+        console.log('[Groups V2]  About to POST delete to server, groups count:', window.STATE.groups.length);
         console.log('[Groups V2] Groups being sent:', window.STATE.groups.map(g => ({ id: g.id, name: g.name, lights: g.lights?.length || 0 })));
         try {
           const response = await fetch('/data/groups.json', {
@@ -2603,9 +2603,9 @@ document.addEventListener('DOMContentLoaded', () => {
             throw new Error(`Failed to save groups: ${response.status} ${errorText}`);
           }
           const result = await response.json();
-          console.log('[Groups V2] ✅ Successfully saved groups, server response:', result);
+          console.log('[Groups V2]  Successfully saved groups, server response:', result);
         } catch (error) {
-          console.error('[Groups V2] ❌ Failed to persist groups after deletion:', error);
+          console.error('[Groups V2]  Failed to persist groups after deletion:', error);
           console.error('[Groups V2] Error details:', error.message, error.stack);
           // Show error to user
           alert(`Failed to save group deletion: ${error.message}\n\nPlease check console for details.`);
@@ -2636,7 +2636,7 @@ document.addEventListener('DOMContentLoaded', () => {
             title: 'Group Deleted', 
             msg: `${group.name} has been permanently deleted`, 
             kind: 'success', 
-            icon: '🗑' 
+            icon: '' 
           }, 2000);
         }
 
@@ -2690,7 +2690,7 @@ document.addEventListener('DOMContentLoaded', () => {
         URL.revokeObjectURL(url);
 
         if (typeof showToast === 'function') {
-          showToast({ title: 'Labels Ready', msg: 'Group label PDF downloaded', kind: 'success', icon: '🏷️' }, 2000);
+          showToast({ title: 'Labels Ready', msg: 'Group label PDF downloaded', kind: 'success', icon: '' }, 2000);
         }
       } catch (error) {
         console.error('[Groups V2] Print labels error:', error);
@@ -2891,7 +2891,7 @@ function populateGroupsV2ControllerDropdown() {
     opt.value = identifier;
     
     // Show type indicator
-    const typeIcon = controller.isPlug ? '🔌 ' : '🎛 ';
+    const typeIcon = '';
     const deviceName = controller.name || controller.label || 'Unknown Device';
     const protocolLabel = controller.protocol ? ` (${controller.protocol})` : '';
     
@@ -2965,7 +2965,7 @@ function populateGroupsV2UnassignedLightsDropdown() {
     opt.value = identifier;
     
     // Show type indicator for plugs vs lights
-    const typeIcon = light.isPlug ? '🔌 ' : light.fromIoT ? ' ' : '';
+    const typeIcon = '';
     const typeLabel = light.isPlug ? '[Plug] ' : '';
     
     // Show name and S/N (ID) for clarity
@@ -3446,7 +3446,7 @@ async function upsertGroupScheduleForGroup(groupId, scheduleConfig, metadata = {
     // Surface a friendlier hint when PIN is required
     if (response.status === 403 && /pin-required/i.test(message || '')) {
       try {
-        window.showToast?.({ title: 'Schedule Save Blocked', msg: 'PIN required to save schedules. Add ?pin=YOUR_PIN to the URL or set localStorage["gr.farmPin"].', kind: 'error', icon: '🔒' });
+        window.showToast?.({ title: 'Schedule Save Blocked', msg: 'PIN required to save schedules. Add ?pin=YOUR_PIN to the URL or set localStorage["gr.farmPin"].', kind: 'error', icon: '' });
       } catch {}
     }
     throw new Error(message || `Failed to save schedule (HTTP ${response.status})`);
@@ -3737,7 +3737,7 @@ function updateGroupsV2HarvestButtonVisibility() {
     if (regrowthDay !== null && regrowthDay >= hc.regrowthDays) {
       const nextHarvest = hc.currentHarvest + 1;
       const isFinal = nextHarvest >= hc.maxHarvests;
-      harvestBtn.textContent = isFinal ? `🌾 Final Harvest (${nextHarvest}/${hc.maxHarvests})` : `✂️ Cut Harvest (${nextHarvest}/${hc.maxHarvests})`;
+      harvestBtn.textContent = isFinal ? `Final Harvest (${nextHarvest}/${hc.maxHarvests})` : `Cut Harvest (${nextHarvest}/${hc.maxHarvests})`;
       harvestBtn.style.display = 'inline-block';
       harvestBtn.style.borderColor = isFinal ? '#dc2626' : '#f59e0b';
       harvestBtn.style.color = isFinal ? '#dc2626' : '#f59e0b';
@@ -3779,11 +3779,11 @@ function updateGroupsV2HarvestButtonVisibility() {
   // Show button if we're at or past the plan's end
   if (maxDay !== null && dayNumber >= maxDay) {
     if (isCCA) {
-      harvestBtn.textContent = `✂️ Cut Harvest (1/${hc.maxHarvests})`;
+      harvestBtn.textContent = `Cut Harvest (1/${hc.maxHarvests})`;
       harvestBtn.style.borderColor = '#f59e0b';
       harvestBtn.style.color = '#f59e0b';
     } else {
-      harvestBtn.textContent = '🌾 Harvest';
+      harvestBtn.textContent = 'Harvest';
       harvestBtn.style.borderColor = '#f59e0b';
       harvestBtn.style.color = '#f59e0b';
     }
@@ -6303,17 +6303,17 @@ function requestGroupsV2LoadGroupRefresh() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  console.log('[Groups V2] ✅ DOMContentLoaded event fired');
+  console.log('[Groups V2]  DOMContentLoaded event fired');
   requestGroupsV2LoadGroupRefresh();
 });
 
 document.addEventListener('groups-updated', () => {
-  console.log('[Groups V2] 🔄 groups-updated event received, refreshing load dropdown...');
+  console.log('[Groups V2]  groups-updated event received, refreshing load dropdown...');
   requestGroupsV2LoadGroupRefresh();
 });
 
 document.addEventListener('groups-updated', () => {
-  console.log('[Groups V2] 🔄 groups-updated event received, rendering light card...');
+  console.log('[Groups V2]  groups-updated event received, rendering light card...');
   renderGroupsV2LightCard(getGroupsV2SelectedPlan());
 });
 
@@ -6396,16 +6396,16 @@ function renderGroupsV2GroupList() {
           ${statusLabel}
         </span>
       </div>
-      <div style="display:flex;gap:12px;margin-top:8px;font-size:12px;color:#475569;">
-        <span title="Trays">🧺 ${trays}</span>
-        <span title="Lights">💡 ${lightsCount}</span>
-        <span title="Plan" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">📋 ${escapeHtml(String(planName))}</span>
+      <div style="display:flex;gap:12px;margin-top:8px;font-size:12px;color:#94a3b8;">
+        <span title="Trays">Trays: ${trays}</span>
+        <span title="Lights">Lights: ${lightsCount}</span>
+        <span title="Plan" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Plan: ${escapeHtml(String(planName))}</span>
       </div>
       <div style="display:flex;gap:6px;margin-top:8px;justify-content:flex-end;">
         <button type="button" class="ghost tiny" data-action="edit"
-          style="padding:4px 10px;font-size:11px;border:1px solid #3b82f6;color:#3b82f6;border-radius:6px;">✏️ Edit</button>
+          style="padding:4px 10px;font-size:11px;border:1px solid #3b82f6;color:#3b82f6;border-radius:6px;">Edit</button>
         <button type="button" class="ghost tiny" data-action="delete"
-          style="padding:4px 10px;font-size:11px;border:1px solid #ef4444;color:#ef4444;border-radius:6px;">🗑️</button>
+          style="padding:4px 10px;font-size:11px;border:1px solid #ef4444;color:#ef4444;border-radius:6px;">Delete</button>
       </div>
     </div>`;
   }).join('');
@@ -7571,7 +7571,7 @@ document.addEventListener('DOMContentLoaded', function() {
               title: 'Bulk Edit Complete',
               msg: 'Updated ' + result.updated + ' group' + (result.updated !== 1 ? 's' : '') + ' in "' + prefix + '".',
               kind: 'success',
-              icon: '✏️'
+              icon: ''
             }, 3000);
           }
         }
