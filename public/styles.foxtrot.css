@@ -6308,6 +6308,56 @@ header {
   box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
 }
 
+/* LE embedded admin dark-surface overrides */
+.card.std.ai-advisory-card .ai-advisory-room__suggestions li,
+.card.std.ai-advisory-card .ai-advisory-room__learning,
+.automation-room,
+.groups-v2-card,
+.groups-v2-card__canvas,
+.device-manager__assign-form select,
+.device-manager__assign-form input,
+.room-tile,
+#groups-setup,
+#groups-setup .row input,
+#groups-setup .row select,
+.equip-row,
+.groupsv2-unassigned-card {
+  background: linear-gradient(180deg, rgba(30, 41, 59, 0.94) 0%, rgba(15, 23, 42, 0.9) 100%) !important;
+  color: var(--text-primary, var(--gr-text, #f1f5f9)) !important;
+  border-color: rgba(148, 163, 184, 0.18) !important;
+  box-shadow: 0 16px 32px rgba(2, 6, 23, 0.22) !important;
+}
+
+.card.std.ai-advisory-card .ai-advisory-room__learning-title,
+.card.std.ai-advisory-card .ai-advisory-room__suggestion-label,
+.automation-room__title,
+.groups-v2-card__title,
+.groups-v2-card__metrics dd,
+.room-tile__hdr,
+.room-tile__hdr *,
+#groups-setup header h2,
+.groupsv2-unassigned-card__header h3 {
+  color: var(--text-primary, var(--gr-text, #f1f5f9)) !important;
+}
+
+.card.std.ai-advisory-card .ai-advisory-room__learning-list,
+.card.std.ai-advisory-card .ai-advisory-room__learning-note,
+.card.std.ai-advisory-card .ai-advisory-room__suggestion-detail,
+.automation-room__metric-label,
+.automation-room__actuators .text-muted,
+.groups-v2-card__metrics dt,
+.groups-v2-card__subtitle,
+.device-manager__assign-form label,
+#groups-setup .row label,
+.equip-row input,
+.groupsv2-unassigned-card__header p {
+  color: var(--text-secondary, var(--gr-muted, #94a3b8)) !important;
+}
+
+.equip-row input {
+  background: transparent !important;
+}
+
 .groupsv2-unassigned-card__header h3 {
   margin: 0;
   font-size: 1.2rem;
