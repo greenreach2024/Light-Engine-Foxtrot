@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="/styles.foxtrot.css">
   <link rel="stylesheet" href="/styles/le-dashboard-theme.css">
   <link rel="stylesheet" href="/styles/nav-color-palette.css">
+  <link rel="stylesheet" href="/styles/le-foundation.css">
   <!--
     grow-management.css must load AFTER styles.foxtrot.css. foxtrot.css has
     ~49 !important rules targeting selectors used on this page (#lightInfoCard,
@@ -18,9 +19,8 @@
   <link rel="stylesheet" href="/styles/grow-management.css">
   <script src="/js/console-wrapper.js"></script>
   <script src="/js/net.guard.js" defer></script>
-  <script src="/app.foxtrot.js" defer></script>
-  <script src="/groups-v2.js" defer></script>
-<link rel="stylesheet" href="/styles/le-foundation.css">
+  <script src="/app.foxtrot.js?v=20260419-standalone-panel-fix" defer></script>
+  <script src="/groups-v2.js?v=20260419-groupsv2-runtime-fix" defer></script>
 </head>
 <body class="le-theme">
 
@@ -175,7 +175,9 @@
           </div>
 
           <div id="groupsV2ScheduleSummary" class="tiny text-muted"></div>
-          <div id="groupsV2ScheduleSelect" style="display:none;"></div>
+          <select id="groupsV2ScheduleSelect" style="display:none;">
+            <option value="">(select schedule)</option>
+          </select>
 
           <!-- ===== TARGET TEMP / HUMIDITY ===== -->
           <div class="gm-targets-box">
