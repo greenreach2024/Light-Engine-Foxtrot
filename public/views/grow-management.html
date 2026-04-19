@@ -466,17 +466,21 @@
     /* Bulk edit / Build stock modals */
     #bulkEditGroupModal,
     #buildStockGroupModal {
+      display: none;
       position: fixed;
       top: 0; left: 0; right: 0; bottom: 0;
       background: rgba(0, 0, 0, 0.7);
       backdrop-filter: blur(4px);
       z-index: 200;
+    }
+    #bulkEditGroupModal[open],
+    #buildStockGroupModal[open] {
       display: flex;
       align-items: center;
       justify-content: center;
     }
-    #bulkEditGroupModal > div,
-    #buildStockGroupModal > div {
+    #bulkEditGroupModal > form,
+    #buildStockGroupModal > form {
       background: #1e293b !important;
       border: 1px solid rgba(59, 130, 246, 0.3) !important;
       border-radius: 16px !important;
