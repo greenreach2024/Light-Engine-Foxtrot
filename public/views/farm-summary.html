@@ -5133,8 +5133,10 @@
       const detail = document.getElementById('task-detail-' + taskId);
       const arrow = document.getElementById('task-arrow-' + taskId);
       if (!detail) return;
+      // .le-task-detail is display:flex + gap, so expanding must restore flex
+      // (not block) or the child gap collapses to zero.
       const hidden = detail.style.display === 'none';
-      detail.style.display = hidden ? 'block' : 'none';
+      detail.style.display = hidden ? 'flex' : 'none';
       if (arrow) arrow.textContent = hidden ? '▼' : '▶';
     }
 
