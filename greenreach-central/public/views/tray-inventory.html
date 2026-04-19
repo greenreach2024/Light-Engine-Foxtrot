@@ -2,7 +2,11 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="format-detection" content="telephone=no">
   <title>Activity Hub - Light Engine</title>
   <style>
     * {
@@ -92,7 +96,7 @@
       transition: transform 0.3s ease;
     }
 
-    .nav-item:hover .nav-arrow {
+    .nav-item.open .nav-arrow {
       transform: rotate(180deg);
     }
 
@@ -119,10 +123,29 @@
       right: 0;
     }
 
-    .nav-item:hover .dropdown-menu {
+    /* Tap-to-open (primary interaction for tablet). */
+    .nav-item.open .dropdown-menu {
       opacity: 1;
       visibility: visible;
       transform: translateY(0);
+    }
+
+    /* Hover-to-open — only on devices that actually have a hover pointer (desktop).
+       Tablets report no hover, so the dropdown does NOT open on accidental touches
+       and hover-flicker does not prevent tap. */
+    @media (hover: hover) and (pointer: fine) {
+      .nav-item:hover .nav-arrow {
+        transform: rotate(180deg);
+      }
+      .nav-item:hover .dropdown-menu {
+        opacity: 1;
+        visibility: visible;
+        transform: translateY(0);
+      }
+      .nav-button:hover, .nav-link-button:hover {
+        background: rgba(59, 130, 246, 0.35);
+        transform: translateY(-2px);
+      }
     }
 
     .dropdown-item {
@@ -136,16 +159,62 @@
       white-space: nowrap;
     }
 
-    .dropdown-item:hover {
-      background: rgba(59, 130, 246, 0.3);
-      color: white;
-      transform: translateX(4px);
+    @media (hover: hover) and (pointer: fine) {
+      .dropdown-item:hover {
+        background: rgba(59, 130, 246, 0.3);
+        color: white;
+        transform: translateX(4px);
+      }
     }
 
     .dropdown-item.active {
       background: rgba(59, 130, 246, 0.4);
       color: white;
       font-weight: 600;
+    }
+
+    /* ============================================================
+       Tablet touch-target sizing (Apple HIG / Material: 44–48px min).
+       Any pointer that isn't a mouse gets the upsized chrome.
+       ============================================================ */
+    @media (pointer: coarse) {
+      .nav-button, .nav-link-button {
+        min-height: 48px;
+        padding: 0.85rem 1.25rem;
+        font-size: 1rem;
+      }
+      .dropdown-item {
+        min-height: 48px;
+        padding: 0.85rem 1rem;
+        display: flex;
+        align-items: center;
+        font-size: 1rem;
+      }
+      .header-action-btn {
+        min-height: 48px;
+        padding: 0.75rem 1.25rem !important;
+        font-size: 1rem !important;
+      }
+      .priority-card {
+        min-height: 96px;
+      }
+      .tab-btn, .checkpoint-btn {
+        min-height: 48px;
+        font-size: 1rem;
+      }
+      body {
+        font-size: 17px;
+        line-height: 1.55;
+      }
+      .section-title {
+        font-size: 1.25rem;
+      }
+      /* Remove desktop hover-jitter on coarse pointers — taps provide feedback
+         via :active states already. */
+      .nav-button, .nav-link-button, .dropdown-item,
+      .priority-card, .checkpoint-btn {
+        transform: none !important;
+      }
     }
 
     .top-header {
@@ -1405,7 +1474,7 @@
           font-size: 0.9rem;
           font-weight: 600;
           cursor: pointer;
-          " title="Generate QR code to pair additional tablets">📱 Pair Device</button>
+          " title="Generate QR code to pair additional tablets">Pair Device</button>
           <button class="header-action-btn" onclick="window.open('/LE-qr-generator.html', '_blank')" style="
           background: rgba(96, 165, 250, 0.2);
           border: 1px solid #60a5fa;
@@ -1415,7 +1484,7 @@
           font-size: 0.9rem;
           font-weight: 600;
           cursor: pointer;
-          " title="Generate tray and group QR labels">🏷️ QR Labels</button>
+          " title="Generate tray and group QR labels">QR Labels</button>
           <button id="logoutBtn" class="header-action-btn" onclick="logoutDevice()" style="
           background: rgba(239, 68, 68, 0.2);
           border: 1px solid #ef4444;
@@ -1537,7 +1606,7 @@
           </button>
           
           <button class="action-btn orange" onclick="openOrderDashboard()">
-            <span class="action-icon">📋</span>
+            <span class="action-icon"></span>
             <div class="action-text">
               <div>View Orders</div>
               <div class="action-subtitle">Wholesale Order Dashboard</div>
@@ -1553,7 +1622,7 @@
           </button>
           
           <button class="action-btn cyan" onclick="startQuickMove()" id="quickMoveBtn">
-            <span class="action-icon">⚡</span>
+            <span class="action-icon"></span>
             <div class="action-text">
               <div>Quick Move</div>
               <div class="action-subtitle">Fast 2-Scan Move</div>
@@ -1561,7 +1630,7 @@
           </button>
           
           <button class="action-btn" onclick="toggleVoiceMode()" id="voiceBtn" style="opacity: 0.5;">
-            <span class="action-icon">🔊</span>
+            <span class="action-icon"></span>
             <div class="action-text">
               <div>Voice Mode</div>
               <div class="action-subtitle">Audio Feedback</div>
@@ -1611,7 +1680,7 @@
   <!-- Orientation Warning -->
   <div id="orientationWarning" class="orientation-warning">
     <div class="orientation-content">
-      <div style="font-size: 4rem; margin-bottom: 1rem;">🔄</div>
+      <div aria-hidden="true" style="margin: 0 auto 1.25rem; width: 4rem; height: 4rem; border: 3px solid rgba(148, 163, 184, 0.35); border-top-color: #60a5fa; border-radius: 50%; animation: spin 1.4s linear infinite;"></div>
       <h2>Please Rotate Device</h2>
       <p>Activity Hub is optimized for landscape mode</p>
       <p style="font-size: 0.9rem; margin-top: 1rem; opacity: 0.8;">Rotate your tablet horizontally for the best experience</p>
@@ -1619,8 +1688,8 @@
   </div>
 
   <!-- Voice Assistant Button -->
-  <button class="voice-assistant-btn" onclick="toggleVoiceAssistant()" id="voiceBtn">
-    <span class="voice-icon">🎤</span>
+  <button class="voice-assistant-btn" onclick="toggleVoiceAssistant()" id="voiceBtn" aria-label="Voice assistant">
+    <svg class="voice-icon" xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="12" rx="3"></rect><path d="M5 10v1a7 7 0 0 0 14 0v-1"></path><line x1="12" y1="18" x2="12" y2="22"></line><line x1="8" y1="22" x2="16" y2="22"></line></svg>
   </button>
 
   <!-- Voice Assistant Modal -->
@@ -3724,6 +3793,58 @@
         }
       });
     }
+
+    // Tablet-friendly tap-to-open nav dropdowns.
+    // Desktop still opens on :hover (see @media (hover: hover) in CSS);
+    // this handler drives the `.open` class used by both interaction models.
+    document.addEventListener('DOMContentLoaded', () => {
+      const navItems = document.querySelectorAll('.nav-menu .nav-item');
+      if (!navItems.length) return;
+
+      const closeAll = (except) => {
+        navItems.forEach((item) => { if (item !== except) item.classList.remove('open'); });
+      };
+
+      navItems.forEach((item) => {
+        const trigger = item.querySelector('.nav-button');
+        if (!trigger) return;
+
+        // Expose state to AT.
+        trigger.setAttribute('aria-haspopup', 'true');
+        trigger.setAttribute('aria-expanded', 'false');
+
+        trigger.addEventListener('click', (event) => {
+          // Only intercept when this nav-item actually has a dropdown;
+          // plain nav-link-buttons (no dropdown) should behave normally.
+          const menu = item.querySelector('.dropdown-menu');
+          if (!menu) return;
+          event.preventDefault();
+          event.stopPropagation();
+          const willOpen = !item.classList.contains('open');
+          closeAll(item);
+          item.classList.toggle('open', willOpen);
+          trigger.setAttribute('aria-expanded', String(willOpen));
+        });
+      });
+
+      // Tap outside or Esc closes all menus.
+      document.addEventListener('click', (event) => {
+        if (!event.target.closest('.nav-menu .nav-item')) closeAll();
+        navItems.forEach((item) => {
+          const trigger = item.querySelector('.nav-button');
+          if (trigger) trigger.setAttribute('aria-expanded', String(item.classList.contains('open')));
+        });
+      });
+      document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+          closeAll();
+          navItems.forEach((item) => {
+            const trigger = item.querySelector('.nav-button');
+            if (trigger) trigger.setAttribute('aria-expanded', 'false');
+          });
+        }
+      });
+    });
 
     // Photo preview
     document.addEventListener('DOMContentLoaded', () => {
