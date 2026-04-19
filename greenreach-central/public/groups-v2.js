@@ -1125,7 +1125,7 @@ document.addEventListener('DOMContentLoaded', () => {
       try {
         // Disable button during test
         testGroupLightsBtn.disabled = true;
-        testGroupLightsBtn.textContent = '⏳ Testing...';
+        testGroupLightsBtn.textContent = 'Testing...';
 
         // Show testing indicator
         if (testingIndicator) {
@@ -1533,7 +1533,7 @@ document.addEventListener('DOMContentLoaded', () => {
       try {
         // Disable button during execution
         runGroupBtn.disabled = true;
-        runGroupBtn.textContent = '⏳ Saving & Running...';
+        runGroupBtn.textContent = 'Saving & Running...';
 
         // FIRST: Save all current settings as deployed
         g2debug('[Groups V2] Run clicked - saving all settings first...');
@@ -1586,7 +1586,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // SECOND: Execute the group by applying the plan to all assigned lights
-        runGroupBtn.textContent = '⏳ Running...';
+        runGroupBtn.textContent = 'Running...';
         
         const plan = (window.STATE?.plans || []).find(p => p.id === group.plan);
         if (!plan) {
@@ -2665,7 +2665,7 @@ document.addEventListener('DOMContentLoaded', () => {
     printBtn.addEventListener('click', async () => {
       try {
         printBtn.disabled = true;
-        printBtn.textContent = '⏳ Generating…';
+        printBtn.textContent = 'Generating...';
 
         const resp = await fetch('/api/qr-generator/generate-groups', {
           method: 'POST',
@@ -2701,7 +2701,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       } finally {
         printBtn.disabled = false;
-        printBtn.textContent = '🏷️ Print Labels';
+        printBtn.textContent = 'Print Labels';
       }
     });
   }
@@ -5838,7 +5838,7 @@ function renderGroupsV2LightCard(plan, options) {
   const staticLightNote = hasStaticLights ? `
     <div style="background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.28); border-radius: 6px; padding: 8px; margin-top: 8px;">
       <div style="font-size: 0.7rem; color: #fde68a; line-height: 1.4;">
-        <strong>ℹ Static Lights:</strong> This group contains ${staticFixtures} static fixture${staticFixtures > 1 ? 's' : ''}. 
+        <strong>Static Lights:</strong> This group contains ${staticFixtures} static fixture${staticFixtures > 1 ? 's' : ''}. 
         Static lights maintain their factory-set spectrum and can only be dimmed. 
         They do not adjust spectrum to match grow recipes.
       </div>
@@ -6261,7 +6261,7 @@ function populateGroupsV2LoadGroupDropdown() {
   sortedGroups.forEach(group => {
     const label = formatGroupsV2GroupLabel(group);
     const status = group.status || 'draft';
-    const statusIcon = status === 'deployed' ? '✓' : '•';
+    const statusIcon = '';
     
     const opt = document.createElement('option');
     opt.value = group.id || label;
@@ -7185,7 +7185,7 @@ async function executeBuildStockGroups() {
 
   if (created === 0) {
     if (typeof showToast === 'function') {
-      showToast({ title: 'No Groups Created', msg: `All ${count} group names already exist.`, kind: 'warn', icon: '⚠️' });
+      showToast({ title: 'No Groups Created', msg: `All ${count} group names already exist.`, kind: 'warn', icon: '' });
     }
     return { created: 0, skipped };
   }
@@ -7640,7 +7640,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const msg = result.skipped > 0
               ? `Created ${result.created} groups (${result.skipped} skipped — already exist).`
               : `Created ${result.created} groups as drafts. Assign crop plans and deploy individually.`;
-            showToast({ title: 'Stock Groups Built', msg, kind: 'success', icon: '🏗️' }, 4000);
+            showToast({ title: 'Stock Groups Built', msg, kind: 'success', icon: '' }, 4000);
           }
         }
       } catch (error) {
