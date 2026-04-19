@@ -10,6 +10,8 @@
   <link rel="stylesheet" href="../styles/le-dashboard-theme.css?v=2025-12-20-01">
   <link rel="stylesheet" href="/styles/nav-color-palette.css">
   <link rel="stylesheet" href="/styles/light-engine.css">
+  <link rel="stylesheet" href="/styles/le-foundation.css">
+  <link rel="stylesheet" href="/styles/le-dailytodo.css">
   <link rel="stylesheet" href="/styles/evie-core.css">
   <style>
     html { height: 100%; }
@@ -231,13 +233,12 @@
 
     /* Card Styles */
     .card {
-      background: rgba(30, 41, 59, 0.6);
-      border-radius: 16px;
+      background: var(--surface-1, rgba(30, 41, 59, 0.6));
+      border-radius: var(--radius-lg, 16px);
       padding: 2rem;
       padding-top: 1.25rem;
-      border: 1px solid rgba(59, 130, 246, 0.2);
-      backdrop-filter: blur(10px);
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+      border: 1px solid var(--border-subtle, rgba(148, 163, 184, 0.12));
+      box-shadow: var(--elevation-3, 0 8px 32px rgba(0, 0, 0, 0.3));
       display: flex;
       flex-direction: column;
       position: relative;
@@ -298,9 +299,9 @@
     .card h2 {
       font-size: 1.5rem;
       margin-bottom: 1rem;
-      color: #f1f5f9;
+      color: var(--text-1, #f1f5f9);
       font-weight: 600;
-      border-bottom: 2px solid rgba(59, 130, 246, 0.3);
+      border-bottom: 1px solid var(--border-strong, rgba(148, 163, 184, 0.24));
       padding-bottom: 0.75rem;
       line-height: 1.4;
     }
@@ -1764,11 +1765,9 @@
     <!-- Daily To-Do — Farm Ops Agent -->
     <div class="card" id="dailyTodoCard">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
-        <h2 style="margin:0;display:flex;align-items:center;gap:0.5rem;">
-          <span style="font-size:1.1rem;">📋</span> Today's Tasks
-        </h2>
+        <h2 style="margin:0;">Today's Tasks</h2>
         <div style="display:flex;gap:0.5rem;align-items:center;">
-          <select id="todoFilterCategory" style="background:#1e293b;color:#94a3b8;border:1px solid #334155;border-radius:6px;padding:0.35rem 0.6rem;font-size:0.8rem;cursor:pointer;">
+          <select id="todoFilterCategory" class="le-field" aria-label="Filter tasks by category">
             <option value="">All</option>
             <option value="wholesale">Wholesale</option>
             <option value="harvest">Harvest</option>
@@ -1777,11 +1776,11 @@
             <option value="environment">Environment</option>
             <option value="ai-recommendation">AI Recs</option>
           </select>
-          <button class="refresh-btn" onclick="loadDailyTodo()" style="background:#334155;border:none;color:#94a3b8;padding:0.375rem 0.75rem;border-radius:6px;cursor:pointer;font-size:0.8rem;">↻</button>
+          <button class="le-iconbtn" onclick="loadDailyTodo()" title="Refresh tasks" aria-label="Refresh tasks">↻</button>
         </div>
       </div>
       <div id="dailyTodoContent" style="display:flex;flex-direction:column;gap:0.5rem;">
-        <span style="color:#64748b;font-size:0.9rem;">Loading tasks...</span>
+        <span style="color:var(--text-3);font-size:var(--font-size-sm);">Loading tasks...</span>
       </div>
     </div>
 
@@ -5134,8 +5133,10 @@
       const detail = document.getElementById('task-detail-' + taskId);
       const arrow = document.getElementById('task-arrow-' + taskId);
       if (!detail) return;
+      // .le-task-detail is display:flex + gap, so expanding must restore flex
+      // (not block) or the child gap collapses to zero.
       const hidden = detail.style.display === 'none';
-      detail.style.display = hidden ? 'block' : 'none';
+      detail.style.display = hidden ? 'flex' : 'none';
       if (arrow) arrow.textContent = hidden ? '▼' : '▶';
     }
 
@@ -5155,34 +5156,38 @@
       if (el) { el.style.opacity = '0.3'; el.style.pointerEvents = 'none'; }
     }
 
-    /** Render a single expandable task row */
+    /**
+     * Render a single expandable task row.
+     * `style` comes from the category map below and provides `chip` (2-letter code)
+     * and `accent` (one of the 6 LE accents: blue/green/amber/red/purple/teal).
+     */
     function renderTodoTask(task, style) {
       const s = style;
       const scorePct = Math.round((task.score || 0) * 100);
-      const scoreColor = scorePct >= 70 ? '#f87171' : scorePct >= 40 ? '#fbbf24' : '#4ade80';
+      const priorityClass = scorePct >= 70 ? 'le-badge--critical' : scorePct >= 40 ? 'le-badge--warning' : 'le-badge--ok';
       const safeId = (task.id || '').replace(/[^a-zA-Z0-9_-]/g, '_');
       const whyText = typeof task.why === 'object' ? (task.why.message || task.why.error || JSON.stringify(task.why)) : (task.why || '');
       const actions = Array.isArray(task.actions) ? task.actions : [];
       const severityBadge = task.category === 'anomaly'
-        ? `<span style="font-size:0.65rem;font-weight:700;text-transform:uppercase;padding:1px 5px;border-radius:3px;margin-left:6px;${scorePct >= 70 ? 'background:rgba(239,68,68,0.2);color:#ef4444;' : 'background:rgba(251,191,36,0.2);color:#fbbf24;'}">${scorePct >= 70 ? 'critical' : 'warning'}</span>`
+        ? `<span class="le-badge ${scorePct >= 70 ? 'le-badge--critical' : 'le-badge--warning'}">${scorePct >= 70 ? 'critical' : 'warning'}</span>`
         : '';
 
       return `
-        <div id="todo-task-${safeId}" style="background:${s.bg};border:1px solid ${s.border};border-radius:8px;padding:0.6rem 0.85rem;transition:opacity 0.3s;">
-          <div style="display:flex;gap:0.6rem;align-items:center;cursor:pointer;" onclick="toggleTaskDetail('${safeId}')">
-            <span style="font-size:1rem;flex-shrink:0;">${s.icon}</span>
-            <span id="task-arrow-${safeId}" style="font-size:0.65rem;color:#64748b;flex-shrink:0;width:12px;">▶</span>
-            <span style="flex:1;min-width:0;font-weight:600;color:${s.text};font-size:0.85rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${task.title}</span>
+        <div id="todo-task-${safeId}">
+          <div class="le-task-row" onclick="toggleTaskDetail('${safeId}')">
+            <span class="le-chip le-chip--${s.accent}" aria-label="${s.label}">${s.chip}</span>
+            <span id="task-arrow-${safeId}" class="le-task-row__arrow">▶</span>
+            <span class="le-task-row__title">${task.title}</span>
             ${severityBadge}
-            <span style="flex-shrink:0;font-size:0.65rem;font-weight:700;color:${scoreColor};background:rgba(0,0,0,0.25);padding:1px 5px;border-radius:4px;" title="Priority score">${scorePct}%</span>
+            <span class="le-badge ${priorityClass}" title="Priority score">${scorePct}%</span>
           </div>
-          <div id="task-detail-${safeId}" style="display:none;margin-top:0.5rem;padding-left:2.2rem;">
-            ${whyText ? `<div style="font-size:0.8rem;color:#94a3b8;line-height:1.4;margin-bottom:0.4rem;">${whyText}</div>` : ''}
-            ${task.estimated_minutes ? `<div style="font-size:0.7rem;color:#64748b;margin-bottom:0.5rem;">⏱ ~${task.estimated_minutes} min</div>` : ''}
-            ${actions.length > 0 ? `
-              <div style="display:flex;gap:0.4rem;flex-wrap:wrap;">
-                ${actions.map(a => `<button onclick="event.stopPropagation();this.textContent='Done ✓';this.disabled=true;this.style.opacity='0.5';" style="font-size:0.7rem;padding:3px 10px;border:1px solid ${s.border};background:${s.bg};color:${s.text};border-radius:5px;cursor:pointer;font-weight:500;">${a}</button>`).join('')}
-                ${task.category === 'anomaly' ? `<button onclick="event.stopPropagation();dismissTodoAlert('${safeId}');" style="font-size:0.7rem;padding:3px 10px;border:1px solid #475569;background:transparent;color:#64748b;border-radius:5px;cursor:pointer;">Dismiss</button>` : ''}
+          <div id="task-detail-${safeId}" class="le-task-detail" style="display:none;">
+            ${whyText ? `<div class="le-task-detail__why">${whyText}</div>` : ''}
+            ${task.estimated_minutes ? `<div class="le-task-detail__meta">~${task.estimated_minutes} min</div>` : ''}
+            ${actions.length > 0 || task.category === 'anomaly' ? `
+              <div class="le-task-detail__actions">
+                ${actions.map(a => `<button class="le-task-detail__action" onclick="event.stopPropagation();this.textContent='Done';this.disabled=true;">${a}</button>`).join('')}
+                ${task.category === 'anomaly' ? `<button class="le-task-detail__action le-task-detail__action--dismiss" onclick="event.stopPropagation();dismissTodoAlert('${safeId}');">Dismiss</button>` : ''}
               </div>` : ''}
           </div>
         </div>`;
@@ -5201,20 +5206,22 @@
         const data = await resp.json();
 
         if (!data.tasks || data.tasks.length === 0) {
-          container.innerHTML = '<div style="text-align:center;padding:1.5rem;color:#64748b;font-size:0.9rem;">✅ No tasks for today — you\'re all caught up!</div>';
+          container.innerHTML = '<div style="text-align:center;padding:1.5rem;color:var(--text-3);font-size:var(--font-size-sm);">No tasks for today — you\'re all caught up.</div>';
           if (card) card.style.display = '';
           return;
         }
 
+        // Map categories to the 6 LE accents + a 2-letter chip code.
+        // See public/styles/le-dailytodo.css for chip styling.
         const categoryColors = {
-          wholesale: { bg: 'rgba(251,146,60,0.12)', border: 'rgba(251,146,60,0.4)', text: '#fb923c', icon: '📦' },
-          harvest: { bg: 'rgba(74,222,128,0.12)', border: 'rgba(74,222,128,0.4)', text: '#4ade80', icon: '🌾' },
-          seeding: { bg: 'rgba(96,165,250,0.12)', border: 'rgba(96,165,250,0.4)', text: '#60a5fa', icon: '🌱' },
-          anomaly: { bg: 'rgba(248,113,113,0.12)', border: 'rgba(248,113,113,0.4)', text: '#f87171', icon: '⚠️' },
-          environment: { bg: 'rgba(244,114,182,0.12)', border: 'rgba(244,114,182,0.4)', text: '#f472b6', icon: '🌡️' },
-          'ai-recommendation': { bg: 'rgba(167,139,250,0.12)', border: 'rgba(167,139,250,0.4)', text: '#a78bfa', icon: '🤖' }
+          wholesale:           { accent: 'amber',  chip: 'WS', label: 'Wholesale' },
+          harvest:             { accent: 'green',  chip: 'HV', label: 'Harvest' },
+          seeding:             { accent: 'blue',   chip: 'SD', label: 'Seeding' },
+          anomaly:             { accent: 'red',    chip: 'AL', label: 'Alert' },
+          environment:         { accent: 'purple', chip: 'EN', label: 'Environment' },
+          'ai-recommendation': { accent: 'teal',   chip: 'AI', label: 'AI Recommendation' }
         };
-        const defaultStyle = { bg: 'rgba(148,163,184,0.08)', border: 'rgba(148,163,184,0.3)', text: '#94a3b8', icon: '📌' };
+        const defaultStyle = { accent: 'blue', chip: 'TK', label: 'Task' };
 
         // Separate anomaly/alert tasks from actionable tasks
         const alertTasks = data.tasks.filter(t => t.category === 'anomaly');
@@ -5233,32 +5240,32 @@
           const criticalCount = alertTasks.filter(t => Math.round((t.score || 0) * 100) >= 70).length;
           const warningCount = alertTasks.length - criticalCount;
           const summaryParts = [];
-          if (criticalCount > 0) summaryParts.push(`<span style="color:#ef4444;font-weight:700;">${criticalCount} critical</span>`);
-          if (warningCount > 0) summaryParts.push(`<span style="color:#fbbf24;font-weight:700;">${warningCount} warning</span>`);
+          if (criticalCount > 0) summaryParts.push(`<span style="color:var(--accent-red);font-weight:700;">${criticalCount} critical</span>`);
+          if (warningCount > 0) summaryParts.push(`<span style="color:var(--accent-amber);font-weight:700;">${warningCount} warning</span>`);
 
           html += `
-            <div style="background:rgba(248,113,113,0.06);border:1px solid rgba(248,113,113,0.25);border-radius:8px;overflow:hidden;">
-              <div onclick="toggleAlertsGroup()" style="display:flex;align-items:center;gap:0.5rem;padding:0.6rem 0.85rem;cursor:pointer;user-select:none;">
-                <span style="font-size:1rem;">⚠️</span>
-                <span id="todo-alerts-arrow" style="font-size:0.65rem;color:#64748b;width:12px;">▶</span>
-                <span style="flex:1;font-weight:600;color:#f87171;font-size:0.85rem;">Alerts (${alertTasks.length})</span>
-                <span style="font-size:0.75rem;color:#94a3b8;">${summaryParts.join(' · ')}</span>
+            <div class="le-alerts-group">
+              <div class="le-alerts-group__header" onclick="toggleAlertsGroup()">
+                <span class="le-chip le-chip--red" aria-hidden="true">AL</span>
+                <span id="todo-alerts-arrow" class="le-task-row__arrow">▶</span>
+                <span class="le-alerts-group__title">Alerts (${alertTasks.length})</span>
+                <span class="le-alerts-group__count">${summaryParts.join(' · ')}</span>
               </div>
-              <div id="todo-alerts-list" style="display:none;padding:0 0.5rem 0.5rem;display:none;flex-direction:column;gap:0.35rem;">
+              <div id="todo-alerts-list" class="le-alerts-group__list" style="display:none;">
                 ${alertTasks.map(t => renderTodoTask(t, categoryColors.anomaly)).join('')}
               </div>
             </div>`;
         }
 
         if (data.task_count > 10 + alertTasks.length) {
-          html += `<div style="text-align:center;padding:0.5rem;color:#64748b;font-size:0.8rem;">${data.task_count - 10 - alertTasks.length} more task(s) not shown</div>`;
+          html += `<div style="text-align:center;padding:0.5rem;color:var(--text-3);font-size:var(--font-size-xs);">${data.task_count - 10 - alertTasks.length} more task(s) not shown</div>`;
         }
 
         container.innerHTML = html;
         if (card) card.style.display = '';
       } catch (err) {
         console.warn('[Daily Todo]', err.message);
-        container.innerHTML = '<div style="color:#64748b;font-size:0.85rem;padding:0.75rem;text-align:center;">Daily tasks unavailable</div>';
+        container.innerHTML = '<div style="color:var(--text-3);font-size:var(--font-size-sm);padding:0.75rem;text-align:center;">Daily tasks unavailable</div>';
         if (card) card.style.display = '';
       }
     }

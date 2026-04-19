@@ -1,0 +1,238 @@
+/* ==========================================================================
+   Light Engine — Today's Tasks (Daily To-Do) card
+   --------------------------------------------------------------------------
+   Consumes tokens from public/styles/le-foundation.css. Requires
+   <body class="le-theme"> on the host page so the LE palette resolves.
+
+   Design rules (locked with product):
+     * only the 6 LE accent colors (blue, green, amber, red, purple, teal)
+     * no emojis; category cue is a 2-letter accent chip
+     * soft dark surface stack: .le-task-row sits on --surface-2 inside a
+       --surface-1 card, producing legible text without backdrop-filter hacks
+     * body copy uses --text-2 (9.46:1 on --surface-1); --text-3 only for
+       compact metadata; --text-4 is decorative-only and never used here
+   ========================================================================== */
+
+/* ---- 2-letter category chip ---- */
+.le-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 22px;
+  border-radius: var(--radius-sm);
+  font: 700 10px/1 var(--font-mono);
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
+  border: 1px solid transparent;
+}
+.le-chip--blue {
+  background: var(--accent-blue-soft);
+  color: var(--accent-blue);
+  border-color: var(--accent-blue-edge);
+}
+.le-chip--green {
+  background: var(--accent-green-soft);
+  color: var(--accent-green);
+  border-color: var(--accent-green-edge);
+}
+.le-chip--amber {
+  background: var(--accent-amber-soft);
+  color: var(--accent-amber);
+  border-color: var(--accent-amber-edge);
+}
+.le-chip--red {
+  background: var(--accent-red-soft);
+  color: var(--accent-red);
+  border-color: var(--accent-red-edge);
+}
+.le-chip--purple {
+  background: var(--accent-purple-soft);
+  color: var(--accent-purple);
+  border-color: var(--accent-purple-edge);
+}
+.le-chip--teal {
+  background: var(--accent-teal-soft);
+  color: var(--accent-teal);
+  border-color: var(--accent-teal-edge);
+}
+
+/* ---- Task row ---- */
+.le-task-row {
+  background: var(--surface-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 0.6rem 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  cursor: pointer;
+  transition: border-color var(--motion-fast) var(--motion-easing),
+              transform var(--motion-fast) var(--motion-easing),
+              opacity var(--motion-normal) var(--motion-easing);
+}
+.le-task-row:hover {
+  border-color: var(--border-strong);
+  transform: translateY(-1px);
+}
+.le-task-row__arrow {
+  font-size: 0.65rem;
+  color: var(--text-3);
+  width: 12px;
+  flex-shrink: 0;
+}
+.le-task-row__title {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+  color: var(--text-1);
+  font-size: var(--font-size-sm);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---- Expanded detail region ---- */
+.le-task-detail {
+  margin-top: 0.5rem;
+  padding-left: 2.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.le-task-detail__why {
+  color: var(--text-2);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-body);
+}
+.le-task-detail__meta {
+  color: var(--text-3);
+  font-size: var(--font-size-xs);
+}
+.le-task-detail__actions {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  margin-top: 0.1rem;
+}
+.le-task-detail__action {
+  font-size: var(--font-size-xs);
+  padding: 4px 10px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-3);
+  color: var(--text-2);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-weight: 500;
+  font-family: var(--font-stack);
+  transition: border-color var(--motion-fast) var(--motion-easing),
+              color var(--motion-fast) var(--motion-easing);
+}
+.le-task-detail__action:hover {
+  border-color: var(--accent-teal-edge);
+  color: var(--accent-teal);
+}
+.le-task-detail__action:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.le-task-detail__action--dismiss {
+  background: transparent;
+  color: var(--text-3);
+  border-color: var(--border-subtle);
+}
+
+/* ---- Priority + severity badges ---- */
+.le-badge {
+  font: 700 10px/1 var(--font-stack);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 3px 6px;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.le-badge--ok {
+  background: var(--accent-green-soft);
+  color: var(--accent-green);
+  border-color: var(--accent-green-edge);
+}
+.le-badge--warning {
+  background: var(--accent-amber-soft);
+  color: var(--accent-amber);
+  border-color: var(--accent-amber-edge);
+}
+.le-badge--critical {
+  background: var(--accent-red-soft);
+  color: var(--accent-red);
+  border-color: var(--accent-red-edge);
+}
+.le-badge--info {
+  background: var(--accent-blue-soft);
+  color: var(--accent-blue);
+  border-color: var(--accent-blue-edge);
+}
+
+/* ---- Filter control + icon button (shared header controls) ---- */
+.le-field {
+  background: var(--surface-3);
+  color: var(--text-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 0.35rem 0.6rem;
+  font-size: var(--font-size-xs);
+  font-family: var(--font-stack);
+  cursor: pointer;
+}
+.le-field:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 1px;
+}
+.le-iconbtn {
+  background: var(--surface-2);
+  color: var(--text-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 0.35rem 0.6rem;
+  font-size: var(--font-size-xs);
+  cursor: pointer;
+  font-family: var(--font-stack);
+  transition: border-color var(--motion-fast) var(--motion-easing),
+              color var(--motion-fast) var(--motion-easing);
+}
+.le-iconbtn:hover {
+  color: var(--text-1);
+  border-color: var(--border-strong);
+}
+
+/* ---- Alerts group (collapsible anomaly container) ---- */
+.le-alerts-group {
+  background: var(--accent-red-soft);
+  border: 1px solid var(--accent-red-edge);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+.le-alerts-group__header {
+  padding: 0.5rem 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  user-select: none;
+}
+.le-alerts-group__title {
+  flex: 1;
+  font-weight: 600;
+  color: var(--accent-red);
+  font-size: var(--font-size-sm);
+}
+.le-alerts-group__count {
+  color: var(--text-2);
+  font-size: var(--font-size-xs);
+}
+.le-alerts-group__list {
+  padding: 0 0.5rem 0.5rem;
+  flex-direction: column;
+  gap: 0.35rem;
+}
