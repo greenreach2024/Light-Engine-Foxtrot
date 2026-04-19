@@ -1,5 +1,5 @@
 // Groups V2 Script Loading
-g2debug('[Groups V2] 📄 Script loading...');
+g2debug('[Groups V2] Script loading...');
 
 // Helper: safely escape HTML to prevent XSS
 function escapeHtml(text) {
@@ -266,7 +266,7 @@ function getHarvestCycleStatus(group) {
   if (hc.currentHarvest > 0 && regrowthDay !== null) {
     const daysLeft = Math.max(0, hc.regrowthDays - regrowthDay);
     return {
-      label: `🔄 Regrowth Day ${regrowthDay} of ${hc.regrowthDays} — Harvest ${hc.currentHarvest + 1} of ${hc.maxHarvests} in ${daysLeft} day${daysLeft !== 1 ? 's' : ''}`,
+      label: `Regrowth Day ${regrowthDay} of ${hc.regrowthDays} — Harvest ${hc.currentHarvest + 1} of ${hc.maxHarvests} in ${daysLeft} day${daysLeft !== 1 ? 's' : ''}`,
       color: '#f59e0b',
       isRegrowing: true,
       harvestNumber: hc.currentHarvest,
@@ -275,7 +275,7 @@ function getHarvestCycleStatus(group) {
       regrowthDays: hc.regrowthDays
     };
   }
-  return { label: `🌱 Cut & Come Again (${hc.maxHarvests} harvests)`, color: '#0369a1', isRegrowing: false, harvestNumber: 0, maxHarvests: hc.maxHarvests, regrowthDay: null, regrowthDays: hc.regrowthDays };
+  return { label: `Cut & Come Again (${hc.maxHarvests} harvests)`, color: '#0369a1', isRegrowing: false, harvestNumber: 0, maxHarvests: hc.maxHarvests, regrowthDay: null, regrowthDays: hc.regrowthDays };
 }
 
 // Pre-fetch crop registry on load
@@ -317,20 +317,20 @@ function updateHarvestStrategyIndicator(group) {
       // Currently in regrowth
       const regrowthDay = strategy.regrowthStartDate ? getRegrowthDayNumber(strategy) : null;
       const daysLeft = regrowthDay !== null ? Math.max(0, days - regrowthDay) : days;
-      indicator.innerHTML = `🔄 Regrowing — Harvest ${currentHarvest + 1} of ${harvests} in ${daysLeft} day${daysLeft !== 1 ? 's' : ''}`;
-      indicator.style.background = '#fef3c7';
-      indicator.style.color = '#92400e';
-      indicator.style.border = '1px solid #f59e0b';
+      indicator.innerHTML = `Regrowing — Harvest ${currentHarvest + 1} of ${harvests} in ${daysLeft} day${daysLeft !== 1 ? 's' : ''}`;
+      indicator.style.background = 'rgba(245, 158, 11, 0.16)';
+      indicator.style.color = '#fde68a';
+      indicator.style.border = '1px solid rgba(245, 158, 11, 0.28)';
     } else if (currentHarvest >= harvests) {
-      indicator.innerHTML = `✅ All ${harvests} harvests complete`;
-      indicator.style.background = '#fef2f2';
-      indicator.style.color = '#991b1b';
-      indicator.style.border = '1px solid #fca5a5';
+      indicator.innerHTML = `All ${harvests} harvests complete`;
+      indicator.style.background = 'rgba(239, 68, 68, 0.16)';
+      indicator.style.color = '#fecaca';
+      indicator.style.border = '1px solid rgba(248, 113, 113, 0.28)';
     } else {
-      indicator.innerHTML = `🔄 Cut & Come Again — ${harvests} harvests, ${days}-day regrowth`;
-      indicator.style.background = '#eff6ff';
-      indicator.style.color = '#1e40af';
-      indicator.style.border = '1px solid #93c5fd';
+      indicator.innerHTML = `Cut & Come Again — ${harvests} harvests, ${days}-day regrowth`;
+      indicator.style.background = 'rgba(59, 130, 246, 0.16)';
+      indicator.style.color = '#bfdbfe';
+      indicator.style.border = '1px solid rgba(96, 165, 250, 0.28)';
     }
     indicator.style.display = 'block';
   } else {
@@ -1078,7 +1078,7 @@ document.addEventListener('DOMContentLoaded', () => {
             title: 'Assignments Saved', 
             msg: `Light assignments for ${groupLabel} have been saved.`, 
             kind: 'success',
-            icon: '💾'
+            icon: ''
           });
         }
       } catch (error) {
@@ -1479,10 +1479,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (typeof showToast === 'function') {
           if (errorCount === 0) {
             showToast({ 
-              title: 'All Lights Online ✨', 
+              title: 'All Lights Online', 
               msg: ` All ${successCount} light(s) in ${groupLabel} blinked successfully!`, 
               kind: 'success',
-              icon: '🔦'
+              icon: ''
             }, 3000);
           } else if (successCount === 0) {
             showToast({ 
@@ -1513,7 +1513,7 @@ document.addEventListener('DOMContentLoaded', () => {
       } finally {
         // Re-enable button
         testGroupLightsBtn.disabled = false;
-        testGroupLightsBtn.textContent = '🔦 Test Group Lights';
+        testGroupLightsBtn.textContent = 'Test Group Lights';
         
         // Hide testing indicator if still visible
         if (testingIndicator) {
@@ -1756,19 +1756,19 @@ function renderLightInfoCard(light) {
   }
   
   if (isDynamic) {
-    html += '<div style="padding: 8px; margin-bottom: 10px; background: #dbeafe; border: 2px solid #3b82f6; border-radius: 6px;">';
-    html += '<div style="font-weight: 700; color: #1e40af; margin-bottom: 4px;"> TUNABLE SPECTRUM</div>';
-    html += '<div style="font-size: 0.75rem; color: #1e3a8a; line-height: 1.3;">This fixture can dynamically adjust its spectrum to match grow recipes.</div>';
+    html += '<div style="padding: 8px; margin-bottom: 10px; background: rgba(59, 130, 246, 0.14); border: 2px solid rgba(59, 130, 246, 0.32); border-radius: 6px;">';
+    html += '<div style="font-weight: 700; color: #bfdbfe; margin-bottom: 4px;"> TUNABLE SPECTRUM</div>';
+    html += '<div style="font-size: 0.75rem; color: #93c5fd; line-height: 1.3;">This fixture can dynamically adjust its spectrum to match grow recipes.</div>';
     html += '</div>';
   } else if (isStatic) {
-    html += '<div style="padding: 8px; margin-bottom: 10px; background: #fef3c7; border: 2px solid #f59e0b; border-radius: 6px;">';
-    html += '<div style="font-weight: 700; color: #92400e; margin-bottom: 4px;"> STATIC SPECTRUM</div>';
-    html += '<div style="font-size: 0.75rem; color: #78350f; line-height: 1.3;">This fixture has a factory-set spectrum and supports dimming only. Spectrum cannot be adjusted to match recipes.</div>';
+    html += '<div style="padding: 8px; margin-bottom: 10px; background: rgba(245, 158, 11, 0.14); border: 2px solid rgba(245, 158, 11, 0.3); border-radius: 6px;">';
+    html += '<div style="font-weight: 700; color: #fde68a; margin-bottom: 4px;"> STATIC SPECTRUM</div>';
+    html += '<div style="font-size: 0.75rem; color: #fcd34d; line-height: 1.3;">This fixture has a factory-set spectrum and supports dimming only. Spectrum cannot be adjusted to match recipes.</div>';
     html += '</div>';
   } else if (tunableUnknown) {
-    html += '<div style="padding: 8px; margin-bottom: 10px; background: #f3f4f6; border: 2px solid #9ca3af; border-radius: 6px;">';
-    html += '<div style="font-weight: 700; color: #374151; margin-bottom: 4px;">? SPECTRUM CAPABILITY UNKNOWN</div>';
-    html += '<div style="font-size: 0.75rem; color: #4b5563; line-height: 1.3;">Spectrum tunability not specified in database.</div>';
+    html += '<div style="padding: 8px; margin-bottom: 10px; background: rgba(51, 65, 85, 0.72); border: 2px solid rgba(148, 163, 184, 0.24); border-radius: 6px;">';
+    html += '<div style="font-weight: 700; color: #e2e8f0; margin-bottom: 4px;">? SPECTRUM CAPABILITY UNKNOWN</div>';
+    html += '<div style="font-size: 0.75rem; color: #cbd5e1; line-height: 1.3;">Spectrum tunability not specified in database.</div>';
     html += '</div>';
   }
   
@@ -1785,7 +1785,7 @@ function renderLightInfoCard(light) {
     const spectrum = dbLight.spectrum || dbLight.spectra;
     
     // Add spectrograph canvas
-    html += '<div style="margin-top:10px;"><canvas id="lightInfoSpectrumCanvas" width="300" height="60" style="border-radius:6px; background:#f8fafc; box-shadow:0 1px 4px #0001;"></canvas></div>';
+    html += '<div style="margin-top:10px;"><canvas id="lightInfoSpectrumCanvas" width="300" height="60" style="border-radius:6px; background:rgba(15, 23, 42, 0.86); box-shadow:0 1px 4px rgba(0,0,0,0.24);"></canvas></div>';
     
     // Add numerical spectrum breakdown
     if (typeof spectrum === 'object') {
@@ -2251,7 +2251,7 @@ async function saveGroupsV2Group(status = 'draft') {
   // Show success toast
   if (typeof showToast === 'function') {
     const statusLabel = status === 'deployed' ? 'Deployed' : 'Saved as Draft';
-    const statusIcon = status === 'deployed' ? '' : '💾';
+    const statusIcon = status === 'deployed' ? '' : '';
     const details = [`${groupName} (${room}:${zone})`];
     if (planId) details.push(`Plan ${plan?.name || planId}`);
     
@@ -2420,7 +2420,7 @@ document.addEventListener('DOMContentLoaded', () => {
               title: `Cut Harvest ${nextHarvest} of ${maxHarvests}`, 
               msg: `${group.name} will regrow for ${hc.regrowthDays} days until next harvest`, 
               kind: 'success', 
-              icon: '✂️' 
+              icon: '' 
             }, 4000);
           }
 
@@ -2473,7 +2473,7 @@ document.addEventListener('DOMContentLoaded', () => {
               title: isCCA ? 'Final Harvest Complete' : 'Harvest Complete', 
               msg: `${group.name} has been harvested and archived`, 
               kind: 'success', 
-              icon: '🌾' 
+              icon: '' 
             }, 3000);
           }
 
@@ -2588,7 +2588,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Persist to server
-        console.log('[Groups V2] 🔄 About to POST delete to server, groups count:', window.STATE.groups.length);
+        console.log('[Groups V2]  About to POST delete to server, groups count:', window.STATE.groups.length);
         console.log('[Groups V2] Groups being sent:', window.STATE.groups.map(g => ({ id: g.id, name: g.name, lights: g.lights?.length || 0 })));
         try {
           const response = await fetch('/data/groups.json', {
@@ -2603,9 +2603,9 @@ document.addEventListener('DOMContentLoaded', () => {
             throw new Error(`Failed to save groups: ${response.status} ${errorText}`);
           }
           const result = await response.json();
-          console.log('[Groups V2] ✅ Successfully saved groups, server response:', result);
+          console.log('[Groups V2]  Successfully saved groups, server response:', result);
         } catch (error) {
-          console.error('[Groups V2] ❌ Failed to persist groups after deletion:', error);
+          console.error('[Groups V2]  Failed to persist groups after deletion:', error);
           console.error('[Groups V2] Error details:', error.message, error.stack);
           // Show error to user
           alert(`Failed to save group deletion: ${error.message}\n\nPlease check console for details.`);
@@ -2636,7 +2636,7 @@ document.addEventListener('DOMContentLoaded', () => {
             title: 'Group Deleted', 
             msg: `${group.name} has been permanently deleted`, 
             kind: 'success', 
-            icon: '🗑' 
+            icon: '' 
           }, 2000);
         }
 
@@ -2690,7 +2690,7 @@ document.addEventListener('DOMContentLoaded', () => {
         URL.revokeObjectURL(url);
 
         if (typeof showToast === 'function') {
-          showToast({ title: 'Labels Ready', msg: 'Group label PDF downloaded', kind: 'success', icon: '🏷️' }, 2000);
+          showToast({ title: 'Labels Ready', msg: 'Group label PDF downloaded', kind: 'success', icon: '' }, 2000);
         }
       } catch (error) {
         console.error('[Groups V2] Print labels error:', error);
@@ -2701,7 +2701,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       } finally {
         printBtn.disabled = false;
-        printBtn.textContent = '🏷️ Print Labels';
+        printBtn.textContent = 'Print Labels';
       }
     });
   }
@@ -2891,7 +2891,7 @@ function populateGroupsV2ControllerDropdown() {
     opt.value = identifier;
     
     // Show type indicator
-    const typeIcon = controller.isPlug ? '🔌 ' : '🎛 ';
+    const typeIcon = '';
     const deviceName = controller.name || controller.label || 'Unknown Device';
     const protocolLabel = controller.protocol ? ` (${controller.protocol})` : '';
     
@@ -2965,7 +2965,7 @@ function populateGroupsV2UnassignedLightsDropdown() {
     opt.value = identifier;
     
     // Show type indicator for plugs vs lights
-    const typeIcon = light.isPlug ? '🔌 ' : light.fromIoT ? ' ' : '';
+    const typeIcon = '';
     const typeLabel = light.isPlug ? '[Plug] ' : '';
     
     // Show name and S/N (ID) for clarity
@@ -3446,7 +3446,7 @@ async function upsertGroupScheduleForGroup(groupId, scheduleConfig, metadata = {
     // Surface a friendlier hint when PIN is required
     if (response.status === 403 && /pin-required/i.test(message || '')) {
       try {
-        window.showToast?.({ title: 'Schedule Save Blocked', msg: 'PIN required to save schedules. Add ?pin=YOUR_PIN to the URL or set localStorage["gr.farmPin"].', kind: 'error', icon: '🔒' });
+        window.showToast?.({ title: 'Schedule Save Blocked', msg: 'PIN required to save schedules. Add ?pin=YOUR_PIN to the URL or set localStorage["gr.farmPin"].', kind: 'error', icon: '' });
       } catch {}
     }
     throw new Error(message || `Failed to save schedule (HTTP ${response.status})`);
@@ -3737,7 +3737,7 @@ function updateGroupsV2HarvestButtonVisibility() {
     if (regrowthDay !== null && regrowthDay >= hc.regrowthDays) {
       const nextHarvest = hc.currentHarvest + 1;
       const isFinal = nextHarvest >= hc.maxHarvests;
-      harvestBtn.textContent = isFinal ? `🌾 Final Harvest (${nextHarvest}/${hc.maxHarvests})` : `✂️ Cut Harvest (${nextHarvest}/${hc.maxHarvests})`;
+      harvestBtn.textContent = isFinal ? `Final Harvest (${nextHarvest}/${hc.maxHarvests})` : `Cut Harvest (${nextHarvest}/${hc.maxHarvests})`;
       harvestBtn.style.display = 'inline-block';
       harvestBtn.style.borderColor = isFinal ? '#dc2626' : '#f59e0b';
       harvestBtn.style.color = isFinal ? '#dc2626' : '#f59e0b';
@@ -3779,11 +3779,11 @@ function updateGroupsV2HarvestButtonVisibility() {
   // Show button if we're at or past the plan's end
   if (maxDay !== null && dayNumber >= maxDay) {
     if (isCCA) {
-      harvestBtn.textContent = `✂️ Cut Harvest (1/${hc.maxHarvests})`;
+      harvestBtn.textContent = `Cut Harvest (1/${hc.maxHarvests})`;
       harvestBtn.style.borderColor = '#f59e0b';
       harvestBtn.style.color = '#f59e0b';
     } else {
-      harvestBtn.textContent = '🌾 Harvest';
+      harvestBtn.textContent = 'Harvest';
       harvestBtn.style.borderColor = '#f59e0b';
       harvestBtn.style.color = '#f59e0b';
     }
@@ -4997,40 +4997,23 @@ function renderGroupsV2PlanCard(plan, dayNumber) {
     console.log('[Groups V2] Fallback channels:', {cw: cwPct, ww: wwPct, bl: blPct, rd: rdPct});
   }
   
-  // Card HTML
   card.innerHTML = `
-    <header class="group-info-card__header" style="display: flex; justify-content: space-between; align-items: flex-start;">
-      <div>
-        <h3>Plan: ${escapeHtml(plan.name || 'Untitled')}</h3>
+        indicator.style.background = 'rgba(245, 158, 11, 0.16)';
+        indicator.style.color = '#fde68a';
+        indicator.style.border = '1px solid rgba(245, 158, 11, 0.28)';
         <p class="tiny text-muted">${escapeHtml(description)}</p>
       </div>
-      <button type="button" class="ghost danger" data-action="delete-plan" style="margin-top: 4px; white-space: nowrap;">Delete Plan</button>
-    </header>
-    <div class="group-info-card__body" style="flex-direction: column; gap: 10px;">
+        indicator.style.background = 'rgba(239, 68, 68, 0.16)';
+        indicator.style.color = '#fecaca';
+        indicator.style.border = '1px solid rgba(248, 113, 113, 0.28)';
   <canvas id="groupsV2PlanSpectrumCanvas" class="group-info-card__canvas" width="280" height="100" role="img" aria-label="Plan spectrum preview" style="width: 100%;"></canvas>
-      <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px; min-height: 85px;">
-        <div class="tiny" style="font-weight: 600; margin-bottom: 6px; color: #475569;">Channel Mix</div>
-        <dl class="group-info-card__metrics" style="width: 100%; grid-template-columns: repeat(2, 1fr); gap: 4px 8px; font-size: 0.75rem;">
-          <dt style="font-size: 0.65rem;">Cool White</dt><dd id="groupsV2PlanCw">${cwPct.toFixed(1)}%</dd>
-          <dt style="font-size: 0.65rem;">Warm White</dt><dd id="groupsV2PlanWw">${wwPct.toFixed(1)}%</dd>
-          <dt style="font-size: 0.65rem;">Blue</dt><dd id="groupsV2PlanBl">${blPct.toFixed(1)}%</dd>
+      <div style="background: rgba(15, 23, 42, 0.78); border: 1px solid rgba(148, 163, 184, 0.22); border-radius: 6px; padding: 10px; min-height: 85px;">
           <dt style="font-size: 0.65rem;">Red</dt><dd id="groupsV2PlanRd">${rdPct.toFixed(1)}%</dd>
         </dl>
       </div>
-      <div id="groupsV2PlanColorBreakdown" style="background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 6px; padding: 10px; min-height: 95px; display: none;">
-        <div class="tiny" style="font-weight: 600; margin-bottom: 6px; color: #0369a1;">Spectral Distribution</div>
-        <dl class="group-info-card__metrics" style="width: 100%; grid-template-columns: repeat(2, 1fr); gap: 4px 8px; font-size: 0.75rem;">
-          <dt style="font-size: 0.65rem;" title="Violet and blue wavelengths">Blue (400-500nm)</dt><dd id="groupsV2PlanBlue">—</dd>
-          <dt style="font-size: 0.65rem;" title="Mid-spectrum: cyan, green, yellow, amber">Green (500-600nm)</dt><dd id="groupsV2PlanGreen">—</dd>
-          <dt style="font-size: 0.65rem;" title="Orange and red wavelengths">Red (600-680nm)</dt><dd id="groupsV2PlanRed">—</dd>
-          <dt style="font-size: 0.65rem;" title="Far-red and near-infrared">Deep Red (680-750nm)</dt><dd id="groupsV2PlanDeepRed">—</dd>
-        </dl>
-        <details style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #bae6fd;">
-          <summary style="cursor: pointer; font-size: 0.7rem; color: #0369a1; font-weight: 500; user-select: none;">
-            ▸ Mid-Spectrum Breakdown
           </summary>
-          <div style="margin-top: 10px; padding: 8px; background: rgba(240, 249, 255, 0.5); border-radius: 4px;">
-            <div style="font-size: 0.65rem; color: #64748b; margin-bottom: 6px;">
+          <div style="margin-top: 10px; padding: 8px; background: rgba(15, 23, 42, 0.42); border-radius: 4px;">
+            <div style="font-size: 0.65rem; color: #94a3b8; margin-bottom: 6px;">
               Assuming uniform distribution across 500-600nm:
             </div>
             <dl class="group-info-card__metrics" style="width: 100%; grid-template-columns: repeat(2, 1fr); gap: 4px 8px; font-size: 0.7rem;">
@@ -5044,8 +5027,8 @@ function renderGroupsV2PlanCard(plan, dayNumber) {
       </div>
       
 
-      <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; padding: 10px; min-height: 115px;">
-        <div class="tiny" style="font-weight: 600; margin-bottom: 6px; color: #166534;">Plan Day Targets</div>
+      <div style="background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(52, 211, 153, 0.24); border-radius: 6px; padding: 10px; min-height: 115px;">
+        <div class="tiny" style="font-weight: 600; margin-bottom: 6px; color: #86efac;">Plan Day Targets</div>
         <dl class="group-info-card__metrics" style="width: 100%; grid-template-columns: repeat(2, 1fr); gap: 4px 8px; font-size: 0.75rem;">
           <dt style="font-size: 0.65rem;">Target PPFD</dt><dd id="groupsV2PlanPpfd">${ppfdLabel}</dd>
           <dt style="font-size: 0.65rem;">Target DLI</dt><dd id="groupsV2PlanDli">${dliLabel}</dd>
@@ -5054,10 +5037,10 @@ function renderGroupsV2PlanCard(plan, dayNumber) {
         </dl>
       </div>
     </div>
-    <div style="background: #fefce8; border: 1px solid #fde047; border-radius: 6px; padding: 12px; margin-top: 12px;">
+    <div style="background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.28); border-radius: 6px; padding: 12px; margin-top: 12px;">
       <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
-        <label for="groupsV2PlanDaySlider" class="tiny" style="font-weight: 600; color: #854d0e;">Day Timeline</label>
-        <span id="groupsV2PlanDayLabel" class="tiny" style="font-weight: 600; color: #854d0e;">Day ${currentDay} of ${totalDays}</span>
+        <label for="groupsV2PlanDaySlider" class="tiny" style="font-weight: 600; color: #fde68a;">Day Timeline</label>
+        <span id="groupsV2PlanDayLabel" class="tiny" style="font-weight: 600; color: #fde68a;">Day ${currentDay} of ${totalDays}</span>
       </div>
       ${totalDays > 1 ? `
       <input 
@@ -5073,7 +5056,7 @@ function renderGroupsV2PlanCard(plan, dayNumber) {
         <span class="tiny text-muted">Day ${totalDays}</span>
       </div>
       ` : `
-      <div class="tiny text-muted" style="text-align: center; padding: 8px; background: #fef9c3; border-radius: 4px;">
+      <div class="tiny text-muted" style="text-align: center; padding: 8px; background: rgba(245, 158, 11, 0.12); border-radius: 4px;">
         This plan has only one day. Multi-day plans will show an interactive timeline here.
       </div>
       `}
@@ -5816,16 +5799,16 @@ function renderGroupsV2LightCard(plan, options) {
     const count = record.weight;
     const countDisplay = Math.abs(count - Math.round(count)) < 0.01 ? `×${Math.round(count)}` : `×${count.toFixed(1)}`;
     const typeIndicator = record.dynamic 
-      ? '<span style="display: inline-block; padding: 1px 6px; margin-left: 6px; background: #dbeafe; color: #1e40af; border: 1px solid #93c5fd; border-radius: 3px; font-size: 0.65rem; font-weight: 600;" title="Tunable spectrum - can adjust to match grow recipe">TUNABLE</span>'
-      : '<span style="display: inline-block; padding: 1px 6px; margin-left: 6px; background: #fef3c7; color: #92400e; border: 1px solid #fde047; border-radius: 3px; font-size: 0.65rem; font-weight: 600;" title="Static spectrum - factory-set spectrum, dimming only">STATIC</span>';
+      ? '<span style="display: inline-block; padding: 1px 6px; margin-left: 6px; background: rgba(59, 130, 246, 0.16); color: #bfdbfe; border: 1px solid rgba(96, 165, 250, 0.28); border-radius: 3px; font-size: 0.65rem; font-weight: 600;" title="Tunable spectrum - can adjust to match grow recipe">TUNABLE</span>'
+      : '<span style="display: inline-block; padding: 1px 6px; margin-left: 6px; background: rgba(245, 158, 11, 0.14); color: #fde68a; border: 1px solid rgba(245, 158, 11, 0.28); border-radius: 3px; font-size: 0.65rem; font-weight: 600;" title="Static spectrum - factory-set spectrum, dimming only">STATIC</span>';
     return `
-      <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 8px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 4px; margin-bottom: 4px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 8px; background: rgba(15, 23, 42, 0.72); border: 1px solid rgba(148, 163, 184, 0.22); border-radius: 4px; margin-bottom: 4px;">
         <div style="display: flex; align-items: center; flex: 1; min-width: 0;">
-          <span class="tiny" style="font-weight: 500; color: #1e293b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${displayName} ${countDisplay}</span>
+          <span class="tiny" style="font-weight: 500; color: #e2e8f0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${displayName} ${countDisplay}</span>
           ${typeIndicator}
         </div>
         <button class="groupsV2RemoveLightBtn" data-light-id="${escapeHtml(record.id)}" type="button" 
-                style="padding: 2px 8px; font-size: 0.7rem; background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; border-radius: 4px; cursor: pointer; font-weight: 500; margin-left: 8px; flex-shrink: 0;"
+                style="padding: 2px 8px; font-size: 0.7rem; background: rgba(127, 29, 29, 0.32); color: #fecaca; border: 1px solid rgba(248, 113, 113, 0.28); border-radius: 4px; cursor: pointer; font-weight: 500; margin-left: 8px; flex-shrink: 0;"
                 title="Remove this light from the group">
           Remove
         </button>
@@ -5836,8 +5819,8 @@ function renderGroupsV2LightCard(plan, options) {
   // Add explanation for static lights if any are present
   const hasStaticLights = staticFixtures > 0;
   const staticLightNote = hasStaticLights ? `
-    <div style="background: #fef9c3; border: 1px solid #fde047; border-radius: 6px; padding: 8px; margin-top: 8px;">
-      <div style="font-size: 0.7rem; color: #854d0e; line-height: 1.4;">
+    <div style="background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.28); border-radius: 6px; padding: 8px; margin-top: 8px;">
+      <div style="font-size: 0.7rem; color: #fde68a; line-height: 1.4;">
         <strong>ℹ Static Lights:</strong> This group contains ${staticFixtures} static fixture${staticFixtures > 1 ? 's' : ''}. 
         Static lights maintain their factory-set spectrum and can only be dimmed. 
         They do not adjust spectrum to match grow recipes.
@@ -5857,35 +5840,35 @@ function renderGroupsV2LightCard(plan, options) {
       <canvas id="groupsV2LightSpectrumCanvas" class="group-info-card__canvas" width="280" height="100" role="img" aria-label="Assigned light spectrum" style="width: 100%;"></canvas>
 
       ${hasDynamic ? `
-      <div style="background: #ecfdf5; border: 1px solid #bbf7d0; border-radius: 6px; padding: 10px; min-height: 85px;">
-        <div class="tiny" style="font-weight: 600; margin-bottom: 6px; color: #065f46;">Driver target (tunable lights)</div>
+      <div style="background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(52, 211, 153, 0.24); border-radius: 6px; padding: 10px; min-height: 85px;">
+        <div class="tiny" style="font-weight: 600; margin-bottom: 6px; color: #86efac;">Driver target (tunable lights)</div>
         <dl class="group-info-card__metrics" style="width: 100%; grid-template-columns: repeat(2, 1fr); gap: 4px 8px; font-size: 0.75rem;">
           ${driverChannelHtml}
         </dl>
       </div>
       ` : ''}
 
-      <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px; min-height: 85px;">
-        <div class="tiny" style="font-weight: 600; margin-bottom: 6px; color: #475569;">Resulting group mix</div>
+      <div style="background: rgba(15, 23, 42, 0.78); border: 1px solid rgba(148, 163, 184, 0.22); border-radius: 6px; padding: 10px; min-height: 85px;">
+        <div class="tiny" style="font-weight: 600; margin-bottom: 6px; color: #cbd5e1;">Resulting group mix</div>
         <dl class="group-info-card__metrics" style="width: 100%; grid-template-columns: repeat(2, 1fr); gap: 4px 8px; font-size: 0.75rem;">
           ${groupChannelHtml}
         </dl>
       </div>
 
-  <div id="groupsV2LightColorBreakdown" style="background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 6px; padding: 10px; min-height: 95px; display: none;">
-        <div class="tiny" style="font-weight: 600; margin-bottom: 6px; color: #0369a1;">Spectral Distribution</div>
+    <div id="groupsV2LightColorBreakdown" style="background: rgba(14, 116, 144, 0.16); border: 1px solid rgba(56, 189, 248, 0.28); border-radius: 6px; padding: 10px; min-height: 95px; display: none;">
+      <div class="tiny" style="font-weight: 600; margin-bottom: 6px; color: #7dd3fc;">Spectral Distribution</div>
         <dl class="group-info-card__metrics" style="width: 100%; grid-template-columns: repeat(2, 1fr); gap: 4px 8px; font-size: 0.75rem;">
           <dt style="font-size: 0.65rem;" title="Violet and blue wavelengths">Blue (400-500nm)</dt><dd id="groupsV2LightBlue">—</dd>
           <dt style="font-size: 0.65rem;" title="Mid-spectrum: cyan, green, yellow, amber">Green (500-600nm)</dt><dd id="groupsV2LightGreen">—</dd>
           <dt style="font-size: 0.65rem;" title="Orange and red wavelengths">Red (600-680nm)</dt><dd id="groupsV2LightRed">—</dd>
           <dt style="font-size: 0.65rem;" title="Far-red and near-infrared">Deep Red (680-750nm)</dt><dd id="groupsV2LightDeepRed">—</dd>
         </dl>
-        <details style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #bae6fd;">
-          <summary style="cursor: pointer; font-size: 0.7rem; color: #0369a1; font-weight: 500; user-select: none;">
+        <details style="margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(56, 189, 248, 0.28);">
+          <summary style="cursor: pointer; font-size: 0.7rem; color: #7dd3fc; font-weight: 500; user-select: none;">
             ▸ Mid-Spectrum Breakdown
           </summary>
-          <div style="margin-top: 10px; padding: 8px; background: rgba(240, 249, 255, 0.5); border-radius: 4px;">
-            <div style="font-size: 0.65rem; color: #64748b; margin-bottom: 6px;">
+          <div style="margin-top: 10px; padding: 8px; background: rgba(15, 23, 42, 0.42); border-radius: 4px;">
+            <div style="font-size: 0.65rem; color: #94a3b8; margin-bottom: 6px;">
               Assuming uniform distribution across 500-600nm:
             </div>
             <dl class="group-info-card__metrics" style="width: 100%; grid-template-columns: repeat(2, 1fr); gap: 4px 8px; font-size: 0.7rem;">
@@ -5898,15 +5881,15 @@ function renderGroupsV2LightCard(plan, options) {
         </details>
       </div>
 
-      <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; padding: 10px; min-height: 115px;">
-        <div class="tiny" style="font-weight: 600; margin-bottom: 6px; color: #166534;">Fixture Output</div>
+      <div style="background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(52, 211, 153, 0.24); border-radius: 6px; padding: 10px; min-height: 115px;">
+        <div class="tiny" style="font-weight: 600; margin-bottom: 6px; color: #86efac;">Fixture Output</div>
         <dl class="group-info-card__metrics" style="width: 100%; grid-template-columns: repeat(2, 1fr); gap: 4px 8px; font-size: 0.75rem;">
           ${metricsHtml}
         </dl>
       </div>
 
-      <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px;">
-        <div class="tiny" style="font-weight: 600; margin-bottom: 6px; color: #854d0e;">Assigned Fixtures</div>
+      <div style="background: rgba(15, 23, 42, 0.78); border: 1px solid rgba(148, 163, 184, 0.22); border-radius: 6px; padding: 10px;">
+        <div class="tiny" style="font-weight: 600; margin-bottom: 6px; color: #fde68a;">Assigned Fixtures</div>
         <div id="groupsV2AssignedLightsList">
           ${assignedLightsHtml}
         </div>
@@ -6312,17 +6295,17 @@ function requestGroupsV2LoadGroupRefresh() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  console.log('[Groups V2] ✅ DOMContentLoaded event fired');
+  console.log('[Groups V2]  DOMContentLoaded event fired');
   requestGroupsV2LoadGroupRefresh();
 });
 
 document.addEventListener('groups-updated', () => {
-  console.log('[Groups V2] 🔄 groups-updated event received, refreshing load dropdown...');
+  console.log('[Groups V2]  groups-updated event received, refreshing load dropdown...');
   requestGroupsV2LoadGroupRefresh();
 });
 
 document.addEventListener('groups-updated', () => {
-  console.log('[Groups V2] 🔄 groups-updated event received, rendering light card...');
+  console.log('[Groups V2]  groups-updated event received, rendering light card...');
   renderGroupsV2LightCard(getGroupsV2SelectedPlan());
 });
 
@@ -6391,30 +6374,30 @@ function renderGroupsV2GroupList() {
 
     return `<div class="gr-card groupsV2-group-card"
       data-group-id="${escapeHtml(group.id)}"
-      style="padding:12px;border:2px solid ${isActive ? '#3b82f6' : '#e2e8f0'};border-radius:10px;
-             background:${isActive ? '#eff6ff' : '#fff'};cursor:pointer;transition:border-color .15s,background .15s;">
+            style="padding:12px;border:2px solid ${isActive ? '#3b82f6' : 'rgba(148, 163, 184, 0.22)'};border-radius:10px;
+              background:${isActive ? 'rgba(59, 130, 246, 0.14)' : 'rgba(15, 23, 42, 0.78)'};cursor:pointer;transition:border-color .15s,background .15s;">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
         <div style="flex:1;min-width:0;">
-          <div style="font-weight:600;font-size:13px;color:#0f172a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"
+          <div style="font-weight:600;font-size:13px;color:#e2e8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"
                title="${escapeHtml(group.name)}">${escapeHtml(group.name)}</div>
-          <div class="tiny text-muted" style="margin-top:2px;">${escapeHtml(group.zone || '—')}</div>
+          <div class="tiny text-muted" style="margin-top:2px;color:#94a3b8;">${escapeHtml(group.zone || '—')}</div>
         </div>
         <span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:12px;font-size:11px;
-                     font-weight:600;background:${deployed ? '#dcfce7' : '#f1f5f9'};color:${statusColor};">
+                     font-weight:600;background:${deployed ? 'rgba(16, 185, 129, 0.14)' : 'rgba(51, 65, 85, 0.72)'};color:${statusColor};">
           <span style="width:6px;height:6px;border-radius:50%;background:${statusColor};"></span>
           ${statusLabel}
         </span>
       </div>
-      <div style="display:flex;gap:12px;margin-top:8px;font-size:12px;color:#475569;">
-        <span title="Trays">🧺 ${trays}</span>
-        <span title="Lights">[INFO] ${lightsCount}</span>
-        <span title="Plan" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">📋 ${escapeHtml(String(planName))}</span>
+      <div style="display:flex;gap:12px;margin-top:8px;font-size:12px;color:#94a3b8;">
+        <span title="Trays">Trays: ${trays}</span>
+        <span title="Lights">Lights: ${lightsCount}</span>
+        <span title="Plan" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Plan: ${escapeHtml(String(planName))}</span>
       </div>
       <div style="display:flex;gap:6px;margin-top:8px;justify-content:flex-end;">
         <button type="button" class="ghost tiny" data-action="edit"
-          style="padding:4px 10px;font-size:11px;border:1px solid #3b82f6;color:#3b82f6;border-radius:6px;">✏️ Edit</button>
+          style="padding:4px 10px;font-size:11px;border:1px solid #3b82f6;color:#3b82f6;border-radius:6px;">Edit</button>
         <button type="button" class="ghost tiny" data-action="delete"
-          style="padding:4px 10px;font-size:11px;border:1px solid #ef4444;color:#ef4444;border-radius:6px;">🗑️</button>
+          style="padding:4px 10px;font-size:11px;border:1px solid #ef4444;color:#ef4444;border-radius:6px;">Delete</button>
       </div>
     </div>`;
   }).join('');
@@ -7580,7 +7563,7 @@ document.addEventListener('DOMContentLoaded', function() {
               title: 'Bulk Edit Complete',
               msg: 'Updated ' + result.updated + ' group' + (result.updated !== 1 ? 's' : '') + ' in "' + prefix + '".',
               kind: 'success',
-              icon: '✏️'
+              icon: ''
             }, 3000);
           }
         }

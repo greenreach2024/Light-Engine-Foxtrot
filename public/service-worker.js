@@ -23,6 +23,7 @@ const CRITICAL_NETWORK_FIRST = [
   '/groups-v2.js'
 ];
 
+const NETWORK_FIRST_DESTINATIONS = new Set(['document', 'iframe', 'script', 'style']);
 // API routes that should be network-first
 // NOTE: /data/ added to ensure fresh groups, rooms, etc. after changes
 const API_ROUTES = [
