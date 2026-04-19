@@ -409,7 +409,7 @@ async function handleLogin(e) {
                 } else if (needsPasswordChange) {
                     // Already set up but must change password (e.g. admin reset)
                     window.location.href = getSetupWizardRedirectPath({ passwordOnly: true });
-                } else if (explicitAdminReturnPath) {
+                } else if (hasExplicitAdminReturnPath()) {
                     window.location.href = getPostLoginRedirectPath();
                 } else {
                     window.location.href = getPostLoginRedirectPath();
