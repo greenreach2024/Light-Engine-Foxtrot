@@ -265,9 +265,9 @@
             const overallEl = document.getElementById('overall-status');
             const statusIcon = {
                 'healthy': '✅',
-                'degraded': '⚠️',
+                'degraded': '[WARN]️',
                 'error': '❌',
-                'warning': '⚠️'
+                'warning': '[WARN]️'
             }[results.overall] || '❓';
             
             const statusText = {
@@ -294,7 +294,7 @@
                 centralSync: '☁️ Central Sync',
                 database: '🗄️ Database',
                 sensors: '🌡️ Sensors',
-                lights: '💡 Light Controllers',
+                lights: '[INFO] Light Controllers',
                 network: '🌐 Network',
                 dataIntegrity: '📁 Data Integrity'
             };
@@ -353,7 +353,7 @@
                     if (data.controllers && data.controllers.length > 0) {
                         detailsHtml = `<div><strong>${data.controllers.length}</strong> controllers found</div>`;
                         data.controllers.forEach(ctrl => {
-                            const icon = ctrl.reachable ? '✓' : '✗';
+                            const icon = ctrl.reachable ? '[OK]' : '[ERR]';
                             detailsHtml += `<div>${icon} ${ctrl.ip}:${ctrl.port} (${ctrl.protocol})</div>`;
                         });
                     } else {
@@ -368,7 +368,7 @@
                         detailsHtml = `<div><strong>${valid}/${total}</strong> files valid</div>`;
                         
                         for (const [file, info] of Object.entries(data.files)) {
-                            const icon = info.valid ? '✓' : '✗';
+                            const icon = info.valid ? '[OK]' : '[ERR]';
                             detailsHtml += `<div>${icon} ${file}</div>`;
                         }
                     } else {

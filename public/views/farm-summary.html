@@ -1869,7 +1869,7 @@
     <!-- Loss Prediction Alerts (S4.3) -->
     <div class="card" id="lossPredictionCard" style="display:none;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
-        <h2 style="margin:0;">⚠ Loss Risk Alerts</h2>
+        <h2 style="margin:0;">[WARN] Loss Risk Alerts</h2>
         <button class="refresh-btn" onclick="loadLossPredictions()" style="background:#334155;border:none;color:#94a3b8;padding:0.375rem 0.75rem;border-radius:6px;cursor:pointer;font-size:0.8rem;">↻</button>
       </div>
       <div id="lossPredictionContent"></div>
@@ -3931,7 +3931,7 @@
                     <div class="status ${Number.isFinite(temp) && zone.tempSetpoint ? (temp >= zone.tempSetpoint.min && temp <= zone.tempSetpoint.max ? 'optimal' : temp >= (zone.tempSetpoint.min - 3) && temp <= (zone.tempSetpoint.max + 3) ? 'warning' : 'critical') : (Number.isFinite(temp) ? (temp >= 18 && temp <= 24 ? 'optimal' : temp >= 15 && temp <= 28 ? 'warning' : 'critical') : '')}">${Number.isFinite(temp) && zone.tempSetpoint ? (temp >= zone.tempSetpoint.min && temp <= zone.tempSetpoint.max ? 'Optimal' : temp >= (zone.tempSetpoint.min - 3) && temp <= (zone.tempSetpoint.max + 3) ? 'Acceptable' : 'Alert') : (Number.isFinite(temp) ? (temp >= 18 && temp <= 24 ? 'Optimal' : temp >= 15 && temp <= 28 ? 'Acceptable' : 'Alert') : '--')}</div>
                   </div>
                   <div class="env-metric ${humidityInvalid ? 'invalid-reading' : ''}">
-                    <div class="label">Humidity <span style="color: green; font-weight: bold;">✓</span></div>
+                    <div class="label">Humidity <span style="color: green; font-weight: bold;">[OK]</span></div>
                     <div class="value">${Number.isFinite(humidity) ? formatNumber(humidity, 0) : '--'}</div>
                     <div class="unit">%</div>
                     ${zone.rhSetpoint ? `<div class="target">Target: ${zone.rhSetpoint.min}–${zone.rhSetpoint.max}%</div>` : ''}
@@ -4036,7 +4036,7 @@
               centralHtml += `<div style="padding:8px;margin-bottom:6px;background:white;border-radius:4px;border-left:3px solid ${color};">`;
               centralHtml += `<span style="font-size:0.82rem;">${alert.message}</span>`;
               centralHtml += `<div style="margin-top:4px;display:flex;gap:6px;">`;
-              centralHtml += `<button onclick="this.closest('div[style]').style.opacity='0.4';this.disabled=true" style="font-size:0.75rem;padding:2px 8px;border:1px solid #2d5016;background:#eaf5e0;border-radius:4px;cursor:pointer;">✓ Noted</button>`;
+              centralHtml += `<button onclick="this.closest('div[style]').style.opacity='0.4';this.disabled=true" style="font-size:0.75rem;padding:2px 8px;border:1px solid #2d5016;background:#eaf5e0;border-radius:4px;cursor:pointer;">[OK] Noted</button>`;
               centralHtml += `<button onclick="this.closest('div[style]').remove()" style="font-size:0.75rem;padding:2px 8px;border:1px solid #ccc;background:#f9f9f9;border-radius:4px;cursor:pointer;">Dismiss</button>`;
               centralHtml += `</div></div>`;
             });
@@ -4045,7 +4045,7 @@
               centralHtml += `<div style="padding:8px;margin-bottom:6px;background:white;border-radius:4px;border-left:3px solid #8e44ad;">`;
               centralHtml += `<span style="font-size:0.82rem;"><strong>A/B Experiment:</strong> ${exp.crop} — ${exp.hypothesis || 'spectrum test'}</span>`;
               centralHtml += `<div style="margin-top:4px;display:flex;gap:6px;">`;
-              centralHtml += `<button onclick="this.textContent='Accepted ✓';this.disabled=true;this.style.background='#d5f5e3'" style="font-size:0.75rem;padding:2px 8px;border:1px solid #8e44ad;background:#f5eef8;border-radius:4px;cursor:pointer;">Accept Experiment</button>`;
+              centralHtml += `<button onclick="this.textContent='Accepted [OK]';this.disabled=true;this.style.background='#d5f5e3'" style="font-size:0.75rem;padding:2px 8px;border:1px solid #8e44ad;background:#f5eef8;border-radius:4px;cursor:pointer;">Accept Experiment</button>`;
               centralHtml += `<button onclick="this.closest('div[style]').remove()" style="font-size:0.75rem;padding:2px 8px;border:1px solid #ccc;background:#f9f9f9;border-radius:4px;cursor:pointer;">Dismiss</button>`;
               centralHtml += `</div></div>`;
             });
@@ -5026,7 +5026,7 @@
                 const source = (typeof insight === 'object' && insight.source) ?
                   `<div style="margin-top: 0.25rem; font-size: 0.75rem; color: #10b981; font-weight: 600;">${insight.source}</div>` : '';
                 const priority = (typeof insight === 'object' && insight.priority === 'high') ?
-                  `<span style="color: #ef4444; font-weight: 700; margin-left: 0.5rem;">⚠ HIGH PRIORITY</span>` : '';
+                  `<span style="color: #ef4444; font-weight: 700; margin-left: 0.5rem;">[WARN] HIGH PRIORITY</span>` : '';
                 return `<div class="health-insight-item">${message}${priority}${recommendation}${source}</div>`;
               }).join('')}
             </div>
@@ -5079,7 +5079,7 @@
         console.error('[Health] Failed to load:', error);
         container.innerHTML = `
           <div class="health-no-data">
-            <div style="font-size: 2rem; margin-bottom: 1rem;">⚠</div>
+            <div style="font-size: 2rem; margin-bottom: 1rem;">[WARN]</div>
             <div style="font-size: 1rem; font-weight: 600; margin-bottom: 0.5rem;">Failed to Load Health Data</div>
             <div style="font-size: 0.875rem;">${error.message}</div>
           </div>
@@ -5638,11 +5638,11 @@
             ? '<span style="background:#3b82f6;color:white;padding:0.125rem 0.5rem;border-radius:10px;font-size:0.65rem;font-weight:700;">NETWORK</span>'
             : '<span style="background:#22c55e;color:white;padding:0.125rem 0.5rem;border-radius:10px;font-size:0.65rem;font-weight:700;">LOCAL</span>';
           const harvestGate = (m.harvest_count || 0) < (m.source === 'network' ? 50 : 10)
-            ? `<div style="color:#f59e0b;font-size:0.7rem;margin-top:0.25rem;">⚠ Insufficient data (${m.harvest_count || 0}/${m.source === 'network' ? 50 : 10} harvests)</div>`
+            ? `<div style="color:#f59e0b;font-size:0.7rem;margin-top:0.25rem;">[WARN] Insufficient data (${m.harvest_count || 0}/${m.source === 'network' ? 50 : 10} harvests)</div>`
             : '';
           const btns = m.source === 'network' && !m.accepted
             ? `<div style="display:flex;gap:0.5rem;margin-top:0.5rem;">
-                <button onclick="acceptModifier('${m.crop}')" style="flex:1;background:#22c55e;color:white;border:none;padding:0.375rem;border-radius:6px;cursor:pointer;font-size:0.75rem;">✓ Accept</button>
+                <button onclick="acceptModifier('${m.crop}')" style="flex:1;background:#22c55e;color:white;border:none;padding:0.375rem;border-radius:6px;cursor:pointer;font-size:0.75rem;">[OK] Accept</button>
                 <button onclick="dismissModifier('${m.crop}')" style="flex:1;background:#475569;color:#94a3b8;border:none;padding:0.375rem;border-radius:6px;cursor:pointer;font-size:0.75rem;">✕ Dismiss</button>
               </div>` : '';
           return `<div style="background:#1e293b;border-radius:8px;padding:1rem;">
@@ -5689,7 +5689,7 @@
         const autoData = autonomousResp.status === 'fulfilled' ? autonomousResp.value : null;
         if (modData) { const n = (modData.local || []).length + (modData.network || []).length; features.push({ icon: '', label: 'Recipe Modifiers', value: n + ' active', color: n > 0 ? '#22c55e' : '#64748b' }); }
         if (harvestData) { const groups = harvestData.notifications || harvestData.groups || harvestData.data || []; const ready = groups.filter(g => (g.readiness_score || g.readiness || g.confidence || 0) >= 0.8).length; features.push({ icon: '', label: 'Harvest Ready', value: ready + '/' + groups.length, color: ready > 0 ? '#f59e0b' : '#64748b' }); }
-        if (lossData) { const alerts = lossData.alerts || []; const high = alerts.filter(a => (a.risk_score || 0) > 0.7).length; features.push({ icon: '⚠', label: 'Loss Risk', value: high > 0 ? high + ' high risk' : 'Clear', color: high > 0 ? '#ef4444' : '#22c55e' }); }
+        if (lossData) { const alerts = lossData.alerts || []; const high = alerts.filter(a => (a.risk_score || 0) > 0.7).length; features.push({ icon: '[WARN]', label: 'Loss Risk', value: high > 0 ? high + ' high risk' : 'Clear', color: high > 0 ? '#ef4444' : '#22c55e' }); }
         if (autoData) { features.push({ icon: '', label: 'Autonomous', value: autoData.enabled ? 'Active' : 'Inactive', color: autoData.enabled ? '#3b82f6' : '#64748b' }); }
         if (features.length === 0) { if (card) card.style.display = 'none'; return; }
         card.style.display = '';
@@ -7795,7 +7795,7 @@
         confirmMessage += `Planned Harvest: Day ${maxDay}\n`;
         
         if (variance === 0) {
-          confirmMessage += `Status: On schedule ✓\n`;
+          confirmMessage += `Status: On schedule [OK]\n`;
         } else if (variance < 0) {
           confirmMessage += `Status: ${Math.abs(variance)} day${Math.abs(variance) !== 1 ? 's' : ''} EARLY ⏰\n`;
         } else {
@@ -8386,7 +8386,7 @@
 
       } catch (error) {
         console.error('Failed to create new planting:', error);
-        alert(`✗ Failed to create planting: ${error.message}\n\nPlease try again or contact support.`);
+        alert(`[ERR] Failed to create planting: ${error.message}\n\nPlease try again or contact support.`);
       }
     }
 

@@ -627,10 +627,10 @@ class HealthCheck {
     };
 
     const statusIcons = {
-      healthy: '✓',
-      degraded: '⚠',
-      warning: '⚠',
-      error: '✗',
+      healthy: '[OK]',
+      degraded: '[WARN]',
+      warning: '[WARN]',
+      error: '[ERR]',
       disabled: '○',
       info: 'ℹ'
     };
@@ -672,7 +672,7 @@ class HealthCheck {
       if (name === 'sensors' && check.zones) {
         html += `<div style="margin-top: 0.5rem; font-size: 0.875rem;">`;
         check.zones.forEach(zone => {
-          html += `<div style="margin-top: 0.25rem;">• ${zone.zone}: ${zone.sensorCount} sensors ${zone.healthy ? '✓' : '⚠'}</div>`;
+          html += `<div style="margin-top: 0.25rem;">• ${zone.zone}: ${zone.sensorCount} sensors ${zone.healthy ? '[OK]' : '[WARN]'}</div>`;
         });
         html += `</div>`;
       }
@@ -680,7 +680,7 @@ class HealthCheck {
       if (name === 'lightControllers' && check.controllers && check.controllers.length > 0) {
         html += `<div style="margin-top: 0.5rem; font-size: 0.875rem;">`;
         check.controllers.forEach(ctrl => {
-          const status = ctrl.reachable === true ? '✓' : (ctrl.reachable === false ? '✗' : '?');
+          const status = ctrl.reachable === true ? '[OK]' : (ctrl.reachable === false ? '[ERR]' : '?');
           html += `<div style="margin-top: 0.25rem;">• ${ctrl.name || ctrl.id}: ${status}</div>`;
         });
         html += `</div>`;

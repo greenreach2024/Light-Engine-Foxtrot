@@ -2448,7 +2448,7 @@
         // Check if sensors exist but aren't positioned
         const unpositionedSensors = STATE.sensors.filter(s => s.x == null || s.y == null).length;
         if (unpositionedSensors > 0) {
-          ctx.fillText('⚠️ Sensors detected but not positioned on grid', width / 2, height / 2 - 20);
+          ctx.fillText('[WARN]️ Sensors detected but not positioned on grid', width / 2, height / 2 - 20);
           ctx.font = '14px sans-serif';
           ctx.fillStyle = '#cbd5e1';
           ctx.fillText(`${unpositionedSensors} sensor(s) need to be placed in Room Mapper`, width / 2, height / 2 + 10);

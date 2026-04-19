@@ -272,7 +272,7 @@
       if (!data.ok) throw new Error(data.error);
       document.getElementById('metricAlerts').textContent = data.count;
       if (data.alerts.length === 0) {
-        document.getElementById('riskAlerts').innerHTML = '<p style="color:#27ae60;">✓ No active risk alerts. Network is healthy.</p>';
+        document.getElementById('riskAlerts').innerHTML = '<p style="color:#27ae60;">[OK] No active risk alerts. Network is healthy.</p>';
       } else {
         let html = '';
         data.alerts.forEach(a => {

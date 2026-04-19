@@ -2559,7 +2559,7 @@ function persistIotDevices(devices) {
         const saved = await verifyResp.json();
         const savedArr = Array.isArray(saved) ? saved : (saved.devices || []);
         if (savedArr.length !== payload.length) {
-          console.error('[persistIotDevices] ⚠️ VERIFICATION MISMATCH! Saved:', payload.length, 'Read back:', savedArr.length);
+          console.error('[persistIotDevices] [WARN]️ VERIFICATION MISMATCH! Saved:', payload.length, 'Read back:', savedArr.length);
         } else {
           console.log('[persistIotDevices] ✅ Verified: read back', savedArr.length, 'devices from server');
         }
@@ -2575,10 +2575,10 @@ function persistIotDevices(devices) {
       console.warn('[persistIotDevices] Failed to dispatch iot-devices-updated:', err);
     }
   }).catch(err => {
-    console.error('[IoT] ⚠️ Failed to persist devices to server:', err);
+    console.error('[IoT] [WARN]️ Failed to persist devices to server:', err);
     // Show user-visible warning since devices may not survive navigation
     if (typeof showToast === 'function') {
-      showToast({ title: 'Save Warning', msg: 'IoT devices saved locally but server save failed. They may not persist after page reload.', kind: 'warn', icon: '⚠️', duration: 8000 });
+      showToast({ title: 'Save Warning', msg: 'IoT devices saved locally but server save failed. They may not persist after page reload.', kind: 'warn', icon: '[WARN]️', duration: 8000 });
     }
   });
 }
@@ -3692,7 +3692,7 @@ window.runUniversalScan = async function() {
 
       if (connectedEdge) {
         console.log('[UniversalScan] Local Light Engine detected at', connectedEdge);
-        if (status) status.textContent = '✓ Local Light Engine connected — scanning network devices...';
+        if (status) status.textContent = '[OK] Local Light Engine connected — scanning network devices...';
 
         try {
           const edgeResp = await fetch(connectedEdge + '/discovery/scan', {
@@ -4196,7 +4196,7 @@ async function addDeviceToIoT(device, deviceIndex, credentials = null) {
       title: 'Device Added Successfully', 
       msg: successMsg, 
       kind: 'success', 
-      icon: '✓',
+      icon: '[OK]',
       duration: 5000
     });
     
@@ -12892,7 +12892,7 @@ async function loadAllData() {
       console.log('[loadAllData] First group:', STATE.groups[0]);
       console.log('[loadAllData] All group IDs:', STATE.groups.map(g => g.id));
     } else {
-      console.error('[loadAllData] ⚠️ NO GROUPS LOADED! Raw response:', groups);
+      console.error('[loadAllData] [WARN]️ NO GROUPS LOADED! Raw response:', groups);
     }
     const iotDevicesData = Array.isArray(storedIotDevices) ? storedIotDevices : [];
     
@@ -13181,7 +13181,7 @@ async function loadAllData() {
     try {
       console.log(`[loadAllData] About to dispatch groups-updated event with ${STATE.groups.length} groups`);
       document.dispatchEvent(new Event('groups-updated'));
-      console.log('[loadAllData] ✓ Dispatched groups-updated event');
+      console.log('[loadAllData] [OK] Dispatched groups-updated event');
     } catch (err) {
       console.error('[loadAllData] ❌ Failed to dispatch groups-updated:', err);
     }
@@ -20298,7 +20298,7 @@ class DevicePairWizard {
         }
 
         if (connectedEdge) {
-          if (this.scanStatus) this.scanStatus.textContent = '✓ Local Light Engine connected — scanning...';
+          if (this.scanStatus) this.scanStatus.textContent = '[OK] Local Light Engine connected — scanning...';
           try {
             const edgeResp = await fetch(connectedEdge + '/discovery/scan', {
               method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -23232,11 +23232,11 @@ document.addEventListener('DOMContentLoaded', () => {
       // Update status text
       const statusEl = document.getElementById('integrationsStatus');
       const parts = [];
-      if (data.switchbot?.configured) parts.push('SwitchBot ✓');
-      if (data.kasa?.configured)      parts.push('Kasa ✓');
+      if (data.switchbot?.configured) parts.push('SwitchBot [OK]');
+      if (data.kasa?.configured)      parts.push('Kasa [OK]');
       if (statusEl) statusEl.textContent = parts.length ? parts.join(' · ') : 'No integrations configured';
 
-      btn.textContent = 'Saved ✓';
+      btn.textContent = 'Saved [OK]';
       setTimeout(() => { btn.textContent = 'Save Integrations'; btn.disabled = false; }, 2000);
     } catch (err) {
       console.error('[integrations] Save failed:', err);
@@ -23253,8 +23253,8 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!data.ok) return;
       const statusEl = document.getElementById('integrationsStatus');
       const parts = [];
-      if (data.switchbot?.configured) parts.push('SwitchBot ✓');
-      if (data.kasa?.configured)      parts.push('Kasa ✓');
+      if (data.switchbot?.configured) parts.push('SwitchBot [OK]');
+      if (data.kasa?.configured)      parts.push('Kasa [OK]');
       if (statusEl) statusEl.textContent = parts.length ? parts.join(' · ') : 'No integrations configured';
     })
     .catch(() => {});

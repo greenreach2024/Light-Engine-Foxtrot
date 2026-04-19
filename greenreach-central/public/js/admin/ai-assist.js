@@ -27,7 +27,7 @@
       // Update the button badge
       const btn = document.querySelector('#ai-assist-getting-started .nav-button');
       if (btn && complete.length === data.tasks.length) {
-        btn.innerHTML = '✓ All Set Up <span class="nav-arrow">▼</span>';
+        btn.innerHTML = '[OK] All Set Up <span class="nav-arrow">▼</span>';
       }
 
       // Build contextual suggestions — show up to 4 most important next steps

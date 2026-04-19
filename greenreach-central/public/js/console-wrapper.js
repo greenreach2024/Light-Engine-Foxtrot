@@ -97,6 +97,6 @@
 
   // Log that we've activated (using original console before suppressing)
   originalConsole.log('🤫 Demo mode detected - console output suppressed');
-  originalConsole.log('💡 Run window.enableConsole() to temporarily enable logging');
-  originalConsole.log('💡 Run window.enableConsole(true) to permanently enable logging');
+  originalConsole.log('[INFO] Run window.enableConsole() to temporarily enable logging');
+  originalConsole.log('[INFO] Run window.enableConsole(true) to permanently enable logging');
 })();

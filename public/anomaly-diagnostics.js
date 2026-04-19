@@ -133,7 +133,7 @@ class AnomalyDiagnosticsDisplay {
     if (!this.summary || this.summary.total === 0) {
       return `
         <div class="diagnostic-summary diagnostic-summary-ok">
-          <div class="summary-icon">✓</div>
+          <div class="summary-icon">[OK]</div>
           <div class="summary-message">${this.summary?.message || 'All systems normal'}</div>
         </div>
       `;

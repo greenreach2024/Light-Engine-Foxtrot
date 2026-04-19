@@ -369,7 +369,7 @@
           const badge = document.createElement('div');
           badge.className = 'faye-tool-badge';
           badge.style.cssText = data.action_executed.success ? 'background:rgba(16,185,129,0.2);color:#6ee7b7' : 'background:rgba(239,68,68,0.2);color:#fca5a5';
-          badge.textContent = (data.action_executed.success ? '✓ Executed: ' : '✗ Failed: ') + data.action_executed.tool.replace(/_/g, ' ');
+          badge.textContent = (data.action_executed.success ? '[OK] Executed: ' : '[ERR] Failed: ') + data.action_executed.tool.replace(/_/g, ' ');
           messagesEl.appendChild(badge);
           messagesEl.scrollTop = messagesEl.scrollHeight;
         }
@@ -401,7 +401,7 @@
 
     const yesBtn = document.createElement('button');
     yesBtn.className = 'faye-confirm-btn yes';
-    yesBtn.textContent = pendingAction.tier === 'admin' ? '✓ Confirm Action' : '✓ Yes, proceed';
+    yesBtn.textContent = pendingAction.tier === 'admin' ? '[OK] Confirm Action' : '[OK] Yes, proceed';
     yesBtn.addEventListener('click', () => { bar.remove(); sendMessage('yes'); });
 
     const noBtn = document.createElement('button');

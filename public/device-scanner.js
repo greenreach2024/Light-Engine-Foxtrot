@@ -110,7 +110,7 @@ class DeviceScanner {
       return `
         <div class="device-card" data-ip="${device.ip}" data-port="${device.port}" data-protocol="${device.protocol}">
           <div class="device-header">
-            <div class="device-icon">💡</div>
+            <div class="device-icon">[INFO]</div>
             <div class="device-info">
               <div class="device-title">${device.manufacturer}</div>
               <div class="device-subtitle">${device.ip}:${device.port}</div>
@@ -136,7 +136,7 @@ class DeviceScanner {
             ` : ''}
           </div>
           <button class="device-select-btn" data-device='${JSON.stringify(device)}'>
-            ✓ Use This Device
+            [OK] Use This Device
           </button>
         </div>
       `;

@@ -64,7 +64,7 @@ function toggleBatchHarvestMode() {
   const btn = document.getElementById('batchHarvestBtn');
   if (batchHarvestMode) {
     btn.classList.add('active');
-    btn.textContent = '✓ Batch Mode Active (0)';
+    btn.textContent = '[OK] Batch Mode Active (0)';
     showBatchControls();
   } else {
     btn.classList.remove('active');
@@ -86,7 +86,7 @@ function toggleTraySelection(trayRunId) {
   }
   
   document.getElementById('batchHarvestBtn').textContent = 
-    `✓ Batch Mode Active (${batchSelectedTrays.length})`;
+    `[OK] Batch Mode Active (${batchSelectedTrays.length})`;
   
   updateBatchSelection();
 }
