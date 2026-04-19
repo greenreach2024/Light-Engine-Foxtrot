@@ -16868,24 +16868,6 @@ app.get('/api/weather/current', async (req, res) => {
 
 // ===== NUTRIENT MANAGEMENT API (MQTT-backed) =====
 
-// Note: Charlie backend (port 8000) deprecated - all nutrient endpoints use MQTT directly
-// Legacy fetchPythonBackend function kept for compatibility but not used
-async function fetchPythonBackend(endpoint, options = {}) {
-  // DEPRECATED: This function is no longer used (nutrients use MQTT)
-  const url = `http://localhost:8000${endpoint}`;
-  
-  try {
-    const response = await fetch(url, {
-      timeout: 5000,
-      ...options
-    });
-    return response;
-  } catch (error) {
-    console.warn(`[Nutrient API] Python backend unavailable at ${url}:`, error.message);
-    return null;
-  }
-}
-
 async function publishNutrientCommand(payload, {
   brokerUrl = DEFAULT_NUTRIENT_MQTT_URL,
   topic = DEFAULT_NUTRIENT_COMMAND_TOPIC,

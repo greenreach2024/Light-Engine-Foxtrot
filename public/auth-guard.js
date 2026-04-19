@@ -75,6 +75,36 @@
     return safePath;
   }
 
+  function isEmbeddedFrame() {
+    try {
+      return window.self !== window.top;
+    } catch (_) {
+      return true;
+    }
+  }
+
+  function buildReturnPath() {
+    const currentPath = sanitizeReturnPath(`${window.location.pathname}${window.location.search}${window.location.hash}`);
+    if (!isEmbeddedFrame()) return currentPath;
+
+    try {
+      if (window.parent && window.parent.location && window.parent.location.origin === window.location.origin) {
+        return sanitizeReturnPath(`${window.parent.location.pathname}${window.parent.location.search}${window.parent.location.hash}`);
+      }
+    } catch (_) {}
+
+    try {
+      if (document.referrer) {
+        const ref = new URL(document.referrer, window.location.origin);
+        if (ref.origin === window.location.origin) {
+          return sanitizeReturnPath(`${ref.pathname}${ref.search}${ref.hash}`);
+        }
+      }
+    } catch (_) {}
+
+    return currentPath;
+  }
+
   // Check if current page requires authentication
   function requiresAuth() {
     const currentPath = window.location.pathname;
@@ -91,7 +121,8 @@
 
     // Farm admin interfaces require auth
     if (currentPath.includes('farm-admin') || 
-        currentPath.includes('farm-sales-pos')) {
+        currentPath.includes('farm-sales-pos') ||
+        currentPath.startsWith('/views/')) {
       return true;
     }
     
@@ -190,7 +221,17 @@
   function redirectToLogin() {
     // In cloud mode, login page is on the same subdomain
     const loginBase = window.IS_CLOUD ? window.location.origin : '';
-    window.location.href = `${loginBase}/farm-admin-login.html`;
+    const returnPath = encodeURIComponent(buildReturnPath());
+    const target = `${loginBase}/farm-admin-login.html?return=${returnPath}`;
+
+    if (isEmbeddedFrame()) {
+      try {
+        window.top.location.href = target;
+        return;
+      } catch (_) {}
+    }
+
+    window.location.href = target;
   }
 
   // Main authentication check
