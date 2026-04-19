@@ -12,8 +12,24 @@
 - [ ] The branch being deployed has been pushed to GitHub
 - [ ] The exact production fixes exist on GitHub, not only in local branches or local `main`
 - [ ] If fixes came from multiple branches, they were merged or cherry-picked before deploy
+- [ ] If `main` is protected and direct push is blocked, the deploy branch has an open PR to `main`
+- [ ] The deploy commit SHA matches the GitHub branch or PR head being shipped
 - [ ] A report was added under `docs/operations/` for any production drift reconciliation
 - [ ] For `main` deploys: `git rev-list --left-right --count origin/main...main` shows no local-only commits
+
+### 0.1 Branch Reconciliation Check ✅
+- [ ] Check whether required production fixes are split across multiple GitHub branches before deploy
+- [ ] Compare `main` against any salvage, hotfix, reconcile, or recovery branches that contain production work
+- [ ] Merge or cherry-pick every required production commit into one deploy branch before build
+- [ ] Do not assume `main` contains the latest production behavior without verifying branch history
+- [ ] Record source branches and commit SHAs in `docs/operations/` when reconciliation was required
+
+### 0.2 Service and Folder Mapping Check ✅
+- [ ] Root-level code (`server-foxtrot.js`, `routes/`, `lib/`, `services/`, root `public/`) maps to LE deploys
+- [ ] `greenreach-central/` code maps to Central deploys
+- [ ] Shared UI files duplicated in both `greenreach-central/public/` and root `public/` were updated in both locations
+- [ ] If a file exists in both public folders, Central copy was edited first and then copied to root `public/`
+- [ ] If shared UI changed, BOTH Cloud Run services were evaluated for deployment impact
 
 ### 1. Framework Knowledge Check ✅
 - [ ] **I have read** `.github/AGENT_SKILLS_FRAMEWORK.md` section "Investigation-First Methodology"
@@ -115,6 +131,29 @@ Before you deploy:
 - [ ] You can explain what changed and why
 - [ ] GitHub contains the same commit(s) you are deploying
 - [ ] Artifact Registry digest was resolved from `gcloud artifacts docker images list ... --include-tags`
+- [ ] The service/file mapping below was checked so the correct Cloud Run services are redeployed
+
+### 8.1 Correct Deployment Target ✅
+
+| Change Type | Deploy LE | Deploy Central |
+|-------------|-----------|----------------|
+| `server-foxtrot.js`, root `routes/`, root `lib/`, root `services/`, root `public/` | Yes | No |
+| `greenreach-central/server.js`, `greenreach-central/routes/`, `greenreach-central/services/`, `greenreach-central/public/` | No | Yes |
+| Shared UI files duplicated in both public folders | Yes | Yes |
+| Cross-service feature where LE serves UI and Central serves API | Usually Yes | Usually Yes |
+
+Never infer deploy targets from the page where a bug appears. Check which service and folder actually serve the changed file.
+
+### 8.2 Correct Release Sequence ✅
+
+1. Reconcile required fixes into one deploy branch.
+2. Push that branch to GitHub.
+3. Open or update a PR if `main` branch protection blocks direct push.
+4. Build from the exact pushed branch state.
+5. Resolve the authoritative Artifact Registry digest.
+6. Deploy the affected Cloud Run service(s) by digest.
+7. Verify the new revision is healthy.
+8. Merge the PR so GitHub `main` remains the long-term deployable source of truth.
 
 ---
 

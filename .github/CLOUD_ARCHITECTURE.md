@@ -108,6 +108,53 @@ gcloud run services update greenreach-central --region=us-east1 --image=us-east1
 gcloud run services update light-engine --region=us-east1 --image=us-east1-docker.pkg.dev/project-5d00790f-13a9-4637-a40/greenreach/light-engine:latest
 ```
 
+### Correct Production Deployment Process
+
+The correct release flow is:
+
+1. Reconcile required production commits into one GitHub branch.
+2. Push that branch to GitHub.
+3. If `main` is protected, open a PR and use the PR head SHA as the deployable source.
+4. Build the affected image from that pushed branch state.
+5. Resolve the authoritative Artifact Registry digest with `gcloud artifacts docker images list ... --include-tags`.
+6. Deploy the affected Cloud Run service(s) by digest.
+7. Verify the resulting revision is healthy.
+8. Merge the PR so GitHub `main` reflects what is in production.
+
+Do not build from unpushed local commits. Do not deploy from a branch that is missing commits from other production-critical branches.
+
+### Branch Reconciliation Requirement
+
+This repository has had production drift caused by required fixes being split across multiple branches.
+
+- Before deploy, check whether the production fix is spread across `main`, hotfix branches, reconcile branches, salvage branches, or local recovery branches.
+- If multiple branches contain part of the fix, merge or cherry-pick them into a single deploy branch first.
+- Record the source branches and commit SHAs in `docs/operations/` when reconciliation is required.
+- GitHub is the source of truth for deployment, not a local working tree.
+
+### Protected Main Behavior
+
+`main` may reject direct pushes because required status checks must pass.
+
+- If direct push to `main` is blocked, push a deploy branch instead.
+- Open a PR to `main`.
+- Deploy from the pushed branch or PR head only if necessary.
+- Merge the PR after verification so the deployed SHA is represented in `main`.
+
+### Service and Folder Deployment Mapping
+
+| Change Location | Deploy LE | Deploy Central |
+|----------------|-----------|----------------|
+| Root application code and root `public/` | Yes | No |
+| `greenreach-central/` application code and `greenreach-central/public/` | No | Yes |
+| Shared UI duplicated in both public folders | Yes | Yes |
+
+Important static-file rule:
+
+- `greenreach-central/public/` is the authoritative edit location for duplicated UI assets.
+- After editing the Central copy, copy the final file to root `public/`.
+- If only one service is deployed after a duplicated-file change, production can appear partially rolled back.
+
 ### Environment Variables
 
 Env vars are set via `--set-env-vars` / `--update-env-vars` on Cloud Run. Secrets use `--set-secrets` referencing Google Secret Manager.
