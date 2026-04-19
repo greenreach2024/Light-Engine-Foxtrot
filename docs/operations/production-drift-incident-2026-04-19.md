@@ -96,6 +96,12 @@ New rule:
 - Production-relevant fixes must not remain local-only.
 - If fixes are split across branches, reconcile Git history first, push to GitHub, then deploy.
 
+### Follow-up hardening
+
+- LE startup now bootstraps a minimal production-safe `public/data/farm.json` when the file is absent in a clean GitHub-backed build.
+- The bootstrap uses the canonical production farm identity and any present `SWITCHBOT_TOKEN` / `SWITCHBOT_SECRET` env vars.
+- The framework validator still blocks startup if an existing `farm.json` is malformed, missing `farmId`, or contains a demo farm ID.
+
 ## Deployment Notes
 
 Cloud Run deploys must use the digest reported by Artifact Registry, not the truncated digest shown in local Docker output.

@@ -18,6 +18,7 @@
 ### 1. Framework Knowledge Check ✅
 - [ ] **I have read** `.github/AGENT_SKILLS_FRAMEWORK.md` section "Investigation-First Methodology"
 - [ ] **I understand** why demo data violations happened and what prevents them
+- [ ] **I know** LE bootstraps a missing `public/data/farm.json`, but existing `farm.json` must still contain the correct non-demo production farm ID
 - [ ] **I can explain**: Why this commit doesn't violate any rules (be specific)
 
 ### 2. Code Review Requirements ✅
