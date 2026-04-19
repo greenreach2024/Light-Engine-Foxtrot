@@ -105,6 +105,29 @@ Before you `git push`:
 - [ ] Commit message is clear and includes review notation
 - [ ] You can explain what changed and why
 
+### 9. Mirrored Static Asset Check ✅
+- [ ] If a file exists in BOTH:
+  - `greenreach-central/public/`
+  - `public/`
+- [ ] Treat `greenreach-central/public/` as the canonical source
+- [ ] Sync the root `public/` copy before commit
+- [ ] If the file is a required mirrored asset, confirm it is listed in `scripts/mirrored-assets-required.txt`
+- [ ] Run:
+  ```bash
+  npm run validate-mirrored-assets
+  ```
+- [ ] If this check fails:
+  - [ ] Either sync the mirror
+  - [ ] Or explicitly mark the file as intentionally divergent in `scripts/sync-check-mirrored.sh`
+
+### 10. Cloud Run Deploy Target Check ✅
+- [ ] If a mirrored static asset changed, deploy BOTH services:
+  - `light-engine` from repo root
+  - `greenreach-central` from `greenreach-central/`
+- [ ] If only LE-only root files changed, deploy LE
+- [ ] If only `greenreach-central/` files changed, deploy Central
+- [ ] Verify the live page contains markers from the edited file after deploy
+
 ---
 
 ## WHAT HAPPENS IF YOU SKIP THESE STEPS

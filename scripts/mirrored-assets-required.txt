@@ -1,0 +1,9 @@
+LE-dashboard.html
+LE-farm-admin.html
+css/setup-orchestrator.css
+device-scanner.js
+styles/farm-assistant.css
+styles.foxtrot.css
+views/3d-farm-viewer.html
+views/farm-inventory.html
+views/tray-inventory.html

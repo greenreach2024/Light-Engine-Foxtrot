@@ -26,6 +26,9 @@ jobs:
       - name: Install server dependencies
         run: |
           npm ci
+      - name: Validate mirrored static assets
+        run: |
+          npm run validate-mirrored-assets
       - name: Validate data schemas
         run: |
           npm run validate-schemas
