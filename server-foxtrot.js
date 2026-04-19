@@ -25229,6 +25229,7 @@ app.get('/admin.html', (req, res) => {
 
 // Serve consolidated Light Engine UI
 app.use('/light-engine/public', express.static(LIGHT_ENGINE_DIR, {
+  cacheControl: false,
   setHeaders: (res, path) => {
     if (path.endsWith('.html')) {
       res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
@@ -25236,7 +25237,9 @@ app.use('/light-engine/public', express.static(LIGHT_ENGINE_DIR, {
       res.setHeader('Expires', '0');
     }
     else if (path.endsWith('.js') || path.endsWith('.css')) {
-      res.setHeader('Cache-Control', 'public, max-age=3600, must-revalidate');
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
     }
     else if (path.match(/\.(jpg|jpeg|png|gif|svg|woff|woff2|ttf|eot)$/)) {
       res.setHeader('Cache-Control', 'public, max-age=86400');
@@ -25249,13 +25252,16 @@ app.use('/light-engine/public', express.static(LIGHT_ENGINE_DIR, {
 const CENTRAL_PUBLIC = path.join(__dirname, 'greenreach-central', 'public');
 app.use(express.static(CENTRAL_PUBLIC, {
   index: false,
+  cacheControl: false,
   setHeaders: (res, filePath) => {
     if (filePath.endsWith('.html')) {
       res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
       res.setHeader('Pragma', 'no-cache');
       res.setHeader('Expires', '0');
     } else if (filePath.endsWith('.js') || filePath.endsWith('.css')) {
-      res.setHeader('Cache-Control', 'public, max-age=3600, must-revalidate');
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
     }
   }
 }));
@@ -25265,6 +25271,7 @@ app.use(express.static(CENTRAL_PUBLIC, {
 // Disable index.html auto-serving so we control root URL routing
 app.use(express.static(PUBLIC_DIR, {
   index: false,  // Don't automatically serve index.html at root - let our route handlers decide
+  cacheControl: false,
   setHeaders: (res, path) => {
     // Force no-cache for HTML files to ensure latest UI
     if (path.endsWith('.html')) {
@@ -25272,9 +25279,11 @@ app.use(express.static(PUBLIC_DIR, {
       res.setHeader('Pragma', 'no-cache');
       res.setHeader('Expires', '0');
     }
-    // Cache JS/CSS for 1 hour but allow revalidation
+    // JS/CSS use literal ?v={{BUILD_TIME}} URLs today, so caching causes stale UI after deploys.
     else if (path.endsWith('.js') || path.endsWith('.css')) {
-      res.setHeader('Cache-Control', 'public, max-age=3600, must-revalidate');
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
     }
     // Cache images/fonts longer
     else if (path.match(/\.(jpg|jpeg|png|gif|svg|woff|woff2|ttf|eot)$/)) {

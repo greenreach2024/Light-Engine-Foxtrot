@@ -811,7 +811,9 @@ const staticCacheOptions = {
       res.setHeader('Pragma', 'no-cache');
       res.setHeader('Expires', '0');
     } else if (filePath.endsWith('.js') || filePath.endsWith('.css')) {
-      res.setHeader('Cache-Control', 'public, max-age=3600, must-revalidate');
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
     } else if (filePath.match(/\.(jpg|jpeg|png|gif|svg|woff|woff2|ttf|eot|ico)$/)) {
       res.setHeader('Cache-Control', 'public, max-age=86400');
     }
