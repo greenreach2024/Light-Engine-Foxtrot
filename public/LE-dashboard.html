@@ -1834,7 +1834,7 @@ Dance Party
               </div>
               <div id="weatherDisplay" class="weather-display" style="display: none; margin-top: 12px; padding: 12px; background: #f8f9fa; border-radius: 6px;">
                 <div class="weather-header" style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-                  <span style="font-size: 18px;"></span>
+                  <span style="font-size: 18px; font-weight: 700; color: #2563eb;">Wx</span>
                   <strong style="color: #333;">Current Weather</strong>
                 </div>
                 <div id="weatherContent"></div>
@@ -1967,13 +1967,13 @@ Live Branding Preview
           
           <div class="wizard-options">
             <button class="wizard-option-card" onclick="storeWizardSelectOption('subdomain')">
-              <div class="wizard-option-icon"></div>
+              <div class="wizard-option-icon">URL</div>
               <div class="wizard-option-title">Use Free Subdomain</div>
               <div class="wizard-option-desc">yourfarm.lightengine.app (Free, instant setup)</div>
             </button>
             
             <button class="wizard-option-card" onclick="storeWizardSelectOption('custom')">
-              <div class="wizard-option-icon"></div>
+              <div class="wizard-option-icon">DNS</div>
               <div class="wizard-option-title">Use Custom Domain</div>
               <div class="wizard-option-desc">www.yourfarm.com (Requires domain ownership)</div>
             </button>
@@ -2649,9 +2649,9 @@ Live Branding Preview
       if (!token) {
         // Not an exceptional error in many contexts (e.g., public pages or private browsing)
         grLog('[Dashboard] ✗ No token found in sessionStorage or localStorage');
-        grLog('[Dashboard]Private browsing mode? Token may not persist across pages');
-        grLog('[Dashboard]Please log in at: ' + window.location.origin + '/farm-admin-login.html');
-        grLog('[Dashboard]Redirecting to login page in 2 seconds...');
+        grLog('[Dashboard] Private browsing mode? Token may not persist across pages');
+        grLog('[Dashboard] Please log in at: ' + window.location.origin + '/farm-admin-login.html');
+        grLog('[Dashboard] Redirecting to login page in 2 seconds...');
         
         setTimeout(() => {
           window.location.href = '/farm-admin-login.html';
