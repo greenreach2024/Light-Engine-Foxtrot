@@ -317,37 +317,20 @@ function updateHarvestStrategyIndicator(group) {
       // Currently in regrowth
       const regrowthDay = strategy.regrowthStartDate ? getRegrowthDayNumber(strategy) : null;
       const daysLeft = regrowthDay !== null ? Math.max(0, days - regrowthDay) : days;
-<<<<<<< HEAD
       indicator.innerHTML = `Regrowing — Harvest ${currentHarvest + 1} of ${harvests} in ${daysLeft} day${daysLeft !== 1 ? 's' : ''}`;
-      indicator.style.background = '#fef3c7';
-      indicator.style.color = '#92400e';
-      indicator.style.border = '1px solid #f59e0b';
-    } else if (currentHarvest >= harvests) {
-      indicator.innerHTML = `All ${harvests} harvests complete`;
-      indicator.style.background = '#fef2f2';
-      indicator.style.color = '#991b1b';
-      indicator.style.border = '1px solid #fca5a5';
-    } else {
-      indicator.innerHTML = `Cut & Come Again — ${harvests} harvests, ${days}-day regrowth`;
-      indicator.style.background = '#eff6ff';
-      indicator.style.color = '#1e40af';
-      indicator.style.border = '1px solid #93c5fd';
-=======
-      indicator.innerHTML = `🔄 Regrowing — Harvest ${currentHarvest + 1} of ${harvests} in ${daysLeft} day${daysLeft !== 1 ? 's' : ''}`;
       indicator.style.background = 'rgba(245, 158, 11, 0.16)';
       indicator.style.color = '#fde68a';
       indicator.style.border = '1px solid rgba(245, 158, 11, 0.28)';
     } else if (currentHarvest >= harvests) {
-      indicator.innerHTML = `✅ All ${harvests} harvests complete`;
+      indicator.innerHTML = `All ${harvests} harvests complete`;
       indicator.style.background = 'rgba(239, 68, 68, 0.16)';
       indicator.style.color = '#fecaca';
       indicator.style.border = '1px solid rgba(248, 113, 113, 0.28)';
     } else {
-      indicator.innerHTML = `🔄 Cut & Come Again — ${harvests} harvests, ${days}-day regrowth`;
+      indicator.innerHTML = `Cut & Come Again — ${harvests} harvests, ${days}-day regrowth`;
       indicator.style.background = 'rgba(59, 130, 246, 0.16)';
       indicator.style.color = '#bfdbfe';
       indicator.style.border = '1px solid rgba(96, 165, 250, 0.28)';
->>>>>>> 7ea58032 (Fix grow management deep-link and dark runtime cards)
     }
     indicator.style.display = 'block';
   } else {
@@ -3754,7 +3737,7 @@ function updateGroupsV2HarvestButtonVisibility() {
     if (regrowthDay !== null && regrowthDay >= hc.regrowthDays) {
       const nextHarvest = hc.currentHarvest + 1;
       const isFinal = nextHarvest >= hc.maxHarvests;
-      harvestBtn.textContent = isFinal ? `Final Harvest (${nextHarvest}/${hc.maxHarvests})` : ` Cut Harvest (${nextHarvest}/${hc.maxHarvests})`;
+      harvestBtn.textContent = isFinal ? `Final Harvest (${nextHarvest}/${hc.maxHarvests})` : `Cut Harvest (${nextHarvest}/${hc.maxHarvests})`;
       harvestBtn.style.display = 'inline-block';
       harvestBtn.style.borderColor = isFinal ? '#dc2626' : '#f59e0b';
       harvestBtn.style.color = isFinal ? '#dc2626' : '#f59e0b';
