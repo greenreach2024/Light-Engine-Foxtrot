@@ -131,6 +131,35 @@ Both services deploy independently via Docker Buildx and Cloud Run.
 
 **GitHub is the deployable source of truth.** Production-relevant code must be committed and pushed before building Cloud Run images.
 
+### Correct Deployment Workflow
+
+1. Reconcile all required production fixes into one GitHub branch.
+2. Push that branch to GitHub before building any image.
+3. If `main` is protected, open a PR and treat the PR head SHA as the deployable source until merge.
+4. Build from that pushed branch state.
+5. Resolve the authoritative Artifact Registry digest.
+6. Deploy the affected Cloud Run service(s) by digest.
+7. Merge the PR so GitHub `main` stays aligned with production.
+
+### Branch Drift Warning
+
+Production issues in April 2026 were caused by required fixes being split across multiple GitHub branches and local-only history.
+
+- Do not assume `main` contains all required production fixes.
+- Check side branches, salvage branches, reconcile branches, and local recovery branches before deploy.
+- Merge or cherry-pick all required commits into one deploy branch first.
+- Do not deploy from code that exists only on a laptop.
+
+### Correct Service and Folder Mapping
+
+| Change Location | Deploy LE | Deploy Central |
+|----------------|-----------|----------------|
+| Root app code and root `public/` | Yes | No |
+| `greenreach-central/` code and `greenreach-central/public/` | No | Yes |
+| Shared UI duplicated in both public folders | Yes | Yes |
+
+If a UI file exists in both public folders, update the Central copy first, then copy it to root `public/`, and evaluate both services for deployment.
+
 **Central:**
 ```bash
 docker buildx build --platform linux/amd64 \
