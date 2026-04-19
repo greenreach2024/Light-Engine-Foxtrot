@@ -247,7 +247,8 @@ async function initDashboard() {
             // Clear redirect counter and stale data before redirecting
             sessionStorage.removeItem('login_redirect_count');
             localStorage.removeItem(STORAGE_KEY_SESSION);
-            window.location.href = '/farm-admin-login.html';
+            const currentRoute = encodeURIComponent(`${window.location.pathname}${window.location.search}${window.location.hash}`);
+            window.location.href = `/farm-admin-login.html?return=${currentRoute}`;
             return;
         }
 
