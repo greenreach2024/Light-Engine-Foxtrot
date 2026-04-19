@@ -1148,6 +1148,7 @@
         } catch(e) {}
       })();
     </script>
+<link rel="stylesheet" href="/styles/le-foundation.css">
 </head>
 <body class="le-theme">
   <!-- Tray Details Modal -->
@@ -1376,7 +1377,7 @@
             Cancel
           </button>
           <button type="button" class="timeline-btn" onclick="remixRecommendations()" style="flex: 1; min-width: 160px; background: rgba(168,85,247,0.2); border-color: #a855f7; color: #c084fc;">
-            🔄 Remix Recommendations
+Remix Recommendations
           </button>
           <button type="button" class="timeline-btn primary" onclick="acceptRecommendation()" style="flex: 2; min-width: 200px;">
             Accept & Schedule Top Recommendation
@@ -2114,7 +2115,7 @@
 
       // Update badge
       if (status.engine.type === 'ml') {
-        badge.textContent = '🚀 AI Model Active';
+        badge.textContent = 'AI Model Active';
         badge.style.background = 'rgba(16, 185, 129, 0.2)';
         badge.style.color = '#34d399';
       } else {
@@ -2273,7 +2274,7 @@
     // ============================================================================
     
     /**
-     * 🚨 AI RECOMMENDATION SYSTEM OPPORTUNITY 🚨
+     *AI RECOMMENDATION SYSTEM OPPORTUNITY
      * 
      * CURRENT STATE: Simplistic - recommends replanting same crop
      * 
@@ -2961,7 +2962,7 @@
           </div>
 
           <div class="tray-compatibility">
-            <div class="tray-compatibility-header" title="${getCompatibilityTooltip(compat)}" style="cursor: help;">Compatibility ℹ️</div>
+            <div class="tray-compatibility-header" title="${getCompatibilityTooltip(compat)}" style="cursor: help;">Compatibility ℹ</div>
             <div class="tray-compatibility-details">
               <span class="compatibility-tag" title="${getCompatibilityTooltip(compat)}" style="cursor: help;">Rating: ${compat.rating.toUpperCase()}</span>
               ${compat.reasons && compat.reasons.length > 0 ? 
@@ -3002,7 +3003,7 @@
           <tr>
             <td colspan="8">
               <div class="empty-state">
-                <div class="icon">🌱</div>
+                <div class="icon"></div>
                 <h3>No Trays to Forecast</h3>
                 <p>Add trays with active crops to see the seeding schedule</p>
               </div>
@@ -3851,17 +3852,17 @@
     function renderJustifications(justifications) {
       if (!Array.isArray(justifications) || justifications.length === 0) return '';
       const iconMap = {
-        market_opportunity: { icon: '📈', color: '#22c55e', bg: 'rgba(34,197,94,0.15)' },
-        market_caution:     { icon: '📉', color: '#f59e0b', bg: 'rgba(245,158,11,0.15)' },
-        diversity_concern:  { icon: '🌱', color: '#f59e0b', bg: 'rgba(245,158,11,0.15)' },
-        rotation_benefit:   { icon: '🔄', color: '#60a5fa', bg: 'rgba(96,165,250,0.15)' },
-        seasonal_advantage: { icon: '☀️', color: '#22c55e', bg: 'rgba(34,197,94,0.15)' },
-        seasonal_caution:   { icon: '❄️', color: '#f59e0b', bg: 'rgba(245,158,11,0.15)' }
+        market_opportunity: { icon: '', color: '#22c55e', bg: 'rgba(34,197,94,0.15)' },
+        market_caution:     { icon: '', color: '#f59e0b', bg: 'rgba(245,158,11,0.15)' },
+        diversity_concern:  { icon: '', color: '#f59e0b', bg: 'rgba(245,158,11,0.15)' },
+        rotation_benefit:   { icon: '', color: '#60a5fa', bg: 'rgba(96,165,250,0.15)' },
+        seasonal_advantage: { icon: '☀', color: '#22c55e', bg: 'rgba(34,197,94,0.15)' },
+        seasonal_caution:   { icon: '❄', color: '#f59e0b', bg: 'rgba(245,158,11,0.15)' }
       };
       return `
         <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1rem;">
           ${justifications.map(j => {
-            const style = iconMap[j.type] || { icon: 'ℹ️', color: '#94a3b8', bg: 'rgba(148,163,184,0.15)' };
+            const style = iconMap[j.type] || { icon: 'ℹ', color: '#94a3b8', bg: 'rgba(148,163,184,0.15)' };
             return `<div style="background: ${style.bg}; border: 1px solid ${style.color}33; border-radius: 14px; padding: 0.6rem 0.75rem; font-size: 0.82rem; line-height: 1.4;">
               <div style="color: ${style.color}; font-weight: 600; margin-bottom: 0.2rem;">
                 ${style.icon} ${j.type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
