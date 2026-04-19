@@ -2280,7 +2280,7 @@ Live Branding Preview
             const data = await response.json();
             
             if (data.status === 'success') {
-              passwordChangeStatus.textContent = '✓ Password changed successfully!';
+              passwordChangeStatus.textContent = '[OK] Password changed successfully!';
               passwordChangeStatus.style.color = '#10b981';
               passwordChangeForm.reset();
               
@@ -2412,7 +2412,7 @@ Live Branding Preview
       }
       
       // TODO: Check availability via API
-      document.getElementById('subdomainStatus').innerHTML = '<span style="color: #10b981;">✓ Available: ' + subdomain + '.lightengine.app</span>';
+      document.getElementById('subdomainStatus').innerHTML = '<span style="color: #10b981;">[OK] Available: ' + subdomain + '.lightengine.app</span>';
       storeWizardData.subdomain = subdomain;
       document.getElementById('domainNextBtn').disabled = false;
     }
@@ -2648,7 +2648,7 @@ Live Branding Preview
       
       if (!token) {
         // Not an exceptional error in many contexts (e.g., public pages or private browsing)
-        grLog('[Dashboard] ✗ No token found in sessionStorage or localStorage');
+        grLog('[Dashboard] [ERR] No token found in sessionStorage or localStorage');
         grLog('[Dashboard] Private browsing mode? Token may not persist across pages');
         grLog('[Dashboard] Please log in at: ' + window.location.origin + '/farm-admin-login.html');
         grLog('[Dashboard] Redirecting to login page in 2 seconds...');

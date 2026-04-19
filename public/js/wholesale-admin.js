@@ -1767,7 +1767,7 @@
           detailsSpan.textContent = `${count} SKU(s) have insufficient inventory: ${skus}${more}`;
           alertBanner.style.display = 'block';
           
-          console.warn('⚠️ Overselling detected:', data.items);
+          console.warn('[WARN] Overselling detected:', data.items);
         } else {
           alertBanner.style.display = 'none';
         }
@@ -1990,7 +1990,7 @@
           </div>
           <div>
             <span style="padding: 0.375rem 0.75rem; background: var(--success); color: white; border-radius: 4px; font-size: 0.875rem; font-weight: 600;">
-              ✓ Complete
+              [OK] Complete
             </span>
           </div>
         </div>

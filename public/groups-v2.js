@@ -6270,7 +6270,7 @@ function populateGroupsV2LoadGroupDropdown() {
   sortedGroups.forEach(group => {
     const label = formatGroupsV2GroupLabel(group);
     const status = group.status || 'draft';
-    const statusIcon = status === 'deployed' ? '✓' : '•';
+    const statusIcon = status === 'deployed' ? '[OK]' : '•';
     
     const opt = document.createElement('option');
     opt.value = group.id || label;
@@ -6407,7 +6407,7 @@ function renderGroupsV2GroupList() {
       </div>
       <div style="display:flex;gap:12px;margin-top:8px;font-size:12px;color:#475569;">
         <span title="Trays">🧺 ${trays}</span>
-        <span title="Lights">💡 ${lightsCount}</span>
+        <span title="Lights">[INFO] ${lightsCount}</span>
         <span title="Plan" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">📋 ${escapeHtml(String(planName))}</span>
       </div>
       <div style="display:flex;gap:6px;margin-top:8px;justify-content:flex-end;">
@@ -7194,7 +7194,7 @@ async function executeBuildStockGroups() {
 
   if (created === 0) {
     if (typeof showToast === 'function') {
-      showToast({ title: 'No Groups Created', msg: `All ${count} group names already exist.`, kind: 'warn', icon: '⚠️' });
+      showToast({ title: 'No Groups Created', msg: `All ${count} group names already exist.`, kind: 'warn', icon: '[WARN]' });
     }
     return { created: 0, skipped };
   }

@@ -81,7 +81,7 @@ function renderChecklist(tasks, completedCount, totalCount, pct, planType) {
 
   let taskListHTML = tasks.map(task => {
     const icon = task.completed
-      ? '<span style="color: var(--accent-green); font-size: 18px;">✓</span>'
+      ? '<span style="color: var(--accent-green); font-size: 18px;">[OK]</span>'
       : '<span style="color: var(--text-muted); font-size: 18px; opacity: 0.4;">○</span>';
     const textStyle = task.completed
       ? 'text-decoration: line-through; color: var(--text-muted);'

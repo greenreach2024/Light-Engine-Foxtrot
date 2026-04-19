@@ -5,11 +5,11 @@
   try {
     localStorage.setItem('__test__', '1');
     localStorage.removeItem('__test__');
-    console.log('✓ localStorage available (normal browsing mode)');
+    console.log('[OK] localStorage available (normal browsing mode)');
   } catch (e) {
     // localStorage is blocked - show warning
     document.getElementById('privateModeWarning').style.display = 'block';
-    console.warn('⚠ localStorage blocked - private browsing mode detected');
-    console.log('💡 Authentication will work via sessionStorage (this tab only)');
+    console.warn('[WARN] localStorage blocked - private browsing mode detected');
+    console.log('[INFO] Authentication will work via sessionStorage (this tab only)');
   }
 })();

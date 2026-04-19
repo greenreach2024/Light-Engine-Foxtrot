@@ -499,7 +499,7 @@
             <h2 style="margin-bottom: 1rem;">🛒 Available Products</h2>
             <div style="margin-bottom: 1rem; padding: 1rem; background: var(--card); border-radius: 8px; border: 1px solid var(--border);">
               <p style="color: var(--text-light); font-size: 0.875rem;">
-                💡 Note: Currently, only <strong>Farm Boxes</strong> are available for delivery. Individual items will be available soon!
+                [INFO] Note: Currently, only <strong>Farm Boxes</strong> are available for delivery. Individual items will be available soon!
               </p>
             </div>
             <div id="product-grid" class="product-grid">
@@ -1332,7 +1332,7 @@
         });
         
         document.getElementById('checkout-success').textContent = 
-          `✓ Order placed successfully! Order ID: ${result.receipt.order_id}`;
+          `[OK] Order placed successfully! Order ID: ${result.receipt.order_id}`;
         document.getElementById('checkout-success').classList.remove('hidden');
         document.getElementById('checkout-error').classList.add('hidden');
         

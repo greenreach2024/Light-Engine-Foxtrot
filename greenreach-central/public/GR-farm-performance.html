@@ -360,7 +360,7 @@
       </div>
       <div class="alerts-section" id="alertsContainer">
         <div class="empty-state">
-          <div class="empty-state-icon">✓</div>
+          <div class="empty-state-icon">+</div>
           <p>No active alerts. All farms performing within acceptable ranges.</p>
         </div>
       </div>
@@ -546,7 +546,7 @@
         if (!alerts || alerts.length === 0) {
           container.innerHTML = `
             <div class="empty-state">
-              <div class="empty-state-icon">✓</div>
+              <div class="empty-state-icon">+</div>
               <p>No active alerts. All farms performing within acceptable ranges.</p>
             </div>
           `;
@@ -567,7 +567,7 @@
 
       getAlertIcon(severity) {
         if (severity === 'high') return '🔴';
-        if (severity === 'medium') return '⚠️';
+        if (severity === 'medium') return '[WARN]';
         return 'ℹ️';
       },
 

@@ -642,7 +642,7 @@
     }
     
     .plan-features li::before {
-      content: "✓";
+      content: "+";
       color: var(--success);
       font-weight: bold;
     }
@@ -1192,7 +1192,7 @@
       updateCart();
       
       // Show brief success animation
-      event.target.textContent = '✓ Added';
+      event.target.textContent = '[OK] Added';
       setTimeout(() => {
         event.target.innerHTML = '<span>Add</span><span>+</span>';
       }, 1000);
@@ -1391,7 +1391,7 @@
         
         if (result.ok) {
           document.getElementById('checkout-success').textContent = 
-            `✓ Order placed successfully! Order ID: ${result.order.order_id}. We'll contact you to confirm delivery.`;
+            `[OK] Order placed successfully! Order ID: ${result.order.order_id}. We'll contact you to confirm delivery.`;
           document.getElementById('checkout-success').classList.remove('hidden');
           document.getElementById('checkout-error').classList.add('hidden');
           
