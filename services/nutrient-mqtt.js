@@ -436,7 +436,12 @@ class NutrientMqttSubscriber extends EventEmitter {
 
     this.client.on('error', (err) => {
       console.error('[nutrient-mqtt] MQTT error:', err?.message);
-      this.emit('error', err);
+      // EventEmitter treats an `error` event with no listeners as fatal. Atlas
+      // connectivity is optional during Cloud Run startup, so connection issues
+      // must degrade telemetry rather than crash the whole LE revision.
+      if (this.listenerCount('error') > 0) {
+        this.emit('error', err);
+      }
     });
 
     this.client.on('reconnect', () => {
