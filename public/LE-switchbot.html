@@ -5,7 +5,9 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <title>SwitchBot Device Manager - Light Engine Charlie</title>
   <link rel="stylesheet" href="./styles.foxtrot.css?v=foxtrot-1.0">
+  <link rel="stylesheet" href="/styles/le-foundation.css">
   <link rel="stylesheet" href="./styles/le-dashboard-theme.css?v=2025-12-20-01">
+  <link rel="stylesheet" href="/styles/switchbot-manager.css">
   <link rel="stylesheet" href="/styles/nav-color-palette.css">
   <script src="/js/light-engine-help.js" defer></script>
   <style>
@@ -192,12 +194,12 @@
     .control-button.off {
       background: var(--gr-surface, #ffffff);
       border-color: var(--gr-border, #dce5e5);
-      color: #0f172a;
+      color: var(--gr-text, #0f172a);
     }
 
     .control-button.secondary {
-      background: var(--gr-accent-soft, #e9f8f8);
-      color: var(--gr-primary, #0d7d7d);
+      background: var(--accent-teal-soft, var(--gr-accent-soft, #e9f8f8));
+      color: var(--accent-teal, var(--gr-primary, #0d7d7d));
     }
 
     .control-button:hover:not(:disabled) {
@@ -261,27 +263,27 @@
     }
 
     .status-badge.tone-positive {
-      background: rgba(15, 155, 116, 0.12);
-      border-color: rgba(15, 155, 116, 0.4);
-      color: #0f9b74;
+      background: var(--accent-green-soft, rgba(15, 155, 116, 0.12));
+      border-color: var(--accent-green-edge, rgba(15, 155, 116, 0.4));
+      color: var(--accent-green, #0f9b74);
     }
 
     .status-badge.tone-warning {
-      background: rgba(240, 165, 0, 0.12);
-      border-color: rgba(240, 165, 0, 0.4);
-      color: #b45309;
+      background: var(--accent-amber-soft, rgba(240, 165, 0, 0.14));
+      border-color: var(--accent-amber-edge, rgba(240, 165, 0, 0.4));
+      color: var(--accent-amber, #b45309);
     }
 
     .status-badge.tone-critical {
-      background: rgba(209, 67, 67, 0.12);
-      border-color: rgba(209, 67, 67, 0.45);
-      color: #b91c1c;
+      background: var(--accent-red-soft, rgba(209, 67, 67, 0.14));
+      border-color: var(--accent-red-edge, rgba(209, 67, 67, 0.45));
+      color: var(--accent-red, #b91c1c);
     }
 
     .status-badge.tone-neutral {
-      background: rgba(79, 70, 229, 0.08);
-      border-color: rgba(79, 70, 229, 0.25);
-      color: #4338ca;
+      background: rgba(79, 70, 229, 0.14);
+      border-color: rgba(79, 70, 229, 0.35);
+      color: var(--accent-indigo, #818cf8);
     }
 
     .reading-grid {
@@ -313,7 +315,7 @@
       font-weight: 500;
       text-transform: uppercase;
       letter-spacing: 0.05em;
-      color: #4d5562;
+      color: var(--text-3, #4d5562);
     }
 
     .reading-item[data-tone="warning"] {
@@ -383,18 +385,18 @@
     }
 
     .error-message {
-      background: rgba(209, 67, 67, 0.08);
-      border: 1px solid rgba(209, 67, 67, 0.35);
-      color: #7f1d1d;
+      background: var(--accent-red-soft, rgba(209, 67, 67, 0.14));
+      border: 1px solid var(--accent-red-edge, rgba(209, 67, 67, 0.35));
+      color: var(--accent-red, #f87171);
       padding: 16px;
       border-radius: 12px;
       margin: 20px 0;
     }
 
     .info-message {
-      background: rgba(79, 70, 229, 0.08);
-      border: 1px solid rgba(79, 70, 229, 0.25);
-      color: #312e81;
+      background: rgba(79, 70, 229, 0.14);
+      border: 1px solid rgba(79, 70, 229, 0.35);
+      color: var(--accent-indigo, #818cf8);
       padding: 16px;
       border-radius: 12px;
       margin: 20px 0;
@@ -403,7 +405,7 @@
     .loading {
       text-align: center;
       padding: 48px;
-      color: #4d5562;
+      color: var(--text-3, #4d5562);
       font-size: 15px;
     }
 
@@ -452,9 +454,9 @@
     }
 
     .device-type-badge.real-device {
-      background: rgba(15, 155, 116, 0.12);
-      color: #0f9b74;
-      border: 1px solid rgba(15, 155, 116, 0.3);
+      background: var(--accent-green-soft, rgba(15, 155, 116, 0.12));
+      color: var(--accent-green, #0f9b74);
+      border: 1px solid var(--accent-green-edge, rgba(15, 155, 116, 0.3));
     }
 
     .live-indicator {
@@ -463,9 +465,9 @@
       gap: 10px;
       padding: 10px 14px;
       border-radius: 12px;
-      background: rgba(15, 155, 116, 0.1);
-      border: 1px solid rgba(15, 155, 116, 0.3);
-      color: #0f9b74;
+      background: var(--accent-green-soft, rgba(15, 155, 116, 0.14));
+      border: 1px solid var(--accent-green-edge, rgba(15, 155, 116, 0.3));
+      color: var(--accent-green, #0f9b74);
       font-weight: 600;
     }
 
@@ -488,7 +490,7 @@
     }
 
     .device-status.online {
-      color: #0f9b74;
+      color: var(--accent-green, #0f9b74);
       font-weight: 600;
     }
   </style>
