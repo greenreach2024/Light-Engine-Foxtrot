@@ -22,21 +22,21 @@ Read these documents in order:
 
 This monorepo contains two independently deployed Node.js applications:
 
-- **Light Engine (LE)**: `server-foxtrot.js` at repo root, deploys to `light-engine-foxtrot-prod-v3`
-- **GreenReach Central**: `greenreach-central/server.js`, deploys to `greenreach-central-prod-v4`
+- **Light Engine (LE)**: `server-foxtrot.js` at repo root, deploys to Cloud Run service `light-engine`
+- **GreenReach Central**: `greenreach-central/server.js`, deploys to Cloud Run service `greenreach-central`
 
-They share NO runtime imports across boundaries. Do NOT import from `greenreach-central/routes/` into `server-foxtrot.js` (it will crash EB due to dependency chains).
+They share NO runtime imports across boundaries. Do NOT import from `greenreach-central/routes/` into `server-foxtrot.js` (it will crash LE due to dependency chains).
 
 ### The Farm Is 100% Cloud
 
-There is no physical device, no Raspberry Pi, no edge hardware. The LE Elastic Beanstalk instance IS the farm. References to "edge," "Pi," or "hardware" in old code are legacy artifacts.
+There is no physical device, no Raspberry Pi, no edge hardware. The LE Cloud Run service IS the farm. References to "edge," "Pi," or "hardware" in old code are legacy artifacts.
 
 ### Two public/ Directories
 
 | Directory | Served By | Deploy Target |
 |-----------|-----------|---------------|
-| `public/` (root) | LE only | `light-engine-foxtrot-prod-v3` |
-| `greenreach-central/public/` | Central only | `greenreach-central-prod-v4` |
+| `public/` (root) | LE only | `light-engine` |
+| `greenreach-central/public/` | Central only | `greenreach-central` |
 
 Both servers serve the same UI files (e.g., `LE-farm-admin.html`) to avoid cross-origin issues. When editing shared UI files, edit in `greenreach-central/public/` first, then copy to root `public/`.
 
@@ -67,9 +67,36 @@ Central requires PostgreSQL and the environment variables listed in [.github/CRI
 1. Create a feature branch from `main`
 2. Make your changes
 3. Test locally
-4. Stage all changes: `git add -A`
-5. Commit with descriptive message
-6. Deploy to the correct environment(s)
+4. Reconcile Git history before deploy:
+	- Ensure required production fixes are not stranded on local branches or local `main`
+	- Check GitHub for side branches that may hold part of the production fix
+	- Merge or cherry-pick side-branch fixes into one deploy branch
+	- Confirm GitHub contains the exact code you will deploy before any image build
+5. Stage all changes: `git add -A`
+6. Commit with descriptive message
+7. Push to GitHub
+8. If direct push to `main` is blocked by branch protection, push the deploy branch and open a PR to `main`
+9. Build and deploy from the pushed branch or PR head commit
+10. Merge the PR after validation so `main` stays aligned with production
+
+### Branch Management Rules
+
+- Do not leave production fixes split across multiple GitHub branches after an incident or hotfix.
+- Do not deploy from local-only commits.
+- If the fix came from salvage, recovery, or reconcile branches, combine those commits first and deploy only after the combined branch is on GitHub.
+- Treat the GitHub PR head SHA as the deployable source when `main` is protected and not yet merged.
+- After deployment, merge the PR so production and GitHub `main` do not drift again.
+
+### Protected Main Workflow
+
+This repository protects `main` with required checks.
+
+- If `git push origin main` is rejected, that is expected behavior.
+- Push a deploy branch instead.
+- Open a PR to `main`.
+- Let required checks run.
+- Deploy from the pushed branch or PR head only if operationally necessary.
+- Merge the PR afterward so the deployed SHA is represented in `main`.
 
 ### Deploying
 
@@ -81,16 +108,42 @@ Central requires PostgreSQL and the environment variables listed in [.github/CRI
 | `greenreach-central/` code | Central |
 | Shared UI files (exist in both public/ dirs) | BOTH |
 
-```bash
-# Deploy Central
-cd greenreach-central
-eb deploy greenreach-central-prod-v4 --staged
+### Correct Deployment Mapping
 
-# Deploy LE (from repo root)
-eb deploy light-engine-foxtrot-prod-v3 --staged
+- Root `public/` is served by LE.
+- `greenreach-central/public/` is served by Central.
+- Many operator-facing pages exist in both locations. Those files must be kept in sync.
+- Edit `greenreach-central/public/` first, then copy the final version into root `public/`.
+- If you only deploy one service after changing a duplicated file, production will remain inconsistent.
+
+### Correct Deployment Sequence
+
+1. Push the deploy branch to GitHub.
+2. If `main` is protected, open a PR and use the PR head SHA as the reviewable deploy source.
+3. Build the affected service image from the exact pushed branch state.
+4. Resolve the authoritative Artifact Registry digest.
+5. Deploy the affected Cloud Run service by digest.
+6. Verify the new Cloud Run revision is healthy.
+7. Merge the PR so GitHub `main` matches the deployed code.
+
+```bash
+# Build and push Central
+docker buildx build --platform linux/amd64 \
+	-t us-east1-docker.pkg.dev/project-5d00790f-13a9-4637-a40/greenreach/greenreach-central:latest \
+	--push ./greenreach-central/
+
+# Build and push LE
+docker buildx build --platform linux/amd64 \
+	-t us-east1-docker.pkg.dev/project-5d00790f-13a9-4637-a40/greenreach/light-engine:latest \
+	--push .
+
+# Resolve the authoritative digest from Artifact Registry, then deploy by digest
+gcloud run services update greenreach-central --region=us-east1 --image=REGISTRY_DIGEST
+gcloud run services update light-engine --region=us-east1 --image=REGISTRY_DIGEST
 ```
 
-**Never deploy during business hours without coordination.** Deployments cause brief downtime (~30-60 seconds).
+**GitHub parity is mandatory before deploy.** Never deploy production-relevant local-only commits.
+**Never deploy during business hours without coordination.**
 
 ---
 

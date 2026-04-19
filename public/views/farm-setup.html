@@ -177,8 +177,11 @@
     .fs-container strong {
       color: var(--text-1, #f1f5f9) !important;
     }
-    .fs-container .text-muted { color: var(--text-4, #64748b) !important; }
-    .fs-container p { color: var(--text-3, #94a3b8); }
+    /* Body copy sits at --text-2 (9.46:1 on --surface-1 — AAA) so fine print
+       remains readable in low-light grow rooms. --text-3 is reserved for
+       compact metadata/labels; --text-4 is decorative-only and not used here. */
+    .fs-container .text-muted { color: var(--text-3, #94a3b8) !important; }
+    .fs-container p { color: var(--text-2, #cbd5e1); }
     .fs-container .section-title { color: var(--text-1, #f1f5f9) !important; }
 
     /* ---- Form controls ---- */
@@ -337,9 +340,12 @@
       font-size: var(--font-size-sm, 0.8125rem);
       font-weight: 600;
     }
+    /* <details> bodies often nest inside --surface-2 panels; using --surface-3
+       here stacks three translucent layers and washes the text out in dark
+       grow rooms. Solid --surface-1 + --border-strong restores contrast. */
     .fs-container details > div {
-      background: var(--surface-3, rgba(15, 23, 42, 0.6)) !important;
-      border: 1px solid var(--border-subtle, rgba(148, 163, 184, 0.12)) !important;
+      background: var(--surface-1, #1e293b) !important;
+      border: 1px solid var(--border-strong, rgba(148, 163, 184, 0.24)) !important;
       border-radius: var(--radius-sm, 8px) !important;
     }
 

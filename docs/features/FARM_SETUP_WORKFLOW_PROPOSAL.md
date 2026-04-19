@@ -9,11 +9,26 @@ recommend where light / IoT / controller assignments should live.
 > **Architecture note.** This proposal assumes the established 100%-cloud
 > architecture (see `CONTRIBUTING.md` and `.github/copilot-instructions.md`):
 > Light Engine and GreenReach Central run on Google Cloud Run; there is no
-> Raspberry Pi, no on-premise edge server, and no local orchestrator. All
-> "controllers" referenced below are **vendor cloud APIs** (SwitchBot Cloud,
-> Kasa cloud, Code3 cloud, etc.) or cloud-managed gateway devices whose
-> logic lives in the cloud service — never an edge PLC running local
-> automation.
+> Raspberry Pi, no on-premise edge server, and no local orchestrator running
+> automation logic. All control logic lives in the cloud service.
+>
+> The platform does still reach **physical hardware** in two distinct ways,
+> and both belong in this proposal:
+>
+> 1. **Vendor cloud APIs / cloud-managed hubs** — SwitchBot Cloud, Kasa
+>    cloud, Code3 cloud, DMX registrations, etc. The cloud service calls the
+>    vendor's cloud; the vendor's cloud talks to the device.
+> 2. **Direct wired / LAN-addressable controllers** — GROW3 fixtures,
+>    DMX512/Art-Net bridges, and wired bus channels (I2C / SPI / 1-Wire /
+>    UART) that the cloud service probes and drives directly.
+>    `lib/device-discovery.js` implements `tryGrow3()` (HTTP on port 80) and
+>    `tryDMX()` (Art-Net on port 6038); `greenreach-central/routes/assistant-chat.js`
+>    exposes `scan_bus_channels` and `save_bus_mapping` tools for wired
+>    onboarding. These are real, shipping surfaces — not edge compute.
+>
+> "Controller" in this doc therefore means either a vendor-cloud endpoint
+> **or** a directly-addressable wired/LAN device that the cloud service
+> owns end-to-end — never an on-premise orchestrator or edge PLC.
 
 ---
 
@@ -81,10 +96,19 @@ Notable:
 
 `docs/features/VERTICAL_FARM_CALCULATOR_SPEC.md` encodes the exact
 calculations you described — PPFD → kWh, transpiration g/day → BTU/hour →
-cooling tons, pump W per 10k plants, reservoir gallons. It currently lives
-inside the **Grant Wizard** (`greenreach-central/routes/grant-wizard.js`),
-not the setup flow. These formulas are the natural engine for a
-"build the farm" step.
+cooling tons, pump W per 10k plants, reservoir gallons.
+
+**Important:** the spec is currently **unimplemented**. A grep across the
+repo for the relevant formula keywords (`heatLoad`, `transpiration`,
+`BTU`, `cooling ton`, `dehum sizing`, `PPFD → kWh`, `reservoir`, etc.)
+returns zero matches in `greenreach-central/routes/grant-wizard.js` or
+any other runtime file. The Grant Wizard is a grant-program enrollment
+flow (intake_status / eligibility_rules / deadline_tracking); it does
+**not** run these load-math formulas. The only other references live in
+`docs/features/GRANT_WIZARD_INTELLIGENCE_ROADMAP.md` (another roadmap
+document). So the formulas are specced but not wired anywhere today,
+which means the "build the farm" step would be implementing them for the
+first time — not lifting a working implementation from the Grant Wizard.
 
 ### 1e. What's missing / loosely modelled
 
@@ -139,13 +163,18 @@ as a **room build plan** (a reservation / bill of materials).
 Now bind real hardware into the slots Phase A reserved.
 
 ```
-6. Device discovery         pull inventory from the vendor cloud APIs
-                            (SwitchBot Cloud, Kasa cloud, Code3 cloud,
-                            DMX registrations) and any legacy mDNS
-                            helpers that surface to the cloud. Matched
-                            to reserved slots by category + channel
-                            count. Unmatched devices become ad-hoc
-                            additions.
+6. Device discovery         run both discovery channels the cloud service
+                            already owns:
+                              • Vendor cloud APIs (SwitchBot Cloud, Kasa
+                                cloud, Code3 cloud, DMX registrations)
+                              • Direct LAN / wired probes via
+                                `lib/device-discovery.js` (GROW3 on port 80,
+                                DMX512/Art-Net on 6038) and
+                                `scan_bus_channels` (I2C/SPI/1-Wire/UART)
+                                in `assistant-chat.js`
+                            Discovered devices are matched to reserved
+                            slots by category + channel count. Unmatched
+                            devices become ad-hoc additions.
 7. Zones                    auto-suggested from the template geometry
                             (per rack row / per tier / per bench), or
                             manually drawn. Zone sensors attach here.
@@ -165,8 +194,9 @@ Now bind real hardware into the slots Phase A reserved.
   room size. Template + quantity + room size is the smallest input set that
   unlocks everything.
 - **Phase B keeps identity discovery late.** Users should never type MAC
-  addresses or DMX universes into a wizard; the cloud vendor-API pull
-  does it for them and slots the result into the reservation.
+  addresses or DMX universes into a wizard; the cloud-owned discovery
+  surfaces (vendor APIs + direct GROW3/DMX/bus-channel probes) do it for
+  them and slot the result into the reservation.
 - **The top-down FK chain is preserved** — Room rows still exist before
   Zone rows, groups still live under zones. You are only changing
   *when the equipment decisions happen relative to the hierarchy*, not the
@@ -182,7 +212,7 @@ Now bind real hardware into the slots Phase A reserved.
 | Concern | Data home | Why |
 |---|---|---|
 | Footprint, tier count, trays/tier, irrigation type (NFT/DWC/aero/flood), pump sizing curve, transpiration g/plant/day, default fixture **class** (PPFD/DLI), default controller **class** (DMX-4 / 0-10V / Modbus / smart-plug), required channel counts | **`public/data/grow-systems.json` (new registry)** | These are design-time invariants of the physical growing apparatus. They drive load math. They do **not** hold device identities. |
-| Dimensions, ceiling, envelope class, installed `systems[]` (templateId × quantity × position), **room build plan** (computed load + accepted equipment list + reserved controller slots), room-level cloud gateway (SwitchBot hub / Kasa account / Code3 gateway / DMX universe), electrical panel | **`rooms.json` (extend schema)** | Everything that depends on the *room as a whole* — HVAC sizing, dehum sizing, supply fans, panel load, the vendor-cloud gateway the room's devices report through — belongs here, not on the template. All control logic stays in the cloud service; "gateway" here means the vendor-managed hub/account a physical device reports through, not an edge compute node. |
+| Dimensions, ceiling, envelope class, installed `systems[]` (templateId × quantity × position), **room build plan** (computed load + accepted equipment list + reserved controller slots), room-level controller anchor (SwitchBot hub / Kasa account / Code3 gateway / DMX universe / wired bus segment), electrical panel | **`rooms.json` (extend schema)** | Everything that depends on the *room as a whole* — HVAC sizing, dehum sizing, supply fans, panel load, the hub/account/bus segment the room's devices are reached through — belongs here, not on the template. All control logic stays in the cloud service; "controller anchor" here means the vendor-managed hub/account **or** the directly-addressable wired/LAN segment the cloud talks to, not an on-premise orchestrator. |
 | Climate envelope boundary, zone sensor(s), zone-level overrides (sub-controller, extra fans), recipe-derived env targets | **zones** (already in `groups.zone` / `rooms.zones[]` / `target_ranges.zones`) | Zones are the finest-grained climate control boundary. This is already where recipe targets resolve. |
 | Light fixture binding, light schedule, crop + recipe assignment, group-level controller channel map | **groups** (`groups.json` + `groups-v2`) | Group is where "which crop, which recipe, which fixtures, which channels" converges. The setup agent already reads `g.lights` for the `lights` phase — keep it here. |
 | Tray format, seed date, QR, planted site count, tray placement | **tray_runs + tray_placements** (already defined in `RECIPE_BASED_ENVIRONMENTAL_CONTROL.md`) | Unchanged. |

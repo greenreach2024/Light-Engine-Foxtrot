@@ -88,6 +88,27 @@ function getPostLoginRedirectPath() {
     return safePath;
 }
 
+function hasExplicitAdminReturnPath() {
+    const params = new URLSearchParams(window.location.search);
+    if (!params.has('return')) return false;
+
+    const redirectPath = getPostLoginRedirectPath();
+    return redirectPath !== '/LE-farm-admin.html' || redirectPath.includes('#');
+}
+
+function getSetupWizardRedirectPath({ passwordOnly = false } = {}) {
+    const params = new URLSearchParams();
+    if (passwordOnly) {
+        params.set('passwordOnly', 'true');
+    }
+
+    if (hasExplicitAdminReturnPath()) {
+        params.set('return', getPostLoginRedirectPath());
+    }
+
+    const query = params.toString();
+    return query ? `/setup-wizard.html?${query}` : '/setup-wizard.html';
+}
 /**
  * Initialize on page load
  */
@@ -384,10 +405,12 @@ async function handleLogin(e) {
             setTimeout(() => {
                 if (needsFullSetup) {
                     // Full wizard: password change + farm profile + rooms
-                    window.location.href = '/setup-wizard.html';
+                    window.location.href = getSetupWizardRedirectPath();
                 } else if (needsPasswordChange) {
                     // Already set up but must change password (e.g. admin reset)
-                    window.location.href = '/setup-wizard.html?passwordOnly=true';
+                    window.location.href = getSetupWizardRedirectPath({ passwordOnly: true });
+                } else if (hasExplicitAdminReturnPath()) {
+                    window.location.href = getPostLoginRedirectPath();
                 } else {
                     window.location.href = getPostLoginRedirectPath();
                 }
@@ -6785,7 +6808,7 @@ async function checkFirstTimeSetup() {
                 return;
             }
             console.log('[setup-wizard] Setup not complete, redirecting to wizard');
-            window.location.href = '/setup-wizard.html';
+            window.location.href = getSetupWizardRedirectPath();
             return;
         }
         
