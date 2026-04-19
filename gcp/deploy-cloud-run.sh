@@ -168,7 +168,7 @@ SMTP_PORT=465,\
 SMTP_USER=noreply@greenreachgreens.com,\
 FROM_EMAIL=noreply@greenreachgreens.com,\
 WHOLESALE_COMMISSION_RATE=0.12,\
-WHOLESALE_DEFAULT_SKU_FACTOR=0.65,\
+WHOLESALE_DEFAULT_SKU_FACTOR=0.75,\
 WHOLESALE_DELIVERY_ENABLED=true" \
   --set-secrets="${CENTRAL_SECRETS_FLAG}" \
   --allow-unauthenticated

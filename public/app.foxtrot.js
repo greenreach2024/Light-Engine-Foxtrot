@@ -2145,9 +2145,9 @@ function buildInfoGrid(entries, options = {}) {
   const columns = options.columns || 2;
   const grid = document.createElement('div');
   grid.style.cssText = `margin-top:${options.compact ? '6px' : '10px'};display:grid;grid-template-columns:repeat(${columns}, minmax(0, 1fr));gap:${options.compact ? '6px' : '10px'};`; 
-  const cellStyle = options.cellStyle || 'background:#f1f5f9;border:1px solid #e2e8f0;border-radius:6px;padding:8px;display:flex;flex-direction:column;gap:2px;';
-  const labelStyle = options.labelStyle || 'font-size:10px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;color:#475569;';
-  const valueStyle = options.valueStyle || 'font-size:12px;color:#0f172a;font-weight:500;word-break:break-word;';
+  const cellStyle = options.cellStyle || 'background:var(--surface-2, #f1f5f9);border:1px solid var(--border-subtle, #e2e8f0);border-radius:6px;padding:8px;display:flex;flex-direction:column;gap:2px;';
+  const labelStyle = options.labelStyle || 'font-size:10px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;color:var(--text-3, #475569);';
+  const valueStyle = options.valueStyle || 'font-size:12px;color:var(--text-1, #0f172a);font-weight:500;word-break:break-word;';
   items.forEach(entry => {
     const cell = document.createElement('div');
     cell.style.cssText = cellStyle;
@@ -2468,15 +2468,15 @@ function buildSwitchbotSnapshot(device) {
   const grid = buildInfoGrid(entries, {
     columns: isPlug ? 3 : (entries.length > 2 ? 3 : 2),
     compact: true,
-    cellStyle: 'background:#ffffff;border:1px solid #cbd5e1;border-radius:8px;padding:8px;display:flex;flex-direction:column;gap:2px;box-shadow:inset 0 1px 0 rgba(255,255,255,0.7);',
-    labelStyle: 'font-size:10px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:#64748b;',
-    valueStyle: 'font-size:12px;color:#0f172a;font-weight:600;word-break:break-word;'
+    cellStyle: 'background:var(--surface-2, #ffffff);border:1px solid var(--border-subtle, #cbd5e1);border-radius:8px;padding:8px;display:flex;flex-direction:column;gap:2px;box-shadow:var(--elevation-1, inset 0 1px 0 rgba(255,255,255,0.7));',
+    labelStyle: 'font-size:10px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:var(--text-3, #64748b);',
+    valueStyle: 'font-size:12px;color:var(--text-1, #0f172a);font-weight:600;word-break:break-word;'
   });
   if (!grid) return null;
   const wrapper = document.createElement('div');
   wrapper.style.cssText = 'margin-top:8px;display:flex;flex-direction:column;gap:6px;';
   const heading = document.createElement('span');
-  heading.style.cssText = 'font-size:10px;font-weight:700;color:#166534;letter-spacing:0.04em;text-transform:uppercase;';
+  heading.style.cssText = 'font-size:10px;font-weight:700;color:var(--accent-green, #166534);letter-spacing:0.04em;text-transform:uppercase;';
   heading.textContent = 'SwitchBot Snapshot';
   wrapper.appendChild(heading);
   wrapper.appendChild(grid);
@@ -2613,22 +2613,24 @@ function createDeviceEntryElement(device) {
   // Get device category for styling
   const deviceCategory = getDeviceCategory(device);
   
-  // Category-specific colors
+  // Category-specific colors. Using CSS custom props with light-palette fallbacks so
+  // LE dark pages (body.le-theme loads le-foundation.css) resolve to bright-on-dark,
+  // non-LE pages fall back to the original dark-on-light foxtrot palette.
   const categoryColors = {
-    'sensor': { bg: '#ffffff', border: '#4ade80', accent: '#166534', icon: '' },
-    'plug': { bg: '#ffffff', border: '#f59e0b', accent: '#92400e', icon: '🔌' },
-    'controller': { bg: '#ffffff', border: '#818cf8', accent: '#3730a3', icon: '🎛' },
-    'device': { bg: '#ffffff', border: '#cbd5e1', accent: '#334155', icon: '📱' }
+    'sensor': { bg: 'var(--surface-1, #ffffff)', border: 'var(--accent-green, #4ade80)', accent: 'var(--accent-green, #166534)', icon: '' },
+    'plug': { bg: 'var(--surface-1, #ffffff)', border: 'var(--accent-amber, #f59e0b)', accent: 'var(--accent-amber, #92400e)', icon: '🔌' },
+    'controller': { bg: 'var(--surface-1, #ffffff)', border: 'var(--accent-indigo, #818cf8)', accent: 'var(--accent-indigo, #3730a3)', icon: '🎛' },
+    'device': { bg: 'var(--surface-1, #ffffff)', border: 'var(--border-strong, #cbd5e1)', accent: 'var(--text-2, #334155)', icon: '📱' }
   };
   
   const colors = categoryColors[deviceCategory] || categoryColors['device'];
-  entry.style.cssText = `background:${colors.bg};border:1px solid ${colors.border};border-left:4px solid ${colors.border};border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:10px;min-height:200px;max-width:100%;box-sizing:border-box;box-shadow:0 8px 24px rgba(15,23,42,0.08);`;
+  entry.style.cssText = `background:${colors.bg};border:1px solid ${colors.border};border-left:4px solid ${colors.border};border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:10px;min-height:200px;max-width:100%;box-sizing:border-box;box-shadow:var(--elevation-2, 0 8px 24px rgba(15,23,42,0.08));`;
 
   const info = document.createElement('div');
   info.style.cssText = 'flex:1;min-width:0;';
 
   const name = document.createElement('div');
-  name.style.cssText = `font-weight:700;color:${colors.accent || '#0f172a'};margin-bottom:4px;font-size:14px;display:flex;align-items:center;gap:6px;`;
+  name.style.cssText = `font-weight:700;color:${colors.accent || 'var(--text-1, #0f172a)'};margin-bottom:4px;font-size:14px;display:flex;align-items:center;gap:6px;`;
   
   // Add category icon
   const categoryIcon = document.createElement('span');
@@ -2643,15 +2645,15 @@ function createDeviceEntryElement(device) {
   info.appendChild(name);
 
   const subline = document.createElement('div');
-  subline.style.cssText = 'font-size:10px;color:#475569;display:flex;flex-wrap:wrap;gap:6px;align-items:center;';
+  subline.style.cssText = 'font-size:10px;color:var(--text-3, #475569);display:flex;flex-wrap:wrap;gap:6px;align-items:center;';
 
   // Add category badge
   const categoryBadge = document.createElement('span');
   const categoryBadgeColors = {
-    'sensor': { bg: '#dcfce7', color: '#166534' },
-    'plug': { bg: '#fef3c7', color: '#92400e' },
-    'controller': { bg: '#e0e7ff', color: '#3730a3' },
-    'device': { bg: '#e2e8f0', color: '#334155' }
+    'sensor': { bg: 'var(--accent-green-soft, #dcfce7)', color: 'var(--accent-green, #166534)' },
+    'plug': { bg: 'var(--accent-amber-soft, #fef3c7)', color: 'var(--accent-amber, #92400e)' },
+    'controller': { bg: 'var(--accent-purple-soft, #e0e7ff)', color: 'var(--accent-indigo, #3730a3)' },
+    'device': { bg: 'var(--surface-3, #e2e8f0)', color: 'var(--text-2, #334155)' }
   };
   const catColors = categoryBadgeColors[deviceCategory] || categoryBadgeColors['device'];
   categoryBadge.style.cssText = `background:${catColors.bg};color:${catColors.color};padding:2px 6px;border-radius:999px;font-weight:600;letter-spacing:0.03em;text-transform:uppercase;`;
@@ -2659,13 +2661,13 @@ function createDeviceEntryElement(device) {
   subline.appendChild(categoryBadge);
 
   const protocolBadge = document.createElement('span');
-  protocolBadge.style.cssText = 'background:#e0e7ff;color:#1d4ed8;padding:2px 6px;border-radius:999px;font-weight:600;letter-spacing:0.03em;text-transform:uppercase;';
+  protocolBadge.style.cssText = 'background:var(--accent-blue-soft, #e0e7ff);color:var(--accent-blue, #1d4ed8);padding:2px 6px;border-radius:999px;font-weight:600;letter-spacing:0.03em;text-transform:uppercase;';
   protocolBadge.textContent = device.protocol || 'unknown';
   subline.appendChild(protocolBadge);
 
   if (device.type && device.type !== device.protocol) {
     const typeBadge = document.createElement('span');
-  typeBadge.style.cssText = 'background:#e2e8f0;color:#1f2937;padding:2px 6px;border-radius:999px;font-weight:500;text-transform:uppercase;letter-spacing:0.03em;';
+  typeBadge.style.cssText = 'background:var(--surface-3, #e2e8f0);color:var(--text-1, #1f2937);padding:2px 6px;border-radius:999px;font-weight:500;text-transform:uppercase;letter-spacing:0.03em;';
     typeBadge.textContent = device.type;
     subline.appendChild(typeBadge);
   }
@@ -2677,9 +2679,9 @@ function createDeviceEntryElement(device) {
   const powerStateValue = getDevicePowerState(device);
   if (powerStateValue) {
     const stateChip = document.createElement('span');
-    stateChip.style.cssText = `display:inline-flex;align-items:center;gap:4px;margin-top:6px;font-size:11px;font-weight:600;color:${powerStateValue === 'on' ? '#047857' : '#b91c1c'};`;
+    stateChip.style.cssText = `display:inline-flex;align-items:center;gap:4px;margin-top:6px;font-size:11px;font-weight:600;color:${powerStateValue === 'on' ? 'var(--accent-green, #047857)' : 'var(--accent-red, #b91c1c)'};`;
     const dot = document.createElement('span');
-    dot.style.cssText = `display:inline-block;width:8px;height:8px;border-radius:50%;background:${powerStateValue === 'on' ? '#22c55e' : '#f87171'};`;
+    dot.style.cssText = `display:inline-block;width:8px;height:8px;border-radius:50%;background:${powerStateValue === 'on' ? 'var(--accent-green, #22c55e)' : 'var(--accent-red, #f87171)'};`;
     stateChip.appendChild(dot);
     const label = document.createElement('span');
     label.textContent = `Power ${powerStateValue.toUpperCase()}`;
@@ -2707,17 +2709,17 @@ function createDeviceEntryElement(device) {
   // Add zone assignment dropdown for SwitchBot sensors (all sensor types, not just WoIOSensor)
   if (isSwitchbotSensor) {
     const zoneSection = document.createElement('div');
-    zoneSection.style.cssText = 'margin-top:10px;padding:8px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:6px;';
+    zoneSection.style.cssText = 'margin-top:10px;padding:8px;background:var(--surface-2, #f0f9ff);border:1px solid var(--border-subtle, #bae6fd);border-radius:6px;';
     
     const zoneLabel = document.createElement('label');
-    zoneLabel.style.cssText = 'display:flex;align-items:center;gap:8px;font-size:12px;color:#0c4a6e;font-weight:600;';
+    zoneLabel.style.cssText = 'display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-1, #0c4a6e);font-weight:600;';
     
     const labelText = document.createElement('span');
     labelText.textContent = 'Zone:';
     zoneLabel.appendChild(labelText);
     
     const zoneSelect = document.createElement('select');
-    zoneSelect.style.cssText = 'padding:4px 8px;border:1px solid #0ea5e9;border-radius:4px;background:white;color:#0f172a;font-size:12px;font-weight:500;cursor:pointer;';
+    zoneSelect.style.cssText = 'padding:4px 8px;border:1px solid var(--border-subtle, #0ea5e9);border-radius:4px;background:var(--surface-3, white);color:var(--text-1, #0f172a);font-size:12px;font-weight:500;cursor:pointer;';
     zoneSelect.dataset.deviceId = device.id;
     
     // Add unassigned option
@@ -2859,15 +2861,15 @@ function createDeviceEntryElement(device) {
     
     // Add automation control toggle
     const automationRow = document.createElement('div');
-    automationRow.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-top:8px;padding-top:8px;border-top:1px solid #bae6fd;';
+    automationRow.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-top:8px;padding-top:8px;border-top:1px solid var(--border-subtle, #bae6fd);';
     
     const automationLabel = document.createElement('label');
-    automationLabel.style.cssText = 'display:flex;align-items:center;gap:8px;font-size:12px;color:#0c4a6e;font-weight:600;cursor:pointer;flex:1;';
+    automationLabel.style.cssText = 'display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-1, #0c4a6e);font-weight:600;cursor:pointer;flex:1;';
     
     const automationCheckbox = document.createElement('input');
     automationCheckbox.type = 'checkbox';
     automationCheckbox.checked = device.automationControl === true;
-    automationCheckbox.style.cssText = 'width:16px;height:16px;cursor:pointer;accent-color:#0ea5e9;';
+    automationCheckbox.style.cssText = 'width:16px;height:16px;cursor:pointer;accent-color:var(--accent-blue, #0ea5e9);';
     automationCheckbox.dataset.deviceId = device.id;
     
     automationCheckbox.addEventListener('change', (e) => {
@@ -2882,7 +2884,7 @@ function createDeviceEntryElement(device) {
     
     // Add status badge
     const statusBadge = document.createElement('span');
-    statusBadge.style.cssText = `padding:2px 8px;border-radius:12px;font-size:10px;font-weight:600;${device.automationControl ? 'background:#dcfce7;color:#166534;' : 'background:#f3f4f6;color:#6b7280;'}`;
+    statusBadge.style.cssText = `padding:2px 8px;border-radius:12px;font-size:10px;font-weight:600;${device.automationControl ? 'background:var(--accent-green-soft, #dcfce7);color:var(--accent-green, #166534);' : 'background:var(--surface-3, #f3f4f6);color:var(--text-3, #6b7280);'}`;
     statusBadge.textContent = device.automationControl ? 'Active' : 'Monitor Only';
     
     automationRow.appendChild(automationLabel);
@@ -2901,7 +2903,7 @@ function createDeviceEntryElement(device) {
       info.appendChild(telemetrySection);
     } else {
       const placeholder = document.createElement('div');
-      placeholder.style.cssText = 'margin-top:10px;font-size:11px;color:#94a3b8;';
+      placeholder.style.cssText = 'margin-top:10px;font-size:11px;color:var(--text-3, #94a3b8);';
       placeholder.textContent = 'No telemetry reported yet.';
       info.appendChild(placeholder);
     }
@@ -2911,10 +2913,10 @@ function createDeviceEntryElement(device) {
   const controlledEquipment = getAllEquipment().filter(eq => eq.control === `IoT:${device.deviceId || device.id}`);
   if (controlledEquipment.length > 0) {
     const controlSection = document.createElement('div');
-    controlSection.style.cssText = 'margin-top:10px;padding:8px;background:#f1f5f9;border-radius:6px;border-left:3px solid #3b82f6;';
+    controlSection.style.cssText = 'margin-top:10px;padding:8px;background:var(--surface-2, #f1f5f9);border-radius:6px;border-left:3px solid var(--accent-blue, #3b82f6);';
     
     const controlHeader = document.createElement('div');
-    controlHeader.style.cssText = 'font-size:11px;font-weight:600;color:#1e40af;margin-bottom:6px;';
+    controlHeader.style.cssText = 'font-size:11px;font-weight:600;color:var(--accent-blue, #1e40af);margin-bottom:6px;';
     controlHeader.textContent = `Controls ${controlledEquipment.length} Equipment:`;
     controlSection.appendChild(controlHeader);
     
@@ -2923,11 +2925,11 @@ function createDeviceEntryElement(device) {
     
     controlledEquipment.forEach(eq => {
       const equipItem = document.createElement('div');
-      equipItem.style.cssText = 'font-size:11px;color:#475569;display:flex;align-items:center;gap:6px;';
+      equipItem.style.cssText = 'font-size:11px;color:var(--text-3, #475569);display:flex;align-items:center;gap:6px;';
       equipItem.innerHTML = `
-        <span style="width:6px;height:6px;background:#3b82f6;border-radius:50%;"></span>
+        <span style="width:6px;height:6px;background:var(--accent-blue, #3b82f6);border-radius:50%;"></span>
         <span style="font-weight:500;">${escapeHtml(eq.name || eq.category || 'Equipment')}</span>
-        ${eq.roomName ? `<span style="color:#94a3b8;">in ${escapeHtml(eq.roomName)}</span>` : ''}
+        ${eq.roomName ? `<span style="color:var(--text-4, #94a3b8);">in ${escapeHtml(eq.roomName)}</span>` : ''}
       `;
       equipList.appendChild(equipItem);
     });
@@ -2988,7 +2990,7 @@ function createDeviceEntryElement(device) {
   const trustValue = String(device.trust || '').toLowerCase();
   if (trustValue && trustValue !== 'unknown') {
     const trustBadge = document.createElement('span');
-    trustBadge.style.cssText = 'font-size:10px;font-weight:600;text-transform:uppercase;color:#475569;';
+    trustBadge.style.cssText = 'font-size:10px;font-weight:600;text-transform:uppercase;color:var(--text-3, #475569);';
     trustBadge.textContent = `Trust: ${trustValue}`;
     actions.appendChild(trustBadge);
   }
@@ -3011,7 +3013,7 @@ function renderIoTDeviceCards(devices) {
       iotPanelBody.appendChild(list);
       console.warn('[renderIoTDeviceCards] Created missing iotDevicesList container dynamically');
     } else {
-      console.error('[renderIoTDeviceCards] IoT panel body not found; cannot render devices');
+      console.info('[renderIoTDeviceCards] IoT panel body not present on this page; skipping device card render');
       return;
     }
   }
@@ -19710,7 +19712,7 @@ class FreshLightWizard {
       this.setupEventListeners();
       console.log('[FreshLightWizard] Fresh wizard initialized successfully');
     } else {
-      console.error('[FreshLightWizard] Could not find freshLightModal element!');
+      console.info('[FreshLightWizard] freshLightModal not present on this page; skipping wizard init');
     }
   }
 
@@ -19738,7 +19740,7 @@ class FreshLightWizard {
     });
     
     if (!roomSelect) {
-      console.error('[FreshLightWizard] Missing freshRoomSelect element! Cannot setup room dropdown.');
+      console.info('[FreshLightWizard] freshRoomSelect not present on this page; skipping room dropdown setup');
       return;
     }
 
@@ -21640,12 +21642,19 @@ function setActivePanel(panelId = 'overview') {
 }
 
 function initializeSidebarNavigation() {
+  const sidebarLinks = document.querySelectorAll('[data-sidebar-link]');
+  const sidebarGroups = document.querySelectorAll('.sidebar-group');
+  if (!sidebarLinks.length && !sidebarGroups.length) {
+    console.info('[Sidebar] No sidebar navigation found; skipping dashboard panel initialization');
+    return;
+  }
+
   // Guard to prevent duplicate initialization and event handler attachment
   if (window.__sidebarNavInitialized) return;
   window.__sidebarNavInitialized = true;
   ensureFieldMappingLink();
   console.log('[DEBUG] initializeSidebarNavigation called');
-  document.querySelectorAll('.sidebar-group').forEach((group) => {
+  sidebarGroups.forEach((group) => {
     const trigger = group.querySelector('.sidebar-group__trigger');
     const items = group.querySelector('.sidebar-group__items');
     if (items) items.hidden = true;
@@ -21664,7 +21673,7 @@ function initializeSidebarNavigation() {
     });
   });
 
-  document.querySelectorAll('[data-sidebar-link]').forEach((link) => {
+  sidebarLinks.forEach((link) => {
     link.addEventListener('click', () => {
       const target = link.getAttribute('data-target') || 'overview';
       if (target === 'overview') {

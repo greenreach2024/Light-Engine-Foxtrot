@@ -7,6 +7,7 @@ import mqtt from 'mqtt';
 import fs from 'node:fs';
 import path from 'node:path';
 import { EventEmitter } from 'node:events';
+import { resolveRuntimeStatePath, scheduleRuntimeJsonMirror } from '../lib/runtime-state.js';
 
 const MAX_HISTORY = 200;
 const MAX_DOSING_HISTORY = 100;
@@ -42,10 +43,11 @@ const ACK_TOPICS = [
 ];
 
 class NutrientStore extends EventEmitter {
-  constructor({ dataDir, fileName = 'nutrient-store.json' } = {}) {
+  constructor({ dataDir, fileName = 'nutrient-store.json', storageRelativePath } = {}) {
     super();
-    this.dataDir = dataDir || path.join(process.cwd(), 'public', 'data', 'automation');
-    this.filePath = path.join(this.dataDir, fileName);
+    this.storageRelativePath = storageRelativePath || `public/data/automation/${fileName}`;
+    this.filePath = resolveRuntimeStatePath(this.storageRelativePath);
+    this.dataDir = dataDir || path.dirname(this.filePath);
     this.state = {
       tanks: {},
       dosingHistory: [],
@@ -100,6 +102,7 @@ class NutrientStore extends EventEmitter {
       await fs.promises.mkdir(this.dataDir, { recursive: true });
       const json = JSON.stringify(this.state, null, 2);
       await fs.promises.writeFile(this.filePath, json, 'utf8');
+      scheduleRuntimeJsonMirror(this.storageRelativePath, this.state, { delayMs: 0 });
     } catch (err) {
       console.warn('[nutrient-store] Persist failed:', err?.message);
     }

@@ -116,8 +116,9 @@
     .empty-state h3 { font-size: 1.5rem; margin-bottom: 1rem; color: var(--text-c); }
     @media print { body { background: white; color: #000; } header, .stats-bar, .filter-tabs, .action-buttons, .notes-actions, .toast { display: none !important; } .order-card { border-color: #ccc; break-inside: avoid; } }
   </style>
+<link rel="stylesheet" href="/styles/le-foundation.css">
 </head>
-<body>
+<body class="le-theme">
   <header>
     <h1>Wholesale Orders Dashboard</h1>
     <p>Review, respond to, and manage wholesale orders</p>
@@ -435,6 +436,8 @@
           if (data.ok) {
             self.showToast('Order accepted', 'success');
             self.updateCardStatus(subOrderId, 'farm_accepted');
+            // Re-fetch from server after short delay to confirm persistence
+            setTimeout(function() { self.loadOrders(); }, 1500);
           } else { throw new Error(data.error || 'Failed to accept order'); }
         }).catch(function(err) {
           console.error('Accept error:', err);

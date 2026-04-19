@@ -11,6 +11,7 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { scanAllZones, getZoneStatus, getOutOfTargetConditions } from '../lib/broad-health-monitor.js';
 import { calculateFarmHealthScore, getHealthScoreWithInsights } from '../lib/health-scorer.js';
+import { resolveRuntimeStatePath } from '../lib/runtime-state.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -983,7 +984,7 @@ router.get('/vitality', async (req, res) => {
     let nutrientScore = 0;
     let nutrientAgeMin = null;
     try {
-      const nutPath = join(__dirname, '..', 'data', 'nutrients-inventory.db');
+      const nutPath = resolveRuntimeStatePath('data/nutrients-inventory.db');
       const stat = await fs.stat(nutPath);
       nutrientAgeMin = Math.round((now - stat.mtimeMs) / 60000);
       nutrientScore = nutrientAgeMin <= 1440 ? 75 : 50;
@@ -1002,7 +1003,7 @@ router.get('/vitality', async (req, res) => {
     let opsScore = 0;
     let opsAgeMin = null;
     try {
-      const dhPath = join(__dirname, '..', 'data', 'device-health.db');
+      const dhPath = resolveRuntimeStatePath('data/device-health.db');
       const stat = await fs.stat(dhPath);
       opsAgeMin = Math.round((now - stat.mtimeMs) / 60000);
       opsScore = opsAgeMin <= 60 ? 85 : (opsAgeMin <= 1440 ? 65 : 40);

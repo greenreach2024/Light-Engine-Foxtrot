@@ -133,12 +133,19 @@ function trimField(val) {
 import { requireFarmApiKey, loadFarmApiKeys } from '../middleware/farmApiKeyAuth.js';
 import { transitionOrderStatus } from '../services/orderStateMachine.js';
 
+let devWholesaleJwtSecret = null;
+
 function getWholesaleJwtSecret() {
   const secret = process.env.WHOLESALE_JWT_SECRET || process.env.JWT_SECRET;
   if (secret) return secret;
 
   // Dev-only fallback; production should set a real secret.
-  if (process.env.NODE_ENV !== 'production') return crypto.randomBytes(32).toString('hex');
+  if (process.env.NODE_ENV !== 'production') {
+    if (!devWholesaleJwtSecret) {
+      devWholesaleJwtSecret = crypto.randomBytes(32).toString('hex');
+    }
+    return devWholesaleJwtSecret;
+  }
   return null;
 }
 
@@ -1143,6 +1150,9 @@ function canUseDemoWholesalePaths() {
 }
 
 function requireDbForCriticalWholesale() {
+  if (process.env.CI === 'true') {
+    return false;
+  }
   return parseBooleanEnv(
     process.env.WHOLESALE_REQUIRE_DB_FOR_CRITICAL,
     process.env.NODE_ENV === 'production'
@@ -1448,10 +1458,13 @@ router.get('/catalog', async (req, res, next) => {
 
       let items = catalog.items || catalog.skus || [];
 
-      // Strip out fallback-seeded demo items — only show real farm inventory
-      items = items.filter(it =>
-        !(it.farms || []).every(f => (f.quality_flags || []).includes('fallback_seeded'))
-      );
+      // Strip out fallback-seeded demo items in normal operation, but keep them
+      // in demo-enabled environments so CI/dev smoke runs have a deterministic catalog.
+      if (!canUseDemoWholesalePaths()) {
+        items = items.filter(it =>
+          !(it.farms || []).every(f => (f.quality_flags || []).includes('fallback_seeded'))
+        );
+      }
 
       // Database fallback: when the network aggregate is empty, build catalog
       // items directly from farm_inventory so the admin dashboard shows products

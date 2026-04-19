@@ -775,6 +775,7 @@ const _htmlDirs = [
 app.use((req, res, next) => {
   // Only intercept .html requests (skip API routes, data files, JS/CSS/images)
   const reqPath = req.path;
+  if (reqPath === '/LE-dashboard.html' || reqPath === '/farm-admin.html') return next();
   if (!reqPath.endsWith('.html')) return next();
 
   // Find the HTML file in our static directories
@@ -800,6 +801,18 @@ app.use((req, res, next) => {
     return;
   }
   next();
+});
+
+app.get('/LE-dashboard.html', (req, res) => {
+  const queryIndex = req.originalUrl.indexOf('?');
+  const queryString = queryIndex >= 0 ? req.originalUrl.slice(queryIndex) : '';
+  res.redirect(302, `/views/farm-setup.html${queryString}`);
+});
+
+app.get('/farm-admin.html', (req, res) => {
+  const queryIndex = req.originalUrl.indexOf('?');
+  const queryString = queryIndex >= 0 ? req.originalUrl.slice(queryIndex) : '';
+  res.redirect(302, `/LE-farm-admin.html${queryString}`);
 });
 
 // Static UI — non-HTML assets (JS, CSS, images, JSON, fonts)
@@ -3778,6 +3791,7 @@ app.use('/api/lots', authOrAdminMiddleware, lotSystemRoutes);
 // Guard only /api/research/* traffic here; avoid intercepting unrelated /api routes
 // such as /api/admin/auth/login before their dedicated routers run.
 const researchFeatureGate = requireResearchTier();
+const researchApiMount = /^\/api(?=\/research(?:\/|$))/;
 const researchAuthGuard = (req, res, next) => {
   if (req.path.startsWith('/research/')) {
     return authMiddleware(req, res, (authErr) => {
@@ -3788,26 +3802,26 @@ const researchAuthGuard = (req, res, next) => {
   return next();
 };
 
-app.use('/api', researchAuthGuard, researchStudiesRouter);
-app.use('/api', researchAuthGuard, researchDataRouter);
-app.use('/api', researchAuthGuard, researchExportsRouter);
-app.use('/api', researchAuthGuard, researchComplianceRouter);
-app.use('/api', researchAuthGuard, researchElnRouter);
-app.use('/api', researchAuthGuard, researchCollaborationRouter);
-app.use('/api', researchAuthGuard, researchRecipesRouter);
-app.use('/api', researchAuthGuard, researchAuditRouter);
-app.use('/api', researchAuthGuard, researchWorkspaceOpsRouter);
-app.use('/api', researchAuthGuard, researchGrantsRouter);
-app.use('/api', researchAuthGuard, researchEthicsRouter);
-app.use('/api', researchAuthGuard, researchHqpRouter);
-app.use('/api', researchAuthGuard, researchPartnersRouter);
-app.use('/api', researchAuthGuard, researchSecurityRouter);
-app.use('/api', researchAuthGuard, researchReportingRouter);
-app.use('/api', researchAuthGuard, researchDeadlinesRouter);
-app.use('/api', researchAuthGuard, researchPublicationsRouter);
-app.use('/api', researchAuthGuard, researchEquipmentRouter);
-app.use('/api', researchAuthGuard, researchLineageRouter);
-app.use('/api', researchAuthGuard, researchIntegrationsRouter); // Research integrations: ORCID, DataCite, OSF, protocols.io, instruments, workflows, Globus, governance, CFD
+app.use(researchApiMount, researchAuthGuard, researchStudiesRouter);
+app.use(researchApiMount, researchAuthGuard, researchDataRouter);
+app.use(researchApiMount, researchAuthGuard, researchExportsRouter);
+app.use(researchApiMount, researchAuthGuard, researchComplianceRouter);
+app.use(researchApiMount, researchAuthGuard, researchElnRouter);
+app.use(researchApiMount, researchAuthGuard, researchCollaborationRouter);
+app.use(researchApiMount, researchAuthGuard, researchRecipesRouter);
+app.use(researchApiMount, researchAuthGuard, researchAuditRouter);
+app.use(researchApiMount, researchAuthGuard, researchWorkspaceOpsRouter);
+app.use(researchApiMount, researchAuthGuard, researchGrantsRouter);
+app.use(researchApiMount, researchAuthGuard, researchEthicsRouter);
+app.use(researchApiMount, researchAuthGuard, researchHqpRouter);
+app.use(researchApiMount, researchAuthGuard, researchPartnersRouter);
+app.use(researchApiMount, researchAuthGuard, researchSecurityRouter);
+app.use(researchApiMount, researchAuthGuard, researchReportingRouter);
+app.use(researchApiMount, researchAuthGuard, researchDeadlinesRouter);
+app.use(researchApiMount, researchAuthGuard, researchPublicationsRouter);
+app.use(researchApiMount, researchAuthGuard, researchEquipmentRouter);
+app.use(researchApiMount, researchAuthGuard, researchLineageRouter);
+app.use(researchApiMount, researchAuthGuard, researchIntegrationsRouter); // Research integrations: ORCID, DataCite, OSF, protocols.io, instruments, workflows, Globus, governance, CFD
 app.use('/api/research/gwen', researchAuthGuard, gwenResearchRouter); // G.W.E.N. research intelligence agent
 app.use('/api/orders', authMiddleware, ordersRoutes);
 app.use('/api/alerts', authMiddleware, alertsRoutes);

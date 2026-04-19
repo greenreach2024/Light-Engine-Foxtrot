@@ -7,6 +7,7 @@ import express from 'express';
 import jwt from 'jsonwebtoken';
 import validator from 'validator';
 import bcrypt from 'bcryptjs';
+import { randomBytes } from 'crypto';
 
 const router = express.Router();
 const isProductionRuntime =

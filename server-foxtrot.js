@@ -103,6 +103,8 @@ import {
   resolveTankTargets as resolveRecipeNutrientTankTargets,
   diffTargets as diffNutrientTargets
 } from './automation/recipe-nutrient-targets.js';
+import { hydrateAutomationStorageCache } from './automation/utils/file-storage.js';
+import { hydrateRuntimeStateJson, resolveRuntimeStatePath } from './lib/runtime-state.js';
 
 // =====================================================
 // Controller Restriction Middleware
@@ -379,9 +381,30 @@ if (AUDIT_LOG_ENABLED) {
 // Initialize sync services (will be started after DB is ready)
 let syncService = null;
 let wholesaleService = null;
+const IS_CLOUD_RUN = Boolean(process.env.K_SERVICE);
+const DEFER_CLOUD_RUN_RUNTIME_STARTUP = IS_CLOUD_RUN && String(process.env.DEFER_CLOUD_RUN_RUNTIME_STARTUP || 'true').toLowerCase() !== 'false';
+let operationalServicesStarted = false;
+let operationalServicesStartPromise = null;
+const AUTOMATION_DATA_DIR = resolveRuntimeStatePath('data/automation');
+const PUBLIC_AUTOMATION_DATA_DIR = resolveRuntimeStatePath('public/data/automation');
+const DEFAULT_NUTRIENT_STORE_STATE = {
+  tanks: {},
+  dosingHistory: [],
+  calibrations: {},
+  alerts: [],
+  updatedAt: null
+};
+
+await Promise.all([
+  hydrateAutomationStorageCache(),
+  hydrateRuntimeStateJson('public/data/automation/nutrient-store.json', DEFAULT_NUTRIENT_STORE_STATE)
+]);
 
 // Nutrient MQTT subscriber and local store (Atlas dosing system)
-const nutrientStore = new NutrientStore({ dataDir: path.join(process.cwd(), 'public', 'data', 'automation') });
+const nutrientStore = new NutrientStore({
+  dataDir: PUBLIC_AUTOMATION_DATA_DIR,
+  storageRelativePath: 'public/data/automation/nutrient-store.json'
+});
 let nutrientSubscriber = null;
 
 // Metrics tracking for monitoring
@@ -711,6 +734,27 @@ async function writeJsonQueued(fullPath, jsonString) {
   return next;
 }
 
+// ─── Data-change event bus (SSE push channel) ────────────────────────────────
+// Used by the 3D viewer and any other UI that wants targeted refresh instead of
+// polling /data/*.json on a 30s timer. Each change to groups.json, room-map*.json,
+// or iot-devices.json is broadcast to all connected SSE clients as a small JSON
+// envelope: { kind, ids?, roomId?, updatedAt, source? }.
+const __dataEventClients = new Set(); // Set<{ id, res, lastPing }>
+let __dataEventSeq = 0;
+
+function emitDataChange(payload) {
+  if (!payload || typeof payload !== 'object') return;
+  const envelope = {
+    seq: ++__dataEventSeq,
+    ts: new Date().toISOString(),
+    ...payload,
+  };
+  const line = `event: data-change\ndata: ${JSON.stringify(envelope)}\n\n`;
+  for (const client of __dataEventClients) {
+    try { client.res.write(line); } catch (_) { /* dropped; will be cleaned up on next ping */ }
+  }
+}
+
 // In-memory caches for hot data paths
 let __envCache = null; // { zones: [...], updatedAt?: ISO }
 let __envWriteInFlight = false;
@@ -901,8 +945,12 @@ const UI_DATA_RESOURCES = new Map([
 const UI_EQUIP_PATH = path.join(PUBLIC_DIR, 'data', 'ui.equip.json');
 const UI_CTRLMAP_PATH = path.join(PUBLIC_DIR, 'data', 'ui.ctrlmap.json');
 // Device DB (outside public): ./data/devices.nedb
-const DB_DIR = path.resolve('./data');
+const DB_DIR = resolveRuntimeStatePath('data');
 const DB_PATH = path.join(DB_DIR, 'devices.nedb');
+
+function runtimeDbPath(fileName) {
+  return resolveRuntimeStatePath(`data/${fileName}`);
+}
 
 // Controller helpers: load persisted value if present; allow runtime updates
 function ensureDataDir() {
@@ -939,6 +987,304 @@ function seedRuntimeDataFiles() {
       }
     }
   }
+}
+
+function isOperationalStartupExemptPath(requestPath = '') {
+  return requestPath === '/health'
+    || requestPath === '/healthz'
+    || requestPath === '/api/health'
+    || requestPath === '/api/status'
+    || requestPath === '/api/version';
+}
+
+async function startOperationalServices(trigger = 'startup') {
+  console.log(`[startup] Starting operational services (trigger: ${trigger})`);
+
+  // Seed runtime data files that may not exist after a fresh deploy
+  seedRuntimeDataFiles();
+
+  // Validate license (Task #2 - License Validation)
+  try {
+    const licenseResult = await validateLicense();
+    if (licenseResult.valid) {
+      console.log(`[License] ✅ Valid license - Reason: ${licenseResult.reason}`);
+      if (licenseResult.license) {
+        console.log(`[License] Farm: ${licenseResult.license.farmId} (${licenseResult.license.tier})`);
+        console.log(`[License] Features: ${licenseResult.license.features?.join(', ') || 'all'}`);
+      }
+    } else {
+      console.error(`[License] ❌ License validation failed: ${licenseResult.reason}`);
+      console.error('[License] ⚠️  Some features may be restricted');
+    }
+  } catch (error) {
+    console.error('[License] ❌ License check error:', error.message);
+  }
+
+  // Initialize database (Task #3 - Database Persistence)
+  (async () => {
+    try {
+      const dbResult = await initDatabase();
+      console.log(`[Database] Mode: ${dbResult.mode}`);
+      if (dbResult.enabled) {
+        console.log('[Database] ✅ PostgreSQL ready for production');
+
+        // Initialize migration system with database pool
+        if (dbResult.pool) {
+          initMigrationDb(dbResult.pool);
+          console.log('[Migration] ✅ Cloud-to-edge migration system initialized');
+        }
+      }
+
+      // Start ML training worker (Phase 2 Bridge)
+      try {
+        const { startMLTrainingWorker } = await import('./lib/ml-training-pipeline.js');
+        await startMLTrainingWorker();
+        console.log('[ML Training] ✅ Background training worker started');
+      } catch (mlError) {
+        console.warn('[ML Training] Worker failed to start:', mlError.message);
+      }
+
+    } catch (error) {
+      console.error('[Database] ❌ Initialization error:', error.message);
+    }
+  })();
+
+  try { setupWeatherPolling(); } catch {}
+
+  // Initialize zone setpoints from room-map.json
+  try { initializeZoneSetpointsFromRoomMap(); } catch (error) {
+    console.warn('[setpoint-init] Failed:', error?.message || error);
+  }
+
+  // Sync zone assignments from room-map.json to iot-devices.json first
+  try { syncZoneAssignmentsFromRoomMap(); } catch (error) {
+    console.warn('[zone-sync] Failed:', error?.message || error);
+  }
+
+  // Start syncing live sensor data from iot-devices.json to env.json zones
+  try { setupLiveSensorSync(); } catch (error) {
+    console.warn('[sensor-sync] Failed to start:', error?.message || error);
+  }
+
+  // Start nutrient MQTT subscriber (Atlas dosing system)
+  try {
+    if (DEFAULT_NUTRIENT_MQTT_URL) {
+      nutrientSubscriber = new NutrientMqttSubscriber({
+        brokerUrl: DEFAULT_NUTRIENT_MQTT_URL,
+        store: nutrientStore,
+        scopeId: NUTRIENT_SCOPE_ID
+      });
+      nutrientSubscriber.start();
+      // Pipe telemetry from MQTT into env store for dashboard integration
+      nutrientStore.on('telemetry', ({ tankId, reading }) => {
+        pushTelemetryToEnvStore({
+          ph: reading.ph != null ? { value: reading.ph, unit: 'pH', observedAt: reading.observedAt } : null,
+          ec: reading.ec != null ? { value: reading.ec, unit: 'mS/cm', observedAt: reading.observedAt } : null,
+          temperature: reading.temperature != null ? { value: reading.temperature, unit: '\u00B0C', observedAt: reading.observedAt } : null
+        }, NUTRIENT_BACKEND_SCOPE);
+      });
+      console.log('[nutrient-mqtt] Atlas dosing subscriber started');
+    }
+  } catch (error) {
+    console.warn('[nutrient-mqtt] Failed to start:', error?.message || error);
+  }
+
+  // Start periodic order sync with Central (catches missed notifications)
+  try { startOrderSyncPolling(); } catch (error) {
+    console.warn('[order-sync] Failed to start:', error?.message || error);
+  }
+
+  // Initialize Schedule Executor for automated plan/schedule application
+  if (SCHEDULE_EXECUTOR_ENABLED) {
+    try {
+      // Load device registry
+      const registryPath = path.join(PUBLIC_DIR, 'data', 'device-registry.json');
+      let deviceRegistry = {
+        'F00001': 2,
+        'F00002': 3,
+        'F00003': 4,
+        'F00004': 6,
+        'F00005': 5
+      };
+
+      try {
+        const registryData = JSON.parse(fs.readFileSync(registryPath, 'utf8'));
+        if (registryData.devices) {
+          deviceRegistry = Object.entries(registryData.devices).reduce((acc, [id, device]) => {
+            acc[id] = device.controllerId;
+            return acc;
+          }, {});
+        }
+      } catch (error) {
+        console.warn('[ScheduleExecutor] Failed to load device-registry.json, using defaults:', error.message);
+      }
+
+      scheduleExecutor = new ScheduleExecutor({
+        interval: SCHEDULE_EXECUTOR_INTERVAL,
+        baseUrl: `http://127.0.0.1:${PORT}`,
+        grow3Target: getController(),
+        enabled: true,
+        deviceRegistry
+      });
+
+      scheduleExecutor.start();
+      console.log('[ScheduleExecutor] Started successfully');
+    } catch (error) {
+      console.error('[ScheduleExecutor] Failed to start:', error);
+    }
+  } else {
+    console.log('[ScheduleExecutor] Disabled (set SCHEDULE_EXECUTOR_ENABLED=true to enable)');
+  }
+
+  // Start Wholesale Reservation Cleanup Job
+  // Runs every hour to clean up expired reservations
+  try {
+    const CLEANUP_INTERVAL = 60 * 60 * 1000; // 1 hour
+    setInterval(() => {
+      const result = cleanupExpiredReservations();
+      if (result.cleaned > 0) {
+        console.log(`[Cleanup] Released ${result.cleaned} expired reservations, ${result.active} active`);
+      }
+    }, CLEANUP_INTERVAL);
+
+    // Run once on startup
+    cleanupExpiredReservations();
+    console.log('[Cleanup] ✓ Reservation cleanup job started (runs hourly)');
+  } catch (error) {
+    console.warn('[Cleanup] Failed to start reservation cleanup job:', error?.message || error);
+  }
+
+  // ── Sprint 0: ML Periodic Scheduling ──────────────────────────────────
+  // Runs anomaly detection + harvest prediction refresh periodically
+  try {
+    const ML_SCHEDULE_INTERVAL = parseInt(process.env.ML_SCHEDULE_INTERVAL || '900000', 10); // 15 min default
+    let mlScheduleInFlight = false;
+
+    async function runMLSchedule() {
+      if (mlScheduleInFlight) { console.log('[ML Schedule] Skipping — already in flight'); return; }
+      mlScheduleInFlight = true;
+      try {
+        // 1) Run anomaly detection
+        const { spawn } = await import('node:child_process');
+        const pyBin = process.env.PYTHON_BIN || 'python3';
+        const scriptPath = path.join(__dirname, 'scripts', 'simple-anomaly-detector.py');
+        const anomalyResult = await new Promise((resolve, reject) => {
+          const proc = spawn(pyBin, [scriptPath, '--json'], { stdio: ['ignore', 'pipe', 'pipe'], timeout: 30_000 });
+          let stdout = '', stderr = '';
+          proc.stdout.on('data', d => stdout += d);
+          proc.stderr.on('data', d => stderr += d);
+          proc.on('close', code => {
+            if (code !== 0) return reject(new Error(stderr.slice(0, 200)));
+            try { resolve(JSON.parse(stdout)); } catch { reject(new Error('Invalid JSON')); }
+          });
+          proc.on('error', reject);
+        });
+        if (anomalyResult.anomalies?.length) {
+          console.log(`[ML Schedule] Detected ${anomalyResult.anomalies.length} anomalies`);
+        }
+
+        // 2) Refresh harvest predictions
+        try {
+          const { HarvestPredictor } = await import('./lib/harvest-predictor.js');
+          const predictor = new HarvestPredictor({ dataDir: DATA_DIR });
+          await predictor.predictAll();
+          console.log('[ML Schedule] Harvest predictions refreshed');
+        } catch (e) {
+          console.warn('[ML Schedule] Harvest prediction refresh failed:', e.message);
+        }
+      } catch (err) {
+        console.warn('[ML Schedule] Error:', err.message);
+      } finally {
+        mlScheduleInFlight = false;
+      }
+    }
+
+    if (process.env.NODE_ENV !== 'test') {
+      const mlInitTimer = setTimeout(runMLSchedule, 60_000);
+      mlInitTimer.unref();
+      const mlPeriodicTimer = setInterval(runMLSchedule, ML_SCHEDULE_INTERVAL);
+      mlPeriodicTimer.unref();
+      console.log(`[ML Schedule] Periodic ML scheduling enabled (interval: ${ML_SCHEDULE_INTERVAL / 1000}s)`);
+    }
+  } catch (mlSchedErr) {
+    console.warn('[ML Schedule] Failed to initialize:', mlSchedErr.message);
+  }
+
+  // Start background refresh for zone bindings (every 30s)
+  try {
+    const refresh = async () => {
+      try {
+        const snapshot = await buildZoneBindingsFromDevices();
+        __zoneBindingsSnapshot = snapshot;
+      } catch (err) {
+        console.warn('[zone-bindings] refresh failed:', err?.message || err);
+      }
+    };
+    // Prime once at startup, then schedule interval
+    refresh().catch(() => {});
+    __zoneBindingsTimer = setInterval(refresh, Number(process.env.ZONE_BINDINGS_REFRESH_MS || 30000));
+    if (typeof __zoneBindingsTimer?.unref === 'function') __zoneBindingsTimer.unref();
+    console.log('[zone-bindings] Background refresh enabled');
+  } catch (error) {
+    console.warn('[zone-bindings] Failed to start background refresh:', error?.message || error);
+  }
+
+  // Initialize Edge Mode Sync Service
+  if (edgeConfig.isEdgeMode()) {
+    try {
+      // Import sqlite3 for sync service (dynamic import)
+      import('sqlite3').then((sqlite3Module) => {
+        const sqlite3 = sqlite3Module.default;
+        const dbPath = path.join(__dirname, 'lightengine.db');
+        const db = new sqlite3.Database(dbPath);
+
+        // Start data sync service
+        syncService = new SyncService(db);
+        syncService.start();
+
+        // Start wholesale inventory sync service
+        wholesaleService = new EdgeWholesaleService(db);
+        wholesaleService.start();
+
+        // Make services globally available for API routes
+        global.syncService = syncService;
+        global.wholesaleService = wholesaleService;
+
+        console.log('[EdgeMode] ✓ Sync service started');
+        console.log('[EdgeMode] ✓ Wholesale sync service started');
+        console.log(`[EdgeMode] Farm: ${edgeConfig.getFarmName()} (${edgeConfig.getFarmId()})`);
+        console.log(`[EdgeMode] Central API: ${edgeConfig.getCentralApiUrl()}`);
+        console.log(`[EdgeMode] Heartbeat: ${edgeConfig.getHeartbeatInterval() / 1000}s`);
+        console.log(`[EdgeMode] Data Sync: ${edgeConfig.getSyncInterval() / 1000 / 60}min`);
+        console.log(`[EdgeMode] Wholesale Sync: every 15 minutes`);
+      }).catch((error) => {
+        console.error('[EdgeMode] ✗ Failed to import sqlite3:', error?.message || error);
+      });
+    } catch (error) {
+      console.error('[EdgeMode] ✗ Failed to start sync service:', error?.message || error);
+    }
+  } else {
+    console.log('[EdgeMode] Running in cloud mode (set EDGE_MODE=true for edge mode)');
+  }
+}
+
+function ensureOperationalServicesStarted(trigger = 'startup') {
+  if (operationalServicesStarted) {
+    return Promise.resolve();
+  }
+
+  if (!operationalServicesStartPromise) {
+    operationalServicesStartPromise = startOperationalServices(trigger)
+      .then(() => {
+        operationalServicesStarted = true;
+      })
+      .catch((error) => {
+        operationalServicesStartPromise = null;
+        throw error;
+      });
+  }
+
+  return operationalServicesStartPromise;
 }
 
 function ensureDbDir(){ try { fs.mkdirSync(DB_DIR, { recursive: true }); } catch {} }
@@ -2346,6 +2692,36 @@ const pinGuard = (req, res, next) => {
   next();
 };
 
+// Mirrors pinGuard's gating behaviour (no-op unless FARM_PIN/CTRL_PIN is set)
+// but also accepts a matching GREENREACH_API_KEY / EDGE_API_KEY via X-API-Key
+// or Authorization: Bearer so Central's server-to-server callers (which don't
+// know the operator PIN) still pass. This keeps /data/groups.json exactly as
+// permissive as POST /groups for clients that already authenticate via PIN,
+// without adding a new auth surface that breaks the viewer's JWT-only fetches
+// when only FARM_PIN is unset.
+function needPinOrApiKey(req, res) {
+  const configuredPin = process.env.FARM_PIN || process.env.CTRL_PIN || '';
+  if (!configuredPin) return false; // same passthrough as pinGuard
+  const providedPin = (req.body && (req.body.pin || req.body.PIN))
+    || req.headers['x-farm-pin']
+    || req.query.pin;
+  if (providedPin && String(providedPin) === configuredPin) return false;
+  const configuredKey = process.env.GREENREACH_API_KEY || process.env.EDGE_API_KEY || '';
+  if (configuredKey) {
+    const rawAuth = req.headers['authorization'] || '';
+    const providedKey = req.headers['x-api-key']
+      || (rawAuth.toLowerCase().startsWith('bearer ') ? rawAuth.slice(7) : '');
+    if (providedKey && String(providedKey) === configuredKey) return false;
+  }
+  res.status(403).json({ ok: false, error: 'pin-or-api-key-required' });
+  return true;
+}
+
+const pinOrApiKeyGuard = (req, res, next) => {
+  if (needPinOrApiKey(req, res)) return;
+  next();
+};
+
 const readEnv = () => readJSON(envPath, { rooms: {}, targets: {}, control: {} }) || { rooms: {}, targets: {}, control: {} };
 const writeEnv = (obj) => writeJSON(envPath, obj);
 
@@ -2622,7 +2998,7 @@ const automationEngine = new AutomationRulesEngine();
 console.log('[automation] Rules engine initialized with default farm automation rules');
 
 const preAutomationContext = createPreAutomationLayer({
-  dataDir: path.resolve('./data/automation'),
+  dataDir: AUTOMATION_DATA_DIR,
   publicDataDir: path.resolve('./public/data'),
   autoStart: true, //  ENABLED for testing
   fanRotation: {
@@ -4637,13 +5013,13 @@ let dailyResolverTimer = null;
 // Phase 2, Ticket 2.7: Agent action audit log
 // Every AI agent recommendation / action is persisted for governance & review.
 const agentAuditDB = new Datastore({
-  filename: './data/agent-audit.db',
+  filename: runtimeDbPath('agent-audit.db'),
   autoload: true,
   timestampData: true
 });
 
 const aiFeedbackDB = new Datastore({
-  filename: './data/ai-feedback.db',
+  filename: runtimeDbPath('ai-feedback.db'),
   autoload: true,
   timestampData: true
 });
@@ -4651,20 +5027,20 @@ const aiFeedbackDB = new Datastore({
 // ─── AI Vision Phase 1: Experiment Data Stores ─────────────────────────
 // P0: Recipe parameters applied per group per day (Rule 9.1, Task 1.1)
 const appliedRecipesDB = new Datastore({
-  filename: './data/applied-recipes.db',
+  filename: runtimeDbPath('applied-recipes.db'),
   autoload: true,
   timestampData: true
 });
 
 // P0: Complete harvest outcome "experiment record" (Rule 3.1, Task 1.2)
 const harvestOutcomesDB = new Datastore({
-  filename: './data/harvest-outcomes.db',
+  filename: runtimeDbPath('harvest-outcomes.db'),
   autoload: true,
   timestampData: true
 });
 
 const trayLossEventsDB = new Datastore({
-  filename: './data/tray-loss-events.db',
+  filename: runtimeDbPath('tray-loss-events.db'),
   autoload: true,
   timestampData: true
 });
@@ -4672,32 +5048,32 @@ const trayLossEventsDB = new Datastore({
 // I-1.9: Device integration records store (Integration Assistant)
 // Tracks all device integrations for network learning and Central sync
 const integrationDB = new Datastore({
-  filename: './data/integrations.db',
+  filename: runtimeDbPath('integrations.db'),
   autoload: true,
   timestampData: true
 });
 
 const trayFormatsDB = new Datastore({
-  filename: './data/tray-formats.db',
+  filename: runtimeDbPath('tray-formats.db'),
   autoload: true,
   timestampData: true
 });
 
 const traysDB = new Datastore({
-  filename: './data/trays.db',
+  filename: runtimeDbPath('trays.db'),
   autoload: true,
   timestampData: true
 });
 
 // Inventory tracking databases
 const trayRunsDB = new Datastore({
-  filename: './data/tray-runs.db',
+  filename: runtimeDbPath('tray-runs.db'),
   autoload: true,
   timestampData: true
 });
 
 const trayPlacementsDB = new Datastore({
-  filename: './data/tray-placements.db',
+  filename: runtimeDbPath('tray-placements.db'),
   autoload: true,
   timestampData: true
 });
@@ -8863,6 +9239,22 @@ app.get('/api/health', asyncHandler(async (req, res) => {
   res.status(sc).json(health);
 }));
 
+app.use(async (req, res, next) => {
+  if (!DEFER_CLOUD_RUN_RUNTIME_STARTUP || isOperationalStartupExemptPath(req.path)) {
+    return next();
+  }
+
+  try {
+    const startupPromise = ensureOperationalServicesStarted(`${req.method} ${req.path}`);
+    if (req.path.startsWith('/api/')) {
+      await startupPromise;
+    }
+    next();
+  } catch (error) {
+    next(error);
+  }
+});
+
 // ── Cloud Scheduler cron endpoints ──────────────────────────────────────
 // These are invoked by Cloud Scheduler to trigger operations that would
 // otherwise rely on setInterval (which can be lost if the container restarts).
@@ -10489,68 +10881,46 @@ app.post('/api/automation/sync-actuator', async (req, res) => {
     }
     
     console.log(`[automation] Syncing actuator: ${actuatorType} -> ${deviceId} for room ${roomId}`);
-    
-    // Load current env-state (automation files are in ./data, not ./public/data)
-    const envStatePath = path.resolve('./data/automation/env-state.json');
-    let envState = { rooms: {} };
-    
-    try {
-      if (fs.existsSync(envStatePath)) {
-        const raw = fs.readFileSync(envStatePath, 'utf8');
-        envState = JSON.parse(raw);
-      }
-    } catch (error) {
-      console.warn('[automation] Could not load env-state.json:', error.message);
-    }
-    
-    // Initialize room if it doesn't exist
-    if (!envState.rooms) {
-      envState.rooms = {};
-    }
-    
-    if (!envState.rooms[roomId]) {
-      console.log(`[automation] Creating new room config for ${roomId}`);
-      envState.rooms[roomId] = {
-        roomId,
-        name: roomId,
-        actuators: {
-          lights: [],
-          fans: [],
-          dehu: []
-        }
-      };
-    }
-    
-    // Initialize actuators if missing
-    if (!envState.rooms[roomId].actuators) {
-      envState.rooms[roomId].actuators = {
+    const existingRoom = preEnvStore.getRoom(roomId) || {
+      roomId,
+      name: roomId,
+      actuators: {
         lights: [],
         fans: [],
         dehu: []
-      };
+      }
+    };
+
+    const nextActuators = {
+      lights: Array.isArray(existingRoom.actuators?.lights) ? [...existingRoom.actuators.lights] : [],
+      fans: Array.isArray(existingRoom.actuators?.fans) ? [...existingRoom.actuators.fans] : [],
+      dehu: Array.isArray(existingRoom.actuators?.dehu) ? [...existingRoom.actuators.dehu] : []
+    };
+
+    if (!Array.isArray(nextActuators[actuatorType])) {
+      nextActuators[actuatorType] = [];
     }
-    
-    // Ensure actuator type array exists
-    if (!Array.isArray(envState.rooms[roomId].actuators[actuatorType])) {
-      envState.rooms[roomId].actuators[actuatorType] = [];
-    }
-    
-    // Check if device is already in the actuator list
-    const actuatorList = envState.rooms[roomId].actuators[actuatorType];
-    if (!actuatorList.includes(deviceId)) {
-      // Add device to actuator list
-      actuatorList.push(deviceId);
+
+    if (!nextActuators[actuatorType].includes(deviceId)) {
+      nextActuators[actuatorType].push(deviceId);
       console.log(`[automation] Added ${deviceId} to ${roomId}.actuators.${actuatorType}`);
     } else {
       console.log(`[automation] Device ${deviceId} already in ${roomId}.actuators.${actuatorType}`);
     }
-    
-    // Update timestamp
-    envState.rooms[roomId].updatedAt = new Date().toISOString();
-    envState.updatedAt = new Date().toISOString();
-    
-    // Save env-state
-    fs.writeFileSync(envStatePath, JSON.stringify(envState, null, 2));
+
+    const updatedRoom = preEnvStore.upsertRoom(roomId, {
+      name: existingRoom.name || roomId,
+      control: existingRoom.control || {},
+      targets: existingRoom.targets || {},
+      sensors: existingRoom.sensors || {},
+      meta: {
+        ...(existingRoom.meta || {}),
+        lastActuatorSync: new Date().toISOString(),
+        lastActuatorSyncDetails: { equipmentId: equipmentId || null, category: category || null }
+      },
+      actuators: nextActuators
+    });
+
     console.log(`[automation] Saved env-state with updated actuators for ${roomId}`);
     
     return res.json({
@@ -10559,7 +10929,7 @@ app.post('/api/automation/sync-actuator', async (req, res) => {
       roomId,
       actuatorType,
       deviceId,
-      actuators: envState.rooms[roomId].actuators
+      actuators: updatedRoom?.actuators || nextActuators
     });
     
   } catch (error) {
@@ -13626,7 +13996,7 @@ const wholesaleCentralProxy = createProxyMiddleware({
 
 // Paths that must stay local on LE (handled by wholesaleOrdersRouter / wholesaleSyncRouter)
 const WHOLESALE_LOCAL_PATHS = [
-  '/inventory/reserve', '/inventory/release', '/inventory/confirm',
+  '/inventory/reserve', '/inventory/release', '/inventory/confirm', '/inventory/reservations',
   '/orders/farm-verify', '/orders/create', '/orders/buyer-review',
   '/orders/confirm-pickup', '/orders/pending-verification'
 ];
@@ -21495,11 +21865,11 @@ app.get('/api/inventory/forecast/:days?', (req, res) => {
 // =====================================================
 // NeDB-backed stores for farm supplies inventory (Phase 0, Ticket 0.2)
 // In-memory arrays kept for fast reads; every mutation writes through to NeDB.
-const seedsInventoryDB = new Datastore({ filename: './data/seeds-inventory.db', autoload: true });
-const packagingInventoryDB = new Datastore({ filename: './data/packaging-inventory.db', autoload: true });
-const nutrientsInventoryDB = new Datastore({ filename: './data/nutrients-inventory.db', autoload: true });
-const equipmentInventoryDB = new Datastore({ filename: './data/equipment-inventory.db', autoload: true });
-const suppliesInventoryDB = new Datastore({ filename: './data/supplies-inventory.db', autoload: true });
+const seedsInventoryDB = new Datastore({ filename: runtimeDbPath('seeds-inventory.db'), autoload: true });
+const packagingInventoryDB = new Datastore({ filename: runtimeDbPath('packaging-inventory.db'), autoload: true });
+const nutrientsInventoryDB = new Datastore({ filename: runtimeDbPath('nutrients-inventory.db'), autoload: true });
+const equipmentInventoryDB = new Datastore({ filename: runtimeDbPath('equipment-inventory.db'), autoload: true });
+const suppliesInventoryDB = new Datastore({ filename: runtimeDbPath('supplies-inventory.db'), autoload: true });
 
 const seedsInventory = [];
 const packagingInventory = [];
@@ -23340,8 +23710,10 @@ app.post('/api/trays/:trayId/seed', async (req, res) => {
           const seedDateStr = now.toISOString().slice(0, 10);
           targetGroup.planConfig.anchor.seedDate = seedDateStr;
           if (!targetGroup.crop) targetGroup.crop = recipe;
+          targetGroup.lastModified = new Date().toISOString();
           fs.writeFileSync(groupsPath, JSON.stringify(groupsData, null, 2));
           console.log(`[tray-runs] Synced seed date ${seedDateStr} + crop ${recipe} to group ${groupId}`);
+          try { emitDataChange({ kind: 'groups', ids: [groupId], updatedAt: targetGroup.lastModified, source: 'tray-seed' }); } catch (_) {}
         }
       } catch (syncErr) {
         console.warn(`[tray-runs] Seed date sync to group failed (non-fatal):`, syncErr.message);
@@ -24676,6 +25048,12 @@ app.get('/', (req, res) => {
   res.redirect(302, `/LE-farm-admin.html${queryString}`);
 });
 
+app.get('/farm-admin.html', (req, res) => {
+  const queryIndex = req.originalUrl.indexOf('?');
+  const queryString = queryIndex >= 0 ? req.originalUrl.slice(queryIndex) : '';
+  res.redirect(302, `/LE-farm-admin.html${queryString}`);
+});
+
 // Legacy routes — redirect to admin for bookmarks/links that still reference old pages
 app.get('/index.charlie.html', (req, res) => {
   res.redirect(302, '/LE-farm-admin.html');
@@ -24846,27 +25224,48 @@ app.get('/data/groups.json', (req, res, next) => {
   return res.json({ groups });
 });
 
-// POST /data/groups.json -- write-back from Central optimize_layout tool.
-// Saves updated groups (with gridX, gridY layout positions) to LE flat file
-// so subsequent LE->Central syncs preserve those positions.
-app.post('/data/groups.json', (req, res) => {
+// POST /data/groups.json -- non-destructive merge writer.
+// Originally added as a write-back path for Central's optimize_layout tool, which
+// only needs gridX/gridY to round-trip. The 3D viewer also falls back to this
+// endpoint when `POST /groups` errors (expired PIN, unknown light id, etc.), so
+// the payload can be a full group record: { id, crop, plan, planId, planConfig,
+// status, dimensions, ... }. We merge field-by-field rather than whitelisting
+// gridX/gridY so neither caller silently drops operator edits.
+app.post('/data/groups.json', pinOrApiKeyGuard, (req, res) => {
   setCors(req, res);
   const body = req.body || {};
   const incoming = Array.isArray(body) ? body : (body.groups || null);
   if (!Array.isArray(incoming)) {
     return res.status(400).json({ ok: false, error: 'Expected { groups: [...] } or array.' });
   }
-  // Merge: preserve existing fields, overlay gridX/gridY from incoming
   const existing = loadGroupsFile();
   const incomingMap = new Map();
-  for (const g of incoming) { if (g.id) incomingMap.set(g.id, g); }
-  const merged = existing.map(g => {
+  for (const g of incoming) { if (g && g.id) incomingMap.set(g.id, g); }
+  const existingIds = new Set();
+  const nowIso = new Date().toISOString();
+  const touchedIds = [];
+  const merged = existing.map((g) => {
+    if (!g || !g.id) return g;
+    existingIds.add(g.id);
     const inc = incomingMap.get(g.id);
-    if (inc) return { ...g, gridX: inc.gridX, gridY: inc.gridY };
-    return g;
+    if (!inc) return g;
+    touchedIds.push(g.id);
+    return {
+      ...g,
+      ...inc,
+      lastModified: inc.lastModified || nowIso,
+    };
   });
+  // Append brand-new groups the incoming payload introduced.
+  for (const inc of incoming) {
+    if (inc && inc.id && !existingIds.has(inc.id)) {
+      touchedIds.push(inc.id);
+      merged.push({ ...inc, lastModified: inc.lastModified || nowIso });
+    }
+  }
   if (saveGroupsFile(merged)) {
-    return res.json({ ok: true, updated: merged.length });
+    emitDataChange({ kind: 'groups', ids: touchedIds, updatedAt: nowIso, source: 'data-groups-post' });
+    return res.json({ ok: true, updated: merged.length, touched: touchedIds.length });
   }
   return res.status(500).json({ ok: false, error: 'Failed to save groups.' });
 });
@@ -25856,6 +26255,41 @@ function setCors(req, res) {
 app.options('/brand/extract', (req, res) => { setCors(req, res); res.status(204).end(); });
 app.options('/farm', (req, res) => { setCors(req, res); res.status(204).end(); });
 
+// ─── SSE: live data-change stream ────────────────────────────────────────────
+// UIs subscribe with EventSource('/events'). The server emits a `data-change`
+// event whenever groups.json, room-map*.json, or iot-devices.json are written.
+// Clients use these to do targeted refreshes instead of periodic full re-fetches.
+app.get('/events', (req, res) => {
+  setCors(req, res);
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no'); // disable proxy buffering
+  res.flushHeaders?.();
+
+  const client = { id: crypto.randomBytes(6).toString('hex'), res, lastPing: Date.now() };
+  __dataEventClients.add(client);
+
+  // Initial hello so clients can confirm the channel is open.
+  try {
+    res.write(`event: hello\ndata: ${JSON.stringify({ clientId: client.id, seq: __dataEventSeq })}\n\n`);
+  } catch (_) { /* ignore */ }
+
+  // Heartbeat every 25s (under typical 30s proxy idle timeouts).
+  const heartbeat = setInterval(() => {
+    try { res.write(`: ping ${Date.now()}\n\n`); client.lastPing = Date.now(); }
+    catch (_) { clearInterval(heartbeat); __dataEventClients.delete(client); }
+  }, 25000);
+
+  const cleanup = () => {
+    clearInterval(heartbeat);
+    __dataEventClients.delete(client);
+    try { res.end(); } catch (_) {}
+  };
+  req.on('close', cleanup);
+  req.on('error', cleanup);
+});
+
 // Helper: safe JSON read
 function readJSONSafe(fullPath, fallback = null) {
   try {
@@ -26633,14 +27067,33 @@ app.post("/data/:name", (req, res) => {
     if (!name.endsWith(".json")) return res.status(400).json({ ok: false, error: "Only .json files allowed" });
     const baseName = path.basename(name);
     const full = path.join(DATA_DIR, baseName);
+    const nowIso = new Date().toISOString();
+    const isRoomMap = /^room-map(.*)?\.json$/.test(baseName);
+    const isIotDevices = baseName === 'iot-devices.json';
+    // Stamp lastModified so UIs can merge on refresh.
+    // - room-map*.json payloads are always objects (top-level lastModified).
+    // - iot-devices.json is sometimes a bare array; stamp lastModified on each
+    //   device so the viewer's per-entity dirty merge has something to compare.
+    if (req.body && typeof req.body === 'object' && !Array.isArray(req.body) && (isRoomMap || isIotDevices)) {
+      req.body.lastModified = req.body.lastModified || nowIso;
+    }
+    if (isIotDevices) {
+      const list = Array.isArray(req.body)
+        ? req.body
+        : (req.body && Array.isArray(req.body.devices) ? req.body.devices : null);
+      if (list) {
+        for (const dev of list) {
+          if (dev && typeof dev === 'object' && !dev.lastModified) {
+            dev.lastModified = nowIso;
+          }
+        }
+      }
+    }
     const payload = JSON.stringify(req.body, null, 2);
 
     // Persist the requested file first
     writeJsonQueued(full, payload)
       .then(async () => {
-        // If this is a room map save, perform additional side-effects so Room Mapper becomes source of truth
-        const isRoomMap = /^room-map(.*)?\.json$/.test(baseName);
-        const isIotDevices = baseName === 'iot-devices.json';
         if (isRoomMap) {
           try {
             // While multi-room support is evolving, mirror room-map-<roomId>.json to legacy room-map.json
@@ -26675,6 +27128,22 @@ app.post("/data/:name", (req, res) => {
           }
         }
 
+        // Broadcast a data-change event so subscribers (3D viewer, etc.) can do
+        // a targeted refresh instead of relying on the 30s full-data poll.
+        if (isRoomMap) {
+          const roomIdMatch = baseName.match(/^room-map-(.+)\.json$/);
+          const roomId = roomIdMatch ? roomIdMatch[1] : (req.body?.roomId || null);
+          emitDataChange({ kind: 'room-map', roomId, file: baseName, updatedAt: nowIso, source: 'data-post' });
+        } else if (isIotDevices) {
+          emitDataChange({ kind: 'iot-devices', updatedAt: nowIso, source: 'data-post' });
+        } else if (baseName === 'groups.json') {
+          // The specialized /data/groups.json handler runs earlier in the route table,
+          // but if anything else hits this generic path we still want subscribers notified.
+          emitDataChange({ kind: 'groups', updatedAt: nowIso, source: 'data-post-generic' });
+        } else {
+          emitDataChange({ kind: 'data', file: baseName, updatedAt: nowIso, source: 'data-post-generic' });
+        }
+
         return res.json({ ok: true, name: baseName, refreshed: isRoomMap || isIotDevices || false });
       })
       .catch((e) => res.status(500).json({ ok: false, error: e.message }));
@@ -26707,13 +27176,19 @@ app.post('/groups', pinGuard, async (req, res) => {
     return res.status(400).json({ ok: false, error: 'Expected { groups: [...] } payload.' });
   }
   try {
+    const nowIso = new Date().toISOString();
     // Under tests, skip controller validation for repeatable runs
     const knownIds = RUNNING_UNDER_NODE_TEST ? null : await fetchKnownDeviceIds();
     const parsed = incoming.map((g) => parseIncomingGroup(g, knownIds));
-    const stored = parsed.map((item) => item.stored);
+    const stored = parsed.map((item) => {
+      if (item.stored && !item.stored.lastModified) item.stored.lastModified = nowIso;
+      return item.stored;
+    });
     if (!saveGroupsFile(stored)) {
       return res.status(500).json({ ok: false, error: 'Failed to persist groups.' });
     }
+    const touchedIds = stored.map((g) => g?.id).filter(Boolean);
+    emitDataChange({ kind: 'groups', ids: touchedIds, updatedAt: nowIso, source: 'groups-post' });
     return res.json({ ok: true, groups: parsed.map((item) => item.response) });
   } catch (err) {
     return res.status(400).json({ ok: false, error: err.message });
@@ -26728,13 +27203,16 @@ app.put('/groups/:id', pinGuard, async (req, res) => {
   const idx = existing.findIndex((group) => String(group?.id || '').trim() === id);
   if (idx === -1) return res.status(404).json({ ok: false, error: `Group '${id}' not found.` });
   try {
-    const merged = { ...req.body, id };
+    const nowIso = new Date().toISOString();
+    const merged = { ...req.body, id, lastModified: req.body?.lastModified || nowIso };
     const knownIds = RUNNING_UNDER_NODE_TEST ? null : await fetchKnownDeviceIds();
     const { stored, response } = parseIncomingGroup(merged, knownIds);
+    if (stored && !stored.lastModified) stored.lastModified = nowIso;
     existing[idx] = stored;
     // Async queued write to avoid blocking I/O
     const payload = JSON.stringify({ groups: existing }, null, 2);
     await writeJsonQueued(GROUPS_PATH, payload);
+    emitDataChange({ kind: 'groups', ids: [id], updatedAt: nowIso, source: 'groups-put' });
     return res.json({ ok: true, group: response });
   } catch (err) {
     return res.status(400).json({ ok: false, error: err.message });
@@ -28780,7 +29258,7 @@ let WIZARD_TEST_MODE = false;
 
 // Wizard state persistence with NeDB
 const wizardStatesDB = new Datastore({
-  filename: './data/wizard-states.db',
+  filename: runtimeDbPath('wizard-states.db'),
   autoload: true,
   timestampData: true
 });
@@ -28802,7 +29280,7 @@ const wizardDiscoveryContext = new Map();
 // I-3.10: Device health tracking store (Integration Assistant)
 // Tracks device uptime and connectivity for health monitoring
 const deviceHealthDB = new Datastore({
-  filename: './data/device-health.db',
+  filename: runtimeDbPath('device-health.db'),
   autoload: true,
   timestampData: true
 });
@@ -32385,271 +32863,17 @@ function startOrderSyncPolling() {
       console.log(`[charlie] 🎭 DEMO MODE: Visit http://127.0.0.1:${PORT} to explore demo farm`);
     }
 
-    // Seed runtime data files that may not exist after a fresh deploy
-    seedRuntimeDataFiles();
-    
-    // Validate license (Task #2 - License Validation)
+    if (DEFER_CLOUD_RUN_RUNTIME_STARTUP) {
+      console.log('[startup] Deferring operational services until the revision handles non-health traffic');
+      return;
+    }
+
     try {
-      const licenseResult = await validateLicense();
-      if (licenseResult.valid) {
-        console.log(`[License] ✅ Valid license - Reason: ${licenseResult.reason}`);
-        if (licenseResult.license) {
-          console.log(`[License] Farm: ${licenseResult.license.farmId} (${licenseResult.license.tier})`);
-          console.log(`[License] Features: ${licenseResult.license.features?.join(', ') || 'all'}`);
-        }
-      } else {
-        console.error(`[License] ❌ License validation failed: ${licenseResult.reason}`);
-        console.error('[License] ⚠️  Some features may be restricted');
-      }
+      await ensureOperationalServicesStarted('listen');
     } catch (error) {
-      console.error('[License] ❌ License check error:', error.message);
+      console.error('[startup] Failed to start operational services during listen callback:', error?.message || error);
+      throw error;
     }
-    
-    // Initialize database (Task #3 - Database Persistence)
-    (async () => {
-      try {
-        const dbResult = await initDatabase();
-        console.log(`[Database] Mode: ${dbResult.mode}`);
-        if (dbResult.enabled) {
-          console.log('[Database] ✅ PostgreSQL ready for production');
-          
-          // Initialize migration system with database pool
-          if (dbResult.pool) {
-            initMigrationDb(dbResult.pool);
-            console.log('[Migration] ✅ Cloud-to-edge migration system initialized');
-          }
-        }
-
-        // Start ML training worker (Phase 2 Bridge)
-        try {
-          const { startMLTrainingWorker } = await import('./lib/ml-training-pipeline.js');
-          await startMLTrainingWorker();
-          console.log('[ML Training] ✅ Background training worker started');
-        } catch (mlError) {
-          console.warn('[ML Training] Worker failed to start:', mlError.message);
-        }
-
-      } catch (error) {
-        console.error('[Database] ❌ Initialization error:', error.message);
-      }
-    })();
-    
-    try { setupWeatherPolling(); } catch {}
-    
-    // Initialize zone setpoints from room-map.json
-    try { initializeZoneSetpointsFromRoomMap(); } catch (error) {
-      console.warn('[setpoint-init] Failed:', error?.message || error);
-    }
-    
-    // Sync zone assignments from room-map.json to iot-devices.json first
-    try { syncZoneAssignmentsFromRoomMap(); } catch (error) {
-      console.warn('[zone-sync] Failed:', error?.message || error);
-    }
-    
-    // Start syncing live sensor data from iot-devices.json to env.json zones
-    try { setupLiveSensorSync(); } catch (error) {
-      console.warn('[sensor-sync] Failed to start:', error?.message || error);
-    }
-    // Start nutrient MQTT subscriber (Atlas dosing system)
-    try {
-      if (DEFAULT_NUTRIENT_MQTT_URL) {
-        nutrientSubscriber = new NutrientMqttSubscriber({
-          brokerUrl: DEFAULT_NUTRIENT_MQTT_URL,
-          store: nutrientStore,
-          scopeId: NUTRIENT_SCOPE_ID
-        });
-        nutrientSubscriber.start();
-        // Pipe telemetry from MQTT into env store for dashboard integration
-        nutrientStore.on('telemetry', ({ tankId, reading }) => {
-          pushTelemetryToEnvStore({
-            ph: reading.ph != null ? { value: reading.ph, unit: 'pH', observedAt: reading.observedAt } : null,
-            ec: reading.ec != null ? { value: reading.ec, unit: 'mS/cm', observedAt: reading.observedAt } : null,
-            temperature: reading.temperature != null ? { value: reading.temperature, unit: '\u00B0C', observedAt: reading.observedAt } : null
-          }, NUTRIENT_BACKEND_SCOPE);
-        });
-        console.log('[nutrient-mqtt] Atlas dosing subscriber started');
-      }
-    } catch (error) {
-      console.warn('[nutrient-mqtt] Failed to start:', error?.message || error);
-    }
-    // Start periodic order sync with Central (catches missed notifications)
-    try { startOrderSyncPolling(); } catch (error) {
-      console.warn('[order-sync] Failed to start:', error?.message || error);
-    }
-
-    
-  // Initialize Schedule Executor for automated plan/schedule application
-    if (SCHEDULE_EXECUTOR_ENABLED) {
-      try {
-        // Load device registry
-        const registryPath = path.join(PUBLIC_DIR, 'data', 'device-registry.json');
-        let deviceRegistry = {
-          'F00001': 2,
-          'F00002': 3,
-          'F00003': 4,
-          'F00004': 6,
-          'F00005': 5
-        };
-        
-        try {
-          const registryData = JSON.parse(fs.readFileSync(registryPath, 'utf8'));
-          if (registryData.devices) {
-            deviceRegistry = Object.entries(registryData.devices).reduce((acc, [id, device]) => {
-              acc[id] = device.controllerId;
-              return acc;
-            }, {});
-          }
-        } catch (error) {
-          console.warn('[ScheduleExecutor] Failed to load device-registry.json, using defaults:', error.message);
-        }
-        
-        scheduleExecutor = new ScheduleExecutor({
-          interval: SCHEDULE_EXECUTOR_INTERVAL,
-          baseUrl: `http://127.0.0.1:${PORT}`,
-          grow3Target: getController(),
-          enabled: true,
-          deviceRegistry
-        });
-        
-        scheduleExecutor.start();
-        console.log('[ScheduleExecutor] Started successfully');
-      } catch (error) {
-        console.error('[ScheduleExecutor] Failed to start:', error);
-      }
-    } else {
-      console.log('[ScheduleExecutor] Disabled (set SCHEDULE_EXECUTOR_ENABLED=true to enable)');
-    }
-
-    // Start Wholesale Reservation Cleanup Job
-    // Runs every hour to clean up expired reservations
-    try {
-      const CLEANUP_INTERVAL = 60 * 60 * 1000; // 1 hour
-      setInterval(() => {
-        const result = cleanupExpiredReservations();
-        if (result.cleaned > 0) {
-          console.log(`[Cleanup] Released ${result.cleaned} expired reservations, ${result.active} active`);
-        }
-      }, CLEANUP_INTERVAL);
-      
-      // Run once on startup
-      cleanupExpiredReservations();
-      console.log('[Cleanup] ✓ Reservation cleanup job started (runs hourly)');
-    } catch (error) {
-      console.warn('[Cleanup] Failed to start reservation cleanup job:', error?.message || error);
-    }
-
-    // ── Sprint 0: ML Periodic Scheduling ──────────────────────────────────
-    // Runs anomaly detection + harvest prediction refresh periodically
-    try {
-      const ML_SCHEDULE_INTERVAL = parseInt(process.env.ML_SCHEDULE_INTERVAL || '900000', 10); // 15 min default
-      let mlScheduleInFlight = false;
-
-      async function runMLSchedule() {
-        if (mlScheduleInFlight) { console.log('[ML Schedule] Skipping — already in flight'); return; }
-        mlScheduleInFlight = true;
-        try {
-          // 1) Run anomaly detection
-          const { spawn } = await import('node:child_process');
-          const pyBin = process.env.PYTHON_BIN || 'python3';
-          const scriptPath = path.join(__dirname, 'scripts', 'simple-anomaly-detector.py');
-          const anomalyResult = await new Promise((resolve, reject) => {
-            const proc = spawn(pyBin, [scriptPath, '--json'], { stdio: ['ignore', 'pipe', 'pipe'], timeout: 30_000 });
-            let stdout = '', stderr = '';
-            proc.stdout.on('data', d => stdout += d);
-            proc.stderr.on('data', d => stderr += d);
-            proc.on('close', code => {
-              if (code !== 0) return reject(new Error(stderr.slice(0, 200)));
-              try { resolve(JSON.parse(stdout)); } catch { reject(new Error('Invalid JSON')); }
-            });
-            proc.on('error', reject);
-          });
-          if (anomalyResult.anomalies?.length) {
-            console.log(`[ML Schedule] Detected ${anomalyResult.anomalies.length} anomalies`);
-          }
-
-          // 2) Refresh harvest predictions
-          try {
-            const { HarvestPredictor } = await import('./lib/harvest-predictor.js');
-            const predictor = new HarvestPredictor({ dataDir: DATA_DIR });
-            await predictor.predictAll();
-            console.log('[ML Schedule] Harvest predictions refreshed');
-          } catch (e) {
-            console.warn('[ML Schedule] Harvest prediction refresh failed:', e.message);
-          }
-        } catch (err) {
-          console.warn('[ML Schedule] Error:', err.message);
-        } finally {
-          mlScheduleInFlight = false;
-        }
-      }
-
-      if (process.env.NODE_ENV !== 'test') {
-        const mlInitTimer = setTimeout(runMLSchedule, 60_000);
-        mlInitTimer.unref();
-        const mlPeriodicTimer = setInterval(runMLSchedule, ML_SCHEDULE_INTERVAL);
-        mlPeriodicTimer.unref();
-        console.log(`[ML Schedule] Periodic ML scheduling enabled (interval: ${ML_SCHEDULE_INTERVAL / 1000}s)`);
-      }
-    } catch (mlSchedErr) {
-      console.warn('[ML Schedule] Failed to initialize:', mlSchedErr.message);
-    }
-
-      // Start background refresh for zone bindings (every 30s)
-      try {
-        const refresh = async () => {
-          try {
-            const snapshot = await buildZoneBindingsFromDevices();
-            __zoneBindingsSnapshot = snapshot;
-          } catch (err) {
-            console.warn('[zone-bindings] refresh failed:', err?.message || err);
-          }
-        };
-        // Prime once at startup, then schedule interval
-        refresh().catch(()=>{});
-        __zoneBindingsTimer = setInterval(refresh, Number(process.env.ZONE_BINDINGS_REFRESH_MS || 30000));
-        if (typeof __zoneBindingsTimer?.unref === 'function') __zoneBindingsTimer.unref();
-        console.log('[zone-bindings] Background refresh enabled');
-      } catch (error) {
-        console.warn('[zone-bindings] Failed to start background refresh:', error?.message || error);
-      }
-
-      // Initialize Edge Mode Sync Service
-      if (edgeConfig.isEdgeMode()) {
-        try {
-          // Import sqlite3 for sync service (dynamic import)
-          import('sqlite3').then((sqlite3Module) => {
-            const sqlite3 = sqlite3Module.default;
-            const dbPath = path.join(__dirname, 'lightengine.db');
-            const db = new sqlite3.Database(dbPath);
-            
-            // Start data sync service
-            syncService = new SyncService(db);
-            syncService.start();
-            
-            // Start wholesale inventory sync service
-            wholesaleService = new EdgeWholesaleService(db);
-            wholesaleService.start();
-            
-            // Make services globally available for API routes
-            global.syncService = syncService;
-            global.wholesaleService = wholesaleService;
-            
-            console.log('[EdgeMode] ✓ Sync service started');
-            console.log('[EdgeMode] ✓ Wholesale sync service started');
-            console.log(`[EdgeMode] Farm: ${edgeConfig.getFarmName()} (${edgeConfig.getFarmId()})`);
-            console.log(`[EdgeMode] Central API: ${edgeConfig.getCentralApiUrl()}`);
-            console.log(`[EdgeMode] Heartbeat: ${edgeConfig.getHeartbeatInterval() / 1000}s`);
-            console.log(`[EdgeMode] Data Sync: ${edgeConfig.getSyncInterval() / 1000 / 60}min`);
-            console.log(`[EdgeMode] Wholesale Sync: every 15 minutes`);
-          }).catch((error) => {
-            console.error('[EdgeMode] ✗ Failed to import sqlite3:', error?.message || error);
-          });
-        } catch (error) {
-          console.error('[EdgeMode] ✗ Failed to start sync service:', error?.message || error);
-        }
-      } else {
-        console.log('[EdgeMode] Running in cloud mode (set EDGE_MODE=true for edge mode)');
-      }
   });
 
   // Add error handler for server startup failures
