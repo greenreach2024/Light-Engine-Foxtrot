@@ -233,6 +233,7 @@
 }
 .le-alerts-group__list {
   padding: 0 0.5rem 0.5rem;
+  display: flex;
   flex-direction: column;
   gap: 0.35rem;
 }
