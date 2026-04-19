@@ -2555,7 +2555,13 @@ ${sections.includes('bibliography') && bibItems ? `<h2>Bibliography</h2><ol>${bi
       const plantCount = params.plant_count || 0;
       const transpMlDay = params.plant_transpiration_ml_day || 250;
       const transpLHr = (plantCount * transpMlDay) / (24 * 1000);
-      const transpBtu = transpLHr * 8100; // ~8100 BTU per liter evaporated
+      // Latent heat of vaporization of water at ~20°C: 2326 BTU/kg ≈ 2326 BTU/L
+      // (1 kg water ≈ 1 L). Previous value 8100 was a BTU-per-GALLON constant
+      // (970 BTU/lb × 8.345 lb/gal ≈ 8100) being applied to liters, which
+      // over-estimated transpiration cooling by ~3.5× and therefore under-
+      // estimated required HVAC capacity by the same factor. Consistent with
+      // the latent-heat constant in lib/farm-load-calculator.js.
+      const transpBtu = transpLHr * 2326;
 
       // Net heat balance
       const netHeatBtu = totalHeatBtu - envelopeBtu - ventBtu - transpBtu;
