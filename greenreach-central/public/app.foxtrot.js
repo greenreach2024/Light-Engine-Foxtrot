@@ -3013,7 +3013,7 @@ function renderIoTDeviceCards(devices) {
       iotPanelBody.appendChild(list);
       console.warn('[renderIoTDeviceCards] Created missing iotDevicesList container dynamically');
     } else {
-      console.error('[renderIoTDeviceCards] IoT panel body not found; cannot render devices');
+      console.info('[renderIoTDeviceCards] IoT panel body not present on this page; skipping device card render');
       return;
     }
   }
@@ -19712,7 +19712,7 @@ class FreshLightWizard {
       this.setupEventListeners();
       console.log('[FreshLightWizard] Fresh wizard initialized successfully');
     } else {
-      console.error('[FreshLightWizard] Could not find freshLightModal element!');
+      console.info('[FreshLightWizard] freshLightModal not present on this page; skipping wizard init');
     }
   }
 
@@ -19740,7 +19740,7 @@ class FreshLightWizard {
     });
     
     if (!roomSelect) {
-      console.error('[FreshLightWizard] Missing freshRoomSelect element! Cannot setup room dropdown.');
+      console.info('[FreshLightWizard] freshRoomSelect not present on this page; skipping room dropdown setup');
       return;
     }
 
@@ -21642,12 +21642,19 @@ function setActivePanel(panelId = 'overview') {
 }
 
 function initializeSidebarNavigation() {
+  const sidebarLinks = document.querySelectorAll('[data-sidebar-link]');
+  const sidebarGroups = document.querySelectorAll('.sidebar-group');
+  if (!sidebarLinks.length && !sidebarGroups.length) {
+    console.info('[Sidebar] No sidebar navigation found; skipping dashboard panel initialization');
+    return;
+  }
+
   // Guard to prevent duplicate initialization and event handler attachment
   if (window.__sidebarNavInitialized) return;
   window.__sidebarNavInitialized = true;
   ensureFieldMappingLink();
   console.log('[DEBUG] initializeSidebarNavigation called');
-  document.querySelectorAll('.sidebar-group').forEach((group) => {
+  sidebarGroups.forEach((group) => {
     const trigger = group.querySelector('.sidebar-group__trigger');
     const items = group.querySelector('.sidebar-group__items');
     if (items) items.hidden = true;
@@ -21666,7 +21673,7 @@ function initializeSidebarNavigation() {
     });
   });
 
-  document.querySelectorAll('[data-sidebar-link]').forEach((link) => {
+  sidebarLinks.forEach((link) => {
     link.addEventListener('click', () => {
       const target = link.getAttribute('data-target') || 'overview';
       if (target === 'overview') {
