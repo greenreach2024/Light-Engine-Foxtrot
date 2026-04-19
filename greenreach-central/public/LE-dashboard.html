@@ -143,7 +143,7 @@
   
   <!-- PRIVATE MODE BANNER: Shows when localStorage is restricted -->
   <div id="privateModeWarning" style="display: none; position: fixed; top: 30px; left: 0; right: 0; background: #8b5cf6; color: white; padding: 8px 16px; font-size: 13px; text-align: center; z-index: 99998; box-shadow: 0 2px 8px rgba(0,0,0,0.2);">
-    🔒 <strong>Private Browsing Detected</strong> - Session will end when you close this tab. Authentication saved to sessionStorage only.
+<strong>Private Browsing Detected</strong> - Session will end when you close this tab. Authentication saved to sessionStorage only.
   </div>
   <script>
     // Detect private browsing mode by checking if localStorage is restricted
@@ -640,9 +640,9 @@
                   </select>
                 </label>
                 <button id="groupsV2SaveAndDeploy" type="button" class="ghost" style="align-self:flex-end;border:1px solid #22c55e;color:#22c55e;font-weight:600;">Deploy Group</button>
-                <button id="groupsV2HarvestBtn" type="button" class="ghost" style="display:none;align-self:flex-end;border:1px solid #f59e0b;color:#f59e0b;font-weight:600;">🌾 Harvest</button>
+                <button id="groupsV2HarvestBtn" type="button" class="ghost" style="display:none;align-self:flex-end;border:1px solid #f59e0b;color:#f59e0b;font-weight:600;">Harvest</button>
                 <button id="groupsV2DeleteGroup" type="button" class="ghost" style="align-self:flex-end;">Delete selected group</button>
-                <button id="groupsV2PrintLabels" type="button" class="ghost" style="align-self:flex-end;border:1px solid #7c3aed;color:#7c3aed;font-weight:600;" title="Download PDF of group labels (QR + name)">🏷️ Print Labels</button>
+                <button id="groupsV2PrintLabels" type="button" class="ghost" style="align-self:flex-end;border:1px solid #7c3aed;color:#7c3aed;font-weight:600;" title="Download PDF of group labels (QR + name)">Print Labels</button>
               </div>
               <!-- Harvest strategy indicator (shown when plan is assigned) -->
               <div id="groupsV2HarvestStrategyIndicator" style="display:none;padding:6px 12px;border-radius:8px;font-size:0.85rem;font-weight:600;margin-top:4px;"></div>
@@ -766,7 +766,7 @@
 
           <!-- Editing Indicator (shown when a group is loaded for editing) -->
           <div id="groupsV2EditingIndicator" style="display:none;align-items:center;gap:8px;padding:8px 14px;border-radius:8px;background:#eff6ff;border:1px solid #93c5fd;font-size:0.85rem;color:#1e40af;">
-            <span>✏️</span>
+            <span>✏</span>
             <strong>Editing:</strong>
             <span id="groupsV2EditingName"></span>
             <button type="button" id="groupsV2ClearEditing" style="margin-left:auto;background:none;border:none;color:#64748b;cursor:pointer;font-size:18px;line-height:1;" title="Clear editing">&times;</button>
@@ -778,7 +778,7 @@
               <h3 style="margin:0;font-size:14px;font-weight:600;color:#1e293b;">Standard Groups</h3>
               <div style="display:flex;align-items:center;gap:8px;">
                 <span id="groupsV2GroupCount" class="tiny text-muted"></span>
-                <button id="bulkEditGroupsBtn" type="button" class="ghost tiny" style="padding:4px 10px;font-size:11px;border:1px dashed #8b5cf6;color:#8b5cf6;border-radius:6px;font-weight:600;" title="Edit all groups that share a common prefix">✏️ Bulk Edit</button>
+                <button id="bulkEditGroupsBtn" type="button" class="ghost tiny" style="padding:4px 10px;font-size:11px;border:1px dashed #8b5cf6;color:#8b5cf6;border-radius:6px;font-weight:600;" title="Edit all groups that share a common prefix">✏ Bulk Edit</button>
               </div>
             </div>
             <div id="groupsV2GroupListBody" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px;max-height:420px;overflow-y:auto;">
@@ -835,9 +835,9 @@
                 <select id="groupsV2AssignController" style="padding:6px 10px;border:1px solid #cbd5e1;border-radius:6px;font-size:13px;background:#fff;">
                   <option value="">Assign Controller...</option>
                 </select>
-                <button id="groupsV2SaveLightAssignments" type="button" class="primary tiny">💾 Save Assigned Lights</button>
-                <button id="groupsV2TestGroupLights" type="button" class="primary tiny" style="background:#f59e0b;border-color:#d97706;">🔦 Test Assigned Lights</button>
-                <button id="groupsV2RunGroup" type="button" class="primary" style="background:#10b981;border-color:#059669;">▶️ Run Group</button>
+                <button id="groupsV2SaveLightAssignments" type="button" class="primary tiny">Save Assigned Lights</button>
+                <button id="groupsV2TestGroupLights" type="button" class="primary tiny" style="background:#f59e0b;border-color:#d97706;">Test Assigned Lights</button>
+                <button id="groupsV2RunGroup" type="button" class="primary" style="background:#10b981;border-color:#059669;">▶ Run Group</button>
                 <div id="groupsV2RunningIndicator" style="display:none;align-items:center;gap:6px;padding:4px 12px;background:#10b981;color:#fff;border-radius:6px;font-size:13px;font-weight:600;">
                   <span style="display:inline-block;width:8px;height:8px;background:#fff;border-radius:50%;animation:pulse 1.5s ease-in-out infinite;"></span>
                   RUNNING
@@ -854,7 +854,7 @@
 
           <!-- Calibration Button -->
           <div class="gr-card" style="padding:16px;border:1px solid #e5e7eb;border-radius:12px;background:linear-gradient(120deg,#fef3c7 0%,#fde68a 100%);">
-            <button id="btnOpenCalWizardFromGroupsV2" type="button" class="primary" style="width:100%;">🔬 Open Calibration Wizard</button>
+            <button id="btnOpenCalWizardFromGroupsV2" type="button" class="primary" style="width:100%;">Open Calibration Wizard</button>
             <p class="tiny" style="margin:8px 0 0;color:#78350f;text-align:center;">Calibrate light output to match target spectrum</p>
           </div>
         </div>
@@ -1014,7 +1014,7 @@
                     All Off
                   </button>
                   <button id="btnGrow3DanceParty" type="button" class="ghost" style="padding:8px 16px;background:linear-gradient(45deg, #f472b6, #8b5cf6, #3b82f6, #10b981);color:white;border:none;" title="30-second light show with random color phasing">
-                    🎉 Dance Party
+Dance Party
                   </button>
                 </div>
 
@@ -1814,11 +1814,11 @@
               
               <!-- Use Current Location moved to top -->
               <div style="display: flex; gap: 6px; align-items: center; margin: 8px 0; flex-wrap: wrap;">
-                <button type="button" id="btnUseMyLocation" class="btn-secondary" style="font-size: 14px;" title="Uses your device's current location to automatically fill address and get GPS coordinates">🧭 Use Current Location</button>
+                <button type="button" id="btnUseMyLocation" class="btn-secondary" style="font-size: 14px;" title="Uses your device's current location to automatically fill address and get GPS coordinates">Use Current Location</button>
                 <span id="locationStatus" class="tiny" style="color: #666;"></span>
               </div>
               <div class="tiny" style="color:#666;margin-bottom:8px;line-height:1.3">
-                <strong>🧭 Use Current Location:</strong> Uses your device's GPS to automatically fill in your current address and coordinates for subscription services
+                <strong>Use Current Location:</strong> Uses your device's GPS to automatically fill in your current address and coordinates for subscription services
               </div>
               
               <p class="tiny" style="color:#64748b;margin:4px 0">Or enter your farm's address manually below (this information will be used for subscriptions):</p>
@@ -1834,7 +1834,7 @@
               </div>
               <div id="weatherDisplay" class="weather-display" style="display: none; margin-top: 12px; padding: 12px; background: #f8f9fa; border-radius: 6px;">
                 <div class="weather-header" style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-                  <span style="font-size: 18px;">🌤️</span>
+                  <span style="font-size: 18px;"></span>
                   <strong style="color: #333;">Current Weather</strong>
                 </div>
                 <div id="weatherContent"></div>
@@ -1855,12 +1855,12 @@
               <div style="display:flex;align-items:center;gap:8px">
                 <input id="contactWebsite" name="contactWebsite" type="url" autocomplete="url" placeholder="Website (for branding)" style="border:2px solid var(--gr-accent);box-shadow:0 0 0 2px rgba(100, 199, 199, 0.1);flex:1">
                 <button id="websiteBrandingButton" type="button" style="background:var(--gr-primary);color:white;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:14px;font-weight:600;white-space:nowrap;min-width:80px;opacity:0.5;transition:all 0.2s ease" disabled>
-                  🎨 Enter
+Enter
                 </button>
               </div>
               <div id="brandingPreview" class="tiny branding-preview-card" style="margin-top:8px;padding:12px;background:var(--gr-bg);border:1px solid var(--gr-border);border-radius:6px;display:none;cursor:pointer;transition:all 0.2s ease" onclick="farmWizard.showBrandingModal()">
                 <div style="color:var(--gr-primary);font-weight:600;margin-bottom:4px;display:flex;align-items:center;gap:6px">
-                  🎨 Live Branding Preview 
+Live Branding Preview 
                   <span style="font-size:10px;opacity:0.7;background:var(--gr-primary);color:white;padding:2px 6px;border-radius:10px">CLICK TO EXPAND</span>
                 </div>
                 <div id="brandingPreviewContent" style="color:var(--medium)">Enter farm name and website to see your branding...</div>
@@ -1967,13 +1967,13 @@
           
           <div class="wizard-options">
             <button class="wizard-option-card" onclick="storeWizardSelectOption('subdomain')">
-              <div class="wizard-option-icon">🔗</div>
+              <div class="wizard-option-icon"></div>
               <div class="wizard-option-title">Use Free Subdomain</div>
               <div class="wizard-option-desc">yourfarm.lightengine.app (Free, instant setup)</div>
             </button>
             
             <button class="wizard-option-card" onclick="storeWizardSelectOption('custom')">
-              <div class="wizard-option-icon">🌐</div>
+              <div class="wizard-option-icon"></div>
               <div class="wizard-option-title">Use Custom Domain</div>
               <div class="wizard-option-desc">www.yourfarm.com (Requires domain ownership)</div>
             </button>
@@ -2648,10 +2648,10 @@
       
       if (!token) {
         // Not an exceptional error in many contexts (e.g., public pages or private browsing)
-        grLog('[Dashboard] ❌ No token found in sessionStorage or localStorage');
-        grLog('[Dashboard] 📍 Private browsing mode? Token may not persist across pages');
-        grLog('[Dashboard] 📍 Please log in at: ' + window.location.origin + '/farm-admin-login.html');
-        grLog('[Dashboard] 🔄 Redirecting to login page in 2 seconds...');
+        grLog('[Dashboard] ✗ No token found in sessionStorage or localStorage');
+        grLog('[Dashboard]Private browsing mode? Token may not persist across pages');
+        grLog('[Dashboard]Please log in at: ' + window.location.origin + '/farm-admin-login.html');
+        grLog('[Dashboard]Redirecting to login page in 2 seconds...');
         
         setTimeout(() => {
           window.location.href = '/farm-admin-login.html';
