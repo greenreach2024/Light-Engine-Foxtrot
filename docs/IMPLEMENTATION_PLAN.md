@@ -293,7 +293,7 @@ grow-systems.json now has runtime consumers -- `GET /api/grow-systems` serves te
 
 ### P1 -- Agent Infrastructure
 
-- [ ] Recipe Modifier Management UI `XC-7`
+- [x] Recipe Modifier Management UI `XC-7` (Phase 2 #11 -- SHIPPED)
   - Surface the 10 existing recipe modifier endpoints in a grower-facing interface
   - Show current modifiers per recipe, allow approve/reject/revert
 - [ ] Agent infrastructure write actions
@@ -368,7 +368,7 @@ This ordering respects dependency chains: items higher on the list unblock items
 | 8 | ~~Zone-aware recommendation rollup + confidence~~ | Grow Mgmt | SHIPPED |
 | 9 | ~~Wire 3D viewer to live sensor telemetry~~ | 3D Viewer | SHIPPED |
 | 10 | ~~Remove 2-tank hardcoding; integrate nutrient-profiles.json~~ | Nutrient | SHIPPED |
-| 11 | Recipe Modifier Management UI | AI Agents | `XC-7` |
+| 11 | ~~Recipe Modifier Management UI~~ | AI Agents | SHIPPED |
 | 12 | ~~Merge setup-agent phases (template-aware)~~ | Farm Setup | Step 4 -- SHIPPED |
 
 ### Phase 3: Autonomy Foundations (P1 features)
