@@ -129,11 +129,11 @@ resolve_digest() {
   echo "$digest"
 }
 
-# Deploy <svc> pinned to <digest>. Env vars / secrets / resource flags
-# are delegated to deploy_<svc>_flags() functions so the two services
-# stay independently configured.
+# Deploy <svc> pinned to <digest>, using the flag-set for <role>
+# (role is one of: le, central). Role decouples the flag-function
+# lookup from the (overridable) service name.
 deploy_by_digest() {
-  local svc="$1" digest="$2"
+  local svc="$1" digest="$2" role="$3"
   local image_ref="${REGISTRY}/${svc}@${digest}"
 
   echo ""
@@ -144,7 +144,7 @@ deploy_by_digest() {
     --project="${PROJECT_ID}" \
     --region="${REGION}" \
     --image="${image_ref}" \
-    $(deploy_${svc//-/_}_flags)
+    $(flags_for_role "${role}" "${svc}")
 
   local url
   url=$(gcloud run services describe "${svc}" \
@@ -156,17 +156,23 @@ deploy_by_digest() {
 }
 
 # ----------------------------------------------------------------
-# Per-service flags
+# Per-role flags
 # Keep these minimal and stable; full env/secret config lives in
 # gcp/deploy-cloud-run.sh (the initial-setup script). These flags
 # are what a redeploy-by-digest needs to preserve runtime shape.
 # To edit env vars or secrets, use `gcloud run services update`
 # directly, or rerun gcp/deploy-cloud-run.sh.
+#
+# Role (not service name) selects the flag-set so overriding
+# LE_SERVICE/CENTRAL_SERVICE via env vars does not break dispatch.
 # ----------------------------------------------------------------
 
-deploy_light_engine_flags() {
-  cat <<EOF
---service-account=${LE_SERVICE}-sa@${PROJECT_ID}.iam.gserviceaccount.com
+flags_for_role() {
+  local role="$1" svc="$2"
+  case "$role" in
+    le)
+      cat <<EOF
+--service-account=${svc}-sa@${PROJECT_ID}.iam.gserviceaccount.com
 --port=8080
 --cpu=1
 --memory=1Gi
@@ -177,11 +183,10 @@ deploy_light_engine_flags() {
 --execution-environment=gen2
 --allow-unauthenticated
 EOF
-}
-
-deploy_greenreach_central_flags() {
-  cat <<EOF
---service-account=${CENTRAL_SERVICE}-sa@${PROJECT_ID}.iam.gserviceaccount.com
+      ;;
+    central)
+      cat <<EOF
+--service-account=${svc}-sa@${PROJECT_ID}.iam.gserviceaccount.com
 --port=8080
 --cpu=1
 --memory=512Mi
@@ -191,6 +196,12 @@ deploy_greenreach_central_flags() {
 --concurrency=80
 --allow-unauthenticated
 EOF
+      ;;
+    *)
+      echo "ERROR: unknown role: ${role}" >&2
+      return 1
+      ;;
+  esac
 }
 
 # ----------------------------------------------------------------
@@ -198,7 +209,7 @@ EOF
 # ----------------------------------------------------------------
 
 run_service() {
-  local svc="$1" ctx="$2"
+  local role="$1" svc="$2" ctx="$3"
 
   if [[ "$SKIP_BUILD" != "true" ]]; then
     build_and_push "$svc" "$ctx"
@@ -215,15 +226,15 @@ run_service() {
   digest=$(resolve_digest "$svc")
   echo ">>> [${svc}] authoritative digest: ${digest}"
 
-  deploy_by_digest "$svc" "$digest"
+  deploy_by_digest "$svc" "$digest" "$role"
 }
 
 case "$SERVICE" in
-  le)      run_service "$LE_SERVICE"      "$LE_CONTEXT" ;;
-  central) run_service "$CENTRAL_SERVICE" "$CENTRAL_CONTEXT" ;;
+  le)      run_service le      "$LE_SERVICE"      "$LE_CONTEXT" ;;
+  central) run_service central "$CENTRAL_SERVICE" "$CENTRAL_CONTEXT" ;;
   both)
-    run_service "$CENTRAL_SERVICE" "$CENTRAL_CONTEXT"
-    run_service "$LE_SERVICE"      "$LE_CONTEXT"
+    run_service central "$CENTRAL_SERVICE" "$CENTRAL_CONTEXT"
+    run_service le      "$LE_SERVICE"      "$LE_CONTEXT"
     ;;
 esac
 
