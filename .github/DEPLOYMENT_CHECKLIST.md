@@ -1,7 +1,9 @@
 # DEPLOYMENT CHECKLIST - MANDATORY BEFORE EVERY PUSH
 **Status**: BLOCKING - Deployment will fail if these checks are not completed  
 **Date Effective**: February 1, 2026  
-**Reason**: Prevent framework violations that caused $INCIDENT_DATE incidents
+**Reason**: Prevent framework violations that caused $INCIDENT_DATE incidents  
+**Authoritative playbook**: `.github/PLAYBOOK.md`  
+**Platform**: Google Cloud Run (AWS Elastic Beanstalk is FULLY DEPRECATED)
 
 ---
 

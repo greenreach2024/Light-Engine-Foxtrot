@@ -1,5 +1,7 @@
 Production Light Engine Foxtrot system
 
+**Authoritative playbook**: `.github/PLAYBOOK.md` -- single source of truth for all deployment, commit, and collaboration policy.
+
 ## ARCHITECTURE: THE FARM IS 100% CLOUD -- GOOGLE CLOUD RUN (REQUIRED READING)
 
 **There is NO physical farm device. No Raspberry Pi. No edge hardware. No on-premise server.**
