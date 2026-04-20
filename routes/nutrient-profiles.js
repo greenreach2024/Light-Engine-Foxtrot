@@ -4,7 +4,7 @@
 // endpoint for validating whether crops can share a nutrient tank.
 
 import { Router } from 'express';
-import { readFileSync } from 'fs';
+import { readFileSync, writeFileSync } from 'fs';
 import path from 'path';
 
 const router = Router();
@@ -110,6 +110,72 @@ router.post('/check-compatibility', (req, res) => {
         ? 'Tank sharing is possible but suboptimal. Consider separating if yield matters.'
         : 'These crops can share a tank safely.'
   });
+});
+
+// POST /api/nutrient-profiles/custom -- create a custom nutrient formulation
+router.post('/custom', (req, res) => {
+  const data = loadProfiles();
+  if (!data) return res.status(500).json({ ok: false, error: 'profiles-not-loaded' });
+
+  const body = req.body || {};
+  const id = typeof body.id === 'string' && body.id.trim() ? body.id.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '_') : null;
+  if (!id) return res.status(400).json({ ok: false, error: 'id is required (alphanumeric/underscores)' });
+  if (data.profiles[id] && !body.overwrite) {
+    return res.status(409).json({ ok: false, error: 'profile already exists, set overwrite:true to replace' });
+  }
+
+  const ecTarget = Number(body.ec_target);
+  const phTarget = Number(body.ph_target);
+  if (!Number.isFinite(ecTarget) || ecTarget < 0.1 || ecTarget > 5.0) {
+    return res.status(400).json({ ok: false, error: 'ec_target must be 0.1-5.0 mS/cm' });
+  }
+  if (!Number.isFinite(phTarget) || phTarget < 4.0 || phTarget > 8.0) {
+    return res.status(400).json({ ok: false, error: 'ph_target must be 4.0-8.0' });
+  }
+
+  const profile = {
+    name: typeof body.name === 'string' ? body.name.trim() : id,
+    ec_target: Math.round(ecTarget * 100) / 100,
+    ph_target: Math.round(phTarget * 100) / 100,
+    vpd_target: Number.isFinite(Number(body.vpd_target)) ? Number(body.vpd_target) : 1.0,
+    dli_target: Number.isFinite(Number(body.dli_target)) ? Number(body.dli_target) : 14,
+    compatible_crops: Array.isArray(body.compatible_crops) ? body.compatible_crops.filter(c => typeof c === 'string') : [],
+    custom: true,
+    createdAt: new Date().toISOString()
+  };
+
+  data.profiles[id] = profile;
+  profilesCache = data;
+
+  try {
+    writeFileSync(path.resolve('./public/data/nutrient-profiles.json'), JSON.stringify(data, null, 2), 'utf-8');
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: 'failed to persist: ' + (err?.message || '') });
+  }
+
+  res.json({ ok: true, profileId: id, profile });
+});
+
+// DELETE /api/nutrient-profiles/custom/:profileId -- remove a custom profile
+router.delete('/custom/:profileId', (req, res) => {
+  const data = loadProfiles();
+  if (!data) return res.status(500).json({ ok: false, error: 'profiles-not-loaded' });
+
+  const id = req.params.profileId;
+  const profile = data.profiles[id];
+  if (!profile) return res.status(404).json({ ok: false, error: 'profile not found' });
+  if (!profile.custom) return res.status(403).json({ ok: false, error: 'cannot delete built-in profiles' });
+
+  delete data.profiles[id];
+  profilesCache = data;
+
+  try {
+    writeFileSync(path.resolve('./public/data/nutrient-profiles.json'), JSON.stringify(data, null, 2), 'utf-8');
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: 'failed to persist: ' + (err?.message || '') });
+  }
+
+  res.json({ ok: true, deleted: id });
 });
 
 // POST /api/nutrient-profiles/reload -- force reload from disk

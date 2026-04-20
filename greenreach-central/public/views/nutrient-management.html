@@ -1084,6 +1084,13 @@
         <div id="tank2NutrientCards" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem;"></div>
       </div>
     </section>
+
+    <!-- P2 #28: Nutrient Alert Inbox -->
+    <section class="card" id="alertInboxCard">
+      <h2>Nutrient Alerts</h2>
+      <div id="alertInboxEmpty" style="padding: 1rem; color: var(--neutral-400); font-size: 0.9rem;">No active alerts</div>
+      <div id="alertInboxList" style="display: flex; flex-direction: column; gap: 0.5rem;"></div>
+    </section>
   </main>
 
   <footer class="page-footer">
@@ -1116,6 +1123,7 @@
   const PUMP_CAL_ENDPOINT = '/api/nutrients/pump-calibration';
   const SENSOR_CAL_ENDPOINT = '/api/nutrients/sensor-calibration';
   const COMMAND_ENDPOINT = '/api/nutrients/command';
+    const ALERTS_ENDPOINT = '/api/nutrients/alerts';
     const GROUPS_ENDPOINT = '/data/groups.json';
     const PLANS_ENDPOINT = '/plans';
     const PAIL_LOW_THRESHOLD = 0.8; // 80%
@@ -3498,6 +3506,47 @@
       renderAutodoseSummary('tank1');
       renderAutodoseSummary('tank2');
       renderSystemConfig();
+      renderAlertInbox();
+    }
+
+    async function renderAlertInbox() {
+      const listEl = document.getElementById('alertInboxList');
+      const emptyEl = document.getElementById('alertInboxEmpty');
+      if (!listEl) return;
+      try {
+        const res = await fetch(ALERTS_ENDPOINT + '?includeAcknowledged=false&t=' + Date.now());
+        if (!res.ok) return;
+        const data = await res.json();
+        const alerts = data.alerts || [];
+        if (alerts.length === 0) {
+          listEl.innerHTML = '';
+          if (emptyEl) emptyEl.style.display = '';
+          return;
+        }
+        if (emptyEl) emptyEl.style.display = 'none';
+        listEl.innerHTML = alerts.slice(-20).reverse().map(a => {
+          const severity = a.severity || 'warning';
+          const borderColor = severity === 'critical' ? 'rgba(239,68,68,0.6)' : 'rgba(250,204,21,0.5)';
+          const badge = severity === 'critical' ? '[CRITICAL]' : '[WARN]';
+          const time = a.receivedAt ? new Date(a.receivedAt).toLocaleString() : '';
+          return '<div style="padding:0.75rem;border:1px solid ' + borderColor + ';border-radius:10px;background:rgba(15,23,42,0.6);display:flex;justify-content:space-between;align-items:center;">'
+            + '<div><strong style="color:' + (severity === 'critical' ? '#ef4444' : '#facc15') + ';">' + badge + '</strong> '
+            + (a.message || a.type || 'Unknown alert') + '<br><small style="color:var(--neutral-400);">' + time + ' | Tank: ' + (a.tankId || 'unknown') + '</small></div>'
+            + '<button onclick="acknowledgeAlert('' + a.id + '')" style="padding:0.4rem 0.75rem;background:rgba(59,130,246,0.2);border:1px solid rgba(59,130,246,0.4);border-radius:8px;color:var(--neutral-200);cursor:pointer;font-size:0.8rem;">Ack</button>'
+            + '</div>';
+        }).join('');
+      } catch (err) {
+        console.warn('[alerts] Failed to render alert inbox:', err);
+      }
+    }
+
+    async function acknowledgeAlert(alertId) {
+      try {
+        const res = await fetch('/api/nutrients/alerts/' + alertId + '/acknowledge', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+        if (res.ok) renderAlertInbox();
+      } catch (err) {
+        console.warn('[alerts] Failed to acknowledge:', err);
+      }
     }
 
     async function fetchGroups() {

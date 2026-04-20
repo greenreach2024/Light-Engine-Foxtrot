@@ -1091,6 +1091,22 @@ async function startOperationalServices(trigger = 'startup') {
         }, NUTRIENT_BACKEND_SCOPE);
       });
       console.log('[nutrient-mqtt] Atlas dosing subscriber started');
+      // P2 #28: Persist applied setpoints back to nutrient-dashboard.json
+      nutrientStore.on('applied-targets', ({ tankId, targets }) => {
+        try {
+          const doc = loadNutrientDashboardCache() || { tanks: {} };
+          if (!doc.tanks) doc.tanks = {};
+          if (!doc.tanks[tankId]) doc.tanks[tankId] = {};
+          doc.tanks[tankId].autodose = {
+            ...(doc.tanks[tankId].autodose || {}),
+            ...targets,
+            lastAppliedAt: new Date().toISOString()
+          };
+          schedulePersistNutrientDashboard(doc);
+        } catch (err) {
+          console.warn('[nutrients] Failed to persist applied targets to dashboard:', err?.message);
+        }
+      });
     }
   } catch (error) {
     console.warn('[nutrient-mqtt] Failed to start:', error?.message || error);
@@ -17083,6 +17099,17 @@ async function publishNutrientCommand(payload, {
     throw new Error('nutrient-mqtt-config-missing');
   }
 
+  // P2 #28: Reuse the long-lived subscriber client when connected
+  if (nutrientSubscriber && nutrientSubscriber.isConnected()) {
+    try {
+      const result = await nutrientSubscriber.publish(publishTopic, publishPayload);
+      console.log(`[nutrients] Published via subscriber client to ${publishTopic}`);
+      return { ...result, brokerUrl: resolvedBroker, topic: publishTopic, translated: Boolean(translation) };
+    } catch (reuseErr) {
+      console.warn('[nutrients] Subscriber publish failed, falling back to ephemeral client:', reuseErr?.message);
+    }
+  }
+
   console.log(`[nutrients] Publishing nutrient command to ${publishTopic} via ${resolvedBroker}${translation ? ' (translated)' : ''}`);
 
   return await new Promise((resolve, reject) => {
@@ -18126,18 +18153,31 @@ app.post('/api/nutrients/command', requireEdgeForControl, async (req, res) => {
     setCors(req, res);
     const body = req.body || {};
 
+    const action = typeof body.action === 'string' ? body.action.trim() : '';
+    const allowedActions = new Set(['phDown', 'ecMixA', 'ecMixB', 'stop', 'requestStatus']);
+    if (!allowedActions.has(action)) {
+      return res.status(400).json({ ok: false, error: 'invalid-action' });
+    }
+
+    // P2 #28: Rate limit manual dose commands (1 per 5s per action type)
+    const rateKey = `dose:${action}`;
+    const lastTs = _nutrientCommandTimestamps.get(rateKey) || 0;
+    const elapsed = Date.now() - lastTs;
+    if (elapsed < NUTRIENT_COMMAND_RATE_LIMIT_MS) {
+      return res.status(429).json({
+        ok: false,
+        error: 'rate-limited',
+        retryAfterMs: NUTRIENT_COMMAND_RATE_LIMIT_MS - elapsed
+      });
+    }
+    _nutrientCommandTimestamps.set(rateKey, Date.now());
+
     const brokerUrl = typeof body.brokerUrl === 'string' && body.brokerUrl.trim()
       ? body.brokerUrl.trim()
       : DEFAULT_NUTRIENT_MQTT_URL;
     const topic = typeof body.topic === 'string' && body.topic.trim()
       ? body.topic.trim()
       : DEFAULT_NUTRIENT_COMMAND_TOPIC;
-
-    const action = typeof body.action === 'string' ? body.action.trim() : '';
-    const allowedActions = new Set(['phDown', 'ecMixA', 'ecMixB', 'stop', 'requestStatus']);
-    if (!allowedActions.has(action)) {
-      return res.status(400).json({ ok: false, error: 'invalid-action' });
-    }
 
     const duration = toNumberOrNull(body.durationSec ?? body.duration ?? body.seconds);
 
@@ -18357,6 +18397,23 @@ app.get('/api/nutrients/resolved-targets', async (req, res) => {
     res.status(500).json({ ok: false, error: error?.message || 'resolve-failed' });
   }
 });
+
+// P2 #28: Unacknowledged command status -- surface "sent but not confirmed" state
+app.get('/api/nutrients/unacknowledged', async (req, res) => {
+  try {
+    setCors(req, res);
+    const thresholdMs = Math.max(5000, Math.min(300000, Number(req.query.threshold) || 30000));
+    const stale = nutrientStore.getUnacknowledgedCommands(thresholdMs);
+    res.json({ ok: true, unacknowledged: stale, thresholdMs });
+  } catch (error) {
+    console.error('[nutrients] unacknowledged check failed:', error?.message || error);
+    res.status(500).json({ ok: false, error: error?.message || 'check-failed' });
+  }
+});
+
+// P2 #28: Rate-limited manual dose command wrapper
+const _nutrientCommandTimestamps = new Map();
+const NUTRIENT_COMMAND_RATE_LIMIT_MS = 5000;
 
 // Legacy MQTT endpoint (retained for backward compatibility)
 app.get('/api/mqtt/nutrients', async (req, res) => {

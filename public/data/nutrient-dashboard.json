@@ -129,6 +129,45 @@
         }
       },
       "lastUpdated": "2025-12-09T22:00:00.000Z"
+    },
+    "tank1": {
+      "sensors": {
+        "ph": {
+          "value": null,
+          "unit": "pH",
+          "history": [],
+          "observedAt": null
+        },
+        "ec": {
+          "value": null,
+          "unit": "mS/cm",
+          "history": [],
+          "observedAt": null
+        },
+        "temperature": {
+          "value": null,
+          "unit": "\u00b0C",
+          "history": [],
+          "observedAt": null
+        }
+      },
+      "autodose": {
+        "enabled": false,
+        "phTarget": 6.0,
+        "phTolerance": 0.3,
+        "ecTarget": 1200,
+        "ecTolerance": 100,
+        "ecDoseSeconds": 2.0,
+        "phDownDoseSeconds": 1.0,
+        "minDoseIntervalSec": 180
+      },
+      "dosingHistory": [],
+      "calibration": {},
+      "metadata": {
+        "provider": "atlas-ezo",
+        "scope": "tank-1",
+        "label": "Tank 1 - Vegetative"
+      }
     }
   },
   "system": {

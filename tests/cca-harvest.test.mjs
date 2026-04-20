@@ -488,3 +488,89 @@ test('doc/reality reconciliation report exists', () => {
   assert.ok(content.includes('Contradiction 1'), 'addresses contradiction 1');
   assert.ok(content.includes('Contradiction 5'), 'addresses all 5 contradictions');
 });
+
+// ---- Phase 4 #28: Multi-tank nutrient support ----
+
+test('NutrientStore has ack correlation and unacknowledged tracking', async () => {
+  const { NutrientStore } = await import('../services/nutrient-mqtt.js');
+  assert.ok(NutrientStore, 'NutrientStore exists');
+  const store = new NutrientStore({ dataDir: '/tmp/test-nutrient-store-' + Date.now() });
+  // Record a pending target
+  store.recordPendingTargets('tank-1', { phTarget: 6.0, ecTarget: 1200 }, { source: 'test' });
+  const pending = store.getPendingTargets('tank-1');
+  assert.ok(pending?.requestedAt, 'pending has requestedAt');
+  // Record applied -- should compute ack latency
+  store.recordAppliedTargets('tank-1', { phTarget: 6.0, ecTarget: 1200 }, { source: 'ack' });
+  const applied = store.getAppliedTargets('tank-1');
+  assert.ok(applied?.ackLatencyMs != null, 'applied has ackLatencyMs');
+  assert.ok(applied.ackLatencyMs >= 0, 'ackLatencyMs is non-negative');
+  // getUnacknowledgedCommands returns empty after promotion
+  assert.strictEqual(store.getUnacknowledgedCommands(0).length, 0, 'no stale after promotion');
+});
+
+test('NutrientMqttSubscriber has publish method for client reuse', async () => {
+  const { NutrientMqttSubscriber } = await import('../services/nutrient-mqtt.js');
+  assert.ok(NutrientMqttSubscriber, 'NutrientMqttSubscriber exists');
+  const sub = new NutrientMqttSubscriber({ brokerUrl: null });
+  assert.ok(typeof sub.publish === 'function', 'has publish() method');
+  // Should reject when not connected
+  try {
+    await sub.publish('test/topic', { test: true });
+    assert.fail('should have thrown');
+  } catch (err) {
+    assert.ok(err.message.includes('not-connected'), 'rejects when disconnected');
+  }
+});
+
+test('nutrient command endpoint has rate limiting', () => {
+  const content = fs.readFileSync(path.resolve('./server-foxtrot.js'), 'utf-8');
+  assert.ok(content.includes('_nutrientCommandTimestamps'), 'rate limit map exists');
+  assert.ok(content.includes('NUTRIENT_COMMAND_RATE_LIMIT_MS'), 'rate limit constant exists');
+  assert.ok(content.includes("error: 'rate-limited'"), 'returns 429 on rate limit');
+});
+
+test('nutrient-dashboard.json has tank1 structure', () => {
+  const data = JSON.parse(fs.readFileSync(path.resolve('./public/data/nutrient-dashboard.json'), 'utf-8'));
+  assert.ok(data.tanks?.tank1, 'tank1 exists');
+  assert.ok(data.tanks?.tank1?.sensors, 'tank1 has sensors');
+  assert.ok(data.tanks?.tank2, 'tank2 still exists');
+});
+
+test('nutrient management HTML has alert inbox', () => {
+  const html = fs.readFileSync(path.resolve('./greenreach-central/public/views/nutrient-management.html'), 'utf-8');
+  assert.ok(html.includes('alertInboxCard'), 'alert inbox section exists');
+  assert.ok(html.includes('alertInboxList'), 'alert list container exists');
+  assert.ok(html.includes('renderAlertInbox'), 'renderAlertInbox function exists');
+  assert.ok(html.includes('acknowledgeAlert'), 'acknowledgeAlert function exists');
+  assert.ok(html.includes('ALERTS_ENDPOINT'), 'ALERTS_ENDPOINT defined');
+});
+
+test('nutrient profiles router supports custom formulations', () => {
+  const content = fs.readFileSync(path.resolve('./routes/nutrient-profiles.js'), 'utf-8');
+  assert.ok(content.includes("'/custom'"), 'POST /custom route exists');
+  assert.ok(content.includes("'/custom/:profileId'"), 'DELETE /custom/:profileId route exists');
+  assert.ok(content.includes('custom: true'), 'marks custom profiles');
+  assert.ok(content.includes('cannot delete built-in profiles'), 'protects built-in profiles');
+});
+
+test('setpoint persistence wired on applied-targets event', () => {
+  const content = fs.readFileSync(path.resolve('./server-foxtrot.js'), 'utf-8');
+  assert.ok(content.includes("nutrientStore.on('applied-targets'"), 'listens for applied-targets');
+  assert.ok(content.includes('schedulePersistNutrientDashboard(doc)'), 'persists to dashboard');
+  assert.ok(content.includes('lastAppliedAt'), 'writes lastAppliedAt timestamp');
+});
+
+test('publishNutrientCommand reuses subscriber client', () => {
+  const content = fs.readFileSync(path.resolve('./server-foxtrot.js'), 'utf-8');
+  assert.ok(content.includes('nutrientSubscriber.publish('), 'tries subscriber publish');
+  assert.ok(content.includes('Published via subscriber client'), 'logs subscriber reuse');
+  assert.ok(content.includes('falling back to ephemeral client'), 'has fallback');
+  const mqttContent = fs.readFileSync(path.resolve('./services/nutrient-mqtt.js'), 'utf-8');
+  assert.ok(mqttContent.includes('reusedClient'), 'subscriber marks reused client');
+});
+
+test('unacknowledged commands endpoint exists', () => {
+  const content = fs.readFileSync(path.resolve('./server-foxtrot.js'), 'utf-8');
+  assert.ok(content.includes("/api/nutrients/unacknowledged"), 'endpoint defined');
+  assert.ok(content.includes('getUnacknowledgedCommands'), 'calls store method');
+});
