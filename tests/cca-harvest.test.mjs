@@ -462,3 +462,29 @@ test('VPD targets vary by growth stage', async () => {
   const mature = mod.getVPDTarget('mature');
   assert.ok(seedling.optimal < mature.optimal, 'seedling VPD target < mature VPD target');
 });
+
+// ---- Phase 4 #27: Doc/reality reconciliation ----
+
+test('schemaVersion added to data files', () => {
+  const files = ['crop-registry.json', 'controller-bindings.json', 'equipment-kb.json', 'stock-equipment.catalog.json', 'device-kb.json'];
+  for (const f of files) {
+    const data = JSON.parse(fs.readFileSync(path.resolve('./public/data/' + f), 'utf-8'));
+    assert.ok(data.schemaVersion, f + ' should have schemaVersion');
+  }
+});
+
+test('secret rotation runbook exists', () => {
+  assert.ok(fs.existsSync(path.resolve('./docs/SECRET_ROTATION_RUNBOOK.md')), 'runbook exists');
+  const content = fs.readFileSync(path.resolve('./docs/SECRET_ROTATION_RUNBOOK.md'), 'utf-8');
+  assert.ok(content.includes('JWT_SECRET'), 'covers JWT');
+  assert.ok(content.includes('SWITCHBOT_TOKEN'), 'covers SwitchBot');
+  assert.ok(content.includes('SQUARE_ACCESS_TOKEN'), 'covers Square');
+  assert.ok(content.includes('Emergency Rotation'), 'has emergency section');
+});
+
+test('doc/reality reconciliation report exists', () => {
+  assert.ok(fs.existsSync(path.resolve('./docs/DOC_REALITY_RECONCILIATION.md')), 'report exists');
+  const content = fs.readFileSync(path.resolve('./docs/DOC_REALITY_RECONCILIATION.md'), 'utf-8');
+  assert.ok(content.includes('Contradiction 1'), 'addresses contradiction 1');
+  assert.ok(content.includes('Contradiction 5'), 'addresses all 5 contradictions');
+});

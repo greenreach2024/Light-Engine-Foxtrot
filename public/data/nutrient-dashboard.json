@@ -84,7 +84,7 @@
             "pumpId": "ec",
             "action": "EC adjustment",
             "durationSeconds": 2.5,
-            "reason": "EC below target (1585 µS/cm)"
+            "reason": "EC below target (1585 \u00b5S/cm)"
           },
           {
             "timestamp": "2025-12-09T21:30:00.000Z",
@@ -98,7 +98,7 @@
             "pumpId": "ec",
             "action": "EC adjustment",
             "durationSeconds": 2.5,
-            "reason": "EC below target (1580 µS/cm)"
+            "reason": "EC below target (1580 \u00b5S/cm)"
           }
         ],
         "ecPumpDosesTotal": 145,
@@ -156,5 +156,6 @@
         "updatedAt": "2026-02-01T15:12:11.477Z"
       }
     }
-  }
+  },
+  "schemaVersion": "1.0.0"
 }

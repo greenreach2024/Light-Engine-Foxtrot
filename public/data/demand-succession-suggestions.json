@@ -367,5 +367,6 @@
       "priority": "high"
     }
   ],
-  "totalCrops": 1
+  "totalCrops": 1,
+  "schemaVersion": "1.0.0"
 }
