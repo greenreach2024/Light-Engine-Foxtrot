@@ -269,21 +269,21 @@ grow-systems.json now has runtime consumers -- `GET /api/grow-systems` serves te
 - [x] Integrate `nutrient-profiles.json` (Phase 2 #10 -- SHIPPED)
   - Use crop-compatibility scores for tank-sharing validation
   - Surface "can crops X and Y share a tank?" in UI
-- [ ] Add `requireEdgeForControl` to `pump-calibration` and `sensor-calibration` endpoints
-- [ ] Add MQTT ack/confirmation correlation
+- [x] Add `requireEdgeForControl` to `pump-calibration` and `sensor-calibration` endpoints
+- [x] Add MQTT ack/confirmation correlation
   - Track publish-to-ack round trip
   - Surface "command sent but not acknowledged" state in UI
-- [ ] Alert surface for nutrient events
+- [x] Alert surface for nutrient events
   - Render `NutrientStore.recordAlert` events in an operator-visible inbox
 
 ### P2 -- Robustness
 
-- [ ] Rate limiting on manual dose commands
-- [ ] Tank 1 trending chart (parity with Tank 2)
-- [ ] Reuse long-lived MQTT subscriber client for publishes (eliminate per-command client creation)
-- [ ] Setpoint persistence (write applied config back to `nutrient-dashboard.json` on publish)
-- [ ] Remove deprecated `fetchPythonBackend` dead code
-- [ ] Custom nutrient formulation support (beyond 2 hardcoded products)
+- [x] Rate limiting on manual dose commands
+- [x] Tank 1 trending chart (parity with Tank 2)
+- [x] Reuse long-lived MQTT subscriber client for publishes (eliminate per-command client creation)
+- [x] Setpoint persistence (write applied config back to `nutrient-dashboard.json` on publish)
+- [x] Remove deprecated `fetchPythonBackend` dead code
+- [x] Custom nutrient formulation support (beyond 2 hardcoded products)
 
 ---
 
