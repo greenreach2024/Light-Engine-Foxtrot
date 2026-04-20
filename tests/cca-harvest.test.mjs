@@ -354,3 +354,35 @@ test('groups-v2.js loads stock equipment catalog', () => {
   assert.ok(gv2.includes('stock-equipment.catalog.json'), 'references catalog file');
   assert.ok(gv2.includes('window.STATE.equipmentCatalog'), 'stores on STATE.equipmentCatalog');
 });
+
+// ---- Phase 4 #24: 3D viewer mobile + accessibility ----
+
+test('3D viewer has keyboard navigation and accessibility', () => {
+  const html = fs.readFileSync(path.resolve('./greenreach-central/public/views/3d-farm-viewer.html'), 'utf-8');
+  // Canvas accessibility
+  assert.ok(html.includes('role="img"'), 'canvas has role attribute');
+  assert.ok(html.includes('tabindex="0"'), 'canvas is focusable');
+  assert.ok(html.includes('aria-label='), 'canvas has aria-label');
+  // Screen reader announcements
+  assert.ok(html.includes('a11yAnnouncer'), 'has aria-live announcer region');
+  assert.ok(html.includes('aria-live="polite"'), 'announcer uses polite mode');
+  // Keyboard nav
+  assert.ok(html.includes("e.key === 'ArrowLeft'"), 'arrow key orbit left');
+  assert.ok(html.includes("e.key === 'ArrowRight'"), 'arrow key orbit right');
+  assert.ok(html.includes("e.key === 'Tab'"), 'Tab cycles zones');
+  assert.ok(html.includes("e.key === 'Enter'"), 'Enter opens detail panel');
+  assert.ok(html.includes("e.key === '+'"), 'plus key zooms in');
+  assert.ok(html.includes("e.key === '-'"), 'minus key zooms out');
+});
+
+test('3D viewer has mobile touch multi-touch guard', () => {
+  const html = fs.readFileSync(path.resolve('./greenreach-central/public/views/3d-farm-viewer.html'), 'utf-8');
+  assert.ok(html.includes('_touchCount'), 'tracks touch count');
+  assert.ok(html.includes('_touchCount > 1'), 'guards drag on multi-touch');
+  assert.ok(html.includes("{ passive: true }"), 'touch listeners are passive');
+});
+
+test('3D viewer toolbar buttons have aria-labels', () => {
+  const html = fs.readFileSync(path.resolve('./greenreach-central/public/views/3d-farm-viewer.html'), 'utf-8');
+  assert.ok(html.includes('id="detailClose" aria-label="Close detail panel"'), 'close button has aria-label');
+});
