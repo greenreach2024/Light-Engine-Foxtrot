@@ -1,0 +1,340 @@
+{
+  "$schema": "stock-equipment-catalog-v1",
+  "version": "1.0.0",
+  "updated_at": "2026-04-20T00:00:00.000Z",
+  "description": "Unified stock equipment catalog. Manufacturer-keyed entries with validated specs.",
+  "lights": [
+    {
+      "id": "toplight-mh-300w-22g12",
+      "manufacturer": "TopLight",
+      "model": "MH Model-300W-22G12",
+      "category": "led-grow-light",
+      "wattage": 300,
+      "ppf": 709,
+      "ppe": 2.59,
+      "spectrum": "Full Spectrum (400-700nm)",
+      "spectrally_tunable": true,
+      "dimmable": true,
+      "dimming_method": "WiFi/BLE",
+      "ip_rating": "IP66",
+      "cooling": "Passive fanless",
+      "dimensions_mm": "1240x140x76",
+      "weight_kg": 6.35,
+      "input_voltage": "100-277VAC 50/60Hz"
+    },
+    {
+      "id": "pl-light-vertimax-640w",
+      "manufacturer": "P.L. Light Systems",
+      "model": "VertiMax 640W",
+      "category": "led-grow-light",
+      "wattage": 640,
+      "ppf": 1738,
+      "ppe": 2.7,
+      "spectrum": "Full Spectrum (400-700nm)",
+      "spectrally_tunable": false,
+      "dimmable": true,
+      "dimming_method": "0-10V",
+      "ip_rating": "IP65",
+      "cooling": "Passive",
+      "weight_kg": null,
+      "input_voltage": "100-277VAC"
+    },
+    {
+      "id": "fluence-spydr-2x",
+      "manufacturer": "Fluence",
+      "model": "SPYDR 2x",
+      "category": "led-grow-light",
+      "wattage": 685,
+      "ppf": 1700,
+      "ppe": 2.5,
+      "spectrum": "Full Spectrum (400-700nm)",
+      "spectrally_tunable": false,
+      "dimmable": true,
+      "dimming_method": "BLE",
+      "ip_rating": "IP66",
+      "cooling": "Passive",
+      "weight_kg": null,
+      "input_voltage": "100-277VAC"
+    },
+    {
+      "id": "zipgrow-200w",
+      "manufacturer": "ZipGrow",
+      "model": "200W Full Spectrum",
+      "category": "led-grow-light",
+      "wattage": 200,
+      "ppf": 560,
+      "ppe": 2.8,
+      "spectrum": "Full Spectrum (400-700nm)",
+      "spectrally_tunable": false,
+      "dimmable": true,
+      "dimming_method": "0-10V",
+      "ip_rating": "IP65",
+      "coverage_area_sqft": 16,
+      "lifespan_hours": 50000,
+      "weight_kg": 3.2,
+      "input_voltage": "100-277VAC"
+    },
+    {
+      "id": "generic-led-smart-plug",
+      "manufacturer": "Generic",
+      "model": "LED via Smart Plug",
+      "category": "led-grow-light",
+      "wattage": 100,
+      "ppf": 220,
+      "ppe": 2.2,
+      "spectrum": "Full Spectrum (400-700nm)",
+      "spectrally_tunable": false,
+      "dimmable": false,
+      "dimming_method": "SmartPlug (on/off)",
+      "ip_rating": null,
+      "weight_kg": null,
+      "input_voltage": "120VAC"
+    }
+  ],
+  "fans": [
+    {
+      "id": "ac-infinity-cloudline-t6",
+      "manufacturer": "AC Infinity",
+      "model": "CLOUDLINE T6",
+      "category": "inline-fan",
+      "cfm": 402,
+      "wattage": 40,
+      "noise_dba": 32,
+      "size_inches": 6,
+      "speed_control": true,
+      "controller_type": "smart_plug"
+    },
+    {
+      "id": "ac-infinity-cloudline-t4",
+      "manufacturer": "AC Infinity",
+      "model": "CLOUDLINE T4",
+      "category": "inline-fan",
+      "cfm": 205,
+      "wattage": 25,
+      "noise_dba": 28,
+      "size_inches": 4,
+      "speed_control": true,
+      "controller_type": "smart_plug"
+    },
+    {
+      "id": "secret-jardin-monkey-fan-30",
+      "manufacturer": "Secret Jardin",
+      "model": "Monkey Fan 30W",
+      "category": "circulation-fan",
+      "cfm": 340,
+      "wattage": 30,
+      "clip_mount": true,
+      "oscillating": true,
+      "controller_type": "smart_plug"
+    },
+    {
+      "id": "hurricane-classic-16",
+      "manufacturer": "Hurricane",
+      "model": "Classic 16in Wall Mount",
+      "category": "circulation-fan",
+      "cfm": 2100,
+      "wattage": 65,
+      "oscillating": true,
+      "wall_mount": true,
+      "controller_type": "manual"
+    }
+  ],
+  "dehumidifiers": [
+    {
+      "id": "quest-335",
+      "manufacturer": "Quest",
+      "model": "335",
+      "category": "commercial-dehumidifier",
+      "pints_per_day": 155,
+      "wattage": 1300,
+      "airflow_cfm": 450,
+      "coverage_sqft": 2000,
+      "voltage": "120/240V"
+    },
+    {
+      "id": "quest-506",
+      "manufacturer": "Quest",
+      "model": "506",
+      "category": "commercial-dehumidifier",
+      "pints_per_day": 250,
+      "wattage": 2200,
+      "airflow_cfm": 650,
+      "coverage_sqft": 3500,
+      "voltage": "240V"
+    },
+    {
+      "id": "quest-876",
+      "manufacturer": "Quest",
+      "model": "876",
+      "category": "commercial-dehumidifier",
+      "pints_per_day": 400,
+      "wattage": 3200,
+      "airflow_cfm": 900,
+      "coverage_sqft": 5000,
+      "voltage": "240V"
+    }
+  ],
+  "hvac": [
+    {
+      "id": "mr-cool-diy-24k",
+      "manufacturer": "MrCool",
+      "model": "DIY 24K BTU Mini Split",
+      "category": "mini-split",
+      "btu": 24000,
+      "wattage": 2100,
+      "seer": 20,
+      "coverage_sqft": 1500,
+      "voltage": "230V",
+      "refrigerant": "R-410A"
+    },
+    {
+      "id": "mr-cool-diy-36k",
+      "manufacturer": "MrCool",
+      "model": "DIY 36K BTU Mini Split",
+      "category": "mini-split",
+      "btu": 36000,
+      "wattage": 3200,
+      "seer": 18,
+      "coverage_sqft": 2200,
+      "voltage": "230V",
+      "refrigerant": "R-410A"
+    }
+  ],
+  "sensors": [
+    {
+      "id": "switchbot-meter-plus",
+      "manufacturer": "SwitchBot",
+      "model": "Meter Plus (WoIOSensor)",
+      "category": "temp-humidity-sensor",
+      "metrics": [
+        "temperature",
+        "humidity"
+      ],
+      "protocol": "switchbot_cloud",
+      "battery_powered": true,
+      "ip_rating": null,
+      "hub_required": true
+    },
+    {
+      "id": "switchbot-hub-mini",
+      "manufacturer": "SwitchBot",
+      "model": "Hub Mini",
+      "category": "hub",
+      "protocol": "switchbot_cloud",
+      "power": "USB-C 5V",
+      "connectivity": "WiFi 2.4GHz"
+    }
+  ],
+  "controllers": [
+    {
+      "id": "switchbot-plug-mini",
+      "manufacturer": "SwitchBot",
+      "model": "Plug Mini",
+      "category": "smart-plug",
+      "max_amps": 15,
+      "max_watts": 1800,
+      "protocol": "switchbot_cloud",
+      "energy_monitoring": true,
+      "voltage": "120V"
+    },
+    {
+      "id": "trolmaster-hydro-x-hcs-2",
+      "manufacturer": "TrolMaster",
+      "model": "Hydro-X HCS-2",
+      "category": "environment-controller",
+      "zones": 2,
+      "outputs": 8,
+      "protocol": "0_10v",
+      "sensors_supported": [
+        "temp",
+        "humidity",
+        "co2",
+        "light"
+      ],
+      "voltage": "120/240V"
+    }
+  ],
+  "manufacturers": {
+    "TopLight": {
+      "country": "China",
+      "website": null,
+      "categories": [
+        "led-grow-light"
+      ]
+    },
+    "P.L. Light Systems": {
+      "country": "Canada",
+      "website": "https://www.pllight.com",
+      "categories": [
+        "led-grow-light"
+      ]
+    },
+    "Fluence": {
+      "country": "USA",
+      "website": "https://fluence.science",
+      "categories": [
+        "led-grow-light"
+      ]
+    },
+    "ZipGrow": {
+      "country": "Canada",
+      "website": "https://www.zipgrow.com",
+      "categories": [
+        "led-grow-light",
+        "vertical-farming"
+      ]
+    },
+    "AC Infinity": {
+      "country": "USA",
+      "website": "https://www.acinfinity.com",
+      "categories": [
+        "inline-fan",
+        "circulation-fan"
+      ]
+    },
+    "Quest": {
+      "country": "USA",
+      "website": "https://questclimate.com",
+      "categories": [
+        "commercial-dehumidifier"
+      ]
+    },
+    "MrCool": {
+      "country": "USA",
+      "website": "https://mrcool.com",
+      "categories": [
+        "mini-split"
+      ]
+    },
+    "SwitchBot": {
+      "country": "China",
+      "website": "https://www.switch-bot.com",
+      "categories": [
+        "sensor",
+        "hub",
+        "smart-plug"
+      ]
+    },
+    "TrolMaster": {
+      "country": "USA",
+      "website": "https://www.trolmaster.com",
+      "categories": [
+        "environment-controller"
+      ]
+    },
+    "Secret Jardin": {
+      "country": "Belgium",
+      "website": null,
+      "categories": [
+        "circulation-fan"
+      ]
+    },
+    "Hurricane": {
+      "country": "USA",
+      "website": null,
+      "categories": [
+        "circulation-fan"
+      ]
+    }
+  }
+}

@@ -1881,7 +1881,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setTimeout(updateCard, 100);
 });
 // Hard code five lights for room GreenReach
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   if (!window.STATE) window.STATE = {};
   if (!Array.isArray(window.STATE.lights)) window.STATE.lights = [];
   const greenReachLights = [
@@ -1993,6 +1993,20 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     }
   });
+
+  // Also load stock equipment catalog if available (Phase 4 #23)
+  try {
+    const catalogRes = await fetch('/data/stock-equipment.catalog.json');
+    if (catalogRes.ok) {
+      const catalog = await catalogRes.json();
+      window.STATE.equipmentCatalog = catalog;
+      console.log('[groups-v2] Stock equipment catalog loaded:', (catalog.lights || []).length, 'lights,',
+        (catalog.fans || []).length, 'fans,', Object.keys(catalog.manufacturers || {}).length, 'manufacturers');
+    }
+  } catch (e) {
+    console.warn('[groups-v2] Stock catalog not loaded:', e.message);
+  }
+
   // Optionally trigger update event
   document.dispatchEvent(new Event('lights-updated'));
 });

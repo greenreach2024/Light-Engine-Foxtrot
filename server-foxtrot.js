@@ -14952,6 +14952,7 @@ import purchaseLeadsRouter from './routes/purchase-leads.js';
 import kpisRouter from './routes/kpis.js';
 import setupWizardRouter from './routes/setup-wizard.js';
 import growSystemsRouter from './routes/grow-systems.js';
+import controllerBindingsRouter from './routes/controller-bindings.js';
 import zoneRecommendationsRouter from './routes/zone-recommendations.js';
 import nutrientProfilesRouter from './routes/nutrient-profiles.js';
 import pg from 'pg';
@@ -15276,6 +15277,7 @@ app.get('/api/setup-wizard/status', async (req, res) => {
 // Setup wizard router with edge session authentication
 app.use('/api/setup-wizard', setupWizardRouter);
 app.use('/api/grow-systems', growSystemsRouter);
+app.use('/api/controller-bindings', controllerBindingsRouter);
 app.use('/api/zone-recommendations', zoneRecommendationsRouter);
 app.use('/api/nutrient-profiles', nutrientProfilesRouter);
 

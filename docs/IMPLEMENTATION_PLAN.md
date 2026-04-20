@@ -201,7 +201,7 @@ grow-systems.json now has runtime consumers -- `GET /api/grow-systems` serves te
 
 ### P1 -- Polish and Catalog
 
-- [ ] Stock equipment catalog (`public/data/stock-equipment.catalog.json`)
+- [x] Stock equipment catalog (`public/data/stock-equipment.catalog.json`)
   - Manufacturer-keyed entries with validated specs
   - Replace hardcoded arrays in groups-v2.js
 - [ ] Equipment selector sync with room equipment inventory

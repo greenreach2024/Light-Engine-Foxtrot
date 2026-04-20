@@ -297,3 +297,60 @@ test('event taxonomy includes agent_decision event type', () => {
   assert.ok(taxonomy.events.agent_decision.payload.agent, 'payload includes agent field');
   assert.ok(taxonomy.events.agent_decision.payload.chosen, 'payload includes chosen field');
 });
+
+// ---- Phase 4 #22: Controller bindings + auto-assign ----
+
+test('controller-bindings route module exists and exports router', () => {
+  const src = fs.readFileSync(path.resolve('./routes/controller-bindings.js'), 'utf-8');
+  assert.ok(src.includes("import { Router }") || src.includes("Router()"), 'uses express Router');
+  assert.ok(src.includes("router.get('/'"), 'GET / list endpoint');
+  assert.ok(src.includes("router.post('/'"), 'POST / create endpoint');
+  assert.ok(src.includes("router.delete('/:id'"), 'DELETE /:id endpoint');
+  assert.ok(src.includes("router.post('/auto-suggest'"), 'POST /auto-suggest endpoint');
+  assert.ok(src.includes("router.post('/accept-suggestion'"), 'POST /accept-suggestion endpoint');
+});
+
+test('controller-bindings schema file has valid structure', () => {
+  const bindings = JSON.parse(fs.readFileSync(path.resolve('./public/data/controller-bindings.json'), 'utf-8'));
+  assert.strictEqual(bindings['$schema'], 'controller-bindings-v1');
+  assert.ok(Array.isArray(bindings.bindings), 'bindings is an array');
+});
+
+test('controller-bindings router is mounted in server-foxtrot', () => {
+  const sf = fs.readFileSync(path.resolve('./server-foxtrot.js'), 'utf-8');
+  assert.ok(sf.includes("import controllerBindingsRouter"), 'imports controller bindings router');
+  assert.ok(sf.includes("/api/controller-bindings"), 'mounts at /api/controller-bindings');
+});
+
+// ---- Phase 4 #23: Stock equipment catalog ----
+
+test('stock-equipment.catalog.json has valid structure and entries', () => {
+  const catalog = JSON.parse(fs.readFileSync(path.resolve('./public/data/stock-equipment.catalog.json'), 'utf-8'));
+  assert.strictEqual(catalog['$schema'], 'stock-equipment-catalog-v1');
+  assert.ok(Array.isArray(catalog.lights), 'has lights array');
+  assert.ok(Array.isArray(catalog.fans), 'has fans array');
+  assert.ok(Array.isArray(catalog.dehumidifiers), 'has dehumidifiers array');
+  assert.ok(Array.isArray(catalog.hvac), 'has hvac array');
+  assert.ok(catalog.manufacturers && typeof catalog.manufacturers === 'object', 'has manufacturers object');
+  assert.ok(catalog.lights.length >= 5, 'at least 5 lights from hardcoded + catalog');
+  assert.ok(Object.keys(catalog.manufacturers).length >= 5, 'at least 5 manufacturers');
+  // Validate each light has required fields
+  catalog.lights.forEach(l => {
+    assert.ok(l.id, `light missing id: ${JSON.stringify(l)}`);
+    assert.ok(l.manufacturer, `light ${l.id} missing manufacturer`);
+    assert.ok(typeof l.wattage === 'number', `light ${l.id} missing wattage`);
+  });
+});
+
+test('stock catalog exists in both public directories', () => {
+  const le = fs.existsSync(path.resolve('./public/data/stock-equipment.catalog.json'));
+  const central = fs.existsSync(path.resolve('./greenreach-central/public/data/stock-equipment.catalog.json'));
+  assert.ok(le, 'catalog in root public/data/');
+  assert.ok(central, 'catalog in greenreach-central/public/data/');
+});
+
+test('groups-v2.js loads stock equipment catalog', () => {
+  const gv2 = fs.readFileSync(path.resolve('./public/groups-v2.js'), 'utf-8');
+  assert.ok(gv2.includes('stock-equipment.catalog.json'), 'references catalog file');
+  assert.ok(gv2.includes('window.STATE.equipmentCatalog'), 'stores on STATE.equipmentCatalog');
+});
