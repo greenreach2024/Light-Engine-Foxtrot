@@ -33,6 +33,11 @@ The farm runs entirely on Google Cloud Run. The Light Engine Cloud Run service I
 
 ### Recent Fixes (Apr 19, 2026)
 
+41. **Phase 2 #9: 3D Viewer -- Zone Status Coloring from Live Sensor Targets**
+    - Branch: `impl/phase2-setup-template-aware` (continued).
+    - **3d-farm-viewer.html** (both copies): The viewer already fetched live sensor data via `/env?hours=24` (not mock). Added: (1) Fetch `target-ranges.json` in `loadAllData()` and store in `S.targetRanges`. (2) `computeZoneDeviations()` called from `buildZoneDataMap()` -- classifies each zone as ok/caution/warning/critical per metric (temperature, humidity, VPD) using severity thresholds. (3) Always-on zone tinting when overlay is `none` -- zones glow green (ok), amber (warning), or red (critical) at subtle opacity. (4) New "Status" overlay button -- prominent zone-level deviation coloring with legend showing in-range/warning/critical counts. (5) `findZoneDataForMesh()` helper resolves zone ID mismatches between room maps and env data.
+    - Implementation plan: `docs/IMPLEMENTATION_PLAN.md` item #9 marked SHIPPED.
+
 40. **Phase 2 #8: Zone-Aware Recommendation Rollup + Confidence**
     - Branch: `impl/phase2-setup-template-aware` (continued).
     - **LE route** (`routes/zone-recommendations.js`, NEW ~310 lines): `GET /api/zone-recommendations` (all zones), `GET /api/zone-recommendations/:zoneId` (single). Reads env-cache.json, target-ranges.json, groups.json, rooms.json. Zone ID normalization handles inconsistent formats (env-cache "zone-1" vs groups.json "room-xxx-zZone 1"). Per-zone output: readings (temp/rh/vpd/sensor_count), drift from midpoint, group context summary (crops, trays, equipment), actionable recommendations with priority, crop conflict detection (>3 unique crops), confidence scoring (1.0 base minus penalties for missing sensors/readings/groups/crops/targets, levels: high/medium/low).

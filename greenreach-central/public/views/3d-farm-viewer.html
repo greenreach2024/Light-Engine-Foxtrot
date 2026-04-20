@@ -385,6 +385,7 @@
       <button data-overlay="humidity">Humidity</button>
       <button data-overlay="co2">CO2</button>
       <button data-overlay="vpd">VPD</button>
+      <button data-overlay="status">Status</button>
       <div class="sep"></div>
       <button id="btnWalls" class="active" title="Toggle walls and ceiling">Walls</button>
       <div class="sep"></div>
@@ -491,6 +492,7 @@
     const S = {
       rooms: [], groups: [], roomMaps: {}, envData: null,
       iotDevices: [], cropRegistry: {},
+      targetRanges: null,
       overlay: 'none', roomFilter: '__all',
       currentTimeIndex: -1,
       isPlaying: false,
@@ -1370,12 +1372,13 @@
         if (!opts.silent) {
           status(opts.reason === 'manual' ? 'Refreshing viewer data...' : 'Loading farm data...');
         }
-        const [roomsRes, groupsRes, iotRes, envRes, regRes] = await Promise.all([
+        const [roomsRes, groupsRes, iotRes, envRes, regRes, trRes] = await Promise.all([
           authFetch('/data/rooms.json?t=' + Date.now()),
           authFetch('/data/groups.json?t=' + Date.now()),
           authFetch('/data/iot-devices.json?t=' + Date.now()),
           authFetch('/env?hours=24&t=' + Date.now(), { cache: 'no-store' }),
           authFetch('/data/crop-registry.json?t=' + Date.now()),
+          authFetch('/data/target-ranges.json?t=' + Date.now()),
         ]);
 
         // Room list: still a wholesale replace — this list rarely changes and
@@ -1395,6 +1398,7 @@
         }
         if (envRes.ok) { S.envData = await envRes.json(); }
         if (regRes.ok) { const d = await regRes.json(); S.cropRegistry = d.crops || d || {}; }
+        if (trRes.ok) { S.targetRanges = await trRes.json(); }
 
         status('Loading room layouts...');
         const freshRoomMaps = {};
@@ -1613,6 +1617,62 @@
         }
         if (entry) entry.groups.push(g);
       });
+      computeZoneDeviations();
+    }
+
+
+    // ---- Zone deviation from targets (for status coloring) ----
+    function computeZoneDeviations() {
+      if (!S.targetRanges) return;
+      const zones = S.targetRanges.zones || {};
+      const defaults = S.targetRanges.defaults || {};
+      const thr = S.targetRanges.severity_thresholds || {};
+      const tempThr = thr.temperature || { warning_deviation: 2, critical_deviation: 3 };
+      const rhThr = thr.humidity || { warning_deviation: 10, critical_deviation: 20 };
+      const vpdThr = thr.vpd || { warning_deviation: 0.3, critical_deviation: 0.5 };
+      Object.entries(S.zoneDataMap).forEach(([zId, data]) => {
+        const targets = zones[zId] || defaults;
+        const metrics = {};
+        let worst = 'ok';
+        function classify(val, min, max, warnDev, critDev, name) {
+          if (val == null) return;
+          let deviation = 0;
+          if (val < min) deviation = min - val;
+          else if (val > max) deviation = val - max;
+          let status = 'ok';
+          if (deviation >= critDev) status = 'critical';
+          else if (deviation >= warnDev) status = 'warning';
+          else if (deviation > 0) status = 'caution';
+          metrics[name] = { value: val, deviation: +deviation.toFixed(2), status };
+          if (status === 'critical') worst = 'critical';
+          else if (status === 'warning' && worst !== 'critical') worst = 'warning';
+          else if (status === 'caution' && worst === 'ok') worst = 'caution';
+        }
+        classify(data.temp, targets.temp_min ?? 18, targets.temp_max ?? 26,
+          tempThr.warning_deviation, tempThr.critical_deviation, 'temperature');
+        classify(data.humidity, targets.rh_min ?? 45, targets.rh_max ?? 70,
+          rhThr.warning_deviation, rhThr.critical_deviation, 'humidity');
+        if (data.vpd != null) {
+          classify(data.vpd, targets.vpd_min ?? 0.6, targets.vpd_max ?? 1.4,
+            vpdThr.warning_deviation, vpdThr.critical_deviation, 'vpd');
+        }
+        data.deviation = { worst, metrics };
+      });
+    }
+
+    function findZoneDataForMesh(mesh) {
+      const ud = mesh.userData;
+      const zId = ud.zoneId;
+      if (S.zoneDataMap[zId]) return S.zoneDataMap[zId];
+      const name = String(ud.zone?.name || ud.zone?.zone || '');
+      if (name) {
+        const key = Object.keys(S.zoneDataMap).find(k =>
+          k === name || S.zoneDataMap[k].name === name ||
+          k === 'zone-' + name || S.zoneDataMap[k].name === 'Zone ' + name
+        );
+        if (key) return S.zoneDataMap[key];
+      }
+      return null;
     }
 
     function getVal(sensors, ...keys) {
@@ -2397,7 +2457,56 @@
 
       const legend = document.getElementById('dataLegend');
       if (type === 'none') {
+        // Always-on zone status tinting when no overlay is active
+        if (S.targetRanges) {
+          const STATUS_TINT = { ok: 0x22c55e, caution: 0xfacc15, warning: 0xf59e0b, critical: 0xef4444 };
+          S.meshes.zones.forEach(m => {
+            if (!m.isMesh || m.userData.type !== 'zone') return;
+            const data = findZoneDataForMesh(m);
+            if (!data || !data.deviation) return;
+            const worst = data.deviation.worst;
+            if (worst !== 'ok') {
+              m.material.color.setHex(STATUS_TINT[worst]);
+              m.material.opacity = worst === 'critical' ? 0.30 : worst === 'warning' ? 0.25 : 0.20;
+            }
+          });
+        }
         legend.classList.remove('visible');
+        return;
+      }
+
+      // Dedicated status overlay: per-zone deviation from target ranges
+      if (type === 'status') {
+        const STATUS_COLORS = { ok: 0x22c55e, caution: 0xfacc15, warning: 0xf59e0b, critical: 0xef4444, unknown: 0x475569 };
+        const STATUS_OPACITY = { ok: 0.30, caution: 0.40, warning: 0.45, critical: 0.55, unknown: 0.15 };
+        let worstOverall = 'ok';
+        let okCount = 0, warnCount = 0, critCount = 0;
+        S.meshes.zones.forEach(m => {
+          if (!m.isMesh || m.userData.type !== 'zone') return;
+          const data = findZoneDataForMesh(m);
+          const worst = data?.deviation?.worst || 'unknown';
+          const color = STATUS_COLORS[worst] || STATUS_COLORS.unknown;
+          m.material.color.setHex(color);
+          m.material.opacity = STATUS_OPACITY[worst] || 0.15;
+          if (m.material.emissive) {
+            m.material.emissive.setHex(color);
+            m.material.emissiveIntensity = worst === 'critical' ? 0.18 : worst === 'warning' ? 0.10 : 0.03;
+          }
+          if (worst === 'critical') { critCount++; worstOverall = 'critical'; }
+          else if (worst === 'warning') { warnCount++; if (worstOverall !== 'critical') worstOverall = 'warning'; }
+          else if (worst === 'caution') { warnCount++; if (worstOverall === 'ok') worstOverall = 'caution'; }
+          else if (worst === 'ok') { okCount++; }
+        });
+        legend.classList.add('visible');
+        const parts = [];
+        if (okCount) parts.push(okCount + ' in range');
+        if (warnCount) parts.push(warnCount + ' warning');
+        if (critCount) parts.push(critCount + ' critical');
+        document.getElementById('legendTitle').textContent = 'Zone Status' + (parts.length ? ' -- ' + parts.join(', ') : '');
+        document.getElementById('legendMin').textContent = 'In Range';
+        document.getElementById('legendMax').textContent = 'Critical';
+        const gradBar = document.getElementById('legendGradient');
+        gradBar.style.background = 'linear-gradient(to right, #22c55e 0%, #facc15 33%, #f59e0b 66%, #ef4444 100%)';
         return;
       }
 

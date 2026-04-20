@@ -226,9 +226,9 @@ grow-systems.json now has runtime consumers -- `GET /api/grow-systems` serves te
 
 ### P0 -- Live Data
 
-- [ ] Wire live sensor telemetry to zone/group coloring
-  - Replace random/mock data with real SwitchBot readings
-  - Color zones by temperature, humidity, or VPD deviation from target
+- [x] Wire live sensor telemetry to zone/group coloring
+  - Viewer already used live /env endpoint; added target-ranges.json fetch
+  - Color zones by temperature, humidity, or VPD deviation from target (Status overlay + always-on tinting)
 - [ ] Automation state overlay
   - Show active lighting schedules, HVAC state, dosing status
 
@@ -366,7 +366,7 @@ This ordering respects dependency chains: items higher on the list unblock items
 | # | Item | Workstream | Ref |
 |---|------|-----------|-----|
 | 8 | ~~Zone-aware recommendation rollup + confidence~~ | Grow Mgmt | SHIPPED |
-| 9 | Wire 3D viewer to live sensor telemetry | 3D Viewer | -- |
+| 9 | ~~Wire 3D viewer to live sensor telemetry~~ | 3D Viewer | SHIPPED |
 | 10 | Remove 2-tank hardcoding; integrate nutrient-profiles.json | Nutrient | -- |
 | 11 | Recipe Modifier Management UI | AI Agents | `XC-7` |
 | 12 | ~~Merge setup-agent phases (template-aware)~~ | Farm Setup | Step 4 -- SHIPPED |
