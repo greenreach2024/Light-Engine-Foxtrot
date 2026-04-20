@@ -26,6 +26,10 @@
 # =================================================================
 
 set -euo pipefail
+# Propagate command-substitution failures so e.g. `$(flags_for_role ...)`
+# aborts the script if the callee returns non-zero, rather than silently
+# inserting an empty string and running `gcloud run deploy` without flags.
+shopt -s inherit_errexit
 
 # ----------------------------------------------------------------
 # Configuration (override via env vars)
@@ -97,6 +101,11 @@ build_and_push() {
   local svc="$1" ctx="$2"
   local image_ref="${REGISTRY}/${svc}:${TAG}"
 
+  if [[ ! -d "$ctx" ]]; then
+    echo "ERROR: [${svc}] build context does not exist: ${ctx}" >&2
+    return 1
+  fi
+
   echo ""
   echo ">>> [${svc}] buildx build --platform ${PLATFORM} --push"
   echo "    context: ${ctx}"
@@ -139,20 +148,28 @@ deploy_by_digest() {
   echo ""
   echo ">>> [${svc}] gcloud run deploy --image ${image_ref}"
 
-  # shellcheck disable=SC2046
+  # Capture flags first so an unknown role aborts the script here (via
+  # inherit_errexit) rather than silently running `gcloud run deploy`
+  # with no per-role flags.
+  local flags
+  flags=$(flags_for_role "${role}" "${svc}")
+
+  # shellcheck disable=SC2086
   gcloud run deploy "${svc}" \
     --project="${PROJECT_ID}" \
     --region="${REGION}" \
     --image="${image_ref}" \
-    $(flags_for_role "${role}" "${svc}")
+    ${flags}
 
-  local url
+  # URL lookup is best-effort; don't fail the whole deploy if it returns
+  # nothing (e.g. status.url not yet populated, permission gap).
+  local url=""
   url=$(gcloud run services describe "${svc}" \
     --project="${PROJECT_ID}" \
     --region="${REGION}" \
-    --format="value(status.url)")
+    --format="value(status.url)" 2>/dev/null || true)
   echo ">>> [${svc}] deployed @ ${digest}"
-  echo ">>> [${svc}] URL: ${url}"
+  echo ">>> [${svc}] URL: ${url:-(unavailable)}"
 }
 
 # ----------------------------------------------------------------
