@@ -22495,6 +22495,33 @@ function savePlantingAssignments(data) {
 }
 
 /**
+ * GET /api/planting/recipes
+ * Return available crops from lighting-recipes.json for the manual scheduling form
+ */
+app.get('/api/planting/recipes', (req, res) => {
+  try {
+    const recipesPath = path.join(__dirname, 'public', 'data', 'lighting-recipes.json');
+    if (!fs.existsSync(recipesPath)) {
+      return res.json({ recipes: [] });
+    }
+    const recipes = JSON.parse(fs.readFileSync(recipesPath, 'utf8'));
+    const crops = recipes.crops || {};
+    const result = Object.entries(crops).map(([name, schedule]) => {
+      const id = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+      return {
+        id: `crop-${id}`,
+        name,
+        harvestDays: Array.isArray(schedule) ? schedule.length : 30
+      };
+    });
+    res.json({ recipes: result });
+  } catch (err) {
+    console.error('[planting] Failed to load recipes:', err.message);
+    res.status(500).json({ error: 'Failed to load recipes' });
+  }
+});
+
+/**
  * GET /api/planting/assignments
  * Load saved planting assignments (optionally filtered by farm_id)
  */
@@ -22512,7 +22539,7 @@ app.get('/api/planting/assignments', (req, res) => {
  * POST /api/planting/assignments
  * Save or update a planting assignment for a group
  */
-app.post('/api/planting/assignments', (req, res) => {
+app.post('/api/planting/assignments', async (req, res) => {
   const { group_id, crop_id, crop_name, seed_date, harvest_date, status, notes } = req.body;
   if (!group_id) return res.status(400).json({ error: 'group_id is required' });
 
@@ -22542,6 +22569,27 @@ app.post('/api/planting/assignments', (req, res) => {
 
   savePlantingAssignments(store);
   console.log(`[planting] Assignment saved: group=${group_id}, crop=${crop_name}`);
+
+  // Stamp groups.json so daily resolver picks up the crop
+  try {
+    await withGroupsLock((groups) => {
+      const g = groups.find(gr => gr.id === group_id);
+      if (g) {
+        g.crop = crop_name || '';
+        g.plan = crop_id || '';
+        g.planId = crop_id || '';
+        g.recipe = crop_id || '';
+        if (!g.planConfig) g.planConfig = {};
+        if (!g.planConfig.anchor) g.planConfig.anchor = {};
+        g.planConfig.anchor.seedDate = seed_date || new Date().toISOString().slice(0, 10);
+        g.lastModified = now;
+        console.log(`[planting] Stamped group ${group_id} in groups.json`);
+      }
+    });
+  } catch (err) {
+    console.error(`[planting] Failed to stamp group ${group_id}:`, err.message);
+  }
+
   res.json({ ok: true, assignment });
 });
 
@@ -22550,7 +22598,7 @@ app.post('/api/planting/assignments', (req, res) => {
  * Create a planting plan (manual schedule, AI implementation, or scoped scheduling)
  * Supports scope: tray, group, zone, room
  */
-app.post('/api/planting/plan', (req, res) => {
+app.post('/api/planting/plan', async (req, res) => {
   const { scope, cadence, cropId, cropName, items, notes } = req.body;
 
   if (!scope || !cropId) {
@@ -22636,6 +22684,30 @@ app.post('/api/planting/plan', (req, res) => {
     });
     savePlantingAssignments(store);
     console.log(`[planting] Plan ${planId}: saved assignments for ${groupIds.length} groups`);
+
+    // Also stamp groups.json so daily resolver and other UIs see the crop assignment
+    try {
+      await withGroupsLock((groups) => {
+        let changed = 0;
+        groupIds.forEach(gid => {
+          const g = groups.find(gr => gr.id === gid);
+          if (!g) return;
+          g.crop = cropName || '';
+          g.plan = cropId || '';
+          g.planId = cropId || '';
+          g.recipe = cropId || '';
+          if (!g.planConfig) g.planConfig = {};
+          if (!g.planConfig.anchor) g.planConfig.anchor = {};
+          g.planConfig.anchor.seedDate = seedDate;
+          g.lastModified = now.toISOString();
+          changed++;
+        });
+        console.log(`[planting] Plan ${planId}: stamped ${changed} groups in groups.json`);
+      });
+    } catch (err) {
+      console.error(`[planting] Failed to stamp groups.json:`, err.message);
+      // Non-blocking: assignments are saved, groups.json stamp is best-effort
+    }
   }
 
   const plan = {

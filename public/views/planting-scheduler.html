@@ -2497,6 +2497,57 @@ Remix Recommendations
         });
       });
 
+      // ── Assignment-based tasks (for groups with no active trays) ──
+      // When the farm has saved planting assignments but no trays in inventory,
+      // generate seeding tasks from those assignments so the timeline is populated.
+      const trayGroupIds = new Set(tasks.map(t => t.groupId));
+      if (state.savedAssignments) {
+        Object.entries(state.savedAssignments).forEach(([groupId, assignment]) => {
+          if (trayGroupIds.has(groupId)) return; // already has a tray-based task
+          if (!assignment || !assignment.crop_name) return;
+
+          const group = state.groups?.find(g => g.id === groupId);
+          const normalizedCropId = normalizeCropId(assignment.crop_id || assignment.crop_name);
+          const harvestDays = getPlanHarvestDays(assignment.crop_id || assignment.crop_name || normalizedCropId);
+          const cropName = assignment.crop_name || extractCropDisplayName(normalizedCropId);
+
+          const seedDate = assignment.seed_date ? new Date(assignment.seed_date + 'T00:00:00') : new Date();
+          seedDate.setHours(0, 0, 0, 0);
+          const harvestDate = assignment.harvest_date ? new Date(assignment.harvest_date + 'T00:00:00') : new Date(seedDate.getTime() + harvestDays * 86400000);
+          harvestDate.setHours(0, 0, 0, 0);
+
+          const daysUntilSeeding = Math.floor((seedDate - today) / 86400000);
+          let urgency = 'normal';
+          if (daysUntilSeeding < 0) urgency = 'overdue';
+          else if (daysUntilSeeding <= 2) urgency = 'urgent';
+          else if (daysUntilSeeding <= 5) urgency = 'soon';
+
+          tasks.push({
+            id: `assign-${groupId}-${seedDate.getTime()}`,
+            trayId: null,
+            groupId,
+            location: group ? `${group.room} / ${group.zone}` : groupId,
+            currentCrop: cropName,
+            expectedHarvest: harvestDate,
+            harvestWindow: { earliest: harvestDate, latest: harvestDate },
+            cropId: normalizedCropId,
+            cropName,
+            cropClass: 'leafy',
+            targetSeedDate: seedDate,
+            earliestSeedDate: new Date(seedDate.getTime() - 3 * 86400000),
+            latestSeedDate: new Date(seedDate.getTime() + 3 * 86400000),
+            targetTransplantDate: seedDate,
+            expectedNewHarvest: harvestDate,
+            quantity: group?.trays || 15,
+            urgency,
+            daysUntil: daysUntilSeeding,
+            harvestStrategy: 'single_harvest',
+            ccaNote: null,
+            _fromAssignment: true
+          });
+        });
+      }
+
       // Sort by target seed date
       return tasks.sort((a, b) => a.targetSeedDate - b.targetSeedDate);
     }
@@ -3618,15 +3669,17 @@ Remix Recommendations
         // Non-blocking - show warning but continue
       }
 
-      // Update in-memory state (keeping existing behavior for UI updates)
+      // Update in-memory state: stamp plan fields so findGroupPlan() works
+      // and seeding tasks render correctly on the timeline
       state.groups = state.groups.map(group => {
         if (!scopedGroupIds.has(group.id)) return group;
         return {
           ...group,
+          plan: normalizedCropId,
+          crop: normalizedCropName,
           nextCrop: normalizedCropName,
           nextSeedDate: seedDate.toISOString().split('T')[0],
           nextHarvestDate: harvestDate.toISOString().split('T')[0]
-          // Note: DO NOT update group.plan (current crop) - that's separate!
         };
       });
 
