@@ -90,7 +90,7 @@ Recommended execution order matches the dependency chain:
 - [x] Pin recipe snapshots at seed time (`R4`)
   - Persist `recipe_snapshot_hash` with each tray run
   - Simulate against pinned snapshot, not live recipe
-- [ ] Relax chat-agent scheduling prohibition (`R12`)
+- [x] Relax chat-agent scheduling prohibition (`R12`)
   - Allow safe summarization and invocation of sanctioned scheduler tools
   - Prohibit direct schedule mutation only
 
@@ -298,7 +298,7 @@ grow-systems.json now has runtime consumers -- `GET /api/grow-systems` serves te
   - Show current modifiers per recipe, allow approve/reject/revert
 - [ ] Agent infrastructure write actions
   - EVIE can explain but cannot fully operate; add sanctioned write tools for equipment, schedule, and recipe changes
-- [ ] Inter-agent handoff protocol
+- [x] Inter-agent handoff protocol
   - Define structured handoff between EVIE, GWEN, FAYE, and future S.A.G.E.
 - [ ] FAYE trust-tier state machine
   - Implement full `new -> learning -> trusted -> autonomous` lifecycle

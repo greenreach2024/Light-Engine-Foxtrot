@@ -182,3 +182,33 @@ test('getZoneMetricValueAtFrame handles ppfd and dli', () => {
   assert.ok(html.includes("metricKey === 'dli'"), 'should handle dli metric');
   assert.ok(html.includes('g.targetPpfd'), 'should read group targetPpfd');
 });
+
+// ── Agent Write Actions + Inter-Agent Handoff (#18) ──────────────────
+test('assistant-chat has get_active_light_schedules tool', () => {
+  const chatText = fs.readFileSync(path.resolve('./greenreach-central/routes/assistant-chat.js'), 'utf-8');
+  assert.ok(chatText.includes("name: 'get_active_light_schedules'"), 'should define get_active_light_schedules tool');
+  assert.ok(chatText.includes("case 'get_active_light_schedules':"), 'should have execution handler');
+});
+
+test('assistant-chat has handoff_to_agent tool', () => {
+  const chatText = fs.readFileSync(path.resolve('./greenreach-central/routes/assistant-chat.js'), 'utf-8');
+  assert.ok(chatText.includes("name: 'handoff_to_agent'"), 'should define handoff_to_agent tool');
+  assert.ok(chatText.includes("case 'handoff_to_agent':"), 'should have execution handler');
+  assert.ok(chatText.includes("target_agent"), 'should accept target_agent parameter');
+  assert.ok(chatText.includes("from: 'evie'"), 'should set handoff source as evie');
+});
+
+test('handoff_to_agent routes to existing agent channels', () => {
+  const chatText = fs.readFileSync(path.resolve('./greenreach-central/routes/assistant-chat.js'), 'utf-8');
+  assert.ok(chatText.includes("target_agent === 'faye'"), 'should route faye handoffs to escalate_to_faye');
+  assert.ok(chatText.includes("target_agent === 'gwen'"), 'should route gwen handoffs to ask_gwen');
+  assert.ok(chatText.includes('agent_handoffs'), 'should queue unknown agents for async processing');
+});
+
+test('scheduling read tools are auto-tier', () => {
+  const chatText = fs.readFileSync(path.resolve('./greenreach-central/routes/assistant-chat.js'), 'utf-8');
+  assert.ok(chatText.includes("'get_active_light_schedules'"), 'get_active_light_schedules in auto tier');
+  assert.ok(chatText.includes("'handoff_to_agent'"), 'handoff_to_agent in auto tier');
+  // set_light_schedule should remain in confirm tier (write protection)
+  assert.ok(chatText.includes("'set_light_schedule'"), 'set_light_schedule should still be confirm tier');
+});

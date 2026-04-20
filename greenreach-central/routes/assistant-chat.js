@@ -224,7 +224,7 @@ const pendingActions = new Map();
 // ── Autonomous Action Trust Tiers ─────────────────────────────────────
 const TRUST_TIERS = {
   // AUTO: Execute immediately, notify after
-  auto: new Set(['dismiss_alert', 'get_ai_pricing_recommendations', 'save_user_memory', 'escalate_to_faye', 'reply_to_faye', 'get_faye_directives', 'read_skill_file', 'get_gwen_messages', 'reply_to_gwen', 'ask_gwen']),
+  auto: new Set(['dismiss_alert', 'get_ai_pricing_recommendations', 'save_user_memory', 'escalate_to_faye', 'reply_to_faye', 'get_faye_directives', 'read_skill_file', 'get_gwen_messages', 'reply_to_gwen', 'ask_gwen', 'get_active_light_schedules', 'handoff_to_agent']),
   // QUICK-CONFIRM: Execute with brief undo window
   quick_confirm: new Set(['resolve_all_alerts', 'resolve_stale_alerts', 'mark_harvest_complete', 'update_farm_profile', 'update_group_crop', 'create_room', 'create_zone', 'update_certifications', 'complete_setup', 'update_crop_price', 'add_inventory_item', 'update_manual_inventory', 'record_harvest', 'update_room_specs', 'apply_crop_environment', 'recommend_farm_layout', 'update_crop_description', 'add_salad_mix_inventory', 'update_equipment', 'align_equipment_to_walls', 'update_group', 'optimize_layout', 'update_zone', 'add_equipment', 'remove_equipment']),
   // CONFIRM: Ask before executing (default for write tools)
@@ -1698,6 +1698,39 @@ const GPT_TOOLS = [
           days_ahead: { type: 'number', description: 'Look-ahead window in days (default: 7)' },
           farm_id: { type: 'string', description: 'Farm ID (optional)' }
         }
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_active_light_schedules',
+      description: 'Get all active light schedules across groups -- on/off times, PPFD targets, photoperiod, spectrum, and recipe stage. Read-only schedule summary. Use when the farmer asks "what are the light schedules", "show me the lighting", or "what PPFD are we running".',
+      parameters: {
+        type: 'object',
+        properties: {
+          zone_id: { type: 'string', description: 'Optional zone to filter by' },
+          room_id: { type: 'string', description: 'Optional room to filter by' }
+        }
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'handoff_to_agent',
+      description: 'Hand off a conversation or task to another agent with structured context. Use for cross-domain requests: E.V.I.E. handles farm ops, F.A.Y.E. handles business/admin, G.W.E.N. handles research/science, S.A.G.E. handles sustainability/grants. Include all relevant context so the receiving agent does not need to re-gather information.',
+      parameters: {
+        type: 'object',
+        properties: {
+          target_agent: { type: 'string', description: 'Target agent: "faye", "gwen", "sage"', enum: ['faye', 'gwen', 'sage'] },
+          task_summary: { type: 'string', description: 'Brief one-line summary of what needs to be handled' },
+          context: { type: 'string', description: 'Full context: conversation summary, relevant data gathered, user intent, and any partial work completed' },
+          data_snapshot: { type: 'object', description: 'Optional structured data to pass (sensor readings, crop info, order details, etc.)' },
+          priority: { type: 'string', description: 'Priority: low, normal, high', enum: ['low', 'normal', 'high'] },
+          return_to_evie: { type: 'boolean', description: 'Whether the receiving agent should return results to E.V.I.E. for the user (default: true)' }
+        },
+        required: ['target_agent', 'task_summary', 'context']
       }
     }
   },
@@ -5095,6 +5128,90 @@ async function executeExtendedTool(toolName, params, farmId) {
           ...sections,
           generated_at: new Date().toISOString()
         };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+
+    case 'get_active_light_schedules': {
+      try {
+        const groupsData = await farmStore.get(farmId, 'groups') || [];
+        const groups = Array.isArray(groupsData) ? groupsData : (groupsData.groups || []);
+        const schedules = groups
+          .filter(g => {
+            if (params.zone_id && g.zoneId !== params.zone_id && g.zone !== params.zone_id) return false;
+            if (params.room_id && g.roomId !== params.room_id && g.room !== params.room_id) return false;
+            return true;
+          })
+          .map(g => {
+            const pc = g.planConfig || {};
+            const preview = pc.preview || {};
+            return {
+              group: g.name || g.id,
+              room: g.room || null,
+              zone: g.zone || null,
+              crop: g.crop || g.recipe || 'unassigned',
+              ppfd: preview.ppfd || pc.ppfd || null,
+              dli: preview.dli || pc.dli || null,
+              photoperiod: preview.photoperiod || pc.photoperiod || null,
+              schedule: g.schedule || null,
+              plan: g.plan || null,
+              status: g.status || 'draft',
+              active: g.active !== false
+            };
+          });
+        return {
+          ok: true,
+          count: schedules.length,
+          schedules,
+          generated_at: new Date().toISOString()
+        };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+
+    case 'handoff_to_agent': {
+      try {
+        const { target_agent, task_summary, context, data_snapshot, priority, return_to_evie } = params;
+        const handoffPayload = {
+          from: 'evie',
+          to: target_agent,
+          task_summary,
+          context,
+          data_snapshot: data_snapshot || null,
+          priority: priority || 'normal',
+          return_to_evie: return_to_evie !== false,
+          handoff_at: new Date().toISOString(),
+          conversation_id: params.conversation_id || null
+        };
+
+        // Route to existing agent communication channels
+        if (target_agent === 'faye') {
+          return await executeTool('escalate_to_faye', {
+            subject: task_summary,
+            body: context + (data_snapshot ? '\n\nData: ' + JSON.stringify(data_snapshot) : ''),
+            priority: priority || 'normal',
+            farm_id: farmId
+          });
+        } else if (target_agent === 'gwen') {
+          return await executeTool('ask_gwen', {
+            question: task_summary + '\n\nContext: ' + context,
+            farm_id: farmId,
+            data: data_snapshot || undefined
+          });
+        } else {
+          // Future agents (S.A.G.E.) -- store handoff for async processing
+          const handoffStore = await farmStore.get(farmId, 'agent_handoffs') || { handoffs: [] };
+          handoffStore.handoffs.push(handoffPayload);
+          await farmStore.set(farmId, 'agent_handoffs', handoffStore);
+          return {
+            ok: true,
+            status: 'queued',
+            message: 'Handoff to ' + target_agent.toUpperCase() + ' queued. The agent will process this when available.',
+            handoff_at: handoffPayload.handoff_at
+          };
+        }
       } catch (err) {
         return { ok: false, error: err.message };
       }
