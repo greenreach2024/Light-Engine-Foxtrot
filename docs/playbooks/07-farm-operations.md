@@ -211,7 +211,7 @@ Every UI or agent that assigns a crop to a group **must** stamp all five fields 
 | Field | Purpose | Who reads it |
 |---|---|---|
 | `group.crop` | Human-readable canonical crop name | UI, reports |
-| `group.recipe` | Recipe key in `lighting-recipes.json` (usually the canonical crop name) | `resolvePlanLightTargets`, `resolvePlanEnvTargets` |
+| `group.recipe` | Recipe key in `lighting-recipes.json` (usually the canonical crop name) | `resolvePlanLightTargets`, `resolvePlanEnvTargets`, nutrient-management enrichment (`server-foxtrot.js` ~L17002) |
 | `group.plan` | Plan key in `plans.json` / registry | Daily resolver (`runDailyPlanResolver`) |
 | `group.planId` | Same as `group.plan` (alias for backward compat) | Same |
 | `group.planConfig.anchor.seedDate` | `YYYY-MM-DD`; day 1 anchor for recipe progression | `computePlanDayNumber` → `resolvePlanLightTargets(day)` |

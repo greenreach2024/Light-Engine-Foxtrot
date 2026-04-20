@@ -120,29 +120,32 @@ Farm operator can re-run the builder from `farm-setup.html → Re-run Builder`. 
 | `DESIGN_CONDITIONS_CACHE_TTL_HOURS` | Default 720 (30 days) |
 | `FARM_BUILDER_RECENT_PROPOSAL_LIMIT` | UI cap; default 5 |
 
-## 9. Canonical data shape for growing systems
+## 9. Canonical data shape for growing systems (proposed)
 
-`grow-systems.json` is canonical. `equipment-db.js HYDRO_SYSTEM_DB` is derived from it at module load (Phase C4). Fields every template must carry:
+> **Status:** This is the **target** schema for `grow-systems.json` once the Farm Builder is fully active. Today's `grow-systems.json` already carries the fields marked **(present)**; fields marked **(Phase C)** are new and land with `buildFarmLayout_v2` so the builder can size HVAC/irrigation from the template alone. `equipment-db.js HYDRO_SYSTEM_DB` is derived from `grow-systems.json` at module load starting in **Phase C4**.
 
 ```jsonc
 {
-  "id": "nft-rack-3tier",
-  "name": "NFT Rack, 3-Tier",
-  "category": "nft_rack",
-  "suitableCropClasses": ["leafy_greens", "herbs"],
-  "footprintM": { "length": 2.4, "width": 0.6 },
-  "heightM": 2.4,
-  "tierCount": 3,
-  "traysPerTier": 10,
-  "trayFormat": { "lengthIn": 24, "widthIn": 28, "plantsPerTrayDefault": 30 },
-  "plantsPerTrayByClass": { "leafy_greens": 30, "herbs": 15, "fruiting": 4, "microgreens": 200 },
-  "irrigation": { "type": "nft", "supplyPumpWattsPer10kPlants": 300, "returnPumpWattsPer10kPlants": 150, "dutyCycle": 0.5, "reservoirGalPerPlant": 1.0, "plumbingCostPer10kPlantsUsd": 500 },
-  "transpiration": { "gPerPlantPerDayByClass": { "leafy_greens": 30, "herbs": 25, "fruiting": 120, "microgreens": 8 }, "sensibleHeatFactor": 0.3 },
-  "defaultFixtureClass": { "ppfdTargetByClass": {...}, "dliTargetByClass": {...}, "photoperiodHoursByClass": {...}, "efficacyUmolPerJ": 2.7, "fixtureWattsNominal": 100, "fixturesPerTierUnit": 2 },
-  "defaultControllerClass": { "lights": { "type": "0_10v" }, "pumps": {...}, "fans": {...}, "sensors": { "type": "switchbot_cloud" } },
-  "requiredChannels": [...],
-  "powerClassW": 1200,
-  "references": [...]
+  // --- present in grow-systems.json today ---
+  "id": "nft-rack-3tier",                        // (present)
+  "name": "NFT Rack, 3-Tier",                    // (present)
+  "category": "nft_rack",                         // (present)
+  "suitableCropClasses": ["leafy_greens","herbs"], // (present)
+  "footprintM": { "length": 2.4, "width": 0.6 },  // (present)
+  "heightM": 2.4,                                  // (present)
+  "tierCount": 3,                                  // (present)
+  "traysPerTier": 10,                              // (present)
+  "trayFormat": { "lengthIn": 24, "widthIn": 28, "plantsPerTrayDefault": 30 }, // (present)
+  "plantsPerTrayByClass": { "leafy_greens": 30, "herbs": 15, "fruiting": 4, "microgreens": 200 }, // (present)
+  "defaultFixtureClass": { "ppfdTargetByClass": {...}, "dliTargetByClass": {...}, "photoperiodHoursByClass": {...}, "efficacyUmolPerJ": 2.7, "fixtureWattsNominal": 100, "fixturesPerTierUnit": 2 }, // (present)
+  "defaultControllerClass": { "lights": { "type": "0_10v" }, "pumps": {...}, "fans": {...}, "sensors": { "type": "switchbot_cloud" } }, // (present)
+  "requiredChannels": [...],                       // (present)
+  "powerClassW": 1200,                             // (present)
+  "references": [...],                             // (present)
+
+  // --- to be added in Phase C; needed for HVAC + irrigation sizing ---
+  "irrigation": { "type": "nft", "supplyPumpWattsPer10kPlants": 300, "returnPumpWattsPer10kPlants": 150, "dutyCycle": 0.5, "reservoirGalPerPlant": 1.0, "plumbingCostPer10kPlantsUsd": 500 }, // (Phase C)
+  "transpiration": { "gPerPlantPerDayByClass": { "leafy_greens": 30, "herbs": 25, "fruiting": 120, "microgreens": 8 }, "sensibleHeatFactor": 0.3 } // (Phase C)
 }
 ```
 
@@ -174,7 +177,7 @@ Suggested order: **E1 → A → B → D → C → E2.**
 - Never bypass `design-conditions.js` cache with direct external calls at request time (rate-limit + latency risk).
 - Never embed farm-specific data (farmId, user, operator name) into the design-conditions cache key.
 - Never regenerate `grow-systems.json` or `equipment-kb.json` automatically at runtime; they are curated KBs, edited via PR.
-- Never let a UI write directly to `rooms` / `groups` outside the `accept` path once Phase B lands — the only write channel is via proposal acceptance (keeps audit trail).
+- Never let a UI write directly to `rooms` / `groups` outside the `accept` path **after the Phase B proposal/accept flow is migrated to production**. The current canonical crop-assignment UI (`public/views/3d-farm-viewer.html` `applyGroupEdits`, lines ~3679–3710) is the legitimate write path today; it migrates to issue a mini-proposal via `/api/farm-builder/propose` + `accept` in Phase B2. Until then, direct writes from the 3D viewer are **allowed and expected** — do not disable them prematurely.
 - Never stamp `anchor.seedDate` from a system default in the crop-scheduling path without also raising an operator-visible alert that the date was auto-filled.
 
 ## 13. References

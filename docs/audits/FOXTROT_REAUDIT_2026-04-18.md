@@ -49,8 +49,8 @@
 ## 2. Inventory of the Farm Builder stack (what's already written)
 
 ### 2.1 Server-side
-- `greenreach-central/lib/farm-builder.js` (467 L) — exports `buildFarmLayout(params)`; takes `room_area_m2`, `ceiling_height_m`, `hydro_system`, `hvac_type`, `crops[]`, optional `plant_count`; returns `{ room_specs, crops, environment_targets, plant_estimate, hydroponic_system, lights, fans, dehumidifier, hvac, placements, summary }`. Uses recipe targets from `public/data/lighting-recipes.json` for PPFD / DLI. See <ref_snippet file="/home/ubuntu/repos/Light-Engine-Foxtrot/greenreach-central/lib/farm-builder.js" lines="256-340" />.
-- `greenreach-central/lib/equipment-db.js` (572 L) — `LIGHT_DB`, `FAN_DB`, `DEHUMIDIFIER_DB`, `HVAC_DB`, `HYDRO_SYSTEM_DB` (6 systems: NFT, DWC, ebb_flow, dutch_bucket, vertical_tower, aeroponics). Each hydro entry carries `water_usage_l_day_per_site`, `suitable_crops`, pump/timer flags. See <ref_snippet file="/home/ubuntu/repos/Light-Engine-Foxtrot/greenreach-central/lib/equipment-db.js" lines="267-340" />.
+- `greenreach-central/lib/farm-builder.js` (467 L) — exports `buildFarmLayout(params)`; takes `room_area_m2`, `ceiling_height_m`, `hydro_system`, `hvac_type`, `crops[]`, optional `plant_count`; returns `{ room_specs, crops, environment_targets, plant_estimate, hydroponic_system, lights, fans, dehumidifier, hvac, placements, summary }`. Uses recipe targets from `public/data/lighting-recipes.json` for PPFD / DLI. See `greenreach-central/lib/farm-builder.js:256-340`.
+- `greenreach-central/lib/equipment-db.js` (572 L) — `LIGHT_DB`, `FAN_DB`, `DEHUMIDIFIER_DB`, `HVAC_DB`, `HYDRO_SYSTEM_DB` (6 systems: NFT, DWC, ebb_flow, dutch_bucket, vertical_tower, aeroponics). Each hydro entry carries `water_usage_l_day_per_site`, `suitable_crops`, pump/timer flags. See `greenreach-central/lib/equipment-db.js:267-340`.
 
 ### 2.2 Data
 - `public/data/grow-systems.json` — `schemaVersion 1.0.0`, `cropClasses: ['leafy_greens','microgreens','herbs','fruiting']`, `templates[5]` with rich per-class keys (`plantsPerTrayByClass`, `defaultFixtureClass.ppfdTargetByClass`, `defaultFixtureClass.dliTargetByClass`, `defaultFixtureClass.photoperiodHoursByClass`, `defaultControllerClass`, `requiredChannels`, `powerClassW`). Template IDs: `nft-rack-3tier`, `dwc-pond-4x8`, `vertical-tier-5-microgreen`, plus 2 more.
@@ -157,7 +157,7 @@ Every phase is an **existence check** — did the user enter X? None of the phas
 ```
 
 ### 4.1 3D viewer path (canonical, good)
-`public/views/3d-farm-viewer.html` line 3679–3700 (`applyGroupEdits`) stamps all five fields: `crop`, `recipe`, `plan`, `planId`, and `planConfig.anchor.seedDate` (defaults to today if absent). Via PR #37 this is now byte-identical in the Central mirror. See <ref_snippet file="/home/ubuntu/repos/Light-Engine-Foxtrot/public/views/3d-farm-viewer.html" lines="3685-3710" />.
+`public/views/3d-farm-viewer.html` line 3679–3700 (`applyGroupEdits`) stamps all five fields: `crop`, `recipe`, `plan`, `planId`, and `planConfig.anchor.seedDate` (defaults to today if absent). Via PR #37 this is now byte-identical in the Central mirror. See `public/views/3d-farm-viewer.html:3685-3710`.
 
 ### 4.2 EVIE path (broken, silent)
 `assistant-chat.js` `update_group_crop` case (lines 4918–4950) sets:
