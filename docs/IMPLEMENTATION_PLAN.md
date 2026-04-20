@@ -116,16 +116,16 @@ Recommended execution order matches the dependency chain:
 - [x] `calculate_light_heat_load` tool in EVIE catalog
 - [x] `recommend_dehumidifier` tool in EVIE catalog
 - [x] `recommend_group_equipment` tool in EVIE catalog
-- [x] Central route `GET /api/farm-ops/groups/:groupId/env-recommendation`
-- [x] LE proxy route `GET /api/groups/:groupId/env-recommendation`
-- [x] Grow Management environment recommendation card UI
+- [ ] Central route `GET /api/farm-ops/groups/:groupId/env-recommendation`
+- [ ] LE proxy route `GET /api/groups/:groupId/env-recommendation`
+- [ ] Grow Management environment recommendation card UI
 
 ### P0 -- Zone Rollup and Confidence
 
-- [ ] Zone-aware recommendation rollup
+- [x] Zone-aware recommendation rollup
   - Aggregate group-level recommendations to zone level
   - Identify conflicting requirements across groups sharing zone infrastructure
-- [ ] Confidence scoring and data gap surfacing
+- [x] Confidence scoring and data gap surfacing
   - Return confidence metadata when group context is incomplete (missing area, missing crop, missing equipment)
   - Render confidence indicator on recommendation card
 
@@ -365,7 +365,7 @@ This ordering respects dependency chains: items higher on the list unblock items
 
 | # | Item | Workstream | Ref |
 |---|------|-----------|-----|
-| 8 | Zone-aware recommendation rollup + confidence | Grow Mgmt | -- |
+| 8 | ~~Zone-aware recommendation rollup + confidence~~ | Grow Mgmt | SHIPPED |
 | 9 | Wire 3D viewer to live sensor telemetry | 3D Viewer | -- |
 | 10 | Remove 2-tank hardcoding; integrate nutrient-profiles.json | Nutrient | -- |
 | 11 | Recipe Modifier Management UI | AI Agents | `XC-7` |
@@ -407,7 +407,7 @@ This ordering respects dependency chains: items higher on the list unblock items
 | `greenreach_review_2026-04-17.md` | Agent architecture review, ML pipeline stale, FAYE trust tiers unimplemented |
 | `greenreach_ui_3d_gwen_audit_2026-04-17.md` | 3D viewer read-only, no live data, no device overlay, no mobile |
 | `farm-setup-workflow-proposal.md` | 2-phase setup (design + provision), 6 concrete steps, Step 1 done |
-| `GROW_SYSTEMS_TEMPLATE_SCHEMA.md` | Full grow-systems.json schema spec, zero runtime consumers |
+| `GROW_SYSTEMS_TEMPLATE_SCHEMA.md` | Full grow-systems.json schema spec; runtime consumers: `routes/grow-systems.js` (API) + `setup-agent.js` (room_design phase) |
 | `grow-management-review.md` | Grow management production plan, EVIE tool exposure needed |
 | `grow-management-review-2.md` | AI recommendation card review, zone rollup P0 |
 | `grow-management-engineering-checklist.md` | 4-phase engineering plan, transpiration model |

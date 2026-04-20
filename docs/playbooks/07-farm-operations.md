@@ -161,6 +161,8 @@ E.V.I.E. surfaces this to the farm on the home page and in briefings.
 | `routes/farm-sales/*.js` | DTC + POS |
 | `routes/wholesale-*.js`, `routes/wholesale/*.js` | Wholesale LE endpoints |
 | `public/LE-farm-admin.html` + `public/views/*.html` (environment, planning, tray-inventory, farm-summary, nutrient-management, inventory, supplies, …) | Operator UI shell + iframe sub-views |
+| `routes/grow-systems.js` | Grow-systems template registry API: GET all/single templates, POST compute-room-load (uses `lib/farm-load-calculator.js`), POST reload. First runtime consumer of `public/data/grow-systems.json`. |
+| `lib/farm-load-calculator.js` | Pure-function electrical/climate load computation from room dimensions + template quantities (computeRoomLoad, resolveInstalledSystems, etc.) |
 
 ## 12. Security & tenancy rules
 

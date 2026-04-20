@@ -2968,6 +2968,173 @@ export const TOOL_CATALOG = {
       };
     }
   },
+  'get_zone_recommendations': {
+    description: 'Get zone-aware environment recommendations with confidence scoring. Aggregates group context (crops, equipment, grow-system templates) per zone, computes env drift vs targets, identifies crop conflicts, and scores data completeness. Use this for setup assessment, zone optimization, or when an operator asks "what should I fix?"',
+    category: 'read',
+    required: [],
+    optional: ['zone_id'],
+    handler: async ({ zone_id }) => {
+      const envCache = readJSON('env-cache.json', {});
+      const targetRanges = readJSON('target-ranges.json', {});
+      const groupsData = readJSON('groups.json', { groups: [] });
+      const roomsData = readJSON('rooms.json', { rooms: [] });
+
+      const zt = targetRanges.zones || {};
+      const dt = targetRanges.defaults || {};
+      const allGroups = groupsData.groups || [];
+      const rooms = roomsData.rooms || [];
+
+      // Normalize zone IDs across inconsistent data stores
+      function normalizeZoneId(rawId) {
+        if (!rawId) return '';
+        if (/^zone-\d+$/i.test(rawId)) return rawId.toLowerCase();
+        const match = rawId.match(/[zZ]one\s*(\d+)/);
+        if (match) return `zone-${match[1]}`;
+        return rawId.toLowerCase();
+      }
+
+      // Build zone -> groups map
+      const zoneGroupsMap = {};
+      for (const g of allGroups) {
+        const nzid = normalizeZoneId(g.zoneId || g.zone);
+        if (!nzid) continue;
+        if (!zoneGroupsMap[nzid]) zoneGroupsMap[nzid] = [];
+        zoneGroupsMap[nzid].push(g);
+      }
+
+      // Build room name map
+      const roomNameMap = {};
+      for (const r of rooms) roomNameMap[r.id] = r.name || r.id;
+
+      function computeZone(zoneId, envData, targets, groups, roomId, roomName) {
+        const temp = envData?.temperature ?? null;
+        const rh = envData?.humidity ?? null;
+        const sensorCount = envData?.sensor_count ?? 0;
+
+        const tempMin = targets.temp_min ?? 18;
+        const tempMax = targets.temp_max ?? 26;
+        const rhMin = targets.rh_min ?? 45;
+        const rhMax = targets.rh_max ?? 70;
+        const tempMid = (tempMin + tempMax) / 2;
+        const rhMid = (rhMin + rhMax) / 2;
+        const tempDrift = temp != null ? +(temp - tempMid).toFixed(1) : null;
+        const rhDrift = rh != null ? +(rh - rhMid).toFixed(1) : null;
+        const tempStatus = temp == null ? 'unknown' : temp < tempMin ? 'low' : temp > tempMax ? 'high' : 'ok';
+        const humidityStatus = rh == null ? 'unknown' : rh < rhMin ? 'low' : rh > rhMax ? 'high' : 'ok';
+
+        // VPD
+        let vpd = null;
+        let vpdStatus = 'unknown';
+        if (temp != null && rh != null) {
+          const svp = 0.6108 * Math.exp((17.27 * temp) / (temp + 237.3));
+          vpd = +(svp * (1 - rh / 100)).toFixed(2);
+          const vpdMin = targets.vpd_min ?? 0.8;
+          const vpdMax = targets.vpd_max ?? 1.2;
+          vpdStatus = vpd < vpdMin ? 'low' : vpd > vpdMax ? 'high' : 'ok';
+        }
+
+        // Group context
+        const totalGroups = groups.length;
+        const croppedGroups = groups.filter(g => g.crop && g.crop !== '');
+        const uniqueCrops = [...new Set(croppedGroups.map(g => g.crop))];
+        const activeTrayCount = groups.reduce((sum, g) => sum + (g.trays || 0), 0);
+
+        // Conflicts
+        const conflicts = [];
+        if (uniqueCrops.length > 3) {
+          conflicts.push({ type: 'crop_diversity', severity: 'warning',
+            message: `${uniqueCrops.length} different crops share this zone. Consider grouping crops with similar environmental needs.` });
+        }
+
+        // Recommendations
+        const recs = [];
+        if (tempStatus === 'low') {
+          const deficit = +(tempMin - temp).toFixed(1);
+          recs.push({ type: 'temperature', priority: deficit > 5 ? 'critical' : deficit > 2 ? 'high' : 'medium',
+            action: `Increase temperature by ${deficit}C to reach ${tempMin}-${tempMax}C`, current: temp, target: { min: tempMin, max: tempMax } });
+        } else if (tempStatus === 'high') {
+          const excess = +(temp - tempMax).toFixed(1);
+          recs.push({ type: 'temperature', priority: excess > 5 ? 'critical' : excess > 2 ? 'high' : 'medium',
+            action: `Reduce temperature by ${excess}C to reach ${tempMin}-${tempMax}C`, current: temp, target: { min: tempMin, max: tempMax } });
+        }
+        if (humidityStatus === 'low') {
+          const deficit = +(rhMin - rh).toFixed(1);
+          recs.push({ type: 'humidity', priority: deficit > 20 ? 'critical' : deficit > 10 ? 'high' : 'medium',
+            action: `Raise humidity by ${deficit}% to reach ${rhMin}-${rhMax}%`, current: rh, target: { min: rhMin, max: rhMax } });
+        } else if (humidityStatus === 'high') {
+          const excess = +(rh - rhMax).toFixed(1);
+          recs.push({ type: 'humidity', priority: excess > 20 ? 'critical' : excess > 10 ? 'high' : 'medium',
+            action: `Lower humidity by ${excess}% to reach ${rhMin}-${rhMax}%`, current: rh, target: { min: rhMin, max: rhMax } });
+        }
+        if (vpdStatus === 'low') {
+          recs.push({ type: 'vpd', priority: 'medium', action: `VPD is ${vpd} kPa (below ${targets.vpd_min ?? 0.8} kPa). Reduce humidity or raise temperature.`, current: vpd });
+        } else if (vpdStatus === 'high') {
+          recs.push({ type: 'vpd', priority: 'medium', action: `VPD is ${vpd} kPa (above ${targets.vpd_max ?? 1.2} kPa). Increase humidity or lower temperature.`, current: vpd });
+        }
+        if (sensorCount === 0) {
+          recs.push({ type: 'sensor_coverage', priority: 'high', action: 'No sensors detected. Install or map SwitchBot sensors.' });
+        }
+
+        // Confidence
+        let confidence = 1.0;
+        const gaps = [];
+        if (sensorCount === 0) { confidence -= 0.40; gaps.push('no_sensors'); }
+        else if (sensorCount < 2) { confidence -= 0.10; gaps.push('low_sensor_coverage'); }
+        if (temp == null || rh == null) { confidence -= 0.25; gaps.push('no_readings'); }
+        if (totalGroups === 0) { confidence -= 0.10; gaps.push('no_groups'); }
+        else if (croppedGroups.length === 0) { confidence -= 0.15; gaps.push('no_crops_assigned'); }
+        if (targets.temp_min == null && targets.temp_max == null) { confidence -= 0.10; gaps.push('using_default_targets'); }
+        confidence = Math.max(0, Math.min(1.0, +confidence.toFixed(2)));
+
+        const hasCritical = recs.some(r => r.priority === 'critical');
+        const hasHigh = recs.some(r => r.priority === 'high');
+        const status = hasCritical ? 'critical' : hasHigh ? 'attention' : recs.length > 0 ? 'advisory' : 'stable';
+
+        return {
+          zone_id: zoneId, room_id: roomId, room_name: roomName, overall_status: status,
+          readings: { temperature: temp, humidity: rh, vpd, sensor_count: sensorCount },
+          targets: { temp_min: tempMin, temp_max: tempMax, rh_min: rhMin, rh_max: rhMax, vpd_min: targets.vpd_min ?? 0.8, vpd_max: targets.vpd_max ?? 1.2 },
+          drift: { temp_c_from_mid: tempDrift, rh_pct_from_mid: rhDrift, temp_status: tempStatus, humidity_status: humidityStatus, vpd_status: vpdStatus },
+          groups_summary: { total_groups: totalGroups, cropped_groups: croppedGroups.length, unique_crops: uniqueCrops, active_trays: activeTrayCount },
+          recommendations: recs, conflicts,
+          confidence: { score: confidence, gaps, level: confidence >= 0.8 ? 'high' : confidence >= 0.5 ? 'medium' : 'low' }
+        };
+      }
+
+      // Compute per requested zone or all zones
+      const results = [];
+      for (const [roomId, roomData] of Object.entries(envCache)) {
+        if (roomId === 'meta') continue;
+        const zoneEntries = roomData?.zones || {};
+        const roomName = roomNameMap[roomId] || roomId;
+        for (const [zid, envData] of Object.entries(zoneEntries)) {
+          const nzid = normalizeZoneId(zid);
+          if (zone_id && nzid !== normalizeZoneId(zone_id)) continue;
+          const targets = zt[zid] || zt[nzid] || dt;
+          const groups = zoneGroupsMap[nzid] || [];
+          results.push(computeZone(nzid, envData, targets, groups, roomId, roomName));
+        }
+      }
+      // Include zones with groups but no env data
+      for (const [nzid, groups] of Object.entries(zoneGroupsMap)) {
+        if (results.some(r => r.zone_id === nzid)) continue;
+        if (zone_id && nzid !== normalizeZoneId(zone_id)) continue;
+        const firstGroup = groups[0];
+        const roomId = firstGroup?.roomId || '';
+        const roomName = roomNameMap[roomId] || firstGroup?.room || roomId;
+        const targets = zt[nzid] || dt;
+        results.push(computeZone(nzid, null, targets, groups, roomId, roomName));
+      }
+
+      const statusOrder = { critical: 0, attention: 1, advisory: 2, stable: 3 };
+      results.sort((a, b) => (statusOrder[a.overall_status] ?? 9) - (statusOrder[b.overall_status] ?? 9));
+      const overall = results.some(r => r.overall_status === 'critical') ? 'critical'
+        : results.some(r => r.overall_status === 'attention') ? 'attention'
+        : results.some(r => r.overall_status === 'advisory') ? 'advisory' : 'stable';
+
+      return { ok: true, overall_status: overall, zone_count: results.length, updated_at: envCache.meta?.updatedAt || null, zones: results };
+    }
+  },
   'set_light_schedule': {
     description: 'Set or update the light schedule for a zone — on/off times, PPFD, photoperiod hours',
     category: 'write',

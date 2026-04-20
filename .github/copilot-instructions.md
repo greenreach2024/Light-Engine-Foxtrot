@@ -33,6 +33,24 @@ The farm runs entirely on Google Cloud Run. The Light Engine Cloud Run service I
 
 ### Recent Fixes (Apr 19, 2026)
 
+40. **Phase 2 #8: Zone-Aware Recommendation Rollup + Confidence**
+    - Branch: `impl/phase2-setup-template-aware` (continued).
+    - **LE route** (`routes/zone-recommendations.js`, NEW ~310 lines): `GET /api/zone-recommendations` (all zones), `GET /api/zone-recommendations/:zoneId` (single). Reads env-cache.json, target-ranges.json, groups.json, rooms.json. Zone ID normalization handles inconsistent formats (env-cache "zone-1" vs groups.json "room-xxx-zZone 1"). Per-zone output: readings (temp/rh/vpd/sensor_count), drift from midpoint, group context summary (crops, trays, equipment), actionable recommendations with priority, crop conflict detection (>3 unique crops), confidence scoring (1.0 base minus penalties for missing sensors/readings/groups/crops/targets, levels: high/medium/low).
+    - **E.V.I.E. tool** (`greenreach-central/routes/farm-ops-agent.js`): Added `get_zone_recommendations` tool to Central farm-ops-agent catalog. Reads same data files via `readJSON()`. Category: read. Optional param: zone_id.
+    - **server-foxtrot.js**: Added import + mount for zoneRecommendationsRouter at `/api/zone-recommendations`.
+    - Implementation plan: `docs/IMPLEMENTATION_PLAN.md` item #8 marked SHIPPED. Also un-checked 3 false-shipped items (env-recommendation routes that never existed).
+
+
+39. **Phase 2 #12: Template-Aware Setup Agent + Grow-Systems API**
+    - Branch: `impl/phase2-setup-template-aware`. Commit `9572ade6`.
+    - **Setup-agent phase merge**: Merged `grow_rooms` (order 2) + `room_specs` (order 3) into unified `room_design` (order 2, weight 14). Added `build_plan` (order 3, weight 4). Total phases still 12, weights sum 100. Backwards-compat: old phase IDs remap to `room_design` in both evaluatePhase() and guidance endpoint.
+    - **`room_design` evaluatePhase**: Checks rooms exist, have dimensions (length_m/width_m/area_m2), ceiling_height_m, and tracks installedSystems[] from grow-systems.json. Complete when all rooms have dims + ceiling. Templates tracked but not blocking.
+    - **`build_plan` evaluatePhase**: Checks rooms for buildPlan/build_plan property. Complete when at least one room has a computed plan.
+    - **Grow-Systems API** (new file `routes/grow-systems.js`): First runtime consumer of `public/data/grow-systems.json`. GET /api/grow-systems (all templates), GET /api/grow-systems/:templateId (single), POST /api/grow-systems/compute-room-load (runs farm-load-calculator), POST /api/grow-systems/reload (force-reload). Caches registry in memory.
+    - File: `greenreach-central/routes/setup-agent.js` (+78 lines, now ~650 lines)
+    - File: `routes/grow-systems.js` (NEW, ~120 lines)
+    - File: `server-foxtrot.js` (added import + mount for growSystemsRouter at /api/grow-systems)
+    - Implementation plan: `docs/IMPLEMENTATION_PLAN.md` item #12 marked SHIPPED.
 38. **Phase 1 Data Integrity: Server-Authoritative Timestamps + Groups.json Write Safety**
     - Branch: `impl/phase1-data-integrity`. PR pending.
     - **Server-authoritative timestamps (XC-5)**: Seed (`POST /api/trays/:trayId/seed`) and harvest (`POST /api/tray-runs/:id/harvest`) routes now validate client-provided timestamps against server time. Client hints accepted only if drift < 15 min; otherwise overridden with server time and warning logged. Responses include `timestamp_source` and `seeded_at`/`harvestedAt`. Event bus emissions include authoritative `timestamp` field.
