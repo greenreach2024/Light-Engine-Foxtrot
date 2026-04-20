@@ -23269,7 +23269,9 @@ app.get('/api/trays', async (req, res) => {
       // Determine status
       let status = 'available';
       if (currentRun) {
-        if (currentRun.harvested_at) {
+        if (currentRun.status === 'REGROWING') {
+          status = 'regrowing';
+        } else if (currentRun.harvested_at) {
           status = 'harvested';
         } else {
           status = 'active';
@@ -23320,6 +23322,11 @@ app.get('/api/trays', async (req, res) => {
         seededAt: currentRun?.seeded_at,
         plantedSiteCount: currentRun?.planted_site_count,
         daysSinceSeeding,
+        cutNumber: currentRun?.cut_number || null,
+        remainingCuts: currentRun?.remaining_cuts ?? null,
+        maxCuts: currentRun?.max_cuts || null,
+        nextExpectedCutDate: currentRun?.next_expected_cut_date || null,
+        lastCutAt: currentRun?.last_cut_at || null,
         createdAt: tray.created_at,
         updatedAt: tray.updated_at
       };
@@ -23400,7 +23407,7 @@ app.get('/api/tray-runs/recent-harvests', async (req, res) => {
  */
 app.post('/api/tray-runs/:id/harvest', async (req, res) => {
   const trayRunId = req.params.id;
-  const { actualWeight, note, harvestedAt } = req.body;
+  const { actualWeight, note, harvestedAt, isFinalCut } = req.body;
 
   try {
     // Look up tray run from NeDB
@@ -23408,6 +23415,32 @@ app.post('/api/tray-runs/:id/harvest', async (req, res) => {
 
     if (!trayRun) {
       return res.status(404).json({ error: 'Tray run not found', tray_run_id: trayRunId });
+    }
+
+    // ── CCA (cut-and-come-again) detection ──────────────────────────
+    // If the crop supports multiple cuts (e.g. basil, lettuce, kale),
+    // a non-final harvest sets status to REGROWING instead of HARVESTED.
+    let ccaStrategy = null;
+    let isPartialHarvest = false;
+    let cutNumber = (trayRun.cut_number || 0) + 1;
+    let remainingCuts = 0;
+    let nextExpectedCutDate = null;
+    try {
+      const { lookupCCAStrategy } = await import('./lib/harvest-predictor.js');
+      const dataDir = path.join(process.cwd(), 'public', 'data');
+      ccaStrategy = lookupCCAStrategy(trayRun.crop_key || trayRun.crop || '', dataDir);
+      if (ccaStrategy) {
+        const maxCuts = ccaStrategy.maxHarvests || 4;
+        remainingCuts = Math.max(0, maxCuts - cutNumber);
+        // Partial harvest: CCA crop with remaining cuts AND caller didn't force final
+        isPartialHarvest = remainingCuts > 0 && isFinalCut !== true;
+        if (isPartialHarvest) {
+          const regrowthMs = (ccaStrategy.regrowthDays || 14) * 86400000;
+          nextExpectedCutDate = new Date(Date.now() + regrowthMs).toISOString();
+        }
+      }
+    } catch (ccaErr) {
+      console.warn('[tray-runs] CCA strategy lookup non-fatal:', ccaErr.message);
     }
 
     // Generate lot code: ZONE-CROP-YYMMDD-BATCH
@@ -23453,13 +23486,18 @@ app.post('/api/tray-runs/:id/harvest', async (req, res) => {
       { tray_run_id: trayRunId },
       {
         $set: {
-          status: 'HARVESTED',
-          harvested_at: now.toISOString(),
+          status: isPartialHarvest ? 'REGROWING' : 'HARVESTED',
+          harvested_at: isPartialHarvest ? undefined : now.toISOString(),
+          last_cut_at: now.toISOString(),
           lot_code: lotCode,
           actual_weight: weight,
           weight_unit: 'oz',
           harvested_count: harvestedCount,
           harvest_note: note || '',
+          cut_number: ccaStrategy ? cutNumber : undefined,
+          remaining_cuts: ccaStrategy ? remainingCuts : undefined,
+          max_cuts: ccaStrategy ? (ccaStrategy.maxHarvests || 4) : undefined,
+          next_expected_cut_date: nextExpectedCutDate || undefined,
           updated_at: now.toISOString()
         }
       }
@@ -23592,8 +23630,9 @@ app.post('/api/tray-runs/:id/harvest', async (req, res) => {
       console.warn('[tray-runs] Experiment record creation failed (non-fatal):', expErr.message);
     }
 
-    // Phase 1 Ticket 1.6 -- emit standardized harvest event
-    eventBus.emitEvent('harvest', {
+    // Phase 1 Ticket 1.6 -- emit standardized harvest or partial_harvest event
+    const harvestEventType = isPartialHarvest ? 'partial_harvest' : 'harvest';
+    const harvestPayload = {
       tray_run_id: trayRunId,
       group_id: trayRun?.group_id || null,
       crop: trayRun?.crop_key || trayRun?.crop || trayRun?.recipe_id || null,
@@ -23609,7 +23648,16 @@ app.post('/api/tray-runs/:id/harvest', async (req, res) => {
       room: null,
       harvested_by: null,
       timestamp: now.toISOString(),
-    });
+    };
+    if (isPartialHarvest) {
+      harvestPayload.cut_number = cutNumber;
+      harvestPayload.remaining_cuts = remainingCuts;
+      harvestPayload.max_cuts = ccaStrategy?.maxHarvests || 4;
+      harvestPayload.next_expected_cut_date = nextExpectedCutDate;
+      harvestPayload.regrowth_days = ccaStrategy?.regrowthDays || 14;
+      harvestPayload.yield_factor = ccaStrategy?.regrowthYieldFactor || 0.85;
+    }
+    eventBus.emitEvent(harvestEventType, harvestPayload);
 
     // Sync harvest data to Central farm_inventory (actual weights)
     try {
@@ -23625,7 +23673,7 @@ app.post('/api/tray-runs/:id/harvest', async (req, res) => {
       console.warn('[tray-runs] Harvest sync call failed (non-fatal):', syncErr.message);
     }
 
-    res.json({
+    const harvestResponse = {
       success: true,
       trayRunId,
       lotCode,
@@ -23642,7 +23690,16 @@ app.post('/api/tray-runs/:id/harvest', async (req, res) => {
       experiment_id: experiment_id || null,
       label_print: labelPrintData,
       auto_print_result: autoPrintResult
-    });
+    };
+    if (isPartialHarvest) {
+      harvestResponse.partialHarvest = true;
+      harvestResponse.status = 'REGROWING';
+      harvestResponse.cutNumber = cutNumber;
+      harvestResponse.remainingCuts = remainingCuts;
+      harvestResponse.maxCuts = ccaStrategy?.maxHarvests || 4;
+      harvestResponse.nextExpectedCutDate = nextExpectedCutDate;
+    }
+    res.json(harvestResponse);
   } catch (error) {
     console.error('[tray-runs] Error recording harvest:', error);
     res.status(500).json({ error: 'Failed to record harvest', details: error.message });

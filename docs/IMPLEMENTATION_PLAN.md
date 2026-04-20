@@ -77,7 +77,7 @@ Recommended execution order matches the dependency chain:
 
 ### P1 -- High Priority
 
-- [ ] Add `partial_harvest` event and CCA tray-state model (`E7`)
+- [x] Add `partial_harvest` event and CCA tray-state model (`E7`)
   - `cut_number`, `remaining_cuts`, `next_expected_cut_date`
   - Prevent first-cut harvest from marking tray capacity as free
 - [ ] Surface degraded compromise calculations (`E1`)
