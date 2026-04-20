@@ -720,6 +720,37 @@ app.post('/data/iot-devices.json', async (req, res) => {
   }
 });
 
+// ── farm-summary.json: synthetic summary for accounting/operations dashboard ──
+// loadOperationsData() in farm-admin.js fetches /data/farm-summary.json for
+// plants-seeded/harvested counts. LE generates this at runtime; Central builds
+// it on-the-fly from groups+trays data already in farmStore.
+app.get('/data/farm-summary.json', async (req, res) => {
+  try {
+    const fid = farmStore.farmIdFromReq(req);
+    const trays = await getInventoryTraysForCompat(fid);
+    // Wrap flat tray array in rooms->zones structure that loadOperationsData() expects
+    return res.json({
+      rooms: [{
+        roomId: 'synthetic',
+        name: 'All Rooms',
+        zones: [{
+          zoneId: 'synthetic',
+          name: 'All Zones',
+          trays: trays.map(t => ({
+            plant_count: t.plantCount || t.plant_count || 0,
+            status: t.status || 'active'
+          }))
+        }]
+      }],
+      generatedAt: new Date().toISOString(),
+      source: 'central-synthetic'
+    });
+  } catch (err) {
+    logger.error('[farm-summary.json] Failed to build summary:', err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Phase 4: Auto-inject api-config.js + auth-guard.js into all HTML responses ──
 // Serves HTML pages with injected config/auth scripts so every page gets
 // environment detection + the enhanced fetch wrapper without editing 160+ files.

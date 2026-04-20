@@ -962,6 +962,8 @@ function setupNavigation() {
                     if (devFrame && !devFrame.src.includes('iot-manager')) devFrame.src = '/views/iot-manager.html?embedded=1';
                 } else if (section === 'harvest-donations') {
                     loadHarvestDonationData();
+                } else if (section === 'sustainability') {
+                    if (typeof loadSustainabilityDashboard === 'function') loadSustainabilityDashboard();
                 }
             }
         });
@@ -1025,10 +1027,12 @@ function setupNavigation() {
     setupHeaderDropdowns();
     setupEmbeddedNavigationFallback();
     
-    // Handle initial hash navigation (e.g. LE-farm-admin.html#traceability)
+    // Handle initial hash navigation (e.g. LE-farm-admin.html#traceability or #business/sustainability)
     const urlHash = window.location.hash.replace('#', '');
     if (urlHash && urlHash !== 'dashboard') {
-        const navItem = document.querySelector(`.nav-item[data-section="${urlHash}"]`);
+        // Support compound hashes like #business/sustainability → section=sustainability
+        const sectionKey = urlHash.includes('/') ? urlHash.split('/').pop() : urlHash;
+        const navItem = document.querySelector(`.nav-item[data-section="${sectionKey}"]`);
         if (navItem) {
             setTimeout(() => navItem.click(), 200);
         }

@@ -5,6 +5,7 @@
 
 import { Router } from 'express';
 import { calculateESGScore, getESGHistory } from '../services/esg-scoring-engine.js';
+import { listAllBuyers } from '../services/wholesaleMemoryStore.js';
 import logger from '../utils/logger.js';
 
 const router = Router();
@@ -12,7 +13,7 @@ const router = Router();
 // ── helpers ────────────────────────────────────────────────────────────
 
 function getFarmStore(req) {
-  return req.app?.locals?.farmStore || null;
+  return req.farmStore || req.app?.locals?.farmStore || null;
 }
 
 function farmId(req) {
@@ -237,21 +238,23 @@ router.get('/food-miles', async (req, res) => {
       try {
         const farmData = await store.get(fid, `farm_settings_${fid}`) || await store.get(fid, 'farm_settings');
         if (farmData) {
-          farmLat = farmData.latitude || farmData.lat;
-          farmLng = farmData.longitude || farmData.lng;
+          // farm_settings stores coords under coordinates.lat/lng (from farm.json)
+          farmLat = farmData.coordinates?.lat ?? farmData.latitude ?? farmData.lat ?? null;
+          farmLng = farmData.coordinates?.lng ?? farmData.longitude ?? farmData.lng ?? null;
         }
       } catch (_) { /* ignore */ }
 
-      // Try wholesale buyer locations
+      // Use wholesale buyer records from memory store (buyers are in DB, not farmStore)
       try {
-        const buyers = await store.get(fid, 'wholesale_buyers') || [];
+        const buyers = listAllBuyers();
         if (Array.isArray(buyers) && buyers.length > 0 && farmLat && farmLng) {
           let totalDist = 0;
           let counted = 0;
           for (const b of buyers) {
-            const blat = b.location?.lat || b.lat;
-            const blng = b.location?.lng || b.lng;
-            if (blat && blng) {
+            // buyer location uses latitude/longitude (not lat/lng)
+            const blat = b.location?.latitude ?? b.location?.lat ?? b.lat ?? null;
+            const blng = b.location?.longitude ?? b.location?.lng ?? b.lng ?? null;
+            if (blat != null && blng != null) {
               totalDist += haversineKm(farmLat, farmLng, blat, blng);
               counted++;
             }
