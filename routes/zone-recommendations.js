@@ -374,11 +374,21 @@ router.get('/', (_req, res) => {
           ? 'advisory'
           : 'stable';
 
+    // Surface degraded plan resolver status (E1 -- dropped groups)
+    const envData = readJSON('env.json', {});
+    const planResolver = envData?.planResolver || null;
+    const degradedInfo = planResolver?.degraded ? {
+      degraded: true,
+      skipped_groups: planResolver.skipped_groups || [],
+      last_resolver_run: planResolver.lastRunAt || null
+    } : undefined;
+
     res.json({
       ok: true,
       overall_status: overallStatus,
       zone_count: results.length,
       updated_at: envCache.meta?.updatedAt || null,
+      plan_resolver: degradedInfo,
       zones: results
     });
   } catch (err) {

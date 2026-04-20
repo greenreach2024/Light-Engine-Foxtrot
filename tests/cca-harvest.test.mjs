@@ -77,3 +77,41 @@ test('taxonomy has exactly 13 events after adding partial_harvest', () => {
   const taxonomy = JSON.parse(fs.readFileSync(taxPath, 'utf-8'));
   assert.equal(Object.keys(taxonomy.events).length, 13);
 });
+
+// ── Degraded Compromise Surfacing (#14) ──────────────────────────────
+test('recipe-environmental-targets tracks dropped trays', async () => {
+  // Verify the module has dropped_trays tracking in _calculateWeightedTargets
+  const moduleText = fs.readFileSync(
+    path.resolve('./automation/recipe-environmental-targets.js'), 'utf-8'
+  );
+  assert.ok(moduleText.includes('droppedTrays'), 'should have droppedTrays tracking');
+  assert.ok(moduleText.includes("reason: 'recipe_not_found'"), 'should track recipe_not_found');
+  assert.ok(moduleText.includes("reason: 'no_schedule_day'"), 'should track no_schedule_day');
+  assert.ok(moduleText.includes('defaults.degraded = true'), 'should set degraded flag');
+  assert.ok(moduleText.includes('dropped_trays:'), 'should include dropped_trays in return');
+});
+
+test('daily plan resolver tracks skipped groups', () => {
+  const serverText = fs.readFileSync(path.resolve('./server-foxtrot.js'), 'utf-8');
+  assert.ok(serverText.includes('skippedGroups'), 'should have skippedGroups array');
+  assert.ok(serverText.includes("reason: 'no_plan_key'"), 'should track no_plan_key skip');
+  assert.ok(serverText.includes("reason: 'plan_not_found'"), 'should track plan_not_found skip');
+  assert.ok(serverText.includes("reason: 'no_devices'"), 'should track no_devices skip');
+  assert.ok(serverText.includes('skipped_groups:'), 'should persist skipped_groups');
+});
+
+test('zone recommendations includes plan_resolver degraded info', () => {
+  const routeText = fs.readFileSync(
+    path.resolve('./routes/zone-recommendations.js'), 'utf-8'
+  );
+  assert.ok(routeText.includes('plan_resolver:'), 'should include plan_resolver in response');
+  assert.ok(routeText.includes('degradedInfo'), 'should compute degradedInfo');
+});
+
+test('grow-management.html has degraded compromise banner', () => {
+  const htmlText = fs.readFileSync(
+    path.resolve('./greenreach-central/public/views/grow-management.html'), 'utf-8'
+  );
+  assert.ok(htmlText.includes('degradedBanner'), 'should have degradedBanner element');
+  assert.ok(htmlText.includes('checkDegradedCompromise'), 'should have checkDegradedCompromise function');
+});

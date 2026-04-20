@@ -5131,6 +5131,7 @@ async function runDailyPlanResolver(trigger = 'manual') {
     const calibrationMap = buildCalibrationMap();
     const envState = readEnv();
     const results = [];
+    const skippedGroups = [];
     const todayStart = new Date(startedAt);
     todayStart.setHours(0, 0, 0, 0);
 
@@ -5160,7 +5161,10 @@ async function runDailyPlanResolver(trigger = 'manual') {
           group?.planConfig?.preview?.planKey,
           group?.planConfig?.preview?.plan
         ].find((value) => typeof value === 'string' && value.trim());
-        if (!planKeyCandidate) continue;
+        if (!planKeyCandidate) {
+          skippedGroups.push({ group_id: group.id || group.name, reason: 'no_plan_key' });
+          continue;
+        }
         const planKey = planKeyCandidate.trim();
         let plan = planIndex.get(planKey);
         if (!plan) {
@@ -5174,11 +5178,15 @@ async function runDailyPlanResolver(trigger = 'manual') {
         }
         if (!plan) {
           console.warn(`[daily] plan '${planKey}' not found for group ${group.id || group.name || 'unknown'}`);
+          skippedGroups.push({ group_id: group.id || group.name, reason: 'plan_not_found', plan_key: planKey });
           continue;
         }
 
         const deviceIds = Array.from(new Set(getGroupDeviceIds(group)));
-        if (!deviceIds.length) continue;
+        if (!deviceIds.length) {
+          skippedGroups.push({ group_id: group.id || group.name, reason: 'no_devices' });
+          continue;
+        }
 
         const planConfig = (group.planConfig && typeof group.planConfig === 'object') ? group.planConfig : {};
         const dayNumber = computePlanDayNumber(planConfig, group, todayStart);
@@ -5491,7 +5499,13 @@ async function runDailyPlanResolver(trigger = 'manual') {
 
     envState.lastDailyResolverAt = startedAt.toISOString();
     envState.lastDailyResolverTrigger = trigger;
-    envState.planResolver = { lastRunAt: startedAt.toISOString(), trigger, groups: results };
+    envState.planResolver = {
+      lastRunAt: startedAt.toISOString(),
+      trigger,
+      groups: results,
+      degraded: skippedGroups.length > 0,
+      skipped_groups: skippedGroups.length > 0 ? skippedGroups : undefined
+    };
     envState.updatedAt = startedAt.toISOString();
     writeEnv(envState);
 

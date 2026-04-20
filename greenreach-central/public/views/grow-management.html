@@ -552,6 +552,13 @@
     </div>
   </div>
 
+  <!-- ===== DEGRADED COMPROMISE BANNER (E1) ===== -->
+  <div id="degradedBanner" style="display:none;margin:0 16px 12px;padding:12px 16px;background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;color:#92400e;">
+    <strong>Degraded Compromise</strong>
+    <span id="degradedBannerMessage"></span>
+    <button onclick="document.getElementById('degradedBanner').style.display='none'" style="float:right;background:none;border:none;color:#92400e;cursor:pointer;font-weight:bold;">X</button>
+  </div>
+
   <!-- ===== MAIN CONTENT ===== -->
   <div class="gm-container">
 
@@ -914,7 +921,28 @@
     // Also run after initial load
     window.addEventListener('load', function() {
       setTimeout(updateGrowKPIs, 2000);
+      // Check for degraded plan resolver state (E1)
+      checkDegradedCompromise();
     });
+
+    function checkDegradedCompromise() {
+      fetch('/api/zone-recommendations')
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          var banner = document.getElementById('degradedBanner');
+          var msg = document.getElementById('degradedBannerMessage');
+          if (!banner || !msg) return;
+          if (data.plan_resolver && data.plan_resolver.degraded) {
+            var skipped = data.plan_resolver.skipped_groups || [];
+            var names = skipped.map(function(s) {
+              return (s.group_id || 'unknown') + ' (' + (s.reason || 'dropped') + ')';
+            });
+            msg.textContent = ' -- ' + skipped.length + ' group(s) excluded from zone target calculations: ' + names.join(', ') + '.';
+            banner.style.display = 'block';
+          }
+        })
+        .catch(function() {});
+    }
   </script>
 
   <style>

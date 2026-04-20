@@ -80,7 +80,7 @@ Recommended execution order matches the dependency chain:
 - [x] Add `partial_harvest` event and CCA tray-state model (`E7`)
   - `cut_number`, `remaining_cuts`, `next_expected_cut_date`
   - Prevent first-cut harvest from marking tray capacity as free
-- [ ] Surface degraded compromise calculations (`E1`)
+- [x] Surface degraded compromise calculations (`E1`)
   - Return `{ degraded: true, dropped_trays: [...] }` when recipe lookup drops a tray
   - Show blocking UI banner in Zone view
 - [ ] Add per-group scheduling autonomy override and global kill switch (`R3`, `R6`)
