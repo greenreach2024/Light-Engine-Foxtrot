@@ -57,6 +57,17 @@ Phases (high level):
 
 Progress stored per farm; admin + Setup-Agent can resume mid-phase.
 
+> **Source of truth:** the runtime phase catalogue lives in `greenreach-central/routes/setup-agent.js` `PHASES[]` and is what `GET /api/setup-agent/progress` evaluates. Each phase today performs **existence checks only** (did the farm enter X?), no recommendation logic. The active Farm-Builder paradigm — where the system recommends rooms / zones / equipment from location + growing system + crop plan — is layered on top of these phases via **Playbook 10**. Phase 7 ("Rooms + groups") and Phase 8 ("Crop registry + target ranges") will gain a new `growing_system_choice` sub-phase between them in Playbook 10 Phase B1, so the builder can be invoked before crops are picked.
+
+### 4.1 Farm Builder integration (Playbook 10)
+
+When `PLATFORM_FARM_BUILDER_ENABLED=1`, the 12-phase graph gains:
+- A `growing_system_choice` sub-phase (between 7 and 8) surfacing `grow-systems.json.templates[]` with suitability filters
+- An optional `build` step backing onto `/api/farm-builder/propose` → reviewable proposal in `farm_proposals`
+- An `accept` action (EVIE `explicit_confirm` tier) that writes rooms / zones / groups / devices in bulk and stamps `groups[*].planConfig.template_id`
+
+Until the flag is on, the passive flow (phases 6–8 as-is) remains the only path.
+
 ## 5. User & role management
 
 ### 5.1 Admin users

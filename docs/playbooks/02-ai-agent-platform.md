@@ -203,6 +203,9 @@ Checklist:
 - **G.W.E.N. `execute_code`** — gated off by default in cloud; enable per research program only
 - **Prompt drift** — multiple vision docs describe related but not identical tones (E.V.I.E. vs F.A.Y.E.); reconcile before ambient-presence rollout
 - **Cross-agent memory** — conversation history is per-agent today; unifying will require a memory-broker service
+- **Crop-scheduling tools are inconsistent.** `update_group_crop` (E.V.I.E., `assistant-chat.js:4918–4950`) stamps `group.crop | recipe | plan | planId` but **not** `planConfig.anchor.seedDate`; daily resolver (`server-foxtrot.js:5086–5511`) therefore sees EVIE-assigned groups at day 1 forever. Only `public/views/3d-farm-viewer.html` `applyGroupEdits` (lines ~3679–3710) stamps the full contract. Tracked in Playbook 10 Phase A.
+- **`recommend_farm_layout` has no UI entry point.** The tool (assistant-chat.js:1449–1574) is live at `quick_confirm` tier but reachable only through E.V.I.E. chat; neither `farm-setup.html`, `setup-wizard.html`, nor `3d-farm-viewer.html` surfaces a “recommend layout” affordance. Tracked in Playbook 10 Phase B.
+- **Missing `accept_farm_proposal` tool.** Accepting a farm-builder proposal writes rooms / groups / devices in bulk; it must be `explicit_confirm`, not `quick_confirm`. To be added in Playbook 10 Phase B1.
 
 ## 16. References
 
@@ -212,4 +215,5 @@ Checklist:
 - `greenreach-central/EVIE_VISION.md`, `FAYE_VISION.md`
 - `docs/ai-agents/AI_AGENT_DOCUMENTATION.md`, `ML_AI_FEATURES_REPORT.md`, `FARM_OPS_AGENT_BUILD_PLAN_2026-03-08.md`
 - `greenreach-central/routes/` — all agent route files
+- Playbook 07 §7A (crop-scheduling contract), Playbook 10 (Farm Builder)
 - `greenreach-central/lib/ai-usage-tracker.js`, `gemini-client.js`

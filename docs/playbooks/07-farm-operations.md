@@ -17,7 +17,10 @@ The Light Engine (LE) is the **per-tenant farm runtime** that operators use ever
 | Farm Admin (shell) | `/LE-farm-admin.html` | Tesla-style tabbed shell (Operations / Growing / Business / Assistant); loads the sub-views below via iframe |
 | Environment | `/views/environment.html` (iframe inside Farm Admin) | Live VPD, temp/RH/CO₂ by zone; target ranges |
 | Activity Hub | `/views/tray-inventory.html` (iframe) | Tray lifecycle / movements / harvests (this is the current "grow management" surface) |
-| Planning | `/views/planning.html` (iframe) | Schedule next seeding + multi-week plan |
+| 3D Farm Viewer | `/views/3d-farm-viewer.html` | **Canonical crop-assignment UI.** Click a group → pick crop → save writes all five scheduling fields (see §7A). Also the preview surface for Farm Builder proposals (Playbook 10). |
+| Farm Setup | `/views/farm-setup.html` | Per-room hardware inventory, location / weather, WiFi + SwitchBot pairing. Will gain the Farm Builder `build` step in Phase B1 (Playbook 10). |
+| Setup Wizard | `/setup-wizard.html` | First-boot 5-step linear wizard; thin UI over the Setup-Agent 12-phase catalogue (Playbook 09). |
+| Planning | `/views/planning.html` (iframe) | Schedule next seeding + multi-week plan; embeds `planting-scheduler.html` which writes `planting_assignments` (see §15 gap G3). |
 | Nutrient Management | `/views/nutrient-management.html` (iframe) | Nutrient targets and dosing |
 | Farm Summary | `/views/farm-summary.html` (iframe) | Real-time zone dashboard (temp/RH/VPD/CO₂ + alerts) |
 | Inventory | `/views/inventory.html` + `/views/farm-inventory.html` (iframes) | Crop + supplies |
@@ -195,7 +198,25 @@ E.V.I.E. surfaces this to the farm on the home page and in briefings.
 - Some pages in `public/` duplicate Central equivalents; dual-deploy registry prevents drift but risk remains
 - Automation coverage varies by farm hardware; documented in `device-meta.json`
 - Tray-to-inventory pipeline is mostly automatic but some farm-sales paths still skip inventory decrement (see Playbook 03 §7)
-- Room mapper / 3D viewer experimental; not required for ops
+- **G1.** The 3D viewer is the canonical crop-assignment UI today; it is **not** experimental. `public/views/3d-farm-viewer.html` `applyGroupEdits` (lines ~3679–3710) is the one UI path that stamps all five scheduling fields correctly.
+- **G2.** `update_group_crop` (EVIE, `greenreach-central/routes/assistant-chat.js:4918–4950`) does **not** stamp `planConfig.anchor.seedDate`; daily resolver therefore keeps EVIE-assigned groups at day 1 indefinitely. Fix planned in Farm-Builder Phase A (Playbook 10 §10).
+- **G3.** `planting-scheduler.html` (`savePlantingAssignment`, line 1624) writes `seed_date` / `harvest_date` to the `planting_assignments` store, which `runDailyPlanResolver` (server-foxtrot.js:5086–5511) does **not** read. Fix planned in Farm-Builder Phase D.
+- **G4.** `tray-inventory.html` batch-mode seeding emits no `planId` / `seedDate`; seedings initiated from the Activity Hub are invisible to the daily resolver.
+- **G5.** Dual-deploy mirror reconciliation (`greenreach-central/public/`) has no CI drift guard; #9/#16/#17 divergence went undetected until #37 cleaned it up. Fix planned in Farm-Builder Phase E2.
+
+## 7A. Crop-scheduling contract (authoritative)
+
+Every UI or agent that assigns a crop to a group **must** stamp all five fields atomically (or delegate to a shared helper once Phase A lands):
+
+| Field | Purpose | Who reads it |
+|---|---|---|
+| `group.crop` | Human-readable canonical crop name | UI, reports |
+| `group.recipe` | Recipe key in `lighting-recipes.json` (usually the canonical crop name) | `resolvePlanLightTargets`, `resolvePlanEnvTargets` |
+| `group.plan` | Plan key in `plans.json` / registry | Daily resolver (`runDailyPlanResolver`) |
+| `group.planId` | Same as `group.plan` (alias for backward compat) | Same |
+| `group.planConfig.anchor.seedDate` | `YYYY-MM-DD`; day 1 anchor for recipe progression | `computePlanDayNumber` → `resolvePlanLightTargets(day)` |
+
+Today, the 3D viewer stamps all five; `update_group_crop` (EVIE) stamps four (missing `anchor.seedDate`); tray-inventory batch-mode stamps zero. This is tracked as gap G2/G4 above.
 
 ## 16. References
 
