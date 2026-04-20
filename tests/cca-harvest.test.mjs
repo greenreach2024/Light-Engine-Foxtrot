@@ -420,3 +420,45 @@ test('ML schedule falls back to JS anomaly engine', () => {
   assert.ok(sf.includes("import('./lib/ml-anomaly-js.js')"), 'imports JS anomaly fallback');
   assert.ok(sf.includes('Python unavailable, used JS anomaly engine'), 'logs fallback usage');
 });
+
+// ---- Phase 4 #26: Advanced transpiration model ----
+
+test('transpiration model exports crop/stage-aware lookup', () => {
+  const src = fs.readFileSync(path.resolve('./lib/transpiration-model.js'), 'utf-8');
+  assert.ok(src.includes('export function getTranspirationRate'), 'exports getTranspirationRate');
+  assert.ok(src.includes('export function getVPDTarget'), 'exports getVPDTarget');
+  assert.ok(src.includes('export function estimateGrowthStage'), 'exports estimateGrowthStage');
+  assert.ok(src.includes('export function computeTranspirationLoad'), 'exports computeTranspirationLoad');
+});
+
+test('transpiration table has per-stage rates for key crops', async () => {
+  const mod = await import('../lib/transpiration-model.js');
+  // Lettuce: mature should be around 30 g/plant/day
+  const lettuce = mod.getTranspirationRate('lettuce', 'mature');
+  assert.strictEqual(lettuce.gPerPlantPerDay, 30);
+  assert.strictEqual(lettuce.source, 'crop_specific');
+  // Seedling should be much lower
+  const lettuceSeedling = mod.getTranspirationRate('lettuce', 'seedling');
+  assert.ok(lettuceSeedling.gPerPlantPerDay < lettuce.gPerPlantPerDay, 'seedling < mature');
+  // Tomato: fruiting crop should be higher
+  const tomato = mod.getTranspirationRate('tomato', 'mature');
+  assert.ok(tomato.gPerPlantPerDay > 100, 'tomato mature > 100g');
+  // Unknown crop falls back to default
+  const unknown = mod.getTranspirationRate('alien_crop', 'mature');
+  assert.strictEqual(unknown.source, 'default');
+});
+
+test('growth stage estimation from days since seed', async () => {
+  const mod = await import('../lib/transpiration-model.js');
+  assert.strictEqual(mod.estimateGrowthStage('lettuce', 1, 35), 'germination');
+  assert.strictEqual(mod.estimateGrowthStage('lettuce', 5, 35), 'seedling');
+  assert.strictEqual(mod.estimateGrowthStage('lettuce', 15, 35), 'vegetative');
+  assert.strictEqual(mod.estimateGrowthStage('lettuce', 30, 35), 'mature');
+});
+
+test('VPD targets vary by growth stage', async () => {
+  const mod = await import('../lib/transpiration-model.js');
+  const seedling = mod.getVPDTarget('seedling');
+  const mature = mod.getVPDTarget('mature');
+  assert.ok(seedling.optimal < mature.optimal, 'seedling VPD target < mature VPD target');
+});
