@@ -4567,6 +4567,13 @@
         if (handled) e.preventDefault();
       });
 
+      var canvas = document.getElementById('farmCanvas');
+      canvas.style.touchAction = 'none';
+      canvas.addEventListener('pointerdown', onPointerDown);
+      canvas.addEventListener('pointermove', onPointerMove);
+      canvas.addEventListener('pointerup', onPointerUp);
+      canvas.addEventListener('click', function(e) { if (!S.isDragging && !S.editMode) onClick(e); else if (S.editMode && !S.isDragging) onClick(e); });
+
       // ---- Phase 4 #24: Mobile touch refinements ----
       // Prevent edit-mode drag from interfering with multi-touch orbit/zoom
       var _touchCount = 0;
@@ -4574,12 +4581,6 @@
       canvas.addEventListener('touchend', function(e) { _touchCount = e.touches.length; }, { passive: true });
       canvas.addEventListener('touchcancel', function(e) { _touchCount = 0; }, { passive: true });
 
-      var canvas = document.getElementById('farmCanvas');
-      canvas.style.touchAction = 'none';
-      canvas.addEventListener('pointerdown', onPointerDown);
-      canvas.addEventListener('pointermove', onPointerMove);
-      canvas.addEventListener('pointerup', onPointerUp);
-      canvas.addEventListener('click', function(e) { if (!S.isDragging && !S.editMode) onClick(e); else if (S.editMode && !S.isDragging) onClick(e); });
       document.getElementById('btnEdit').addEventListener('click', toggleEditMode);
       document.getElementById('detailClose').addEventListener('click', function() {
         closeDetailPanel({ confirm: true, message: 'Discard unsaved detail panel changes?' });

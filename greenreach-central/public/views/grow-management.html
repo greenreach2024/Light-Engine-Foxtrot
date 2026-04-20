@@ -927,8 +927,9 @@
 
     function checkDegradedCompromise() {
       fetch('/api/zone-recommendations')
-        .then(function(r) { return r.json(); })
+        .then(function(r) { if (!r.ok) return null; return r.json(); })
         .then(function(data) {
+          if (!data) return;
           var banner = document.getElementById('degradedBanner');
           var msg = document.getElementById('degradedBannerMessage');
           if (!banner || !msg) return;
