@@ -14843,6 +14843,7 @@ import purchaseRouter from './routes/purchase.js';
 import purchaseLeadsRouter from './routes/purchase-leads.js';
 import kpisRouter from './routes/kpis.js';
 import setupWizardRouter from './routes/setup-wizard.js';
+import growSystemsRouter from './routes/grow-systems.js';
 import pg from 'pg';
 
 // Initialize PostgreSQL pool for purchase flow (only if DB credentials provided)
@@ -15164,6 +15165,7 @@ app.get('/api/setup-wizard/status', async (req, res) => {
 
 // Setup wizard router with edge session authentication
 app.use('/api/setup-wizard', setupWizardRouter);
+app.use('/api/grow-systems', growSystemsRouter);
 
 /**
  * Farm Sales: Customer Management

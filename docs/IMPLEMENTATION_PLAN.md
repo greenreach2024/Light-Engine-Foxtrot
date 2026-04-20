@@ -160,12 +160,15 @@ Two-phase architecture: **Phase A (Design)** = room geometry + grow system templ
 - [x] `lib/farm-load-calculator.js` -- load computation from room dimensions + template quantities (PR #15)
 - [x] CI schema validation for grow-systems.json (PR #13)
 
-Note: grow-systems.json has **zero runtime consumers** -- no code reads this file yet. `rooms.json` schema accepts new fields but existing rooms have no dimensions data.
+grow-systems.json now has runtime consumers -- `GET /api/grow-systems` serves templates and `POST /api/grow-systems/compute-room-load` runs load math.
 
 ### P0 -- Phase A: Design (remaining)
 
-4. **Merge setup-agent phases** (Step 4)
-   - Collapse E.V.I.E. setup-agent "define room" + "assign equipment" steps into a single template-aware phase
+4. ~~**Merge setup-agent phases**~~ (Step 4) -- SHIPPED
+   - ~~Collapse E.V.I.E. setup-agent "define room" + "assign equipment" steps into a single template-aware phase~~
+   - Merged `grow_rooms` + `room_specs` into `room_design` phase; added `build_plan` phase
+   - Created `routes/grow-systems.js` with GET /api/grow-systems + POST /api/grow-systems/compute-room-load
+   - Backwards-compat: old phase IDs (`grow_rooms`, `room_specs`) remap to `room_design`
 
 ### P1 -- Phase B: Provision
 
@@ -366,7 +369,7 @@ This ordering respects dependency chains: items higher on the list unblock items
 | 9 | Wire 3D viewer to live sensor telemetry | 3D Viewer | -- |
 | 10 | Remove 2-tank hardcoding; integrate nutrient-profiles.json | Nutrient | -- |
 | 11 | Recipe Modifier Management UI | AI Agents | `XC-7` |
-| 12 | Merge setup-agent phases (template-aware) | Farm Setup | Step 4 |
+| 12 | ~~Merge setup-agent phases (template-aware)~~ | Farm Setup | Step 4 -- SHIPPED |
 
 ### Phase 3: Autonomy Foundations (P1 features)
 
