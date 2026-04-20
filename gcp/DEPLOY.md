@@ -118,6 +118,62 @@ Because every deploy was pinned by digest, the previous revision still
 references the exact image bytes it was serving — no chance of a cached
 `:latest` surprise.
 
+## Deploy from GitHub Actions (WIF — no keys)
+
+Production deploys should be triggered from the `Deploy Cloud Run`
+GitHub Actions workflow (`.github/workflows/deploy-cloud-run.yml`). It
+authenticates to GCP via **Workload Identity Federation** — no
+long-lived service-account keys are ever created.
+
+### One-time WIF setup (Cloud Shell)
+
+```bash
+PROJECT=project-5d00790f-13a9-4637-a40
+PROJECT_NUMBER=1029387937866
+POOL_ID=github
+PROVIDER_ID=greenreach2024
+REPO=greenreach2024/Light-Engine-Foxtrot
+SA=devin-deployer@$PROJECT.iam.gserviceaccount.com
+
+gcloud iam workload-identity-pools create $POOL_ID \
+  --project=$PROJECT --location=global \
+  --display-name="GitHub Actions"
+
+gcloud iam workload-identity-pools providers create-oidc $PROVIDER_ID \
+  --project=$PROJECT --location=global --workload-identity-pool=$POOL_ID \
+  --display-name="GitHub Actions OIDC" \
+  --attribute-mapping="google.subject=assertion.sub,attribute.repository=assertion.repository,attribute.repository_owner=assertion.repository_owner" \
+  --attribute-condition="assertion.repository_owner=='greenreach2024'" \
+  --issuer-uri="https://token.actions.githubusercontent.com"
+
+gcloud iam service-accounts add-iam-policy-binding $SA \
+  --project=$PROJECT \
+  --role=roles/iam.workloadIdentityUser \
+  --member="principalSet://iam.googleapis.com/projects/$PROJECT_NUMBER/locations/global/workloadIdentityPools/$POOL_ID/attribute.repository/$REPO"
+```
+
+The `devin-deployer` service account must also hold these project roles:
+`roles/run.admin`, `roles/artifactregistry.writer`,
+`roles/iam.serviceAccountUser`, `roles/storage.admin`.
+
+### Trigger a deploy
+
+From the GitHub UI:
+Actions → **Deploy Cloud Run (buildx + digest-pinned)** → Run workflow →
+pick `service: both | le | central` → Run.
+
+From the CLI (or from Devin):
+
+```bash
+gh workflow run deploy-cloud-run.yml -f service=both
+# or
+gh workflow run deploy-cloud-run.yml -f service=le -f skip_build=false
+```
+
+The workflow runs the same `gcp/deploy-cloud-run-buildx.sh` script, so
+the principles above (digest pinning, `linux/amd64`, per-service,
+manual-only) apply identically.
+
 ## Relationship to `gcp/deploy-cloud-run.sh`
 
 `gcp/deploy-cloud-run.sh` is the **initial infrastructure bring-up** script
