@@ -5135,6 +5135,22 @@ async function runDailyPlanResolver(trigger = 'manual') {
     const todayStart = new Date(startedAt);
     todayStart.setHours(0, 0, 0, 0);
 
+    // --- Autonomy kill switch (#15) ---
+    let agentPerms = {};
+    try { agentPerms = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'agent-permissions.json'), 'utf-8')); } catch (_) {}
+    const autonomyGlobal = agentPerms?.autonomy?.enabled;
+    if (autonomyGlobal === false) {
+      envState.lastDailyResolverAt = startedAt.toISOString();
+      envState.lastDailyResolverTrigger = trigger;
+      envState.planResolver = { lastRunAt: startedAt.toISOString(), trigger, groups: [], autonomy_killed: true };
+      envState.updatedAt = startedAt.toISOString();
+      writeEnv(envState);
+      console.log(`[daily] autonomy global kill switch is OFF -- skipping all groups (trigger: ${trigger})`);
+      dailyResolverRunning = false;
+      return [];
+    }
+    const autonomySchedulingDefault = agentPerms?.autonomy?.scheduling?.default !== false;
+
     if (!Array.isArray(groups) || !groups.length || !planIndex.size) {
       envState.lastDailyResolverAt = startedAt.toISOString();
       envState.lastDailyResolverTrigger = trigger;
@@ -5185,6 +5201,14 @@ async function runDailyPlanResolver(trigger = 'manual') {
         const deviceIds = Array.from(new Set(getGroupDeviceIds(group)));
         if (!deviceIds.length) {
           skippedGroups.push({ group_id: group.id || group.name, reason: 'no_devices' });
+          continue;
+        }
+
+        // Per-group autonomy override (#15)
+        const groupAutonomy = group.autonomy?.scheduling;
+        const isAutonomous = groupAutonomy !== undefined ? groupAutonomy : autonomySchedulingDefault;
+        if (!isAutonomous) {
+          skippedGroups.push({ group_id: group.id || group.name, reason: 'autonomy_disabled' });
           continue;
         }
 
@@ -27372,6 +27396,70 @@ app.post('/groups', pinGuard, async (req, res) => {
     return res.json({ ok: true, groups: parsed.map((item) => item.response) });
   } catch (err) {
     return res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+// ── Autonomy control endpoints (#15) ────────────────────────────────
+app.get('/api/autonomy', (req, res) => {
+  setCors(req, res);
+  try {
+    let perms = {};
+    try { perms = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'agent-permissions.json'), 'utf-8')); } catch (_) {}
+    const groups = loadGroupsFile();
+    const groupOverrides = groups.filter(g => g.autonomy?.scheduling !== undefined).map(g => ({
+      group_id: g.id || g.name,
+      scheduling: g.autonomy.scheduling
+    }));
+    res.json({
+      ok: true,
+      global_enabled: perms?.autonomy?.enabled !== false,
+      scheduling_default: perms?.autonomy?.scheduling?.default !== false,
+      group_overrides: groupOverrides
+    });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.put('/api/autonomy', pinGuard, (req, res) => {
+  setCors(req, res);
+  const { enabled } = req.body || {};
+  if (typeof enabled !== 'boolean') return res.status(400).json({ ok: false, error: 'enabled must be a boolean' });
+  try {
+    const permsPath = path.join(DATA_DIR, 'agent-permissions.json');
+    let perms = {};
+    try { perms = JSON.parse(fs.readFileSync(permsPath, 'utf-8')); } catch (_) {}
+    if (!perms.autonomy) perms.autonomy = {};
+    perms.autonomy.enabled = enabled;
+    fs.writeFileSync(permsPath, JSON.stringify(perms, null, 2) + '\n');
+    console.log(`[autonomy] global kill switch set to ${enabled}`);
+    res.json({ ok: true, enabled });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.put('/api/autonomy/group/:groupId', pinGuard, async (req, res) => {
+  setCors(req, res);
+  const groupId = String(req.params.groupId || '').trim();
+  if (!groupId) return res.status(400).json({ ok: false, error: 'groupId is required' });
+  const { scheduling } = req.body || {};
+  if (typeof scheduling !== 'boolean') return res.status(400).json({ ok: false, error: 'scheduling must be a boolean' });
+  try {
+    let found = false;
+    await withGroupsLock((groups) => {
+      const idx = groups.findIndex(g => String(g?.id || '').trim() === groupId);
+      if (idx === -1) return false;
+      if (!groups[idx].autonomy) groups[idx].autonomy = {};
+      groups[idx].autonomy.scheduling = scheduling;
+      groups[idx].lastModified = new Date().toISOString();
+      found = true;
+    });
+    if (!found) return res.status(404).json({ ok: false, error: 'Group not found' });
+    console.log(`[autonomy] group ${groupId} scheduling set to ${scheduling}`);
+    res.json({ ok: true, group_id: groupId, scheduling });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
   }
 });
 

@@ -115,3 +115,33 @@ test('grow-management.html has degraded compromise banner', () => {
   assert.ok(htmlText.includes('degradedBanner'), 'should have degradedBanner element');
   assert.ok(htmlText.includes('checkDegradedCompromise'), 'should have checkDegradedCompromise function');
 });
+
+// ── Per-Group Autonomy Override + Kill Switch (#15) ──────────────────
+test('agent-permissions.json has autonomy config', () => {
+  const perms = JSON.parse(fs.readFileSync(path.resolve('./data/agent-permissions.json'), 'utf-8'));
+  assert.strictEqual(perms._version, '1.1.0', 'version should be 1.1.0');
+  assert.ok(perms.autonomy, 'should have autonomy section');
+  assert.strictEqual(perms.autonomy.enabled, true, 'global enabled should default to true');
+  assert.ok(perms.autonomy.scheduling, 'should have scheduling config');
+  assert.strictEqual(perms.autonomy.scheduling.default, true, 'scheduling default should be true');
+});
+
+test('daily plan resolver has autonomy kill switch', () => {
+  const serverText = fs.readFileSync(path.resolve('./server-foxtrot.js'), 'utf-8');
+  assert.ok(serverText.includes('autonomy_killed'), 'should set autonomy_killed flag');
+  assert.ok(serverText.includes('autonomyGlobal'), 'should read global autonomy flag');
+  assert.ok(serverText.includes('autonomySchedulingDefault'), 'should read scheduling default');
+});
+
+test('daily plan resolver checks per-group autonomy', () => {
+  const serverText = fs.readFileSync(path.resolve('./server-foxtrot.js'), 'utf-8');
+  assert.ok(serverText.includes("group.autonomy?.scheduling"), 'should check group autonomy');
+  assert.ok(serverText.includes("reason: 'autonomy_disabled'"), 'should track autonomy_disabled skip reason');
+});
+
+test('autonomy API endpoints exist', () => {
+  const serverText = fs.readFileSync(path.resolve('./server-foxtrot.js'), 'utf-8');
+  assert.ok(serverText.includes("app.get('/api/autonomy'"), 'should have GET /api/autonomy');
+  assert.ok(serverText.includes("app.put('/api/autonomy'"), 'should have PUT /api/autonomy');
+  assert.ok(serverText.includes("app.put('/api/autonomy/group/:groupId'"), 'should have PUT /api/autonomy/group/:groupId');
+});

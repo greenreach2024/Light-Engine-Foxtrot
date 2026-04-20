@@ -83,7 +83,7 @@ Recommended execution order matches the dependency chain:
 - [x] Surface degraded compromise calculations (`E1`)
   - Return `{ degraded: true, dropped_trays: [...] }` when recipe lookup drops a tray
   - Show blocking UI banner in Zone view
-- [ ] Add per-group scheduling autonomy override and global kill switch (`R3`, `R6`)
+- [x] Add per-group scheduling autonomy override and global kill switch (`R3`, `R6`)
   - Class-wide defaults in `agent-permissions.json`
   - Per-group `autonomy.scheduling` override in `groups.json`
   - `autonomy.enabled` global flag
