@@ -334,14 +334,14 @@ Note: PLAYBOOK.md and DEPLOYMENT_LOG.md were created on a feature branch but hav
 
 ### P1 -- Doc/Reality Reconciliation
 
-- [ ] Resolve 5 documented contradictions from v3 audit
+- [x] Resolve 5 documented contradictions from v3 audit
   - `writeJSON` dual-write claim vs actual single-write behavior
   - `schemaVersion` in docs vs missing in data files
   - Recipe v2 migration "complete" vs partially consumed
   - Sensor pipeline doc vs actual SwitchBot-only path
   - Demo mode doc vs actual implementation scope
-- [ ] Add `schemaVersion` field to all JSON data files
-- [ ] Secret rotation schedule (Square, SwitchBot, JWT)
+- [x] Add `schemaVersion` field to all JSON data files
+- [x] Secret rotation schedule (Square, SwitchBot, JWT)
 
 ---
 
