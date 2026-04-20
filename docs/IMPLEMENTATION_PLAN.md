@@ -87,7 +87,7 @@ Recommended execution order matches the dependency chain:
   - Class-wide defaults in `agent-permissions.json`
   - Per-group `autonomy.scheduling` override in `groups.json`
   - `autonomy.enabled` global flag
-- [ ] Pin recipe snapshots at seed time (`R4`)
+- [x] Pin recipe snapshots at seed time (`R4`)
   - Persist `recipe_snapshot_hash` with each tray run
   - Simulate against pinned snapshot, not live recipe
 - [ ] Relax chat-agent scheduling prohibition (`R12`)

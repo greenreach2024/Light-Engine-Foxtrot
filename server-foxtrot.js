@@ -23298,6 +23298,15 @@ app.get('/api/trays', async (req, res) => {
       }
     }
     
+    // ── Recipe drift detection (#16 R4) ──────────────────────────────────
+    let liveRecipes = null;
+    try {
+      const recipesPath = path.join(DATA_DIR, 'lighting-recipes.json');
+      if (fs.existsSync(recipesPath)) {
+        liveRecipes = JSON.parse(fs.readFileSync(recipesPath, 'utf-8'))?.crops || {};
+      }
+    } catch (_) {}
+
     // Build tray list with enriched data
     const traysWithYield = trays.map(tray => {
       const format = formatMap.get(tray.tray_format_id);
@@ -23365,6 +23374,14 @@ app.get('/api/trays', async (req, res) => {
         maxCuts: currentRun?.max_cuts || null,
         nextExpectedCutDate: currentRun?.next_expected_cut_date || null,
         lastCutAt: currentRun?.last_cut_at || null,
+        recipeSnapshotHash: currentRun?.recipe_snapshot_hash || null,
+        recipeDrift: (() => {
+          if (!currentRun?.recipe_snapshot_hash || !liveRecipes) return null;
+          const liveCrop = liveRecipes[currentRun.crop] || liveRecipes[currentRun.recipe_id];
+          if (!liveCrop) return null;
+          const liveHash = crypto.createHash('sha256').update(JSON.stringify(liveCrop)).digest('hex').slice(0, 16);
+          return liveHash !== currentRun.recipe_snapshot_hash;
+        })(),
         createdAt: tray.created_at,
         updatedAt: tray.updated_at
       };
@@ -23854,6 +23871,25 @@ app.post('/api/trays/:trayId/seed', async (req, res) => {
       targetWeightSource = 'format';
     }
 
+    // ── Recipe snapshot pinning (#16 R4) ──────────────────────────────────
+    // Pin the recipe at seed time so the resolver can detect recipe drift.
+    let recipeSnapshotHash = null;
+    let recipeSnapshot = null;
+    try {
+      const recipesPath = path.join(DATA_DIR, 'lighting-recipes.json');
+      if (fs.existsSync(recipesPath)) {
+        const recipesData = JSON.parse(fs.readFileSync(recipesPath, 'utf-8'));
+        const cropRecipe = recipesData?.crops?.[cropKey] || recipesData?.crops?.[recipe];
+        if (cropRecipe) {
+          const snapshotJson = JSON.stringify(cropRecipe);
+          recipeSnapshotHash = crypto.createHash('sha256').update(snapshotJson).digest('hex').slice(0, 16);
+          recipeSnapshot = cropRecipe;
+        }
+      }
+    } catch (snapErr) {
+      console.warn(`[tray-runs] Could not pin recipe snapshot for ${cropKey}:`, snapErr.message);
+    }
+
     const trayRun = {
       tray_run_id:        trayRunId,
       tray_id:            trayId,
@@ -23871,6 +23907,8 @@ app.post('/api/trays/:trayId/seed', async (req, res) => {
       target_weight_source: targetWeightSource,
       group_id:           groupId || null,
       status:             'GROWING',
+      recipe_snapshot_hash: recipeSnapshotHash,
+      recipe_snapshot:    recipeSnapshot,
       created_at:         now.toISOString(),
       updated_at:         now.toISOString()
     };

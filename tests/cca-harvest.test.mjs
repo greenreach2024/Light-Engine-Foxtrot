@@ -145,3 +145,18 @@ test('autonomy API endpoints exist', () => {
   assert.ok(serverText.includes("app.put('/api/autonomy'"), 'should have PUT /api/autonomy');
   assert.ok(serverText.includes("app.put('/api/autonomy/group/:groupId'"), 'should have PUT /api/autonomy/group/:groupId');
 });
+
+// ── Recipe Snapshot Pinning (#16) ────────────────────────────────────
+test('seed endpoint pins recipe snapshot with hash', () => {
+  const serverText = fs.readFileSync(path.resolve('./server-foxtrot.js'), 'utf-8');
+  assert.ok(serverText.includes('recipe_snapshot_hash:'), 'should store recipe_snapshot_hash on tray run');
+  assert.ok(serverText.includes('recipe_snapshot:'), 'should store recipe_snapshot on tray run');
+  assert.ok(serverText.includes("createHash('sha256')"), 'should use SHA-256 for recipe hash');
+});
+
+test('GET /api/trays includes recipe drift detection', () => {
+  const serverText = fs.readFileSync(path.resolve('./server-foxtrot.js'), 'utf-8');
+  assert.ok(serverText.includes('recipeDrift'), 'should include recipeDrift in tray response');
+  assert.ok(serverText.includes('recipeSnapshotHash'), 'should include recipeSnapshotHash in tray response');
+  assert.ok(serverText.includes('liveRecipes'), 'should load live recipes for drift comparison');
+});
