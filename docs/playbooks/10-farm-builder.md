@@ -185,6 +185,6 @@ Suggested order: **E1 → A → B → D → C → E2.**
 - `docs/playbooks/02-ai-agent-platform.md` §4 (trust tiers — `recommend_farm_layout` is `quick_confirm`; `accept` must be `confirm`)
 - `docs/playbooks/07-farm-operations.md` §7 (tray lifecycle) and new §Crop scheduling contract
 - `docs/playbooks/09-admin-platform-ops.md` §Setup-agent phase catalogue
-- `/home/ubuntu/deliverables/FOXTROT_REAUDIT_2026-04-18.md` (this audit)
+- `docs/audits/FOXTROT_REAUDIT_2026-04-18.md` (this audit)
 - `greenreach-central/lib/farm-builder.js`, `greenreach-central/lib/equipment-db.js`
 - `greenreach-central/routes/setup-agent.js`, `greenreach-central/routes/assistant-chat.js`
