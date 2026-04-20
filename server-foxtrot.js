@@ -270,6 +270,8 @@ import { coreAllocator } from './controller/coreAllocator.js';
 import outdoorSensorValidator from './lib/outdoor-sensor-validator.js';
 import anomalyHistory from './lib/anomaly-history.js';
 import eventBus from './lib/event-bus.js';
+import { initEventLog } from './lib/event-log.js';
+import { resolveCropKey } from './lib/crop-resolver.js';
 import mlAutomation from './lib/ml-automation-controller.js';
 import { applyModifier as applyRecipeModifier, computeModifiers as computeRecipeModifiers } from './lib/recipe-modifier.js';
 import { logDailyFixtureRun, getFixtureHours } from './lib/led-aging.js';
@@ -5106,6 +5108,10 @@ const trayPlacementsDB = new Datastore({
   autoload: true,
   timestampData: true
 });
+
+// ── Durable Event Log (XC-3) ───────────────────────────────────────────────
+// Persist all event bus events to NeDB with per-consumer cursor tracking.
+const eventLog = initEventLog(eventBus, runtimeDbPath);
 
 async function runDailyPlanResolver(trigger = 'manual') {
   if (dailyResolverRunning) {
@@ -14730,6 +14736,29 @@ app.use('/api/wholesale/farm-performance', wholesaleFarmPerformanceRouter);
  */
 app.use('/api/audit', createAuditRoutes());
 
+// ── Event Log API (XC-3) ─────────────────────────────────────────────────
+// Query persisted events from the durable event log.
+app.get('/api/events', async (req, res) => {
+  try {
+    const { type, limit = '100', order = 'desc', consumer } = req.query;
+    const lim = Math.min(parseInt(limit, 10) || 100, 500);
+
+    // Consumer mode: return events since last cursor position and advance it
+    if (consumer) {
+      const result = await eventLog.consumeSince(String(consumer), lim);
+      return res.json({ ok: true, events: result.events, cursor: result.cursor, consumer });
+    }
+
+    // Query mode: return matching events
+    const filter = type ? { event_type: String(type) } : {};
+    const events = await eventLog.query(filter, lim, order);
+    return res.json({ ok: true, events, count: events.length });
+  } catch (err) {
+    console.error('[event-log] Query error:', err.message);
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 // Apply audit middleware to all wholesale routes
 app.use('/api/wholesale', auditMiddleware);
 
@@ -23396,7 +23425,7 @@ app.post('/api/tray-runs/:id/harvest', async (req, res) => {
       now = new Date(serverNow);
     }
     const dateStr = now.toISOString().slice(2, 10).replace(/-/g, '');
-    const cropName = (trayRun.recipe_id || trayRun.crop || 'CROP').toUpperCase().slice(0, 8).replace(/[^A-Z0-9]/g, '');
+    const cropName = (trayRun.crop_key || trayRun.crop || trayRun.recipe_id || 'CROP').toUpperCase().slice(0, 8).replace(/[^A-Z0-9]/g, '');
     const batchSuffix = Math.random().toString(36).slice(2, 6).toUpperCase();
     const lotCode = `A1-${cropName}-${dateStr}-${batchSuffix}`;
     const batchId = `B-${dateStr}-${batchSuffix}`;
@@ -23434,7 +23463,7 @@ app.post('/api/tray-runs/:id/harvest', async (req, res) => {
     // Crops with verified data get standard sampling rate (20%)
     let shouldWeigh = false;
     try {
-      const cropKey = trayRun.recipe_id || trayRun.crop;
+      const cropKey = trayRun.crop_key || trayRun.crop || trayRun.recipe_id;
       const hasVerifiedWeight = hasCropBenchmark(cropKey);
       const weighRatio = hasVerifiedWeight
         ? (parseFloat(process.env.WEIGH_IN_RATIO_VERIFIED) || 0.20)   // verified: 1-in-5
@@ -23470,7 +23499,7 @@ app.post('/api/tray-runs/:id/harvest', async (req, res) => {
         lot_code:           lotCode,
         batch_id:           batchId,
         tray_run_id:        trayRunId,
-        crop_name:          trayRun.recipe_id || trayRun.crop || 'Unknown',
+        crop_name:          trayRun.crop_key || trayRun.crop || trayRun.recipe_id || 'Unknown',
         variety:            trayRun.variety || null,
         recipe_id:          trayRun.recipe_id || null,
         zone:               placement?.location_qr || placement?.zone || trayRun.zone || '',
@@ -23497,7 +23526,7 @@ app.post('/api/tray-runs/:id/harvest', async (req, res) => {
     // automatically without a separate manual step.
     const labelPrintData = {
       lotCode,
-      cropName: (trayRun.recipe_id || trayRun.crop || 'Unknown'),
+      cropName: (trayRun.crop_key || trayRun.crop || trayRun.recipe_id || 'Unknown'),
       weight: weight || 'N/A',
       unit: 'oz',
       harvestedAt: now.toISOString(),
@@ -23532,7 +23561,8 @@ app.post('/api/tray-runs/:id/harvest', async (req, res) => {
 
       const experimentInput = {
         groupId: trayRun.group_id || trayRun.groupId || trayRunId,
-        crop: trayRun.recipe_id || trayRun.crop || null,
+        crop: trayRun.crop_key || trayRun.crop || trayRun.recipe_id || null,
+        crop_key: trayRun.crop_key || null,
         recipe_id: trayRun.recipe_id || null,
         grow_days: growDays,
         planned_grow_days: null,
@@ -23559,7 +23589,8 @@ app.post('/api/tray-runs/:id/harvest', async (req, res) => {
     eventBus.emitEvent('harvest', {
       tray_run_id: trayRunId,
       group_id: trayRun?.group_id || null,
-      crop: trayRun?.crop || trayRun?.recipe_id || null,
+      crop: trayRun?.crop_key || trayRun?.crop || trayRun?.recipe_id || null,
+      crop_key: trayRun?.crop_key || null,
       total_weight_oz: weight || null,
       harvested_count: harvestedCount,
       planted_count: trayRun?.planted_site_count || null,
@@ -23575,7 +23606,7 @@ app.post('/api/tray-runs/:id/harvest', async (req, res) => {
 
     // Sync harvest data to Central farm_inventory (actual weights)
     try {
-      const cropName = trayRun.recipe_id || trayRun.crop || 'Unknown';
+      const cropName = trayRun.crop_key || trayRun.crop || trayRun.recipe_id || 'Unknown';
       getSyncService().syncHarvest([{
         crop: cropName,
         lot_code: lotCode,
@@ -23674,6 +23705,15 @@ app.post('/api/trays/:trayId/seed', async (req, res) => {
     }
     const trayRunId = `TR-${Date.now()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
 
+    // ── Canonical crop key resolution (XC-4) ──────────────────────────────
+    // Resolve free-text recipe input to canonical crop key from crop-registry.json.
+    // Store both the canonical key and the raw input for traceability.
+    const canonicalCrop = resolveCropKey(recipe);
+    if (!canonicalCrop) {
+      console.warn(`[tray-runs] Unknown crop "${recipe}" — storing as-is (no canonical key)`);
+    }
+    const cropKey = canonicalCrop || recipe;
+
     // ── Determine target weight (progressive refinement) ──────────────────
     // Priority 1: Verified crop benchmark from reconciliation weigh-ins
     // Priority 2: Format-level targetWeightPerSite (generic fallback)
@@ -23703,7 +23743,7 @@ app.post('/api/trays/:trayId/seed', async (req, res) => {
     let targetWeightOz = null;
     let targetWeightSource = null;
 
-    const cropBenchmark = getCropBenchmark(recipe);
+    const cropBenchmark = getCropBenchmark(cropKey);
     if (cropBenchmark && cropBenchmark.verified) {
       targetWeightOz = cropBenchmark.avg_weight_per_plant_oz;
       targetWeightSource = 'benchmark';
@@ -23716,7 +23756,9 @@ app.post('/api/trays/:trayId/seed', async (req, res) => {
       tray_run_id:        trayRunId,
       tray_id:            trayId,
       recipe_id:          recipe,
-      crop:               recipe,
+      crop:               cropKey,
+      crop_key:           canonicalCrop,
+      crop_raw:           recipe,
       variety:            variety || null,
       seeded_at:          now.toISOString(),
       planted_site_count: resolvedPlantCount,
@@ -23761,9 +23803,9 @@ app.post('/api/trays/:trayId/seed', async (req, res) => {
             if (!targetGroup.planConfig.anchor) targetGroup.planConfig.anchor = {};
             const seedDateStr = now.toISOString().slice(0, 10);
             targetGroup.planConfig.anchor.seedDate = seedDateStr;
-            if (!targetGroup.crop) targetGroup.crop = recipe;
+            if (!targetGroup.crop) targetGroup.crop = cropKey;
             targetGroup.lastModified = new Date().toISOString();
-            console.log(`[tray-runs] Synced seed date ${seedDateStr} + crop ${recipe} to group ${groupId}`);
+            console.log(`[tray-runs] Synced seed date ${seedDateStr} + crop ${cropKey} to group ${groupId}`);
             try { emitDataChange({ kind: 'groups', ids: [groupId], updatedAt: targetGroup.lastModified, source: 'tray-seed' }); } catch (_) {}
           }
         });
@@ -23772,13 +23814,14 @@ app.post('/api/trays/:trayId/seed', async (req, res) => {
       }
     }
 
-    console.log(`[tray-runs] Seeded: ${trayRunId} tray=${trayId} crop=${recipe} plants=${resolvedPlantCount ?? 'unknown'} (${plantCountSource || 'no data'}) targetWeight=${targetWeightOz ?? 'none'} (${targetWeightSource || 'no data'})${seed_source ? ` source=${seed_source}` : ''}${groupId ? ` group=${groupId}` : ''}`);
+    console.log(`[tray-runs] Seeded: ${trayRunId} tray=${trayId} crop=${cropKey}${canonicalCrop ? '' : ' (UNRESOLVED)'} plants=${resolvedPlantCount ?? 'unknown'} (${plantCountSource || 'no data'}) targetWeight=${targetWeightOz ?? 'none'} (${targetWeightSource || 'no data'})${seed_source ? ` source=${seed_source}` : ''}${groupId ? ` group=${groupId}` : ''}`);
 
     // Phase 1 Ticket 1.6 -- emit standardized seed event
     eventBus.emitEvent('seed', {
       tray_run_id: trayRunId,
       group_id: groupId || null,
-      crop: recipe,
+      crop: cropKey,
+      crop_key: canonicalCrop,
       variety: variety || null,
       seed_count: resolvedPlantCount,
       tray_format: trayFormat?.name || null,
@@ -23793,6 +23836,8 @@ app.post('/api/trays/:trayId/seed', async (req, res) => {
       success: true,
       tray_run_id: trayRunId,
       placement_id: placementId,
+      crop: cropKey,
+      crop_key: canonicalCrop,
       planted_site_count: resolvedPlantCount,
       plant_count_source: plantCountSource,
       target_weight_oz: targetWeightOz,
@@ -23986,7 +24031,8 @@ app.post('/api/tray-runs/:id/loss', async (req, res) => {
     eventBus.emitEvent('loss', {
       tray_run_id: trayRunId,
       group_id: trayRun?.group_id || null,
-      crop: crop_name || crop_id || trayRun?.crop || null,
+      crop: crop_name || crop_id || trayRun?.crop_key || trayRun?.crop || null,
+      crop_key: trayRun?.crop_key || null,
       loss_count: lost_quantity ? parseInt(lost_quantity) : null,
       loss_reason: loss_reason,
       loss_category: 'other',

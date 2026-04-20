@@ -50,10 +50,10 @@ Recommended execution order matches the dependency chain:
 
 1. **Canonical crop identity at seed time** `XC-4`
    - [x] Client datalist from `/api/crops?active=true`
-   - [ ] Server-side alias resolution and rejection of unknown crops
-   - [ ] Canonical `crop_key` persisted in tray runs and seed events
-   - [ ] Benchmark lookup routed through canonical key
-   - [ ] Update all downstream recipe/environment consumers to use canonical key
+   - [x] Server-side alias resolution and rejection of unknown crops
+   - [x] Canonical `crop_key` persisted in tray runs and seed events
+   - [x] Benchmark lookup routed through canonical key
+   - [x] Update all downstream recipe/environment consumers to use canonical key
 
 2. **Server-authoritative timestamps** `XC-5`
    - [x] Accept client timestamps as hints only
@@ -66,10 +66,10 @@ Recommended execution order matches the dependency chain:
    - [ ] Move group mutations behind a single storage abstraction or DB path (preferred)
 
 4. **Durable event log** `XC-3`
-   - [ ] Persist `seed`, `harvest`, `loss` (and future `partial_harvest`) events
-   - [ ] Add per-consumer cursor state
-   - [ ] Add trivial audit-log consumer before scheduler agent ships
-   - [ ] Decouple handler execution from request latency (async dispatch)
+   - [x] Persist `seed`, `harvest`, `loss` (and future `partial_harvest`) events
+   - [x] Add per-consumer cursor state
+   - [x] Add trivial audit-log consumer before scheduler agent ships
+   - [x] Decouple handler execution from request latency (async dispatch)
 
 5. **Unified tray source of truth** `XC-1`
    - [ ] Make seed/harvest workflow and environmental targeting observe the same tray state
