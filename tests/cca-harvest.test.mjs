@@ -72,10 +72,10 @@ test('harvest event still exists in taxonomy', () => {
   assert.equal(taxonomy.events.harvest.category, 'grow');
 });
 
-test('taxonomy has exactly 13 events after adding partial_harvest', () => {
+test('taxonomy has exactly 14 events after adding agent_decision', () => {
   const taxPath = path.resolve('./data/event-taxonomy.json');
   const taxonomy = JSON.parse(fs.readFileSync(taxPath, 'utf-8'));
-  assert.equal(Object.keys(taxonomy.events).length, 13);
+  assert.equal(Object.keys(taxonomy.events).length, 14);
 });
 
 // ── Degraded Compromise Surfacing (#14) ──────────────────────────────
@@ -211,4 +211,89 @@ test('scheduling read tools are auto-tier', () => {
   assert.ok(chatText.includes("'handoff_to_agent'"), 'handoff_to_agent in auto tier');
   // set_light_schedule should remain in confirm tier (write protection)
   assert.ok(chatText.includes("'set_light_schedule'"), 'set_light_schedule should still be confirm tier');
+});
+
+// ── Phase 4 #19: Offline seed queue parity ────────────────────────────
+test('offline seed queue: syncPendingActions handles seed type', () => {
+  const html = fs.readFileSync(path.resolve('./greenreach-central/public/views/tray-inventory.html'), 'utf-8');
+  assert.ok(html.includes("case 'seed':"), 'seed case exists in syncPendingActions switch');
+  assert.ok(html.includes("/api/trays/${action.data.trayId}/seed"), 'seed sync posts to correct API endpoint');
+});
+
+test('offline seed queue: submitSeed checks isOnline before fetch', () => {
+  const html = fs.readFileSync(path.resolve('./greenreach-central/public/views/tray-inventory.html'), 'utf-8');
+  // Find the submitSeed function and verify it checks isOnline
+  const submitSeedSection = html.slice(html.indexOf('async function submitSeed('));
+  assert.ok(submitSeedSection.includes("if (!isOnline)"), 'submitSeed checks offline status before fetch');
+  assert.ok(submitSeedSection.includes("queueOfflineAction('seed'"), 'submitSeed queues offline action for seeds');
+});
+
+test('offline seed queue: network error fallback queues seed offline', () => {
+  const html = fs.readFileSync(path.resolve('./greenreach-central/public/views/tray-inventory.html'), 'utf-8');
+  const submitSeedSection = html.slice(html.indexOf('async function submitSeed('));
+  const catchSection = submitSeedSection.slice(submitSeedSection.indexOf('} catch (err)'));
+  assert.ok(catchSection.includes("queueOfflineAction('seed'"), 'catch block queues seed action on network error');
+  assert.ok(catchSection.includes('Saved Offline'), 'catch block shows Saved Offline UI');
+});
+
+// ── Phase 4 #20: Demand refresh idempotency ────────────────────────────
+test('inventory endpoints have TTL cache and in-flight dedup', () => {
+  const sf = fs.readFileSync(path.resolve('./server-foxtrot.js'), 'utf-8');
+  assert.ok(sf.includes('_inventoryCache'), 'inventory cache object exists');
+  assert.ok(sf.includes('TTL: 30_000'), '30-second TTL configured');
+  assert.ok(sf.includes('_inventoryCache.current.inFlight'), 'current inventory has in-flight dedup');
+  assert.ok(sf.includes("req.query.refresh === 'true'"), 'force refresh bypass supported');
+});
+
+test('inventory forecast endpoint has TTL cache', () => {
+  const sf = fs.readFileSync(path.resolve('./server-foxtrot.js'), 'utf-8');
+  assert.ok(sf.includes('_inventoryCache.forecast.data'), 'forecast cache exists');
+  assert.ok(sf.includes('_inventoryCache.forecast.at'), 'forecast cache timestamp tracked');
+});
+
+test('getCropHarvestDays tries crop registry before 45d default', () => {
+  const sf = fs.readFileSync(path.resolve('./server-foxtrot.js'), 'utf-8');
+  const fn = sf.slice(sf.indexOf('function getCropHarvestDays('));
+  assert.ok(fn.includes('cropUtils.getCropGrowDays(cropName)'), 'tries crop registry before default');
+  // Verify there are multiple fallback-to-registry attempts
+  const registryAttempts = (fn.match(/getCropGrowDays/g) || []).length;
+  assert.ok(registryAttempts >= 3, `should try registry in multiple fallback paths (found ${registryAttempts})`);
+});
+
+test('recipe-modifiers/compute has in-flight dedup', () => {
+  const sf = fs.readFileSync(path.resolve('./server-foxtrot.js'), 'utf-8');
+  assert.ok(sf.includes('_recipeModifierComputeInFlight'), 'recipe modifier compute has in-flight guard');
+});
+
+test('reportHarvestSchedule has in-flight dedup', () => {
+  const sf = fs.readFileSync(path.resolve('./server-foxtrot.js'), 'utf-8');
+  assert.ok(sf.includes('_harvestReportInFlight'), 'harvest report has in-flight guard');
+  assert.ok(sf.includes('_doReportHarvestSchedule'), 'inner function extracted for dedup wrapper');
+});
+
+// ── Phase 4 #21: Scheduler decision ledger ────────────────────────────
+test('decision ledger module exists with NDJSON append-only pattern', () => {
+  const ledger = fs.readFileSync(path.resolve('./lib/decision-ledger.js'), 'utf-8');
+  assert.ok(ledger.includes('appendFileSync'), 'uses appendFileSync for append-only writes');
+  assert.ok(ledger.includes('.ndjson'), 'uses .ndjson file extension');
+  assert.ok(ledger.includes('agent-decisions'), 'stores in agent-decisions directory');
+  assert.ok(ledger.includes('function record('), 'has record function');
+  assert.ok(ledger.includes('function recordOutcome('), 'has recordOutcome function');
+  assert.ok(ledger.includes('function read('), 'has read function');
+});
+
+test('decision ledger API endpoints are wired in server-foxtrot', () => {
+  const sf = fs.readFileSync(path.resolve('./server-foxtrot.js'), 'utf-8');
+  assert.ok(sf.includes("app.get('/api/agent-decisions/:agent'"), 'GET decisions by agent');
+  assert.ok(sf.includes("app.get('/api/agent-decisions/:agent/dates'"), 'GET available dates');
+  assert.ok(sf.includes("app.post('/api/agent-decisions'"), 'POST new decision');
+  assert.ok(sf.includes("app.post('/api/agent-decisions/:agent/outcome'"), 'POST outcome update');
+});
+
+test('event taxonomy includes agent_decision event type', () => {
+  const taxonomy = JSON.parse(fs.readFileSync(path.resolve('./data/event-taxonomy.json'), 'utf-8'));
+  assert.ok(taxonomy.events.agent_decision, 'agent_decision event type exists');
+  assert.strictEqual(taxonomy.events.agent_decision.category, 'ai');
+  assert.ok(taxonomy.events.agent_decision.payload.agent, 'payload includes agent field');
+  assert.ok(taxonomy.events.agent_decision.payload.chosen, 'payload includes chosen field');
 });

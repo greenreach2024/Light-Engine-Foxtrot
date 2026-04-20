@@ -272,6 +272,7 @@ import outdoorSensorValidator from './lib/outdoor-sensor-validator.js';
 import anomalyHistory from './lib/anomaly-history.js';
 import eventBus from './lib/event-bus.js';
 import { initEventLog } from './lib/event-log.js';
+import decisionLedger from './lib/decision-ledger.js';
 import { resolveCropKey } from './lib/crop-resolver.js';
 import mlAutomation from './lib/ml-automation-controller.js';
 import { applyModifier as applyRecipeModifier, computeModifiers as computeRecipeModifiers } from './lib/recipe-modifier.js';
@@ -5113,6 +5114,10 @@ const trayPlacementsDB = new Datastore({
 // ── Durable Event Log (XC-3) ───────────────────────────────────────────────
 // Persist all event bus events to NeDB with per-consumer cursor tracking.
 const eventLog = initEventLog(eventBus, runtimeDbPath);
+
+// ── Agent Decision Ledger (R7) ────────────────────────────────────────────
+// Append-only NDJSON logs per agent per day: data/agent-decisions/<agent>/<yyyy-mm-dd>.ndjson
+decisionLedger.init(DATA_DIR);
 
 async function runDailyPlanResolver(trigger = 'manual') {
   if (dailyResolverRunning) {
@@ -11988,17 +11993,28 @@ app.get('/api/recipe-modifiers', async (req, res) => {
  * POST /api/recipe-modifiers/compute
  * Trigger recomputation of local recipe modifiers from experiment records.
  */
+let _recipeModifierComputeInFlight = null;
 app.post('/api/recipe-modifiers/compute', async (req, res) => {
   try {
-    const records = await harvestOutcomesDB.find({});
-    const result = computeRecipeModifiers(records, req.body?.minRecords || 10);
-    res.json({
-      ok: true,
-      crops_computed: Object.keys(result.modifiers).length,
-      modifiers: result.modifiers,
-      computed_at: result.computed_at
-    });
+    if (_recipeModifierComputeInFlight) {
+      const cached = await _recipeModifierComputeInFlight;
+      return res.json(cached);
+    }
+    _recipeModifierComputeInFlight = (async () => {
+      const records = await harvestOutcomesDB.find({});
+      const result = computeRecipeModifiers(records, req.body?.minRecords || 10);
+      return {
+        ok: true,
+        crops_computed: Object.keys(result.modifiers).length,
+        modifiers: result.modifiers,
+        computed_at: result.computed_at
+      };
+    })();
+    const computeResult = await _recipeModifierComputeInFlight;
+    _recipeModifierComputeInFlight = null;
+    res.json(computeResult);
   } catch (error) {
+    _recipeModifierComputeInFlight = null;
     res.status(500).json({ ok: false, error: error.message });
   }
 });
@@ -12369,7 +12385,13 @@ app.post('/api/ai/recommendations/receive', async (req, res) => {
     return projections;
   }
 
+  let _harvestReportInFlight = null;
   async function reportHarvestSchedule() {
+    if (_harvestReportInFlight) return _harvestReportInFlight;
+    _harvestReportInFlight = _doReportHarvestSchedule();
+    try { return await _harvestReportInFlight; } finally { _harvestReportInFlight = null; }
+  }
+  async function _doReportHarvestSchedule() {
     try {
       const projections = await computeProjectedHarvests();
       if (projections.length === 0) {
@@ -14795,6 +14817,53 @@ app.get('/api/events', async (req, res) => {
   } catch (err) {
     console.error('[event-log] Query error:', err.message);
     return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// ── Agent Decision Ledger API (R7) ──────────────────────────────────────
+app.get('/api/agent-decisions/:agent', (req, res) => {
+  try {
+    const { agent } = req.params;
+    const date = req.query.date || new Date().toISOString().slice(0, 10);
+    const records = decisionLedger.read(agent, date);
+    res.json({ ok: true, agent, date, count: records.length, decisions: records });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.get('/api/agent-decisions/:agent/dates', (req, res) => {
+  try {
+    const dates = decisionLedger.listDates(req.params.agent);
+    res.json({ ok: true, agent: req.params.agent, dates });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.post('/api/agent-decisions', (req, res) => {
+  try {
+    const { agent, decision_type, inputs, alternatives, chosen, approval, farm_id } = req.body;
+    if (!agent || !chosen) {
+      return res.status(400).json({ ok: false, error: 'agent and chosen are required' });
+    }
+    const record = decisionLedger.record({ agent, decision_type, inputs, alternatives, chosen, approval, farm_id });
+    res.json({ ok: true, record });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.post('/api/agent-decisions/:agent/outcome', (req, res) => {
+  try {
+    const { ref_seq, outcome } = req.body;
+    if (!ref_seq || !outcome) {
+      return res.status(400).json({ ok: false, error: 'ref_seq and outcome are required' });
+    }
+    const update = decisionLedger.recordOutcome(req.params.agent, ref_seq, outcome);
+    res.json({ ok: true, update });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
   }
 });
 
@@ -21471,13 +21540,26 @@ function getCropHarvestDays(planId) {
     const recipesPath = path.join(PUBLIC_DIR, 'data/lighting-recipes.json');
     if (!fs.existsSync(recipesPath)) {
       console.warn('[getCropHarvestDays] lighting-recipes.json not found');
+      // Try crop registry before defaulting to 45
+      const cropName = extractCropDisplayName(planId);
+      if (cropName) {
+        const registryDays = cropUtils.getCropGrowDays(cropName);
+        if (registryDays) return registryDays;
+      }
       return 45;
     }
     
     const recipesData = JSON.parse(fs.readFileSync(recipesPath, 'utf8'));
-    if (!recipesData.crops) return 45;
+    if (!recipesData.crops) {
+      const cropName = extractCropDisplayName(planId);
+      if (cropName) {
+        const registryDays = cropUtils.getCropGrowDays(cropName);
+        if (registryDays) return registryDays;
+      }
+      return 45;
+    }
     
-    // Extract crop name from plan ID: "crop-bibb-butterhead" → "Bibb Butterhead"
+    // Extract crop name from plan ID: "crop-bibb-butterhead" -> "Bibb Butterhead"
     const cropSlug = planId.replace(/^crop-/, '');
     
     // Find matching crop (case-insensitive, handle variations)
@@ -21490,11 +21572,21 @@ function getCropHarvestDays(planId) {
       const schedule = cropEntry[1];
       // Get the max day value (final harvest day)
       const maxDay = Math.max(...schedule.map(d => Number(d.day) || 0));
-      console.log(`[getCropHarvestDays] ${planId} → ${cropEntry[0]} → ${maxDay} days`);
+      console.log(`[getCropHarvestDays] ${planId} -> ${cropEntry[0]} -> ${maxDay} days`);
       return Math.ceil(maxDay);
     }
     
-    console.warn(`[getCropHarvestDays] No recipe found for planId: ${planId}`);
+    // Recipe not found -- try crop registry before defaulting
+    const cropName = extractCropDisplayName(planId);
+    if (cropName) {
+      const registryDays = cropUtils.getCropGrowDays(cropName);
+      if (registryDays) {
+        console.log(`[getCropHarvestDays] ${planId} -> registry -> ${registryDays} days`);
+        return registryDays;
+      }
+    }
+    
+    console.warn(`[getCropHarvestDays] No recipe or registry entry for planId: ${planId}`);
     return 45;
   } catch (err) {
     console.error('[getCropHarvestDays] Error:', err.message);
@@ -21700,12 +21792,30 @@ app.use('/api/farm/products', proxyCorsMiddleware, createProxyMiddleware({
   }
 }));
 
+// ── Inventory cache + in-flight dedup (Phase 4 #20) ────────────────────
+const _inventoryCache = {
+  current: { data: null, at: 0, inFlight: null },
+  forecast: { data: null, at: 0, inFlight: null },
+  TTL: 30_000  // 30 seconds
+};
+
 /**
  * GET /api/inventory/current
  * Returns current inventory summary with detailed tray data
  */
 app.get('/api/inventory/current', async (req, res) => {
   try {
+    const now = Date.now();
+    const force = req.query.refresh === 'true';
+    if (!force) {
+      if (_inventoryCache.current.inFlight) {
+        const cached = await _inventoryCache.current.inFlight;
+        return res.json(cached);
+      }
+      if (_inventoryCache.current.data && (now - _inventoryCache.current.at) < _inventoryCache.TTL) {
+        return res.json(_inventoryCache.current.data);
+      }
+    }
     // Load from groups.json (real crop data)
     const groupsPath = path.join(PUBLIC_DIR, 'data', 'groups.json');
     if (!fs.existsSync(groupsPath)) {
@@ -21811,7 +21921,7 @@ app.get('/api/inventory/current', async (req, res) => {
       }
     }
 
-    res.json({
+    const result = {
       activeTrays: totalTrays,
       totalPlants: totalPlants,
       seedlingPlants: seedlingPlants,
@@ -21827,8 +21937,13 @@ app.get('/api/inventory/current', async (req, res) => {
           trays: allTrays
         }
       ]
-    });
+    };
+    _inventoryCache.current.data = result;
+    _inventoryCache.current.at = Date.now();
+    _inventoryCache.current.inFlight = null;
+    res.json(result);
   } catch (error) {
+    _inventoryCache.current.inFlight = null;
     console.error('[inventory] Failed to get current inventory:', error);
     res.status(500).json({ error: 'Failed to load inventory' });
   }
@@ -21841,6 +21956,12 @@ app.get('/api/inventory/current', async (req, res) => {
 // Inventory forecast endpoint with optional days parameter (cloud-compatible)
 app.get('/api/inventory/forecast/:days?', (req, res) => {
   try {
+    const _cacheNow = Date.now();
+    const force = req.query.refresh === 'true';
+    if (!force && _inventoryCache.forecast.data && (_cacheNow - _inventoryCache.forecast.at) < _inventoryCache.TTL) {
+      return res.json(_inventoryCache.forecast.data);
+    }
+
     // Load from groups.json (real crop data)
     const groupsPath = path.join(PUBLIC_DIR, 'data', 'groups.json');
     if (!fs.existsSync(groupsPath)) {
@@ -21926,7 +22047,7 @@ app.get('/api/inventory/forecast/:days?', (req, res) => {
       }
     });
 
-    res.json({
+    const forecastResult = {
       next7Days: {
         count: buckets.next7Days.reduce((sum, t) => sum + t.plantCount, 0),
         trays: buckets.next7Days
@@ -21943,7 +22064,10 @@ app.get('/api/inventory/forecast/:days?', (req, res) => {
         count: buckets.beyond30Days.reduce((sum, t) => sum + t.plantCount, 0),
         trays: buckets.beyond30Days
       }
-    });
+    };
+    _inventoryCache.forecast.data = forecastResult;
+    _inventoryCache.forecast.at = Date.now();
+    res.json(forecastResult);
   } catch (error) {
     console.error('[inventory] Failed to get forecast:', error);
     res.status(500).json({ error: 'Failed to load forecast' });

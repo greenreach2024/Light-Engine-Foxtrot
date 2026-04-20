@@ -2602,7 +2602,19 @@
                 body: JSON.stringify(action.data)
               });
               break;
-            // Add other action types as needed
+            case 'seed':
+              response = await fetch(`${currentAPI}/api/trays/${action.data.trayId}/seed`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  recipe: action.data.recipe,
+                  variety: action.data.variety,
+                  seed_source: action.data.seed_source,
+                  seedDate: action.data.seedDate,
+                  plantCount: action.data.plantCount
+                })
+              });
+              break;
           }
           
           if (response && response.ok) {
@@ -5674,16 +5686,50 @@
       const crop = document.getElementById('seedCrop').value.trim();
       if (!crop) { alert('Crop is required'); return; }
 
+      const seedData = {
+        trayId:      trayId,
+        recipe:      crop,
+        variety:     document.getElementById('seedVariety').value.trim() || null,
+        seed_source: document.getElementById('seedSource').value.trim() || null,
+        seedDate:    document.getElementById('seedDate').value,
+        plantCount:  document.getElementById('seedPlantCount').value || null
+      };
+
+      const scanResult = document.getElementById('scanResult');
+
+      // If offline, queue the seed action
+      if (!isOnline) {
+        await queueOfflineAction('seed', seedData);
+        scanResult.innerHTML = `
+          <div style="text-align: center; padding: 2rem;">
+            <div style="font-size: 3rem; color: #f97316; margin-bottom: 1rem;">+</div>
+            <div style="font-size: 1.5rem; font-weight: 700; color: #f97316; margin-bottom: 0.5rem;">
+              Saved Offline
+            </div>
+            <div style="font-size: 1.1rem; color: #cbd5e1; margin-bottom: 1rem;">
+              Seeding will sync when connection is restored
+            </div>
+            <div style="color: #94a3b8; font-size: 0.9rem;">${crop}</div>
+            <button onclick="closeScanModal()" style="
+              margin-top: 1.5rem; padding: 12px 24px; border: none; border-radius: 12px;
+              background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+              color: white; font-size: 1.1rem; font-weight: 700; cursor: pointer;"
+            >Done</button>
+          </div>
+        `;
+        return;
+      }
+
       try {
         const res = await fetch(`${currentAPI}/api/trays/${trayId}/seed`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            recipe:      crop,
-            variety:     document.getElementById('seedVariety').value.trim() || null,
-            seed_source: document.getElementById('seedSource').value.trim() || null,
-            seedDate:    document.getElementById('seedDate').value,
-            plantCount:  document.getElementById('seedPlantCount').value || null
+            recipe:      seedData.recipe,
+            variety:     seedData.variety,
+            seed_source: seedData.seed_source,
+            seedDate:    seedData.seedDate,
+            plantCount:  seedData.plantCount
           })
         });
         const data = await res.json();
@@ -5697,7 +5743,6 @@
              </div>`
           : '';
 
-        const scanResult = document.getElementById('scanResult');
         scanResult.innerHTML = `
           <div style="text-align: center; padding: 2rem;">
             <div style="font-size: 3rem; color: #10b981;">+</div>
@@ -5714,7 +5759,25 @@
           </div>
         `;
       } catch (err) {
-        alert('Seeding error: ' + err.message);
+        // Network error — queue offline as fallback
+        await queueOfflineAction('seed', seedData);
+        scanResult.innerHTML = `
+          <div style="text-align: center; padding: 2rem;">
+            <div style="font-size: 3rem; color: #f97316; margin-bottom: 1rem;">+</div>
+            <div style="font-size: 1.5rem; font-weight: 700; color: #f97316; margin-bottom: 0.5rem;">
+              Saved Offline
+            </div>
+            <div style="font-size: 1.1rem; color: #cbd5e1; margin-bottom: 1rem;">
+              Network error -- seeding saved offline
+            </div>
+            <div style="color: #94a3b8; font-size: 0.9rem;">${crop}</div>
+            <button onclick="closeScanModal()" style="
+              margin-top: 1.5rem; padding: 12px 24px; border: none; border-radius: 12px;
+              background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+              color: white; font-size: 1.1rem; font-weight: 700; cursor: pointer;"
+            >Done</button>
+          </div>
+        `;
       }
     }
 

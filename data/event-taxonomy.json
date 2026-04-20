@@ -1,6 +1,6 @@
 {
   "$schema": "event-taxonomy-v1",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Canonical event names and schemas for Light Engine Foxtrot. All system events should emit payloads conforming to these definitions.",
   "events": {
     "seed": {
@@ -253,6 +253,27 @@
         "zone": "string|null",
         "room": "string|null",
         "harvested_by": "string|null",
+        "timestamp": "ISO8601"
+      },
+      "status": "active"
+    },
+    "agent_decision": {
+      "name": "agent_decision",
+      "category": "ai",
+      "description": "An AI agent recorded a decision with inputs, alternatives, and chosen action",
+      "emitted_by": [
+        "lib/decision-ledger.js"
+      ],
+      "payload": {
+        "event_type": "agent_decision",
+        "agent": "string",
+        "decision_type": "string",
+        "inputs": "object|null",
+        "alternatives": "array",
+        "chosen": "object",
+        "approval": "string",
+        "outcome": "object|null",
+        "farm_id": "string|null",
         "timestamp": "ISO8601"
       },
       "status": "active"

@@ -96,9 +96,9 @@ Recommended execution order matches the dependency chain:
 
 ### P2 -- Follow-On
 
-- [ ] Offline seed queue parity with harvest (`E2`)
-- [ ] Idempotency and debounce on demand refresh processing (`E10`)
-- [ ] Scheduler decision ledger with outcome tracking (`R7`)
+- [x] Offline seed queue parity with harvest (`E2`)
+- [x] Idempotency and debounce on demand refresh processing (`E10`)
+- [x] Scheduler decision ledger with outcome tracking (`R7`)
   - Append-only `data/agent-decisions/<agent>/<yyyy-mm-dd>.ndjson`
   - Log inputs, alternatives, chosen action, approval, outcome
 - [ ] Sanity bounds on S.A.G.E. outputs (labor cap, capacity cap, tank compatibility)
