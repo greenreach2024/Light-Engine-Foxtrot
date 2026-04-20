@@ -1010,12 +1010,42 @@ function setupNavigation() {
     setupHeaderDropdowns();
     setupEmbeddedNavigationFallback();
     
-    // Handle initial hash navigation (e.g. LE-farm-admin.html#traceability)
+    // Handle initial hash navigation (e.g. #traceability or #growing/grow-management)
     const urlHash = window.location.hash.replace('#', '');
     if (urlHash && urlHash !== 'dashboard') {
         const navItem = document.querySelector(`.nav-item[data-section="${urlHash}"]`);
         if (navItem) {
             setTimeout(() => navItem.click(), 200);
+        } else if (urlHash.includes('/')) {
+            const fallbackRoutes = {
+                'growing/grow-management': { url: '/views/grow-management.html', label: 'Grow Management' },
+                'growing/setup-update': { url: '/views/farm-setup.html', label: 'Setup / Update' },
+                'growing/planting-scheduler': { url: '/views/planting-scheduler.html', label: 'Planting Scheduler' },
+                'growing/tray-setup': { url: '/views/tray-setup.html', label: 'Tray Setup' },
+                'growing/farm-inventory': { url: '/views/farm-inventory.html', label: 'Crop Inventory' },
+                'operations/farm-summary': { url: '/views/farm-summary.html', label: 'Farm Summary' },
+                'operations/activity-hub': { url: '/views/tray-inventory.html', label: 'Activity Hub' },
+                'visualization/3d-farm-viewer': { url: '/views/3d-farm-viewer.html', label: '3D Farm Viewer' }
+            };
+
+            setTimeout(() => {
+                const [catKey, itemId] = urlHash.split('/');
+                const infoCategories = window.InfoNav && window.InfoNav.categories;
+                const infoCategory = infoCategories && infoCategories[catKey];
+                const infoItem = infoCategory && Array.isArray(infoCategory.items)
+                    ? infoCategory.items.find(item => item.id === itemId)
+                    : null;
+
+                if (window.InfoNav && typeof window.InfoNav.item === 'function' && infoItem) {
+                    window.InfoNav.item(catKey, itemId);
+                    return;
+                }
+
+                const mapped = fallbackRoutes[urlHash];
+                if (mapped && typeof renderEmbeddedView === 'function') {
+                    renderEmbeddedView(mapped.url, mapped.label);
+                }
+            }, 350);
         }
     }
 }
