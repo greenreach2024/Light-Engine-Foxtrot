@@ -386,3 +386,37 @@ test('3D viewer toolbar buttons have aria-labels', () => {
   const html = fs.readFileSync(path.resolve('./greenreach-central/public/views/3d-farm-viewer.html'), 'utf-8');
   assert.ok(html.includes('id="detailClose" aria-label="Close detail panel"'), 'close button has aria-label');
 });
+
+// ---- Phase 4 #25: ML pipeline reactivation ----
+
+test('JS anomaly detector module exists with Z-score detection', () => {
+  const src = fs.readFileSync(path.resolve('./lib/ml-anomaly-js.js'), 'utf-8');
+  assert.ok(src.includes('export function detectAnomalies'), 'exports detectAnomalies');
+  assert.ok(src.includes('export async function runFullScan'), 'exports runFullScan');
+  assert.ok(src.includes('Z_THRESHOLD'), 'uses Z-score threshold');
+  assert.ok(src.includes('STUCK_THRESHOLD'), 'detects stuck sensors');
+  assert.ok(src.includes("engine: 'js-zscore'"), 'identifies engine type');
+});
+
+test('JS forecast module exists with Holt-Winters', () => {
+  const src = fs.readFileSync(path.resolve('./lib/ml-forecast-js.js'), 'utf-8');
+  assert.ok(src.includes('export function holtWintersForecast'), 'exports holtWintersForecast');
+  assert.ok(src.includes('export function forecastZone'), 'exports forecastZone');
+  assert.ok(src.includes('confidence'), 'includes confidence intervals');
+  assert.ok(src.includes("engine: 'js-holt-winters'"), 'identifies engine type');
+});
+
+test('harvest predictor includes confidence intervals', () => {
+  const src = fs.readFileSync(path.resolve('./lib/harvest-predictor.js'), 'utf-8');
+  assert.ok(src.includes('confidenceInterval'), 'returns confidenceInterval field');
+  assert.ok(src.includes('early:'), 'has early date');
+  assert.ok(src.includes('late:'), 'has late date');
+  assert.ok(src.includes('stdDevDays'), 'includes standard deviation in days');
+  assert.ok(src.includes('sampleSize'), 'includes sample size');
+});
+
+test('ML schedule falls back to JS anomaly engine', () => {
+  const sf = fs.readFileSync(path.resolve('./server-foxtrot.js'), 'utf-8');
+  assert.ok(sf.includes("import('./lib/ml-anomaly-js.js')"), 'imports JS anomaly fallback');
+  assert.ok(sf.includes('Python unavailable, used JS anomaly engine'), 'logs fallback usage');
+});

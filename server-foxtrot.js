@@ -1171,23 +1171,36 @@ async function startOperationalServices(trigger = 'startup') {
       if (mlScheduleInFlight) { console.log('[ML Schedule] Skipping — already in flight'); return; }
       mlScheduleInFlight = true;
       try {
-        // 1) Run anomaly detection
-        const { spawn } = await import('node:child_process');
-        const pyBin = process.env.PYTHON_BIN || 'python3';
-        const scriptPath = path.join(__dirname, 'scripts', 'simple-anomaly-detector.py');
-        const anomalyResult = await new Promise((resolve, reject) => {
-          const proc = spawn(pyBin, [scriptPath, '--json'], { stdio: ['ignore', 'pipe', 'pipe'], timeout: 30_000 });
-          let stdout = '', stderr = '';
-          proc.stdout.on('data', d => stdout += d);
-          proc.stderr.on('data', d => stderr += d);
-          proc.on('close', code => {
-            if (code !== 0) return reject(new Error(stderr.slice(0, 200)));
-            try { resolve(JSON.parse(stdout)); } catch { reject(new Error('Invalid JSON')); }
+        // 1) Run anomaly detection (Python with JS fallback -- Phase 4 #25)
+        let anomalyResult;
+        try {
+          const { spawn } = await import('node:child_process');
+          const pyBin = process.env.PYTHON_BIN || 'python3';
+          const scriptPath = path.join(__dirname, 'scripts', 'simple-anomaly-detector.py');
+          anomalyResult = await new Promise((resolve, reject) => {
+            const proc = spawn(pyBin, [scriptPath, '--json'], { stdio: ['ignore', 'pipe', 'pipe'], timeout: 30_000 });
+            let stdout = '', stderr = '';
+            proc.stdout.on('data', d => stdout += d);
+            proc.stderr.on('data', d => stderr += d);
+            proc.on('close', code => {
+              if (code !== 0) return reject(new Error(stderr.slice(0, 200)));
+              try { resolve(JSON.parse(stdout)); } catch { reject(new Error('Invalid JSON')); }
+            });
+            proc.on('error', reject);
           });
-          proc.on('error', reject);
-        });
+        } catch (pyErr) {
+          // Fallback to JS-based anomaly detection
+          try {
+            const { runFullScan } = await import('./lib/ml-anomaly-js.js');
+            anomalyResult = await runFullScan(DATA_DIR);
+            console.log('[ML Schedule] Python unavailable, used JS anomaly engine');
+          } catch (jsErr) {
+            console.warn('[ML Schedule] JS anomaly fallback also failed:', jsErr.message);
+            anomalyResult = { anomalies: [] };
+          }
+        }
         if (anomalyResult.anomalies?.length) {
-          console.log(`[ML Schedule] Detected ${anomalyResult.anomalies.length} anomalies`);
+          console.log('[ML Schedule] Detected ' + anomalyResult.anomalies.length + ' anomalies (engine: ' + (anomalyResult.engine || 'python') + ')');
         }
 
         // 2) Refresh harvest predictions
@@ -15474,6 +15487,7 @@ console.log(' Farm sales terminal initialized - POS, D2C, B2B, food security pro
  * ML Predictive Forecasting Endpoint
  * Predict indoor temperature/humidity 1-4 hours ahead using outdoor-aware SARIMAX model
  * GET /api/ml/forecast?zone=Grow Room 1&hours=2&metric=indoor_temp
+ * Falls back to JS Holt-Winters when Python is unavailable (Phase 4 #25)
  */
 app.get('/api/ml/forecast', asyncHandler(async (req, res) => {
   const { spawn } = await import('child_process');
