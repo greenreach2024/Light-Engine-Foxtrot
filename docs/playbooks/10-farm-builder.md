@@ -153,7 +153,7 @@ Farm operator can re-run the builder from `farm-setup.html → Re-run Builder`. 
 
 | Phase | Goal | PRs (indicative) | Risk | Depends on | Blast radius |
 |---|---|---|---|---|---|
-| **A** | Fix silent crop-scheduling break (pre-req for any active builder to be trustworthy) | A1 `stampPlanAnchor` helper + `update_group_crop` patch · A2 tray-inventory seeding hook · A3 opt-in startup migration | Low | — | EVIE-assigned / Activity-Hub-assigned groups (today: broken day-numbering) |
+| **A** | Unify crop-assignment resolver + anchor stamping across viewer / EVIE / tray-seed | A1 `public/js/plan-anchor.js` shared helper (`resolveCropRegistryEntry` + `stampPlanAnchor`) · A2 `update_group_crop` patched to use helper (alias + `planIds[]` parity with viewer) · A3 `POST /api/trays/:trayId/seed` patched to use helper | Low | — | EVIE-assigned groups (alias drift fixed); no behavior change in viewer save path (viewer already used PR #37's resolver byte-for-byte) |
 | **B** | Make the builder reachable from a UI | B1 `farm-setup.html` new `build` step · B2 3D-viewer proposal overlay | Low-Medium | existing `buildFarmLayout` v1 | New UI, no behavior change to existing groups |
 | **C** | Active = location-aware | C1 `design-conditions.js` + `get_design_conditions` tool · C2 `buildFarmLayout_v2` with `designEnvelope` input · C3 farm-setup.html posts location+envelope · C4 auto-generate `HYDRO_SYSTEM_DB` from `grow-systems.json` | Medium | B, external design-conditions provider | HVAC sizing for new builds |
 | **D** | Unified crop-scheduling store | D1 `/api/schedule/seedings` adapter · D2 planting-scheduler.html migration | Medium | A | Planning / tray-inventory / daily resolver read same source |
@@ -166,7 +166,7 @@ Suggested order: **E1 → A → B → D → C → E2.**
 1. `recommend_farm_layout` is wired to EVIE chat only; no UI entry point anywhere in `public/views/farm-setup.html` or `public/setup-wizard.html`.
 2. `HYDRO_SYSTEM_DB` (equipment-db.js) and `grow-systems.json.templates` are two parallel schemas with different keys. `buildFarmLayout` reads only the former.
 3. `buildFarmLayout` is location-agnostic: no ASHRAE / TMY design condition input → HVAC/dehumidification sizing is wrong outside moderate climates.
-4. `update_group_crop` (assistant-chat.js:4918–4950) does not stamp `planConfig.anchor.seedDate` — EVIE-assigned groups do not progress through recipes. (Tracked in Phase A.)
+4. ~~`update_group_crop` (assistant-chat.js:4918–4950) does not stamp `planConfig.anchor.seedDate` — EVIE-assigned groups do not progress through recipes.~~ **RESOLVED** (2026-04-18, prior to this doc landing): `update_group_crop` already stamped `planConfig.anchor.seedDate` on assignment (assistant-chat.js:4950) and `POST /api/trays/:trayId/seed` already synced it to the group (server-foxtrot.js:23689–23710). The residual gap was resolver drift — the viewer's `resolveCropRegistryEntry` (PR #37) did alias + `planIds[]` lookup, but EVIE's inline resolver did not, so `update_group_crop("Bok Choy")` wrote `planId: "crop-bok-choy"` instead of `crop-pak-choi`. Phase A (this playbook rev) extracts `public/js/plan-anchor.js` as the single resolver+stamper, wired into all three call sites.
 5. `planting-scheduler.html` writes `planting_assignments` which the daily resolver does not read. (Tracked in Phase D.)
 6. No `farm_proposals` store exists yet; current state is write-through to `rooms`/`groups`/`devices` with no audit trail for rejected proposals.
 7. No mirror-drift CI guard exists for the dual-deploy registry; #9/#16/#17 drift went undetected until #37.
@@ -179,6 +179,7 @@ Suggested order: **E1 → A → B → D → C → E2.**
 - Never regenerate `grow-systems.json` or `equipment-kb.json` automatically at runtime; they are curated KBs, edited via PR.
 - Never let a UI write directly to `rooms` / `groups` outside the `accept` path **after the Phase B proposal/accept flow is migrated to production**. The current canonical crop-assignment UI (`public/views/3d-farm-viewer.html` `applyGroupEdits`, lines ~3679–3710) is the legitimate write path today; it migrates to issue a mini-proposal via `/api/farm-builder/propose` + `accept` in Phase B2. Until then, direct writes from the 3D viewer are **allowed and expected** — do not disable them prematurely.
 - Never stamp `anchor.seedDate` from a system default in the crop-scheduling path without also raising an operator-visible alert that the date was auto-filled.
+- Never duplicate the crop-resolver or anchor-stamping logic inline in a new call site. All three current call sites (`greenreach-central/routes/assistant-chat.js` `update_group_crop`, `greenreach-central/public/views/3d-farm-viewer.html` `applyGroupEdits`, `server-foxtrot.js` `POST /api/trays/:trayId/seed`) share `public/js/plan-anchor.js`; any future path that writes `crop/recipe/plan/planId/planConfig.anchor.seedDate` must call the helper so aliases + `planIds[]` resolve identically everywhere.
 
 ## 13. References
 
