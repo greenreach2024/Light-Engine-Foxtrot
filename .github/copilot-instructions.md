@@ -636,6 +636,17 @@ Agents MUST receive **"APPROVED FOR DEPLOYMENT"** message from user before execu
 
 See `.github/copilot-instructions-schema.md` for detailed guidance.
 
+
+## Nutrient System Architecture
+
+The nutrient management system supports N tanks (not hardcoded to 2).
+
+- **Tank config**: `DEFAULT_TANK_CONFIG` in `automation/recipe-nutrient-targets.js` defines the default 2-tank layout. Callers can pass `opts.tankConfig` for N-tank support.
+- **NutrientStore** (`services/nutrient-mqtt.js`): Already fully N-tank capable. `getScopes()` returns dynamic keys.
+- **API**: `GET /api/nutrient-profiles` serves crop compatibility data. `POST /api/nutrient-profiles/check-compatibility` validates tank sharing.
+- **Server**: `reconcileRecipeNutrientTargets()` and `ALLOWED_TANK_SCOPES` derive from `DEFAULT_TANK_CONFIG` dynamically -- do NOT re-hardcode tank IDs.
+- **Profile data**: `public/data/nutrient-profiles.json` contains EC/pH targets, compatible crops, and a pairwise compatibility matrix.
+
 ## Data Mapping Reference (REQUIRED)
 
 **Before debugging ANY data loading, authentication, or sync issue**, agents MUST:

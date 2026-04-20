@@ -263,10 +263,10 @@ grow-systems.json now has runtime consumers -- `GET /api/grow-systems` serves te
 
 ### P1 -- Multi-Tank and Safety
 
-- [ ] Remove hardcoded 2-tank assumption
+- [x] Remove hardcoded 2-tank assumption (Phase 2 #10 -- SHIPPED)
   - Support 1, 3, or N recirculating reservoirs
   - Dynamic tank card generation from configuration
-- [ ] Integrate `nutrient-profiles.json` (currently orphaned)
+- [x] Integrate `nutrient-profiles.json` (Phase 2 #10 -- SHIPPED)
   - Use crop-compatibility scores for tank-sharing validation
   - Surface "can crops X and Y share a tank?" in UI
 - [ ] Add `requireEdgeForControl` to `pump-calibration` and `sensor-calibration` endpoints
@@ -367,7 +367,7 @@ This ordering respects dependency chains: items higher on the list unblock items
 |---|------|-----------|-----|
 | 8 | ~~Zone-aware recommendation rollup + confidence~~ | Grow Mgmt | SHIPPED |
 | 9 | ~~Wire 3D viewer to live sensor telemetry~~ | 3D Viewer | SHIPPED |
-| 10 | Remove 2-tank hardcoding; integrate nutrient-profiles.json | Nutrient | -- |
+| 10 | ~~Remove 2-tank hardcoding; integrate nutrient-profiles.json~~ | Nutrient | SHIPPED |
 | 11 | Recipe Modifier Management UI | AI Agents | `XC-7` |
 | 12 | ~~Merge setup-agent phases (template-aware)~~ | Farm Setup | Step 4 -- SHIPPED |
 

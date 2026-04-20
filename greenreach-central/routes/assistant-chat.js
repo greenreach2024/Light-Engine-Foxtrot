@@ -1174,7 +1174,7 @@ const GPT_TOOLS = [
       parameters: {
         type: 'object',
         properties: {
-          tank_id: { type: 'string', description: 'Specific tank ID (e.g. "tank2"). Omit for all tanks.' }
+          tank_id: { type: 'string', description: 'Tank ID (e.g. "tank-1", "tank-2"). Omit for all tanks.' }
         },
         required: []
       }
@@ -1188,7 +1188,7 @@ const GPT_TOOLS = [
       parameters: {
         type: 'object',
         properties: {
-          tank_id: { type: 'string', description: 'Tank ID (e.g. "tank2")' },
+          tank_id: { type: 'string', description: 'Tank ID (e.g. "tank-1", "tank-2")' },
           ph_target: { type: 'number', description: 'Target pH level (e.g. 6.0)' },
           ph_tolerance: { type: 'number', description: 'pH tolerance band (e.g. 0.15)' },
           ec_target: { type: 'number', description: 'Target EC in µS/cm (e.g. 1600)' },

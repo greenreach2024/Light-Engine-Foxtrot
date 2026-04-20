@@ -101,6 +101,7 @@ import SyncServiceClass from './services/sync-service.js';
 import { NutrientStore, NutrientMqttSubscriber } from './services/nutrient-mqtt.js';
 import {
   resolveTankTargets as resolveRecipeNutrientTankTargets,
+  DEFAULT_TANK_CONFIG,
   diffTargets as diffNutrientTargets
 } from './automation/recipe-nutrient-targets.js';
 import { hydrateAutomationStorageCache } from './automation/utils/file-storage.js';
@@ -14845,6 +14846,7 @@ import kpisRouter from './routes/kpis.js';
 import setupWizardRouter from './routes/setup-wizard.js';
 import growSystemsRouter from './routes/grow-systems.js';
 import zoneRecommendationsRouter from './routes/zone-recommendations.js';
+import nutrientProfilesRouter from './routes/nutrient-profiles.js';
 import pg from 'pg';
 
 // Initialize PostgreSQL pool for purchase flow (only if DB credentials provided)
@@ -15168,6 +15170,7 @@ app.get('/api/setup-wizard/status', async (req, res) => {
 app.use('/api/setup-wizard', setupWizardRouter);
 app.use('/api/grow-systems', growSystemsRouter);
 app.use('/api/zone-recommendations', zoneRecommendationsRouter);
+app.use('/api/nutrient-profiles', nutrientProfilesRouter);
 
 /**
  * Farm Sales: Customer Management
@@ -17080,10 +17083,9 @@ const DRIFT_ALERT_COOLDOWN_MS = 30 * 60 * 1000; // 30 min
 function reconcileRecipeNutrientTargets() {
   try {
     const resolved = resolveRecipeNutrientTargetsFromDisk({ aggregator: 'weighted' });
-    const tankAssignments = [
-      { tankId: 'tank-1', tankKey: 'tank1', resolved: resolved.tank1 },
-      { tankId: NUTRIENT_SCOPE_ID, tankKey: 'tank2', resolved: resolved.tank2 }
-    ];
+    const tankAssignments = DEFAULT_TANK_CONFIG.map(tc => ({
+      tankId: tc.scopeId, tankKey: tc.id, resolved: resolved.tanks?.[tc.id] || resolved[tc.id]
+    }));
     const report = { calculatedAt: resolved.calculatedAt, tanks: {} };
     for (const { tankId, tankKey, resolved: tankResolved } of tankAssignments) {
       const applied = nutrientStore.getAppliedTargets(tankId);
@@ -17771,11 +17773,12 @@ app.post('/api/nutrients/targets', requireEdgeForControl, async (req, res) => {
       return res.status(400).json({ ok: false, error: 'invalid-targets' });
     }
 
-    const ALLOWED_TANK_SCOPES = new Set(['tank-1', 'tank-2', NUTRIENT_SCOPE_ID]);
+    const allowedTankScopes = new Set(DEFAULT_TANK_CONFIG.map(tc => tc.scopeId));
+    allowedTankScopes.add(NUTRIENT_SCOPE_ID);
     const rawScope = typeof body.tankScope === 'string' && body.tankScope.trim()
       ? body.tankScope.trim()
       : (typeof body.tank === 'string' && body.tank.trim() ? body.tank.trim() : null);
-    const tankScope = rawScope && ALLOWED_TANK_SCOPES.has(rawScope) ? rawScope : NUTRIENT_SCOPE_ID;
+    const tankScope = rawScope && allowedTankScopes.has(rawScope) ? rawScope : NUTRIENT_SCOPE_ID;
 
     const payload = {
       action: 'setTargets',
