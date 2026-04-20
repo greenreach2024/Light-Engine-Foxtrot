@@ -4,7 +4,49 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Farm Setup - Light Engine</title>
-  <link rel="stylesheet" href="/styles.foxtrot.css">
+  <script>
+    (function retireLegacyLightEngineServiceWorker() {
+      if (!('serviceWorker' in navigator)) return;
+
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.getRegistrations()
+          .then(function (registrations) {
+            return Promise.all(registrations.map(function (registration) {
+              return registration.unregister();
+            })).then(function () {
+              return registrations.length;
+            });
+          })
+          .then(function (registrationCount) {
+            if (!('caches' in window)) return { registrationCount: registrationCount, deletedCount: 0 };
+            return caches.keys().then(function (cacheNames) {
+              var staleCacheNames = cacheNames.filter(function (cacheName) {
+                return cacheName.indexOf('light-engine-') === 0;
+              });
+              return Promise.all(staleCacheNames.map(function (cacheName) {
+                return caches.delete(cacheName);
+              })).then(function () {
+                return { registrationCount: registrationCount, deletedCount: staleCacheNames.length };
+              });
+            });
+          })
+          .then(function (result) {
+            var reloadKey = 'gr-sw-retire-reloaded';
+            var needsReload = result.registrationCount > 0 || result.deletedCount > 0;
+            if (needsReload && !sessionStorage.getItem(reloadKey)) {
+              sessionStorage.setItem(reloadKey, '1');
+              window.location.reload();
+            } else if (!needsReload) {
+              sessionStorage.removeItem(reloadKey);
+            }
+          })
+          .catch(function (error) {
+            console.warn('[Farm Setup] Failed to retire legacy service worker:', error);
+          });
+      }, { once: true });
+    })();
+  </script>
+  <link rel="stylesheet" href="/styles.foxtrot.css?v=20260419-modal-fix">
   <link rel="stylesheet" href="/styles/le-foundation.css">
   <link rel="stylesheet" href="/styles/le-dashboard-theme.css">
   <link rel="stylesheet" href="/styles/switchbot-manager.css">
@@ -983,7 +1025,7 @@
           
           <div style="margin-bottom: 20px;">
             <label style="display: block; margin-bottom: 8px;">Room:</label>
-            <select id="freshRoomSelect" style="width: 100%; padding: 8px; font-size: 14px;">
+            <select id="freshRoomSelect" class="fresh-light-field" style="width: 100%; padding: 8px; font-size: 14px;">
               <option value="">Select a room</option>
             </select>
           </div>
@@ -1001,13 +1043,13 @@
             
             <div style="margin-bottom: 12px;">
               <label style="display: block; margin-bottom: 8px; font-size: 13px;">Search fixtures:</label>
-              <input id="freshFixtureSearch" type="text" placeholder="Search models (e.g., Gavita 1700e)" 
+              <input id="freshFixtureSearch" class="fresh-light-field" type="text" placeholder="Search models (e.g., Gavita 1700e)" 
                      style="width: 100%; padding: 8px; font-size: 14px;">
             </div>
             
             <div style="margin-bottom: 12px;">
               <div style="font-size: 12px; color: #64748b; margin-bottom: 4px;">Search Results:</div>
-              <div id="freshFixtureResults" style="max-height: 150px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 4px; min-height: 60px;">
+              <div id="freshFixtureResults" class="fresh-light-panel" style="max-height: 150px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 4px; min-height: 60px;">
                 <div style="padding: 20px; text-align: center; color: #64748b; font-size: 13px;">
                   Type to search for fixture models...
                 </div>
@@ -1016,7 +1058,7 @@
             
             <div>
               <div style="font-size: 12px; color: #64748b; margin-bottom: 4px;">Selected Fixtures:</div>
-              <div id="freshSelectedFixtures" style="min-height: 60px; border: 1px solid #e2e8f0; border-radius: 4px; padding: 8px;">
+              <div id="freshSelectedFixtures" class="fresh-light-panel" style="min-height: 60px; border: 1px solid #e2e8f0; border-radius: 4px; padding: 8px;">
                 <div style="color: #64748b; font-size: 13px;">No fixtures selected yet</div>
               </div>
             </div>
@@ -1037,7 +1079,7 @@
               <button type="button" class="fresh-control-option" data-value="other">Other</button>
             </div>
             
-            <div id="freshControlDetails" style="font-size: 13px; color: #64748b; padding: 12px; background: #f8fafc; border-radius: 4px; display: none;">
+            <div id="freshControlDetails" class="fresh-light-panel" style="font-size: 13px; color: #64748b; padding: 12px; background: #f8fafc; border-radius: 4px; display: none;">
               Control method details will appear here...
             </div>
           </div>
@@ -1047,14 +1089,14 @@
           <h3>Review Setup</h3>
           
           <div style="margin-bottom: 20px;">
-            <div id="freshReviewSummary" style="background: #f8fafc; border-radius: 8px; padding: 16px;">
+            <div id="freshReviewSummary" class="fresh-light-panel" style="background: #f8fafc; border-radius: 8px; padding: 16px;">
               <div style="font-weight: 600; margin-bottom: 12px;">Light Setup Summary</div>
               <div id="freshReviewDetails" style="font-size: 14px; line-height: 1.5;">
                 <!-- Review details will be populated here -->
               </div>
             </div>
             
-            <div style="margin-top: 16px; padding: 12px; background: #fef3c7; border-radius: 6px; border-left: 4px solid #f59e0b;">
+            <div class="fresh-light-warning" style="margin-top: 16px; padding: 12px; background: #fef3c7; border-radius: 6px; border-left: 4px solid #f59e0b;">
               <div style="font-size: 13px; color: #92400e;">
                 <strong>Ready to save:</strong> This will create your light setup configuration for the selected room. Use Groups V2 to assign lights to zones.
               </div>

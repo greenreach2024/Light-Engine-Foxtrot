@@ -9846,15 +9846,6 @@ async function loadDashboardFarmValue() {
             });
         }
 
-        // EVIE button
-        var evieBtn = document.getElementById('evie-bar-evie');
-        if (evieBtn) {
-            evieBtn.addEventListener('click', function() {
-                if (window.EVIE && typeof window.EVIE.open === 'function') {
-                    window.EVIE.open();
-                }
-            });
-        }
     });
 })();
 

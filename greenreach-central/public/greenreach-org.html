@@ -13,6 +13,48 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>GreenReach | Building Canadian Food Sovereignty</title>
+  <script>
+    (function retireLegacyLightEngineServiceWorker() {
+      if (!('serviceWorker' in navigator)) return;
+
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.getRegistrations()
+          .then(function (registrations) {
+            return Promise.all(registrations.map(function (registration) {
+              return registration.unregister();
+            })).then(function () {
+              return registrations.length;
+            });
+          })
+          .then(function (registrationCount) {
+            if (!('caches' in window)) return { registrationCount: registrationCount, deletedCount: 0 };
+            return caches.keys().then(function (cacheNames) {
+              var staleCacheNames = cacheNames.filter(function (cacheName) {
+                return cacheName.indexOf('light-engine-') === 0;
+              });
+              return Promise.all(staleCacheNames.map(function (cacheName) {
+                return caches.delete(cacheName);
+              })).then(function () {
+                return { registrationCount: registrationCount, deletedCount: staleCacheNames.length };
+              });
+            });
+          })
+          .then(function (result) {
+            var reloadKey = 'gr-sw-retire-reloaded';
+            var needsReload = result.registrationCount > 0 || result.deletedCount > 0;
+            if (needsReload && !sessionStorage.getItem(reloadKey)) {
+              sessionStorage.setItem(reloadKey, '1');
+              window.location.reload();
+            } else if (!needsReload) {
+              sessionStorage.removeItem(reloadKey);
+            }
+          })
+          .catch(function (error) {
+            console.warn('[GreenReach Org] Failed to retire legacy service worker:', error);
+          });
+      }, { once: true });
+    })();
+  </script>
   <meta name="description" content="An agri research-and-development organization building practical tools to strengthen Canadian food sovereignty—by supporting local farms and scaling fresh produce production.">
   
   <!-- Open Graph / Facebook -->

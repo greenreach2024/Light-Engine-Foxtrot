@@ -20,6 +20,7 @@
       icon: 'icon-growing',
       items: [
         { id: 'grow-management',    label: 'Grow Management',    icon: 'icon-growing',            section: 'iframe-view', url: '/views/grow-management.html' },
+        { id: 'setup-update',       label: 'Setup / Update',     icon: 'icon-setup',              section: 'iframe-view', url: '/views/farm-setup.html' },
         { id: 'planting-scheduler', label: 'Planting Scheduler', icon: 'icon-planting-scheduler', section: 'iframe-view', url: '/views/planting-scheduler.html' },
         { id: 'tray-setup',         label: 'Tray Setup',         icon: 'icon-tray-setup',         section: 'iframe-view', url: '/views/tray-setup.html' },
         { id: 'nutrient-mgmt',      label: 'Nutrient Management', icon: 'icon-nutrient',          section: 'iframe-view', url: '/views/nutrient-management.html' },
@@ -36,7 +37,6 @@
       items: [
         { id: 'farm-summary',  label: 'Farm Summary',  icon: 'icon-farm-summary',  section: 'iframe-view', url: '/views/farm-summary.html' },
         { id: 'activity-hub',  label: 'Activity Hub',  icon: 'icon-activity-hub',  section: 'iframe-view', url: '/views/tray-inventory.html' },
-        { id: 'farm-setup',    label: 'Farm Setup',     icon: 'icon-setup',        section: 'iframe-view', url: '/views/farm-setup.html' },
         { id: 'devices',       label: 'Devices',        icon: 'icon-devices',      section: 'devices' },
         { id: 'supplies',      label: 'Supplies',       icon: 'icon-supplies',     section: 'inventory-mgmt' },
         { id: 'calendar',      label: 'Calendar',       icon: 'icon-calendar',     section: 'iframe-view', url: '/views/calendar.html' },
@@ -149,12 +149,11 @@
 
   // ---- Bind hero bar elements ----
   function bindHeroBar() {
-    // EVIE orb click opens EVIE chat
+    // Hero orb is decorative; Ask E.V.I.E. remains the single primary launcher here.
     var orb = document.getElementById('evie-hero-orb');
     if (orb) {
-      orb.addEventListener('click', function () {
-        if (window.EVIE && window.EVIE.open) window.EVIE.open();
-      });
+      orb.removeAttribute('tabindex');
+      orb.setAttribute('aria-hidden', 'true');
     }
 
     // Mirror farm name from page header

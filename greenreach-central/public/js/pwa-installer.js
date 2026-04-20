@@ -17,76 +17,67 @@ class PWAInstaller {
     // Check if already installed
     this.isInstalled = window.matchMedia('(display-mode: standalone)').matches ||
                        window.navigator.standalone === true;
-    
-    // Register service worker
-    if ('serviceWorker' in navigator) {
-      try {
-        const serviceWorkerProbe = await fetch('/service-worker.js', {
-          method: 'HEAD',
-          cache: 'no-store'
-        });
 
-        if (!serviceWorkerProbe.ok) {
-          console.log('[PWA] Service worker script not found; skipping registration');
-          return;
-        }
+    await this.retireLegacyServiceWorker();
 
-        this.serviceWorkerRegistration = await navigator.serviceWorker.register('/service-worker.js', {
-          scope: '/'
-        });
-        
-        console.log('[PWA] Service Worker registered:', this.serviceWorkerRegistration.scope);
-        
-        // Check for updates
-        this.serviceWorkerRegistration.addEventListener('updatefound', () => {
-          console.log('[PWA] Service Worker update found');
-          this.handleUpdate();
-        });
-        
-        // Listen for controller change
-        navigator.serviceWorker.addEventListener('controllerchange', () => {
-          console.log('[PWA] Service Worker controller changed');
-          if (!this.isInstalled) {
-            window.location.reload();
-          }
-        });
-        
-      } catch (error) {
-        console.error('[PWA] Service Worker registration failed:', error);
-      }
-    }
-    
+    // Service worker registration is intentionally disabled.
+    // The previous PWA cache layer caused stale admin shells to persist across deploys.
+    // Keep install-prompt UX available without registering a worker.
+
     // Listen for install prompt
     window.addEventListener('beforeinstallprompt', (e) => {
       e.preventDefault();
       this.deferredPrompt = e;
       this.showInstallButton();
     });
-    
+
     // Check if already installed
     window.addEventListener('appinstalled', () => {
       console.log('[PWA] App installed');
       this.isInstalled = true;
       this.hideInstallButton();
     });
-    
+
     // Online/offline detection
     window.addEventListener('online', () => {
       this.isOnline = true;
       this.updateOnlineStatus();
     });
-    
+
     window.addEventListener('offline', () => {
       this.isOnline = false;
       this.updateOnlineStatus();
     });
-    
+
     // Initial online status
     this.updateOnlineStatus();
-    
+
     // iOS detection and install instructions
     if (this.isIOS() && !this.isInstalled) {
       this.showIOSInstructions();
+    }
+  }
+
+  async retireLegacyServiceWorker() {
+    if ('serviceWorker' in navigator) {
+      try {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(registrations.map((registration) => registration.unregister()));
+        this.serviceWorkerRegistration = null;
+
+        if ('caches' in window) {
+          const cacheNames = await caches.keys();
+          await Promise.all(
+            cacheNames
+              .filter((cacheName) => cacheName.startsWith('light-engine-'))
+              .map((cacheName) => caches.delete(cacheName))
+          );
+        }
+
+        console.log('[PWA] Retired legacy service worker registrations and cleared stale caches');
+      } catch (error) {
+        console.error('[PWA] Failed to retire legacy service worker:', error);
+      }
     }
   }
   
@@ -262,60 +253,32 @@ class PWAInstaller {
    * Check for app updates
    */
   async checkForUpdates() {
-    if (!this.serviceWorkerRegistration) {
-      return;
-    }
-    
-    try {
-      await this.serviceWorkerRegistration.update();
-      console.log('[PWA] Checked for updates');
-    } catch (error) {
-      console.error('[PWA] Update check failed:', error);
-    }
+    return;
   }
   
   /**
    * Get cache version
    */
   async getCacheVersion() {
-    if (!navigator.serviceWorker.controller) {
-      return null;
-    }
-    
-    return new Promise((resolve) => {
-      const messageChannel = new MessageChannel();
-      messageChannel.port1.onmessage = (event) => {
-        resolve(event.data.version);
-      };
-      navigator.serviceWorker.controller.postMessage(
-        { type: 'GET_VERSION' },
-        [messageChannel.port2]
-      );
-    });
+    return null;
   }
   
   /**
    * Clear cache
    */
   async clearCache() {
-    if (!navigator.serviceWorker.controller) {
+    if (!('caches' in window)) {
       return;
     }
-    
-    return new Promise((resolve, reject) => {
-      const messageChannel = new MessageChannel();
-      messageChannel.port1.onmessage = (event) => {
-        if (event.data.success) {
-          resolve(event.data.message);
-        } else {
-          reject(new Error('Cache clear failed'));
-        }
-      };
-      navigator.serviceWorker.controller.postMessage(
-        { type: 'CLEAR_CACHE' },
-        [messageChannel.port2]
-      );
-    });
+
+    const cacheNames = await caches.keys();
+    await Promise.all(
+      cacheNames
+        .filter((cacheName) => cacheName.startsWith('light-engine-'))
+        .map((cacheName) => caches.delete(cacheName))
+    );
+
+    return 'Legacy Light Engine caches cleared';
   }
 }
 

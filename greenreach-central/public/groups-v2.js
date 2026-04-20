@@ -6040,6 +6040,10 @@ function renderGroupsV2LightCard(plan, options) {
 function populateGroupsV2ScheduleDropdown() {
   const select = document.getElementById('groupsV2ScheduleSelect');
   if (!select) return;
+  if (!(select instanceof HTMLSelectElement) || !select.options) {
+    console.log('[Groups V2] Schedule select is not a <select>; skipping schedule dropdown refresh');
+    return;
+  }
   
   // Don't repopulate if user is actively interacting with the dropdown
   if (document.activeElement === select) {
@@ -6710,6 +6714,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Wire up calibration button in Groups V2 panel
 document.addEventListener('DOMContentLoaded', () => {
+  const openSetupBtn = document.getElementById('groupsV2OpenSetupBtn');
+  if (openSetupBtn) {
+    openSetupBtn.addEventListener('click', () => {
+      try {
+        if (window.parent && window.parent !== window && window.parent.InfoNav && typeof window.parent.InfoNav.item === 'function') {
+          window.parent.InfoNav.item('growing', 'setup-update');
+          return;
+        }
+      } catch (error) {
+        console.warn('[Groups V2] Unable to route through parent InfoNav:', error);
+      }
+
+      window.location.href = '/views/farm-setup.html';
+    });
+  }
+
   // Handle both old and new calibration button IDs
   const calBtns = [
     document.getElementById('btnOpenCalWizardFromGroups'),

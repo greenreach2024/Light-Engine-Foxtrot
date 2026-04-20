@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Grow Management - Light Engine</title>
-  <link rel="stylesheet" href="/styles.foxtrot.css">
+  <link rel="stylesheet" href="/styles.foxtrot.css?v=20260419-modal-fix">
   <link rel="stylesheet" href="/styles/le-dashboard-theme.css">
   <link rel="stylesheet" href="/styles/nav-color-palette.css">
   <style>
@@ -437,26 +437,21 @@
     }
 
     /* Bulk edit / Build stock modals */
-    #bulkEditGroupModal,
-    #buildStockGroupModal {
-      position: fixed;
-      top: 0; left: 0; right: 0; bottom: 0;
-      background: rgba(0, 0, 0, 0.7);
+    #bulkEditGroupModal::backdrop,
+    #buildStockGroupModal::backdrop {
+      background: rgba(2, 6, 23, 0.76);
       backdrop-filter: blur(4px);
-      z-index: 200;
-      display: flex;
-      align-items: center;
-      justify-content: center;
     }
-    #bulkEditGroupModal > div,
-    #buildStockGroupModal > div {
-      background: #1e293b !important;
-      border: 1px solid rgba(59, 130, 246, 0.3) !important;
-      border-radius: 16px !important;
+    #bulkEditGroupModal[open],
+    #buildStockGroupModal[open] {
+      display: block;
+      margin: auto;
+      z-index: 200;
+    }
+    #bulkEditGroupModal form,
+    #buildStockGroupModal form {
+      background: transparent;
       color: #f1f5f9 !important;
-      max-width: 600px;
-      width: 90%;
-      padding: 2rem;
     }
 
     /* Scrollbar styling */
@@ -488,8 +483,8 @@
   </style>
   <script src="/js/console-wrapper.js"></script>
   <script src="/js/net.guard.js" defer></script>
-  <script src="/app.foxtrot.js" defer></script>
-  <script src="/groups-v2.js" defer></script>
+  <script src="/app.foxtrot.js?v=20260419-modal-fix" defer></script>
+  <script src="/groups-v2.js?v=20260419-modal-fix" defer></script>
 </head>
 <body class="le-theme">
 
@@ -549,6 +544,7 @@
             <div class="row" style="gap:8px;flex-wrap:wrap;">
               <button id="groupsV2SaveGroup" type="button" class="primary">Save Group</button>
               <button id="buildStockGroupsBtn" type="button" class="ghost" title="Batch-create identical groups with same lights, trays, and layout">Build Stock Groups</button>
+              <button id="groupsV2OpenSetupBtn" type="button" class="ghost" title="Open Setup / Update to configure rooms, zones, and fixtures">Setup / Update</button>
               <label class="tiny" style="display:flex;flex-direction:column;min-width:160px;">
                 Load group
                 <select id="groupsV2LoadGroup">
@@ -644,7 +640,9 @@
           </div>
 
           <div id="groupsV2ScheduleSummary" class="tiny text-muted"></div>
-          <div id="groupsV2ScheduleSelect" style="display:none;"></div>
+          <select id="groupsV2ScheduleSelect" style="display:none;">
+            <option value="">(select schedule)</option>
+          </select>
 
           <!-- ===== TARGET TEMP / HUMIDITY ===== -->
           <div class="gm-targets-box">

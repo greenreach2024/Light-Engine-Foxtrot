@@ -3013,7 +3013,7 @@ function renderIoTDeviceCards(devices) {
       iotPanelBody.appendChild(list);
       console.warn('[renderIoTDeviceCards] Created missing iotDevicesList container dynamically');
     } else {
-      console.error('[renderIoTDeviceCards] IoT panel body not found; cannot render devices');
+      console.log('[renderIoTDeviceCards] IoT panel not present on this page; skipping device card render');
       return;
     }
   }
@@ -19712,7 +19712,7 @@ class FreshLightWizard {
       this.setupEventListeners();
       console.log('[FreshLightWizard] Fresh wizard initialized successfully');
     } else {
-      console.error('[FreshLightWizard] Could not find freshLightModal element!');
+      console.log('[FreshLightWizard] freshLightModal not present on this page; skipping wizard init');
     }
   }
 

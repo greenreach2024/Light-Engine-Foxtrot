@@ -5,6 +5,48 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Farm Admin - Light Engine</title>
     <script src="./js/console-guard.js"></script>
+    <script>
+        (function retireLegacyLightEngineServiceWorker() {
+            if (!('serviceWorker' in navigator)) return;
+
+            window.addEventListener('load', function () {
+                navigator.serviceWorker.getRegistrations()
+                    .then(function (registrations) {
+                        return Promise.all(registrations.map(function (registration) {
+                            return registration.unregister();
+                        })).then(function () {
+                            return registrations.length;
+                        });
+                    })
+                    .then(function (registrationCount) {
+                        if (!('caches' in window)) return { registrationCount: registrationCount, deletedCount: 0 };
+                        return caches.keys().then(function (cacheNames) {
+                            var staleCacheNames = cacheNames.filter(function (cacheName) {
+                                return cacheName.indexOf('light-engine-') === 0;
+                            });
+                            return Promise.all(staleCacheNames.map(function (cacheName) {
+                                return caches.delete(cacheName);
+                            })).then(function () {
+                                return { registrationCount: registrationCount, deletedCount: staleCacheNames.length };
+                            });
+                        });
+                    })
+                    .then(function (result) {
+                        var reloadKey = 'gr-sw-retire-reloaded';
+                        var needsReload = result.registrationCount > 0 || result.deletedCount > 0;
+                        if (needsReload && !sessionStorage.getItem(reloadKey)) {
+                            sessionStorage.setItem(reloadKey, '1');
+                            window.location.reload();
+                        } else if (!needsReload) {
+                            sessionStorage.removeItem(reloadKey);
+                        }
+                    })
+                    .catch(function (error) {
+                        console.warn('[LE Admin] Failed to retire legacy service worker:', error);
+                    });
+            }, { once: true });
+        })();
+    </script>
     <link rel="stylesheet" href="/styles/styles.charlie.css?v=2025-12-10-01">
     <link rel="stylesheet" href="/styles/nav-color-palette.css">
     <link rel="stylesheet" href="/styles/light-engine.css">
@@ -1234,7 +1276,6 @@
             </div>
         </nav>
         <div class="tesla-header__actions">
-            <a href="/evie-core.html" class="tesla-evie-btn nav-item" data-section="iframe-view" data-url="/evie-core.html">E.V.I.E.</a>
             <button class="tesla-close-btn" onclick="logout()">Close</button>
         </div>
     </header>
@@ -1273,7 +1314,7 @@
     <div class="infotainment-layout" id="infotainment-layout" style="display: none;">
         <!-- EVIE Hero Bar -->
         <div class="evie-hero-bar">
-            <div class="evie-hero-bar__orb" id="evie-hero-orb" title="Talk to E.V.I.E."></div>
+            <div class="evie-hero-bar__orb" id="evie-hero-orb" title="Farm status" style="cursor:default;"></div>
             <div class="evie-search-wrapper">
                 <svg class="evie-search-icon" width="18" height="18"><use href="/icons/farm-nav-icons.svg#icon-search"></use></svg>
                 <input type="text" id="evie-search-input" class="evie-search-input" placeholder="What do you need? Search or ask E.V.I.E. ..." autocomplete="off" />
@@ -1298,14 +1339,11 @@
                 <div id="evie-brief-actions" style="display:flex;gap:6px;flex-shrink:0;"></div>
                 <!-- Integrated toolbar buttons -->
                 <div style="display:flex;gap:6px;margin-left:8px;flex-shrink:0;" id="evie-bar-toolbar">
-                    <button id="evie-bar-mic" title="Voice input" style="width:32px;height:32px;border-radius:8px;background:rgba(59,130,246,0.12);color:#60a5fa;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background 0.15s;">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+                    <button id="evie-bar-mic" title="Voice input" style="width:40px;height:40px;border-radius:10px;background:rgba(59,130,246,0.12);color:#60a5fa;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background 0.15s;">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
                     </button>
-                    <button id="evie-bar-help" title="Toggle Help Mode" style="width:32px;height:32px;border-radius:8px;background:rgba(148,163,184,0.1);color:#94a3b8;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background 0.15s;">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-                    </button>
-                    <button id="evie-bar-evie" title="Open E.V.I.E." style="width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,rgba(139,92,246,0.15),rgba(59,130,246,0.1));color:#a78bfa;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background 0.15s;">
-                        <div style="width:16px;height:16px;border-radius:50%;background:radial-gradient(circle at 40% 35%,#c4b5fd,#7c3aed 60%,#4c1d95);box-shadow:0 0 6px rgba(139,92,246,0.4);"></div>
+                    <button id="evie-bar-help" title="Toggle Help Mode" style="width:40px;height:40px;border-radius:10px;background:rgba(148,163,184,0.1);color:#94a3b8;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background 0.15s;">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
                     </button>
                 </div>
             </div>
