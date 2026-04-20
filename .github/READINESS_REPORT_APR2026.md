@@ -4,6 +4,16 @@
 **Audit Type**: Full platform audit -- documentation, architecture, code, security, deployment
 **Scope**: Both environments (LE + Central), all documentation, recent changes
 
+> **Notice (post-migration):** This report was written April 2, 2026, before the
+> GCP Cloud Run migration (completed April 7, 2026). Section 1 (Architecture & Deployment)
+> and all scores reflect the former AWS Elastic Beanstalk deployment and are no longer
+> current. For the current architecture see `.github/CLOUD_ARCHITECTURE.md`. `eb`
+> commands and EB environment names referenced in §1 are globally banned per the
+> migration and must not be used. The score inconsistency between the Executive
+> Summary (Documentation Accuracy 88/100) and §8 (70/100 with D1/D2/D3 OPEN) —
+> the §8 figure with open issues is the accurate one at the time of writing; D2
+> and D3 were partially resolved in PR #39 (re-audit + Playbook 10).
+
 ---
 
 ## Executive Summary
