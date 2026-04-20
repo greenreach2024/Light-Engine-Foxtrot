@@ -390,6 +390,7 @@
       <button data-overlay="status">Status</button>
       <div class="sep"></div>
       <button id="btnWalls" aria-label="Toggle walls and ceiling" class="active" title="Toggle walls and ceiling">Walls</button>
+      <button id="btnGear" aria-label="Toggle equipment visibility" title="Show/hide equipment (lights, fans, devices)">Gear</button>
       <div class="sep"></div>
       <button id="btnTop" aria-label="Top-down camera view" title="Top-down view">Top</button>
       <button id="btnAngle" aria-label="Angled 3D camera view" title="Angled view">3D</button>
@@ -516,6 +517,7 @@
       selectedMeshes: [],
       activeDetail: null,
       wallsVisible: true,
+      equipmentVisible: false,
       editMode: false,
       dragTarget: null,
       dragSelection: [],
@@ -2288,6 +2290,9 @@
         S.camera.position.set(cx - 8, 18, cz + 22);
         S.controls.update();
       }
+
+      // Apply initial equipment visibility (hidden by default)
+      S.meshes.equipment.forEach(m => { m.visible = S.equipmentVisible; });
 
       applyOverlay(S.overlay);
     }
@@ -4431,6 +4436,14 @@
       btn.classList.toggle('active', S.wallsVisible);
     }
 
+    // ---- Toggle equipment (lights, fans, devices) ----------
+    function toggleEquipment() {
+      S.equipmentVisible = !S.equipmentVisible;
+      S.meshes.equipment.forEach(m => { m.visible = S.equipmentVisible; });
+      const btn = document.getElementById('btnGear');
+      btn.classList.toggle('active', S.equipmentVisible);
+    }
+
     // ---- GWEN integration ------------------------------------
     function openGwenWithContext() {
       const envSummary = {};
@@ -4465,6 +4478,7 @@
       });
 
       document.getElementById('btnWalls').addEventListener('click', toggleWalls);
+      document.getElementById('btnGear').addEventListener('click', toggleEquipment);
       document.getElementById('btnTop').addEventListener('click', function() { var t = S.controls.target; animateTo({ x: t.x, y: 35, z: t.z + 0.1 }); });
       document.getElementById('btnAngle').addEventListener('click', function() { var t = S.controls.target; animateTo({ x: t.x - 10, y: 16, z: t.z + 18 }); });
       document.getElementById('btnReset').addEventListener('click', function() {

@@ -42,6 +42,19 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const DATA_DIR = path.join(__dirname, '..', 'public', 'data');
 
+// Resolve Light Engine URL for live sensor data
+function resolveLeUrl() {
+  if (process.env.FARM_EDGE_URL) return process.env.FARM_EDGE_URL;
+  try {
+    const farmJsonPath = path.join(DATA_DIR, 'farm.json');
+    if (fs.existsSync(farmJsonPath)) {
+      const farmData = JSON.parse(fs.readFileSync(farmJsonPath, 'utf8'));
+      if (farmData.url) return farmData.url;
+    }
+  } catch { /* fallback below */ }
+  return process.env.LIGHT_ENGINE_URL || null;
+}
+
 // Load crop-utils (UMD module) for name/alias/planId resolution
 const require_ = createRequire(import.meta.url);
 const cropUtils = require_(path.join(__dirname, '..', 'public', 'js', 'crop-utils.js'));
@@ -250,98 +263,134 @@ export function deriveScientificLayoutDefaults({
 }
 
 // ---------------------------------------------------------------------------
-// Sensor data sync — keeps env-cache.json and device-meta.json fresh
+// Sensor data sync -- keeps env-cache.json and device-meta.json fresh
+// Fetches live data from LE /env API (SwitchBot-polled) instead of
+// reading local iot-devices.json which has stale embedded telemetry.
 // ---------------------------------------------------------------------------
-function syncSensorData() {
+async function syncSensorData() {
   try {
+    // --- Try fetching live sensor data from LE /env endpoint ---
+    let liveZones = null;
+    const leUrl = resolveLeUrl();
+    if (leUrl) {
+      try {
+        const envResp = await fetch(`${leUrl}/env?hours=1`, {
+          headers: { 'Accept': 'application/json' },
+          signal: AbortSignal.timeout(8000)
+        });
+        if (envResp.ok) {
+          const envData = await envResp.json();
+          const scopes = envData?.env?.scopes || {};
+          const zoneEntries = {};
+          for (const [scopeId, scope] of Object.entries(scopes)) {
+            if (!scopeId.startsWith('zone-')) continue;
+            const sensors = scope.sensors || {};
+            const tempC = sensors.tempC?.value ?? sensors.temperature?.value ?? null;
+            const rh = sensors.rh?.value ?? sensors.humidity?.value ?? null;
+            const vpd = sensors.vpd?.value ?? null;
+            if (tempC == null && rh == null) continue;
+            const sensorCount = sensors.tempC?.meta?.totalSources || sensors.temperature?.meta?.totalSources || 0;
+            const sensorNames = [];
+            for (const bucket of [sensors.tempC, sensors.rh, sensors.temperature, sensors.humidity]) {
+              if (!bucket?.sources) continue;
+              for (const src of Object.values(bucket.sources)) {
+                if (src.name && !sensorNames.includes(src.name)) sensorNames.push(src.name);
+              }
+            }
+            zoneEntries[scopeId] = {
+              temperature: tempC != null ? Math.round(tempC * 10) / 10 : null,
+              humidity: rh != null ? Math.round(rh * 10) / 10 : null,
+              vpd: vpd != null ? Math.round(vpd * 100) / 100 : null,
+              sensor_count: sensorCount,
+              sensors: sensorNames
+            };
+          }
+          if (Object.keys(zoneEntries).length > 0) liveZones = zoneEntries;
+        }
+      } catch (fetchErr) {
+        console.warn('[syncSensorData] LE /env fetch failed, falling back to local:', fetchErr.message);
+      }
+    }
+
+    // --- Fallback: read local iot-devices.json if LE fetch failed ---
     const iotDevices = readJSON('iot-devices.json', null);
-    if (!iotDevices || !Array.isArray(iotDevices) || iotDevices.length === 0) return;
 
     // --- Update device-meta.json with latest telemetry ---
-    const raw = readJSON('device-meta.json', { devices: {}, lastUpdated: null, version: '1.0.0' });
-    const isWrapper = raw.devices && typeof raw.devices === 'object' && !Array.isArray(raw.devices);
-    const devices = isWrapper ? raw.devices : {};
-    let metaChanged = false;
+    if (iotDevices && Array.isArray(iotDevices) && iotDevices.length > 0) {
+      const raw = readJSON('device-meta.json', { devices: {}, lastUpdated: null, version: '1.0.0' });
+      const isWrapper = raw.devices && typeof raw.devices === 'object' && !Array.isArray(raw.devices);
+      const devices = isWrapper ? raw.devices : {};
+      let metaChanged = false;
 
-    for (const d of iotDevices) {
-      if (devices[d.id] && d.telemetry) {
-        devices[d.id].telemetry = d.telemetry;
-        devices[d.id].status = 'online';
-        metaChanged = true;
-      }
-    }
-
-    // --- Rebuild env-cache.json from sensor readings ---
-    // Zone assignments from iot-devices.json (user-controlled via Room Mapper)
-    // take precedence over device-meta.json (set at registration time).
-    const sensors = iotDevices.filter(d => d.telemetry && d.telemetry.temperature != null);
-    if (sensors.length === 0) return;
-
-    const zoneReadings = {};
-    for (const s of sensors) {
-      // Prefer zone from iot-devices.json (where Room Mapper / user writes)
-      // over device-meta.json (where E.V.I.E. registration writes).
-      // The user controls zone placement via the Room Mapper UI, so their
-      // assignments should take precedence.
-      const iotZone = s.zone;  // from iot-devices.json
-      const metaZone = devices[s.id]?.zone;
-      const rawZone = iotZone || metaZone;
-
-      // If iot-devices.json has a different zone than device-meta.json, update meta
-      if (iotZone != null && devices[s.id] && metaZone !== undefined) {
-        const normalizedIot = String(iotZone).startsWith('zone-') ? String(iotZone) : `zone-${iotZone}`;
-        const normalizedMeta = metaZone ? (String(metaZone).startsWith('zone-') ? String(metaZone) : `zone-${metaZone}`) : null;
-        if (normalizedIot !== normalizedMeta) {
-          devices[s.id].zone = normalizedIot;
+      for (const d of iotDevices) {
+        if (devices[d.id] && d.telemetry) {
+          devices[d.id].telemetry = d.telemetry;
+          devices[d.id].status = 'online';
           metaChanged = true;
-          console.log(`[syncSensorData] Updated device-meta zone for ${s.id} (${s.name}): ${normalizedMeta} → ${normalizedIot}`);
         }
       }
-      const zoneKey = rawZone ? (String(rawZone).startsWith('zone-') ? String(rawZone) : `zone-${rawZone}`) : null;
-      if (!zoneKey) continue;
-      if (!zoneReadings[zoneKey]) zoneReadings[zoneKey] = [];
-      zoneReadings[zoneKey].push({
-        temperature: s.telemetry.temperature,
-        humidity: s.telemetry.humidity,
-        battery: s.telemetry.battery,
-        sensor_name: s.name
-      });
+
+      for (const s of iotDevices) {
+        const iotZone = s.zone;
+        const metaZone = devices[s.id]?.zone;
+        if (iotZone != null && devices[s.id] && metaZone !== undefined) {
+          const normalizedIot = String(iotZone).startsWith('zone-') ? String(iotZone) : `zone-${iotZone}`;
+          const normalizedMeta = metaZone ? (String(metaZone).startsWith('zone-') ? String(metaZone) : `zone-${metaZone}`) : null;
+          if (normalizedIot !== normalizedMeta) {
+            devices[s.id].zone = normalizedIot;
+            metaChanged = true;
+          }
+        }
+      }
+
+      if (metaChanged) {
+        raw.devices = devices;
+        raw.lastUpdated = new Date().toISOString();
+        writeJSON('device-meta.json', raw);
+      }
     }
 
-    // Write device-meta.json if telemetry or zone assignments changed
-    if (metaChanged) {
-      raw.devices = devices;
-      raw.lastUpdated = new Date().toISOString();
-      writeJSON('device-meta.json', raw);
+    // --- Build env-cache.json from live LE data or local fallback ---
+    let zones = {};
+    if (liveZones) {
+      zones = liveZones;
+    } else if (iotDevices && Array.isArray(iotDevices)) {
+      const sensors = iotDevices.filter(d => d.telemetry && d.telemetry.temperature != null);
+      if (sensors.length === 0) return;
+      for (const s of sensors) {
+        const rawZone = s.zone;
+        const zoneKey = rawZone ? (String(rawZone).startsWith('zone-') ? String(rawZone) : `zone-${rawZone}`) : null;
+        if (!zoneKey) continue;
+        if (!zones[zoneKey]) zones[zoneKey] = { _readings: [] };
+        zones[zoneKey]._readings.push({ temperature: s.telemetry.temperature, humidity: s.telemetry.humidity, battery: s.telemetry.battery, sensor_name: s.name });
+      }
+      for (const [zid, zdata] of Object.entries(zones)) {
+        const r = zdata._readings;
+        zones[zid] = {
+          temperature: Math.round((r.reduce((s, x) => s + x.temperature, 0) / r.length) * 10) / 10,
+          humidity: Math.round((r.reduce((s, x) => s + x.humidity, 0) / r.length) * 10) / 10,
+          sensor_count: r.length,
+          sensors: r.map(x => x.sensor_name)
+        };
+      }
+    } else {
+      return;
     }
 
-    const zones = {};
-    for (const [zid, readings] of Object.entries(zoneReadings)) {
-      const avgT = readings.reduce((s, r) => s + r.temperature, 0) / readings.length;
-      const avgH = readings.reduce((s, r) => s + r.humidity, 0) / readings.length;
-      const avgB = readings.reduce((s, r) => s + (r.battery || 0), 0) / readings.length;
-      zones[zid] = {
-        temperature: Math.round(avgT * 10) / 10,
-        humidity: Math.round(avgH * 10) / 10,
-        avg_battery: Math.round(avgB),
-        sensor_count: readings.length,
-        sensors: readings.map(r => r.sensor_name)
-      };
-    }
-
-    const allT = sensors.filter(s => s.zone);
-    const roomTemp = allT.length > 0
-      ? Math.round((allT.reduce((s, r) => s + r.telemetry.temperature, 0) / allT.length) * 10) / 10
+    // Compute room-level averages
+    const zoneVals = Object.values(zones).filter(z => z.temperature != null);
+    const roomTemp = zoneVals.length > 0
+      ? Math.round((zoneVals.reduce((s, z) => s + z.temperature, 0) / zoneVals.length) * 10) / 10
       : null;
-    const roomHum = allT.length > 0
-      ? Math.round((allT.reduce((s, r) => s + r.telemetry.humidity, 0) / allT.length) * 10) / 10
+    const roomHum = zoneVals.length > 0
+      ? Math.round((zoneVals.reduce((s, z) => s + z.humidity, 0) / zoneVals.length) * 10) / 10
       : null;
 
-    // Determine room_id from rooms.json
     const rooms = readJSON('rooms.json', {});
     const roomList = rooms.rooms || [];
     const roomId = roomList.length > 0 ? (roomList[0].id || roomList[0].room_id || 'room-default') : 'room-default';
 
+    const source = liveZones ? 'le-env-api' : 'iot-devices.json';
     writeJSON('env-cache.json', {
       [roomId]: {
         temperature: roomTemp,
@@ -350,8 +399,8 @@ function syncSensorData() {
         par: null,
         vpd: null,
         zones,
-        sensor_count: allT.length,
-        source: 'iot-devices.json'
+        sensor_count: zoneVals.reduce((s, z) => s + (z.sensor_count || 0), 0),
+        source
       },
       meta: { updatedAt: new Date().toISOString(), source: 'syncSensorData' }
     });
@@ -481,8 +530,8 @@ function syncSensorData() {
 }
 
 // Run sensor sync on startup and every 5 minutes
-syncSensorData();
-setInterval(syncSensorData, 5 * 60 * 1000);
+syncSensorData().catch(err => console.error('[syncSensorData] Startup error:', err.message));
+setInterval(() => syncSensorData().catch(err => console.error('[syncSensorData] Interval error:', err.message)), 5 * 60 * 1000);
 
 // Initialize crop-utils registry cache (must happen after readJSON is defined)
 try {
