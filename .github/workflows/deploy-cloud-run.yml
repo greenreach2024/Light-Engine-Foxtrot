@@ -1,0 +1,85 @@
+name: Deploy Cloud Run (buildx + digest-pinned)
+
+# Manual-only deploy. Pushes to git do NOT trigger this — deploys are
+# always initiated explicitly (from the GitHub UI "Run workflow" button
+# or by Devin via `gh workflow run deploy-cloud-run.yml -f service=...`).
+#
+# Authentication is via Workload Identity Federation — no long-lived
+# service-account keys. Setup is documented in gcp/DEPLOY.md §WIF.
+
+on:
+  workflow_dispatch:
+    inputs:
+      service:
+        description: "Which service to deploy (le, central, or both)"
+        required: true
+        default: both
+        type: choice
+        options:
+          - both
+          - le
+          - central
+      skip_build:
+        description: "Skip build/push and redeploy existing image"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  id-token: write   # required to mint the OIDC token that WIF exchanges for GCP creds
+  contents: read
+
+env:
+  GCP_PROJECT_ID: project-5d00790f-13a9-4637-a40
+  GCP_PROJECT_NUMBER: "1029387937866"
+  GCP_REGION: us-east1
+  WIF_POOL_ID: github
+  WIF_PROVIDER_ID: greenreach2024
+  WIF_SA_EMAIL: devin-deployer@project-5d00790f-13a9-4637-a40.iam.gserviceaccount.com
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: auth
+        name: Authenticate to GCP via WIF
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/${{ env.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/${{ env.WIF_POOL_ID }}/providers/${{ env.WIF_PROVIDER_ID }}
+          service_account: ${{ env.WIF_SA_EMAIL }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev --quiet
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Deploy
+        run: |
+          chmod +x ./gcp/deploy-cloud-run-buildx.sh
+          FLAGS="--service ${{ inputs.service }}"
+          if [[ "${{ inputs.skip_build }}" == "true" ]]; then
+            FLAGS="$FLAGS --skip-build"
+          fi
+          ./gcp/deploy-cloud-run-buildx.sh $FLAGS
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "### Cloud Run deploy — service: ${{ inputs.service }}" >> $GITHUB_STEP_SUMMARY
+          for SVC in greenreach-central light-engine; do
+            if [[ "${{ inputs.service }}" == "both" || "${{ inputs.service }}" == "le" && "$SVC" == "light-engine" || "${{ inputs.service }}" == "central" && "$SVC" == "greenreach-central" ]]; then
+              URL=$(gcloud run services describe "$SVC" --region=${{ env.GCP_REGION }} --format='value(status.url)' 2>/dev/null || echo "<unresolved>")
+              IMG=$(gcloud run services describe "$SVC" --region=${{ env.GCP_REGION }} --format='value(spec.template.spec.containers[0].image)' 2>/dev/null || echo "<unresolved>")
+              REV=$(gcloud run services describe "$SVC" --region=${{ env.GCP_REGION }} --format='value(status.latestReadyRevisionName)' 2>/dev/null || echo "<unresolved>")
+              echo "- **$SVC**: rev \`$REV\` — $URL" >> $GITHUB_STEP_SUMMARY
+              echo "  image: \`$IMG\`" >> $GITHUB_STEP_SUMMARY
+            fi
+          done
