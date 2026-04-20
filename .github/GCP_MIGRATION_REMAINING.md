@@ -198,22 +198,33 @@ esac
 
 **Priority**: P3 -- cost savings, do AFTER all verification complete
 
+> **Do NOT execute the snippets below from an agent or automation.** Both `eb` and
+> `aws elasticbeanstalk` CLIs are globally banned post-migration per
+> `.github/copilot-instructions.md`. EB teardown must be performed by a human
+> operator through the AWS Management Console (Elastic Beanstalk → Environments
+> → Terminate), with explicit user approval. The commands are retained below
+> for reference only, so the exact environment names and descriptive queries
+> are discoverable in one place.
+
 Once Cloud Run is fully verified (database migrated, all features working, DNS pointed):
 
 ```bash
+# REFERENCE ONLY -- DO NOT RUN. Perform via AWS Console.
 # Terminate EB environments to stop billing
 # WARNING: This is IRREVERSIBLE. Only do this after confirming everything works on Cloud Run.
 
-# Check current status first
-aws elasticbeanstalk describe-environments \
-  --environment-names light-engine-foxtrot-prod-v3 greenreach-central-prod-v4 \
-  --query 'Environments[*].[EnvironmentName,Status,Health]' --output table
+# Environment names (for the console):
+#   light-engine-foxtrot-prod-v3
+#   greenreach-central-prod-v4
 
-# Terminate (requires explicit user approval)
-aws elasticbeanstalk terminate-environment --environment-name light-engine-foxtrot-prod-v3
-aws elasticbeanstalk terminate-environment --environment-name greenreach-central-prod-v4
+# Legacy CLI (BANNED, shown for reference only):
+# aws elasticbeanstalk describe-environments \
+#   --environment-names light-engine-foxtrot-prod-v3 greenreach-central-prod-v4 \
+#   --query 'Environments[*].[EnvironmentName,Status,Health]' --output table
+# aws elasticbeanstalk terminate-environment --environment-name light-engine-foxtrot-prod-v3
+# aws elasticbeanstalk terminate-environment --environment-name greenreach-central-prod-v4
 
-# Also consider:
+# Also consider (perform via console where possible):
 # - Deleting RDS instance (after confirming AlloyDB has all data)
 # - Removing Route53 records pointing to EB
 # - Cleaning up old CloudFront distribution
