@@ -1409,6 +1409,32 @@ function saveGroupsFile(groups) {
   }
 }
 
+// ── groups.json mutex: serializes all read-modify-write operations ──────────
+// Prevents concurrent requests (e.g. two tablets seeding into the same group)
+// from racing on the shared JSON file. The `fn` callback receives the current
+// groups array, mutates it, and the result is written back atomically.
+let __groupsLock = Promise.resolve();
+
+async function withGroupsLock(fn) {
+  const release = __groupsLock;
+  let resolveLock;
+  __groupsLock = new Promise((resolve) => { resolveLock = resolve; });
+  try {
+    await release;
+    const groups = loadGroupsFile();
+    const result = await fn(groups);
+    if (result !== false) {
+      saveGroupsFile(groups);
+    }
+    return result;
+  } catch (err) {
+    console.error('[groups-lock] Error in locked operation:', err.message);
+    throw err;
+  } finally {
+    resolveLock();
+  }
+}
+
 function readDeviceCache() {
   try {
     if (!fs.existsSync(DEVICES_CACHE_PATH)) return null;
@@ -23349,7 +23375,26 @@ app.post('/api/tray-runs/:id/harvest', async (req, res) => {
     }
 
     // Generate lot code: ZONE-CROP-YYMMDD-BATCH
-    const now = new Date(harvestedAt || Date.now());
+    // Server-authoritative timestamp: accept client hint, override if drift > 15 min
+    const MAX_DRIFT_MS = 15 * 60 * 1000;
+    const serverNow = Date.now();
+    let now;
+    let timestampSource = 'server';
+    if (harvestedAt) {
+      const clientTime = new Date(harvestedAt).getTime();
+      if (!isNaN(clientTime) && Math.abs(clientTime - serverNow) <= MAX_DRIFT_MS) {
+        now = new Date(clientTime);
+        timestampSource = 'client';
+      } else {
+        now = new Date(serverNow);
+        timestampSource = 'server_override';
+        if (!isNaN(clientTime)) {
+          console.warn(`[tray-runs] Harvest timestamp drift: client=${new Date(clientTime).toISOString()} server=${new Date(serverNow).toISOString()} delta=${Math.round((clientTime - serverNow) / 60000)}min — using server time`);
+        }
+      }
+    } else {
+      now = new Date(serverNow);
+    }
     const dateStr = now.toISOString().slice(2, 10).replace(/-/g, '');
     const cropName = (trayRun.recipe_id || trayRun.crop || 'CROP').toUpperCase().slice(0, 8).replace(/[^A-Z0-9]/g, '');
     const batchSuffix = Math.random().toString(36).slice(2, 6).toUpperCase();
@@ -23510,7 +23555,7 @@ app.post('/api/tray-runs/:id/harvest', async (req, res) => {
       console.warn('[tray-runs] Experiment record creation failed (non-fatal):', expErr.message);
     }
 
-    // Phase 1 Ticket 1.6 — emit standardized harvest event
+    // Phase 1 Ticket 1.6 -- emit standardized harvest event
     eventBus.emitEvent('harvest', {
       tray_run_id: trayRunId,
       group_id: trayRun?.group_id || null,
@@ -23525,6 +23570,7 @@ app.post('/api/tray-runs/:id/harvest', async (req, res) => {
       zone: null,
       room: null,
       harvested_by: null,
+      timestamp: now.toISOString(),
     });
 
     // Sync harvest data to Central farm_inventory (actual weights)
@@ -23549,6 +23595,7 @@ app.post('/api/tray-runs/:id/harvest', async (req, res) => {
       actualWeight: weight,
       harvestedCount,
       harvestedAt: now.toISOString(),
+      timestamp_source: timestampSource,
       shouldWeigh,
       weighInReason: shouldWeigh
         ? 'This tray has been selected for a full weigh-in. Please weigh the entire cut crop and record the weight.'
@@ -23605,7 +23652,26 @@ app.post('/api/trays/:trayId/seed', async (req, res) => {
   }
 
   try {
-    const now = new Date(seedDate || Date.now());
+    // Server-authoritative timestamp: accept client hint, override if drift > 15 min
+    const MAX_DRIFT_MS = 15 * 60 * 1000;
+    const serverNow = Date.now();
+    let now;
+    let timestampSource = 'server';
+    if (seedDate) {
+      const clientTime = new Date(seedDate).getTime();
+      if (!isNaN(clientTime) && Math.abs(clientTime - serverNow) <= MAX_DRIFT_MS) {
+        now = new Date(clientTime);
+        timestampSource = 'client';
+      } else {
+        now = new Date(serverNow);
+        timestampSource = 'server_override';
+        if (!isNaN(clientTime)) {
+          console.warn(`[tray-runs] Seed timestamp drift: client=${new Date(clientTime).toISOString()} server=${new Date(serverNow).toISOString()} delta=${Math.round((clientTime - serverNow) / 60000)}min — using server time`);
+        }
+      }
+    } else {
+      now = new Date(serverNow);
+    }
     const trayRunId = `TR-${Date.now()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
 
     // ── Determine target weight (progressive refinement) ──────────────────
@@ -23688,23 +23754,19 @@ app.post('/api/trays/:trayId/seed', async (req, res) => {
     // -- Phase 2 Task 2.6: Sync seed date to group -----------------------
     if (groupId) {
       try {
-        const groupsPath = path.join(__dirname, 'public', 'data', 'groups.json');
-        const groupsRaw = fs.readFileSync(groupsPath, 'utf8');
-        const groupsData = JSON.parse(groupsRaw);
-        const groupsArray = Array.isArray(groupsData) ? groupsData
-          : Array.isArray(groupsData.groups) ? groupsData.groups : [];
-        const targetGroup = groupsArray.find(g => g.id === groupId);
-        if (targetGroup) {
-          if (!targetGroup.planConfig) targetGroup.planConfig = {};
-          if (!targetGroup.planConfig.anchor) targetGroup.planConfig.anchor = {};
-          const seedDateStr = now.toISOString().slice(0, 10);
-          targetGroup.planConfig.anchor.seedDate = seedDateStr;
-          if (!targetGroup.crop) targetGroup.crop = recipe;
-          targetGroup.lastModified = new Date().toISOString();
-          fs.writeFileSync(groupsPath, JSON.stringify(groupsData, null, 2));
-          console.log(`[tray-runs] Synced seed date ${seedDateStr} + crop ${recipe} to group ${groupId}`);
-          try { emitDataChange({ kind: 'groups', ids: [groupId], updatedAt: targetGroup.lastModified, source: 'tray-seed' }); } catch (_) {}
-        }
+        await withGroupsLock((groupsArray) => {
+          const targetGroup = groupsArray.find(g => g.id === groupId);
+          if (targetGroup) {
+            if (!targetGroup.planConfig) targetGroup.planConfig = {};
+            if (!targetGroup.planConfig.anchor) targetGroup.planConfig.anchor = {};
+            const seedDateStr = now.toISOString().slice(0, 10);
+            targetGroup.planConfig.anchor.seedDate = seedDateStr;
+            if (!targetGroup.crop) targetGroup.crop = recipe;
+            targetGroup.lastModified = new Date().toISOString();
+            console.log(`[tray-runs] Synced seed date ${seedDateStr} + crop ${recipe} to group ${groupId}`);
+            try { emitDataChange({ kind: 'groups', ids: [groupId], updatedAt: targetGroup.lastModified, source: 'tray-seed' }); } catch (_) {}
+          }
+        });
       } catch (syncErr) {
         console.warn(`[tray-runs] Seed date sync to group failed (non-fatal):`, syncErr.message);
       }
@@ -23712,7 +23774,7 @@ app.post('/api/trays/:trayId/seed', async (req, res) => {
 
     console.log(`[tray-runs] Seeded: ${trayRunId} tray=${trayId} crop=${recipe} plants=${resolvedPlantCount ?? 'unknown'} (${plantCountSource || 'no data'}) targetWeight=${targetWeightOz ?? 'none'} (${targetWeightSource || 'no data'})${seed_source ? ` source=${seed_source}` : ''}${groupId ? ` group=${groupId}` : ''}`);
 
-    // Phase 1 Ticket 1.6 — emit standardized seed event
+    // Phase 1 Ticket 1.6 -- emit standardized seed event
     eventBus.emitEvent('seed', {
       tray_run_id: trayRunId,
       group_id: groupId || null,
@@ -23724,6 +23786,7 @@ app.post('/api/trays/:trayId/seed', async (req, res) => {
       room: null,
       recipe_id: recipe,
       seeded_by: null,
+      timestamp: now.toISOString(),
     });
 
     res.json({
@@ -23735,6 +23798,8 @@ app.post('/api/trays/:trayId/seed', async (req, res) => {
       target_weight_oz: targetWeightOz,
       target_weight_source: targetWeightSource,
       group_id: groupId || null,
+      seeded_at: now.toISOString(),
+      timestamp_source: timestampSource,
       message: groupId ? `Seeding recorded + assigned to group ${groupId}` : 'Seeding recorded'
     });
   } catch (error) {
@@ -25221,43 +25286,42 @@ app.get('/data/groups.json', (req, res, next) => {
 // the payload can be a full group record: { id, crop, plan, planId, planConfig,
 // status, dimensions, ... }. We merge field-by-field rather than whitelisting
 // gridX/gridY so neither caller silently drops operator edits.
-app.post('/data/groups.json', pinOrApiKeyGuard, (req, res) => {
+app.post('/data/groups.json', pinOrApiKeyGuard, async (req, res) => {
   setCors(req, res);
   const body = req.body || {};
   const incoming = Array.isArray(body) ? body : (body.groups || null);
   if (!Array.isArray(incoming)) {
     return res.status(400).json({ ok: false, error: 'Expected { groups: [...] } or array.' });
   }
-  const existing = loadGroupsFile();
-  const incomingMap = new Map();
-  for (const g of incoming) { if (g && g.id) incomingMap.set(g.id, g); }
-  const existingIds = new Set();
-  const nowIso = new Date().toISOString();
-  const touchedIds = [];
-  const merged = existing.map((g) => {
-    if (!g || !g.id) return g;
-    existingIds.add(g.id);
-    const inc = incomingMap.get(g.id);
-    if (!inc) return g;
-    touchedIds.push(g.id);
-    return {
-      ...g,
-      ...inc,
-      lastModified: inc.lastModified || nowIso,
-    };
-  });
-  // Append brand-new groups the incoming payload introduced.
-  for (const inc of incoming) {
-    if (inc && inc.id && !existingIds.has(inc.id)) {
-      touchedIds.push(inc.id);
-      merged.push({ ...inc, lastModified: inc.lastModified || nowIso });
-    }
+  try {
+    let touchedIds;
+    await withGroupsLock((existing) => {
+      const incomingMap = new Map();
+      for (const g of incoming) { if (g && g.id) incomingMap.set(g.id, g); }
+      const existingIds = new Set();
+      const nowIso = new Date().toISOString();
+      touchedIds = [];
+      for (let i = 0; i < existing.length; i++) {
+        const g = existing[i];
+        if (!g || !g.id) continue;
+        existingIds.add(g.id);
+        const inc = incomingMap.get(g.id);
+        if (!inc) continue;
+        touchedIds.push(g.id);
+        existing[i] = { ...g, ...inc, lastModified: inc.lastModified || nowIso };
+      }
+      for (const inc of incoming) {
+        if (inc && inc.id && !existingIds.has(inc.id)) {
+          touchedIds.push(inc.id);
+          existing.push({ ...inc, lastModified: inc.lastModified || nowIso });
+        }
+      }
+      emitDataChange({ kind: 'groups', ids: touchedIds, updatedAt: nowIso, source: 'data-groups-post' });
+    });
+    return res.json({ ok: true, touched: touchedIds.length });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: 'Failed to save groups.' });
   }
-  if (saveGroupsFile(merged)) {
-    emitDataChange({ kind: 'groups', ids: touchedIds, updatedAt: nowIso, source: 'data-groups-post' });
-    return res.json({ ok: true, updated: merged.length, touched: touchedIds.length });
-  }
-  return res.status(500).json({ ok: false, error: 'Failed to save groups.' });
 });
 
 app.get('/data/ctrl-map.json', (req, res, next) => {
@@ -27100,7 +27164,7 @@ app.post("/data/:name", (req, res) => {
               console.warn('[zone-sync] Post-save refresh failed:', err?.message || err);
             }
             // Sync zone names back to rooms.json so Grow Room Setup page stays current
-            try { syncZonesToRoomsJson(req.body, baseName); } catch (err) {
+            try { await syncZonesToRoomsJson(req.body, baseName); } catch (err) {
               console.warn('[zone-rooms-sync] Post-save refresh failed:', err?.message || err);
             }
           } catch (sideEffectErr) {
@@ -27174,11 +27238,13 @@ app.post('/groups', pinGuard, async (req, res) => {
       if (item.stored && !item.stored.lastModified) item.stored.lastModified = nowIso;
       return item.stored;
     });
-    if (!saveGroupsFile(stored)) {
-      return res.status(500).json({ ok: false, error: 'Failed to persist groups.' });
-    }
-    const touchedIds = stored.map((g) => g?.id).filter(Boolean);
-    emitDataChange({ kind: 'groups', ids: touchedIds, updatedAt: nowIso, source: 'groups-post' });
+    await withGroupsLock((groups) => {
+      // Full replacement (POST semantics) -- overwrite array contents
+      groups.length = 0;
+      stored.forEach(g => groups.push(g));
+      const touchedIds = stored.map((g) => g?.id).filter(Boolean);
+      emitDataChange({ kind: 'groups', ids: touchedIds, updatedAt: nowIso, source: 'groups-post' });
+    });
     return res.json({ ok: true, groups: parsed.map((item) => item.response) });
   } catch (err) {
     return res.status(400).json({ ok: false, error: err.message });
@@ -27189,20 +27255,18 @@ app.put('/groups/:id', pinGuard, async (req, res) => {
   setCors(req, res);
   const id = String(req.params.id || '').trim();
   if (!id) return res.status(400).json({ ok: false, error: 'Group id is required.' });
-  const existing = loadGroupsFile();
-  const idx = existing.findIndex((group) => String(group?.id || '').trim() === id);
-  if (idx === -1) return res.status(404).json({ ok: false, error: `Group '${id}' not found.` });
   try {
     const nowIso = new Date().toISOString();
     const merged = { ...req.body, id, lastModified: req.body?.lastModified || nowIso };
     const knownIds = RUNNING_UNDER_NODE_TEST ? null : await fetchKnownDeviceIds();
     const { stored, response } = parseIncomingGroup(merged, knownIds);
     if (stored && !stored.lastModified) stored.lastModified = nowIso;
-    existing[idx] = stored;
-    // Async queued write to avoid blocking I/O
-    const payload = JSON.stringify({ groups: existing }, null, 2);
-    await writeJsonQueued(GROUPS_PATH, payload);
-    emitDataChange({ kind: 'groups', ids: [id], updatedAt: nowIso, source: 'groups-put' });
+    await withGroupsLock((groups) => {
+      const idx = groups.findIndex((group) => String(group?.id || '').trim() === id);
+      if (idx === -1) return false; // signal: don't save
+      groups[idx] = stored;
+      emitDataChange({ kind: 'groups', ids: [id], updatedAt: nowIso, source: 'groups-put' });
+    });
     return res.json({ ok: true, group: response });
   } catch (err) {
     return res.status(400).json({ ok: false, error: err.message });
@@ -31534,7 +31598,7 @@ function initializeZoneSetpointsFromRoomMap() {
 }
 
 // Sync zone names from a room-map save back to rooms.json so the Grow Room Setup page stays current
-function syncZonesToRoomsJson(roomMapBody, baseName) {
+async function syncZonesToRoomsJson(roomMapBody, baseName) {
   try {
     // Extract roomId from filename: room-map-room-XXXX.json → room-XXXX
     const roomIdMatch = baseName.match(/^room-map-(.+)\.json$/);
@@ -31581,12 +31645,9 @@ function syncZonesToRoomsJson(roomMapBody, baseName) {
 
       // Cascade to groups.json: reassign groups from deleted zones
       try {
-        const groupsPath = path.join(DATA_DIR, 'groups.json');
-        if (fs.existsSync(groupsPath)) {
-          const groupsRaw = JSON.parse(fs.readFileSync(groupsPath, 'utf8'));
-          const groups = Array.isArray(groupsRaw) ? groupsRaw : (groupsRaw.groups || []);
+        const roomName = room.name || targetRoomId;
+        await withGroupsLock((groups) => {
           let groupsChanged = 0;
-          const roomName = room.name || targetRoomId;
           for (const g of groups) {
             const gRoom = g.room || g.roomName || '';
             const gZone = g.zone || '';
@@ -31595,12 +31656,9 @@ function syncZonesToRoomsJson(roomMapBody, baseName) {
               groupsChanged++;
             }
           }
-          if (groupsChanged > 0) {
-            const groupsPayload = Array.isArray(groupsRaw) ? groups : { ...groupsRaw, groups };
-            fs.writeFileSync(groupsPath, JSON.stringify(groupsPayload, null, 2));
-            console.log(`[zone-cascade] Reassigned ${groupsChanged} group(s) from removed zones to "${fallbackZone}"`);
-          }
-        }
+          if (groupsChanged === 0) return false; // no changes, skip write
+          console.log(`[zone-cascade] Reassigned ${groupsChanged} group(s) from removed zones to "${fallbackZone}"`);
+        });
       } catch (groupErr) {
         console.warn('[zone-cascade] Failed to cascade zone removal to groups.json:', groupErr.message);
       }
