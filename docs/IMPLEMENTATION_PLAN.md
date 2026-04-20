@@ -56,13 +56,13 @@ Recommended execution order matches the dependency chain:
    - [ ] Update all downstream recipe/environment consumers to use canonical key
 
 2. **Server-authoritative timestamps** `XC-5`
-   - [ ] Accept client timestamps as hints only
-   - [ ] Override or clamp when drift exceeds threshold (15 min)
-   - [ ] Normalize date-only seed input to farm-local authoritative timestamps
-   - [ ] Return authoritative timestamp in seed/harvest API responses
+   - [x] Accept client timestamps as hints only
+   - [x] Override or clamp when drift exceeds threshold (15 min)
+   - [x] Normalize date-only seed input to farm-local authoritative timestamps
+   - [x] Return authoritative timestamp in seed/harvest API responses
 
 3. **`groups.json` write safety** `XC-2`
-   - [ ] Add file lock around all read-modify-write sequences (short-term)
+   - [x] Add file lock around all read-modify-write sequences (short-term)
    - [ ] Move group mutations behind a single storage abstraction or DB path (preferred)
 
 4. **Durable event log** `XC-3`

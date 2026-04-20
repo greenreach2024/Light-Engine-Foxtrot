@@ -31,6 +31,15 @@ The farm runs entirely on Google Cloud Run. The Light Engine Cloud Run service I
 10. **GitHub is the deployable source of truth.** Do not leave production fixes only in local branches or local `main`. Before any Cloud Run deploy, commit and push the exact code being deployed.
 11. **Production drift reconciliation is mandatory.** If the expected production fixes live on feature, salvage, or local-only branches, merge or cherry-pick them into the branch that will be pushed to GitHub first. Record the source branches and commit SHAs in `docs/operations/`.
 
+### Recent Fixes (Apr 19, 2026)
+
+38. **Phase 1 Data Integrity: Server-Authoritative Timestamps + Groups.json Write Safety**
+    - Branch: `impl/phase1-data-integrity`. PR pending.
+    - **Server-authoritative timestamps (XC-5)**: Seed (`POST /api/trays/:trayId/seed`) and harvest (`POST /api/tray-runs/:id/harvest`) routes now validate client-provided timestamps against server time. Client hints accepted only if drift < 15 min; otherwise overridden with server time and warning logged. Responses include `timestamp_source` and `seeded_at`/`harvestedAt`. Event bus emissions include authoritative `timestamp` field.
+    - **Groups.json write safety (XC-2)**: Added `withGroupsLock()` async mutex (promise-chain pattern, no npm dependency) to serialize all read-modify-write operations on `groups.json`. All 5 LE write sites wrapped: `POST /data/groups.json`, `POST /groups`, `PUT /groups/:id`, seed route group sync, zone cascade in `syncZonesToRoomsJson()`.
+    - File changed: `server-foxtrot.js` (+135 -77 lines). 86/86 tests pass.
+    - Implementation plan: `docs/IMPLEMENTATION_PLAN.md` created and maintained.
+
 ### Recent Fixes (Apr 14, 2026)
 
 37. **Multi-Unit Equipment/Group Bulk Updates + 3D Viewer LE Visibility**
