@@ -160,3 +160,25 @@ test('GET /api/trays includes recipe drift detection', () => {
   assert.ok(serverText.includes('recipeSnapshotHash'), 'should include recipeSnapshotHash in tray response');
   assert.ok(serverText.includes('liveRecipes'), 'should load live recipes for drift comparison');
 });
+
+// ── PPFD/DLI Heatmap + Device Overlay (#17) ──────────────────────────
+test('3D viewer has PPFD and DLI overlay buttons', () => {
+  const html = fs.readFileSync(path.resolve('./greenreach-central/public/views/3d-farm-viewer.html'), 'utf-8');
+  assert.ok(html.includes('data-overlay="ppfd"'), 'should have PPFD overlay button');
+  assert.ok(html.includes('data-overlay="dli"'), 'should have DLI overlay button');
+});
+
+test('OVERLAY_CFG includes ppfd and dli', () => {
+  const html = fs.readFileSync(path.resolve('./greenreach-central/public/views/3d-farm-viewer.html'), 'utf-8');
+  assert.ok(html.includes("ppfd:"), 'should have ppfd in OVERLAY_CFG');
+  assert.ok(html.includes("dli:"), 'should have dli in OVERLAY_CFG');
+  assert.ok(html.includes("umol"), 'should have PPFD unit');
+  assert.ok(html.includes("mol/m2/d"), 'should have DLI unit');
+});
+
+test('getZoneMetricValueAtFrame handles ppfd and dli', () => {
+  const html = fs.readFileSync(path.resolve('./greenreach-central/public/views/3d-farm-viewer.html'), 'utf-8');
+  assert.ok(html.includes("metricKey === 'ppfd'"), 'should handle ppfd metric');
+  assert.ok(html.includes("metricKey === 'dli'"), 'should handle dli metric');
+  assert.ok(html.includes('g.targetPpfd'), 'should read group targetPpfd');
+});

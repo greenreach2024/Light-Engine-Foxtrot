@@ -234,8 +234,8 @@ grow-systems.json now has runtime consumers -- `GET /api/grow-systems` serves te
 
 ### P1 -- Operational Layers
 
-- [ ] PPFD/DLI heatmap layer (toggle on/off)
-- [ ] Device mesh overlay (fans, sensors, lights as instanced meshes at mapped positions)
+- [x] PPFD/DLI heatmap layer (toggle on/off)
+- [x] Device mesh overlay (fans, sensors, lights as instanced meshes at mapped positions)
 - [ ] Grow system template-aware rendering
   - Consume `grow-systems.json` templates for accurate rack/table geometry
 - [ ] Recipe annotation layer (show active recipe phase per group)

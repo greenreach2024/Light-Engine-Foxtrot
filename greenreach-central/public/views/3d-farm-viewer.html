@@ -385,6 +385,8 @@
       <button data-overlay="humidity">Humidity</button>
       <button data-overlay="co2">CO2</button>
       <button data-overlay="vpd">VPD</button>
+      <button data-overlay="ppfd">PPFD</button>
+      <button data-overlay="dli">DLI</button>
       <button data-overlay="status">Status</button>
       <div class="sep"></div>
       <button id="btnWalls" class="active" title="Toggle walls and ceiling">Walls</button>
@@ -554,6 +556,8 @@
       humidity:    { min: 20, max: 95, unit: '%',   label: 'Relative Humidity', colors: [0x1d4ed8, 0x06b6d4, 0x22c55e, 0xfacc15, 0xef4444], key: 'humidity' },
       co2:         { min: 300, max: 1800, unit: 'ppm', label: 'CO\u2082 Concentration', colors: [0x22c55e, 0xfacc15, 0xf59e0b, 0xef4444, 0x7f1d1d], key: 'co2' },
       vpd:         { min: 0.2, max: 2.0, unit: 'kPa', label: 'Vapor Pressure Deficit', colors: [0x1d4ed8, 0x06b6d4, 0x22c55e, 0xf59e0b, 0xef4444], key: 'vpd' },
+      ppfd:        { min: 0, max: 800, unit: 'umol', label: 'PPFD Target', colors: [0x0f172a, 0x1d4ed8, 0x06b6d4, 0x22c55e, 0xf59e0b], key: 'ppfd' },
+      dli:         { min: 0, max: 40, unit: 'mol/m2/d', label: 'DLI Target', colors: [0x0f172a, 0x1d4ed8, 0x06b6d4, 0x22c55e, 0xf59e0b], key: 'dli' },
     };
 
     function extractNumericReading(sample) {
@@ -633,6 +637,19 @@
 
     function getZoneMetricValueAtFrame(zoneData, metricKey) {
       if (!zoneData) return null;
+      // PPFD/DLI: aggregate from zone groups
+      if (metricKey === 'ppfd' || metricKey === 'dli') {
+        const groups = zoneData.groups || [];
+        const vals = [];
+        for (const g of groups) {
+          if (metricKey === 'ppfd' && g.targetPpfd != null) vals.push(Number(g.targetPpfd));
+          else if (metricKey === 'dli' && (g.dli != null || g.planConfig?.dli != null || g.planConfig?.preview?.dli != null))
+            vals.push(Number(g.dli || g.planConfig?.dli || g.planConfig?.preview?.dli));
+          else if (metricKey === 'ppfd' && g.planConfig?.preview?.ppfd != null) vals.push(Number(g.planConfig.preview.ppfd));
+        }
+        if (vals.length) return vals.reduce((a, b) => a + b, 0) / vals.length;
+        return null;
+      }
       const historyKey = { temp: 'tempHistory', humidity: 'humidityHistory', co2: 'co2History', vpd: 'vpdHistory' }[metricKey];
       const fallbackValue = getPlaybackFallbackValue(zoneData[metricKey]);
       return historyKey ? getHistoryValueForFrame(zoneData[historyKey], fallbackValue) : fallbackValue;
@@ -646,6 +663,8 @@
         humidity: getZoneMetricValueAtFrame(zoneData, 'humidity'),
         co2: getZoneMetricValueAtFrame(zoneData, 'co2'),
         vpd: getZoneMetricValueAtFrame(zoneData, 'vpd'),
+        ppfd: getZoneMetricValueAtFrame(zoneData, 'ppfd'),
+        dli: getZoneMetricValueAtFrame(zoneData, 'dli'),
         groups: zoneData.groups || [],
         tempHistory: zoneData.tempHistory || [],
         humidityHistory: zoneData.humidityHistory || [],
@@ -2403,6 +2422,22 @@
         if (v != null) return { value: v, source: 'iot-registry' };
       }
 
+      // PPFD/DLI: extract from group light assignments or zone plan targets
+      if (metricKey === 'ppfd' || metricKey === 'dli') {
+        // Check zone data for groups with PPFD/DLI targets
+        for (const zone of zones) {
+          const groups = zone.groups || [];
+          for (const g of groups) {
+            if (g.targetPpfd != null && metricKey === 'ppfd') return { value: g.targetPpfd, source: 'group-plan' };
+            if (g.dli != null && metricKey === 'dli') return { value: g.dli, source: 'group-plan' };
+            const pc = g.planConfig || {};
+            if (pc.preview?.ppfd != null && metricKey === 'ppfd') return { value: pc.preview.ppfd, source: 'plan-preview' };
+            if (pc.preview?.dli != null && metricKey === 'dli') return { value: pc.preview.dli, source: 'plan-preview' };
+            if (pc.dli != null && metricKey === 'dli') return { value: pc.dli, source: 'plan-config' };
+          }
+        }
+      }
+
       return { value: null, source: 'none' };
     }
 
@@ -2413,6 +2448,7 @@
       if (cat.includes('sensor') || cat.includes('temp') || cat.includes('humid') || cat.includes('environment')) return true;
       if (type.includes('sensor') || type.includes('woio')) return true;
       if (/^sen\b/.test(name) || name.includes('sensor')) return true;
+      if (cat.includes('light') || type.includes('light') || name.includes('light')) return true;
       const devId = dev.deviceId || dev.snapshot?.deviceId || '';
       if (devId && (S.envData?.zones || []).some(function(z) {
         return !!(z?.sensors?.tempC?.sources?.[devId] || z?.sensors?.rh?.sources?.[devId] || z?.sensors?.co2?.sources?.[devId]);
