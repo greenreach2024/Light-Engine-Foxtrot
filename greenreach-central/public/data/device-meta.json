@@ -113,9 +113,7 @@
         "deviceName": "Sen 4",
         "deviceType": "WoIOSensor",
         "hubDeviceId": "D3F85167A57E",
-        "temperature": 21.7,
-        "telemetry": {},
-        "status": {}
+        "temperature": 21.7
       }
     },
     "D3F85167A57E": {
