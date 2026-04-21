@@ -11,7 +11,6 @@ Google Analytics 4 tracking has been added to all GreenReach marketing pages.
 
 ## Pages with Analytics Tracking:
 - ✅ greenreach-org.html (Home)
-- ✅ greenreach-grow.html (GROW product page)
 - ✅ growing-made-easy.html
 - ✅ grow-and-sell.html (Wholesale)
 - ✅ wholesale-landing.html
@@ -61,7 +60,6 @@ grep -r "G-GBPD0VBEF2" greenreach-central/public/*.html
 
 **Updated files (✅ Complete):**
 - greenreach-central/public/greenreach-org.html
-- greenreach-central/public/greenreach-grow.html
 - greenreach-central/public/growing-made-easy.html
 - greenreach-central/public/grow-and-sell.html
 - greenreach-central/public/wholesale-landing.html
