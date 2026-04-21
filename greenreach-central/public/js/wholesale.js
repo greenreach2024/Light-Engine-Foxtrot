@@ -1343,12 +1343,16 @@
       try {
         const legacy = localStorage.getItem(STORAGE_CART_LEGACY);
         if (!legacy) return;
-        // The prefix and the legacy key collide, so skip migration once the
-        // namespaced anon bucket already exists.
-        const anonKey = cartStorageKey(null);
-        if (anonKey === STORAGE_CART_LEGACY) return;
-        if (localStorage.getItem(anonKey) === null) {
-          localStorage.setItem(anonKey, legacy);
+        // Move the legacy un-scoped cart to the current buyer's bucket when
+        // they're already signed in so a returning logged-in buyer doesn't
+        // silently lose their cart on upgrade. When no buyer is active,
+        // fall back to the anonymous bucket.
+        const targetKey = cartStorageKey(this.currentBuyer?.id);
+        // The prefix and the legacy key collide on the anon key, so skip
+        // migration if the target would point back at the legacy key.
+        if (targetKey === STORAGE_CART_LEGACY) return;
+        if (localStorage.getItem(targetKey) === null) {
+          localStorage.setItem(targetKey, legacy);
         }
         localStorage.removeItem(STORAGE_CART_LEGACY);
       } catch (e) { /* best-effort migration */ }
@@ -1706,6 +1710,10 @@
 
         this.orders = [json.data, ...this.orders];
         this.cart = [];
+        // Persist the now-empty cart under the buyer's scoped key so a
+        // page refresh (or later sign-in on this device) doesn't restore
+        // the items the buyer already ordered.
+        this.saveCart();
         this.renderCart();
         this.navigateTo('orders');
         this.showToast('Order placed successfully!', 'success');

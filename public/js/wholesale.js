@@ -33,7 +33,13 @@
 
   const STORAGE_TOKEN = 'greenreach_wholesale_token';
   const STORAGE_BUYER = 'greenreach_wholesale_buyer';
-  const STORAGE_CART = 'greenreach_wholesale_cart';
+  const STORAGE_CART_PREFIX = 'greenreach_wholesale_cart';
+  const STORAGE_CART_LEGACY = 'greenreach_wholesale_cart';
+
+  function cartStorageKey(buyerId) {
+    const scope = buyerId ? String(buyerId) : 'anon';
+    return `${STORAGE_CART_PREFIX}:${scope}`;
+  }
 
   const app = window.app = {
     catalog: [],
@@ -104,9 +110,6 @@
     },
 
     async init() {
-      // Restore cart from localStorage
-      this.loadCart();
-
       const params = new URLSearchParams(window.location.search);
       // Prefer live/network mode by default; demo mode is opt-in.
       if (params.get('demo') === '1') this.demoMode = true;
@@ -114,6 +117,13 @@
       else this.demoMode = false;
 
       await this.loadAuthState();
+
+      // Migrate any legacy un-scoped cart into the anonymous bucket so it
+      // never leaks into a freshly registered buyer's session.
+      this.migrateLegacyCart();
+
+      // Load the cart scoped to the current buyer (or anonymous).
+      this.loadCart();
       
       // No auto-login - require real authentication
       
@@ -346,6 +356,18 @@
 
     setActiveBuyer({ buyer, token }) {
       const normalized = this.normalizeBuyer(buyer);
+      const previousBuyerId = this.currentBuyer?.id || null;
+      const nextBuyerId = normalized?.id || null;
+      const buyerChanged = previousBuyerId !== nextBuyerId;
+
+      // Persist the current cart under the previous scope so the outgoing
+      // buyer (or anonymous session) doesn't lose their work, then hand off
+      // to the incoming buyer's scoped cart.
+      if (buyerChanged) {
+        this.saveCart();
+        this.cart = [];
+      }
+
       this.currentBuyer = normalized;
       localStorage.setItem(STORAGE_BUYER, JSON.stringify(normalized));
       this.token = token;
@@ -354,6 +376,11 @@
       this.loadOrders();
       this.loadBuyerInsights();
       this.updateDonationsTabVisibility();
+
+      if (buyerChanged) {
+        this.loadCart();
+        this.renderCart();
+      }
     },
 
     updateBuyerProfile() {
@@ -527,6 +554,13 @@
       this.currentBuyer = null;
       localStorage.removeItem(STORAGE_TOKEN);
       localStorage.removeItem(STORAGE_BUYER);
+
+      // Drop the in-memory cart so the next visitor on this device (e.g.
+      // a fresh registration) doesn't inherit the signed-out buyer's items.
+      // Each buyer's cart is still persisted under its own namespaced key
+      // and will be restored on next sign-in.
+      this.cart = [];
+      this.renderCart();
 
       this.updateBuyerProfile();
       this.populateCheckoutForm();
@@ -1278,18 +1312,50 @@
 
     saveCart() {
       try {
-        localStorage.setItem(STORAGE_CART, JSON.stringify(this.cart));
+        const key = cartStorageKey(this.currentBuyer?.id);
+        if (!Array.isArray(this.cart) || this.cart.length === 0) {
+          localStorage.removeItem(key);
+          return;
+        }
+        localStorage.setItem(key, JSON.stringify(this.cart));
       } catch (e) { /* localStorage full or unavailable */ }
     },
 
     loadCart() {
       try {
-        const saved = localStorage.getItem(STORAGE_CART);
+        const key = cartStorageKey(this.currentBuyer?.id);
+        const saved = localStorage.getItem(key);
         if (saved) {
-          this.cart = JSON.parse(saved);
-          this.renderCart();
+          const parsed = JSON.parse(saved);
+          this.cart = Array.isArray(parsed) ? parsed : [];
+        } else {
+          this.cart = [];
         }
-      } catch (e) { /* corrupt data, start fresh */ }
+        this.renderCart();
+      } catch (e) {
+        // corrupt data, start fresh
+        this.cart = [];
+        this.renderCart();
+      }
+    },
+
+    migrateLegacyCart() {
+      try {
+        const legacy = localStorage.getItem(STORAGE_CART_LEGACY);
+        if (!legacy) return;
+        // Move the legacy un-scoped cart to the current buyer's bucket when
+        // they're already signed in so a returning logged-in buyer doesn't
+        // silently lose their cart on upgrade. When no buyer is active,
+        // fall back to the anonymous bucket.
+        const targetKey = cartStorageKey(this.currentBuyer?.id);
+        // The prefix and the legacy key collide on the anon key, so skip
+        // migration if the target would point back at the legacy key.
+        if (targetKey === STORAGE_CART_LEGACY) return;
+        if (localStorage.getItem(targetKey) === null) {
+          localStorage.setItem(targetKey, legacy);
+        }
+        localStorage.removeItem(STORAGE_CART_LEGACY);
+      } catch (e) { /* best-effort migration */ }
     },
 
     addToCart(skuId) {
@@ -1644,6 +1710,10 @@
 
         this.orders = [json.data, ...this.orders];
         this.cart = [];
+        // Persist the now-empty cart under the buyer's scoped key so a
+        // page refresh (or later sign-in on this device) doesn't restore
+        // the items the buyer already ordered.
+        this.saveCart();
         this.renderCart();
         this.navigateTo('orders');
         this.showToast('Order placed successfully!', 'success');
