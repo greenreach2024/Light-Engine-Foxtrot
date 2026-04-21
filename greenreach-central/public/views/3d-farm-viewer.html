@@ -1798,8 +1798,11 @@
       if (/aeroponic/.test(txt)) return S.growSystemsById['aeroponics-tower'] || null;
       if (/drip|fruiting/.test(txt)) return S.growSystemsById['drip-rail-fruiting-8ft'] || null;
       if (/microgreen/.test(txt)) return S.growSystemsById['vertical-tier-5-microgreen'] || null;
-      if (sys === 'channel' || /nft/.test(txt)) return S.growSystemsById['nft-rack-3tier'] || null;
+      // Check DWC/raft before the generic `sys === 'channel'` fallback so a
+      // group with "raft" in its name still resolves to the DWC template even
+      // though inferGroupSystemType() maps `raft` onto the `channel` family.
       if (/dwc|pond|raft/.test(txt)) return S.growSystemsById['dwc-pond-4x8'] || null;
+      if (sys === 'channel' || /nft/.test(txt)) return S.growSystemsById['nft-rack-3tier'] || null;
       if (sys === 'rack') return S.growSystemsById['nft-rack-3tier'] || null;
       return null;
     }
@@ -2072,9 +2075,20 @@
         const zoneSpatial = {};
         zones.forEach((zone, zi) => {
           const zKey = String(zone.zone ?? zone.id ?? zone.name ?? ('z' + zi));
+          // Guard every candidate zone identifier so an empty string does not
+          // match every group via `endsWith('')`. Only include identifiers that
+          // are actually present on the zone record.
+          const zoneIds = [zone.zone, zone.id, zone.name]
+            .filter(function (v) { return v !== undefined && v !== null && String(v) !== ''; })
+            .map(String);
           const gInZone = roomGroups.filter(function (g) {
             const gz = String(g.zone ?? g.zoneId ?? '');
-            return gz === zKey || gz === String(zone.name) || gz === String(zone.id) || gz.endsWith(String(zone.zone ?? '')) || gz.endsWith(String(zone.name ?? ''));
+            if (!gz) return false;
+            for (var i = 0; i < zoneIds.length; i++) {
+              var zid = zoneIds[i];
+              if (gz === zid || gz.endsWith(zid)) return true;
+            }
+            return false;
           });
           if (!gInZone.length) return;
           const tpl = pickZoneTemplate(gInZone);
@@ -2158,7 +2172,19 @@
 
         roomGroups.forEach((group, gi) => {
           const gZone = String(group.zone ?? group.zoneId ?? '');
-          const matched = zones.find(z => String(z.zone) === gZone || String(z.name) === gZone || String(z.id) === gZone || gZone.endsWith(String(z.zone)) || gZone.endsWith(String(z.name)));
+          // Match against only the identifiers actually present on each zone so
+          // an empty string cannot match every group via `endsWith('')`. Must
+          // mirror the pre-computation filter above to keep zoneSpatial indexing
+          // consistent with this placement loop.
+          const matched = !gZone ? null : zones.find(function (z) {
+            const zIds = [z.zone, z.id, z.name]
+              .filter(function (v) { return v !== undefined && v !== null && String(v) !== ''; })
+              .map(String);
+            for (var i = 0; i < zIds.length; i++) {
+              if (gZone === zIds[i] || gZone.endsWith(zIds[i])) return true;
+            }
+            return false;
+          });
           let gx, gz;
           let spatialPlacement = null;
           let overflowFlag = false;
