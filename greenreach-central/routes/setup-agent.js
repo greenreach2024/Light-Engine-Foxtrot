@@ -5,29 +5,40 @@
  * Returns granular setup progress, phase-level detail, and contextual guidance
  * that EVIE uses to walk farmers through configuration step by step.
  *
- * Phases (12):
- *   1.  farm_profile    -- Business identity (name, contact, location, timezone)
- *   2.  room_design     -- Room shell + dimensions + grow-system templates (merged)
- *   3.  build_plan      -- Agent-computed equipment plan from templates + crop class
- *   4.  zones           -- Climate zones within rooms
- *   5.  groups          -- Grow groups (benches/racks) within zones
- *   6.  crop_assignment -- Crops assigned to groups with matching recipes
- *   7.  env_targets     -- Environment targets auto-derived from crop recipes
- *   8.  lights          -- Light fixtures registered and assigned
- *   9.  schedules       -- At least one active light schedule
- *   10. devices         -- IoT sensors/controllers paired
- *   11. planting        -- Active planting assignments exist
- *   12. integrations    -- External service credentials (SwitchBot, etc.)
+ * Phase ordering follows the unified farm-flow: Room -> Zones -> Grow Units ->
+ * Lights -> Equipment -> Controllers (steps 2-7). farm_profile is the
+ * prerequisite (step 1); crop/env/scheduling/planting/integrations are
+ * post-setup operations (steps 8-12) that live in the Crop Scheduler / Evie
+ * experience, not in the initial build-out flow.
+ *
+ *   category: 'setup'      -- required to finish initial farm build-out
+ *     1. farm_profile    Business identity (name, contact, location, timezone)
+ *     2. room_design     Room shell + dimensions (length x width x height)
+ *     3. zones           Climate zones within rooms
+ *     4. groups          Grow units (racks/benches/trays) -- installedSystems[]
+ *     5. lights          Light fixtures registered and assigned
+ *     6. build_plan      Equipment plan: lighting kW, HVAC, pumps, controllers
+ *     7. devices         Controllers: IoT sensors + actuators paired
+ *
+ *   category: 'operations' -- post-setup, owned by Crop Scheduler + Evie
+ *     8.  crop_assignment Crops assigned to groups with matching recipes
+ *     9.  env_targets     Environment targets auto-derived from crop recipes
+ *     10. schedules       Photoperiod schedules (Crop Scheduler owns this now)
+ *     11. planting        Active planting assignments (Crop Scheduler owns)
+ *     12. integrations    External service credentials (SwitchBot, etc.)
+ *
+ * Each setup phase exposes a `flow_anchor` hint so the orchestrator can scroll
+ * the unified farm-flow breadcrumb (in grow-management.html) to the matching
+ * step after navigating the sidebar panel.
  *
  * All data is read-only. Write operations go through EVIE's existing tools.
  *
- * Phase evolution (2026-04-20):
- *   - Merged grow_rooms + room_specs into room_design (template-aware).
- *     room_design checks: rooms exist, dimensions set, grow-system templates
- *     assigned from public/data/grow-systems.json via installedSystems[].
- *   - Added build_plan phase: verifies the agent-computed load math
- *     (lighting kW, cooling tons, controller slots) has been run and accepted.
- *     Consumed by POST /api/grow-systems/compute-room-load on LE.
+ * Phase evolution log:
+ *   2026-04-20: Merged grow_rooms + room_specs into room_design (template-aware).
+ *               Added build_plan phase.
+ *   2026-04-21: Realigned phase order + labels to the Room -> Controllers
+ *               farm-flow. Added `category` and `flow_anchor`. Operations
+ *               phases deprioritised now that the Crop Scheduler owns them.
  */
 
 import { Router } from 'express';
@@ -36,114 +47,143 @@ import farmStore from '../lib/farm-data-store.js';
 const router = Router();
 
 // -- Phase Definitions -------------------------------------------------------
+// Declaration order matches phase.order so /progress can iterate the array
+// without re-sorting. Categories let the orchestrator render a visual divider
+// between the setup funnel (1-7) and the operations phases (8-12).
 const PHASES = [
+  // ---- Setup funnel: Room -> Zones -> Grow Units -> Lights -> Equipment -> Controllers
   {
     id: 'farm_profile',
     label: 'Farm Profile',
     description: 'Business name, contact info, location, and timezone',
     weight: 10,
     order: 1,
+    category: 'setup',
     evie_prompt: 'I need to set up my farm profile. Walk me through it.',
-    sidebar_target: 'farm-registration'
+    sidebar_target: 'farm-registration',
+    flow_anchor: null
   },
   {
     id: 'room_design',
-    label: 'Room Design',
-    description: 'Create rooms, set dimensions (L x W x H), and select grow-system templates',
-    weight: 14,
+    label: 'Room',
+    description: 'Create rooms and set dimensions (length x width x height)',
+    weight: 12,
     order: 2,
-    evie_prompt: 'Help me design my grow rooms -- I need to set room dimensions and pick grow-system templates.',
-    sidebar_target: 'grow-rooms'
-  },
-  {
-    id: 'build_plan',
-    label: 'Build Plan',
-    description: 'Agent-computed equipment plan -- lighting, HVAC, pumps, controllers from room templates',
-    weight: 4,
-    order: 3,
-    evie_prompt: 'Compute my build plan from the room templates so I know what equipment I need.',
-    sidebar_target: 'grow-rooms'
+    category: 'setup',
+    evie_prompt: 'Help me design my grow rooms -- I need to create rooms and set their dimensions.',
+    sidebar_target: 'groups-v2',
+    flow_anchor: 'flow-room'
   },
   {
     id: 'zones',
-    label: 'Climate Zones',
-    description: 'Divide rooms into independently controlled zones',
+    label: 'Zones',
+    description: 'Divide each room into independently controlled climate zones',
     weight: 10,
-    order: 4,
-    evie_prompt: 'I need to set up zones in my rooms. Guide me through it.',
-    sidebar_target: 'grow-rooms'
+    order: 3,
+    category: 'setup',
+    evie_prompt: 'How many zones should this room have? Guide me through zoning.',
+    sidebar_target: 'groups-v2',
+    flow_anchor: 'flow-zones'
   },
   {
     id: 'groups',
-    label: 'Grow Groups',
-    description: 'Organize trays and benches into manageable groups',
+    label: 'Grow Units',
+    description: 'Select grow-system templates and the number of units per zone',
+    weight: 12,
+    order: 4,
+    category: 'setup',
+    evie_prompt: 'Help me pick the right grow-system template and how many units fit in each zone.',
+    sidebar_target: 'groups-v2',
+    flow_anchor: 'flow-grow-units'
+  },
+  {
+    id: 'lights',
+    label: 'Lights',
+    description: 'Register and assign light fixtures to each grow unit',
     weight: 8,
     order: 5,
-    evie_prompt: 'Help me create grow groups for my zones.',
-    sidebar_target: 'groups-v2'
+    category: 'setup',
+    evie_prompt: 'I need to set up my lights. What should I do?',
+    sidebar_target: 'groups-v2',
+    flow_anchor: 'flow-lights'
   },
+  {
+    id: 'build_plan',
+    label: 'Equipment',
+    description: 'Accept the computed equipment plan -- HVAC, pumps, fans, controllers',
+    weight: 8,
+    order: 6,
+    category: 'setup',
+    evie_prompt: 'Compute my equipment plan from the room templates so I know what I need to buy or install.',
+    sidebar_target: 'groups-v2',
+    flow_anchor: 'flow-equipment'
+  },
+  {
+    id: 'devices',
+    label: 'Controllers',
+    description: 'Pair controllers and sensors that drive the accepted equipment plan',
+    weight: 8,
+    order: 7,
+    category: 'setup',
+    evie_prompt: 'Walk me through pairing my controllers and sensors for this farm.',
+    sidebar_target: 'groups-v2',
+    flow_anchor: 'flow-controllers'
+  },
+  // ---- Operations: owned by Crop Scheduler + Evie after setup completes
   {
     id: 'crop_assignment',
     label: 'Crop Selection',
     description: 'Assign crops to groups -- recipes auto-set environment targets',
     weight: 10,
-    order: 6,
+    order: 8,
+    category: 'operations',
     evie_prompt: 'What crops should I grow? Help me assign crops to my groups.',
-    sidebar_target: 'groups-v2'
+    sidebar_target: 'groups-v2',
+    flow_anchor: null
   },
   {
     id: 'env_targets',
     label: 'Environment Targets',
     description: 'Auto-derived from crop recipes -- temperature, humidity, VPD, EC, pH',
-    weight: 10,
-    order: 7,
+    weight: 6,
+    order: 9,
+    category: 'operations',
     evie_prompt: 'Show me the environment targets derived from my crop selections.',
-    sidebar_target: 'grow-rooms'
-  },
-  {
-    id: 'lights',
-    label: 'Light Fixtures',
-    description: 'Register and assign light fixtures to groups',
-    weight: 8,
-    order: 8,
-    evie_prompt: 'I need to set up my lights. What should I do?',
-    sidebar_target: 'light-setup'
+    sidebar_target: 'groups-v2',
+    flow_anchor: null
   },
   {
     id: 'schedules',
     label: 'Light Schedules',
-    description: 'Create photoperiod schedules for your crops',
-    weight: 7,
-    order: 9,
-    evie_prompt: 'Help me create a light schedule for my crops.',
-    sidebar_target: 'groups-v2'
-  },
-  {
-    id: 'devices',
-    label: 'IoT Devices',
-    description: 'Pair sensors and controllers for environment monitoring',
-    weight: 7,
+    description: 'Photoperiod schedules -- now managed in the Crop Scheduler',
+    weight: 5,
     order: 10,
-    evie_prompt: 'I want to connect my sensors and devices.',
-    sidebar_target: 'iot-devices'
+    category: 'operations',
+    evie_prompt: 'Help me create a light schedule for my crops in the Crop Scheduler.',
+    sidebar_target: 'groups-v2',
+    flow_anchor: null
   },
   {
     id: 'planting',
     label: 'Planting Plan',
-    description: 'Create active planting assignments for your groups',
-    weight: 7,
+    description: 'Active planting assignments -- now managed in the Crop Scheduler',
+    weight: 5,
     order: 11,
-    evie_prompt: 'Help me create my first planting plan.',
-    sidebar_target: 'groups-v2'
+    category: 'operations',
+    evie_prompt: 'Help me create my first planting plan in the Crop Scheduler.',
+    sidebar_target: 'groups-v2',
+    flow_anchor: null
   },
   {
     id: 'integrations',
     label: 'Integrations',
     description: 'Connect external services (SwitchBot, payment processing)',
-    weight: 5,
+    weight: 4,
     order: 12,
+    category: 'operations',
     evie_prompt: 'Walk me through setting up my integrations.',
-    sidebar_target: 'integrations'
+    sidebar_target: 'integrations',
+    flow_anchor: null
   }
 ];
 
@@ -496,7 +536,9 @@ router.get('/progress', async (req, res) => {
         description: phase.description,
         order: phase.order,
         weight: phase.weight,
+        category: phase.category || 'setup',
         sidebar_target: phase.sidebar_target,
+        flow_anchor: phase.flow_anchor || null,
         evie_prompt: phase.evie_prompt,
         ...evaluation
       };
@@ -505,7 +547,16 @@ router.get('/progress', async (req, res) => {
       if (evaluation.complete) completedWeight += phase.weight;
     }
 
-    const nextPhase = phases.find(p => !p.complete);
+    // Prefer the next incomplete *setup* phase so the orchestrator keeps
+    // steering the operator through Room -> Controllers before suggesting
+    // crop assignment / schedules (which live in the Crop Scheduler).
+    const setupPhases = phases.filter(p => p.category === 'setup');
+    const opsPhases   = phases.filter(p => p.category === 'operations');
+    const nextPhase   = setupPhases.find(p => !p.complete) || phases.find(p => !p.complete);
+
+    const setupCompleted = setupPhases.filter(p => p.complete).length;
+    const setupComplete  = setupPhases.length > 0 && setupCompleted === setupPhases.length;
+
     const percentage = totalWeight > 0 ? Math.round((completedWeight / totalWeight) * 100) : 0;
     const completedCount = phases.filter(p => p.complete).length;
 
@@ -514,12 +565,23 @@ router.get('/progress', async (req, res) => {
       percentage,
       completed: completedCount,
       total: phases.length,
+      setup: {
+        completed: setupCompleted,
+        total: setupPhases.length,
+        complete: setupComplete
+      },
+      operations: {
+        completed: opsPhases.filter(p => p.complete).length,
+        total: opsPhases.length
+      },
       phases,
       next_phase: nextPhase ? {
         id: nextPhase.id,
         label: nextPhase.label,
+        category: nextPhase.category,
         evie_prompt: nextPhase.evie_prompt,
-        sidebar_target: nextPhase.sidebar_target
+        sidebar_target: nextPhase.sidebar_target,
+        flow_anchor: nextPhase.flow_anchor
       } : null,
       all_complete: completedCount === phases.length
     });
@@ -552,7 +614,9 @@ router.get('/guidance/:phaseId', async (req, res) => {
             label: remapped.label,
             description: remapped.description,
             order: remapped.order,
-            sidebar_target: remapped.sidebar_target
+            category: remapped.category || 'setup',
+            sidebar_target: remapped.sidebar_target,
+            flow_anchor: remapped.flow_anchor || null
           },
           status: evaluation,
           steps: getPhaseSteps('room_design', evaluation),
@@ -571,7 +635,9 @@ router.get('/guidance/:phaseId', async (req, res) => {
         label: phase.label,
         description: phase.description,
         order: phase.order,
-        sidebar_target: phase.sidebar_target
+        category: phase.category || 'setup',
+        sidebar_target: phase.sidebar_target,
+        flow_anchor: phase.flow_anchor || null
       },
       status: evaluation,
       steps: getPhaseSteps(phaseId, evaluation),
@@ -594,26 +660,51 @@ function getPhaseSteps(phaseId, evaluation) {
       { action: 'Add contact information (name, phone, email)', tool: 'update_farm_profile', done: evaluation.items?.[1]?.done },
       { action: 'Set your location (city, province, timezone)', tool: 'update_farm_profile', done: evaluation.items?.[2]?.done }
     ],
+    // Step 2 of the farm-flow. Room shell only -- template selection moved
+    // into `groups` (Grow Units). This keeps each farm-flow step focused.
     room_design: [
       { action: 'Create your first grow room', tool: 'create_room', done: evaluation.items?.[0]?.done },
       { action: 'Set room dimensions (length x width in meters)', tool: 'update_room_specs', done: evaluation.items?.[1]?.done },
-      { action: 'Set ceiling height', tool: 'update_room_specs', done: evaluation.items?.[1]?.done },
-      { action: 'Select grow-system templates (NFT rack, DWC pond, vertical tier, etc.)', tool: 'assign_grow_system', done: evaluation.items?.[2]?.done },
-      { action: 'Set quantity and crop class per template', tool: 'assign_grow_system', done: evaluation.items?.[2]?.done }
+      { action: 'Set ceiling height', tool: 'update_room_specs', done: evaluation.items?.[1]?.done }
     ],
-    build_plan: [
-      { action: 'Ensure at least one room has grow-system templates assigned', tool: 'assign_grow_system', done: evaluation.count > 0 || false },
-      { action: 'Ask EVIE to compute the build plan (lighting, HVAC, pumps, controllers)', tool: 'compute_build_plan', done: evaluation.count > 0 },
-      { action: 'Review and accept the proposed equipment list', tool: 'accept_build_plan', done: evaluation.count > 0 }
-    ],
+    // Step 3 of the farm-flow. Evie recommends a zone count based on the
+    // grow-system template + total unit count (see Room Build Plan advisory).
     zones: [
-      { action: 'Define zones within each room', tool: 'create_zone', done: evaluation.count > 0 },
-      { action: 'Each zone should represent an independently controlled climate area', tool: 'create_zone', done: evaluation.count > 1 }
+      { action: 'Let Evie recommend a zone count for your template + unit count', tool: 'recommend_zone_count', done: evaluation.count > 0 },
+      { action: 'Create each zone with its own dimensions', tool: 'create_zone', done: evaluation.count > 0 },
+      { action: 'Use zones to stagger photoperiods, cleaning, and recipes', tool: 'create_zone', done: evaluation.count > 1 }
     ],
+    // Step 4 of the farm-flow. installedSystems[] on each room carries the
+    // selected template + unit count that drives the Room Build Plan and the
+    // 3D viewer spatial layout.
     groups: [
-      { action: 'Create grow groups (benches, racks, or trays)', tool: 'Use Groups V2 panel', done: evaluation.count > 0 },
-      { action: 'Assign groups to rooms and zones', tool: 'Use Groups V2 panel', done: evaluation.count > 0 }
+      { action: 'Pick a grow-system template (NFT, DWC, Microgreen, Aeroponics, ZipGrow, Drip Rail)', tool: 'assign_grow_system', done: evaluation.count > 0 },
+      { action: 'Set the number of units per zone (or let the solver auto-fit)', tool: 'assign_grow_system', done: evaluation.count > 0 },
+      { action: 'Confirm the 3D viewer shows no overflow (red strips)', tool: 'open_3d_viewer', done: evaluation.count > 0 }
     ],
+    // Step 5 of the farm-flow. Fixtures now flow from the template's
+    // defaultFixtureClass and are assignable per group inside the Grow Units
+    // step; the Light Setup panel is still the canonical surface for catalog
+    // edits and per-fixture tuning.
+    lights: [
+      { action: 'Accept the template\'s default fixture class (or override)', tool: 'assign_fixture_class', done: evaluation.items?.[0]?.done },
+      { action: 'Assign fixtures to each grow unit', tool: 'Use Groups V2 panel', done: evaluation.items?.[1]?.done }
+    ],
+    // Step 6 of the farm-flow. Uses the persisted rooms[].buildPlan from
+    // /api/setup/save-rooms (PR #59) so reloads don\'t recompute.
+    build_plan: [
+      { action: 'Ensure every room has templates + unit counts assigned', tool: 'assign_grow_system', done: evaluation.count > 0 || false },
+      { action: 'Let Evie compute the equipment plan (lighting kW, HVAC, pumps, fans, controllers)', tool: 'compute_build_plan', done: evaluation.count > 0 },
+      { action: 'Accept the plan to persist it to rooms[].buildPlan', tool: 'accept_build_plan', done: evaluation.count > 0 }
+    ],
+    // Step 7 of the farm-flow. Phase B device binding surfaces live here;
+    // controller slots reserved in the build plan pair against discovered
+    // SwitchBot / Kasa / Code3 devices.
+    devices: [
+      { action: 'Run a device scan to discover controllers and sensors', tool: 'scan_devices', done: evaluation.items?.[0]?.done },
+      { action: 'Pair each device with the controller slot it drives', tool: 'register_device', done: evaluation.items?.[1]?.done }
+    ],
+    // ---- Operations phases: post-setup, owned by Crop Scheduler + Evie
     crop_assignment: [
       { action: 'Tell EVIE which crops you want to grow', tool: 'assign_crop_to_group', done: evaluation.count > 0 },
       { action: 'EVIE will match crops to recipes and auto-set environment targets', tool: 'get_crop_recipe_targets', done: evaluation.count > 0 }
@@ -622,21 +713,13 @@ function getPhaseSteps(phaseId, evaluation) {
       { action: 'Environment targets auto-derive from crop recipes when crops are assigned', tool: 'apply_crop_environment', done: evaluation.count > 0 },
       { action: 'Review targets with EVIE -- she can show what the recipe calls for', tool: 'get_crop_recipe_targets', done: evaluation.count > 0 }
     ],
-    lights: [
-      { action: 'Register your light fixtures', tool: 'Use Light Setup panel', done: evaluation.items?.[0]?.done },
-      { action: 'Assign lights to grow groups', tool: 'Use Groups V2 panel', done: evaluation.items?.[1]?.done }
-    ],
     schedules: [
-      { action: 'Create a light schedule for your crops', tool: 'set_light_schedule', done: evaluation.count > 0 },
-      { action: 'Assign schedules to groups via Groups V2', tool: 'Use Groups V2 panel', done: evaluation.count > 0 }
-    ],
-    devices: [
-      { action: 'Run a device scan to discover sensors', tool: 'scan_devices', done: evaluation.items?.[0]?.done },
-      { action: 'Register and pair discovered devices', tool: 'register_device', done: evaluation.items?.[1]?.done }
+      { action: 'Open the Crop Scheduler to create a photoperiod schedule', tool: 'Use Crop Scheduler', done: evaluation.count > 0 },
+      { action: 'Assign the schedule to groups from the Crop Scheduler', tool: 'Use Crop Scheduler', done: evaluation.count > 0 }
     ],
     planting: [
-      { action: 'Create a planting plan (EVIE can help based on your crops)', tool: 'create_planting_assignment', done: evaluation.count > 0 },
-      { action: 'Assign planting dates and targets to groups', tool: 'create_planting_assignment', done: evaluation.count > 0 }
+      { action: 'Open the Crop Scheduler to create a planting plan', tool: 'Use Crop Scheduler', done: evaluation.count > 0 },
+      { action: 'EVIE can propose planting dates and harvest windows from your crops', tool: 'Use Crop Scheduler', done: evaluation.count > 0 }
     ],
     integrations: [
       { action: 'Configure SwitchBot credentials for sensor data', tool: 'Use Integrations panel', done: evaluation.items?.[0]?.done || false },
