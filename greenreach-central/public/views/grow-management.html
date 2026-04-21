@@ -1281,6 +1281,58 @@
         span.textContent = label;
         return span;
       }
+      function getRoomDim(r, key) {
+        // key: 'length_m' | 'width_m' | 'height_m'
+        if (key === 'height_m') {
+          return r.ceiling_height_m
+            || (r.dimensions && r.dimensions.height_m)
+            || '';
+        }
+        return r[key]
+          || (r.dimensions && r.dimensions[key])
+          || '';
+      }
+      function setRoomDim(r, key, value) {
+        var n = (value === '' || value == null) ? null : Number(value);
+        if (n != null && !Number.isFinite(n)) return;
+        if (key === 'height_m') {
+          r.ceiling_height_m = n;
+        } else {
+          r[key] = n;
+        }
+        if (!r.dimensions || typeof r.dimensions !== 'object') r.dimensions = {};
+        r.dimensions[key] = n;
+        if (r.length_m && r.width_m) {
+          r.area_m2 = Number((r.length_m * r.width_m).toFixed(2));
+        }
+      }
+      var _saveRoomsTimer = null;
+      var _saveRoomsStatus = null;
+      function scheduleSaveRooms(statusEl) {
+        _saveRoomsStatus = statusEl;
+        if (_saveRoomsTimer) clearTimeout(_saveRoomsTimer);
+        if (statusEl) { statusEl.textContent = 'Saving…'; statusEl.style.color = '#fbbf24'; }
+        _saveRoomsTimer = setTimeout(persistRooms, 500);
+      }
+      function persistRooms() {
+        _saveRoomsTimer = null;
+        var statusEl = _saveRoomsStatus;
+        var payload = { rooms: state.rooms.map(function (r) { return r; }) };
+        fetch('/api/setup/save-rooms', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify(payload)
+        }).then(function (resp) {
+          if (!resp.ok) throw new Error('HTTP ' + resp.status);
+          return resp.json();
+        }).then(function () {
+          if (statusEl) { statusEl.textContent = 'Saved'; statusEl.style.color = '#4ade80'; }
+        }).catch(function (err) {
+          console.error('[grow-management] rooms save failed:', err);
+          if (statusEl) { statusEl.textContent = 'Save failed'; statusEl.style.color = '#f87171'; }
+        });
+      }
       function renderRoom() {
         var host = document.getElementById('ffRoomBody');
         if (!host) return;
@@ -1299,6 +1351,44 @@
           title.style.cssText = 'font-weight:600;color:#f1f5f9;margin-bottom:6px;';
           title.textContent = r.name || r.room_name || r.id || 'Room';
           card.appendChild(title);
+
+          // Inline dimension editor. Auto-saves to /api/setup/save-rooms on
+          // change so the operator never has to bounce to Farm Setup.
+          var dimsRow = document.createElement('div');
+          dimsRow.style.cssText = 'display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin:6px 0 8px;';
+          var statusEl = document.createElement('span');
+          statusEl.className = 'tiny';
+          statusEl.style.cssText = 'color:#94a3b8;min-width:72px;';
+          statusEl.textContent = '';
+          [
+            { key: 'length_m', label: 'Length (m)', step: '0.1', min: '0.5' },
+            { key: 'width_m',  label: 'Width (m)',  step: '0.1', min: '0.5' },
+            { key: 'height_m', label: 'Height (m)', step: '0.1', min: '1.5' }
+          ].forEach(function (spec) {
+            var wrap = document.createElement('label');
+            wrap.className = 'tiny';
+            wrap.style.cssText = 'display:flex;flex-direction:column;gap:2px;color:#cbd5e1;';
+            var lbl = document.createElement('span');
+            lbl.textContent = spec.label;
+            wrap.appendChild(lbl);
+            var input = document.createElement('input');
+            input.type = 'number';
+            input.step = spec.step;
+            input.min = spec.min;
+            input.value = getRoomDim(r, spec.key);
+            input.style.cssText = 'min-height:32px;padding:4px 8px;background:rgba(15,23,42,0.6);border:1px solid rgba(148,163,184,0.3);border-radius:6px;color:#f1f5f9;width:96px;';
+            input.addEventListener('change', function () {
+              setRoomDim(r, spec.key, input.value);
+              scheduleSaveRooms(statusEl);
+              // Re-render to refresh area chip + build-plan inputs
+              renderRoom();
+            });
+            wrap.appendChild(input);
+            dimsRow.appendChild(wrap);
+          });
+          dimsRow.appendChild(statusEl);
+          card.appendChild(dimsRow);
+
           var chips = document.createElement('div');
           chips.className = 'ff-chip-row';
           chips.style.margin = '0';
