@@ -1,6 +1,6 @@
 {
   "version": "2026-03-08-v1",
-  "description": "Canonical crop metadata registry — single source of truth for all crop data across Light Engine",
+  "description": "Canonical crop metadata registry \u2014 single source of truth for all crop data across Light Engine",
   "crops": {
     "Bibb Butterhead": {
       "aliases": [
@@ -550,12 +550,12 @@
       "active": false,
       "unit": "weight"
     },
-    "Frisée Endive": {
+    "Fris\u00e9e Endive": {
       "aliases": [
         "frisee",
-        "frisée",
+        "fris\u00e9e",
         "endive",
-        "frisée endive"
+        "fris\u00e9e endive"
       ],
       "planIds": [
         "crop-frisee-endive"
@@ -583,7 +583,7 @@
         "lastUpdated": "2026-03-08"
       },
       "market": {
-        "resolveAs": "Frisée Endive"
+        "resolveAs": "Fris\u00e9e Endive"
       },
       "active": false,
       "unit": "weight"
@@ -1114,5 +1114,6 @@
         "comparisonPriceCAD": 4.49
       }
     }
-  }
+  },
+  "schemaVersion": "1.0.0"
 }

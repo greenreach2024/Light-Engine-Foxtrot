@@ -260,7 +260,8 @@ async function initDashboard() {
             // Clear redirect counter and stale data before redirecting
             sessionStorage.removeItem('login_redirect_count');
             localStorage.removeItem(STORAGE_KEY_SESSION);
-            window.location.href = '/farm-admin-login.html';
+            const currentRoute = encodeURIComponent(`${window.location.pathname}${window.location.search}${window.location.hash}`);
+            window.location.href = `/farm-admin-login.html?return=${currentRoute}`;
             return;
         }
 
@@ -400,10 +401,15 @@ async function handleLogin(e) {
             // Store setupCompleted in localStorage to prevent future false redirects
             if (data.setupCompleted) {
                 localStorage.setItem('setup_completed', 'true');
+                sessionStorage.setItem('setup_completed', 'true');
             }
+
+            const explicitAdminReturnPath = hasExplicitAdminReturnPath();
             
             setTimeout(() => {
-                if (needsFullSetup) {
+                if (explicitAdminReturnPath) {
+                    window.location.href = getPostLoginRedirectPath();
+                } else if (needsFullSetup) {
                     // Full wizard: password change + farm profile + rooms
                     window.location.href = getSetupWizardRedirectPath();
                 } else if (needsPasswordChange) {
@@ -861,6 +867,7 @@ function renderEmbeddedView(url, title) {
         try {
             const parsed = new URL(url, window.location.origin);
             parsed.searchParams.set('embedded', '1');
+            parsed.searchParams.set('_iframeBust', String(Date.now()));
             return parsed.pathname + parsed.search + parsed.hash;
         } catch {
             return url;
@@ -6802,9 +6809,13 @@ async function checkFirstTimeSetup() {
         if (!data.setupCompleted) {
             // Double-check: if localStorage has setup_completed=true, don't redirect
             // This prevents redirect loops for farms that completed setup but DB flag is stale
-            const localSetupDone = localStorage.getItem('setup_completed') === 'true';
+            const localSetupDone = localStorage.getItem('setup_completed') === 'true' || sessionStorage.getItem('setup_completed') === 'true';
             if (localSetupDone) {
                 console.log('[setup-wizard] DB says not complete but localStorage says done — skipping redirect');
+                return;
+            }
+            if (window.location.hash && window.location.hash !== '#dashboard') {
+                console.log('[setup-wizard] Explicit hash route detected, skipping standalone wizard redirect');
                 return;
             }
             console.log('[setup-wizard] Setup not complete, redirecting to wizard');

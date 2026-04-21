@@ -116,6 +116,7 @@ export default class RecipeEnvironmentalTargets {
     let weightedTemp = 0;
     let weightedMaxRh = 0;
     let maxRhValues = [];
+    const droppedTrays = [];
     
     for (const tray of trays) {
       // Get recipe data
@@ -123,6 +124,7 @@ export default class RecipeEnvironmentalTargets {
       
       if (!recipe || !recipe.data || !recipe.data.schedule) {
         this.logger.warn(`[recipe-targets] Recipe ${tray.recipe_id} not found or invalid`);
+        droppedTrays.push({ tray_id: tray.tray_id, recipe_id: tray.recipe_id, reason: 'recipe_not_found' });
         continue;
       }
       
@@ -134,6 +136,7 @@ export default class RecipeEnvironmentalTargets {
       
       if (!scheduleDay) {
         this.logger.warn(`[recipe-targets] No schedule found for day ${currentDay} in recipe ${recipe.name}`);
+        droppedTrays.push({ tray_id: tray.tray_id, recipe_id: tray.recipe_id, reason: 'no_schedule_day', grow_day: currentDay });
         continue;
       }
       
@@ -164,7 +167,10 @@ export default class RecipeEnvironmentalTargets {
     
     if (totalWeight === 0) {
       this.logger.warn(`[recipe-targets] No valid recipes found for ${level} ${levelId}`);
-      return this._getDefaultTargets('no-valid-recipes');
+      const defaults = this._getDefaultTargets('no-valid-recipes');
+      defaults.degraded = true;
+      defaults.dropped_trays = droppedTrays;
+      return defaults;
     }
     
     // Calculate weighted averages
@@ -199,6 +205,8 @@ export default class RecipeEnvironmentalTargets {
       levelId,
       trayCount: trays.length,
       totalPlants: totalWeight,
+      degraded: droppedTrays.length > 0,
+      dropped_trays: droppedTrays.length > 0 ? droppedTrays : undefined,
       calculatedAt: new Date().toISOString()
     };
   }

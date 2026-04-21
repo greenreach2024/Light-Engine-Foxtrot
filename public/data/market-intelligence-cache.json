@@ -63,5 +63,6 @@
     "internal_harvest_data",
     "benchmark_pricing"
   ],
-  "usda_available": false
+  "usda_available": false,
+  "schemaVersion": "1.0.0"
 }

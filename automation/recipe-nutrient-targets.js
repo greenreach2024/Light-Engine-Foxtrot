@@ -5,8 +5,8 @@
 // the EC (mS/cm) and pH setpoints a recipe is calling for at the current growth day.
 //
 // Design choices:
-//   - Tank routing is the existing UI split (Tank 1 = vegetative/non-fruiting groups, Tank 2 =
-//     fruiting groups). Parameterizing the tank count is explicitly out of scope (P2).
+//   - Tank routing defaults to the 2-tank split (Tank 1 = vegetative, Tank 2 = fruiting)
+//     but callers can supply opts.tankConfig for N-tank support.
 //   - Aggregation across multiple groups uses a PLANT-COUNT WEIGHTED AVERAGE, matching the
 //     environmental resolver's approach. The UI currently uses `max()`, which is noisier and
 //     less fair when one small group has aggressive targets. Callers that want the old
@@ -157,8 +157,15 @@ function aggregate(resolved, key, aggregator) {
   return aggregator === 'max' ? maxOf(values) : weightedAverage(values);
 }
 
+// Default 2-tank configuration (backward compatible). Callers can supply
+// opts.tankConfig to override with N tanks.
+const DEFAULT_TANK_CONFIG = [
+  { id: 'tank1', scopeId: 'tank-1', name: 'Tank 1 - Vegetative', filter: (r) => !r.isFruiting, fallbackStage: 'vegetative' },
+  { id: 'tank2', scopeId: 'tank-2', name: 'Tank 2 - Fruiting',   filter: (r) => r.isFruiting,  fallbackStage: 'earlyFlowering' },
+];
+
 /**
- * Resolve nutrient targets for all tanks from the supplied enriched groups.
+ * Resolve nutrient targets for all configured tanks from the supplied enriched groups.
  *
  * @param {Array<Object>} groups           Enriched groups (with plan.days[])
  * @param {Object}        [opts]
@@ -166,22 +173,21 @@ function aggregate(resolved, key, aggregator) {
  * @param {'weighted'|'max'} [opts.aggregator] Aggregation strategy (default: weighted)
  * @param {Object}        [opts.ecTargets] Overrides for fallback EC stage table
  * @param {Object}        [opts.phTargets] Overrides for fallback pH stage table
+ * @param {Array}         [opts.tankConfig] Tank definitions (default: DEFAULT_TANK_CONFIG)
  * @returns {{
- *   tank1: { ec: number|null, ph: number|null, sources: Object[], reason: string },
- *   tank2: { ec: number|null, ph: number|null, sources: Object[], reason: string },
+ *   tanks: { [tankId]: { ec, ph, sources, reason } },
+ *   tank1: ..., tank2: ...,                            // backward compat aliases
  *   calculatedAt: string,
  *   aggregator: string
  * }}
  */
 function resolveTankTargets(groups, opts = {}) {
   const { now = new Date(), aggregator = 'weighted' } = opts;
+  const tankConfig = opts.tankConfig || DEFAULT_TANK_CONFIG;
   const list = Array.isArray(groups) ? groups : [];
   const resolved = list
     .filter((g) => g && g.plan && Array.isArray(g.plan.days) && g.plan.days.length > 0)
     .map((g) => resolveGroupTargets(g, { now, ecTargets: opts.ecTargets, phTargets: opts.phTargets }));
-
-  const tank1Sources = resolved.filter((r) => !r.isFruiting);
-  const tank2Sources = resolved.filter((r) => r.isFruiting);
 
   const build = (sources, fallbackStage) => {
     if (sources.length === 0) {
@@ -200,12 +206,39 @@ function resolveTankTargets(groups, opts = {}) {
     };
   };
 
-  return {
-    tank1: build(tank1Sources, 'vegetative'),
-    tank2: build(tank2Sources, 'earlyFlowering'),
+  const tanks = {};
+  const assigned = new Set();
+  for (const tc of tankConfig) {
+    const sources = resolved.filter((r) => {
+      if (assigned.has(r.groupId)) return false;
+      return tc.filter ? tc.filter(r) : true;
+    });
+    sources.forEach((s) => assigned.add(s.groupId));
+    tanks[tc.id] = build(sources, tc.fallbackStage || 'vegetative');
+  }
+  // Assign any unmatched groups to the first tank
+  const unmatched = resolved.filter((r) => !assigned.has(r.groupId));
+  if (unmatched.length > 0 && tankConfig.length > 0) {
+    const firstId = tankConfig[0].id;
+    tanks[firstId].sources = [...tanks[firstId].sources, ...unmatched];
+    if (unmatched.length > 0) {
+      tanks[firstId].ec = aggregate(tanks[firstId].sources, 'ec', aggregator) ?? tanks[firstId].ec;
+      tanks[firstId].ph = aggregate(tanks[firstId].sources, 'ph', aggregator) ?? tanks[firstId].ph;
+      if (tanks[firstId].sources.length > 0) {
+        tanks[firstId].reason = tanks[firstId].sources.some((s) => s.fromRecipe) ? 'recipe' : 'fallback-default';
+      }
+    }
+  }
+
+  const result = {
+    tanks,
     calculatedAt: now.toISOString(),
     aggregator
   };
+  // Backward compatibility: expose tank1/tank2 as top-level aliases
+  if (tanks.tank1) result.tank1 = tanks.tank1;
+  if (tanks.tank2) result.tank2 = tanks.tank2;
+  return result;
 }
 
 /**
@@ -231,6 +264,7 @@ function diffTargets(applied, resolved, { ecTolerance = 0.05, phTolerance = 0.05
 
 export {
   resolveTankTargets,
+  DEFAULT_TANK_CONFIG,
   resolveGroupTargets,
   diffTargets,
   calculateCurrentDay,

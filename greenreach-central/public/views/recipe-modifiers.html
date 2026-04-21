@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Recipe Modifiers -- GreenReach</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --bg-card: rgba(15, 23, 42, 0.95);
+      --bg-secondary: #1e293b;
+      --border: rgba(148, 163, 184, 0.12);
+      --text-primary: #f1f5f9;
+      --text-secondary: #94a3b8;
+      --accent: #f59e0b;
+      --green: #10b981;
+      --blue: #3b82f6;
+      --red: #ef4444;
+      --purple: #8b5cf6;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text-primary);
+      min-height: 100vh;
+    }
+    header {
+      background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+      border-bottom: 1px solid var(--border);
+      padding: 1.5rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    header h1 { font-size: 1.5rem; font-weight: 700; }
+    header h1 small { font-size: 0.75rem; color: var(--text-secondary); font-weight: 400; margin-left: 0.5rem; }
+    .header-actions { display: flex; gap: 0.75rem; align-items: center; }
+    .btn {
+      padding: 0.55rem 1.1rem;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      font-size: 0.8125rem;
+      font-weight: 600;
+      cursor: pointer;
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+      transition: all 0.15s;
+    }
+    .btn:hover { background: rgba(148,163,184,0.15); }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-primary { background: var(--accent); color: #000; border-color: var(--accent); }
+    .btn-primary:hover { background: #d97706; }
+    .btn-green { background: var(--green); color: #fff; border-color: var(--green); }
+    .btn-green:hover { background: #059669; }
+    .btn-red { background: rgba(239,68,68,0.15); color: var(--red); border-color: rgba(239,68,68,0.3); }
+    .btn-red:hover { background: rgba(239,68,68,0.25); }
+    .btn-sm { padding: 0.35rem 0.75rem; font-size: 0.75rem; border-radius: 8px; }
+
+    .page-content { max-width: 1200px; margin: 0 auto; padding: 1.5rem 2rem; }
+
+    .status-bar {
+      display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.5rem;
+    }
+    .status-pill {
+      display: flex; align-items: center; gap: 0.4rem;
+      padding: 0.4rem 0.85rem;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+    }
+    .status-pill .dot {
+      width: 8px; height: 8px; border-radius: 50%;
+    }
+    .dot-green { background: var(--green); }
+    .dot-amber { background: var(--accent); }
+    .dot-red { background: var(--red); }
+    .dot-blue { background: var(--blue); }
+
+    .section-title {
+      font-size: 1rem; font-weight: 700; margin-bottom: 1rem;
+      padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .section-title .badge {
+      font-size: 0.7rem; padding: 0.2rem 0.5rem;
+      border-radius: 6px; font-weight: 600;
+    }
+
+    /* ─── Crop Cards ─────────────────────────── */
+    .crops-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+    .crop-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 1.25rem;
+      transition: border-color 0.2s;
+    }
+    .crop-card:hover { border-color: rgba(148,163,184,0.25); }
+    .crop-card-header {
+      display: flex; justify-content: space-between; align-items: flex-start;
+      margin-bottom: 0.75rem;
+    }
+    .crop-name { font-size: 1.1rem; font-weight: 700; text-transform: capitalize; }
+    .crop-source {
+      font-size: 0.65rem; font-weight: 600; padding: 0.15rem 0.5rem;
+      border-radius: 6px; text-transform: uppercase; letter-spacing: 0.03em;
+    }
+    .source-local { background: rgba(59,130,246,0.15); color: var(--blue); }
+    .source-network { background: rgba(139,92,246,0.15); color: var(--purple); }
+    .source-accepted { background: rgba(16,185,129,0.15); color: var(--green); }
+    .source-reverted { background: rgba(239,68,68,0.15); color: var(--red); }
+
+    .modifier-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;
+      margin-bottom: 0.75rem;
+    }
+    .mod-cell {
+      background: var(--bg-secondary);
+      border-radius: 10px;
+      padding: 0.6rem 0.75rem;
+    }
+    .mod-label { font-size: 0.65rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.15rem; }
+    .mod-value { font-size: 1rem; font-weight: 700; }
+    .mod-value.positive { color: var(--green); }
+    .mod-value.negative { color: var(--red); }
+    .mod-value.neutral { color: var(--text-secondary); }
+
+    .confidence-bar {
+      height: 4px; border-radius: 2px; background: rgba(148,163,184,0.15);
+      margin: 0.5rem 0; overflow: hidden;
+    }
+    .confidence-fill { height: 100%; border-radius: 2px; transition: width 0.3s; }
+
+    .crop-meta {
+      display: flex; gap: 1rem; font-size: 0.7rem; color: var(--text-secondary);
+      margin-bottom: 0.75rem;
+    }
+    .crop-meta span { display: flex; align-items: center; gap: 0.25rem; }
+
+    .crop-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+
+    /* ─── Network Suggestions ───────────────── */
+    .suggestion-card {
+      background: linear-gradient(135deg, rgba(139,92,246,0.08) 0%, rgba(59,130,246,0.04) 100%);
+      border: 1px solid rgba(139,92,246,0.2);
+    }
+    .suggestion-card .crop-card-header { margin-bottom: 0.5rem; }
+    .suggestion-label {
+      font-size: 0.7rem; color: var(--purple); font-weight: 500;
+      margin-bottom: 0.5rem;
+    }
+
+    /* ─── Champion/Challenger Panel ──────────── */
+    .cc-panel {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 1.25rem;
+      margin-bottom: 1rem;
+    }
+    .cc-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; }
+    .cc-crop { font-weight: 700; text-transform: capitalize; }
+    .verdict-badge { font-size: 0.7rem; font-weight: 700; padding: 0.2rem 0.6rem; border-radius: 8px; }
+    .verdict-champion { background: rgba(16,185,129,0.15); color: var(--green); }
+    .verdict-challenger { background: rgba(239,68,68,0.15); color: var(--red); }
+    .verdict-neutral { background: rgba(148,163,184,0.1); color: var(--text-secondary); }
+    .cc-stats { display: flex; gap: 1.5rem; font-size: 0.8rem; }
+    .cc-stats .stat-label { color: var(--text-secondary); font-size: 0.65rem; text-transform: uppercase; }
+    .cc-stats .stat-value { font-weight: 700; font-size: 1rem; }
+
+    /* ─── Autonomous Status ─────────────────── */
+    .auto-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+    .auto-table th {
+      text-align: left; padding: 0.5rem 0.75rem;
+      font-size: 0.7rem; color: var(--text-secondary);
+      text-transform: uppercase; letter-spacing: 0.04em;
+      border-bottom: 1px solid var(--border);
+    }
+    .auto-table td {
+      padding: 0.6rem 0.75rem; border-bottom: 1px solid var(--border);
+    }
+    .auto-table tr:hover td { background: rgba(148,163,184,0.04); }
+    .auto-badge {
+      font-size: 0.65rem; font-weight: 600; padding: 0.15rem 0.45rem;
+      border-radius: 5px;
+    }
+    .auto-eligible { background: rgba(16,185,129,0.15); color: var(--green); }
+    .auto-ineligible { background: rgba(148,163,184,0.1); color: var(--text-secondary); }
+    .auto-reverted { background: rgba(239,68,68,0.15); color: var(--red); }
+
+    .empty-state {
+      text-align: center; padding: 3rem 1rem; color: var(--text-secondary);
+    }
+    .empty-state h3 { font-size: 1rem; margin-bottom: 0.5rem; color: var(--text-primary); }
+    .empty-state p { font-size: 0.85rem; max-width: 400px; margin: 0 auto; }
+
+    .loading { text-align: center; padding: 2rem; color: var(--text-secondary); font-size: 0.85rem; }
+    .toast {
+      position: fixed; bottom: 1.5rem; right: 1.5rem;
+      padding: 0.75rem 1.25rem; border-radius: 12px; font-size: 0.8rem; font-weight: 600;
+      background: var(--green); color: #fff;
+      transform: translateY(100px); opacity: 0; transition: all 0.3s;
+      z-index: 100;
+    }
+    .toast.show { transform: translateY(0); opacity: 1; }
+    .toast.error { background: var(--red); }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Recipe Modifiers<small>AI-tuned crop recipe adjustments</small></h1>
+    <div class="header-actions">
+      <button class="btn" onclick="loadAll()" id="btnRefresh">Refresh</button>
+      <button class="btn btn-primary" onclick="recompute()" id="btnRecompute">Recompute</button>
+    </div>
+  </header>
+
+  <div class="page-content">
+    <div class="status-bar" id="statusBar"></div>
+
+    <!-- Active Local Modifiers -->
+    <div id="localSection" style="display:none">
+      <div class="section-title">
+        Active Modifiers
+        <span class="badge" style="background:rgba(59,130,246,0.15);color:var(--blue)" id="localCount">0</span>
+      </div>
+      <div class="crops-grid" id="localGrid"></div>
+    </div>
+
+    <!-- Network Suggestions -->
+    <div id="networkSection" style="display:none">
+      <div class="section-title">
+        Network Suggestions
+        <span class="badge" style="background:rgba(139,92,246,0.15);color:var(--purple)" id="networkCount">0</span>
+      </div>
+      <div class="crops-grid" id="networkGrid"></div>
+    </div>
+
+    <!-- Champion vs Challenger -->
+    <div id="ccSection" style="display:none">
+      <div class="section-title">Champion vs Challenger</div>
+      <div id="ccContainer"></div>
+    </div>
+
+    <!-- Autonomous Status -->
+    <div id="autoSection" style="display:none">
+      <div class="section-title">Autonomous Status</div>
+      <div id="autoContainer"></div>
+    </div>
+
+    <!-- Empty State -->
+    <div id="emptyState" class="empty-state" style="display:none">
+      <h3>No Recipe Modifiers</h3>
+      <p>Recipe modifiers are computed from harvest experiment records. Once enough data accumulates (10+ harvests per crop), modifiers will appear here.</p>
+      <button class="btn btn-primary" onclick="recompute()" style="margin-top:1rem">Compute Now</button>
+    </div>
+
+    <div id="loadingState" class="loading">Loading recipe modifier data...</div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    let S = { local: {}, network: {}, autoStatus: {}, ccData: {} };
+
+    function showToast(msg, isError) {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.className = 'toast show' + (isError ? ' error' : '');
+      setTimeout(() => t.className = 'toast', 3000);
+    }
+
+    async function api(url, opts) {
+      try {
+        const r = await fetch(url, opts);
+        const d = await r.json();
+        if (!d.ok) throw new Error(d.error || 'Request failed');
+        return d;
+      } catch (e) {
+        showToast(e.message, true);
+        throw e;
+      }
+    }
+
+    function fmtOffset(v, unit) {
+      if (v == null || isNaN(v)) return { text: '--', cls: 'neutral' };
+      const sign = v > 0 ? '+' : '';
+      return { text: sign + v.toFixed(2) + unit, cls: v > 0 ? 'positive' : v < 0 ? 'negative' : 'neutral' };
+    }
+
+    function fmtDate(iso) {
+      if (!iso) return '--';
+      const d = new Date(iso);
+      return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' +
+             d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function confColor(c) {
+      if (c >= 0.7) return 'var(--green)';
+      if (c >= 0.4) return 'var(--accent)';
+      return 'var(--red)';
+    }
+
+    function buildModifierCard(crop, mod, isNetwork) {
+      const ppfd = fmtOffset(mod.ppfd_offset_pct, '%');
+      const blue = fmtOffset(mod.blue_pct_offset, 'pt');
+      const red = fmtOffset(mod.red_pct_offset, 'pt');
+      const temp = fmtOffset(mod.temp_offset_pct, '%');
+      const conf = mod.confidence != null ? mod.confidence : 0;
+      const isReverted = mod.reverted === true;
+      const isAccepted = mod.source === 'network_accepted';
+
+      let srcClass = 'source-local';
+      let srcLabel = 'Local';
+      if (isReverted) { srcClass = 'source-reverted'; srcLabel = 'Reverted'; }
+      else if (isNetwork) { srcClass = 'source-network'; srcLabel = 'Network'; }
+      else if (isAccepted) { srcClass = 'source-accepted'; srcLabel = 'Accepted'; }
+
+      const cardClass = isNetwork ? 'crop-card suggestion-card' : 'crop-card';
+
+      let actions = '';
+      if (isNetwork) {
+        actions = `
+          <button class="btn btn-sm btn-green" onclick="acceptNetwork('${crop}')">Accept</button>
+          <button class="btn btn-sm btn-red" onclick="dismissNetwork('${crop}')">Dismiss</button>`;
+      }
+      if (isReverted) {
+        actions = `<button class="btn btn-sm btn-primary" onclick="clearRevert('${crop}')">Clear Revert</button>`;
+      }
+
+      return `
+        <div class="${cardClass}">
+          <div class="crop-card-header">
+            <span class="crop-name">${crop}</span>
+            <span class="crop-source ${srcClass}">${srcLabel}</span>
+          </div>
+          ${isNetwork ? '<div class="suggestion-label">Network recommendation based on multi-farm yield regression</div>' : ''}
+          <div class="modifier-grid">
+            <div class="mod-cell">
+              <div class="mod-label">PPFD</div>
+              <div class="mod-value ${ppfd.cls}">${ppfd.text}</div>
+            </div>
+            <div class="mod-cell">
+              <div class="mod-label">Temperature</div>
+              <div class="mod-value ${temp.cls}">${temp.text}</div>
+            </div>
+            <div class="mod-cell">
+              <div class="mod-label">Blue Spectrum</div>
+              <div class="mod-value ${blue.cls}">${blue.text}</div>
+            </div>
+            <div class="mod-cell">
+              <div class="mod-label">Red Spectrum</div>
+              <div class="mod-value ${red.cls}">${red.text}</div>
+            </div>
+          </div>
+          <div class="confidence-bar">
+            <div class="confidence-fill" style="width:${(conf*100).toFixed(0)}%;background:${confColor(conf)}"></div>
+          </div>
+          <div class="crop-meta">
+            <span>Confidence: ${(conf*100).toFixed(0)}%</span>
+            <span>Records: ${mod.record_count || '--'}</span>
+            <span>${fmtDate(mod.computed_at || mod.accepted_at)}</span>
+          </div>
+          <div class="crop-actions">${actions}</div>
+        </div>`;
+    }
+
+    function renderLocal() {
+      const el = document.getElementById('localGrid');
+      const crops = Object.keys(S.local);
+      document.getElementById('localCount').textContent = crops.length;
+      if (crops.length === 0) {
+        document.getElementById('localSection').style.display = 'none';
+        return;
+      }
+      document.getElementById('localSection').style.display = '';
+      el.innerHTML = crops.map(c => buildModifierCard(c, S.local[c], false)).join('');
+    }
+
+    function renderNetwork() {
+      const el = document.getElementById('networkGrid');
+      // Filter out crops already accepted locally or dismissed
+      const localCrops = new Set(Object.keys(S.local));
+      const pending = Object.entries(S.network).filter(([c]) => !localCrops.has(c));
+      document.getElementById('networkCount').textContent = pending.length;
+      if (pending.length === 0) {
+        document.getElementById('networkSection').style.display = 'none';
+        return;
+      }
+      document.getElementById('networkSection').style.display = '';
+      el.innerHTML = pending.map(([c, m]) => buildModifierCard(c, m, true)).join('');
+    }
+
+    function renderCC() {
+      const el = document.getElementById('ccContainer');
+      const crops = Object.keys(S.ccData);
+      if (crops.length === 0) {
+        document.getElementById('ccSection').style.display = 'none';
+        return;
+      }
+      document.getElementById('ccSection').style.display = '';
+      el.innerHTML = crops.map(crop => {
+        const d = S.ccData[crop];
+        if (!d || !d.sufficient_data) return '';
+        let vClass = 'verdict-neutral', vText = 'No difference';
+        if (d.verdict === 'champion_winning') { vClass = 'verdict-champion'; vText = 'Champion winning'; }
+        else if (d.verdict === 'challenger_winning') { vClass = 'verdict-challenger'; vText = 'Challenger winning'; }
+
+        const wDelta = d.deltas?.weight_pct != null ? (d.deltas.weight_pct > 0 ? '+' : '') + d.deltas.weight_pct.toFixed(1) + '%' : '--';
+        return `
+          <div class="cc-panel">
+            <div class="cc-header">
+              <span class="cc-crop">${crop}</span>
+              <span class="verdict-badge ${vClass}">${vText}</span>
+            </div>
+            <div class="cc-stats">
+              <div><div class="stat-label">Champion Cycles</div><div class="stat-value">${d.champion_count || 0}</div></div>
+              <div><div class="stat-label">Challenger Cycles</div><div class="stat-value">${d.challenger_count || 0}</div></div>
+              <div><div class="stat-label">Weight Delta</div><div class="stat-value">${wDelta}</div></div>
+              <div><div class="stat-label">Quality Delta</div><div class="stat-value">${d.deltas?.quality_score != null ? d.deltas.quality_score.toFixed(1) : '--'}</div></div>
+            </div>
+          </div>`;
+      }).filter(Boolean).join('');
+    }
+
+    function renderAuto() {
+      const crops = Object.keys(S.autoStatus);
+      if (crops.length === 0) {
+        document.getElementById('autoSection').style.display = 'none';
+        return;
+      }
+      document.getElementById('autoSection').style.display = '';
+      const rows = crops.map(crop => {
+        const a = S.autoStatus[crop];
+        let badge = '<span class="auto-badge auto-ineligible">Ineligible</span>';
+        if (a.reverted) badge = '<span class="auto-badge auto-reverted">Reverted</span>';
+        else if (a.auto_eligible) badge = '<span class="auto-badge auto-eligible">Eligible</span>';
+
+        return `<tr>
+          <td style="font-weight:600;text-transform:capitalize">${crop}</td>
+          <td>${badge}</td>
+          <td>${a.confidence != null ? (a.confidence * 100).toFixed(0) + '%' : '--'}</td>
+          <td>${a.record_count || 0}</td>
+          <td>${a.recent_cycles || 0}</td>
+          <td>${a.reverted ? '<button class="btn btn-sm btn-primary" onclick="clearRevert(\'' + crop + '\')">Clear</button>' : '--'}</td>
+        </tr>`;
+      }).join('');
+
+      document.getElementById('autoContainer').innerHTML = `
+        <table class="auto-table">
+          <thead><tr>
+            <th>Crop</th><th>Status</th><th>Confidence</th><th>Records</th><th>Cycles</th><th>Action</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>`;
+    }
+
+    function renderStatusBar() {
+      const localCount = Object.keys(S.local).length;
+      const networkPending = Object.keys(S.network).filter(c => !S.local[c]).length;
+      const revertedCount = Object.values(S.local).filter(m => m.reverted).length;
+      const autoEligible = Object.values(S.autoStatus).filter(a => a.auto_eligible).length;
+      const el = document.getElementById('statusBar');
+      el.innerHTML = `
+        <div class="status-pill"><div class="dot dot-green"></div>${localCount} active</div>
+        ${networkPending > 0 ? '<div class="status-pill"><div class="dot dot-blue"></div>' + networkPending + ' pending</div>' : ''}
+        ${revertedCount > 0 ? '<div class="status-pill"><div class="dot dot-red"></div>' + revertedCount + ' reverted</div>' : ''}
+        <div class="status-pill"><div class="dot dot-amber"></div>${autoEligible} auto-eligible</div>`;
+    }
+
+    function renderAll() {
+      document.getElementById('loadingState').style.display = 'none';
+      renderStatusBar();
+      renderLocal();
+      renderNetwork();
+      renderCC();
+      renderAuto();
+      const hasAnything = Object.keys(S.local).length > 0 || Object.keys(S.network).length > 0;
+      document.getElementById('emptyState').style.display = hasAnything ? 'none' : '';
+    }
+
+    async function loadAll() {
+      try {
+        document.getElementById('loadingState').style.display = '';
+        const [modData, autoData] = await Promise.all([
+          api('/api/recipe-modifiers'),
+          api('/api/recipe-modifiers/autonomous/status').catch(() => ({ crops: {} }))
+        ]);
+        S.local = modData.local || {};
+        S.network = modData.network || {};
+        S.autoStatus = autoData.crops || {};
+
+        // Fetch champion/challenger for each local crop
+        S.ccData = {};
+        const localCrops = Object.keys(S.local);
+        const ccResults = await Promise.allSettled(
+          localCrops.map(c => api('/api/recipe-modifiers/champion-challenger/' + encodeURIComponent(c)))
+        );
+        localCrops.forEach((c, i) => {
+          if (ccResults[i].status === 'fulfilled') S.ccData[c] = ccResults[i].value;
+        });
+
+        renderAll();
+      } catch (e) {
+        document.getElementById('loadingState').textContent = 'Failed to load data. Check console.';
+      }
+    }
+
+    async function recompute() {
+      const btn = document.getElementById('btnRecompute');
+      btn.disabled = true;
+      btn.textContent = 'Computing...';
+      try {
+        const d = await api('/api/recipe-modifiers/compute', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+        showToast('Computed modifiers for ' + (d.crops_computed || 0) + ' crops');
+        await loadAll();
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Recompute';
+      }
+    }
+
+    async function acceptNetwork(crop) {
+      await api('/api/recipe-modifiers/network/' + encodeURIComponent(crop) + '/accept', { method: 'POST' });
+      showToast('Accepted network modifier for ' + crop);
+      await loadAll();
+    }
+
+    async function dismissNetwork(crop) {
+      await api('/api/recipe-modifiers/network/' + encodeURIComponent(crop) + '/dismiss', { method: 'POST' });
+      showToast('Dismissed suggestion for ' + crop);
+      await loadAll();
+    }
+
+    async function clearRevert(crop) {
+      await api('/api/recipe-modifiers/autonomous/clear-revert/' + encodeURIComponent(crop), { method: 'POST' });
+      showToast('Cleared revert for ' + crop);
+      await loadAll();
+    }
+
+    loadAll();
+  </script>
+</body>
+</html>

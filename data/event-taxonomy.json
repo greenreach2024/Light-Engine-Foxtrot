@@ -1,13 +1,15 @@
 {
   "$schema": "event-taxonomy-v1",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "description": "Canonical event names and schemas for Light Engine Foxtrot. All system events should emit payloads conforming to these definitions.",
   "events": {
     "seed": {
       "name": "seed",
       "category": "grow",
       "description": "Seeds planted into a tray or grow site",
-      "emitted_by": ["server-foxtrot.js:POST /api/tray-runs"],
+      "emitted_by": [
+        "server-foxtrot.js:POST /api/tray-runs"
+      ],
       "payload": {
         "event_type": "seed",
         "tray_run_id": "string",
@@ -72,7 +74,9 @@
       "name": "loss",
       "category": "grow",
       "description": "Plant loss recorded (disease, mechanical, environmental, etc.)",
-      "emitted_by": ["server-foxtrot.js:POST /api/tray-runs/:id/loss"],
+      "emitted_by": [
+        "server-foxtrot.js:POST /api/tray-runs/:id/loss"
+      ],
       "payload": {
         "event_type": "loss",
         "tray_run_id": "string",
@@ -91,7 +95,9 @@
       "name": "order",
       "category": "commerce",
       "description": "Wholesale or retail order placed by a buyer",
-      "emitted_by": ["server-foxtrot.js:POST /api/wholesale/webhook/order"],
+      "emitted_by": [
+        "server-foxtrot.js:POST /api/wholesale/webhook/order"
+      ],
       "payload": {
         "event_type": "order",
         "order_id": "string",
@@ -155,7 +161,9 @@
       "name": "agent_action",
       "category": "ai",
       "description": "AI agent generated a recommendation or took an autonomous action",
-      "emitted_by": ["services/ai-agent.js"],
+      "emitted_by": [
+        "services/ai-agent.js"
+      ],
       "payload": {
         "event_type": "agent_action",
         "agent_class": "string",
@@ -171,8 +179,10 @@
     "lead_created": {
       "name": "lead_created",
       "category": "commerce",
-      "description": "New purchase lead / interest form submitted (visitor → lead conversion)",
-      "emitted_by": ["routes/purchase-leads.js:POST /api/purchase/leads"],
+      "description": "New purchase lead / interest form submitted (visitor \u2192 lead conversion)",
+      "emitted_by": [
+        "routes/purchase-leads.js:POST /api/purchase/leads"
+      ],
       "payload": {
         "event_type": "lead_created",
         "lead_id": "string",
@@ -187,8 +197,10 @@
     "lead_status_changed": {
       "name": "lead_status_changed",
       "category": "commerce",
-      "description": "Lead funnel stage changed (e.g. new → contacted → scheduled → converted)",
-      "emitted_by": ["routes/purchase-leads.js:PUT /api/purchase/leads/:id/status"],
+      "description": "Lead funnel stage changed (e.g. new \u2192 contacted \u2192 scheduled \u2192 converted)",
+      "emitted_by": [
+        "routes/purchase-leads.js:PUT /api/purchase/leads/:id/status"
+      ],
       "payload": {
         "event_type": "lead_status_changed",
         "lead_id": "string",
@@ -203,11 +215,65 @@
       "name": "demand_signal_refresh",
       "category": "ai",
       "description": "Demand signals received from GreenReach Central. Triggers automatic succession plan generation.",
-      "emitted_by": ["server-foxtrot.js:POST /api/ai/recommendations/receive"],
+      "emitted_by": [
+        "server-foxtrot.js:POST /api/ai/recommendations/receive"
+      ],
       "payload": {
         "event_type": "demand_signal_refresh",
         "demand_signals": "object",
         "source": "string",
+        "timestamp": "ISO8601"
+      },
+      "status": "active"
+    },
+    "partial_harvest": {
+      "name": "partial_harvest",
+      "category": "grow",
+      "description": "Partial harvest (cut) from a CCA (cut-and-come-again) crop. Tray remains active for regrowth.",
+      "emitted_by": [
+        "server-foxtrot.js:POST /api/tray-runs/:id/harvest"
+      ],
+      "payload": {
+        "event_type": "partial_harvest",
+        "tray_run_id": "string",
+        "group_id": "string|null",
+        "crop": "string",
+        "cut_number": "number",
+        "remaining_cuts": "number",
+        "max_cuts": "number",
+        "next_expected_cut_date": "ISO8601|null",
+        "total_weight_oz": "number|null",
+        "harvested_count": "number|null",
+        "planted_count": "number|null",
+        "grow_days": "number",
+        "regrowth_days": "number",
+        "yield_factor": "number",
+        "quality_grade": "string|null",
+        "experiment_id": "string|null",
+        "zone": "string|null",
+        "room": "string|null",
+        "harvested_by": "string|null",
+        "timestamp": "ISO8601"
+      },
+      "status": "active"
+    },
+    "agent_decision": {
+      "name": "agent_decision",
+      "category": "ai",
+      "description": "An AI agent recorded a decision with inputs, alternatives, and chosen action",
+      "emitted_by": [
+        "lib/decision-ledger.js"
+      ],
+      "payload": {
+        "event_type": "agent_decision",
+        "agent": "string",
+        "decision_type": "string",
+        "inputs": "object|null",
+        "alternatives": "array",
+        "chosen": "object",
+        "approval": "string",
+        "outcome": "object|null",
+        "farm_id": "string|null",
         "timestamp": "ISO8601"
       },
       "status": "active"

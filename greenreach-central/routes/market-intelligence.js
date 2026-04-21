@@ -651,6 +651,120 @@ function buildMovementSummary({
   return `${product} is ${trendDirection} ${Math.abs(trendPercent).toFixed(1)}% (${previousPricePerOzCAD.toFixed(2)} to ${currentPricePerOzCAD.toFixed(2)} CAD/oz). Coverage includes ${observationCount} observations across ${retailerCoverage}. ${signalText}${freshnessNote}`.trim();
 }
 
+// Category rollup: map granular SKUs ("Red Russian Kale", "Lacinato
+// Kale", "Dinosaur Kale", "Curly Kale", "Baby Kale", "Tuscan Kale",
+// etc.) into a single bucket so the Retail Price Watch card doesn't
+// get dominated by six variants of the same leafy green. Any product
+// not matched by a rule falls through to its own bucket (no rollup).
+const CATEGORY_ROLLUP_RULES = [
+  { category: 'Kale',    pattern: /kale/i },
+  { category: 'Basil',   pattern: /basil/i },
+  { category: 'Lettuce', pattern: /lettuce|romaine|butterhead|iceberg|boston/i },
+  { category: 'Arugula', pattern: /arugula|rocket/i },
+  { category: 'Spinach', pattern: /spinach/i },
+  { category: 'Chard',   pattern: /chard/i },
+  { category: 'Mint',    pattern: /\bmint\b/i },
+  { category: 'Cilantro',pattern: /cilantro|coriander/i },
+  { category: 'Parsley', pattern: /parsley/i },
+  { category: 'Microgreens', pattern: /microgreen/i },
+];
+
+function rollupCategoryForProduct(product) {
+  const name = String(product || '');
+  if (!name) return null;
+  for (const rule of CATEGORY_ROLLUP_RULES) {
+    if (rule.pattern.test(name)) return rule.category;
+  }
+  return null;
+}
+
+// Pick the "best" representative variant for a rolled-up category:
+// prefer the one with the most national retailer coverage and the
+// most observations. This is what the Price Watch card surfaces as
+// e.g. "Kale +4.8%" instead of five near-duplicate kale rows.
+function pickRepresentativeVariant(variants) {
+  return variants.slice().sort((a, b) => {
+    const retailerDelta = (b.nationalRetailerCount || 0) - (a.nationalRetailerCount || 0);
+    if (retailerDelta !== 0) return retailerDelta;
+    const obsDelta = (b.observationCount || 0) - (a.observationCount || 0);
+    if (obsDelta !== 0) return obsDelta;
+    return Math.abs(b.trendPercent || 0) - Math.abs(a.trendPercent || 0);
+  })[0];
+}
+
+// Dedup granular SKUs into category-level entries. The representative
+// keeps its per-variant fields (price, retailers, articles) but gains
+// a `categoryLabel`, `variantCount`, and `variantProducts` array so
+// the UI can still say "Kale (5 variants tracked)".
+function rollupRecommendationsByCategory(recommendations) {
+  const buckets = new Map();
+  const passthrough = [];
+  for (const entry of recommendations || []) {
+    const category = rollupCategoryForProduct(entry.product);
+    if (!category) {
+      passthrough.push(entry);
+      continue;
+    }
+    if (!buckets.has(category)) buckets.set(category, []);
+    buckets.get(category).push(entry);
+  }
+
+  const rolled = [];
+  for (const [category, variants] of buckets.entries()) {
+    const rep = pickRepresentativeVariant(variants);
+    if (!rep) continue;
+    const averagedTrend = variants.reduce((acc, v) => acc + (v.trendPercent || 0), 0) / variants.length;
+    rolled.push({
+      ...rep,
+      // Only overwrite the display name when we've actually merged
+      // multiple variants. A lone "Red Russian Kale" should stay
+      // "Red Russian Kale" in the UI rather than get genericised to
+      // "Kale" just because it matches a rollup rule.
+      categoryLabel: variants.length > 1 ? category : null,
+      variantCount: variants.length,
+      variantProducts: variants.map((v) => v.product),
+      categoryAverageTrendPercent: averagedTrend,
+      isCategoryRollup: variants.length > 1,
+    });
+  }
+
+  return passthrough.concat(rolled);
+}
+
+// Outlier sanity gate. We surface a dashboard alert only if either
+// (a) |trendPercent| is inside SUSPECT_CAP_PCT (default 100%), or
+// (b) at least MIN_CONFIRM_RETAILERS distinct national retailers
+// within the recency window corroborate the same direction of change.
+// Entries that fail both get marked `dataQualityFlag: 'under_review'`
+// so the UI can hide them from alerts (while still being available in
+// the richer topSignals list for debugging).
+const DEFAULT_SUSPECT_CAP_PCT = 100;
+const DEFAULT_MIN_CONFIRM_RETAILERS = 2;
+
+function applyOutlierSanityCap(recommendations, options = {}) {
+  const capPct = Number.isFinite(options.capPct) ? options.capPct : DEFAULT_SUSPECT_CAP_PCT;
+  const minConfirmRetailers = Number.isFinite(options.minConfirmRetailers)
+    ? options.minConfirmRetailers
+    : DEFAULT_MIN_CONFIRM_RETAILERS;
+
+  return (recommendations || []).map((entry) => {
+    const trendPct = Math.abs(entry.trendPercent || 0);
+    if (trendPct <= capPct) return entry;
+
+    const retailerCount = Math.max(
+      entry.nationalRetailerCount || 0,
+      Array.isArray(entry.retailers) ? entry.retailers.length : 0
+    );
+    if (retailerCount >= minConfirmRetailers) return entry;
+
+    return {
+      ...entry,
+      dataQualityFlag: 'under_review',
+      dataQualityReason: `Observed ${entry.change || `${trendPct.toFixed(1)}%`} swing exceeds ${capPct}% but fewer than ${minConfirmRetailers} national retailers confirmed it within the recency window.`,
+    };
+  });
+}
+
 function buildPricingRecommendationsFromSignals(marketData, aiAnalyses, fxRate) {
   const aiMap = new Map((aiAnalyses || []).map((analysis) => [analysis.product, analysis]));
   const recommendations = [];
@@ -767,67 +881,77 @@ router.get('/price-alerts', async (req, res) => {
     ]);
 
     const fxRate = getLastFxRate();
-    const recommendations = buildPricingRecommendationsFromSignals(marketData, aiAnalyses, fxRate);
+    const rawRecommendations = buildPricingRecommendationsFromSignals(marketData, aiAnalyses, fxRate);
 
-    const nationallyMonitored = recommendations.filter((entry) => entry.nationalRetailerCount > 0);
-    const monitoredPool = nationallyMonitored.length > 0 ? nationallyMonitored : recommendations;
-    const recentPool = monitoredPool.filter((entry) => isRecentDate(entry.lastUpdated, recencyWindowDays));
+    // Dedup near-duplicate SKUs into a single category row (e.g. five
+    // kale variants become one "Kale" entry) so the Retail Price Watch
+    // card doesn't get visually swamped. Then drop / flag any entry
+    // whose %-change is clearly an ingestion artefact.
+    const rolledRecommendations = rollupRecommendationsByCategory(rawRecommendations);
+    const sanitizedRecommendations = applyOutlierSanityCap(rolledRecommendations, {
+      capPct: DEFAULT_SUSPECT_CAP_PCT,
+      minConfirmRetailers: DEFAULT_MIN_CONFIRM_RETAILERS,
+    });
+
+    const nationallyMonitored = sanitizedRecommendations.filter((entry) => entry.nationalRetailerCount > 0);
+    const monitoredPool = nationallyMonitored.length > 0 ? nationallyMonitored : sanitizedRecommendations;
+    // Re-sort by |trendPercent| descending: rollupRecommendationsByCategory
+    // appends rolled-up entries after passthrough, which destroys the sort
+    // order buildPricingRecommendationsFromSignals established. Without
+    // this, topSignals.slice(0, 5) would return the first 5 passthrough
+    // products instead of the 5 with the largest magnitude changes, and
+    // the UI's demand-context section would silently omit the biggest
+    // market movements.
+    const recentPool = monitoredPool
+      .filter((entry) => isRecentDate(entry.lastUpdated, recencyWindowDays))
+      .sort((a, b) => Math.abs(b.trendPercent || 0) - Math.abs(a.trendPercent || 0));
+
+    const toAlertEntry = (entry) => ({
+      product: entry.categoryLabel || entry.product,
+      category: entry.categoryLabel || null,
+      variantCount: entry.variantCount || 1,
+      variantProducts: entry.variantProducts || [entry.product],
+      change: entry.change,
+      type: entry.trendPercent > 0 ? 'increase' : entry.trendPercent < 0 ? 'decrease' : 'stable',
+      currentPrice: entry.pricePerOzCAD,
+      previousPrice: entry.previousPricePerOzCAD,
+      priceUnit: 'CAD per oz',
+      summary: entry.summary,
+      movementDrivers: entry.movementDrivers,
+      retailers: entry.nationalRetailers.length > 0 ? entry.nationalRetailers : entry.retailers,
+      dataPoints: entry.observationCount || (entry.retailers || []).length,
+      lastUpdated: entry.lastUpdated,
+      confidence: entry.confidence,
+      aiOutlook: entry.aiOutlook,
+      aiAction: entry.aiAction,
+      aiConfidence: entry.aiConfidence,
+      analysisFreshness: entry.analysisFreshness,
+      articles: entry.articles || [],
+      priceRange: {
+        low: toFiniteNumber(entry.priceRange?.[0], 0),
+        high: toFiniteNumber(entry.priceRange?.[1], 0),
+      },
+      dataSource: entry.dataSource || 'static',
+      dataQualityFlag: entry.dataQualityFlag || null,
+      dataQualityReason: entry.dataQualityReason || null,
+    });
 
     const alerts = recentPool
       .filter((entry) => Math.abs(entry.trendPercent) >= thresholdValue)
-      .map((entry) => ({
-        product: entry.product,
-        change: entry.change,
-        type: entry.trendPercent > 0 ? 'increase' : entry.trendPercent < 0 ? 'decrease' : 'stable',
-        currentPrice: entry.pricePerOzCAD,
-        previousPrice: entry.previousPricePerOzCAD,
-        priceUnit: 'CAD per oz',
-        summary: entry.summary,
-        movementDrivers: entry.movementDrivers,
-        retailers: entry.nationalRetailers.length > 0 ? entry.nationalRetailers : entry.retailers,
-        dataPoints: entry.observationCount || (entry.retailers || []).length,
-        lastUpdated: entry.lastUpdated,
-        confidence: entry.confidence,
-        aiOutlook: entry.aiOutlook,
-        aiAction: entry.aiAction,
-        aiConfidence: entry.aiConfidence,
-        analysisFreshness: entry.analysisFreshness,
-        articles: entry.articles || [],
-        priceRange: {
-          low: toFiniteNumber(entry.priceRange?.[0], 0),
-          high: toFiniteNumber(entry.priceRange?.[1], 0),
-        },
-        dataSource: entry.dataSource || 'static',
-      }))
+      .filter((entry) => entry.dataQualityFlag !== 'under_review')
+      .map(toAlertEntry)
       .sort((a, b) => Math.abs(parseFloat(b.change)) - Math.abs(parseFloat(a.change)));
 
     const topSignals = recentPool
       .slice(0, 5)
       .map((entry) => ({
-        product: entry.product,
-        change: entry.change,
-        type: entry.trendPercent > 0 ? 'increase' : entry.trendPercent < 0 ? 'decrease' : 'stable',
-        currentPrice: entry.pricePerOzCAD,
-        previousPrice: entry.previousPricePerOzCAD,
-        priceUnit: 'CAD per oz',
-        summary: entry.summary,
-        movementDrivers: entry.movementDrivers,
-        retailers: entry.nationalRetailers.length > 0 ? entry.nationalRetailers : entry.retailers,
-        dataPoints: entry.observationCount || (entry.retailers || []).length,
-        lastUpdated: entry.lastUpdated,
-        confidence: entry.confidence,
-        aiOutlook: entry.aiOutlook,
-        aiAction: entry.aiAction,
-        aiConfidence: entry.aiConfidence,
-        analysisFreshness: entry.analysisFreshness,
-        articles: entry.articles || [],
-        priceRange: {
-          low: toFiniteNumber(entry.priceRange?.[0], 0),
-          high: toFiniteNumber(entry.priceRange?.[1], 0),
-        },
-        dataSource: entry.dataSource || 'static',
+        ...toAlertEntry(entry),
         aboveThreshold: Math.abs(entry.trendPercent) >= thresholdValue,
       }));
+
+    const underReviewCount = recentPool.filter((entry) => entry.dataQualityFlag === 'under_review').length;
+    const categoriesRolledUp = rolledRecommendations.filter((entry) => entry.isCategoryRollup).length;
+    const aiLive = sanitizedRecommendations.some((entry) => entry.analysisFreshness === 'fresh');
 
     return res.json({
       ok: true,
@@ -839,10 +963,19 @@ router.get('/price-alerts', async (req, res) => {
       totalProductsMonitored: monitoredPool.length,
       recentlyChangedProducts: recentPool.length,
       alertsGenerated: alerts.length,
+      categoriesRolledUp,
+      underReviewCount,
+      aiNarrativeLive: aiLive,
+      displayLabel: aiLive ? 'Retail Price Watch + AI' : 'Retail Price Watch',
+      outlierPolicy: {
+        capPct: DEFAULT_SUSPECT_CAP_PCT,
+        minConfirmRetailers: DEFAULT_MIN_CONFIRM_RETAILERS,
+        note: `Changes greater than ${DEFAULT_SUSPECT_CAP_PCT}% require ${DEFAULT_MIN_CONFIRM_RETAILERS}+ national retailers within the recency window before they surface as alerts.`,
+      },
       monitorScope: nationallyMonitored.length > 0 ? 'national_retailers' : 'all_retailers',
       sourceBasis: [
         'North American national retailer observations',
-        'AI movement-driver analysis',
+        aiLive ? 'AI movement-driver analysis' : 'AI narrative currently stale; showing retailer observations only',
       ],
       newsPolicy: 'Only verifiable external links are attached. Some crops may have no linked articles in the current feed.',
     });

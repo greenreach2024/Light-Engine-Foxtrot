@@ -385,20 +385,25 @@
       <button data-overlay="humidity">Humidity</button>
       <button data-overlay="co2">CO2</button>
       <button data-overlay="vpd">VPD</button>
+      <button data-overlay="ppfd">PPFD</button>
+      <button data-overlay="dli">DLI</button>
+      <button data-overlay="status">Status</button>
       <div class="sep"></div>
-      <button id="btnWalls" class="active" title="Toggle walls and ceiling">Walls</button>
+      <button id="btnWalls" aria-label="Toggle walls and ceiling" class="active" title="Toggle walls and ceiling">Walls</button>
+      <button id="btnGear" aria-label="Toggle equipment visibility" title="Show/hide equipment (lights, fans, devices)">Gear</button>
       <div class="sep"></div>
-      <button id="btnTop" title="Top-down view">Top</button>
-      <button id="btnAngle" title="Angled view">3D</button>
-      <button id="btnReset" title="Reset camera">Reset</button>
-      <button id="btnRefresh" title="Reload rooms, groups, sensors, and heatmap data">Refresh</button>
+      <button id="btnTop" aria-label="Top-down camera view" title="Top-down view">Top</button>
+      <button id="btnAngle" aria-label="Angled 3D camera view" title="Angled view">3D</button>
+      <button id="btnReset" aria-label="Reset camera position" title="Reset camera">Reset</button>
+      <button id="btnRefresh" aria-label="Reload farm data" title="Reload rooms, groups, sensors, and heatmap data">Refresh</button>
       <div class="sep"></div>
-      <button id="btnEdit" title="Edit mode: drag sensors and equipment to reposition">Edit</button>
+      <button id="btnEdit" aria-label="Toggle edit mode" title="Edit mode: drag sensors and equipment to reposition">Edit</button>
     </div>
   </div>
 
   <div id="viewer-container">
-    <canvas id="farmCanvas"></canvas>
+    <canvas id="farmCanvas" role="img" tabindex="0" aria-label="3D farm environment viewer. Use arrow keys to orbit, plus/minus to zoom, Tab to cycle zones."></canvas>
+    <div id="a11yAnnouncer" aria-live="polite" aria-atomic="true" style="position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden"></div>
     <div class="loading-overlay" id="loadingOverlay">
       <div class="loading-spinner"></div>
       <div class="loading-text">Loading farm environment...</div>
@@ -436,7 +441,7 @@
       </div>
     </div>
     <div class="detail-panel" id="detailPanel">
-      <button class="close-btn" id="detailClose">&#10005;</button>
+      <button class="close-btn" id="detailClose" aria-label="Close detail panel">&#10005;</button>
       <div id="detailContent"></div>
     </div>
     <div class="status-bar" id="statusBar">Ready</div>
@@ -452,6 +457,11 @@
     }
   }
   </script>
+
+  <!-- Room layout solver (UMD, attaches window.RoomLayoutSolver) -- must load
+       before the module script below so spatial layout can use real template
+       dimensions and working-space clearances. -->
+  <script src="/lib/room-layout-solver.js"></script>
 
   <script type="module">
   import * as THREE from 'three';
@@ -491,6 +501,10 @@
     const S = {
       rooms: [], groups: [], roomMaps: {}, envData: null,
       iotDevices: [], cropRegistry: {},
+      growSystems: [],           // grow-systems.json templates (for spatial layout)
+      growSystemsById: {},       // id -> template
+      spatialViolations: [],     // { zoneId, roomId, overflow, message } for status bar
+      targetRanges: null,
       overlay: 'none', roomFilter: '__all',
       currentTimeIndex: -1,
       isPlaying: false,
@@ -511,6 +525,7 @@
       selectedMeshes: [],
       activeDetail: null,
       wallsVisible: true,
+      equipmentVisible: false,
       editMode: false,
       dragTarget: null,
       dragSelection: [],
@@ -552,6 +567,8 @@
       humidity:    { min: 20, max: 95, unit: '%',   label: 'Relative Humidity', colors: [0x1d4ed8, 0x06b6d4, 0x22c55e, 0xfacc15, 0xef4444], key: 'humidity' },
       co2:         { min: 300, max: 1800, unit: 'ppm', label: 'CO\u2082 Concentration', colors: [0x22c55e, 0xfacc15, 0xf59e0b, 0xef4444, 0x7f1d1d], key: 'co2' },
       vpd:         { min: 0.2, max: 2.0, unit: 'kPa', label: 'Vapor Pressure Deficit', colors: [0x1d4ed8, 0x06b6d4, 0x22c55e, 0xf59e0b, 0xef4444], key: 'vpd' },
+      ppfd:        { min: 0, max: 800, unit: 'umol', label: 'PPFD Target', colors: [0x0f172a, 0x1d4ed8, 0x06b6d4, 0x22c55e, 0xf59e0b], key: 'ppfd' },
+      dli:         { min: 0, max: 40, unit: 'mol/m2/d', label: 'DLI Target', colors: [0x0f172a, 0x1d4ed8, 0x06b6d4, 0x22c55e, 0xf59e0b], key: 'dli' },
     };
 
     function extractNumericReading(sample) {
@@ -631,6 +648,19 @@
 
     function getZoneMetricValueAtFrame(zoneData, metricKey) {
       if (!zoneData) return null;
+      // PPFD/DLI: aggregate from zone groups
+      if (metricKey === 'ppfd' || metricKey === 'dli') {
+        const groups = zoneData.groups || [];
+        const vals = [];
+        for (const g of groups) {
+          if (metricKey === 'ppfd' && g.targetPpfd != null) vals.push(Number(g.targetPpfd));
+          else if (metricKey === 'dli' && (g.dli != null || g.planConfig?.dli != null || g.planConfig?.preview?.dli != null))
+            vals.push(Number(g.dli || g.planConfig?.dli || g.planConfig?.preview?.dli));
+          else if (metricKey === 'ppfd' && g.planConfig?.preview?.ppfd != null) vals.push(Number(g.planConfig.preview.ppfd));
+        }
+        if (vals.length) return vals.reduce((a, b) => a + b, 0) / vals.length;
+        return null;
+      }
       const historyKey = { temp: 'tempHistory', humidity: 'humidityHistory', co2: 'co2History', vpd: 'vpdHistory' }[metricKey];
       const fallbackValue = getPlaybackFallbackValue(zoneData[metricKey]);
       return historyKey ? getHistoryValueForFrame(zoneData[historyKey], fallbackValue) : fallbackValue;
@@ -644,6 +674,8 @@
         humidity: getZoneMetricValueAtFrame(zoneData, 'humidity'),
         co2: getZoneMetricValueAtFrame(zoneData, 'co2'),
         vpd: getZoneMetricValueAtFrame(zoneData, 'vpd'),
+        ppfd: getZoneMetricValueAtFrame(zoneData, 'ppfd'),
+        dli: getZoneMetricValueAtFrame(zoneData, 'dli'),
         groups: zoneData.groups || [],
         tempHistory: zoneData.tempHistory || [],
         humidityHistory: zoneData.humidityHistory || [],
@@ -740,19 +772,41 @@
     }
 
     // Resolve a crop-name selection against S.cropRegistry (already loaded from
-    // /data/crop-registry.json) and return { resolvedName, planId }. Mirrors the
-    // logic EVIE uses in greenreach-central/routes/assistant-chat.js
-    // update_group_crop so both paths produce the same group record shape.
+    // /data/crop-registry.json) and return { resolvedName, planId }. The
+    // registry stores the canonical name as the object key and plan IDs in a
+    // `planIds` array (see public/js/crop-utils.js), so we key off that.
+    // Falls back to a slugified 'crop-<name>' so unregistered crops still get a
+    // plan anchor. Aliases like "Bok Choy" → "Mei Qing Pak Choi" are resolved
+    // by scanning entry.aliases before giving up.
     function resolveCropRegistryEntry(cropName) {
       const raw = String(cropName || '').trim();
       if (!raw) return { resolvedName: '', planId: '' };
       const crops = (S.cropRegistry && typeof S.cropRegistry === 'object') ? S.cropRegistry : {};
       const keys = Object.keys(crops);
       const lowered = raw.toLowerCase();
-      const matchKey = keys.find(function(k) { return String(k).toLowerCase() === lowered; });
+      let matchKey = keys.find(function(k) { return String(k).toLowerCase() === lowered; });
+      if (!matchKey) {
+        matchKey = keys.find(function(k) {
+          const e = crops[k];
+          if (!e || !Array.isArray(e.aliases)) return false;
+          return e.aliases.some(function(a) { return String(a || '').toLowerCase().trim() === lowered; });
+        }) || null;
+      }
       const entry = matchKey ? crops[matchKey] : null;
-      const resolvedName = (entry && entry.name) ? entry.name : (matchKey || raw);
-      const planId = (entry && entry.planId) ? entry.planId : ('crop-' + resolvedName.toLowerCase().replace(/\s+/g, '-'));
+      const resolvedName = matchKey || raw;
+      // Most entries carry plan IDs in a `planIds` array, but a handful of
+      // legacy rows (e.g. "Breen Pelleted Organic", "Truchas Pelleted Organic",
+      // "Seaside F1 Spinach (baby leaf)") still use the singular `planId`
+      // field. Honour both before slugifying, so groups assigned those crops
+      // land with the registry's canonical planId.
+      let planId = '';
+      if (entry && Array.isArray(entry.planIds) && entry.planIds[0]) {
+        planId = entry.planIds[0];
+      } else if (entry && typeof entry.planId === 'string' && entry.planId.trim()) {
+        planId = entry.planId.trim();
+      } else {
+        planId = 'crop-' + resolvedName.toLowerCase().replace(/\s+/g, '-');
+      }
       return { resolvedName, planId };
     }
 
@@ -1348,12 +1402,14 @@
         if (!opts.silent) {
           status(opts.reason === 'manual' ? 'Refreshing viewer data...' : 'Loading farm data...');
         }
-        const [roomsRes, groupsRes, iotRes, envRes, regRes] = await Promise.all([
+        const [roomsRes, groupsRes, iotRes, envRes, regRes, trRes, gsRes] = await Promise.all([
           authFetch('/data/rooms.json?t=' + Date.now()),
           authFetch('/data/groups.json?t=' + Date.now()),
           authFetch('/data/iot-devices.json?t=' + Date.now()),
           authFetch('/env?hours=24&t=' + Date.now(), { cache: 'no-store' }),
           authFetch('/data/crop-registry.json?t=' + Date.now()),
+          authFetch('/data/target-ranges.json?t=' + Date.now()),
+          authFetch('/data/grow-systems.json?t=' + Date.now()),
         ]);
 
         // Room list: still a wholesale replace — this list rarely changes and
@@ -1373,6 +1429,15 @@
         }
         if (envRes.ok) { S.envData = await envRes.json(); }
         if (regRes.ok) { const d = await regRes.json(); S.cropRegistry = d.crops || d || {}; }
+        if (trRes.ok) { S.targetRanges = await trRes.json(); }
+        if (gsRes && gsRes.ok) {
+          try {
+            const d = await gsRes.json();
+            S.growSystems = Array.isArray(d.templates) ? d.templates : [];
+            S.growSystemsById = {};
+            S.growSystems.forEach(function (t) { if (t && t.id) S.growSystemsById[t.id] = t; });
+          } catch (e) { /* non-fatal: viewer still renders with legacy heuristics */ }
+        }
 
         status('Loading room layouts...');
         const freshRoomMaps = {};
@@ -1401,7 +1466,18 @@
           groups: S.groups,
           roomMaps: S.roomMaps,
           iotDevices: S.iotDevices,
-          cropRegistry: S.cropRegistry
+          cropRegistry: S.cropRegistry,
+          // Include a fingerprint of the grow-systems catalog so a change to
+          // template dimensions / clearances / orientation triggers a scene
+          // rebuild under skipRebuildIfUnchanged (SSE / auto-poll / focus).
+          // Fingerprint is (id + hash of the spatialContract) so routine
+          // non-spatial edits still refresh layout-affecting fields.
+          growSystems: (S.growSystems || []).map(function (t) {
+            return {
+              id: t && t.id,
+              sc: t && t.spatialContract ? JSON.stringify(t.spatialContract) : null
+            };
+          })
         });
         const structureChanged = structureSignature !== S.lastStructureSignature;
 
@@ -1591,6 +1667,62 @@
         }
         if (entry) entry.groups.push(g);
       });
+      computeZoneDeviations();
+    }
+
+
+    // ---- Zone deviation from targets (for status coloring) ----
+    function computeZoneDeviations() {
+      if (!S.targetRanges) return;
+      const zones = S.targetRanges.zones || {};
+      const defaults = S.targetRanges.defaults || {};
+      const thr = S.targetRanges.severity_thresholds || {};
+      const tempThr = thr.temperature || { warning_deviation: 2, critical_deviation: 3 };
+      const rhThr = thr.humidity || { warning_deviation: 10, critical_deviation: 20 };
+      const vpdThr = thr.vpd || { warning_deviation: 0.3, critical_deviation: 0.5 };
+      Object.entries(S.zoneDataMap).forEach(([zId, data]) => {
+        const targets = zones[zId] || defaults;
+        const metrics = {};
+        let worst = 'ok';
+        function classify(val, min, max, warnDev, critDev, name) {
+          if (val == null) return;
+          let deviation = 0;
+          if (val < min) deviation = min - val;
+          else if (val > max) deviation = val - max;
+          let status = 'ok';
+          if (deviation >= critDev) status = 'critical';
+          else if (deviation >= warnDev) status = 'warning';
+          else if (deviation > 0) status = 'caution';
+          metrics[name] = { value: val, deviation: +deviation.toFixed(2), status };
+          if (status === 'critical') worst = 'critical';
+          else if (status === 'warning' && worst !== 'critical') worst = 'warning';
+          else if (status === 'caution' && worst === 'ok') worst = 'caution';
+        }
+        classify(data.temp, targets.temp_min ?? 18, targets.temp_max ?? 26,
+          tempThr.warning_deviation, tempThr.critical_deviation, 'temperature');
+        classify(data.humidity, targets.rh_min ?? 45, targets.rh_max ?? 70,
+          rhThr.warning_deviation, rhThr.critical_deviation, 'humidity');
+        if (data.vpd != null) {
+          classify(data.vpd, targets.vpd_min ?? 0.6, targets.vpd_max ?? 1.4,
+            vpdThr.warning_deviation, vpdThr.critical_deviation, 'vpd');
+        }
+        data.deviation = { worst, metrics };
+      });
+    }
+
+    function findZoneDataForMesh(mesh) {
+      const ud = mesh.userData;
+      const zId = ud.zoneId;
+      if (S.zoneDataMap[zId]) return S.zoneDataMap[zId];
+      const name = String(ud.zone?.name || ud.zone?.zone || '');
+      if (name) {
+        const key = Object.keys(S.zoneDataMap).find(k =>
+          k === name || S.zoneDataMap[k].name === name ||
+          k === 'zone-' + name || S.zoneDataMap[k].name === 'Zone ' + name
+        );
+        if (key) return S.zoneDataMap[key];
+      }
+      return null;
     }
 
     function getVal(sensors, ...keys) {
@@ -1659,6 +1791,75 @@
       return 'Open canopy mixing around bench perimeter';
     }
 
+    // ---- Spatial layout integration --------------------------
+    // Maps the viewer's legacy system-type inference to a canonical
+    // grow-systems.json template so the solver can place units at real
+    // dimensions with working-space envelopes. Returns null when no template
+    // registry is loaded (viewer then falls back to legacy heuristic render).
+    function getTemplateForGroup(group) {
+      if (!S.growSystemsById || !S.growSystems.length) return null;
+      // Explicit linkage first: group.templateId > group.growSystemTemplate
+      const explicitId = group && (group.templateId || group.growSystemTemplate || group.systemTemplateId);
+      if (explicitId && S.growSystemsById[explicitId]) return S.growSystemsById[explicitId];
+
+      const sys = inferGroupSystemType(group);
+      // Secondary keyword match on template name / category
+      const txt = [group && group.name, group && group.notes, group && group.system].filter(Boolean).join(' ').toLowerCase();
+      if (sys === 'zipgrow' || /zipgrow|tower\s*wall/.test(txt)) return S.growSystemsById['zipgrow-tower-wall'] || null;
+      if (/aeroponic/.test(txt)) return S.growSystemsById['aeroponics-tower'] || null;
+      if (/drip|fruiting/.test(txt)) return S.growSystemsById['drip-rail-fruiting-8ft'] || null;
+      if (/microgreen/.test(txt)) return S.growSystemsById['vertical-tier-5-microgreen'] || null;
+      // Check DWC/raft before the generic `sys === 'channel'` fallback so a
+      // group with "raft" in its name still resolves to the DWC template even
+      // though inferGroupSystemType() maps `raft` onto the `channel` family.
+      if (/dwc|pond|raft/.test(txt)) return S.growSystemsById['dwc-pond-4x8'] || null;
+      if (sys === 'channel' || /nft/.test(txt)) return S.growSystemsById['nft-rack-3tier'] || null;
+      if (sys === 'rack') return S.growSystemsById['nft-rack-3tier'] || null;
+      return null;
+    }
+
+    // Picks a single representative template for a zone by majority vote
+    // across the groups assigned to it. Returns null when no group has a
+    // resolvable template (the viewer then skips spatial solving for that
+    // zone and falls back to the legacy per-group render).
+    function pickZoneTemplate(groupsInZone) {
+      const tally = {};
+      let best = null, bestCount = 0;
+      for (const g of groupsInZone) {
+        const t = getTemplateForGroup(g);
+        if (!t || !t.id) continue;
+        tally[t.id] = (tally[t.id] || 0) + 1;
+        if (tally[t.id] > bestCount) { bestCount = tally[t.id]; best = t; }
+      }
+      return best;
+    }
+
+    function solveZoneLayout(zoneRect, template, desiredUnits) {
+      const solver = (typeof window !== 'undefined') && window.RoomLayoutSolver;
+      if (!solver || !template || !zoneRect) return null;
+      try {
+        const plan = solver.solveLayout(template, zoneRect);
+        if (!plan || !plan.ok) return null;
+        const n = Math.min(desiredUnits || 0, plan.maxUnits || 0);
+        const placements = plan.placements(n);
+        const overflow = Math.max(0, (desiredUnits || 0) - (plan.maxUnits || 0));
+        return {
+          plan: plan,
+          placements: placements,
+          desiredUnits: desiredUnits || 0,
+          placedUnits: placements.length,
+          overflow: overflow,
+          maxUnits: plan.maxUnits || 0,
+          unitDims: plan.unit,
+          clearance: plan.clearance,
+          orientation: plan.orientation,
+          plumbingSide: plan.plumbingSide
+        };
+      } catch (e) {
+        return null;
+      }
+    }
+
     // ---- Build 3D Scene --------------------------------------
     function buildScene() {
       if (S.selectedMeshes.length) clearSelection({ silent: true });
@@ -1671,6 +1872,7 @@
       S.particleSystems.length = 0;
       S.zoneMeshMap = {};
       S.floorMeshMap = {};
+      S.spatialViolations = [];
 
       const visible = S.roomFilter === '__all' ? S.rooms : S.rooms.filter(r => r.id === S.roomFilter);
       let offsetX = 0;
@@ -1872,46 +2074,218 @@
         // Track per-zone auto-layout index for groups without explicit positions
         const zoneAutoIdx = {};
 
+        // ---- Pre-compute spatial layout per zone using the RoomLayoutSolver.
+        // For each zone we pick a representative grow-system template (majority
+        // vote over the groups in the zone), solve for the number of groups
+        // actually in that zone, and stash the resulting placements + overflow
+        // so the group render below can place each unit at real template
+        // dimensions with a working-space envelope. Overflow (groups beyond
+        // solver.maxUnits) is tracked for red tinting + zone-level warning
+        // labels. Absent template or solver -> render path falls back to the
+        // legacy heuristic layout.
+        const zoneSpatial = {};
+        zones.forEach((zone, zi) => {
+          const zKey = String(zone.zone ?? zone.id ?? zone.name ?? ('z' + zi));
+          // Guard every candidate zone identifier so an empty string does not
+          // match every group via `endsWith('')`. Only include identifiers that
+          // are actually present on the zone record.
+          const zoneIds = [zone.zone, zone.id, zone.name]
+            .filter(function (v) { return v !== undefined && v !== null && String(v) !== ''; })
+            .map(String);
+          const gInZone = roomGroups.filter(function (g) {
+            const gz = String(g.zone ?? g.zoneId ?? '');
+            if (!gz) return false;
+            for (var i = 0; i < zoneIds.length; i++) {
+              var zid = zoneIds[i];
+              if (gz === zid || gz.endsWith(zid)) return true;
+            }
+            return false;
+          });
+          if (!gInZone.length) return;
+          const tpl = pickZoneTemplate(gInZone);
+          if (!tpl) return;
+
+          const zx1 = (zone.x1 ?? 0) * zScaleX, zy1 = (zone.y1 ?? 0) * zScaleZ;
+          const zx2 = (zone.x2 ?? gridSize) * zScaleX, zy2 = (zone.y2 ?? gridSize) * zScaleZ;
+          const zoneW = Math.abs(zx2 - zx1);
+          const zoneD = Math.abs(zy2 - zy1);
+          const rect = { lengthM: Math.max(zoneW, zoneD), widthM: Math.min(zoneW, zoneD) };
+          const layout = solveZoneLayout(rect, tpl, gInZone.length);
+          if (!layout) return;
+
+          // Solver works in zone-local coordinates with the long axis along x.
+          // Translate to world coordinates, accounting for orientation of the
+          // zone (long axis may be along room X or room Z) and plumbing-wall
+          // preference (anchor rows to the longer wall so walls carry plumbing
+          // / hydro runs, leaving the opposite side for the main walkway).
+          const longAxisX = zoneW >= zoneD;
+          const ox = offsetX + Math.min(zx1, zx2);
+          const oy = Math.min(zy1, zy2);
+          zoneSpatial[zKey] = {
+            template: tpl,
+            layout: layout,
+            groupIds: gInZone.map(function (g) { return g.id || g._id || g.name; }),
+            origin: { ox: ox, oy: oy, longAxisX: longAxisX, zoneW: zoneW, zoneD: zoneD, zoneName: zone.name || ('Zone ' + (zi + 1)) },
+            consumed: 0
+          };
+
+          // Working-space envelopes for the placed units. Rendered as a flat
+          // low-opacity slab beneath each unit so operators can see the
+          // clearance the solver reserved for servicing, plumbing runs, and
+          // the main walkway.
+          const envMat = new THREE.MeshStandardMaterial({ color: 0x22d3ee, transparent: true, opacity: 0.12, roughness: 0.7, metalness: 0.05 });
+          const envEdgeMat = new THREE.LineBasicMaterial({ color: 0x22d3ee, transparent: true, opacity: 0.5 });
+          layout.placements.forEach(function (p) {
+            const envL = p.envelope.lengthM;
+            const envW = p.envelope.widthM;
+            let wx, wz, meshL, meshW;
+            if (longAxisX) {
+              wx = ox + p.envelope.x + envL / 2;
+              wz = oy + p.envelope.y + envW / 2;
+              meshL = envL; meshW = envW;
+            } else {
+              wx = ox + p.envelope.y + envW / 2;
+              wz = oy + p.envelope.x + envL / 2;
+              meshL = envW; meshW = envL;
+            }
+            const envGeo = new THREE.BoxGeometry(Math.max(0.05, meshL - 0.02), 0.03, Math.max(0.05, meshW - 0.02));
+            const envMesh = new THREE.Mesh(envGeo, envMat);
+            envMesh.position.set(wx, 0.2, wz);
+            envMesh.receiveShadow = true;
+            envMesh.userData = { type: 'workspace-envelope', zoneKey: zKey, placement: p };
+            S.scene.add(envMesh);
+            S.meshes.zones.push(envMesh);
+            const envEdge = new THREE.LineSegments(new THREE.EdgesGeometry(envGeo), envEdgeMat);
+            envEdge.position.set(wx, 0.21, wz);
+            S.scene.add(envEdge);
+            S.meshes.zones.push(envEdge);
+          });
+
+          // Zone-level overflow warning: if there are more groups assigned to
+          // this zone than the solver can fit, paint a red strip along the
+          // zone floor and emit a label explaining the shortfall. The user's
+          // recovery path is documented in the Room Build Plan ("use both
+          // zones" / "enlarge zone" / "reduce unit count").
+          if (layout.overflow > 0) {
+            const warnMat = new THREE.MeshStandardMaterial({ color: 0xef4444, transparent: true, opacity: 0.25, roughness: 0.6, metalness: 0.05 });
+            const warnGeo = new THREE.BoxGeometry(Math.max(0.5, zoneW - 0.3), 0.04, Math.max(0.5, zoneD - 0.3));
+            const warnMesh = new THREE.Mesh(warnGeo, warnMat);
+            warnMesh.position.set(offsetX + Math.min(zx1, zx2) + zoneW / 2, 0.19, Math.min(zy1, zy2) + zoneD / 2);
+            warnMesh.userData = { type: 'zone-overflow-warn', zoneKey: zKey, overflow: layout.overflow };
+            S.scene.add(warnMesh);
+            S.meshes.zones.push(warnMesh);
+            makeLabel('! ' + layout.overflow + ' of ' + gInZone.length + ' units do not fit - use both zones or reduce count',
+              offsetX + Math.min(zx1, zx2) + zoneW / 2, 0.9, Math.min(zy1, zy2) + zoneD / 2,
+              { size: 11, color: '#fecaca', opacity: 0.95 });
+            S.spatialViolations.push({ zoneKey: zKey, zoneName: zone.name || ('Zone ' + (zi + 1)), roomId: room.id, overflow: layout.overflow, capacity: layout.maxUnits, requested: gInZone.length });
+          }
+        });
+
         roomGroups.forEach((group, gi) => {
           const gZone = String(group.zone ?? group.zoneId ?? '');
-          const matched = zones.find(z => String(z.zone) === gZone || String(z.name) === gZone || String(z.id) === gZone || gZone.endsWith(String(z.zone)) || gZone.endsWith(String(z.name)));
+          // Match against only the identifiers actually present on each zone so
+          // an empty string cannot match every group via `endsWith('')`. Must
+          // mirror the pre-computation filter above to keep zoneSpatial indexing
+          // consistent with this placement loop.
+          const matched = !gZone ? null : zones.find(function (z) {
+            const zIds = [z.zone, z.id, z.name]
+              .filter(function (v) { return v !== undefined && v !== null && String(v) !== ''; })
+              .map(String);
+            for (var i = 0; i < zIds.length; i++) {
+              if (gZone === zIds[i] || gZone.endsWith(zIds[i])) return true;
+            }
+            return false;
+          });
           let gx, gz;
+          let spatialPlacement = null;
+          let overflowFlag = false;
 
-          // Prefer explicit grid position (set by optimize_layout)
-          const hasGridPos = group.gridX != null && group.gridY != null;
-          if (hasGridPos) {
-            gx = group.gridX * zScaleX + offsetX;
-            gz = group.gridY * zScaleZ;
-          } else if (matched) {
-            // Auto-layout: scale zone bounds from grid to meters
-            const zx1 = (matched.x1 ?? 0) * zScaleX + offsetX, zy1 = (matched.y1 ?? 0) * zScaleZ;
-            const zx2 = (matched.x2 ?? gridSize) * zScaleX + offsetX, zy2 = (matched.y2 ?? gridSize) * zScaleZ;
-            const gDims0 = getSavedGroupDimensions(group);
-            const cellW = Math.max(2.0, (gDims0.length || 1.8) + 0.6);
-            const cellD = Math.max(2.0, (gDims0.width || 1.0) + 0.6);
-            const zoneW = Math.abs(zx2 - zx1);
-            const zoneD = Math.abs(zy2 - zy1);
-            const cols = Math.max(1, Math.floor((zoneW - 0.8) / cellW));
-            const zKey = String(matched.zone ?? matched.name ?? gi);
-            const idx = zoneAutoIdx[zKey] || 0;
-            zoneAutoIdx[zKey] = idx + 1;
-            gx = Math.min(zx1, zx2) + 0.8 + (idx % cols) * cellW + cellW / 2;
-            gz = Math.min(zy1, zy2) + 0.8 + Math.floor(idx / cols) * cellD + cellD / 2;
-          } else {
-            gx = offsetX + 2 + (gi % 6) * 3;
-            gz = 2 + Math.floor(gi / 6) * 3;
+          // Prefer spatial-solver placement (real template dims + working-space
+          // envelope + wall-side plumbing anchoring). Falls back through the
+          // existing grid-position / auto-layout paths when no template could
+          // be resolved for the zone.
+          if (matched) {
+            const zKey = String(matched.zone ?? matched.id ?? matched.name ?? '');
+            const sp = zoneSpatial[zKey];
+            if (sp) {
+              const idxInZone = sp.consumed;
+              sp.consumed += 1;
+              const p = sp.layout.placements[idxInZone];
+              if (p) {
+                spatialPlacement = p;
+                if (sp.origin.longAxisX) {
+                  gx = sp.origin.ox + p.x + p.lengthM / 2;
+                  gz = sp.origin.oy + p.y + p.widthM / 2;
+                } else {
+                  gx = sp.origin.ox + p.y + p.widthM / 2;
+                  gz = sp.origin.oy + p.x + p.lengthM / 2;
+                }
+              } else {
+                // Overflow: park beyond solver capacity, tint red.
+                overflowFlag = true;
+                const over = idxInZone - sp.layout.placements.length;
+                gx = sp.origin.ox + sp.origin.zoneW - 0.9;
+                gz = sp.origin.oy + 0.9 + over * 0.9;
+              }
+            }
+          }
+
+          if (gx == null) {
+            // Prefer explicit grid position (set by optimize_layout)
+            const hasGridPos = group.gridX != null && group.gridY != null;
+            if (hasGridPos) {
+              gx = group.gridX * zScaleX + offsetX;
+              gz = group.gridY * zScaleZ;
+            } else if (matched) {
+              // Auto-layout: scale zone bounds from grid to meters
+              const zx1 = (matched.x1 ?? 0) * zScaleX + offsetX, zy1 = (matched.y1 ?? 0) * zScaleZ;
+              const zx2 = (matched.x2 ?? gridSize) * zScaleX + offsetX, zy2 = (matched.y2 ?? gridSize) * zScaleZ;
+              const gDims0 = getSavedGroupDimensions(group);
+              const cellW = Math.max(2.0, (gDims0.length || 1.8) + 0.6);
+              const cellD = Math.max(2.0, (gDims0.width || 1.0) + 0.6);
+              const zoneW = Math.abs(zx2 - zx1);
+              const cols = Math.max(1, Math.floor((zoneW - 0.8) / cellW));
+              const zKey = String(matched.zone ?? matched.name ?? gi);
+              const idx = zoneAutoIdx[zKey] || 0;
+              zoneAutoIdx[zKey] = idx + 1;
+              gx = Math.min(zx1, zx2) + 0.8 + (idx % cols) * cellW + cellW / 2;
+              gz = Math.min(zy1, zy2) + 0.8 + Math.floor(idx / cols) * cellD + cellD / 2;
+            } else {
+              gx = offsetX + 2 + (gi % 6) * 3;
+              gz = 2 + Math.floor(gi / 6) * 3;
+            }
           }
 
           const gStatus = (group.status || 'active').toLowerCase();
           const trayCount = Math.max(1, Math.min(Number(group.trays) || 1, 20));
-          const color = STATUS_COLOR[gStatus] || 0x22c55e;
+          // Overflow groups get the destructive palette so overlap/overflow
+          // is unmistakable in the scene. Status-driven color is preserved
+          // for in-plan units.
+          const color = overflowFlag ? 0xef4444 : (STATUS_COLOR[gStatus] || 0x22c55e);
 
           // Use saved dimensions first, then the group's persisted server values, then defaults.
           const gDims = getSavedGroupDimensions(group);
-          const gLength = gDims.length || Math.min(trayCount, 4) * 0.45;
-          const gWidth  = gDims.width  || Math.ceil(trayCount / 4) * 0.45;
-          const gHeight = gDims.height || 0.3;
+          let gLength = gDims.length || Math.min(trayCount, 4) * 0.45;
+          let gWidth  = gDims.width  || Math.ceil(trayCount / 4) * 0.45;
+          let gHeight = gDims.height || 0.3;
           const lightOri = gDims.lightOrientation || 'out-of-canopy';
+
+          // Spatial-solver placements override persisted dimensions with the
+          // template's real unit footprint so the 3D scene matches the Room
+          // Build Plan's zone capacity numbers. Height comes from the
+          // template (e.g. 2.44 m for ZipGrow / Aeroponic towers).
+          if (spatialPlacement) {
+            const spZone = matched ? zoneSpatial[String(matched.zone ?? matched.id ?? matched.name ?? '')] : null;
+            const longAxisX = spZone && spZone.origin ? spZone.origin.longAxisX : true;
+            if (longAxisX) {
+              gLength = spatialPlacement.lengthM;
+              gWidth  = spatialPlacement.widthM;
+            } else {
+              gLength = spatialPlacement.widthM;
+              gWidth  = spatialPlacement.lengthM;
+            }
+            gHeight = spatialPlacement.heightM || gHeight;
+          }
 
           const systemType = inferGroupSystemType(group);
           const rackLevels = getGroupRackLevels(group, gHeight, trayCount);
@@ -2187,6 +2561,9 @@
         S.controls.update();
       }
 
+      // Apply initial equipment visibility (hidden by default)
+      S.meshes.equipment.forEach(m => { m.visible = S.equipmentVisible; });
+
       applyOverlay(S.overlay);
     }
 
@@ -2321,6 +2698,22 @@
         if (v != null) return { value: v, source: 'iot-registry' };
       }
 
+      // PPFD/DLI: extract from group light assignments or zone plan targets
+      if (metricKey === 'ppfd' || metricKey === 'dli') {
+        // Check zone data for groups with PPFD/DLI targets
+        for (const zone of zones) {
+          const groups = zone.groups || [];
+          for (const g of groups) {
+            if (g.targetPpfd != null && metricKey === 'ppfd') return { value: g.targetPpfd, source: 'group-plan' };
+            if (g.dli != null && metricKey === 'dli') return { value: g.dli, source: 'group-plan' };
+            const pc = g.planConfig || {};
+            if (pc.preview?.ppfd != null && metricKey === 'ppfd') return { value: pc.preview.ppfd, source: 'plan-preview' };
+            if (pc.preview?.dli != null && metricKey === 'dli') return { value: pc.preview.dli, source: 'plan-preview' };
+            if (pc.dli != null && metricKey === 'dli') return { value: pc.dli, source: 'plan-config' };
+          }
+        }
+      }
+
       return { value: null, source: 'none' };
     }
 
@@ -2331,6 +2724,7 @@
       if (cat.includes('sensor') || cat.includes('temp') || cat.includes('humid') || cat.includes('environment')) return true;
       if (type.includes('sensor') || type.includes('woio')) return true;
       if (/^sen\b/.test(name) || name.includes('sensor')) return true;
+      if (cat.includes('light') || type.includes('light') || name.includes('light')) return true;
       const devId = dev.deviceId || dev.snapshot?.deviceId || '';
       if (devId && (S.envData?.zones || []).some(function(z) {
         return !!(z?.sensors?.tempC?.sources?.[devId] || z?.sensors?.rh?.sources?.[devId] || z?.sensors?.co2?.sources?.[devId]);
@@ -2375,7 +2769,56 @@
 
       const legend = document.getElementById('dataLegend');
       if (type === 'none') {
+        // Always-on zone status tinting when no overlay is active
+        if (S.targetRanges) {
+          const STATUS_TINT = { ok: 0x22c55e, caution: 0xfacc15, warning: 0xf59e0b, critical: 0xef4444 };
+          S.meshes.zones.forEach(m => {
+            if (!m.isMesh || m.userData.type !== 'zone') return;
+            const data = findZoneDataForMesh(m);
+            if (!data || !data.deviation) return;
+            const worst = data.deviation.worst;
+            if (worst !== 'ok') {
+              m.material.color.setHex(STATUS_TINT[worst]);
+              m.material.opacity = worst === 'critical' ? 0.30 : worst === 'warning' ? 0.25 : 0.20;
+            }
+          });
+        }
         legend.classList.remove('visible');
+        return;
+      }
+
+      // Dedicated status overlay: per-zone deviation from target ranges
+      if (type === 'status') {
+        const STATUS_COLORS = { ok: 0x22c55e, caution: 0xfacc15, warning: 0xf59e0b, critical: 0xef4444, unknown: 0x475569 };
+        const STATUS_OPACITY = { ok: 0.30, caution: 0.40, warning: 0.45, critical: 0.55, unknown: 0.15 };
+        let worstOverall = 'ok';
+        let okCount = 0, warnCount = 0, critCount = 0;
+        S.meshes.zones.forEach(m => {
+          if (!m.isMesh || m.userData.type !== 'zone') return;
+          const data = findZoneDataForMesh(m);
+          const worst = data?.deviation?.worst || 'unknown';
+          const color = STATUS_COLORS[worst] || STATUS_COLORS.unknown;
+          m.material.color.setHex(color);
+          m.material.opacity = STATUS_OPACITY[worst] || 0.15;
+          if (m.material.emissive) {
+            m.material.emissive.setHex(color);
+            m.material.emissiveIntensity = worst === 'critical' ? 0.18 : worst === 'warning' ? 0.10 : 0.03;
+          }
+          if (worst === 'critical') { critCount++; worstOverall = 'critical'; }
+          else if (worst === 'warning') { warnCount++; if (worstOverall !== 'critical') worstOverall = 'warning'; }
+          else if (worst === 'caution') { warnCount++; if (worstOverall === 'ok') worstOverall = 'caution'; }
+          else if (worst === 'ok') { okCount++; }
+        });
+        legend.classList.add('visible');
+        const parts = [];
+        if (okCount) parts.push(okCount + ' in range');
+        if (warnCount) parts.push(warnCount + ' warning');
+        if (critCount) parts.push(critCount + ' critical');
+        document.getElementById('legendTitle').textContent = 'Zone Status' + (parts.length ? ' -- ' + parts.join(', ') : '');
+        document.getElementById('legendMin').textContent = 'In Range';
+        document.getElementById('legendMax').textContent = 'Critical';
+        const gradBar = document.getElementById('legendGradient');
+        gradBar.style.background = 'linear-gradient(to right, #22c55e 0%, #facc15 33%, #f59e0b 66%, #ef4444 100%)';
         return;
       }
 
@@ -3276,6 +3719,7 @@
     }
 
     function onPointerDown(e) {
+      if (_touchCount > 1) return; // multi-touch = orbit, not drag
       if (!S.editMode) return;
       if (e.shiftKey || e.metaKey || e.ctrlKey) return;
       var container = document.getElementById('viewer-container');
@@ -4262,6 +4706,14 @@
       btn.classList.toggle('active', S.wallsVisible);
     }
 
+    // ---- Toggle equipment (lights, fans, devices) ----------
+    function toggleEquipment() {
+      S.equipmentVisible = !S.equipmentVisible;
+      S.meshes.equipment.forEach(m => { m.visible = S.equipmentVisible; });
+      const btn = document.getElementById('btnGear');
+      btn.classList.toggle('active', S.equipmentVisible);
+    }
+
     // ---- GWEN integration ------------------------------------
     function openGwenWithContext() {
       const envSummary = {};
@@ -4296,6 +4748,7 @@
       });
 
       document.getElementById('btnWalls').addEventListener('click', toggleWalls);
+      document.getElementById('btnGear').addEventListener('click', toggleEquipment);
       document.getElementById('btnTop').addEventListener('click', function() { var t = S.controls.target; animateTo({ x: t.x, y: 35, z: t.z + 0.1 }); });
       document.getElementById('btnAngle').addEventListener('click', function() { var t = S.controls.target; animateTo({ x: t.x - 10, y: 16, z: t.z + 18 }); });
       document.getElementById('btnReset').addEventListener('click', function() {
@@ -4333,12 +4786,85 @@
         }
       });
 
+      // ---- Phase 4 #24: Keyboard navigation for 3D viewer ----
+      var _kbFocusIdx = -1;
+      function _getZoneMeshes() {
+        var meshes = [];
+        S.scene.traverse(function(obj) {
+          if (obj.isMesh && obj.userData && (obj.userData.type === 'zone' || obj.userData.type === 'group' || obj.userData.type === 'sensor')) {
+            meshes.push(obj);
+          }
+        });
+        return meshes;
+      }
+      function _a11yAnnounce(msg) {
+        var el = document.getElementById('a11yAnnouncer');
+        if (el) { el.textContent = ''; requestAnimationFrame(function() { el.textContent = msg; }); }
+      }
+      document.addEventListener('keydown', function(e) {
+        var target = e.target;
+        if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT') return;
+        if (target.isContentEditable) return;
+        var handled = false;
+        var orbitStep = 0.05;
+        var zoomStep = 2;
+        if (e.key === 'ArrowLeft') {
+          if (S.controls) { S.controls.autoRotate = false; S.controls.object.position.applyAxisAngle(new THREE.Vector3(0,1,0), orbitStep); S.controls.update(); }
+          handled = true;
+        } else if (e.key === 'ArrowRight') {
+          if (S.controls) { S.controls.autoRotate = false; S.controls.object.position.applyAxisAngle(new THREE.Vector3(0,1,0), -orbitStep); S.controls.update(); }
+          handled = true;
+        } else if (e.key === 'ArrowUp') {
+          if (S.controls) { var d = S.controls.object.position.distanceTo(S.controls.target); if (d > S.controls.minDistance) { S.controls.object.position.lerp(S.controls.target, 0.08); S.controls.update(); } }
+          handled = true;
+        } else if (e.key === 'ArrowDown') {
+          if (S.controls) { var dir = S.controls.object.position.clone().sub(S.controls.target).normalize(); S.controls.object.position.add(dir.multiplyScalar(zoomStep)); S.controls.update(); }
+          handled = true;
+        } else if (e.key === '+' || e.key === '=') {
+          if (S.controls) { var d2 = S.controls.object.position.distanceTo(S.controls.target); if (d2 > S.controls.minDistance + zoomStep) { var dir2 = S.controls.target.clone().sub(S.controls.object.position).normalize(); S.controls.object.position.add(dir2.multiplyScalar(zoomStep)); S.controls.update(); } }
+          handled = true;
+        } else if (e.key === '-' || e.key === '_') {
+          if (S.controls) { var dir3 = S.controls.object.position.clone().sub(S.controls.target).normalize(); S.controls.object.position.add(dir3.multiplyScalar(zoomStep)); S.controls.update(); }
+          handled = true;
+        } else if (e.key === 'Tab' && !e.ctrlKey && !e.metaKey) {
+          var meshes = _getZoneMeshes();
+          if (meshes.length > 0) {
+            if (e.shiftKey) { _kbFocusIdx = (_kbFocusIdx - 1 + meshes.length) % meshes.length; }
+            else { _kbFocusIdx = (_kbFocusIdx + 1) % meshes.length; }
+            var mesh = meshes[_kbFocusIdx];
+            var ud = mesh.userData;
+            setSelection([mesh]);
+            var pos = new THREE.Vector3(); mesh.getWorldPosition(pos);
+            animateTo(pos, 500);
+            var label = (ud.label || ud.name || ud.zoneId || ud.groupId || 'Object');
+            var typeLabel = ud.type === 'zone' ? 'Zone' : ud.type === 'group' ? 'Group' : 'Sensor';
+            _a11yAnnounce(typeLabel + ': ' + label + '. Press Enter for details.');
+            handled = true;
+          }
+        } else if (e.key === 'Enter') {
+          if (S.selectedMeshes && S.selectedMeshes.length > 0) {
+            var ud2 = S.selectedMeshes[0].userData;
+            if (ud2) showDetailPanel(ud2);
+            handled = true;
+          }
+        }
+        if (handled) e.preventDefault();
+      });
+
       var canvas = document.getElementById('farmCanvas');
       canvas.style.touchAction = 'none';
       canvas.addEventListener('pointerdown', onPointerDown);
       canvas.addEventListener('pointermove', onPointerMove);
       canvas.addEventListener('pointerup', onPointerUp);
       canvas.addEventListener('click', function(e) { if (!S.isDragging && !S.editMode) onClick(e); else if (S.editMode && !S.isDragging) onClick(e); });
+
+      // ---- Phase 4 #24: Mobile touch refinements ----
+      // Prevent edit-mode drag from interfering with multi-touch orbit/zoom
+      var _touchCount = 0;
+      canvas.addEventListener('touchstart', function(e) { _touchCount = e.touches.length; }, { passive: true });
+      canvas.addEventListener('touchend', function(e) { _touchCount = e.touches.length; }, { passive: true });
+      canvas.addEventListener('touchcancel', function(e) { _touchCount = 0; }, { passive: true });
+
       document.getElementById('btnEdit').addEventListener('click', toggleEditMode);
       document.getElementById('detailClose').addEventListener('click', function() {
         closeDetailPanel({ confirm: true, message: 'Discard unsaved detail panel changes?' });

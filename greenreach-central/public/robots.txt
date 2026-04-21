@@ -1,6 +1,5 @@
 User-agent: *
 Allow: /greenreach-org.html
-Allow: /greenreach-grow.html
 Allow: /growing-made-easy.html
 Allow: /grow-and-sell.html
 Allow: /blog.html

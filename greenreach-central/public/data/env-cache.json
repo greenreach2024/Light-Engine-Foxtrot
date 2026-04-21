@@ -1,14 +1,14 @@
 {
   "room-3xxjln": {
-    "temperature": 15.6,
-    "humidity": 28.8,
+    "temperature": 21.8,
+    "humidity": 62.5,
     "co2": null,
     "par": null,
     "vpd": null,
     "zones": {
       "zone-2": {
-        "temperature": 15.6,
-        "humidity": 29,
+        "temperature": 21.6,
+        "humidity": 62,
         "avg_battery": 60,
         "sensor_count": 2,
         "sensors": [
@@ -17,8 +17,8 @@
         ]
       },
       "zone-1": {
-        "temperature": 15.7,
-        "humidity": 28.5,
+        "temperature": 21.9,
+        "humidity": 63,
         "avg_battery": 60,
         "sensor_count": 2,
         "sensors": [

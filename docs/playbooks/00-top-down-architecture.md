@@ -100,7 +100,7 @@ Foxtrot can be read as **four customer-facing apps** sharing one backend:
 This is actually **two tightly linked surfaces** that share a backend and the marketing agent S.C.O.T.T.
 
 **C.1 Marketing Platform**
-- **Public landing pages**: `landing-*.html`, `about.html`, `greenreach-grow.html`, `id-buy-local.html`, blog, etc.
+- **Public landing pages**: `landing-*.html`, `about.html`, `id-buy-local.html`, blog, etc.
 - **Marketing agent (S.C.O.T.T.)**: `greenreach-central/routes/scott-marketing-agent.js` — "Social Content Optimization, Trends & Targeting." Generates social posts per platform, runs rule-engine auto-approval (`marketing-rules-engine.js`), publishes via `marketing-platforms.js`, tracks AI cost via `ai-usage-tracker.js`. Explicitly positioned as "junior to F.A.Y.E." with escalation.
 - **Admin surface**: `/api/admin/marketing` (`greenreach-central/routes/admin-marketing.js`), campaigns (`greenreach-central/routes/campaign.js`), marketing skills registry (`greenreach-central/services/marketing-skills.js`).
 - **Branding (planned):** per-farm subdomain stores (`*.greenreachgreens.com`) are the **intended** public face of each tenant; today the farm shop is reached via the LE Cloud Run URL or (once migrated) relative paths under Central's domain. Wildcard DNS and TLS for `*.greenreachgreens.com` are **not** configured in production today.
@@ -182,7 +182,7 @@ Foxtrot is an explicitly **multi-agent** system. Every agent has a defined audie
 |---|---|---|---|---|---|---|
 | **E.V.I.E.** | Environmental Vision & Intelligence Engine | **One farm** | Growers, visitors, demo viewers | OpenAI GPT-4o (primary) + Anthropic Claude (fallback) | Farm-scoped read/suggest + act via Farm-Ops tool gateway | `greenreach-central/routes/assistant-chat.js` |
 | **Farm-Ops-Agent** | Deterministic ops engine | One farm | Backend / E.V.I.E. tool-gateway | Deterministic + GPT-4o for NL parsing | Executes scored daily tasks, tool catalog, audit log | `greenreach-central/routes/farm-ops-agent.js` (canonical, ~5.3K lines); LE also ships a companion `routes/farm-ops-agent.js` (~1.1K lines, mounted in `server-foxtrot.js`) — see Playbook 02 §3 |
-| **Setup-Agent** | Farm setup orchestrator | One farm | New farms onboarding with E.V.I.E. | GPT-4o | 12-phase setup progress, fills farm profile, rooms, zones, groups, crops | `greenreach-central/routes/setup-agent.js` |
+| **Setup-Agent** | Farm setup orchestrator | One farm | New farms onboarding with E.V.I.E. | GPT-4o | 12-phase setup progress, template-aware room design + build-plan computation, fills farm profile, rooms, zones, groups, crops | `greenreach-central/routes/setup-agent.js` |
 | **F.A.Y.E.** | Farm Autonomy & Yield Engine | **All farms** | Platform admins / ops | GPT-4o primary | Observe, learn, recommend, progressively automate across network; receives escalations from E.V.I.E. and S.C.O.T.T.; safe-patch approval authority | `greenreach-central/routes/admin-assistant.js` |
 | **Admin-Ops-Agent** | Platform ops agent | Platform-wide | Admins | GPT-4o | Ops runbooks, system health, revenue analysis, feature management | `greenreach-central/routes/admin-ops-agent.js` |
 | **G.W.E.N.** | Grants, Workplans, Evidence & Navigation | Research bubble (across farms per study) | Researchers, PIs, HQP | Gemini 2.5 Pro (Vertex AI) | Research workspace actions, DMPs, grants, governance; `execute_code` disabled by default in cloud unless `GWEN_EXECUTE_CODE_ENABLED=true` | `greenreach-central/routes/gwen-research-agent.js` |
