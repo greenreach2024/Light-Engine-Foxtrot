@@ -112,7 +112,22 @@
       "image": "/images/grow-systems/nft-rack-3tier.jpg",
       "tagline": "High-density vertical NFT for leafy greens and herbs.",
       "defaultCropClass": "leafy_greens",
-      "lightingSpecSummary": "LED bars, 2.7 umol/J efficacy, ~16 h photoperiod, 350 PPFD target for leafy greens."
+      "lightingSpecSummary": "LED bars, 2.7 umol/J efficacy, ~16 h photoperiod, 350 PPFD target for leafy greens.",
+      "spatialContract": {
+        "unitFootprintM": {
+          "length": 2.4,
+          "width": 0.6,
+          "height": 2.4
+        },
+        "workspaceClearanceM": {
+          "front": 0.9,
+          "back": 0.0,
+          "ends": 0.0
+        },
+        "orientation": "butt_end_to_end",
+        "plumbingSide": "wall",
+        "notes": "Three-tier NFT rack butts end-to-end along a plumbing wall. Operator aisle on the picking side; back manifold runs against wall."
+      }
     },
     {
       "id": "dwc-pond-4x8",
@@ -217,7 +232,22 @@
       "image": "/images/grow-systems/dwc-pond-4x8.jpg",
       "tagline": "Shallow deep-water culture pond \u2014 forgiving root zone, simple plumbing.",
       "defaultCropClass": "leafy_greens",
-      "lightingSpecSummary": "Horizontal LED canopy, 2.7 umol/J, 16 h photoperiod, 350 PPFD target."
+      "lightingSpecSummary": "Horizontal LED canopy, 2.7 umol/J, 16 h photoperiod, 350 PPFD target.",
+      "spatialContract": {
+        "unitFootprintM": {
+          "length": 2.4,
+          "width": 1.2,
+          "height": 0.9
+        },
+        "workspaceClearanceM": {
+          "front": 0.9,
+          "back": 0.0,
+          "ends": 0.0
+        },
+        "orientation": "butt_end_to_end",
+        "plumbingSide": "wall",
+        "notes": "Shallow DWC ponds butt end-to-end; single-tier canopy needs access on one long side only. Plumbing manifold routes along the wall-side."
+      }
     },
     {
       "id": "vertical-tier-5-microgreen",
@@ -321,7 +351,22 @@
       "image": "/images/grow-systems/vertical-tier-5-microgreen.jpg",
       "tagline": "5-tier microgreen rack with extended 18 h photoperiod.",
       "defaultCropClass": "microgreens",
-      "lightingSpecSummary": "Compact LED strips, 2.7 umol/J, 18 h photoperiod, 250 PPFD target."
+      "lightingSpecSummary": "Compact LED strips, 2.7 umol/J, 18 h photoperiod, 250 PPFD target.",
+      "spatialContract": {
+        "unitFootprintM": {
+          "length": 1.8,
+          "width": 0.6,
+          "height": 2.2
+        },
+        "workspaceClearanceM": {
+          "front": 0.9,
+          "back": 0.0,
+          "ends": 0.0
+        },
+        "orientation": "butt_end_to_end",
+        "plumbingSide": "wall",
+        "notes": "Compact 5-tier microgreen racks abut end-to-end against a plumbing wall; flood/drain manifold against wall-side."
+      }
     },
     {
       "id": "aeroponics-tower",
@@ -426,7 +471,22 @@
       "image": "/images/grow-systems/aeroponics-tower.jpg",
       "tagline": "Continuous aeroponic tower: 45 W spray pump, 700 W top lighting per tower.",
       "defaultCropClass": "leafy_greens",
-      "lightingSpecSummary": "Top-down LED fixture, 2.7 umol/J, 16 h photoperiod, 350 PPFD target for leafy greens (~700 W per tower)."
+      "lightingSpecSummary": "Top-down LED fixture, 2.7 umol/J, 16 h photoperiod, 350 PPFD target for leafy greens (~700 W per tower).",
+      "spatialContract": {
+        "unitFootprintM": {
+          "length": 0.762,
+          "width": 0.762,
+          "height": 2.44
+        },
+        "workspaceClearanceM": {
+          "front": 0.381,
+          "back": 0.381,
+          "ends": 0.381
+        },
+        "orientation": "single_sided",
+        "plumbingSide": "any",
+        "notes": "Stand-alone round tower (2.5 ft dia). Preferred 5x5 ft working envelope (0.381 m clearance each side around the 0.762 m body). Plumbing drops at base of each tower so placement is flexible."
+      }
     },
     {
       "id": "drip-rail-fruiting-8ft",
@@ -530,7 +590,22 @@
       "image": "/images/grow-systems/drip-rail-fruiting-8ft.jpg",
       "tagline": "Drip rail sized for fruiting crops (tomato / pepper / cucumber).",
       "defaultCropClass": "fruiting",
-      "lightingSpecSummary": "High-PPFD LED, 2.7 umol/J, 14\u201315 h photoperiod, 600+ PPFD target."
+      "lightingSpecSummary": "High-PPFD LED, 2.7 umol/J, 14\u201315 h photoperiod, 600+ PPFD target.",
+      "spatialContract": {
+        "unitFootprintM": {
+          "length": 2.4,
+          "width": 0.9,
+          "height": 2.2
+        },
+        "workspaceClearanceM": {
+          "front": 1.2,
+          "back": 0.0,
+          "ends": 0.0
+        },
+        "orientation": "butt_end_to_end",
+        "plumbingSide": "wall",
+        "notes": "Fruiting drip rail butts end-to-end; wider front aisle (1.2 m) for trellis/picking access. Drip supply + return manifold runs along the wall-side."
+      }
     },
     {
       "id": "zipgrow-tower-wall",
@@ -635,7 +710,22 @@
       "image": "/images/grow-systems/zipgrow-tower-wall.png",
       "tagline": "ZipGrow double-sided wall with 20 \u00d7 8-ft towers and vertical LED bars.",
       "defaultCropClass": "leafy_greens",
-      "lightingSpecSummary": "8 vertical 8-ft LED bars, 2.7 umol/J, 16 h photoperiod, 350 PPFD target for leafy greens (~770 W per rack)."
+      "lightingSpecSummary": "8 vertical 8-ft LED bars, 2.7 umol/J, 16 h photoperiod, 350 PPFD target for leafy greens (~770 W per rack).",
+      "spatialContract": {
+        "unitFootprintM": {
+          "length": 2.44,
+          "width": 1.37,
+          "height": 2.44
+        },
+        "workspaceClearanceM": {
+          "front": 0.915,
+          "back": 0.915,
+          "ends": 0.3
+        },
+        "orientation": "double_sided",
+        "plumbingSide": "wall",
+        "notes": "Double-sided rack (10 towers per side, 20 total). Preferred 10x12 ft working envelope = ~0.915 m aisle each long side. Vertical supply header hangs off the plumbing wall; service clearance 12-18 in above each tower."
+      }
     }
   ]
 }

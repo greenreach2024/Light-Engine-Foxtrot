@@ -520,7 +520,9 @@
   <script src="/js/net.guard.js" defer></script>
   <script src="/app.foxtrot.js?v=20260419-standalone-panel-fix" defer></script>
   <script src="/groups-v2.js?v=20260419-groupsv2-runtime-fix" defer></script>
+  <script src="/lib/room-layout-solver.js?v=20260421-rls-v1" defer></script>
   <script src="/views/grow-management-template-gallery.js?v=20260420-tg-v1" defer></script>
+  <script src="/views/grow-management-room-build-plan.js?v=20260421-rbp-v2" defer></script>
 </head>
 <body class="le-theme">
 
@@ -566,6 +568,22 @@
     <!-- ===== GROW-SYSTEM TEMPLATE GALLERY ===== -->
     <section id="growTemplateGallery" data-template-gallery-mount style="margin:0 16px 18px;"></section>
 
+    <!-- ===== ROOM BUILD PLAN (populated on template click) ===== -->
+    <section id="roomBuildPlan" class="gm-card" style="display:none;margin:0 16px 18px;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:12px;">
+        <div>
+          <h3 id="rbpTitle" style="margin:0 0 4px;border:none;padding:0;">Room Build Plan</h3>
+          <p id="rbpSubtitle" class="tiny text-muted" style="margin:0;">Select a template above to stage a build plan.</p>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button id="rbpPrefillBtn" type="button" class="primary" style="min-height:32px;padding:6px 14px;">Stage group from template</button>
+          <button id="rbpAssignLightsBtn" type="button" class="ghost" style="min-height:32px;padding:6px 14px;">Assign lights</button>
+          <button id="rbpClearBtn" type="button" class="ghost" style="min-height:32px;padding:6px 14px;">Clear</button>
+        </div>
+      </div>
+      <div id="rbpBody" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;"></div>
+    </section>
+
     <!-- Groups V2 Panel (always visible, dark-themed) -->
     <section id="groupsV2Panel" data-card-prefix="GR" data-card-code="GV2">
       <div class="panel-body" style="display:flex;flex-direction:column;gap:18px;">
@@ -604,6 +622,21 @@
             <div id="groupsV2HarvestStrategyIndicator" style="display:none;padding:6px 12px;border-radius:8px;font-size:0.85rem;font-weight:600;margin-top:4px;"></div>
           </div>
 
+          <!-- ===== LEGACY CONTROLS (hidden — moved to Crop Scheduler + Evie) =====
+               These inputs stay in the DOM so existing Save Group / recipe logic keeps
+               working against their default values, but they're no longer presented to
+               the operator. Planting and scheduling now live in the Crop Scheduler;
+               target temp/humidity are set by the crop recipe; environment-delta
+               automation is AI driven. See docs/features/FARM_SETUP_WORKFLOW_PROPOSAL.md.
+          -->
+          <div id="groupsV2LegacyControlsNote" class="tiny text-muted" style="padding:10px 14px;border:1px dashed rgba(148,163,184,0.25);border-radius:10px;background:rgba(15,23,42,0.4);">
+            Planting schedule, photoperiod cycles, target temp/humidity, and environment
+            deltas have moved out of this page.
+            <a href="/LE-farm-admin.html#growing/crop-scheduler" style="color:#38bdf8;">Crop Scheduler</a>
+            owns seeding and harvest anchors; crop recipes set temperature and humidity
+            targets; Evie drives environment-delta automation.
+          </div>
+          <div id="groupsV2LegacyControls" hidden aria-hidden="true" style="display:none;">
           <!-- ===== PLAN SEARCH + SELECT ===== -->
           <div class="row row--wrap" style="gap:12px;align-items:flex-start;">
             <label class="tiny" style="display:flex;flex-direction:column;min-width:200px;">
@@ -725,6 +758,7 @@
               <input id="groupsV2GradientRh" type="number" step="0.5" value="0">
             </label>
           </div>
+          </div><!-- /#groupsV2LegacyControls -->
 
           <!-- ===== PLAN PREVIEW ===== -->
           <div id="groupsV2PlanPreview"></div>
@@ -1121,9 +1155,12 @@
 
     <div id="bulkEditPreview" style="background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:12px;min-height:40px;font-size:0.8rem;color:#78350f;display:none;"></div>
 
-    <div style="display:flex;gap:8px;justify-content:flex-end;">
-      <button type="button" id="bulkEditGroupCancel" class="ghost">Cancel</button>
-      <button type="button" id="bulkEditGroupApply" class="primary" style="background:linear-gradient(135deg,#8b5cf6,#6d28d9);min-width:140px;">Apply to All</button>
+    <div style="display:flex;gap:8px;justify-content:space-between;align-items:center;flex-wrap:wrap;">
+      <button type="button" id="bulkDeleteGroupsBtn" class="ghost" style="color:#ef4444 !important;border:1px solid rgba(239,68,68,0.35) !important;min-width:160px;" title="Delete all groups in the selected family">Delete all matching</button>
+      <div style="display:flex;gap:8px;">
+        <button type="button" id="bulkEditGroupCancel" class="ghost">Cancel</button>
+        <button type="button" id="bulkEditGroupApply" class="primary" style="background:linear-gradient(135deg,#8b5cf6,#6d28d9);min-width:140px;">Apply to All</button>
+      </div>
     </div>
   </form>
 </dialog>
