@@ -13,7 +13,7 @@
  *
  *   category: 'setup'      -- required to finish initial farm build-out
  *     1. farm_profile    Business identity (name, contact, location, timezone)
- *     2. room_design     Room shell + dimensions + grow-system templates
+ *     2. room_design     Room shell + dimensions (length x width x height)
  *     3. zones           Climate zones within rooms
  *     4. groups          Grow units (racks/benches/trays) -- installedSystems[]
  *     5. lights          Light fixtures registered and assigned
@@ -70,7 +70,7 @@ const PHASES = [
     weight: 12,
     order: 2,
     category: 'setup',
-    evie_prompt: 'Help me design my grow rooms -- I need to set room dimensions and pick a grow-system template.',
+    evie_prompt: 'Help me design my grow rooms -- I need to create rooms and set their dimensions.',
     sidebar_target: 'groups-v2',
     flow_anchor: 'flow-room'
   },
@@ -614,7 +614,9 @@ router.get('/guidance/:phaseId', async (req, res) => {
             label: remapped.label,
             description: remapped.description,
             order: remapped.order,
-            sidebar_target: remapped.sidebar_target
+            category: remapped.category || 'setup',
+            sidebar_target: remapped.sidebar_target,
+            flow_anchor: remapped.flow_anchor || null
           },
           status: evaluation,
           steps: getPhaseSteps('room_design', evaluation),
