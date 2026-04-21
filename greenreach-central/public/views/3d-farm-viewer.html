@@ -327,6 +327,58 @@
       padding: 0.25rem 0.6rem;
       font-size: 0.62rem; color: #475569; z-index: 55;
     }
+    /* Spatial-violations HUD. Surfaces S.spatialViolations entries
+       with actionable buttons (rebalance / reduce / open room). Only
+       visible when the scene has at least one violation. */
+    .spatial-hud {
+      position: absolute;
+      top: 80px; right: 16px;
+      width: 320px; max-height: calc(100vh - 200px);
+      overflow-y: auto;
+      background: rgba(15,23,42,0.94);
+      border: 1px solid rgba(239,68,68,0.4);
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 0.72rem; color: #f1f5f9;
+      z-index: 60;
+      box-shadow: 0 8px 24px rgba(239,68,68,0.12);
+      display: none;
+    }
+    .spatial-hud.visible { display: block; }
+    .spatial-hud h4 {
+      font-size: 0.7rem; font-weight: 700;
+      color: #fecaca; text-transform: uppercase; letter-spacing: 0.05em;
+      margin: 0 0 8px; display: flex; justify-content: space-between; align-items: center;
+    }
+    .spatial-hud .sh-close {
+      background: none; border: none; color: #64748b;
+      cursor: pointer; font-size: 0.9rem; padding: 0 4px;
+    }
+    .spatial-hud .sh-close:hover { color: #f1f5f9; }
+    .spatial-hud .sh-row {
+      padding: 8px 0; border-top: 1px solid rgba(148,163,184,0.12);
+    }
+    .spatial-hud .sh-row:first-of-type { border-top: none; }
+    .spatial-hud .sh-where { font-size: 0.7rem; color: #94a3b8; margin-bottom: 2px; }
+    .spatial-hud .sh-what  { font-size: 0.82rem; font-weight: 600; color: #f1f5f9; margin-bottom: 4px; }
+    .spatial-hud .sh-why   { font-size: 0.68rem; color: #94a3b8; margin-bottom: 6px; line-height: 1.4; }
+    .spatial-hud .sh-acts  { display: flex; gap: 6px; flex-wrap: wrap; }
+    .spatial-hud button.sh-btn {
+      background: rgba(16,185,129,0.16);
+      border: 1px solid rgba(16,185,129,0.45);
+      color: #a7f3d0;
+      padding: 4px 10px; border-radius: 4px;
+      font-size: 0.68rem; cursor: pointer;
+    }
+    .spatial-hud button.sh-btn:hover { background: rgba(16,185,129,0.28); color: #ecfdf5; }
+    .spatial-hud button.sh-btn.is-ghost {
+      background: transparent;
+      border-color: rgba(148,163,184,0.35);
+      color: #cbd5e1;
+    }
+    .spatial-hud button.sh-btn:disabled {
+      opacity: 0.45; cursor: not-allowed;
+    }
 
     ::-webkit-scrollbar { width: 5px; }
     ::-webkit-scrollbar-track { background: transparent; }
@@ -445,9 +497,29 @@
       <div id="detailContent"></div>
     </div>
     <div class="status-bar" id="statusBar">Ready</div>
+    <!-- Spatial-violations HUD. Populated from S.spatialViolations at the
+         end of buildScene(). Hidden when there are no violations. Each row
+         describes an overflow (e.g. "Zone 1: 58 of 78 units do not fit")
+         and offers actionable buttons (Rebalance across zones / Open in
+         farm-flow) so the user can resolve it without opening another tab. -->
+    <aside class="spatial-hud" id="spatialHud" aria-live="polite">
+      <h4>
+        <span id="spatialHudTitle">Spatial capacity warnings</span>
+        <button type="button" class="sh-close" id="spatialHudClose" aria-label="Hide warnings">&#10005;</button>
+      </h4>
+      <div id="spatialHudBody"></div>
+    </aside>
     <div class="edit-indicator" id="editIndicator">EDIT MODE -- Drag sensors, equipment, and zones to reposition. Shift-click equipment, sensors, or groups to multi-select.</div>
     <button class="gwen-fab" id="gwenFab" title="Ask GWEN about this view">G<div class="gwen-tooltip">Ask GWEN to analyze zone data</div></button>
   </div>
+
+  <!-- Shared plan-anchor helper (window.planAnchor). Loaded as a classic script
+       so the UMD IIFE executes synchronously before the ESM module below runs.
+       Keeps the viewer's crop-assignment save path in sync with EVIE's
+       update_group_crop tool and the tray-seed endpoint — all three share
+       resolveCropRegistryEntry + stampPlanAnchor. See
+       docs/playbooks/10-farm-builder.md §10 Phase A. -->
+  <script src="/js/plan-anchor.js"></script>
 
   <script type="importmap">
   {
@@ -771,17 +843,22 @@
       return group?.id || group?.group_id || group?.name || null;
     }
 
-    // Resolve a crop-name selection against S.cropRegistry (already loaded from
-    // /data/crop-registry.json) and return { resolvedName, planId }. The
-    // registry stores the canonical name as the object key and plan IDs in a
-    // `planIds` array (see public/js/crop-utils.js), so we key off that.
-    // Falls back to a slugified 'crop-<name>' so unregistered crops still get a
-    // plan anchor. Aliases like "Bok Choy" → "Mei Qing Pak Choi" are resolved
-    // by scanning entry.aliases before giving up.
+    // Thin wrapper around the shared window.planAnchor helper loaded via
+    // <script src="/js/plan-anchor.js">. Keeps the viewer's crop-resolver in
+    // lockstep with EVIE's update_group_crop tool and the tray-seed endpoint —
+    // aliases ("Bok Choy" → "Mei Qing Pak Choi"), `planIds[0]`, singular legacy
+    // `planId`, and slug fallback all behave identically everywhere. Defensive
+    // fallback below performs the same registry-aware resolution inline so a
+    // missing /js/plan-anchor.js (cache miss, offline, CSP block) never demotes
+    // the viewer to slug-only writes.
     function resolveCropRegistryEntry(cropName) {
+      const crops = (S.cropRegistry && typeof S.cropRegistry === 'object') ? S.cropRegistry : {};
+      if (window.planAnchor && typeof window.planAnchor.resolveCropRegistryEntry === 'function') {
+        const r = window.planAnchor.resolveCropRegistryEntry(cropName, crops);
+        return { resolvedName: r.resolvedName, planId: r.planId };
+      }
       const raw = String(cropName || '').trim();
       if (!raw) return { resolvedName: '', planId: '' };
-      const crops = (S.cropRegistry && typeof S.cropRegistry === 'object') ? S.cropRegistry : {};
       const keys = Object.keys(crops);
       const lowered = raw.toLowerCase();
       let matchKey = keys.find(function(k) { return String(k).toLowerCase() === lowered; });
@@ -794,11 +871,6 @@
       }
       const entry = matchKey ? crops[matchKey] : null;
       const resolvedName = matchKey || raw;
-      // Most entries carry plan IDs in a `planIds` array, but a handful of
-      // legacy rows (e.g. "Breen Pelleted Organic", "Truchas Pelleted Organic",
-      // "Seaside F1 Spinach (baby leaf)") still use the singular `planId`
-      // field. Honour both before slugifying, so groups assigned those crops
-      // land with the registry's canonical planId.
       let planId = '';
       if (entry && Array.isArray(entry.planIds) && entry.planIds[0]) {
         planId = entry.planIds[0];
@@ -2565,6 +2637,209 @@
       S.meshes.equipment.forEach(m => { m.visible = S.equipmentVisible; });
 
       applyOverlay(S.overlay);
+      updateSpatialHud();
+    }
+
+    // ---- Spatial-violations HUD ------------------------------
+    // Populated at the end of every buildScene() from S.spatialViolations.
+    // Each violation row surfaces an overflow ("Zone 1: 58 of 78 do not fit")
+    // and offers two resolution paths:
+    //   1. Rebalance across zones — picks overflow groups from the full zone
+    //      and reassigns group.zone to zones in the same room with spare
+    //      capacity, persisted via persistGroupsData. Triggers buildScene()
+    //      on success.
+    //   2. Open in Grow Management — deep-link to the farm-flow breadcrumb
+    //      so the operator can reduce installedSystems[].quantity or enlarge
+    //      a zone instead of rebalancing.
+    function updateSpatialHud() {
+      var hud = document.getElementById('spatialHud');
+      var body = document.getElementById('spatialHudBody');
+      var title = document.getElementById('spatialHudTitle');
+      if (!hud || !body) return;
+      var violations = Array.isArray(S.spatialViolations) ? S.spatialViolations : [];
+      if (!violations.length) {
+        hud.classList.remove('visible');
+        body.innerHTML = '';
+        return;
+      }
+      hud.classList.add('visible');
+      if (title) title.textContent = 'Spatial capacity · ' + violations.length + ' warning' + (violations.length === 1 ? '' : 's');
+      body.innerHTML = '';
+      violations.forEach(function (v, idx) {
+        var row = document.createElement('div');
+        row.className = 'sh-row';
+        row.dataset.violationIdx = String(idx);
+        row.dataset.zoneKey = v.zoneKey || '';
+        var capacity = Number.isFinite(v.capacity) ? v.capacity : 0;
+        var requested = Number.isFinite(v.requested) ? v.requested : 0;
+        var overflow = Number.isFinite(v.overflow) ? v.overflow : Math.max(0, requested - capacity);
+        // Spare capacity in sibling zones of the same room tells us whether
+        // Rebalance can realistically help. If no zone has room, the button
+        // is disabled and we direct the user to farm-flow to reduce units.
+        var spare = computeSpareCapacityForViolation(v);
+        var canRebalance = spare >= overflow && spare > 0;
+        var whereTxt = (v.zoneName || v.zoneKey || 'Zone') + ' · room ' + (v.roomId || '');
+        var whatTxt = overflow + ' of ' + requested + ' units do not fit (capacity ' + capacity + ')';
+        var whyTxt = canRebalance
+          ? 'Sibling zones have ' + spare + ' slot' + (spare === 1 ? '' : 's') + ' free. Rebalance moves ' + overflow + ' group' + (overflow === 1 ? '' : 's') + ' into them without touching room or unit counts.'
+          : 'No sibling zone has capacity to absorb the overflow. Open Grow Management to reduce units or enlarge zones.';
+        var where = document.createElement('div'); where.className = 'sh-where'; where.textContent = whereTxt;
+        var what  = document.createElement('div'); what.className  = 'sh-what';  what.textContent  = whatTxt;
+        var why   = document.createElement('div'); why.className   = 'sh-why';   why.textContent   = whyTxt;
+        var acts  = document.createElement('div'); acts.className  = 'sh-acts';
+        var rebalance = document.createElement('button');
+        rebalance.type = 'button';
+        rebalance.className = 'sh-btn';
+        rebalance.textContent = canRebalance ? ('Rebalance ' + overflow + ' across zones') : 'Rebalance (no capacity)';
+        rebalance.disabled = !canRebalance;
+        rebalance.addEventListener('click', function () { rebalanceZones(v, rebalance); });
+        var openFlow = document.createElement('button');
+        openFlow.type = 'button';
+        openFlow.className = 'sh-btn is-ghost';
+        openFlow.textContent = 'Open in Grow Management';
+        openFlow.addEventListener('click', function () {
+          window.open('/views/grow-management.html#flow-grow-units', '_blank', 'noopener');
+        });
+        acts.appendChild(rebalance);
+        acts.appendChild(openFlow);
+        row.appendChild(where);
+        row.appendChild(what);
+        row.appendChild(why);
+        row.appendChild(acts);
+        body.appendChild(row);
+      });
+    }
+
+    // Sum of (maxUnits - currentGroupCount) across zones in the same room
+    // as the violation, excluding the violating zone itself. Mirrors the
+    // pre-compute logic in buildScene so the HUD stays consistent.
+    function computeSpareCapacityForViolation(v) {
+      if (!v || !v.roomId) return 0;
+      var room = (S.rooms || []).find(function (r) { return r && r.id === v.roomId; });
+      if (!room) return 0;
+      var zones = Array.isArray(room.zones) ? room.zones : [];
+      if (zones.length < 2) return 0;
+      var solver = window.RoomLayoutSolver;
+      if (!solver || typeof solver.solveLayout !== 'function') return 0;
+      var spare = 0;
+      zones.forEach(function (z) {
+        var zKey = getZoneKey(room, z);
+        if (!zKey || zKey === v.zoneKey) return;
+        var groupsInZone = groupsForZone(room, z);
+        // Use an overflow-zone group as the sizing template when the sibling
+        // is empty, so an empty Zone 2 can still report capacity for an
+        // overflowing ZipGrow Zone 1.
+        var sampleGroups = groupsInZone.length ? groupsInZone : groupsForZone(room, zones.find(function (zz) { return getZoneKey(room, zz) === v.zoneKey; }));
+        var template = pickZoneTemplate(sampleGroups);
+        if (!template) return;
+        var plan = solver.solveLayout(template, zoneRectForZone(z));
+        var capacity = (plan && plan.ok) ? (plan.maxUnits || 0) : 0;
+        spare += Math.max(0, capacity - groupsInZone.length);
+      });
+      return spare;
+    }
+
+    // Rebalance action: takes `overflow` groups off the full zone and
+    // distributes them into sibling zones with spare capacity. Writes
+    // group.zone in-place, persists via persistGroupsData (same path the
+    // drag-drop editor uses), then rebuilds the scene.
+    async function rebalanceZones(violation, btn) {
+      if (!violation || !violation.roomId || !violation.zoneKey) return;
+      var room = (S.rooms || []).find(function (r) { return r && r.id === violation.roomId; });
+      if (!room) { setStatusBarMessage('Rebalance: room not found', '#f87171', 4000); return; }
+      var zones = Array.isArray(room.zones) ? room.zones : [];
+      if (zones.length < 2) { setStatusBarMessage('Rebalance: add a second zone first', '#f59e0b', 4000); return; }
+      var solver = window.RoomLayoutSolver;
+      if (!solver || typeof solver.solveLayout !== 'function') return;
+
+      var sourceZone = zones.find(function (z) { return getZoneKey(room, z) === violation.zoneKey; });
+      if (!sourceZone) { setStatusBarMessage('Rebalance: zone not found', '#f87171', 4000); return; }
+      var sourceGroups = groupsForZone(room, sourceZone);
+      if (!sourceGroups.length) return;
+
+      // Sibling zones with remaining slots, in largest-capacity-first order.
+      var candidates = zones
+        .filter(function (z) { return getZoneKey(room, z) !== violation.zoneKey; })
+        .map(function (z) {
+          var groups = groupsForZone(room, z);
+          var template = pickZoneTemplate(groups.length ? groups : sourceGroups);
+          var plan = template ? solver.solveLayout(template, zoneRectForZone(z)) : null;
+          var capacity = (plan && plan.ok) ? (plan.maxUnits || 0) : 0;
+          return { zone: z, remaining: Math.max(0, capacity - groups.length) };
+        })
+        .filter(function (c) { return c.remaining > 0; })
+        .sort(function (a, b) { return b.remaining - a.remaining; });
+      if (!candidates.length) { setStatusBarMessage('Rebalance: no sibling zone has capacity', '#f59e0b', 4000); return; }
+
+      var overflow = Number.isFinite(violation.overflow) ? violation.overflow : 0;
+      if (overflow <= 0) return;
+      if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+
+      // Move groups from the END of the source zone (preserves low indices
+      // so existing operator mental model — "Standard 1..20 in Zone 1" — is
+      // least disrupted).
+      var toMove = sourceGroups.slice(-overflow);
+      var moved = 0;
+      var changedIds = new Set();
+      for (var i = 0; i < toMove.length; i++) {
+        var g = toMove[i];
+        var bucket = candidates.find(function (c) { return c.remaining > 0; });
+        if (!bucket) break;
+        var targetKey = bucket.zone.id || bucket.zone.name || bucket.zone.zone;
+        g.zone = targetKey;
+        bucket.remaining -= 1;
+        changedIds.add(getGroupKey(g));
+        moved += 1;
+      }
+      if (!moved) { if (btn) { btn.disabled = false; btn.textContent = 'Rebalance ' + overflow + ' across zones'; } return; }
+
+      try {
+        await persistGroupsData(S.groups, { changedIds: changedIds });
+        setStatusBarMessage('Rebalanced ' + moved + ' group' + (moved === 1 ? '' : 's') + ' across zones in ' + (room.name || room.id), '#10b981', 4000);
+        buildScene();
+      } catch (err) {
+        console.error('[3D] rebalanceZones failed:', err);
+        if (btn) { btn.disabled = false; btn.textContent = 'Rebalance ' + overflow + ' across zones'; }
+      }
+    }
+
+    // Helpers --------------------------------------------------
+    function getZoneKey(room, zone) {
+      if (!zone) return '';
+      return String(zone.id || zone.name || zone.zone || '');
+    }
+    function groupsForZone(room, zone) {
+      if (!room || !zone) return [];
+      var allowed = [zone.id, zone.name, zone.zone]
+        .filter(function (v) { return v !== undefined && v !== null && String(v) !== ''; })
+        .map(String);
+      return (S.groups || []).filter(function (g) {
+        if (!g) return false;
+        var gRoom = g.room || g.roomId;
+        if (gRoom && String(gRoom) !== String(room.id) && String(gRoom) !== String(room.name)) return false;
+        var gZone = String(g.zone || g.zoneId || '');
+        if (!gZone) return false;
+        for (var i = 0; i < allowed.length; i++) {
+          if (gZone === allowed[i] || gZone.endsWith(allowed[i])) return true;
+        }
+        return false;
+      });
+    }
+    // Shape a zone dict the solver understands: {lengthM, widthM}. Falls
+    // back to the zone's x1/x2 coords when explicit dimensions are missing.
+    function zoneRectForZone(zone) {
+      if (!zone) return null;
+      var L = Number(zone.length_m || zone.lengthM);
+      var W = Number(zone.width_m  || zone.widthM);
+      if (!Number.isFinite(L) || !Number.isFinite(W)) {
+        var x1 = Number(zone.x1), x2 = Number(zone.x2), y1 = Number(zone.y1), y2 = Number(zone.y2);
+        if ([x1, x2, y1, y2].every(Number.isFinite)) {
+          L = Math.abs(x2 - x1);
+          W = Math.abs(y2 - y1);
+        }
+      }
+      if (!Number.isFinite(L) || !Number.isFinite(W) || L <= 0 || W <= 0) return null;
+      return { lengthM: L, widthM: W };
     }
 
     // ---- Particles -------------------------------------------
@@ -3954,7 +4229,9 @@
       S.mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
 
       S.raycaster.setFromCamera(S.mouse, S.camera);
+      const overflowTargets = S.meshes.zones.filter(m => m.isMesh && m.userData && m.userData.type === 'zone-overflow-warn');
       const targets = [
+        ...overflowTargets,
         ...S.heatmapOverlays,
         ...S.meshes.floors,
         ...S.meshes.trays.filter(m => m.userData.type === 'group'),
@@ -3963,6 +4240,17 @@
         ...S.meshes.zones.filter(m => m.isMesh && m.userData.type === 'zone' && (!m.material || m.material.visible !== false)),
       ];
       const hits = S.raycaster.intersectObjects(targets);
+      // Clicking the in-scene overflow warning strip opens the spatial HUD
+      // and scrolls the matching row into view. Short-circuits the normal
+      // detail-panel flow so the operator can act on the warning immediately.
+      if (hits.length > 0 && hits[0].object && hits[0].object.userData && hits[0].object.userData.type === 'zone-overflow-warn') {
+        const zKey = hits[0].object.userData.zoneKey || '';
+        const hud = document.getElementById('spatialHud');
+        if (hud) hud.classList.add('visible');
+        const row = document.querySelector('#spatialHudBody .sh-row[data-zone-key="' + zKey.replace(/"/g, '\\"') + '"]');
+        if (row && row.scrollIntoView) row.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        return;
+      }
       if (S.editMode) {
         if (hits.length === 0) {
           clearSelection({ silent: true });
@@ -4093,31 +4381,37 @@
         html += '<button class="dp-save-btn" id="saveGrpOne" style="margin-top:0.3rem">' + (similarCount > 1 ? 'Update This One Only' : 'Save Changes') + '</button>';
         content.innerHTML = html;
 
-        // Save handler for single group. When a crop is picked, we resolve the
-        // same downstream fields EVIE's update_group_crop tool sets (see
-        // greenreach-central/routes/assistant-chat.js) so the environment daily
-        // resolver and the nutrient management UI can actually key off the group
-        // after a save. Previously the viewer only set `crop` + `status`, which
-        // left `plan`/`planId`/`planConfig.anchor.seedDate` missing and downstream
-        // systems blind to the change.
+        // Save handler for single group. When a crop is picked, we stamp all
+        // five scheduling fields + lastModified via the shared planAnchor
+        // helper — identical to EVIE's update_group_crop and the tray-seed
+        // endpoint. Seed-date policy is "preserve existing" so a real tray-seed
+        // date is never clobbered by a later crop re-assignment from the UI.
         function applyGroupEdits(target) {
           const newCrop = document.getElementById('grpCrop').value;
           const newStatus = document.getElementById('grpStatus').value;
           if (newStatus) target.status = newStatus;
           if (newCrop) {
-            const resolved = resolveCropRegistryEntry(newCrop);
-            target.crop = resolved.resolvedName;
-            target.recipe = resolved.resolvedName;
-            target.plan = resolved.planId;
-            target.planId = resolved.planId;
-            if (!target.planConfig || typeof target.planConfig !== 'object') target.planConfig = {};
-            if (!target.planConfig.anchor || typeof target.planConfig.anchor !== 'object') target.planConfig.anchor = {};
-            // Only stamp seedDate if not already set (preserve a real seed date from tray-seed).
-            if (!target.planConfig.anchor.seedDate) {
-              target.planConfig.anchor.seedDate = new Date().toISOString().slice(0, 10);
+            const crops = (S.cropRegistry && typeof S.cropRegistry === 'object') ? S.cropRegistry : {};
+            if (window.planAnchor && typeof window.planAnchor.assignCropToGroup === 'function') {
+              window.planAnchor.assignCropToGroup(target, newCrop, crops);
+            } else {
+              // Defensive fallback — preserves the pre-extraction behaviour if
+              // /js/plan-anchor.js failed to load (cache miss, offline, etc.).
+              const resolved = resolveCropRegistryEntry(newCrop);
+              target.crop = resolved.resolvedName;
+              target.recipe = resolved.resolvedName;
+              target.plan = resolved.planId;
+              target.planId = resolved.planId;
+              if (!target.planConfig || typeof target.planConfig !== 'object') target.planConfig = {};
+              if (!target.planConfig.anchor || typeof target.planConfig.anchor !== 'object') target.planConfig.anchor = {};
+              if (!target.planConfig.anchor.seedDate) {
+                target.planConfig.anchor.seedDate = new Date().toISOString().slice(0, 10);
+              }
+              target.lastModified = new Date().toISOString();
             }
+          } else {
+            target.lastModified = new Date().toISOString();
           }
-          target.lastModified = new Date().toISOString();
         }
 
         document.getElementById('saveGrpOne').addEventListener('click', async () => {
@@ -4870,6 +5164,13 @@
         closeDetailPanel({ confirm: true, message: 'Discard unsaved detail panel changes?' });
       });
       document.getElementById('gwenFab').addEventListener('click', openGwenWithContext);
+      var spatialHudClose = document.getElementById('spatialHudClose');
+      if (spatialHudClose) {
+        spatialHudClose.addEventListener('click', function () {
+          var hud = document.getElementById('spatialHud');
+          if (hud) hud.classList.remove('visible');
+        });
+      }
     }
 
     // ---- SSE event stream (Option C) -------------------------

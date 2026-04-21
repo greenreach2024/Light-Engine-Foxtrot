@@ -795,6 +795,7 @@
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
           <button id="rbpPrefillBtn" type="button" class="primary" style="min-height:32px;padding:6px 14px;">Stage group from template</button>
           <button id="rbpAssignLightsBtn" type="button" class="ghost" style="min-height:32px;padding:6px 14px;">Assign lights</button>
+          <button id="rbpSavePlanBtn" type="button" class="primary" style="min-height:32px;padding:6px 14px;background:#10b981;border-color:#10b981;" title="Persist this build plan to rooms.json (installedSystems + buildPlan). Makes Equipment step durable across reloads.">Save plan to room</button>
           <button id="rbpClearBtn" type="button" class="ghost" style="min-height:32px;padding:6px 14px;">Clear</button>
         </div>
       </div>
@@ -1360,19 +1361,27 @@
           advice.style.display = '';
         }
       }
+      // Read the first persisted rooms[].buildPlan across all loaded rooms
+      // (first "accepted" wins). Returns null if none saved yet.
+      function persistedBuildPlan() {
+        var rooms = state.rooms || [];
+        for (var i = 0; i < rooms.length; i++) {
+          var bp = rooms[i] && rooms[i].buildPlan;
+          if (bp && bp.computedLoad) {
+            return { room: rooms[i], plan: bp };
+          }
+        }
+        return null;
+      }
       function renderEquipment() {
         var host = document.getElementById('ffEquipmentBody');
         if (!host) return;
-        // grow-management-room-build-plan.js exposes window.__roomBuildPlan
-        // with shape { template, cropClass, scores, desiredUnits, zoneRects,
-        // spatialPlan, zoneRecommendation }. Equipment metrics live under
-        // scores.{transpiration,heatManagement,envBenchmark}.
+        // Source priority:
+        //   1. window.__roomBuildPlan (live preview from template-click)
+        //   2. rooms[].buildPlan (persisted via "Save plan to room")
+        //   3. empty-state copy
         var rbp = window.__roomBuildPlan;
-        if (!rbp || !rbp.scores) {
-          host.className = 'ff-empty';
-          host.textContent = 'Pick a template in step 3 to compute equipment sizing. Cooling tons, dehumidification L/day, and fan CFM populate automatically from the Room Build Plan.';
-          return;
-        }
+        var persisted = persistedBuildPlan();
         host.className = '';
         host.innerHTML = '';
         var grid = document.createElement('div');
@@ -1397,33 +1406,66 @@
           }
           return box;
         }
-        var s = rbp.scores || {};
-        var kgDay = s.transpiration && s.transpiration.dailyWaterKg;
-        if (Number.isFinite(kgDay)) {
-          grid.appendChild(metric('Transpiration', kgDay.toFixed(1), 'kg/day', '≈ ' + Math.round(kgDay) + ' L/day latent — dehum target'));
-        }
-        var totalHeatW = s.heatManagement && s.heatManagement.totalHeatW;
-        if (Number.isFinite(totalHeatW) && totalHeatW > 0) {
-          grid.appendChild(metric('Cooling load', (totalHeatW / 3517).toFixed(2), 'tons', Math.round(totalHeatW) + ' W total'));
-        }
-        var reqCFM = s.envBenchmark && s.envBenchmark.inputs && s.envBenchmark.inputs.airflow && s.envBenchmark.inputs.airflow.requiredCFM;
-        if (Number.isFinite(reqCFM) && reqCFM > 0) {
-          grid.appendChild(metric('Supply fan', Math.round(reqCFM), 'CFM', 'per envelope ACH'));
-        }
-        var envScore = s.envBenchmark && s.envBenchmark.score;
-        if (Number.isFinite(envScore)) {
-          grid.appendChild(metric('Env benchmark', Math.round(envScore), s.tier || '', 'higher = easier to operate'));
-        }
-        var pumps = rbp.template && rbp.template.requiredChannels && rbp.template.requiredChannels.pumpsPer10kPlants;
-        if (Number.isFinite(pumps) && pumps > 0) {
-          grid.appendChild(metric('Pumps', pumps + ' per 10k plants', '', 'scaled with plant count'));
+        if (rbp && rbp.scores) {
+          var s = rbp.scores || {};
+          var kgDay = s.transpiration && s.transpiration.dailyWaterKg;
+          if (Number.isFinite(kgDay)) {
+            grid.appendChild(metric('Transpiration', kgDay.toFixed(1), 'kg/day', '≈ ' + Math.round(kgDay) + ' L/day latent — dehum target'));
+          }
+          var totalHeatW = s.heatManagement && s.heatManagement.totalHeatW;
+          if (Number.isFinite(totalHeatW) && totalHeatW > 0) {
+            grid.appendChild(metric('Cooling load', (totalHeatW / 3517).toFixed(2), 'tons', Math.round(totalHeatW) + ' W total'));
+          }
+          var reqCFM = s.envBenchmark && s.envBenchmark.inputs && s.envBenchmark.inputs.airflow && s.envBenchmark.inputs.airflow.requiredCFM;
+          if (Number.isFinite(reqCFM) && reqCFM > 0) {
+            grid.appendChild(metric('Supply fan', Math.round(reqCFM), 'CFM', 'per envelope ACH'));
+          }
+          var envScore = s.envBenchmark && s.envBenchmark.score;
+          if (Number.isFinite(envScore)) {
+            grid.appendChild(metric('Env benchmark', Math.round(envScore), s.tier || '', 'higher = easier to operate'));
+          }
+          var pumps = rbp.template && rbp.template.requiredChannels && rbp.template.requiredChannels.pumpsPer10kPlants;
+          if (Number.isFinite(pumps) && pumps > 0) {
+            grid.appendChild(metric('Pumps', pumps + ' per 10k plants', '', 'scaled with plant count'));
+          }
+        } else if (persisted) {
+          var cl = persisted.plan.computedLoad || {};
+          if (Number.isFinite(cl.dehumLPerDay) && cl.dehumLPerDay > 0) {
+            grid.appendChild(metric('Dehumidification', cl.dehumLPerDay.toFixed(1), 'L/day', 'from saved plan'));
+          }
+          if (Number.isFinite(cl.coolingTons) && cl.coolingTons > 0) {
+            grid.appendChild(metric('Cooling load', cl.coolingTons.toFixed(2), 'tons', 'from saved plan'));
+          }
+          if (Number.isFinite(cl.supplyFanCFM) && cl.supplyFanCFM > 0) {
+            grid.appendChild(metric('Supply fan', Math.round(cl.supplyFanCFM), 'CFM', 'from saved plan'));
+          }
+          if (Number.isFinite(cl.lightingKW) && cl.lightingKW > 0) {
+            grid.appendChild(metric('Lighting', cl.lightingKW.toFixed(2), 'kW', 'from saved plan'));
+          }
+          if (Number.isFinite(cl.pumpKW) && cl.pumpKW > 0) {
+            grid.appendChild(metric('Pumps', (cl.pumpKW * 1000).toFixed(0), 'W', 'from saved plan'));
+          }
+          if (Number.isFinite(cl.totalCircuitKW) && cl.totalCircuitKW > 0) {
+            grid.appendChild(metric('Total circuit', cl.totalCircuitKW.toFixed(2), 'kW', 'for panel sizing'));
+          }
         }
         if (!grid.children.length) {
           host.className = 'ff-empty';
-          host.textContent = 'Room Build Plan scores not yet computed for the selected template.';
+          host.textContent = rbp
+            ? 'Room Build Plan scores not yet computed for the selected template.'
+            : 'Pick a template in step 3 to compute equipment sizing, or open grow-management.html to stage and save a build plan. Cooling tons, dehumidification L/day, and fan CFM populate automatically.';
           return;
         }
-        host.appendChild(grid);
+        if (persisted && !rbp) {
+          var badge = document.createElement('div');
+          badge.className = 'tiny';
+          badge.style.cssText = 'margin-top:10px;color:#10b981;font-size:0.7rem;letter-spacing:0.05em;text-transform:uppercase;';
+          badge.textContent = 'Accepted plan · ' + (persisted.room.name || persisted.room.id) + ' · ' + (persisted.plan.generatedAt ? persisted.plan.generatedAt.slice(0,10) : '');
+          host.appendChild(grid);
+          host.appendChild(badge);
+        } else {
+          host.appendChild(grid);
+        }
       }
       function renderControllers() {
         var host = document.getElementById('ffControllersBody');
@@ -1459,11 +1501,12 @@
         // Prefer the live groups list (window.STATE.groups) over the closure
         // cache so breadcrumb stays correct after groups-v2.js save/delete.
         var liveGroups = (window.STATE && Array.isArray(window.STATE.groups)) ? window.STATE.groups : (state.groups || []);
-        var hasUnits = liveGroups.length > 0;
+        var hasInstalled = rooms.some(function (r) { return Array.isArray(r.installedSystems) && r.installedSystems.length > 0; });
+        var hasUnits = liveGroups.length > 0 || hasInstalled;
         var hasLights = liveGroups.some(function (g) {
           return Array.isArray(g.lights) && g.lights.length > 0;
         });
-        var hasEquip = !!window.__roomBuildPlan;
+        var hasEquip = !!window.__roomBuildPlan || !!persistedBuildPlan();
         var hasCtrl = (state.devices || []).length > 0;
         var map = {
           'room': hasRoom,
@@ -1506,6 +1549,10 @@
         setTimeout(function () { renderEquipment(); updateBreadcrumb(); }, 50);
       });
       document.addEventListener('groups-updated', updateBreadcrumb);
+      // Accepting a build plan writes rooms.json (installedSystems + buildPlan).
+      // Reload rooms so renderEquipment sees the persisted plan and the
+      // breadcrumb marks grow-units + equipment complete.
+      document.addEventListener('room-build-plan:saved', function () { refresh(); });
       // Scroll-based active state: highlight whichever step is nearest the viewport top.
       window.addEventListener('scroll', function () {
         var steps = ['flow-room', 'flow-zones', 'flow-grow-units', 'flow-lights', 'flow-equipment', 'flow-controllers'];

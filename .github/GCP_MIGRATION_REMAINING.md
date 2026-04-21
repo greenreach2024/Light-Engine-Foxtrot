@@ -66,20 +66,20 @@ gcloud compute instances delete db-migration-vm --zone=us-east1-b --quiet
 
 **Priority**: P1 -- features degraded without these
 
-The following secrets were created with `PLACEHOLDER_UPDATE_ME` values. Extract real values from the EB environments (via `eb printenv` -- one-time exception for read-only query) or existing config, then update in Secret Manager.
+The following secrets were created with `PLACEHOLDER_UPDATE_ME` values. Update them in Secret Manager from the providers' dashboards listed below. **Do not** run `eb printenv` or any other `eb` command -- the `eb` CLI is globally banned post-migration and the EB environments are being torn down (see §5). For values already present in Secret Manager, read them with `gcloud secrets versions access latest --secret=SECRET_NAME`.
 
 | Secret | Purpose | Source |
 |--------|---------|--------|
-| `STRIPE_SECRET_KEY` | Stripe payments | EB env vars or Stripe dashboard |
+| `STRIPE_SECRET_KEY` | Stripe payments | Stripe dashboard |
 | `STRIPE_WEBHOOK_SECRET` | Stripe webhook verification | Stripe dashboard |
 | `STRIPE_CONNECT_CLIENT_ID` | Stripe Connect | Stripe dashboard |
-| `AWS_ACCESS_KEY_ID` | SES email sending | AWS IAM console |
-| `AWS_SECRET_ACCESS_KEY` | SES email sending | AWS IAM console |
+| ~~`AWS_ACCESS_KEY_ID`~~ | ~~SES email sending~~ | **OBSOLETE** -- platform is Google-only post-Apr 2026; SES is no longer in use. Do not populate. |
+| ~~`AWS_SECRET_ACCESS_KEY`~~ | ~~SES email sending~~ | **OBSOLETE** -- see above. |
 | `GITHUB_BILLING_TOKEN` | GitHub API access | GitHub settings |
 | `QUICKBOOKS_CLIENT_SECRET` | QuickBooks integration | Intuit developer portal |
 | `USDA_API_KEY` | USDA Food Data Central | USDA API portal |
 | `USDA_NASS_API_KEY` | USDA NASS statistics | USDA NASS portal |
-| `SMTP_PASS` | WorkMail SMTP password | AWS WorkMail |
+| `SMTP_PASS` | Google Workspace SMTP password (app password) | Google Workspace account security -> App passwords |
 | `SQUARE_WEBHOOK_SECRET` | Square webhook verification | Square dashboard |
 | `SQUARE_WEBHOOK_SIGNATURE_KEY` | Square webhook signatures | Square dashboard |
 
@@ -198,22 +198,33 @@ esac
 
 **Priority**: P3 -- cost savings, do AFTER all verification complete
 
+> **Do NOT execute the snippets below from an agent or automation.** Both `eb` and
+> `aws elasticbeanstalk` CLIs are globally banned post-migration per
+> `.github/copilot-instructions.md`. EB teardown must be performed by a human
+> operator through the AWS Management Console (Elastic Beanstalk → Environments
+> → Terminate), with explicit user approval. The commands are retained below
+> for reference only, so the exact environment names and descriptive queries
+> are discoverable in one place.
+
 Once Cloud Run is fully verified (database migrated, all features working, DNS pointed):
 
 ```bash
+# REFERENCE ONLY -- DO NOT RUN. Perform via AWS Console.
 # Terminate EB environments to stop billing
 # WARNING: This is IRREVERSIBLE. Only do this after confirming everything works on Cloud Run.
 
-# Check current status first
-aws elasticbeanstalk describe-environments \
-  --environment-names light-engine-foxtrot-prod-v3 greenreach-central-prod-v4 \
-  --query 'Environments[*].[EnvironmentName,Status,Health]' --output table
+# Environment names (for the console):
+#   light-engine-foxtrot-prod-v3
+#   greenreach-central-prod-v4
 
-# Terminate (requires explicit user approval)
-aws elasticbeanstalk terminate-environment --environment-name light-engine-foxtrot-prod-v3
-aws elasticbeanstalk terminate-environment --environment-name greenreach-central-prod-v4
+# Legacy CLI (BANNED, shown for reference only):
+# aws elasticbeanstalk describe-environments \
+#   --environment-names light-engine-foxtrot-prod-v3 greenreach-central-prod-v4 \
+#   --query 'Environments[*].[EnvironmentName,Status,Health]' --output table
+# aws elasticbeanstalk terminate-environment --environment-name light-engine-foxtrot-prod-v3
+# aws elasticbeanstalk terminate-environment --environment-name greenreach-central-prod-v4
 
-# Also consider:
+# Also consider (perform via console where possible):
 # - Deleting RDS instance (after confirming AlloyDB has all data)
 # - Removing Route53 records pointing to EB
 # - Cleaning up old CloudFront distribution
@@ -246,14 +257,18 @@ gcloud run services update light-engine --region=us-east1
 
 After completing all items above, verify:
 
-- [ ] `curl https://greenreach-central-1029387937866.us-east1.run.app/api/health` returns `{"ok": true}`
-- [ ] `curl https://greenreachgreens.com` loads the landing page
-- [ ] Farm login works (test with known credentials)
-- [ ] Sensor data is updating (check SwitchBot readings)
-- [ ] EVIE chat responds (test in LE-farm-admin)
-- [ ] FAYE admin assistant responds (test in GR-central-admin)
-- [ ] Square payments process correctly
-- [ ] Email notifications send via SES/SMTP
-- [ ] Wholesale marketplace loads and shows products
+Items verified at the April 7, 2026 migration cutover and items still open:
+
+- [x] LE health endpoint returns healthy (`https://light-engine-1029387937866.us-east1.run.app` responds; see header)
+- [x] LE URL serves `LE-farm-admin.html` (302 redirect verified at cutover)
+- [x] Farm login works against Cloud Run LE
+- [x] Sensor data updating via SwitchBot (SwitchBot secrets live in Secret Manager -- see §6)
+- [x] EVIE chat responds in LE-farm-admin
+- [x] FAYE admin assistant responds in GR-central-admin
+- [x] Square payments process correctly (cutover-verified)
+- [x] Wholesale marketplace loads and shows products
+- [ ] `curl https://greenreach-central-1029387937866.us-east1.run.app/api/health` returns `{"ok": true}` -- blocked on DB migration (§1); Central health currently `{"ok": false, "error": "Database not available"}`
+- [ ] `curl https://greenreachgreens.com` loads the landing page -- blocked on DNS migration (§3)
+- [ ] Email notifications send via Google Workspace SMTP -- blocked on `SMTP_PASS` real value (§2)
 - [ ] Research workspace loads (if research plan)
 - [ ] EB environments terminated (P3, only after full verification)

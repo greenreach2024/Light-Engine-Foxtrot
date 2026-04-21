@@ -16,6 +16,7 @@ Foxtrot is the working name for GreenReach's cloud-native, multi-tenant indoor f
 - **GreenReach Central (GR-Central)** = "the hub". Multi-farm PostgreSQL/AlloyDB backend, admin + marketing + wholesale/distribution backends, AI assistant APIs, research platform, payments.
 - **Data model is deliberately split**: each farm's **financial, customer, and business data is tenant-isolated** (RLS + farm_id scoping + JWT-resolved tenant context); **growing-environment, crop, and research data is sharable** with researchers and cross-farm intelligence.
 - **GreenReach Central is the business**: distribution, admin, billing, marketing, wholesale marketplace, and network intelligence all live here.
+- **Farm Builder is active, not passive.** A dedicated server-side stack (`greenreach-central/lib/farm-builder.js`, `equipment-db.js`, EVIE tool `recommend_farm_layout`) is in place to recommend rooms / zones / lights / HVAC / irrigation from location + building + growing system + crop plan. Until **Playbook 10** lands the UI wiring, the setup surfaces (`farm-setup.html`, `setup-wizard.html`, `LE-migration-wizard.html`) remain passive (user enters equipment; system visualizes).
 
 ---
 
@@ -100,7 +101,7 @@ Foxtrot can be read as **four customer-facing apps** sharing one backend:
 This is actually **two tightly linked surfaces** that share a backend and the marketing agent S.C.O.T.T.
 
 **C.1 Marketing Platform**
-- **Public landing pages**: `landing-*.html`, `about.html`, `greenreach-grow.html`, `id-buy-local.html`, blog, etc.
+- **Public landing pages**: `landing-*.html`, `about.html`, `id-buy-local.html`, blog, etc.
 - **Marketing agent (S.C.O.T.T.)**: `greenreach-central/routes/scott-marketing-agent.js` — "Social Content Optimization, Trends & Targeting." Generates social posts per platform, runs rule-engine auto-approval (`marketing-rules-engine.js`), publishes via `marketing-platforms.js`, tracks AI cost via `ai-usage-tracker.js`. Explicitly positioned as "junior to F.A.Y.E." with escalation.
 - **Admin surface**: `/api/admin/marketing` (`greenreach-central/routes/admin-marketing.js`), campaigns (`greenreach-central/routes/campaign.js`), marketing skills registry (`greenreach-central/services/marketing-skills.js`).
 - **Branding (planned):** per-farm subdomain stores (`*.greenreachgreens.com`) are the **intended** public face of each tenant; today the farm shop is reached via the LE Cloud Run URL or (once migrated) relative paths under Central's domain. Wildcard DNS and TLS for `*.greenreachgreens.com` are **not** configured in production today.

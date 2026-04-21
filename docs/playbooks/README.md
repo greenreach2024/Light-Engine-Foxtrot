@@ -16,6 +16,7 @@ This directory holds category-specific playbooks for the Light Engine Foxtrot pl
 | 07 | [Farm Operations (LE runtime)](./07-farm-operations.md) | SwitchBot, EnvStore, VPD, automation, tray lifecycle, harvest, ML | Farm operators |
 | 08 | [DevOps & Deployment](./08-devops-deployment.md) | Cloud Run, AlloyDB, Secret Manager, dual-deploy registry, banned commands | Platform engineers |
 | 09 | [Admin & Platform Ops](./09-admin-platform-ops.md) | Farm registration, user mgmt, feature flags, network intelligence | Central admins |
+| 10 | [Farm Builder](./10-farm-builder.md) | Active equipment & layout recommendation from location + growing system + crop plan | Setup-Agent / E.V.I.E. / central admin |
 
 ## How these relate to other docs
 
