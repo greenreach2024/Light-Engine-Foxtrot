@@ -196,7 +196,10 @@ router.post('/:templateId/score', async (req, res) => {
     if (!Number.isFinite(quantity) || quantity <= 0) {
       return res.status(400).json({ ok: false, error: 'quantity must be a positive finite number' });
     }
-    if (!template.plantsPerTrayByClass?.[cropClass]) {
+    if (template.plantsPerTrayByClass?.[cropClass] == null) {
+      // Use `== null` (not a falsy check) so a legitimate zero-plant class —
+      // allowed by the schema's `integerNonNegative` — is not rejected as
+      // "no sizing". Downstream scoring/count functions handle 0 correctly.
       return res.status(400).json({
         ok: false,
         error: `template "${template.id}" has no sizing for cropClass "${cropClass}"`
