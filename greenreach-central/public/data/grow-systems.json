@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0.0",
-  "version": "2026-04-18-v1",
+  "version": "2026-04-21-v1",
   "description": "Class-level catalog of physical growing apparatuses. Templates declare class and required channel counts only; device identities live in iot-devices.json. Consumers are documented in docs/features/GROW_SYSTEMS_TEMPLATE_SCHEMA.md. Formula sources are in docs/features/VERTICAL_FARM_CALCULATOR_SPEC.md.",
   "cropClasses": [
     "leafy_greens",
@@ -109,7 +109,7 @@
         "spec": "docs/features/VERTICAL_FARM_CALCULATOR_SPEC.md#hydroponic-system",
         "notes": "Baseline template. Matches VFC \u00a7'Container-Scale System' 3-level assumption. Calibration of plantsPerTrayByClass for fruiting is nominal; fruiting crops are not recommended on this footprint."
       },
-      "image": "/images/grow-systems/nft-rack-3tier.svg",
+      "image": "/images/grow-systems/nft-rack-3tier.jpg",
       "tagline": "High-density vertical NFT for leafy greens and herbs.",
       "defaultCropClass": "leafy_greens",
       "lightingSpecSummary": "LED bars, 2.7 umol/J efficacy, ~16 h photoperiod, 350 PPFD target for leafy greens."
@@ -214,7 +214,7 @@
         "spec": "docs/features/VERTICAL_FARM_CALCULATOR_SPEC.md#hydroponic-system",
         "notes": "Lower plumbing load than NFT but larger reservoir footprint (2 gal/plant). Single-tier; not suitable for vertical-only rooms with low ceilings."
       },
-      "image": "/images/grow-systems/dwc-pond-4x8.svg",
+      "image": "/images/grow-systems/dwc-pond-4x8.jpg",
       "tagline": "Shallow deep-water culture pond \u2014 forgiving root zone, simple plumbing.",
       "defaultCropClass": "leafy_greens",
       "lightingSpecSummary": "Horizontal LED canopy, 2.7 umol/J, 16 h photoperiod, 350 PPFD target."
@@ -318,52 +318,51 @@
         "spec": "docs/features/VERTICAL_FARM_CALCULATOR_SPEC.md#lighting-system",
         "notes": "Plant density is high (200/tray) but transpiration per plant is low (~8 g/day), so HVAC load scales differently than leafy-greens racks. Reservoir sizing is per-flood-cycle, not per-plant steady state."
       },
-      "image": "/images/grow-systems/vertical-tier-5-microgreen.svg",
+      "image": "/images/grow-systems/vertical-tier-5-microgreen.jpg",
       "tagline": "5-tier microgreen rack with extended 18 h photoperiod.",
       "defaultCropClass": "microgreens",
       "lightingSpecSummary": "Compact LED strips, 2.7 umol/J, 18 h photoperiod, 250 PPFD target."
     },
     {
-      "id": "flood-bench-4x8",
-      "name": "Ebb-and-Flow Bench, 4x8",
-      "category": "ebb_flow_bench",
-      "description": "Single-level flood/drain bench for herbs and compact fruiting trials. 12 trays, centralized reservoir.",
+      "id": "aeroponics-tower",
+      "name": "Aeroponics Tower",
+      "category": "aeroponic_tower",
+      "description": "Continuous vertical aeroponic tower (2.5 ft diameter \u00d7 6\u20139.5 ft tall) with a 45 W misting spray pump at the base. Planning default 40 plants per tower out of a 296-site full-head capacity. Recommended working footprint 5\u00d75 ft per tower with 12\u201318 in top service clearance.",
       "suitableCropClasses": [
-        "herbs",
         "leafy_greens",
-        "fruiting"
+        "herbs"
       ],
       "footprintM": {
-        "length": 2.4,
-        "width": 1.2
+        "length": 1.524,
+        "width": 1.524
       },
-      "heightM": 0.9,
+      "heightM": 2.44,
       "tierCount": 1,
-      "traysPerTier": 12,
+      "traysPerTier": 1,
       "trayFormat": {
-        "lengthIn": 24,
-        "widthIn": 28,
-        "plantsPerTrayDefault": 15
+        "lengthIn": 30,
+        "widthIn": 30,
+        "plantsPerTrayDefault": 40
       },
       "plantsPerTrayByClass": {
-        "leafy_greens": 24,
-        "microgreens": 150,
-        "herbs": 15,
-        "fruiting": 6
+        "leafy_greens": 40,
+        "microgreens": 0,
+        "herbs": 40,
+        "fruiting": 0
       },
       "irrigation": {
-        "type": "flood",
-        "supplyPumpWattsPer10kPlants": 250,
+        "type": "aero",
+        "supplyPumpWattsPer10kPlants": 11250,
         "returnPumpWattsPer10kPlants": 0,
-        "dutyCycle": 0.2,
-        "reservoirGalPerPlant": 1.5,
-        "plumbingCostPer10kPlantsUsd": 450
+        "dutyCycle": 0.25,
+        "reservoirGalPerPlant": 0.75,
+        "plumbingCostPer10kPlantsUsd": 1200
       },
       "transpiration": {
         "gPerPlantPerDayByClass": {
-          "leafy_greens": 30,
+          "leafy_greens": 35,
           "microgreens": 8,
-          "herbs": 25,
+          "herbs": 30,
           "fruiting": 120
         },
         "sensibleHeatFactor": 0.3
@@ -382,8 +381,8 @@
           "fruiting": 30
         },
         "efficacyUmolPerJ": 2.7,
-        "fixtureWattsNominal": 150,
-        "fixturesPerTierUnit": 3,
+        "fixtureWattsNominal": 700,
+        "fixturesPerTierUnit": 1,
         "photoperiodHoursByClass": {
           "leafy_greens": 16,
           "microgreens": 18,
@@ -393,7 +392,7 @@
       },
       "defaultControllerClass": {
         "lights": {
-          "type": "dmx_4",
+          "type": "0_10v",
           "channelsPerFixturePair": 1
         },
         "pumps": {
@@ -401,7 +400,7 @@
           "channelsPerPumpPair": 1
         },
         "fans": {
-          "type": "smart_plug",
+          "type": "ec_fan",
           "channelsPerFan": 1
         },
         "sensors": {
@@ -410,24 +409,24 @@
         }
       },
       "requiredChannels": {
-        "lightsPerTier": 3,
+        "lightsPerTier": 1,
         "pumpsPer10kPlants": 1,
         "fansPer5Racks": 1,
         "sensorsPerZone": 2
       },
       "powerClassW": {
-        "lightsPerTierUnit": 450,
-        "pumpsPer10kPlants": 250,
+        "lightsPerTierUnit": 700,
+        "pumpsPer10kPlants": 11250,
         "fansPerUnit": 80
       },
       "references": {
-        "spec": "docs/features/VERTICAL_FARM_CALCULATOR_SPEC.md#hvac-dehumidification",
-        "notes": "Higher per-tier wattage reflects the 3-fixture layout needed to hit fruiting PPFD targets. Suitable for mixed-crop rooms where benches host a fruiting zone alongside leafy racks."
+        "spec": "docs/features/VERTICAL_FARM_CALCULATOR_SPEC.md#hydroponic-system",
+        "notes": "Commercial aeroponic tower (e.g. Agreo). Each tower uses a 45 W spray pump driving ~40 plants at planning density, which scales to 11,250 W per 10k plants. Tower body 2.5 ft dia \u00d7 6\u20139.5 ft tall; section height 9.5\u201310 in; top service clearance 12\u201318 in. Full-head capacity up to 296 sites per tower when crop scheduling allows."
       },
-      "image": "/images/grow-systems/flood-bench-4x8.svg",
-      "tagline": "Ebb-and-flow bench for transplants, propagation, and mixed leafy crops.",
+      "image": "/images/grow-systems/aeroponics-tower.jpg",
+      "tagline": "Continuous aeroponic tower: 45 W spray pump, 700 W top lighting per tower.",
       "defaultCropClass": "leafy_greens",
-      "lightingSpecSummary": "LED canopy above bench, 2.7 umol/J, 16 h photoperiod, 350\u2013400 PPFD."
+      "lightingSpecSummary": "Top-down LED fixture, 2.7 umol/J, 16 h photoperiod, 350 PPFD target for leafy greens (~700 W per tower)."
     },
     {
       "id": "drip-rail-fruiting-8ft",
@@ -528,10 +527,115 @@
         "spec": "docs/features/VERTICAL_FARM_CALCULATOR_SPEC.md#hvac-dehumidification",
         "notes": "Fruiting transpiration (120 g/plant/day) dominates HVAC sizing; sensibleHeatFactor bumped to 0.35 to reflect higher fixture wattage. channelsPerFixturePair is 2 so the calculator reserves enough DMX slots for spectrum-tunable fixtures."
       },
-      "image": "/images/grow-systems/drip-rail-fruiting-8ft.svg",
+      "image": "/images/grow-systems/drip-rail-fruiting-8ft.jpg",
       "tagline": "Drip rail sized for fruiting crops (tomato / pepper / cucumber).",
       "defaultCropClass": "fruiting",
       "lightingSpecSummary": "High-PPFD LED, 2.7 umol/J, 14\u201315 h photoperiod, 600+ PPFD target."
+    },
+    {
+      "id": "zipgrow-tower-wall",
+      "name": "ZipGrow Tower Wall",
+      "category": "tower_wall",
+      "description": "Commercial ZipGrow wall: double-sided rack holding 20 \u00d7 8-ft vertical towers (10 per side) with matrix-media drip-wick irrigation. Planning default 27 plants per tower (540 per rack). Rack footprint 8 ft \u00d7 4.5 ft; required ceiling height 12 ft (12\u201314 ft preferred).",
+      "suitableCropClasses": [
+        "leafy_greens",
+        "herbs"
+      ],
+      "footprintM": {
+        "length": 2.44,
+        "width": 1.37
+      },
+      "heightM": 2.44,
+      "tierCount": 1,
+      "traysPerTier": 20,
+      "trayFormat": {
+        "lengthIn": 96,
+        "widthIn": 4,
+        "plantsPerTrayDefault": 27
+      },
+      "plantsPerTrayByClass": {
+        "leafy_greens": 27,
+        "microgreens": 0,
+        "herbs": 27,
+        "fruiting": 0
+      },
+      "irrigation": {
+        "type": "drip",
+        "supplyPumpWattsPer10kPlants": 1112,
+        "returnPumpWattsPer10kPlants": 0,
+        "dutyCycle": 0.6,
+        "reservoirGalPerPlant": 0.5,
+        "plumbingCostPer10kPlantsUsd": 800
+      },
+      "transpiration": {
+        "gPerPlantPerDayByClass": {
+          "leafy_greens": 32,
+          "microgreens": 8,
+          "herbs": 28,
+          "fruiting": 120
+        },
+        "sensibleHeatFactor": 0.3
+      },
+      "defaultFixtureClass": {
+        "ppfdTargetByClass": {
+          "leafy_greens": 350,
+          "microgreens": 250,
+          "herbs": 400,
+          "fruiting": 600
+        },
+        "dliTargetByClass": {
+          "leafy_greens": 16,
+          "microgreens": 14,
+          "herbs": 20,
+          "fruiting": 30
+        },
+        "efficacyUmolPerJ": 2.7,
+        "fixtureWattsNominal": 96,
+        "fixturesPerTierUnit": 8,
+        "photoperiodHoursByClass": {
+          "leafy_greens": 16,
+          "microgreens": 18,
+          "herbs": 16,
+          "fruiting": 15
+        }
+      },
+      "defaultControllerClass": {
+        "lights": {
+          "type": "0_10v",
+          "channelsPerFixturePair": 1
+        },
+        "pumps": {
+          "type": "relay",
+          "channelsPerPumpPair": 1
+        },
+        "fans": {
+          "type": "ec_fan",
+          "channelsPerFan": 1
+        },
+        "sensors": {
+          "type": "switchbot_cloud",
+          "channelsPerZone": 2
+        }
+      },
+      "requiredChannels": {
+        "lightsPerTier": 8,
+        "pumpsPer10kPlants": 1,
+        "fansPer5Racks": 1,
+        "sensorsPerZone": 2
+      },
+      "powerClassW": {
+        "lightsPerTierUnit": 768,
+        "pumpsPer10kPlants": 1112,
+        "fansPerUnit": 80
+      },
+      "references": {
+        "spec": "docs/features/VERTICAL_FARM_CALCULATOR_SPEC.md#hydroponic-system",
+        "notes": "Estimated: 96 W per 8-ft vertical LED bar scaled from ZipGrow's published Farm Wall LED Light Kit spec (48 W per 48\" HO strip, 6400K), and a 60 W recirculating pump per 20-tower rack; refine with the exact LED bar wattage and pump model you deploy. Working area 8\u00d710.5 ft (min) to 10\u00d712 ft (preferred); required ceiling 12 ft minimum, 12\u201314 ft preferred. Full-head density supports ~180 plants per 10-tower section; 27 plants/tower planning default totals 540 per rack."
+      },
+      "image": "/images/grow-systems/zipgrow-tower-wall.png",
+      "tagline": "ZipGrow double-sided wall with 20 \u00d7 8-ft towers and vertical LED bars.",
+      "defaultCropClass": "leafy_greens",
+      "lightingSpecSummary": "8 vertical 8-ft LED bars, 2.7 umol/J, 16 h photoperiod, 350 PPFD target for leafy greens (~770 W per rack)."
     }
   ]
 }
