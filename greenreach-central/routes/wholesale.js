@@ -704,6 +704,54 @@ function normalizePostalCode(rawPostalCode) {
   return `${compact.slice(0, 3)} ${compact.slice(3)}`;
 }
 
+// Nominatim returns an `addresstype` that tells us the narrowest containing
+// feature (e.g. 'postcode', 'city', 'country'). We reject anything broader
+// than a municipality so a registration with only a partial postal code
+// doesn't silently resolve to the centroid of a province or a country.
+const BUYER_GEOCODE_ACCEPTED_ADDRESSTYPES = new Set([
+  'postcode',
+  'street',
+  'road',
+  'house',
+  'house_number',
+  'building',
+  'residential',
+  'amenity',
+  'hamlet',
+  'village',
+  'town',
+  'city',
+  'municipality',
+  'suburb',
+  'neighbourhood',
+  'quarter',
+  'city_district',
+  'locality',
+  'county'
+]);
+const BUYER_GEOCODE_REJECTED_ADDRESSTYPES = new Set([
+  'country',
+  'state',
+  'region',
+  'province'
+]);
+
+function isAcceptableBuyerGeocodeResult(result) {
+  if (!result || typeof result !== 'object') return false;
+  const addressType = String(result.addresstype || '').toLowerCase().trim();
+  if (BUYER_GEOCODE_REJECTED_ADDRESSTYPES.has(addressType)) return false;
+  if (addressType && BUYER_GEOCODE_ACCEPTED_ADDRESSTYPES.has(addressType)) return true;
+  // If addresstype is absent/unknown, fall back to `class`/`type` and
+  // reject known broad administrative hits. Anything else is accepted
+  // conservatively so we don't overcorrect on unusual Nominatim shapes.
+  const cls = String(result.class || '').toLowerCase().trim();
+  const type = String(result.type || '').toLowerCase().trim();
+  if (cls === 'boundary' && (type === 'administrative' || type === 'political')) {
+    return false;
+  }
+  return true;
+}
+
 function buildBuyerGeocodeQueries(rawLocation) {
   if (!rawLocation || typeof rawLocation !== 'object') return [];
 
@@ -712,6 +760,13 @@ function buildBuyerGeocodeQueries(rawLocation) {
   const state = trimField(rawLocation.state ?? rawLocation.province ?? rawLocation.region ?? '') || '';
   const postalCode = normalizePostalCode(rawLocation.postalCode ?? rawLocation.zip ?? '');
   const country = trimField(rawLocation.country ?? 'Canada') || 'Canada';
+
+  // Require at least one specific signal (postal code or city) before we
+  // ever hit Nominatim. A bare `state, country` query can resolve to the
+  // province/country centroid, which produced the 2,795 km "distance from
+  // farm" bug on the wholesale portal.
+  const hasSpecificSignal = Boolean(postalCode || city || address1);
+  if (!hasSpecificSignal) return [];
 
   const queries = [];
   const pushQuery = (parts) => {
@@ -724,8 +779,10 @@ function buildBuyerGeocodeQueries(rawLocation) {
 
   pushQuery([address1, city, state, postalCode, country]);
   pushQuery([city, state, postalCode, country]);
-  pushQuery([postalCode, state, country]);
-  pushQuery([postalCode, country]);
+  if (postalCode) {
+    pushQuery([postalCode, state, country]);
+    pushQuery([postalCode, country]);
+  }
 
   return queries;
 }
@@ -769,6 +826,12 @@ async function geocodeBuyerLocation(rawLocation) {
       if (!response.ok) continue;
       const results = await response.json();
       if (!Array.isArray(results) || results.length === 0) continue;
+
+      if (!isAcceptableBuyerGeocodeResult(results[0])) {
+        // Skip and try the next (more specific) query rather than persisting
+        // a country/state centroid as the buyer's coordinates.
+        continue;
+      }
 
       const latitude = toFiniteNumber(results[0].lat);
       const longitude = toFiniteNumber(results[0].lon);
