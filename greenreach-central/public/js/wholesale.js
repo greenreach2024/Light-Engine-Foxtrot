@@ -430,8 +430,17 @@
       let lat = latitudeRaw !== undefined && latitudeRaw !== '' ? Number(latitudeRaw) : null;
       let lng = longitudeRaw !== undefined && longitudeRaw !== '' ? Number(longitudeRaw) : null;
 
+      // Block submission on an incomplete Canadian postal code rather than
+      // letting the geocoder fall back to a province/country centroid.
+      const normalizedPostalCode = this.normalizePostalCode(postalCode);
+      if (!normalizedPostalCode) {
+        this.showToast('Please enter a valid Canadian postal code (e.g. K7L 1A1)', 'error');
+        document.getElementById('register-postal')?.focus();
+        return;
+      }
+
       const registrationLocation = {
-        postalCode,
+        postalCode: normalizedPostalCode,
         province,
         state: province,
         country: 'Canada'
@@ -2072,6 +2081,10 @@
       const postalCode = this.normalizePostalCode(location.postalCode || location.zip || '');
       const country = String(location.country || 'Canada').trim() || 'Canada';
 
+      // Require at least one specific signal so we never ask Nominatim
+      // for just "Ontario, Canada" or "Canada" and accept the centroid.
+      if (!postalCode && !city && !address) return [];
+
       const queries = [];
       const addQuery = (parts) => {
         const query = parts.filter(Boolean).join(', ');
@@ -2080,10 +2093,43 @@
 
       addQuery([address, city, state, postalCode, country]);
       addQuery([city, state, postalCode, country]);
-      addQuery([postalCode, state, country]);
-      addQuery([postalCode, country]);
+      if (postalCode) {
+        addQuery([postalCode, state, country]);
+        addQuery([postalCode, country]);
+      }
 
       return queries;
+    },
+
+    // Mirror the server-side BUYER_GEOCODE_ACCEPTED_ADDRESSTYPES /
+    // BUYER_GEOCODE_REJECTED_ADDRESSTYPES gate so the two layers agree
+    // on what counts as a buyer-specific Nominatim hit. The server uses
+    // these coords directly when the client passes latitude/longitude
+    // on the registration payload, so the client must apply the same
+    // whitelist or it silently bypasses the server check.
+    isAcceptableGeocodeResult(result) {
+      if (!result || typeof result !== 'object') return false;
+      const addressType = String(result.addresstype || '').toLowerCase().trim();
+      const acceptedAddressTypes = new Set([
+        'postcode', 'street', 'road', 'house', 'house_number', 'building',
+        'residential', 'amenity', 'hamlet', 'village', 'town', 'city',
+        'municipality', 'suburb', 'neighbourhood', 'quarter', 'city_district',
+        'locality', 'county'
+      ]);
+      const rejectedAddressTypes = new Set([
+        'country', 'state', 'region', 'province'
+      ]);
+      if (rejectedAddressTypes.has(addressType)) return false;
+      if (addressType && acceptedAddressTypes.has(addressType)) return true;
+      // Fall through to class/type — reject broad administrative
+      // boundaries (e.g. addresstype 'state_district' + class 'boundary'
+      // / type 'administrative') that would otherwise sneak through.
+      const cls = String(result.class || '').toLowerCase().trim();
+      const type = String(result.type || '').toLowerCase().trim();
+      if (cls === 'boundary' && (type === 'administrative' || type === 'political')) {
+        return false;
+      }
+      return true;
     },
 
     async geocodeCoordinates(location = {}) {
@@ -2104,6 +2150,8 @@
 
           const results = await response.json();
           if (!Array.isArray(results) || results.length === 0) continue;
+
+          if (!this.isAcceptableGeocodeResult(results[0])) continue;
 
           const latitude = Number(results[0].lat);
           const longitude = Number(results[0].lon);
