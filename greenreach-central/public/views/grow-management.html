@@ -742,13 +742,12 @@
         <span class="ff-step__badge">1</span>
         <div>
           <h2 class="ff-step__title" id="ffRoomTitle">Room</h2>
-          <p class="ff-step__subtitle">Physical shell: name, dimensions (L &times; W &times; H), envelope class.</p>
+          <p class="ff-step__subtitle">Define the physical room: name, dimensions (length &times; width &times; height), and envelope class. Edit dimensions inline on the card below.</p>
         </div>
       </div>
       <div class="ff-step-card">
         <div id="ffRoomBody" class="ff-empty">Loading rooms&hellip;</div>
         <div class="ff-link-row">
-          <a href="/views/farm-setup.html#rooms">Edit rooms in Farm Setup</a>
           <a href="/views/3d-farm-viewer.html">Open 3D viewer</a>
         </div>
       </div>
@@ -760,14 +759,56 @@
         <span class="ff-step__badge">2</span>
         <div>
           <h2 class="ff-step__title" id="ffZonesTitle">Zones</h2>
-          <p class="ff-step__subtitle">Independently controlled climate areas inside a room. Evie recommends splitting for photoperiod, cleaning, or crop-mix separation.</p>
+          <p class="ff-step__subtitle">Zones are independently controlled climate areas inside a room. Draw them on the floor plan to split for photoperiod, cleaning rotation, or crop mix.</p>
         </div>
       </div>
       <div class="ff-step-card">
+        <div style="display:flex;justify-content:flex-end;margin-bottom:8px;">
+          <button id="ffZoneDrawerOpen" type="button" class="primary" style="min-height:32px;padding:6px 14px;">Draw zones on floor plan</button>
+        </div>
         <div id="ffZonesBody" class="ff-empty">Loading zones&hellip;</div>
         <div id="ffZonesEvieAdvice" class="ff-chip-row" style="display:none;"></div>
       </div>
     </section>
+
+    <!-- Zone drawer modal. Top-down SVG floor plan scaled from the selected
+         room's length_m / width_m. Operator click-drags to carve out a zone
+         rectangle; dimensions (m, m^2) auto-compute. Saves to rooms[].zones
+         via /api/setup/save-rooms so the value is live for the rest of the
+         page (and for the 3D viewer) without a reload. -->
+    <div id="ffZoneDrawerBackdrop" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,0.75);z-index:9000;align-items:center;justify-content:center;padding:20px;">
+      <div id="ffZoneDrawerCard" style="background:#0f172a;border:1px solid rgba(59,130,246,0.35);border-radius:14px;width:min(960px,100%);max-height:90vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,0.45);">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:14px 18px;border-bottom:1px solid rgba(148,163,184,0.15);">
+          <div>
+            <h3 style="margin:0 0 4px;color:#f1f5f9;font-size:1.05rem;">Draw zones on floor plan</h3>
+            <p class="tiny text-muted" style="margin:0;">Click and drag on the floor plan to add a rectangular zone. Dimensions auto-compute in metres. Multiple zones per room are allowed and can be different sizes.</p>
+          </div>
+          <button id="ffZoneDrawerClose" type="button" class="ghost" style="min-height:28px;padding:4px 10px;">Close</button>
+        </div>
+        <div style="display:grid;grid-template-columns:minmax(0,1fr) 260px;gap:14px;padding:14px 18px;">
+          <div>
+            <div style="display:flex;gap:10px;align-items:flex-end;margin-bottom:10px;flex-wrap:wrap;">
+              <label class="tiny" style="display:flex;flex-direction:column;gap:2px;color:#cbd5e1;">
+                <span>Room</span>
+                <select id="ffZoneDrawerRoom" style="min-height:32px;padding:4px 8px;background:rgba(15,23,42,0.6);border:1px solid rgba(148,163,184,0.3);border-radius:6px;color:#f1f5f9;"></select>
+              </label>
+              <span id="ffZoneDrawerRoomDims" class="tiny text-muted"></span>
+            </div>
+            <div id="ffZoneDrawerCanvasWrap" style="border:1px solid rgba(148,163,184,0.25);border-radius:10px;background:rgba(15,23,42,0.5);overflow:hidden;"></div>
+            <p class="tiny text-muted" style="margin:8px 0 0;">Tip: click an existing zone rectangle to select it, then press Delete to remove, or drag to reposition.</p>
+          </div>
+          <div>
+            <div style="font-weight:600;color:#f1f5f9;margin-bottom:6px;">Zones in this room</div>
+            <div id="ffZoneDrawerList" style="display:flex;flex-direction:column;gap:6px;max-height:300px;overflow:auto;"></div>
+            <div style="margin-top:12px;display:flex;flex-direction:column;gap:6px;">
+              <button id="ffZoneDrawerUndo" type="button" class="ghost" style="min-height:32px;padding:6px 12px;">Undo last</button>
+              <button id="ffZoneDrawerSave" type="button" class="primary" style="min-height:32px;padding:6px 12px;background:#10b981;border-color:#10b981;">Save zones</button>
+              <span id="ffZoneDrawerStatus" class="tiny" style="color:#94a3b8;min-height:16px;"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <!-- ===== STEP 3 — GROW UNITS =====
          Template gallery + Room Build Plan (auto-fit per template spatial
@@ -778,7 +819,7 @@
         <span class="ff-step__badge">3</span>
         <div>
           <h2 class="ff-step__title" id="ffGrowUnitsTitle">Grow units</h2>
-          <p class="ff-step__subtitle">Pick a growing system template. Evie sizes working clearance, main walkway, and computes units-per-zone.</p>
+          <p class="ff-step__subtitle">Pick a growing system template. Evie sizes working clearance and computes units per zone. Main walkway sizing follows in step 5.</p>
         </div>
       </div>
 
@@ -1013,7 +1054,7 @@
           <span class="ff-step__badge">4</span>
           <div>
             <h2 class="ff-step__title">Lights</h2>
-            <p class="ff-step__subtitle">Assign fixtures to the active group. Fixture class + channel count prefill from the selected template.</p>
+            <p class="ff-step__subtitle">Assign fixtures to the active group. Fixture class and channel count are pre-filled from the selected template.</p>
           </div>
         </div>
 
@@ -1156,7 +1197,7 @@
         <span class="ff-step__badge">5</span>
         <div>
           <h2 class="ff-step__title" id="ffEquipmentTitle">Equipment</h2>
-          <p class="ff-step__subtitle">Cooling tons, dehumidification L/day, fan CFM, pump count — derived from template &times; quantity &times; room envelope.</p>
+          <p class="ff-step__subtitle">Cooling tons, dehumidification capacity, fan CFM, and pump count. Derived from the template multiplied by unit quantity and the room envelope.</p>
         </div>
       </div>
       <div class="ff-step-card">
@@ -1181,7 +1222,7 @@
         <span class="ff-step__badge">6</span>
         <div>
           <h2 class="ff-step__title" id="ffControllersTitle">Controllers</h2>
-          <p class="ff-step__subtitle">SwitchBot hub, Kasa account, Code3 gateway, DMX universes, wired bus segments — bound to the channels reserved in steps 3-5.</p>
+          <p class="ff-step__subtitle">Bind controllers (SwitchBot hub, Kasa account, Code3 gateway, DMX universes, wired bus segments) to the channels reserved in steps 3 through 5.</p>
         </div>
       </div>
       <div class="ff-step-card">
@@ -1282,6 +1323,58 @@
         span.textContent = label;
         return span;
       }
+      function getRoomDim(r, key) {
+        // key: 'length_m' | 'width_m' | 'height_m'
+        if (key === 'height_m') {
+          return r.ceiling_height_m
+            || (r.dimensions && r.dimensions.height_m)
+            || '';
+        }
+        return r[key]
+          || (r.dimensions && r.dimensions[key])
+          || '';
+      }
+      function setRoomDim(r, key, value) {
+        var n = (value === '' || value == null) ? null : Number(value);
+        if (n != null && !Number.isFinite(n)) return;
+        if (key === 'height_m') {
+          r.ceiling_height_m = n;
+        } else {
+          r[key] = n;
+        }
+        if (!r.dimensions || typeof r.dimensions !== 'object') r.dimensions = {};
+        r.dimensions[key] = n;
+        if (r.length_m && r.width_m) {
+          r.area_m2 = Number((r.length_m * r.width_m).toFixed(2));
+        }
+      }
+      var _saveRoomsTimer = null;
+      var _saveRoomsStatus = null;
+      function scheduleSaveRooms(statusEl) {
+        _saveRoomsStatus = statusEl;
+        if (_saveRoomsTimer) clearTimeout(_saveRoomsTimer);
+        if (statusEl) { statusEl.textContent = 'Saving…'; statusEl.style.color = '#fbbf24'; }
+        _saveRoomsTimer = setTimeout(persistRooms, 500);
+      }
+      function persistRooms() {
+        _saveRoomsTimer = null;
+        var statusEl = _saveRoomsStatus;
+        var payload = { rooms: state.rooms.map(function (r) { return r; }) };
+        fetch('/api/setup/save-rooms', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify(payload)
+        }).then(function (resp) {
+          if (!resp.ok) throw new Error('HTTP ' + resp.status);
+          return resp.json();
+        }).then(function () {
+          if (statusEl) { statusEl.textContent = 'Saved'; statusEl.style.color = '#4ade80'; }
+        }).catch(function (err) {
+          console.error('[grow-management] rooms save failed:', err);
+          if (statusEl) { statusEl.textContent = 'Save failed'; statusEl.style.color = '#f87171'; }
+        });
+      }
       function renderRoom() {
         var host = document.getElementById('ffRoomBody');
         if (!host) return;
@@ -1300,6 +1393,44 @@
           title.style.cssText = 'font-weight:600;color:#f1f5f9;margin-bottom:6px;';
           title.textContent = r.name || r.room_name || r.id || 'Room';
           card.appendChild(title);
+
+          // Inline dimension editor. Auto-saves to /api/setup/save-rooms on
+          // change so the operator never has to bounce to Farm Setup.
+          var dimsRow = document.createElement('div');
+          dimsRow.style.cssText = 'display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin:6px 0 8px;';
+          var statusEl = document.createElement('span');
+          statusEl.className = 'tiny';
+          statusEl.style.cssText = 'color:#94a3b8;min-width:72px;';
+          statusEl.textContent = '';
+          [
+            { key: 'length_m', label: 'Length (m)', step: '0.1', min: '0.5' },
+            { key: 'width_m',  label: 'Width (m)',  step: '0.1', min: '0.5' },
+            { key: 'height_m', label: 'Height (m)', step: '0.1', min: '1.5' }
+          ].forEach(function (spec) {
+            var wrap = document.createElement('label');
+            wrap.className = 'tiny';
+            wrap.style.cssText = 'display:flex;flex-direction:column;gap:2px;color:#cbd5e1;';
+            var lbl = document.createElement('span');
+            lbl.textContent = spec.label;
+            wrap.appendChild(lbl);
+            var input = document.createElement('input');
+            input.type = 'number';
+            input.step = spec.step;
+            input.min = spec.min;
+            input.value = getRoomDim(r, spec.key);
+            input.style.cssText = 'min-height:32px;padding:4px 8px;background:rgba(15,23,42,0.6);border:1px solid rgba(148,163,184,0.3);border-radius:6px;color:#f1f5f9;width:96px;';
+            input.addEventListener('change', function () {
+              setRoomDim(r, spec.key, input.value);
+              scheduleSaveRooms(statusEl);
+              // Re-render to refresh area chip + build-plan inputs
+              renderRoom();
+            });
+            wrap.appendChild(input);
+            dimsRow.appendChild(wrap);
+          });
+          dimsRow.appendChild(statusEl);
+          card.appendChild(dimsRow);
+
           var chips = document.createElement('div');
           chips.className = 'ff-chip-row';
           chips.style.margin = '0';
@@ -1571,6 +1702,360 @@
         });
       }, { passive: true });
       return { refresh: refresh };
+    })();
+
+    // =====================================================================
+    // ZONE DRAWER — inline top-down floor-plan overlay
+    // A popup rather than a bounce to another page. Scales an SVG to the
+    // selected room's length_m x width_m, lets the operator click-drag to
+    // add rectangular zones, auto-computes metres + m^2, and persists to
+    // rooms[].zones via /api/setup/save-rooms. Zones of different sizes
+    // in the same room are supported.
+    // =====================================================================
+    (function () {
+      var backdrop = document.getElementById('ffZoneDrawerBackdrop');
+      var openBtn = document.getElementById('ffZoneDrawerOpen');
+      var closeBtn = document.getElementById('ffZoneDrawerClose');
+      var roomSel = document.getElementById('ffZoneDrawerRoom');
+      var roomDimsLabel = document.getElementById('ffZoneDrawerRoomDims');
+      var canvasWrap = document.getElementById('ffZoneDrawerCanvasWrap');
+      var listEl = document.getElementById('ffZoneDrawerList');
+      var undoBtn = document.getElementById('ffZoneDrawerUndo');
+      var saveBtn = document.getElementById('ffZoneDrawerSave');
+      var statusEl = document.getElementById('ffZoneDrawerStatus');
+      if (!backdrop || !openBtn) return;
+
+      var SVG_NS = 'http://www.w3.org/2000/svg';
+      var SVG_W = 680;       // px, fixed viewport width
+      var PADDING_PX = 16;
+      var state = {
+        rooms: [],
+        roomId: null,
+        zones: [],
+        selectedIdx: -1,
+        dragging: null,       // { mode:'draw'|'move', startX, startY, idx }
+        scale: 1              // metres per px
+      };
+
+      function resolveRooms() {
+        // Use the same rooms array ffFlow hydrated. Fall back to fetching
+        // rooms.json directly if the closure isn't available.
+        var maybe = window.__ffFlowRooms;
+        if (Array.isArray(maybe) && maybe.length) return Promise.resolve(maybe);
+        return fetch('/data/rooms.json')
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (j) {
+            return Array.isArray(j) ? j : (j && Array.isArray(j.rooms) ? j.rooms : []);
+          })
+          .catch(function () { return []; });
+      }
+
+      function roomLength(r) {
+        return Number(r.length_m || (r.dimensions && r.dimensions.length_m) || 0);
+      }
+      function roomWidth(r) {
+        return Number(r.width_m || (r.dimensions && r.dimensions.width_m) || 0);
+      }
+      function zoneToRect(z) {
+        // Accept { x_m, y_m, length_m, width_m } or a legacy shape with
+        // dimensions nested. Strings ('Zone 1') have no geometry.
+        if (typeof z === 'string') return null;
+        var x = Number(z.x_m != null ? z.x_m : (z.origin && z.origin.x_m));
+        var y = Number(z.y_m != null ? z.y_m : (z.origin && z.origin.y_m));
+        var l = Number(z.length_m != null ? z.length_m : (z.dimensions && z.dimensions.length_m));
+        var w = Number(z.width_m  != null ? z.width_m  : (z.dimensions && z.dimensions.width_m));
+        if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(l) || !Number.isFinite(w)) return null;
+        return { x: x, y: y, l: l, w: w, name: z.name || z.id || '' };
+      }
+
+      function rectsFromRoom(r) {
+        var out = [];
+        (r.zones || []).forEach(function (z, i) {
+          if (typeof z === 'string') {
+            out.push({ name: z, x: null, y: null, l: null, w: null, _legacy: true });
+            return;
+          }
+          var rect = zoneToRect(z);
+          if (rect) out.push(rect);
+          else out.push({ name: z.name || ('Zone ' + (i + 1)), x: null, y: null, l: null, w: null, _legacy: true });
+        });
+        return out;
+      }
+
+      function room() { return state.rooms.find(function (r) { return r.id === state.roomId || r.room_id === state.roomId; }); }
+
+      function openModal() {
+        resolveRooms().then(function (rooms) {
+          state.rooms = rooms;
+          roomSel.innerHTML = '';
+          rooms.forEach(function (r) {
+            var opt = document.createElement('option');
+            opt.value = r.id || r.room_id;
+            opt.textContent = r.name || r.id;
+            roomSel.appendChild(opt);
+          });
+          if (!rooms.length) {
+            statusEl.textContent = 'No rooms to draw into. Add one from the Room step first.';
+            statusEl.style.color = '#f87171';
+          } else {
+            statusEl.textContent = '';
+            state.roomId = rooms[0].id || rooms[0].room_id;
+            state.zones = rectsFromRoom(rooms[0]);
+          }
+          render();
+          backdrop.style.display = 'flex';
+        });
+      }
+      function closeModal() {
+        backdrop.style.display = 'none';
+        state.dragging = null;
+        state.selectedIdx = -1;
+      }
+
+      function computeScale(r) {
+        var L = roomLength(r) || 6;
+        var W = roomWidth(r)  || 4;
+        var usableW = SVG_W - 2 * PADDING_PX;
+        var sx = usableW / L;                 // px per metre (along long axis)
+        var estH = Math.max(120, Math.min(420, sx * W + 2 * PADDING_PX));
+        var usableH = estH - 2 * PADDING_PX;
+        var sy = usableH / W;
+        var s = Math.min(sx, sy);
+        return { mPerPx: 1 / s, pxPerM: s, svgH: Math.round(s * W + 2 * PADDING_PX) };
+      }
+
+      function mToPx(m, scale) { return PADDING_PX + m * scale.pxPerM; }
+      function pxToM(px, scale) { return (px - PADDING_PX) * scale.mPerPx; }
+
+      function render() {
+        var r = room();
+        canvasWrap.innerHTML = '';
+        listEl.innerHTML = '';
+        if (!r) return;
+        var L = roomLength(r), W = roomWidth(r);
+        roomDimsLabel.textContent = (L && W)
+          ? ('Room: ' + L.toFixed(1) + 'm (L) × ' + W.toFixed(1) + 'm (W)')
+          : 'Set L × W on the Room card first to enable drawing.';
+        if (!L || !W) return;
+        var scale = computeScale(r);
+        state.scale = scale;
+        var svg = document.createElementNS(SVG_NS, 'svg');
+        svg.setAttribute('width', SVG_W);
+        svg.setAttribute('height', scale.svgH);
+        svg.style.display = 'block';
+        svg.style.cursor = 'crosshair';
+
+        // Room boundary
+        var bg = document.createElementNS(SVG_NS, 'rect');
+        bg.setAttribute('x', PADDING_PX);
+        bg.setAttribute('y', PADDING_PX);
+        bg.setAttribute('width', L * scale.pxPerM);
+        bg.setAttribute('height', W * scale.pxPerM);
+        bg.setAttribute('fill', 'rgba(30,41,59,0.4)');
+        bg.setAttribute('stroke', '#94a3b8');
+        bg.setAttribute('stroke-width', '1.5');
+        svg.appendChild(bg);
+
+        // 1 m grid
+        for (var gx = 1; gx < L; gx++) {
+          var gl = document.createElementNS(SVG_NS, 'line');
+          gl.setAttribute('x1', mToPx(gx, scale));
+          gl.setAttribute('x2', mToPx(gx, scale));
+          gl.setAttribute('y1', PADDING_PX);
+          gl.setAttribute('y2', PADDING_PX + W * scale.pxPerM);
+          gl.setAttribute('stroke', 'rgba(148,163,184,0.12)');
+          svg.appendChild(gl);
+        }
+        for (var gy = 1; gy < W; gy++) {
+          var gh = document.createElementNS(SVG_NS, 'line');
+          gh.setAttribute('x1', PADDING_PX);
+          gh.setAttribute('x2', PADDING_PX + L * scale.pxPerM);
+          gh.setAttribute('y1', mToPx(gy, scale));
+          gh.setAttribute('y2', mToPx(gy, scale));
+          gh.setAttribute('stroke', 'rgba(148,163,184,0.12)');
+          svg.appendChild(gh);
+        }
+
+        // Existing zones
+        state.zones.forEach(function (z, i) {
+          if (z._legacy || !Number.isFinite(z.x) || !Number.isFinite(z.y)) return;
+          var rect = document.createElementNS(SVG_NS, 'rect');
+          rect.setAttribute('x', mToPx(z.x, scale));
+          rect.setAttribute('y', mToPx(z.y, scale));
+          rect.setAttribute('width',  Math.max(2, z.l * scale.pxPerM));
+          rect.setAttribute('height', Math.max(2, z.w * scale.pxPerM));
+          rect.setAttribute('fill', i === state.selectedIdx ? 'rgba(59,130,246,0.35)' : 'rgba(16,185,129,0.25)');
+          rect.setAttribute('stroke', i === state.selectedIdx ? '#3b82f6' : '#10b981');
+          rect.setAttribute('stroke-width', '1.5');
+          rect.style.cursor = 'move';
+          rect.addEventListener('mousedown', function (e) {
+            e.stopPropagation();
+            state.selectedIdx = i;
+            state.dragging = { mode: 'move', startX: e.offsetX, startY: e.offsetY, idx: i, origX: z.x, origY: z.y };
+            render();
+          });
+          svg.appendChild(rect);
+          // Label
+          var label = document.createElementNS(SVG_NS, 'text');
+          label.setAttribute('x', mToPx(z.x, scale) + 4);
+          label.setAttribute('y', mToPx(z.y, scale) + 14);
+          label.setAttribute('fill', '#f1f5f9');
+          label.setAttribute('font-size', '11');
+          label.setAttribute('pointer-events', 'none');
+          label.textContent = (z.name || 'Zone ' + (i + 1)) + '  ' + z.l.toFixed(1) + '×' + z.w.toFixed(1) + 'm';
+          svg.appendChild(label);
+        });
+
+        svg.addEventListener('mousedown', function (e) {
+          if (e.target !== svg && e.target !== bg) return;
+          var mx = pxToM(e.offsetX, scale);
+          var my = pxToM(e.offsetY, scale);
+          state.dragging = { mode: 'draw', startX: mx, startY: my };
+          state.selectedIdx = -1;
+        });
+        svg.addEventListener('mousemove', function (e) {
+          if (!state.dragging) return;
+          var mx = pxToM(e.offsetX, scale);
+          var my = pxToM(e.offsetY, scale);
+          if (state.dragging.mode === 'draw') {
+            // Remove any ephemeral rect from a previous move step, then draw new
+            var ephemeral = svg.querySelector('.zone-ephemeral');
+            if (ephemeral) ephemeral.remove();
+            var x0 = Math.min(state.dragging.startX, mx);
+            var y0 = Math.min(state.dragging.startY, my);
+            var l  = Math.abs(mx - state.dragging.startX);
+            var w  = Math.abs(my - state.dragging.startY);
+            var rect = document.createElementNS(SVG_NS, 'rect');
+            rect.setAttribute('class', 'zone-ephemeral');
+            rect.setAttribute('x', mToPx(x0, scale));
+            rect.setAttribute('y', mToPx(y0, scale));
+            rect.setAttribute('width',  l * scale.pxPerM);
+            rect.setAttribute('height', w * scale.pxPerM);
+            rect.setAttribute('fill', 'rgba(59,130,246,0.25)');
+            rect.setAttribute('stroke', '#3b82f6');
+            rect.setAttribute('stroke-dasharray', '4 4');
+            svg.appendChild(rect);
+          } else if (state.dragging.mode === 'move') {
+            var z = state.zones[state.dragging.idx];
+            if (!z) return;
+            var dx = pxToM(e.offsetX, scale) - pxToM(state.dragging.startX, scale);
+            var dy = pxToM(e.offsetY, scale) - pxToM(state.dragging.startY, scale);
+            z.x = Math.max(0, Math.min(L - z.l, state.dragging.origX + dx));
+            z.y = Math.max(0, Math.min(W - z.w, state.dragging.origY + dy));
+            render();
+          }
+        });
+        svg.addEventListener('mouseup', function (e) {
+          if (!state.dragging) return;
+          if (state.dragging.mode === 'draw') {
+            var mx = pxToM(e.offsetX, scale);
+            var my = pxToM(e.offsetY, scale);
+            var x0 = Math.max(0, Math.min(state.dragging.startX, mx));
+            var y0 = Math.max(0, Math.min(state.dragging.startY, my));
+            var l  = Math.min(L - x0, Math.abs(mx - state.dragging.startX));
+            var w  = Math.min(W - y0, Math.abs(my - state.dragging.startY));
+            if (l >= 0.3 && w >= 0.3) {
+              state.zones.push({
+                name: 'Zone ' + (state.zones.length + 1),
+                x: Number(x0.toFixed(2)),
+                y: Number(y0.toFixed(2)),
+                l: Number(l.toFixed(2)),
+                w: Number(w.toFixed(2))
+              });
+            }
+          }
+          state.dragging = null;
+          render();
+        });
+        svg.addEventListener('mouseleave', function () { state.dragging = null; });
+
+        canvasWrap.appendChild(svg);
+
+        // Zone list on the right
+        state.zones.forEach(function (z, i) {
+          var row = document.createElement('div');
+          row.style.cssText = 'display:flex;gap:6px;align-items:center;padding:6px 8px;border:1px solid rgba(148,163,184,0.2);border-radius:6px;background:rgba(15,23,42,0.55);';
+          var name = document.createElement('span');
+          name.style.cssText = 'flex:1;color:#f1f5f9;font-size:0.8rem;';
+          if (z._legacy) {
+            name.textContent = (z.name || 'Zone ' + (i + 1)) + ' (legacy, no geometry)';
+          } else {
+            var area = (z.l * z.w).toFixed(1);
+            name.textContent = (z.name || 'Zone ' + (i + 1)) + ' — ' + z.l.toFixed(1) + '×' + z.w.toFixed(1) + 'm (' + area + ' m²)';
+          }
+          var del = document.createElement('button');
+          del.type = 'button';
+          del.className = 'ghost';
+          del.style.cssText = 'min-height:24px;padding:2px 8px;font-size:0.75rem;';
+          del.textContent = 'Delete';
+          del.addEventListener('click', function () {
+            state.zones.splice(i, 1);
+            render();
+          });
+          row.appendChild(name);
+          row.appendChild(del);
+          listEl.appendChild(row);
+        });
+      }
+
+      roomSel.addEventListener('change', function () {
+        state.roomId = roomSel.value;
+        var r = room();
+        state.zones = r ? rectsFromRoom(r) : [];
+        state.selectedIdx = -1;
+        render();
+      });
+      undoBtn.addEventListener('click', function () {
+        state.zones.pop();
+        render();
+      });
+      saveBtn.addEventListener('click', function () {
+        var r = room();
+        if (!r) return;
+        // Write zones back, preserving legacy entries (strings) that we didn't
+        // re-render. Strings collapse to objects with just a name so callers
+        // like groups-v2 keep working.
+        r.zones = state.zones.map(function (z, i) {
+          if (z._legacy) return { id: z.name || ('zone-' + (i + 1)), name: z.name || ('Zone ' + (i + 1)) };
+          return {
+            id: 'zone-' + (i + 1),
+            name: z.name || ('Zone ' + (i + 1)),
+            x_m: z.x, y_m: z.y, length_m: z.l, width_m: z.w,
+            area_m2: Number((z.l * z.w).toFixed(2))
+          };
+        });
+        statusEl.textContent = 'Saving…'; statusEl.style.color = '#fbbf24';
+        fetch('/api/setup/save-rooms', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ rooms: state.rooms })
+        }).then(function (resp) {
+          if (!resp.ok) throw new Error('HTTP ' + resp.status);
+          return resp.json();
+        }).then(function () {
+          statusEl.textContent = 'Saved.';
+          statusEl.style.color = '#4ade80';
+          document.dispatchEvent(new CustomEvent('rooms-updated'));
+        }).catch(function (err) {
+          console.error('[grow-management] zone save failed:', err);
+          statusEl.textContent = 'Save failed.';
+          statusEl.style.color = '#f87171';
+        });
+      });
+
+      openBtn.addEventListener('click', openModal);
+      closeBtn.addEventListener('click', closeModal);
+      backdrop.addEventListener('click', function (e) { if (e.target === backdrop) closeModal(); });
+      document.addEventListener('keydown', function (e) {
+        if (backdrop.style.display === 'none') return;
+        if (e.key === 'Escape') closeModal();
+        if ((e.key === 'Delete' || e.key === 'Backspace') && state.selectedIdx >= 0) {
+          state.zones.splice(state.selectedIdx, 1);
+          state.selectedIdx = -1;
+          render();
+        }
+      });
     })();
 
     function checkDegradedCompromise() {
