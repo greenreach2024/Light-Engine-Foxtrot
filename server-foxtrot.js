@@ -544,6 +544,10 @@ const LIGHT_ENGINE_DIR = path.join(__dirname, 'light-engine', 'public');
 // Crop registry — single source of truth for all crop metadata (Phase 2a)
 const _require = createRequire(import.meta.url);
 const cropUtils = _require('./public/js/crop-utils.js');
+// Shared plan-anchor helper (resolveCropRegistryEntry + stampPlanAnchor). Keeps
+// EVIE's update_group_crop, the tray-seed endpoint, and the 3D viewer's save
+// path on the same resolver — see docs/playbooks/10-farm-builder.md §10 Phase A.
+const planAnchor = _require('./public/js/plan-anchor.js');
 try {
   const registryData = JSON.parse(fs.readFileSync(path.join(PUBLIC_DIR, 'data/crop-registry.json'), 'utf8'));
   cropUtils.setRegistry(registryData);
@@ -24206,18 +24210,34 @@ app.post('/api/trays/:trayId/seed', async (req, res) => {
     }
 
     // -- Phase 2 Task 2.6: Sync seed date to group -----------------------
+    // Tray-seed is the authoritative seeding event for a group, so we run the
+    // shared planAnchor helper against the recipe name to stamp all five
+    // scheduling fields (crop/recipe/plan/planId/planConfig.anchor.seedDate).
+    // `overwriteSeedDate` is true because the lab-recorded seed event on this
+    // endpoint supersedes any prior placeholder anchor from a draft crop pick.
+    // Groups that already have a crop keep their canonical name unless the
+    // recipe resolves to a known registry entry with a different canonical
+    // form, in which case we honour the registry to prevent alias drift.
     if (groupId) {
       try {
+        // Merges main's withGroupsLock() concurrency guard with the Phase A
+        // shared planAnchor stamping — the helper writes all five scheduling
+        // fields and the lock wrapper serializes disk writes so two tablets
+        // seeding into the same group can't race. Registry is loaded once
+        // outside the critical section to keep the lock short.
+        let registry = null;
+        try {
+          registry = JSON.parse(fs.readFileSync(path.join(PUBLIC_DIR, 'data/crop-registry.json'), 'utf8'));
+        } catch (_) { /* non-fatal — planAnchor handles a null registry */ }
+        const seedDateStr = now.toISOString().slice(0, 10);
         await withGroupsLock((groupsArray) => {
           const targetGroup = groupsArray.find(g => g.id === groupId);
           if (targetGroup) {
-            if (!targetGroup.planConfig) targetGroup.planConfig = {};
-            if (!targetGroup.planConfig.anchor) targetGroup.planConfig.anchor = {};
-            const seedDateStr = now.toISOString().slice(0, 10);
-            targetGroup.planConfig.anchor.seedDate = seedDateStr;
-            if (!targetGroup.crop) targetGroup.crop = cropKey;
-            targetGroup.lastModified = new Date().toISOString();
-            console.log(`[tray-runs] Synced seed date ${seedDateStr} + crop ${cropKey} to group ${groupId}`);
+            planAnchor.assignCropToGroup(targetGroup, recipe, registry, {
+              seedDate: seedDateStr,
+              overwriteSeedDate: true
+            });
+            console.log(`[tray-runs] Synced seed date ${seedDateStr} + crop ${targetGroup.crop} (plan ${targetGroup.planId}) to group ${groupId}`);
             try { emitDataChange({ kind: 'groups', ids: [groupId], updatedAt: targetGroup.lastModified, source: 'tray-seed' }); } catch (_) {}
           }
         });
