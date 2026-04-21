@@ -1507,9 +1507,37 @@
           // Clear synchronously at the end so overlapping calls don't double-render.
           host.innerHTML = '';
           host.className = '';
-          renderControllersPanels(host, bindingsData, suggestData);
+          if (bindingsData === null && suggestData === null) {
+            renderControllersDeviceFallback(host);
+          } else {
+            renderControllersPanels(host, bindingsData, suggestData);
+          }
           updateBreadcrumb();
         });
+      }
+
+      // Pre-API-mount fallback: if /api/controller-bindings is unreachable
+      // (older LE deploys or transient failure), summarise state.devices by
+      // vendor/kind so the step isn't falsely blank.
+      function renderControllersDeviceFallback(host) {
+        var devices = state.devices || [];
+        if (!devices.length) {
+          host.className = 'ff-empty';
+          host.textContent = 'No controllers paired yet. Accept a Room Build Plan in step 5 to reserve controller slots, then pair devices in Farm Setup → IoT — this panel will auto-match them.';
+          return;
+        }
+        var byKind = {};
+        devices.forEach(function (d) {
+          var kind = d.kind || d.type || d.vendor || 'other';
+          byKind[kind] = (byKind[kind] || 0) + 1;
+        });
+        var chips = document.createElement('div');
+        chips.className = 'ff-chip-row';
+        chips.style.margin = '0';
+        Object.keys(byKind).forEach(function (k) {
+          chips.appendChild(chip(byKind[k] + ' × ' + k, 'ok'));
+        });
+        host.appendChild(chips);
       }
 
       function renderControllersPanels(host, bindingsData, suggestData) {
