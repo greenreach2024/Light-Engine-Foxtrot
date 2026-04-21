@@ -85,6 +85,11 @@ jobs:
       
       - name: Setup Pages
         uses: actions/configure-pages@v4
+        with:
+          # Pages hasn't been provisioned for this repo yet; let the action
+          # enable it on first run rather than failing with "Get Pages site
+          # failed / HttpError: Not Found".
+          enablement: true
       
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
