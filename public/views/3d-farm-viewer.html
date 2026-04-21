@@ -752,8 +752,9 @@
     // lockstep with EVIE's update_group_crop tool and the tray-seed endpoint —
     // aliases ("Bok Choy" → "Mei Qing Pak Choi"), `planIds[0]`, singular legacy
     // `planId`, and slug fallback all behave identically everywhere. Defensive
-    // fallback preserves the previous inline behaviour if the helper fails to
-    // load (e.g. offline cache miss).
+    // fallback below performs the same registry-aware resolution inline so a
+    // missing /js/plan-anchor.js (cache miss, offline, CSP block) never demotes
+    // the viewer to slug-only writes.
     function resolveCropRegistryEntry(cropName) {
       const crops = (S.cropRegistry && typeof S.cropRegistry === 'object') ? S.cropRegistry : {};
       if (window.planAnchor && typeof window.planAnchor.resolveCropRegistryEntry === 'function') {
@@ -762,8 +763,26 @@
       }
       const raw = String(cropName || '').trim();
       if (!raw) return { resolvedName: '', planId: '' };
-      const resolvedName = raw;
-      const planId = 'crop-' + resolvedName.toLowerCase().replace(/\s+/g, '-');
+      const keys = Object.keys(crops);
+      const lowered = raw.toLowerCase();
+      let matchKey = keys.find(function(k) { return String(k).toLowerCase() === lowered; });
+      if (!matchKey) {
+        matchKey = keys.find(function(k) {
+          const e = crops[k];
+          if (!e || !Array.isArray(e.aliases)) return false;
+          return e.aliases.some(function(a) { return String(a || '').toLowerCase().trim() === lowered; });
+        }) || null;
+      }
+      const entry = matchKey ? crops[matchKey] : null;
+      const resolvedName = matchKey || raw;
+      let planId = '';
+      if (entry && Array.isArray(entry.planIds) && entry.planIds[0]) {
+        planId = entry.planIds[0];
+      } else if (entry && typeof entry.planId === 'string' && entry.planId.trim()) {
+        planId = entry.planId.trim();
+      } else {
+        planId = 'crop-' + resolvedName.toLowerCase().replace(/\s+/g, '-');
+      }
       return { resolvedName, planId };
     }
 

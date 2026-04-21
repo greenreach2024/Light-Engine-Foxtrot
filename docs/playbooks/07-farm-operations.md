@@ -199,7 +199,7 @@ E.V.I.E. surfaces this to the farm on the home page and in briefings.
 - Automation coverage varies by farm hardware; documented in `device-meta.json`
 - Tray-to-inventory pipeline is mostly automatic but some farm-sales paths still skip inventory decrement (see Playbook 03 §7)
 - **G1.** The 3D viewer is the canonical crop-assignment UI today; it is **not** experimental. `public/views/3d-farm-viewer.html` `applyGroupEdits` (lines ~3679–3710) is the one UI path that stamps all five scheduling fields correctly.
-- **G2.** `update_group_crop` (EVIE, `greenreach-central/routes/assistant-chat.js:4918–4950`) does **not** stamp `planConfig.anchor.seedDate`; daily resolver therefore keeps EVIE-assigned groups at day 1 indefinitely. Fix planned in Farm-Builder Phase A (Playbook 10 §10).
+- ~~**G2.** `update_group_crop` (EVIE, `greenreach-central/routes/assistant-chat.js:4918–4950`) does **not** stamp `planConfig.anchor.seedDate`; daily resolver therefore keeps EVIE-assigned groups at day 1 indefinitely.~~ **RESOLVED** in Phase A (PR #41): `update_group_crop`, the 3D viewer's `applyGroupEdits`, and the tray-seed endpoint all call `planAnchor.assignCropToGroup` (`public/js/plan-anchor.js`) which stamps all five scheduling fields including `planConfig.anchor.seedDate`. Alias drift (`'Bok Choy' → crop-bok-choy` vs. registry-canonical `crop-pak-choi`) is fixed in the same helper. See Playbook 10 §11 item 4.
 - **G3.** `planting-scheduler.html` (`savePlantingAssignment`, line 1624) writes `seed_date` / `harvest_date` to the `planting_assignments` store, which `runDailyPlanResolver` (server-foxtrot.js:5086–5511) does **not** read. Fix planned in Farm-Builder Phase D.
 - **G4.** `tray-inventory.html` batch-mode seeding emits no `planId` / `seedDate`; seedings initiated from the Activity Hub are invisible to the daily resolver.
 - **G5.** Dual-deploy mirror reconciliation (`greenreach-central/public/`) has no CI drift guard; #9/#16/#17 divergence went undetected until #37 cleaned it up. Fix planned in Farm-Builder Phase E2.
@@ -216,7 +216,7 @@ Every UI or agent that assigns a crop to a group **must** stamp all five fields 
 | `group.planId` | Same as `group.plan` (alias for backward compat) | Same |
 | `group.planConfig.anchor.seedDate` | `YYYY-MM-DD`; day 1 anchor for recipe progression | `computePlanDayNumber` → `resolvePlanLightTargets(day)` |
 
-Today, the 3D viewer stamps all five; `update_group_crop` (EVIE) stamps four (missing `anchor.seedDate`); tray-inventory batch-mode stamps zero. This is tracked as gap G2/G4 above.
+As of Phase A (PR #41), the 3D viewer, `update_group_crop` (EVIE), and the tray-seed endpoint all stamp all five fields via `planAnchor.assignCropToGroup`. `tray-inventory.html` batch-mode still stamps zero — this remains open as gap G4 above.
 
 ## 16. References
 
