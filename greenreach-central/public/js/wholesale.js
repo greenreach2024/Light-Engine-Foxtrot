@@ -430,8 +430,17 @@
       let lat = latitudeRaw !== undefined && latitudeRaw !== '' ? Number(latitudeRaw) : null;
       let lng = longitudeRaw !== undefined && longitudeRaw !== '' ? Number(longitudeRaw) : null;
 
+      // Block submission on an incomplete Canadian postal code rather than
+      // letting the geocoder fall back to a province/country centroid.
+      const normalizedPostalCode = this.normalizePostalCode(postalCode);
+      if (!normalizedPostalCode) {
+        this.showToast('Please enter a valid Canadian postal code (e.g. K7L 1A1)', 'error');
+        document.getElementById('register-postal')?.focus();
+        return;
+      }
+
       const registrationLocation = {
-        postalCode,
+        postalCode: normalizedPostalCode,
         province,
         state: province,
         country: 'Canada'
@@ -476,7 +485,28 @@
         // Registration successful - set buyer and token
         this.setActiveBuyer({ buyer: json.data.buyer, token: json.data.token });
         this.hideAuthModal();
-        this.showToast('Account created. Welcome to GreenReach!', 'success');
+
+        // Surface service-radius coverage so the buyer understands up
+        // front whether any GreenReach farm can actually fulfill to
+        // their area, instead of showing an empty catalog with no
+        // explanation.
+        const serviceRadius = json.data?.serviceRadius;
+        if (serviceRadius && serviceRadius.buyerCoordsAvailable && serviceRadius.farmsInRange === 0) {
+          const nearest = Number.isFinite(serviceRadius.nearestFarmDistanceKm)
+            ? `${serviceRadius.nearestFarmDistanceKm} km away`
+            : 'outside our current service area';
+          this.showToast(
+            'GreenReach is not yet live in your area',
+            'info',
+            {
+              prominent: true,
+              detail: `Your account is created, but no farm is operating within ${serviceRadius.serviceRadiusKm} km of your address yet — the nearest is ${nearest}. We'll email you as soon as a farm joins your area.`,
+              duration: 10000
+            }
+          );
+        } else {
+          this.showToast('Account created. Welcome to GreenReach!', 'success');
+        }
       } catch (error) {
         console.error('Register error:', error);
         this.showToast('Network error registering', 'error');
@@ -2072,6 +2102,10 @@
       const postalCode = this.normalizePostalCode(location.postalCode || location.zip || '');
       const country = String(location.country || 'Canada').trim() || 'Canada';
 
+      // Require at least one specific signal so we never ask Nominatim
+      // for just "Ontario, Canada" or "Canada" and accept the centroid.
+      if (!postalCode && !city && !address) return [];
+
       const queries = [];
       const addQuery = (parts) => {
         const query = parts.filter(Boolean).join(', ');
@@ -2080,10 +2114,43 @@
 
       addQuery([address, city, state, postalCode, country]);
       addQuery([city, state, postalCode, country]);
-      addQuery([postalCode, state, country]);
-      addQuery([postalCode, country]);
+      if (postalCode) {
+        addQuery([postalCode, state, country]);
+        addQuery([postalCode, country]);
+      }
 
       return queries;
+    },
+
+    // Mirror the server-side BUYER_GEOCODE_ACCEPTED_ADDRESSTYPES /
+    // BUYER_GEOCODE_REJECTED_ADDRESSTYPES gate so the two layers agree
+    // on what counts as a buyer-specific Nominatim hit. The server uses
+    // these coords directly when the client passes latitude/longitude
+    // on the registration payload, so the client must apply the same
+    // whitelist or it silently bypasses the server check.
+    isAcceptableGeocodeResult(result) {
+      if (!result || typeof result !== 'object') return false;
+      const addressType = String(result.addresstype || '').toLowerCase().trim();
+      const acceptedAddressTypes = new Set([
+        'postcode', 'street', 'road', 'house', 'house_number', 'building',
+        'residential', 'amenity', 'hamlet', 'village', 'town', 'city',
+        'municipality', 'suburb', 'neighbourhood', 'quarter', 'city_district',
+        'locality', 'county'
+      ]);
+      const rejectedAddressTypes = new Set([
+        'country', 'state', 'region', 'province'
+      ]);
+      if (rejectedAddressTypes.has(addressType)) return false;
+      if (addressType && acceptedAddressTypes.has(addressType)) return true;
+      // Fall through to class/type — reject broad administrative
+      // boundaries (e.g. addresstype 'state_district' + class 'boundary'
+      // / type 'administrative') that would otherwise sneak through.
+      const cls = String(result.class || '').toLowerCase().trim();
+      const type = String(result.type || '').toLowerCase().trim();
+      if (cls === 'boundary' && (type === 'administrative' || type === 'political')) {
+        return false;
+      }
+      return true;
     },
 
     async geocodeCoordinates(location = {}) {
@@ -2104,6 +2171,8 @@
 
           const results = await response.json();
           if (!Array.isArray(results) || results.length === 0) continue;
+
+          if (!this.isAcceptableGeocodeResult(results[0])) continue;
 
           const latitude = Number(results[0].lat);
           const longitude = Number(results[0].lon);
@@ -2796,15 +2865,37 @@
           .filter(Boolean);
       }
       
-      // If no farms loaded yet, fetch buyer-safe wholesale network farms
+      // Buyer coords are needed both for the /network/farms query string
+      // and for the local distance calculation below, so derive them
+      // before we dispatch the request (declaring them inside the fetch
+      // block and then again in calculateDistance would create a TDZ
+      // ReferenceError in strict-mode execution).
+      const buyerLat = buyerLoc.latitude;
+      const buyerLng = buyerLoc.longitude;
+
+      // If no farms loaded yet, fetch buyer-safe wholesale network farms.
+      // Pass the buyer coordinates so the server can apply the service
+      // radius filter; record the returned serviceRadiusKm/meta on the
+      // controller so later renders (score, empty-state) stay consistent.
       if (farmsInCatalog.length === 0) {
         try {
           const headers = {};
           if (this.token) headers['Authorization'] = `Bearer ${this.token}`;
-          const response = await fetch('/api/wholesale/network/farms', { headers });
+          const nearParams = (Number.isFinite(buyerLat) && Number.isFinite(buyerLng))
+            ? `?nearLat=${encodeURIComponent(buyerLat)}&nearLng=${encodeURIComponent(buyerLng)}`
+            : '';
+          const response = await fetch(`/api/wholesale/network/farms${nearParams}`, { headers });
           const data = await response.json();
-          
+
           const farms = data?.data?.farms || [];
+          if (response.ok && data?.data) {
+            this.lastNetworkFarmsMeta = {
+              serviceRadiusKm: data.data.serviceRadiusKm || null,
+              totalFarmCount: data.data.totalFarmCount || farms.length,
+              filteredFarmCount: data.data.filteredFarmCount ?? farms.length,
+              buyerCoordsAvailable: Boolean(data.data.buyerCoordsAvailable)
+            };
+          }
           if (response.ok && Array.isArray(farms) && farms.length > 0) {
             farmsInCatalog = farms
               .map(mapFarmRecord)
@@ -2829,23 +2920,50 @@
         ];
       }
 
-      // Calculate distances from buyer to each farm
-      const buyerLat = buyerLoc.latitude;
-      const buyerLng = buyerLoc.longitude;
-
-      const farmDistances = farmsInCatalog.map(farm => {
+      const farmDistancesAll = farmsInCatalog.map(farm => {
         const distance = this.calculateDistance(
           buyerLat,
           buyerLng,
           farm.latitude,
           farm.longitude
         );
-        
-        return {
-          ...farm,
-          distance: distance
-        };
+        return { ...farm, distance };
       });
+
+      // Restrict the impact/score to farms inside the buyer service
+      // radius so a distant farm never skews the calculation. The
+      // server also filters /network/farms, but demo-mode data and
+      // cached responses may include out-of-range farms, so we
+      // defensively re-filter here.
+      const serviceRadiusKm = Number(
+        (this.lastNetworkFarmsMeta && this.lastNetworkFarmsMeta.serviceRadiusKm)
+        || 50
+      );
+      const farmDistances = farmDistancesAll.filter(f => f.distance <= serviceRadiusKm);
+
+      if (farmDistances.length === 0) {
+        impactContent.innerHTML = `
+          <div class="impact-metric">
+            <span class="impact-label">Service Radius</span>
+            <span class="impact-value">${serviceRadiusKm} km</span>
+          </div>
+          <div class="impact-metric">
+            <span class="impact-label">Farms In Range</span>
+            <span class="impact-value">0</span>
+          </div>
+          <div class="impact-comparison">
+            <div class="comparison-text">
+              GreenReach is not yet live within ${serviceRadiusKm} km of your registered address.
+              We'll notify you as soon as a farm joins your area.
+            </div>
+          </div>
+        `;
+        if (impactScore) {
+          impactScore.textContent = '—';
+          impactScore.className = 'impact-score grade-na';
+        }
+        return;
+      }
 
       // Calculate weighted average distance for multi-farm orders
       const avgDistance = farmDistances.reduce((sum, f) => sum + f.distance, 0) / farmDistances.length;
