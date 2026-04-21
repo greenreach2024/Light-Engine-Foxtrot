@@ -199,14 +199,18 @@
   function detectViolations(placements, rect) {
     var out = { overlaps: [], overflows: [] };
     if (!Array.isArray(placements) || !rect) return out;
+    // Small epsilon absorbs FP drift from solver arithmetic (e.g. 1.8 * 6 -> 10.8
+    // + 1.8 = 12.6 + 1e-15) so butt-end-to-end placements are not flagged as
+    // overlapping.
+    var EPS = 1e-6;
     for (var i = 0; i < placements.length; i++) {
       var p = placements[i];
       if (!p.fitsInZone) out.overflows.push(i);
       for (var j = i + 1; j < placements.length; j++) {
         var q = placements[j];
         var overlap =
-          p.x < q.x + q.lengthM && p.x + p.lengthM > q.x &&
-          p.y < q.y + q.widthM  && p.y + p.widthM  > q.y;
+          p.x + EPS < q.x + q.lengthM && p.x + p.lengthM > q.x + EPS &&
+          p.y + EPS < q.y + q.widthM  && p.y + p.widthM  > q.y + EPS;
         if (overlap) out.overlaps.push([i, j]);
       }
     }

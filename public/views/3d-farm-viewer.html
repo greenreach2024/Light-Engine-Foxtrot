@@ -458,6 +458,11 @@
   }
   </script>
 
+  <!-- Room layout solver (UMD, attaches window.RoomLayoutSolver) -- must load
+       before the module script below so spatial layout can use real template
+       dimensions and working-space clearances. -->
+  <script src="/lib/room-layout-solver.js"></script>
+
   <script type="module">
   import * as THREE from 'three';
   import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -496,6 +501,9 @@
     const S = {
       rooms: [], groups: [], roomMaps: {}, envData: null,
       iotDevices: [], cropRegistry: {},
+      growSystems: [],           // grow-systems.json templates (for spatial layout)
+      growSystemsById: {},       // id -> template
+      spatialViolations: [],     // { zoneId, roomId, overflow, message } for status bar
       targetRanges: null,
       overlay: 'none', roomFilter: '__all',
       currentTimeIndex: -1,
@@ -1394,13 +1402,14 @@
         if (!opts.silent) {
           status(opts.reason === 'manual' ? 'Refreshing viewer data...' : 'Loading farm data...');
         }
-        const [roomsRes, groupsRes, iotRes, envRes, regRes, trRes] = await Promise.all([
+        const [roomsRes, groupsRes, iotRes, envRes, regRes, trRes, gsRes] = await Promise.all([
           authFetch('/data/rooms.json?t=' + Date.now()),
           authFetch('/data/groups.json?t=' + Date.now()),
           authFetch('/data/iot-devices.json?t=' + Date.now()),
           authFetch('/env?hours=24&t=' + Date.now(), { cache: 'no-store' }),
           authFetch('/data/crop-registry.json?t=' + Date.now()),
           authFetch('/data/target-ranges.json?t=' + Date.now()),
+          authFetch('/data/grow-systems.json?t=' + Date.now()),
         ]);
 
         // Room list: still a wholesale replace — this list rarely changes and
@@ -1421,6 +1430,14 @@
         if (envRes.ok) { S.envData = await envRes.json(); }
         if (regRes.ok) { const d = await regRes.json(); S.cropRegistry = d.crops || d || {}; }
         if (trRes.ok) { S.targetRanges = await trRes.json(); }
+        if (gsRes && gsRes.ok) {
+          try {
+            const d = await gsRes.json();
+            S.growSystems = Array.isArray(d.templates) ? d.templates : [];
+            S.growSystemsById = {};
+            S.growSystems.forEach(function (t) { if (t && t.id) S.growSystemsById[t.id] = t; });
+          } catch (e) { /* non-fatal: viewer still renders with legacy heuristics */ }
+        }
 
         status('Loading room layouts...');
         const freshRoomMaps = {};
@@ -1763,6 +1780,72 @@
       return 'Open canopy mixing around bench perimeter';
     }
 
+    // ---- Spatial layout integration --------------------------
+    // Maps the viewer's legacy system-type inference to a canonical
+    // grow-systems.json template so the solver can place units at real
+    // dimensions with working-space envelopes. Returns null when no template
+    // registry is loaded (viewer then falls back to legacy heuristic render).
+    function getTemplateForGroup(group) {
+      if (!S.growSystemsById || !S.growSystems.length) return null;
+      // Explicit linkage first: group.templateId > group.growSystemTemplate
+      const explicitId = group && (group.templateId || group.growSystemTemplate || group.systemTemplateId);
+      if (explicitId && S.growSystemsById[explicitId]) return S.growSystemsById[explicitId];
+
+      const sys = inferGroupSystemType(group);
+      // Secondary keyword match on template name / category
+      const txt = [group && group.name, group && group.notes, group && group.system].filter(Boolean).join(' ').toLowerCase();
+      if (sys === 'zipgrow' || /zipgrow|tower\s*wall/.test(txt)) return S.growSystemsById['zipgrow-tower-wall'] || null;
+      if (/aeroponic/.test(txt)) return S.growSystemsById['aeroponics-tower'] || null;
+      if (/drip|fruiting/.test(txt)) return S.growSystemsById['drip-rail-fruiting-8ft'] || null;
+      if (/microgreen/.test(txt)) return S.growSystemsById['vertical-tier-5-microgreen'] || null;
+      if (sys === 'channel' || /nft/.test(txt)) return S.growSystemsById['nft-rack-3tier'] || null;
+      if (/dwc|pond|raft/.test(txt)) return S.growSystemsById['dwc-pond-4x8'] || null;
+      if (sys === 'rack') return S.growSystemsById['nft-rack-3tier'] || null;
+      return null;
+    }
+
+    // Picks a single representative template for a zone by majority vote
+    // across the groups assigned to it. Returns null when no group has a
+    // resolvable template (the viewer then skips spatial solving for that
+    // zone and falls back to the legacy per-group render).
+    function pickZoneTemplate(groupsInZone) {
+      const tally = {};
+      let best = null, bestCount = 0;
+      for (const g of groupsInZone) {
+        const t = getTemplateForGroup(g);
+        if (!t || !t.id) continue;
+        tally[t.id] = (tally[t.id] || 0) + 1;
+        if (tally[t.id] > bestCount) { bestCount = tally[t.id]; best = t; }
+      }
+      return best;
+    }
+
+    function solveZoneLayout(zoneRect, template, desiredUnits) {
+      const solver = (typeof window !== 'undefined') && window.RoomLayoutSolver;
+      if (!solver || !template || !zoneRect) return null;
+      try {
+        const plan = solver.solveLayout(template, zoneRect);
+        if (!plan || !plan.ok) return null;
+        const n = Math.min(desiredUnits || 0, plan.maxUnits || 0);
+        const placements = plan.placements(n);
+        const overflow = Math.max(0, (desiredUnits || 0) - (plan.maxUnits || 0));
+        return {
+          plan: plan,
+          placements: placements,
+          desiredUnits: desiredUnits || 0,
+          placedUnits: placements.length,
+          overflow: overflow,
+          maxUnits: plan.maxUnits || 0,
+          unitDims: plan.unit,
+          clearance: plan.clearance,
+          orientation: plan.orientation,
+          plumbingSide: plan.plumbingSide
+        };
+      } catch (e) {
+        return null;
+      }
+    }
+
     // ---- Build 3D Scene --------------------------------------
     function buildScene() {
       if (S.selectedMeshes.length) clearSelection({ silent: true });
@@ -1775,6 +1858,7 @@
       S.particleSystems.length = 0;
       S.zoneMeshMap = {};
       S.floorMeshMap = {};
+      S.spatialViolations = [];
 
       const visible = S.roomFilter === '__all' ? S.rooms : S.rooms.filter(r => r.id === S.roomFilter);
       let offsetX = 0;
@@ -1976,46 +2060,195 @@
         // Track per-zone auto-layout index for groups without explicit positions
         const zoneAutoIdx = {};
 
+        // ---- Pre-compute spatial layout per zone using the RoomLayoutSolver.
+        // For each zone we pick a representative grow-system template (majority
+        // vote over the groups in the zone), solve for the number of groups
+        // actually in that zone, and stash the resulting placements + overflow
+        // so the group render below can place each unit at real template
+        // dimensions with a working-space envelope. Overflow (groups beyond
+        // solver.maxUnits) is tracked for red tinting + zone-level warning
+        // labels. Absent template or solver -> render path falls back to the
+        // legacy heuristic layout.
+        const zoneSpatial = {};
+        zones.forEach((zone, zi) => {
+          const zKey = String(zone.zone ?? zone.id ?? zone.name ?? ('z' + zi));
+          const gInZone = roomGroups.filter(function (g) {
+            const gz = String(g.zone ?? g.zoneId ?? '');
+            return gz === zKey || gz === String(zone.name) || gz === String(zone.id) || gz.endsWith(String(zone.zone ?? '')) || gz.endsWith(String(zone.name ?? ''));
+          });
+          if (!gInZone.length) return;
+          const tpl = pickZoneTemplate(gInZone);
+          if (!tpl) return;
+
+          const zx1 = (zone.x1 ?? 0) * zScaleX, zy1 = (zone.y1 ?? 0) * zScaleZ;
+          const zx2 = (zone.x2 ?? gridSize) * zScaleX, zy2 = (zone.y2 ?? gridSize) * zScaleZ;
+          const zoneW = Math.abs(zx2 - zx1);
+          const zoneD = Math.abs(zy2 - zy1);
+          const rect = { lengthM: Math.max(zoneW, zoneD), widthM: Math.min(zoneW, zoneD) };
+          const layout = solveZoneLayout(rect, tpl, gInZone.length);
+          if (!layout) return;
+
+          // Solver works in zone-local coordinates with the long axis along x.
+          // Translate to world coordinates, accounting for orientation of the
+          // zone (long axis may be along room X or room Z) and plumbing-wall
+          // preference (anchor rows to the longer wall so walls carry plumbing
+          // / hydro runs, leaving the opposite side for the main walkway).
+          const longAxisX = zoneW >= zoneD;
+          const ox = offsetX + Math.min(zx1, zx2);
+          const oy = Math.min(zy1, zy2);
+          zoneSpatial[zKey] = {
+            template: tpl,
+            layout: layout,
+            groupIds: gInZone.map(function (g) { return g.id || g._id || g.name; }),
+            origin: { ox: ox, oy: oy, longAxisX: longAxisX, zoneW: zoneW, zoneD: zoneD, zoneName: zone.name || ('Zone ' + (zi + 1)) },
+            consumed: 0
+          };
+
+          // Working-space envelopes for the placed units. Rendered as a flat
+          // low-opacity slab beneath each unit so operators can see the
+          // clearance the solver reserved for servicing, plumbing runs, and
+          // the main walkway.
+          const envMat = new THREE.MeshStandardMaterial({ color: 0x22d3ee, transparent: true, opacity: 0.12, roughness: 0.7, metalness: 0.05 });
+          const envEdgeMat = new THREE.LineBasicMaterial({ color: 0x22d3ee, transparent: true, opacity: 0.5 });
+          layout.placements.forEach(function (p) {
+            const envL = p.envelope.lengthM;
+            const envW = p.envelope.widthM;
+            let wx, wz, meshL, meshW;
+            if (longAxisX) {
+              wx = ox + p.envelope.x + envL / 2;
+              wz = oy + p.envelope.y + envW / 2;
+              meshL = envL; meshW = envW;
+            } else {
+              wx = ox + p.envelope.y + envW / 2;
+              wz = oy + p.envelope.x + envL / 2;
+              meshL = envW; meshW = envL;
+            }
+            const envGeo = new THREE.BoxGeometry(Math.max(0.05, meshL - 0.02), 0.03, Math.max(0.05, meshW - 0.02));
+            const envMesh = new THREE.Mesh(envGeo, envMat);
+            envMesh.position.set(wx, 0.2, wz);
+            envMesh.receiveShadow = true;
+            envMesh.userData = { type: 'workspace-envelope', zoneKey: zKey, placement: p };
+            S.scene.add(envMesh);
+            S.meshes.zones.push(envMesh);
+            const envEdge = new THREE.LineSegments(new THREE.EdgesGeometry(envGeo), envEdgeMat);
+            envEdge.position.set(wx, 0.21, wz);
+            S.scene.add(envEdge);
+            S.meshes.zones.push(envEdge);
+          });
+
+          // Zone-level overflow warning: if there are more groups assigned to
+          // this zone than the solver can fit, paint a red strip along the
+          // zone floor and emit a label explaining the shortfall. The user's
+          // recovery path is documented in the Room Build Plan ("use both
+          // zones" / "enlarge zone" / "reduce unit count").
+          if (layout.overflow > 0) {
+            const warnMat = new THREE.MeshStandardMaterial({ color: 0xef4444, transparent: true, opacity: 0.25, roughness: 0.6, metalness: 0.05 });
+            const warnGeo = new THREE.BoxGeometry(Math.max(0.5, zoneW - 0.3), 0.04, Math.max(0.5, zoneD - 0.3));
+            const warnMesh = new THREE.Mesh(warnGeo, warnMat);
+            warnMesh.position.set(offsetX + Math.min(zx1, zx2) + zoneW / 2, 0.19, Math.min(zy1, zy2) + zoneD / 2);
+            warnMesh.userData = { type: 'zone-overflow-warn', zoneKey: zKey, overflow: layout.overflow };
+            S.scene.add(warnMesh);
+            S.meshes.zones.push(warnMesh);
+            makeLabel('! ' + layout.overflow + ' of ' + gInZone.length + ' units do not fit - use both zones or reduce count',
+              offsetX + Math.min(zx1, zx2) + zoneW / 2, 0.9, Math.min(zy1, zy2) + zoneD / 2,
+              { size: 11, color: '#fecaca', opacity: 0.95 });
+            S.spatialViolations.push({ zoneKey: zKey, zoneName: zone.name || ('Zone ' + (zi + 1)), roomId: room.id, overflow: layout.overflow, capacity: layout.maxUnits, requested: gInZone.length });
+          }
+        });
+
         roomGroups.forEach((group, gi) => {
           const gZone = String(group.zone ?? group.zoneId ?? '');
           const matched = zones.find(z => String(z.zone) === gZone || String(z.name) === gZone || String(z.id) === gZone || gZone.endsWith(String(z.zone)) || gZone.endsWith(String(z.name)));
           let gx, gz;
+          let spatialPlacement = null;
+          let overflowFlag = false;
 
-          // Prefer explicit grid position (set by optimize_layout)
-          const hasGridPos = group.gridX != null && group.gridY != null;
-          if (hasGridPos) {
-            gx = group.gridX * zScaleX + offsetX;
-            gz = group.gridY * zScaleZ;
-          } else if (matched) {
-            // Auto-layout: scale zone bounds from grid to meters
-            const zx1 = (matched.x1 ?? 0) * zScaleX + offsetX, zy1 = (matched.y1 ?? 0) * zScaleZ;
-            const zx2 = (matched.x2 ?? gridSize) * zScaleX + offsetX, zy2 = (matched.y2 ?? gridSize) * zScaleZ;
-            const gDims0 = getSavedGroupDimensions(group);
-            const cellW = Math.max(2.0, (gDims0.length || 1.8) + 0.6);
-            const cellD = Math.max(2.0, (gDims0.width || 1.0) + 0.6);
-            const zoneW = Math.abs(zx2 - zx1);
-            const zoneD = Math.abs(zy2 - zy1);
-            const cols = Math.max(1, Math.floor((zoneW - 0.8) / cellW));
-            const zKey = String(matched.zone ?? matched.name ?? gi);
-            const idx = zoneAutoIdx[zKey] || 0;
-            zoneAutoIdx[zKey] = idx + 1;
-            gx = Math.min(zx1, zx2) + 0.8 + (idx % cols) * cellW + cellW / 2;
-            gz = Math.min(zy1, zy2) + 0.8 + Math.floor(idx / cols) * cellD + cellD / 2;
-          } else {
-            gx = offsetX + 2 + (gi % 6) * 3;
-            gz = 2 + Math.floor(gi / 6) * 3;
+          // Prefer spatial-solver placement (real template dims + working-space
+          // envelope + wall-side plumbing anchoring). Falls back through the
+          // existing grid-position / auto-layout paths when no template could
+          // be resolved for the zone.
+          if (matched) {
+            const zKey = String(matched.zone ?? matched.id ?? matched.name ?? '');
+            const sp = zoneSpatial[zKey];
+            if (sp) {
+              const idxInZone = sp.consumed;
+              sp.consumed += 1;
+              const p = sp.layout.placements[idxInZone];
+              if (p) {
+                spatialPlacement = p;
+                if (sp.origin.longAxisX) {
+                  gx = sp.origin.ox + p.x + p.lengthM / 2;
+                  gz = sp.origin.oy + p.y + p.widthM / 2;
+                } else {
+                  gx = sp.origin.ox + p.y + p.widthM / 2;
+                  gz = sp.origin.oy + p.x + p.lengthM / 2;
+                }
+              } else {
+                // Overflow: park beyond solver capacity, tint red.
+                overflowFlag = true;
+                const over = idxInZone - sp.layout.placements.length;
+                gx = sp.origin.ox + sp.origin.zoneW - 0.9;
+                gz = sp.origin.oy + 0.9 + over * 0.9;
+              }
+            }
+          }
+
+          if (gx == null) {
+            // Prefer explicit grid position (set by optimize_layout)
+            const hasGridPos = group.gridX != null && group.gridY != null;
+            if (hasGridPos) {
+              gx = group.gridX * zScaleX + offsetX;
+              gz = group.gridY * zScaleZ;
+            } else if (matched) {
+              // Auto-layout: scale zone bounds from grid to meters
+              const zx1 = (matched.x1 ?? 0) * zScaleX + offsetX, zy1 = (matched.y1 ?? 0) * zScaleZ;
+              const zx2 = (matched.x2 ?? gridSize) * zScaleX + offsetX, zy2 = (matched.y2 ?? gridSize) * zScaleZ;
+              const gDims0 = getSavedGroupDimensions(group);
+              const cellW = Math.max(2.0, (gDims0.length || 1.8) + 0.6);
+              const cellD = Math.max(2.0, (gDims0.width || 1.0) + 0.6);
+              const zoneW = Math.abs(zx2 - zx1);
+              const cols = Math.max(1, Math.floor((zoneW - 0.8) / cellW));
+              const zKey = String(matched.zone ?? matched.name ?? gi);
+              const idx = zoneAutoIdx[zKey] || 0;
+              zoneAutoIdx[zKey] = idx + 1;
+              gx = Math.min(zx1, zx2) + 0.8 + (idx % cols) * cellW + cellW / 2;
+              gz = Math.min(zy1, zy2) + 0.8 + Math.floor(idx / cols) * cellD + cellD / 2;
+            } else {
+              gx = offsetX + 2 + (gi % 6) * 3;
+              gz = 2 + Math.floor(gi / 6) * 3;
+            }
           }
 
           const gStatus = (group.status || 'active').toLowerCase();
           const trayCount = Math.max(1, Math.min(Number(group.trays) || 1, 20));
-          const color = STATUS_COLOR[gStatus] || 0x22c55e;
+          // Overflow groups get the destructive palette so overlap/overflow
+          // is unmistakable in the scene. Status-driven color is preserved
+          // for in-plan units.
+          const color = overflowFlag ? 0xef4444 : (STATUS_COLOR[gStatus] || 0x22c55e);
 
           // Use saved dimensions first, then the group's persisted server values, then defaults.
           const gDims = getSavedGroupDimensions(group);
-          const gLength = gDims.length || Math.min(trayCount, 4) * 0.45;
-          const gWidth  = gDims.width  || Math.ceil(trayCount / 4) * 0.45;
-          const gHeight = gDims.height || 0.3;
+          let gLength = gDims.length || Math.min(trayCount, 4) * 0.45;
+          let gWidth  = gDims.width  || Math.ceil(trayCount / 4) * 0.45;
+          let gHeight = gDims.height || 0.3;
           const lightOri = gDims.lightOrientation || 'out-of-canopy';
+
+          // Spatial-solver placements override persisted dimensions with the
+          // template's real unit footprint so the 3D scene matches the Room
+          // Build Plan's zone capacity numbers. Height comes from the
+          // template (e.g. 2.44 m for ZipGrow / Aeroponic towers).
+          if (spatialPlacement) {
+            const spZone = matched ? zoneSpatial[String(matched.zone ?? matched.id ?? matched.name ?? '')] : null;
+            const longAxisX = spZone && spZone.origin ? spZone.origin.longAxisX : true;
+            if (longAxisX) {
+              gLength = spatialPlacement.lengthM;
+              gWidth  = spatialPlacement.widthM;
+            } else {
+              gLength = spatialPlacement.widthM;
+              gWidth  = spatialPlacement.lengthM;
+            }
+            gHeight = spatialPlacement.heightM || gHeight;
+          }
 
           const systemType = inferGroupSystemType(group);
           const rackLevels = getGroupRackLevels(group, gHeight, trayCount);
