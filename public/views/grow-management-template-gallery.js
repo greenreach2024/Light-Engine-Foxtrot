@@ -144,17 +144,17 @@
             <div class="tg-score">
               <span class="tg-score__label">Transpiration</span>
               <span class="tg-score__value" style="color:${scoreColor(t?.score ?? 0)}">${fmt(t?.score, 0)}</span>
-              <span class="tg-score__unit">${fmt(t?.kgPerDay, 1)} kg/day</span>
+              <span class="tg-score__unit">${fmt(t?.dailyWaterKg, 1)} kg/day</span>
             </div>
             <div class="tg-score">
               <span class="tg-score__label">Heat mgmt</span>
               <span class="tg-score__value" style="color:${scoreColor(h?.score ?? 0)}">${fmt(h?.score, 0)}</span>
               <span class="tg-score__unit">${fmt(h?.wPerM3, 0)} W/m\u00b3</span>
             </div>
-            <div class="tg-score ${tierClass(e?.tier)}">
+            <div class="tg-score ${tierClass(scores?.tier)}">
               <span class="tg-score__label">Env benchmark</span>
               <span class="tg-score__value" style="color:${envColor(e?.score ?? 0)}">${fmt(e?.score, 0)}</span>
-              <span class="tg-score__unit">${e?.tier || '\u2014'}</span>
+              <span class="tg-score__unit">${scores?.tier || '\u2014'}</span>
             </div>
           </div>
         </div>

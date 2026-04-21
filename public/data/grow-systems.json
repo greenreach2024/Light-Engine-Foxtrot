@@ -321,7 +321,7 @@
       "image": "/images/grow-systems/vertical-tier-5-microgreen.svg",
       "tagline": "5-tier microgreen rack with extended 18 h photoperiod.",
       "defaultCropClass": "microgreens",
-      "lightingSpecSummary": "Compact LED strips, 2.5 umol/J, 18 h photoperiod, 250 PPFD target."
+      "lightingSpecSummary": "Compact LED strips, 2.7 umol/J, 18 h photoperiod, 250 PPFD target."
     },
     {
       "id": "flood-bench-4x8",
