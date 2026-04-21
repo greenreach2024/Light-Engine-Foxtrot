@@ -131,7 +131,7 @@ router.post('/auto-suggest', (req, res) => {
     const boundSlotCounts = new Map();
     for (const b of existing.bindings) {
       if (!b.roomId || !b.subsystem) continue;
-      const k = `${b.roomId}::${b.zoneId || ''}::${b.subsystem}`;
+      const k = `${b.roomId}::${b.zoneId || ''}::${b.subsystem}::${b.controlType || ''}`;
       boundSlotCounts.set(k, (boundSlotCounts.get(k) || 0) + 1);
     }
 
@@ -170,7 +170,7 @@ router.post('/auto-suggest', (req, res) => {
           });
 
       for (const slot of slotRecords) {
-        const slotKey = `${room.id}::${slot.zoneId || ''}::${slot.subsystem}`;
+        const slotKey = `${room.id}::${slot.zoneId || ''}::${slot.subsystem}::${slot.controllerClass || ''}`;
         const remaining = boundSlotCounts.get(slotKey) || 0;
         if (remaining > 0) {
           boundSlotCounts.set(slotKey, remaining - 1);
