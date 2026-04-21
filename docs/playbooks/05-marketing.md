@@ -14,7 +14,7 @@ Foxtrot's marketing layer produces, schedules, auto-approves, and publishes cont
 
 | Surface | Audience | Entry point |
 |---|---|---|
-| Public landing pages | Prospective farms, buyers, investors | `landing-*.html`, `about.html`, `greenreach-grow.html`, `blog.html` |
+| Public landing pages | Prospective farms, buyers, investors | `landing-*.html`, `about.html`, `blog.html` |
 | Per-farm storefront (subdomain branding **planned**, not live) | Retail buyers | `public/farm-sales-shop.html` on LE Cloud Run today; target URL `<slug>.greenreachgreens.com/farm-sales-shop.html` once subdomain routing ships (see Playbook 01 §7) |
 | Admin Marketing | GreenReach marketing ops | `GR-central-admin.html` → Marketing tab |
 | S.C.O.T.T. chat + publish UI | Admin / F.A.Y.E. delegation | S.C.O.T.T. panel in admin UI |
@@ -82,7 +82,7 @@ All marketing/landing pages are owned by Central and live under `greenreach-cent
 
 - `greenreach-central/public/landing-*.html` — marketing landing pages (home, cloud, edge, purchase-success, downloads, main)
 - `greenreach-central/public/about.html` — company/mission
-- `greenreach-central/public/greenreach-grow.html`, `id-buy-local.html` — programmatic + local campaigns
+- `greenreach-central/public/id-buy-local.html` — programmatic + local campaigns
 - `greenreach-central/public/blog.html`, `blog-post.html`, plus per-post content under `greenreach-central/public/blog/*/content.html` — blog system
 - `greenreach-central/public/faye-demo.html`, `evie-demo.html`, `gwen-demo.html` — agent demo surfaces used as marketing assets (demo files `faye-demo.html`, `evie-core.html`, `gwen-core.html`, etc. are dual-deployed and also exist at repo root `public/`)
 

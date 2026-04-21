@@ -829,7 +829,6 @@ gcloud run services update light-engine --region=us-east1 \
 | farm-sales-store.html | Farm retail |
 | farm-sales-pos.html | Point of sale system. Loaded as iframe from LE-farm-admin. Embedded mode auto-login from admin session |
 | about.html | About GreenReach |
-| greenreach-grow.html | Growing guides |
 | growing-made-easy.html | Onboarding education |
 | grow-and-sell.html | Farming + sales integration |
 | id-buy-local.html | Buy local marketplace |
