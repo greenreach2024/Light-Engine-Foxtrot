@@ -29,6 +29,7 @@
   const SUBTITLE_ID    = 'rbpSubtitle';
   const PREFILL_BTN    = 'rbpPrefillBtn';
   const ASSIGN_BTN     = 'rbpAssignLightsBtn';
+  const SAVE_PLAN_BTN  = 'rbpSavePlanBtn';
   const CLEAR_BTN      = 'rbpClearBtn';
   const ROOM_SELECT_ID = 'groupsV2RoomSelect';
   const ZONE_SELECT_ID = 'groupsV2ZoneSelect';
@@ -740,15 +741,125 @@
       .forEach(c => c.setAttribute('aria-pressed', 'false'));
   }
 
+  // Persist the currently-staged build plan to rooms.json. Merges a
+  // buildPlan block + installedSystems[] entry onto the selected room
+  // and POSTs the full rooms array to /api/setup/save-rooms. Shape
+  // matches lib/schema-validator.js roomsSchema (buildPlan + installedSystems).
+  async function saveBuildPlan() {
+    if (!state.template || !state.room) {
+      if (typeof window.showToast === 'function') {
+        window.showToast({ title: 'Nothing to save', msg: 'Pick a template first.', kind: 'warn' }, 3000);
+      }
+      return;
+    }
+    try {
+      const roomsResp = await fetch('/data/rooms.json', { credentials: 'same-origin' });
+      const roomsDoc = roomsResp.ok ? await roomsResp.json() : { rooms: [] };
+      const rooms = Array.isArray(roomsDoc.rooms) ? roomsDoc.rooms : [];
+      const idx = rooms.findIndex(r => r.id === state.room.id);
+      if (idx === -1) {
+        if (typeof window.showToast === 'function') {
+          window.showToast({ title: 'Room not found', msg: `Could not find ${state.room.name || state.room.id}.`, kind: 'error' }, 4000);
+        }
+        return;
+      }
+
+      const room = rooms[idx];
+      const tpl  = state.template;
+      const sc   = state.scores || {};
+      const qty  = Math.max(1, state.desiredUnits || 1);
+
+      // computedLoad matches buildPlanSchema.computedLoad. Derive
+      // from scores where available, from template otherwise.
+      const lightingKW = Number.isFinite(sc.power?.lightingW)
+        ? sc.power.lightingW / 1000
+        : (Number.isFinite(tpl.powerClassW?.lightingPerUnit)
+            ? (tpl.powerClassW.lightingPerUnit * qty) / 1000
+            : 0);
+      const pumpKW = Number.isFinite(tpl.powerClassW?.pumpsPer10kPlants)
+        ? (tpl.powerClassW.pumpsPer10kPlants * Math.max(1, (tpl.plantSitesPerUnit || 0) * qty / 10000)) / 1000
+        : 0;
+      const coolingTons = Number.isFinite(sc.heatManagement?.totalHeatW)
+        ? sc.heatManagement.totalHeatW / W_PER_TON : 0;
+      const dehumLPerDay = Number.isFinite(sc.transpiration?.dailyWaterKg)
+        ? sc.transpiration.dailyWaterKg * KG_TO_LITRES : 0;
+      const supplyFanCFM = Number.isFinite(sc.envBenchmark?.inputs?.airflow?.requiredCFM)
+        ? sc.envBenchmark.inputs.airflow.requiredCFM : 0;
+
+      const buildPlan = {
+        status: 'accepted',
+        generatedAt: new Date().toISOString(),
+        computedLoad: {
+          lightingKW: Number(lightingKW.toFixed(3)),
+          coolingTons: Number(coolingTons.toFixed(3)),
+          dehumLPerDay: Number(dehumLPerDay.toFixed(2)),
+          supplyFanCFM: Math.round(supplyFanCFM),
+          pumpKW: Number(pumpKW.toFixed(3)),
+          totalCircuitKW: Number((lightingKW + pumpKW).toFixed(3))
+        },
+        acceptedEquipment: [],
+        reservedControllerSlots: []
+      };
+      // acceptedEquipment: one line per non-zero category so Phase B
+      // discovery has concrete targets to bind into.
+      if (coolingTons > 0)   buildPlan.acceptedEquipment.push({ category: 'hvac',         templateId: tpl.id, quantity: 1, notes: `${coolingTons.toFixed(2)} tons cooling` });
+      if (dehumLPerDay > 0)  buildPlan.acceptedEquipment.push({ category: 'dehumidifier', templateId: tpl.id, quantity: 1, notes: `${Math.round(dehumLPerDay)} L/day` });
+      if (supplyFanCFM > 0)  buildPlan.acceptedEquipment.push({ category: 'fans',         templateId: tpl.id, quantity: 1, notes: `${Math.round(supplyFanCFM)} CFM supply` });
+      if (lightingKW > 0)    buildPlan.acceptedEquipment.push({ category: 'lights',       templateId: tpl.id, quantity: qty, notes: `${lightingKW.toFixed(2)} kW total` });
+      if (pumpKW > 0)        buildPlan.acceptedEquipment.push({ category: 'pumps',        templateId: tpl.id, quantity: 1, notes: `${(pumpKW * 1000).toFixed(0)} W recirculating` });
+
+      // installedSystems[]: upsert on templateId; updates quantity if
+      // the template is already installed.
+      const installed = Array.isArray(room.installedSystems) ? room.installedSystems.slice() : [];
+      const existing = installed.findIndex(s => s && s.templateId === tpl.id);
+      const entry = { templateId: tpl.id, quantity: qty };
+      if (existing === -1) installed.push(entry);
+      else installed[existing] = Object.assign({}, installed[existing], entry);
+
+      rooms[idx] = Object.assign({}, room, {
+        installedSystems: installed,
+        buildPlan: buildPlan
+      });
+
+      const saveResp = await fetch('/api/setup/save-rooms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ rooms })
+      });
+      if (!saveResp.ok) {
+        const text = await saveResp.text().catch(() => '');
+        throw new Error(`save-rooms ${saveResp.status}: ${text}`);
+      }
+      if (typeof window.showToast === 'function') {
+        window.showToast({
+          title: 'Build plan saved',
+          msg: `${tpl.name} × ${qty} persisted to ${room.name || room.id}. Equipment step now shows the accepted plan.`,
+          kind: 'success'
+        }, 3500);
+      }
+      document.dispatchEvent(new CustomEvent('room-build-plan:saved', {
+        detail: { roomId: room.id, templateId: tpl.id, quantity: qty, buildPlan }
+      }));
+    } catch (err) {
+      console.error('[rbp] saveBuildPlan failed:', err);
+      if (typeof window.showToast === 'function') {
+        window.showToast({ title: 'Save failed', msg: err.message || 'Unknown error', kind: 'error' }, 4000);
+      }
+    }
+  }
+
   function wire() {
     injectStyles();
     ensureBreadcrumb();
     document.addEventListener('grow-template:selected', (ev) => handleSelection(ev.detail || {}));
     const prefillBtn = $(PREFILL_BTN);
     const assignBtn  = $(ASSIGN_BTN);
+    const savePlanBtn= $(SAVE_PLAN_BTN);
     const clearBtn   = $(CLEAR_BTN);
     if (prefillBtn) prefillBtn.addEventListener('click', stagePrefill);
     if (assignBtn)  assignBtn.addEventListener('click', scrollToLightAssignment);
+    if (savePlanBtn) savePlanBtn.addEventListener('click', saveBuildPlan);
     if (clearBtn)   clearBtn.addEventListener('click', clear);
 
     const roomSel = $(ROOM_SELECT_ID);
