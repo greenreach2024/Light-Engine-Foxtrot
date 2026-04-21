@@ -87,7 +87,7 @@ function deviceMatchesControllerClass(device, controllerClass) {
   if (controllerClass === '0_10v') {
     return deviceType.includes('dimmer')
       || deviceType.includes('0-10v')
-      || deviceType.includes('controller');
+      || deviceType.includes('0_10v');
   }
   return false;
 }
