@@ -101,7 +101,7 @@ Foxtrot can be read as **four customer-facing apps** sharing one backend:
 This is actually **two tightly linked surfaces** that share a backend and the marketing agent S.C.O.T.T.
 
 **C.1 Marketing Platform**
-- **Public landing pages**: `landing-*.html`, `about.html`, `greenreach-grow.html`, `id-buy-local.html`, blog, etc.
+- **Public landing pages**: `landing-*.html`, `about.html`, `id-buy-local.html`, blog, etc.
 - **Marketing agent (S.C.O.T.T.)**: `greenreach-central/routes/scott-marketing-agent.js` — "Social Content Optimization, Trends & Targeting." Generates social posts per platform, runs rule-engine auto-approval (`marketing-rules-engine.js`), publishes via `marketing-platforms.js`, tracks AI cost via `ai-usage-tracker.js`. Explicitly positioned as "junior to F.A.Y.E." with escalation.
 - **Admin surface**: `/api/admin/marketing` (`greenreach-central/routes/admin-marketing.js`), campaigns (`greenreach-central/routes/campaign.js`), marketing skills registry (`greenreach-central/services/marketing-skills.js`).
 - **Branding (planned):** per-farm subdomain stores (`*.greenreachgreens.com`) are the **intended** public face of each tenant; today the farm shop is reached via the LE Cloud Run URL or (once migrated) relative paths under Central's domain. Wildcard DNS and TLS for `*.greenreachgreens.com` are **not** configured in production today.

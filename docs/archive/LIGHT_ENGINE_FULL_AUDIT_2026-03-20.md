@@ -150,7 +150,6 @@ Light Engine Foxtrot is a **full-stack indoor farming platform** comprising:
 | `landing-purchase-success.html` | `/purchase-success` | Auto-login, setup wizard redirect |
 | `about.html` | `/about` | Company info |
 | `greenreach-org.html` | `/greenreach` | Organization overview |
-| `greenreach-grow.html` | `/grow` | Growing info |
 | `grow-and-sell.html` | `/grow-and-sell` | Producer onboarding |
 | `growing-made-easy.html` | `/growing-made-easy` | Consumer-facing |
 | `id-buy-local.html` | `/buy-local` | Consumer marketplace |

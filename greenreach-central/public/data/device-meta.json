@@ -21,12 +21,12 @@
         "battery": 60,
         "version": "V0.9",
         "deviceId": "C3343035702D",
-        "humidity": 30,
+        "humidity": 61,
         "protocol": "switchbot",
         "deviceName": "Sen 3",
         "deviceType": "WoIOSensor",
         "hubDeviceId": "D3F85167A57E",
-        "temperature": 15.5
+        "temperature": 21.5
       }
     },
     "CE2A81460E78": {
@@ -50,12 +50,12 @@
         "battery": 60,
         "version": "V0.9",
         "deviceId": "CE2A81460E78",
-        "humidity": 28,
+        "humidity": 64,
         "protocol": "switchbot",
         "deviceName": "Sen 1",
         "deviceType": "WoIOSensor",
         "hubDeviceId": "D3F85167A57E",
-        "temperature": 15.7
+        "temperature": 22.0
       }
     },
     "CE2A8606558E": {
@@ -79,12 +79,12 @@
         "battery": 60,
         "version": "V0.9",
         "deviceId": "CE2A8606558E",
-        "humidity": 28,
+        "humidity": 63,
         "protocol": "switchbot",
         "deviceName": "Sen 2",
         "deviceType": "WoIOSensor",
         "hubDeviceId": "D3F85167A57E",
-        "temperature": 15.7
+        "temperature": 21.8
       }
     },
     "D0C841064453": {
@@ -108,12 +108,12 @@
         "battery": 60,
         "version": "V0.4",
         "deviceId": "D0C841064453",
-        "humidity": 29,
+        "humidity": 62,
         "protocol": "switchbot",
         "deviceName": "Sen 4",
         "deviceType": "WoIOSensor",
         "hubDeviceId": "D3F85167A57E",
-        "temperature": 15.6
+        "temperature": 21.7
       }
     },
     "D3F85167A57E": {
