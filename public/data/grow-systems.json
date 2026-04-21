@@ -2,19 +2,34 @@
   "schemaVersion": "1.0.0",
   "version": "2026-04-18-v1",
   "description": "Class-level catalog of physical growing apparatuses. Templates declare class and required channel counts only; device identities live in iot-devices.json. Consumers are documented in docs/features/GROW_SYSTEMS_TEMPLATE_SCHEMA.md. Formula sources are in docs/features/VERTICAL_FARM_CALCULATOR_SPEC.md.",
-  "cropClasses": ["leafy_greens", "microgreens", "herbs", "fruiting"],
+  "cropClasses": [
+    "leafy_greens",
+    "microgreens",
+    "herbs",
+    "fruiting"
+  ],
   "templates": [
     {
       "id": "nft-rack-3tier",
       "name": "NFT Rack, 3-Tier",
       "category": "nft_rack",
       "description": "Classic 3-level NFT rack for leafy greens and herbs. 10 trays per tier on 24\"x28\" channels.",
-      "suitableCropClasses": ["leafy_greens", "herbs"],
-      "footprintM": { "length": 2.4, "width": 0.6 },
+      "suitableCropClasses": [
+        "leafy_greens",
+        "herbs"
+      ],
+      "footprintM": {
+        "length": 2.4,
+        "width": 0.6
+      },
       "heightM": 2.4,
       "tierCount": 3,
       "traysPerTier": 10,
-      "trayFormat": { "lengthIn": 24, "widthIn": 28, "plantsPerTrayDefault": 30 },
+      "trayFormat": {
+        "lengthIn": 24,
+        "widthIn": 28,
+        "plantsPerTrayDefault": 30
+      },
       "plantsPerTrayByClass": {
         "leafy_greens": 30,
         "microgreens": 200,
@@ -62,10 +77,22 @@
         }
       },
       "defaultControllerClass": {
-        "lights":  { "type": "0_10v",        "channelsPerFixturePair": 1 },
-        "pumps":   { "type": "smart_plug",   "channelsPerPumpPair": 1 },
-        "fans":    { "type": "smart_plug",   "channelsPerFan": 1 },
-        "sensors": { "type": "switchbot_cloud", "channelsPerZone": 2 }
+        "lights": {
+          "type": "0_10v",
+          "channelsPerFixturePair": 1
+        },
+        "pumps": {
+          "type": "smart_plug",
+          "channelsPerPumpPair": 1
+        },
+        "fans": {
+          "type": "smart_plug",
+          "channelsPerFan": 1
+        },
+        "sensors": {
+          "type": "switchbot_cloud",
+          "channelsPerZone": 2
+        }
       },
       "requiredChannels": {
         "lightsPerTier": 2,
@@ -80,20 +107,34 @@
       },
       "references": {
         "spec": "docs/features/VERTICAL_FARM_CALCULATOR_SPEC.md#hydroponic-system",
-        "notes": "Baseline template. Matches VFC §'Container-Scale System' 3-level assumption. Calibration of plantsPerTrayByClass for fruiting is nominal; fruiting crops are not recommended on this footprint."
-      }
+        "notes": "Baseline template. Matches VFC \u00a7'Container-Scale System' 3-level assumption. Calibration of plantsPerTrayByClass for fruiting is nominal; fruiting crops are not recommended on this footprint."
+      },
+      "image": "/images/grow-systems/nft-rack-3tier.svg",
+      "tagline": "High-density vertical NFT for leafy greens and herbs.",
+      "defaultCropClass": "leafy_greens",
+      "lightingSpecSummary": "LED bars, 2.7 umol/J efficacy, ~16 h photoperiod, 350 PPFD target for leafy greens."
     },
     {
       "id": "dwc-pond-4x8",
       "name": "DWC Shallow Pond, 4x8",
       "category": "dwc_pond",
       "description": "Single-level deep-water-culture pond for head lettuce and herb production. Raft-based, low plumbing complexity.",
-      "suitableCropClasses": ["leafy_greens", "herbs"],
-      "footprintM": { "length": 2.4, "width": 1.2 },
+      "suitableCropClasses": [
+        "leafy_greens",
+        "herbs"
+      ],
+      "footprintM": {
+        "length": 2.4,
+        "width": 1.2
+      },
       "heightM": 0.9,
       "tierCount": 1,
       "traysPerTier": 12,
-      "trayFormat": { "lengthIn": 24, "widthIn": 28, "plantsPerTrayDefault": 24 },
+      "trayFormat": {
+        "lengthIn": 24,
+        "widthIn": 28,
+        "plantsPerTrayDefault": 24
+      },
       "plantsPerTrayByClass": {
         "leafy_greens": 24,
         "microgreens": 150,
@@ -141,10 +182,22 @@
         }
       },
       "defaultControllerClass": {
-        "lights":  { "type": "0_10v",        "channelsPerFixturePair": 1 },
-        "pumps":   { "type": "smart_plug",   "channelsPerPumpPair": 1 },
-        "fans":    { "type": "smart_plug",   "channelsPerFan": 1 },
-        "sensors": { "type": "switchbot_cloud", "channelsPerZone": 2 }
+        "lights": {
+          "type": "0_10v",
+          "channelsPerFixturePair": 1
+        },
+        "pumps": {
+          "type": "smart_plug",
+          "channelsPerPumpPair": 1
+        },
+        "fans": {
+          "type": "smart_plug",
+          "channelsPerFan": 1
+        },
+        "sensors": {
+          "type": "switchbot_cloud",
+          "channelsPerZone": 2
+        }
       },
       "requiredChannels": {
         "lightsPerTier": 2,
@@ -160,19 +213,32 @@
       "references": {
         "spec": "docs/features/VERTICAL_FARM_CALCULATOR_SPEC.md#hydroponic-system",
         "notes": "Lower plumbing load than NFT but larger reservoir footprint (2 gal/plant). Single-tier; not suitable for vertical-only rooms with low ceilings."
-      }
+      },
+      "image": "/images/grow-systems/dwc-pond-4x8.svg",
+      "tagline": "Shallow deep-water culture pond \u2014 forgiving root zone, simple plumbing.",
+      "defaultCropClass": "leafy_greens",
+      "lightingSpecSummary": "Horizontal LED canopy, 2.7 umol/J, 16 h photoperiod, 350 PPFD target."
     },
     {
       "id": "vertical-tier-5-microgreen",
       "name": "Vertical Microgreen Rack, 5-Tier",
       "category": "vertical_tier",
       "description": "High-density 5-level rack tuned for microgreen cycles. Flood/drain trays, 18h photoperiod, no return pump.",
-      "suitableCropClasses": ["microgreens"],
-      "footprintM": { "length": 1.8, "width": 0.6 },
+      "suitableCropClasses": [
+        "microgreens"
+      ],
+      "footprintM": {
+        "length": 1.8,
+        "width": 0.6
+      },
       "heightM": 2.2,
       "tierCount": 5,
       "traysPerTier": 8,
-      "trayFormat": { "lengthIn": 24, "widthIn": 28, "plantsPerTrayDefault": 200 },
+      "trayFormat": {
+        "lengthIn": 24,
+        "widthIn": 28,
+        "plantsPerTrayDefault": 200
+      },
       "plantsPerTrayByClass": {
         "leafy_greens": 30,
         "microgreens": 200,
@@ -220,10 +286,22 @@
         }
       },
       "defaultControllerClass": {
-        "lights":  { "type": "0_10v",        "channelsPerFixturePair": 1 },
-        "pumps":   { "type": "relay",        "channelsPerPumpPair": 1 },
-        "fans":    { "type": "ec_fan",       "channelsPerFan": 1 },
-        "sensors": { "type": "switchbot_cloud", "channelsPerZone": 2 }
+        "lights": {
+          "type": "0_10v",
+          "channelsPerFixturePair": 1
+        },
+        "pumps": {
+          "type": "relay",
+          "channelsPerPumpPair": 1
+        },
+        "fans": {
+          "type": "ec_fan",
+          "channelsPerFan": 1
+        },
+        "sensors": {
+          "type": "switchbot_cloud",
+          "channelsPerZone": 2
+        }
       },
       "requiredChannels": {
         "lightsPerTier": 2,
@@ -239,19 +317,34 @@
       "references": {
         "spec": "docs/features/VERTICAL_FARM_CALCULATOR_SPEC.md#lighting-system",
         "notes": "Plant density is high (200/tray) but transpiration per plant is low (~8 g/day), so HVAC load scales differently than leafy-greens racks. Reservoir sizing is per-flood-cycle, not per-plant steady state."
-      }
+      },
+      "image": "/images/grow-systems/vertical-tier-5-microgreen.svg",
+      "tagline": "5-tier microgreen rack with extended 18 h photoperiod.",
+      "defaultCropClass": "microgreens",
+      "lightingSpecSummary": "Compact LED strips, 2.7 umol/J, 18 h photoperiod, 250 PPFD target."
     },
     {
       "id": "flood-bench-4x8",
       "name": "Ebb-and-Flow Bench, 4x8",
       "category": "ebb_flow_bench",
       "description": "Single-level flood/drain bench for herbs and compact fruiting trials. 12 trays, centralized reservoir.",
-      "suitableCropClasses": ["herbs", "leafy_greens", "fruiting"],
-      "footprintM": { "length": 2.4, "width": 1.2 },
+      "suitableCropClasses": [
+        "herbs",
+        "leafy_greens",
+        "fruiting"
+      ],
+      "footprintM": {
+        "length": 2.4,
+        "width": 1.2
+      },
       "heightM": 0.9,
       "tierCount": 1,
       "traysPerTier": 12,
-      "trayFormat": { "lengthIn": 24, "widthIn": 28, "plantsPerTrayDefault": 15 },
+      "trayFormat": {
+        "lengthIn": 24,
+        "widthIn": 28,
+        "plantsPerTrayDefault": 15
+      },
       "plantsPerTrayByClass": {
         "leafy_greens": 24,
         "microgreens": 150,
@@ -299,10 +392,22 @@
         }
       },
       "defaultControllerClass": {
-        "lights":  { "type": "dmx_4",        "channelsPerFixturePair": 1 },
-        "pumps":   { "type": "relay",        "channelsPerPumpPair": 1 },
-        "fans":    { "type": "smart_plug",   "channelsPerFan": 1 },
-        "sensors": { "type": "switchbot_cloud", "channelsPerZone": 2 }
+        "lights": {
+          "type": "dmx_4",
+          "channelsPerFixturePair": 1
+        },
+        "pumps": {
+          "type": "relay",
+          "channelsPerPumpPair": 1
+        },
+        "fans": {
+          "type": "smart_plug",
+          "channelsPerFan": 1
+        },
+        "sensors": {
+          "type": "switchbot_cloud",
+          "channelsPerZone": 2
+        }
       },
       "requiredChannels": {
         "lightsPerTier": 3,
@@ -318,19 +423,32 @@
       "references": {
         "spec": "docs/features/VERTICAL_FARM_CALCULATOR_SPEC.md#hvac-dehumidification",
         "notes": "Higher per-tier wattage reflects the 3-fixture layout needed to hit fruiting PPFD targets. Suitable for mixed-crop rooms where benches host a fruiting zone alongside leafy racks."
-      }
+      },
+      "image": "/images/grow-systems/flood-bench-4x8.svg",
+      "tagline": "Ebb-and-flow bench for transplants, propagation, and mixed leafy crops.",
+      "defaultCropClass": "leafy_greens",
+      "lightingSpecSummary": "LED canopy above bench, 2.7 umol/J, 16 h photoperiod, 350\u2013400 PPFD."
     },
     {
       "id": "drip-rail-fruiting-8ft",
       "name": "Drip Rail, Fruiting (8 ft)",
       "category": "drip_rail",
       "description": "Single-level drip-irrigated rail for trellised fruiting crops (strawberry, tomato, pepper). Individual emitters per slab, high PPFD.",
-      "suitableCropClasses": ["fruiting"],
-      "footprintM": { "length": 2.4, "width": 0.9 },
+      "suitableCropClasses": [
+        "fruiting"
+      ],
+      "footprintM": {
+        "length": 2.4,
+        "width": 0.9
+      },
       "heightM": 2.2,
       "tierCount": 1,
       "traysPerTier": 8,
-      "trayFormat": { "lengthIn": 24, "widthIn": 28, "plantsPerTrayDefault": 4 },
+      "trayFormat": {
+        "lengthIn": 24,
+        "widthIn": 28,
+        "plantsPerTrayDefault": 4
+      },
       "plantsPerTrayByClass": {
         "leafy_greens": 24,
         "microgreens": 150,
@@ -378,10 +496,22 @@
         }
       },
       "defaultControllerClass": {
-        "lights":  { "type": "dmx_4",        "channelsPerFixturePair": 2 },
-        "pumps":   { "type": "modbus",       "channelsPerPumpPair": 1 },
-        "fans":    { "type": "ec_fan",       "channelsPerFan": 1 },
-        "sensors": { "type": "modbus",       "channelsPerZone": 3 }
+        "lights": {
+          "type": "dmx_4",
+          "channelsPerFixturePair": 2
+        },
+        "pumps": {
+          "type": "modbus",
+          "channelsPerPumpPair": 1
+        },
+        "fans": {
+          "type": "ec_fan",
+          "channelsPerFan": 1
+        },
+        "sensors": {
+          "type": "modbus",
+          "channelsPerZone": 3
+        }
       },
       "requiredChannels": {
         "lightsPerTier": 2,
@@ -397,7 +527,11 @@
       "references": {
         "spec": "docs/features/VERTICAL_FARM_CALCULATOR_SPEC.md#hvac-dehumidification",
         "notes": "Fruiting transpiration (120 g/plant/day) dominates HVAC sizing; sensibleHeatFactor bumped to 0.35 to reflect higher fixture wattage. channelsPerFixturePair is 2 so the calculator reserves enough DMX slots for spectrum-tunable fixtures."
-      }
+      },
+      "image": "/images/grow-systems/drip-rail-fruiting-8ft.svg",
+      "tagline": "Drip rail sized for fruiting crops (tomato / pepper / cucumber).",
+      "defaultCropClass": "fruiting",
+      "lightingSpecSummary": "High-PPFD LED, 2.7 umol/J, 14\u201315 h photoperiod, 600+ PPFD target."
     }
   ]
 }

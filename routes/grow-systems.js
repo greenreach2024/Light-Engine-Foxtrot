@@ -20,6 +20,7 @@ import {
   resolveInstalledSystems,
   DEFAULT_ENVELOPE_ACH
 } from '../lib/farm-load-calculator.js';
+import { scoreTemplate } from '../lib/grow-system-scoring.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REGISTRY_PATH = resolve(__dirname, '..', 'public', 'data', 'grow-systems.json');
@@ -164,6 +165,52 @@ router.post('/compute-room-load', async (req, res) => {
     console.error('[GrowSystems] compute-room-load failed:', err.message);
     const status = err.message.includes('not found in registry') ? 400 : 500;
     res.status(status).json({ ok: false, error: err.message });
+  }
+});
+
+// ---- POST /api/grow-systems/:templateId/score ------------------------------
+// Compute the transpiration, heat-management, and environmental-benchmark
+// scores for a template deployed at a given quantity + crop class inside an
+// optional room envelope + recipe context. Consumed by the Grow Management
+// template-gallery cards.
+//
+// Body:
+//   {
+//     cropClass: "leafy_greens",
+//     quantity: 1,
+//     room?: { dimensions: { lengthM, widthM, ceilingHeightM }, envelope?: { class }, supplyCFM? },
+//     recipe?: { max_humidity, vpd, ... }        // a recipe.schedule[] stage, optional
+//   }
+router.post('/:templateId/score', async (req, res) => {
+  try {
+    const registry = await getRegistry();
+    const template = (registry.templates || []).find(t => t.id === req.params.templateId);
+    if (!template) {
+      return res.status(404).json({ ok: false, error: `Template not found: ${req.params.templateId}` });
+    }
+
+    const { cropClass, quantity = 1, room = null, recipe = null } = req.body || {};
+    if (!cropClass || typeof cropClass !== 'string') {
+      return res.status(400).json({ ok: false, error: 'cropClass is required (string)' });
+    }
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      return res.status(400).json({ ok: false, error: 'quantity must be a positive finite number' });
+    }
+    if (template.plantsPerTrayByClass?.[cropClass] == null) {
+      // Use `== null` (not a falsy check) so a legitimate zero-plant class —
+      // allowed by the schema's `integerNonNegative` — is not rejected as
+      // "no sizing". Downstream scoring/count functions handle 0 correctly.
+      return res.status(400).json({
+        ok: false,
+        error: `template "${template.id}" has no sizing for cropClass "${cropClass}"`
+      });
+    }
+
+    const scores = scoreTemplate({ template, cropClass, quantity, room, recipe });
+    res.json({ ok: true, scores });
+  } catch (err) {
+    console.error('[GrowSystems] score failed:', err.message);
+    res.status(500).json({ ok: false, error: err.message });
   }
 });
 
