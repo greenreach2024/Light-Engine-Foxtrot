@@ -3509,6 +3509,18 @@
       renderAlertInbox();
     }
 
+    // Alert fields originate from MQTT payloads, which we must treat as untrusted;
+    // otherwise a crafted type/message could execute JS in the operator UI.
+    function escapeHtmlForAlert(s) {
+      if (s == null) return '';
+      return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
     async function renderAlertInbox() {
       const listEl = document.getElementById('alertInboxList');
       const emptyEl = document.getElementById('alertInboxEmpty');
@@ -3529,12 +3541,21 @@
           const borderColor = severity === 'critical' ? 'rgba(239,68,68,0.6)' : 'rgba(250,204,21,0.5)';
           const badge = severity === 'critical' ? '[CRITICAL]' : '[WARN]';
           const time = a.receivedAt ? new Date(a.receivedAt).toLocaleString() : '';
+          const msg = escapeHtmlForAlert(a.message || a.type || 'Unknown alert');
+          const tank = escapeHtmlForAlert(a.tankId || 'unknown');
+          const aid = escapeHtmlForAlert(a.id || '');
           return '<div style="padding:0.75rem;border:1px solid ' + borderColor + ';border-radius:10px;background:rgba(15,23,42,0.6);display:flex;justify-content:space-between;align-items:center;">'
             + '<div><strong style="color:' + (severity === 'critical' ? '#ef4444' : '#facc15') + ';">' + badge + '</strong> '
-            + (a.message || a.type || 'Unknown alert') + '<br><small style="color:var(--neutral-400);">' + time + ' | Tank: ' + (a.tankId || 'unknown') + '</small></div>'
-            + '<button onclick="acknowledgeAlert('' + a.id + '')" style="padding:0.4rem 0.75rem;background:rgba(59,130,246,0.2);border:1px solid rgba(59,130,246,0.4);border-radius:8px;color:var(--neutral-200);cursor:pointer;font-size:0.8rem;">Ack</button>'
+            + msg + '<br><small style="color:var(--neutral-400);">' + escapeHtmlForAlert(time) + ' | Tank: ' + tank + '</small></div>'
+            + '<button data-ack-alert-id="' + aid + '" style="padding:0.4rem 0.75rem;background:rgba(59,130,246,0.2);border:1px solid rgba(59,130,246,0.4);border-radius:8px;color:var(--neutral-200);cursor:pointer;font-size:0.8rem;">Ack</button>'
             + '</div>';
         }).join('');
+        listEl.querySelectorAll('[data-ack-alert-id]').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const id = btn.getAttribute('data-ack-alert-id');
+            if (id) acknowledgeAlert(id);
+          });
+        });
       } catch (err) {
         console.warn('[alerts] Failed to render alert inbox:', err);
       }

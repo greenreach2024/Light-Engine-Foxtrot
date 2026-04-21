@@ -83,11 +83,17 @@ router.post('/auto-suggest', (req, res) => {
       if (!Array.isArray(devices)) devices = [];
     } catch { /* no devices */ }
 
-    // Load grow-systems templates for slot definitions
+    // Load grow-systems templates for slot definitions.
+    // grow-systems.json stores templates in a `templates` array; index by id
+    // so downstream lookups (templates[sys.templateId]) work.
     const templatesPath = path.join(DATA_DIR, 'grow-systems.json');
     let templates = {};
     try {
-      templates = JSON.parse(fs.readFileSync(templatesPath, 'utf-8'));
+      const raw = JSON.parse(fs.readFileSync(templatesPath, 'utf-8'));
+      const list = Array.isArray(raw) ? raw : (Array.isArray(raw?.templates) ? raw.templates : []);
+      for (const tmpl of list) {
+        if (tmpl && tmpl.id) templates[tmpl.id] = tmpl;
+      }
     } catch { /* no templates */ }
 
     // Load rooms for installed systems

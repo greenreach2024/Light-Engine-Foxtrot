@@ -22506,12 +22506,15 @@ app.get('/api/planting/recipes', (req, res) => {
     }
     const recipes = JSON.parse(fs.readFileSync(recipesPath, 'utf8'));
     const crops = recipes.crops || {};
-    const result = Object.entries(crops).map(([name, schedule]) => {
+    const result = Object.entries(crops).map(([name, entry]) => {
       const id = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+      const schedule = Array.isArray(entry?.schedule)
+        ? entry.schedule
+        : (Array.isArray(entry) ? entry : null);
       return {
         id: `crop-${id}`,
         name,
-        harvestDays: Array.isArray(schedule) ? schedule.length : 30
+        harvestDays: schedule && schedule.length ? schedule.length : 30
       };
     });
     res.json({ recipes: result });
@@ -27780,12 +27783,16 @@ app.put('/groups/:id', pinGuard, async (req, res) => {
     const knownIds = RUNNING_UNDER_NODE_TEST ? null : await fetchKnownDeviceIds();
     const { stored, response } = parseIncomingGroup(merged, knownIds);
     if (stored && !stored.lastModified) stored.lastModified = nowIso;
-    await withGroupsLock((groups) => {
+    const found = await withGroupsLock((groups) => {
       const idx = groups.findIndex((group) => String(group?.id || '').trim() === id);
       if (idx === -1) return false; // signal: don't save
       groups[idx] = stored;
       emitDataChange({ kind: 'groups', ids: [id], updatedAt: nowIso, source: 'groups-put' });
+      return true;
     });
+    if (found === false) {
+      return res.status(404).json({ ok: false, error: 'Group not found' });
+    }
     return res.json({ ok: true, group: response });
   } catch (err) {
     return res.status(400).json({ ok: false, error: err.message });
