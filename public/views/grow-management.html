@@ -1467,29 +1467,183 @@
           host.appendChild(grid);
         }
       }
+      // Phase B — Controllers step hydration.
+      //
+      // Pulls the three lists the UI needs in one pass:
+      //   GET  /api/controller-bindings           -> already-bound controller slots
+      //   POST /api/controller-bindings/auto-suggest
+      //        -> candidate bindings for reserved slots (preferred source:
+      //           rooms[].buildPlan.reservedControllerSlots) plus `unmet`
+      //           slots that have no discovered device match.
+      // Falls back to a device-count summary if the endpoints are unreachable
+      // (older deploys or unauthenticated /data/ fetch only).
+      function controllerCtlsLabel(ct) {
+        if (ct === 'switchbot_cloud') return 'SwitchBot';
+        if (ct === 'smart_plug') return 'Smart plug';
+        if (ct === '0_10v') return '0-10V dimmer';
+        return ct || 'controller';
+      }
+      function subsystemLabel(s) {
+        return ({ lights: 'Lights', pumps: 'Pumps', fans: 'Fans', sensors: 'Sensors' })[s] || s;
+      }
       function renderControllers() {
         var host = document.getElementById('ffControllersBody');
         if (!host) return;
         host.innerHTML = '';
-        var devices = state.devices || [];
-        if (!devices.length) {
-          host.className = 'ff-empty';
-          host.textContent = 'No controllers paired yet. Phase B device discovery binds SwitchBot / Kasa / Code3 / DMX identities to the channels reserved in steps 3–5. Use Farm Setup → IoT to pair devices.';
-          return;
-        }
         host.className = '';
-        var byKind = {};
-        devices.forEach(function (d) {
-          var kind = d.kind || d.type || d.vendor || 'other';
-          byKind[kind] = (byKind[kind] || 0) + 1;
+
+        Promise.all([
+          fetch('/api/controller-bindings', { credentials: 'same-origin' })
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .catch(function () { return null; }),
+          fetch('/api/controller-bindings/auto-suggest', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: '{}'
+          }).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; })
+        ]).then(function (results) {
+          var bindingsData = results[0];
+          var suggestData = results[1];
+          state.bindings = (bindingsData && bindingsData.bindings) || [];
+          renderControllersPanels(host, bindingsData, suggestData);
+          updateBreadcrumb();
         });
-        var chips = document.createElement('div');
-        chips.className = 'ff-chip-row';
-        chips.style.margin = '0';
-        Object.keys(byKind).forEach(function (k) {
-          chips.appendChild(chip(byKind[k] + ' × ' + k, 'ok'));
+      }
+
+      function renderControllersPanels(host, bindingsData, suggestData) {
+        var bindings = (bindingsData && bindingsData.bindings) || [];
+        var suggestions = (suggestData && suggestData.suggestions) || [];
+        var unmet = (suggestData && suggestData.unmet) || [];
+
+        var summary = document.createElement('div');
+        summary.className = 'ff-chip-row';
+        summary.style.margin = '0 0 12px';
+        summary.appendChild(chip(bindings.length + ' bound', bindings.length ? 'ok' : ''));
+        if (suggestions.length) {
+          summary.appendChild(chip(suggestions.length + ' suggested', 'warn'));
+        }
+        if (unmet.length) {
+          summary.appendChild(chip(unmet.length + ' unmet · no device found', 'err'));
+        }
+        host.appendChild(summary);
+
+        // Existing bindings
+        if (bindings.length) {
+          var boundWrap = document.createElement('div');
+          boundWrap.style.cssText = 'margin:10px 0 14px;';
+          var h = document.createElement('div');
+          h.className = 'tiny';
+          h.style.cssText = 'color:#7c8a99;font-size:0.72rem;letter-spacing:0.05em;text-transform:uppercase;margin-bottom:6px;';
+          h.textContent = 'Bound controllers';
+          boundWrap.appendChild(h);
+          bindings.forEach(function (b) {
+            boundWrap.appendChild(renderBindingRow(b));
+          });
+          host.appendChild(boundWrap);
+        }
+
+        // Suggestions (accept buttons)
+        if (suggestions.length) {
+          var sugWrap = document.createElement('div');
+          sugWrap.style.cssText = 'margin:10px 0 14px;';
+          var h2 = document.createElement('div');
+          h2.className = 'tiny';
+          h2.style.cssText = 'color:#f59e0b;font-size:0.72rem;letter-spacing:0.05em;text-transform:uppercase;margin-bottom:6px;';
+          h2.textContent = 'Suggested bindings';
+          sugWrap.appendChild(h2);
+          suggestions.forEach(function (s) {
+            sugWrap.appendChild(renderSuggestionRow(s));
+          });
+          host.appendChild(sugWrap);
+        }
+
+        // Unmet slots (no candidate devices)
+        if (unmet.length) {
+          var unmetWrap = document.createElement('div');
+          unmetWrap.style.cssText = 'margin:10px 0 4px;';
+          var h3 = document.createElement('div');
+          h3.className = 'tiny';
+          h3.style.cssText = 'color:#ef4444;font-size:0.72rem;letter-spacing:0.05em;text-transform:uppercase;margin-bottom:6px;';
+          h3.textContent = 'Unmet slots — no matching device discovered';
+          unmetWrap.appendChild(h3);
+          unmet.forEach(function (u) {
+            var row = document.createElement('div');
+            row.style.cssText = 'padding:6px 10px;border:1px dashed #3a1f24;border-radius:6px;margin-bottom:4px;font-size:0.82rem;color:#e5e7eb;background:#1f0f12;';
+            row.textContent = (u.roomName || u.roomId || 'room') + ' · ' + subsystemLabel(u.subsystem)
+              + ' · ' + controllerCtlsLabel(u.controlType)
+              + ' · ' + (u.channelsNeeded || 1) + ' ch';
+            unmetWrap.appendChild(row);
+          });
+          host.appendChild(unmetWrap);
+        }
+
+        // Fallback when no bindings, suggestions, or unmet slots are reported.
+        if (!bindings.length && !suggestions.length && !unmet.length) {
+          host.className = 'ff-empty';
+          host.textContent = 'No controllers paired yet. Accept a Room Build Plan in step 5 to reserve controller slots, then pair devices in Farm Setup → IoT — this panel will auto-match them.';
+        }
+      }
+
+      function renderBindingRow(b) {
+        var row = document.createElement('div');
+        row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:10px;padding:6px 10px;border:1px solid #233045;border-radius:6px;margin-bottom:4px;background:#0b1520;';
+        var left = document.createElement('div');
+        left.style.cssText = 'font-size:0.82rem;color:#d5def0;';
+        left.innerHTML = '<strong>' + (b.deviceName || b.controllerId) + '</strong> · '
+          + subsystemLabel(b.subsystem) + ' · ' + controllerCtlsLabel(b.controlType)
+          + (b.channel ? ' · ch ' + b.channel : '');
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn btn-ghost';
+        btn.style.cssText = 'font-size:0.72rem;padding:4px 10px;';
+        btn.textContent = 'Unbind';
+        btn.addEventListener('click', function () {
+          if (!confirm('Unbind ' + (b.deviceName || b.controllerId) + '?')) return;
+          fetch('/api/controller-bindings/' + b.id, { method: 'DELETE', credentials: 'same-origin' })
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .then(function () { renderControllers(); updateBreadcrumb(); });
         });
-        host.appendChild(chips);
+        row.appendChild(left);
+        row.appendChild(btn);
+        return row;
+      }
+
+      function renderSuggestionRow(s) {
+        var row = document.createElement('div');
+        row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:10px;padding:6px 10px;border:1px solid #3a2b10;border-radius:6px;margin-bottom:4px;background:#1a140a;';
+        var cand = (s.candidateDevices && s.candidateDevices[0]) || {};
+        var left = document.createElement('div');
+        left.style.cssText = 'font-size:0.82rem;color:#f3e8cc;';
+        left.innerHTML = '<strong>' + (s.roomName || s.roomId || 'room') + '</strong> · '
+          + subsystemLabel(s.subsystem) + ' · ' + controllerCtlsLabel(s.controlType)
+          + ' · ' + (s.channelsNeeded || 1) + ' ch'
+          + ' → candidate <em>' + (cand.name || cand.deviceId || 'unknown') + '</em>';
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn btn-primary';
+        btn.style.cssText = 'font-size:0.72rem;padding:4px 10px;';
+        btn.textContent = 'Accept';
+        btn.addEventListener('click', function () {
+          fetch('/api/controller-bindings/accept-suggestion', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({
+              deviceId: cand.deviceId,
+              subsystem: s.subsystem,
+              controlType: s.controlType,
+              templateId: s.templateId,
+              roomId: s.roomId,
+              zoneId: s.zoneId,
+              channel: 0
+            })
+          }).then(function (r) { return r.ok ? r.json() : null; })
+            .then(function () { renderControllers(); updateBreadcrumb(); });
+        });
+        row.appendChild(left);
+        row.appendChild(btn);
+        return row;
       }
       function updateBreadcrumb() {
         // Mark steps complete based on what's been populated.
@@ -1507,7 +1661,12 @@
           return Array.isArray(g.lights) && g.lights.length > 0;
         });
         var hasEquip = !!window.__roomBuildPlan || !!persistedBuildPlan();
-        var hasCtrl = (state.devices || []).length > 0;
+        // Controllers step is complete when at least one physical device has
+        // been bound to a reserved slot. Falls back to "any device paired"
+        // while the bindings cache is loading so the breadcrumb isn't blank
+        // on first paint.
+        var hasCtrl = (state.bindings && state.bindings.length > 0)
+          || (state.devices || []).length > 0;
         var map = {
           'room': hasRoom,
           'zones': hasZones,
