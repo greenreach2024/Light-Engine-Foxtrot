@@ -668,12 +668,13 @@
     .ff-link-row a:hover { text-decoration: underline; }
   </style>
   <script src="/js/console-wrapper.js"></script>
+  <script src="/js/auth-fetch.js?v=20260421-authfetch-v1"></script>
   <script src="/js/net.guard.js" defer></script>
   <script src="/app.foxtrot.js?v=20260419-standalone-panel-fix" defer></script>
-  <script src="/groups-v2.js?v=20260419-groupsv2-runtime-fix" defer></script>
+  <script src="/groups-v2.js?v=20260421-authfetch-v1" defer></script>
   <script src="/lib/room-layout-solver.js?v=20260421-rls-v1" defer></script>
-  <script src="/views/grow-management-template-gallery.js?v=20260420-tg-v1" defer></script>
-  <script src="/views/grow-management-room-build-plan.js?v=20260421-rbp-v2" defer></script>
+  <script src="/views/grow-management-template-gallery.js?v=20260421-tg-v2" defer></script>
+  <script src="/views/grow-management-room-build-plan.js?v=20260421-rbp-v3" defer></script>
 </head>
 <body class="le-theme">
 
@@ -763,6 +764,16 @@
         </div>
       </div>
       <div class="ff-step-card">
+        <div id="ffZonesSource" class="tiny" style="color:#94a3b8;margin-bottom:6px;"></div>
+        <div id="ffZonesCountPicker" style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:10px;padding:10px 12px;border:1px dashed rgba(59,130,246,0.35);border-radius:10px;background:rgba(15,23,42,0.4);">
+          <span class="tiny" style="color:#cbd5e1;">Zones in this room:</span>
+          <button id="ffZonesCountMinus" type="button" class="ghost" style="min-height:30px;padding:2px 12px;">&minus;</button>
+          <input id="ffZonesCountInput" type="number" min="1" max="12" value="1" style="width:68px;min-height:30px;padding:2px 8px;background:rgba(15,23,42,0.6);border:1px solid rgba(148,163,184,0.3);border-radius:6px;color:#f1f5f9;text-align:center;">
+          <button id="ffZonesCountPlus" type="button" class="ghost" style="min-height:30px;padding:2px 12px;">+</button>
+          <span id="ffZonesRecommend" class="tiny" style="color:#60a5fa;"></span>
+          <button id="ffZonesCountApply" type="button" class="primary" style="min-height:30px;padding:4px 14px;">Apply</button>
+          <span id="ffZonesCountStatus" class="tiny" style="color:#94a3b8;"></span>
+        </div>
         <div style="display:flex;justify-content:flex-end;margin-bottom:8px;">
           <button id="ffZoneDrawerOpen" type="button" class="primary" style="min-height:32px;padding:6px 14px;">Draw zones on floor plan</button>
         </div>
@@ -1360,16 +1371,17 @@
         _saveRoomsTimer = null;
         var statusEl = _saveRoomsStatus;
         var payload = { rooms: state.rooms.map(function (r) { return r; }) };
-        fetch('/api/setup/save-rooms', {
+        var _fetch = window.authFetch || fetch;
+        _fetch('/api/setup/save-rooms', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
           body: JSON.stringify(payload)
         }).then(function (resp) {
           if (!resp.ok) throw new Error('HTTP ' + resp.status);
           return resp.json();
         }).then(function () {
           if (statusEl) { statusEl.textContent = 'Saved'; statusEl.style.color = '#4ade80'; }
+          document.dispatchEvent(new CustomEvent('rooms-updated'));
         }).catch(function (err) {
           console.error('[grow-management] rooms save failed:', err);
           if (statusEl) { statusEl.textContent = 'Save failed'; statusEl.style.color = '#f87171'; }
@@ -1443,9 +1455,22 @@
         });
         host.appendChild(frag);
       }
+      function evieRecommendZoneCount(room) {
+        // Evie's heuristic: ~1 zone per ~30m2 of room floor, minimum 1, maximum 4.
+        // Explicit so operators see what's advisory vs. their own choice.
+        var l = Number(room && room.length_m) || 0;
+        var w = Number(room && room.width_m) || 0;
+        var area = l * w;
+        if (!area) return 2;
+        var n = Math.max(1, Math.min(4, Math.round(area / 30)));
+        return n;
+      }
       function renderZones() {
         var host = document.getElementById('ffZonesBody');
         var advice = document.getElementById('ffZonesEvieAdvice');
+        var sourceEl = document.getElementById('ffZonesSource');
+        var recEl = document.getElementById('ffZonesRecommend');
+        var countInput = document.getElementById('ffZonesCountInput');
         if (!host) return;
         host.innerHTML = '';
         var allZones = [];
@@ -1454,9 +1479,25 @@
             allZones.push({ room: r, zone: z });
           });
         });
+        var primaryRoom = state.rooms[0] || null;
+        var savedCount = primaryRoom && Array.isArray(primaryRoom.zones) ? primaryRoom.zones.length : 0;
+        var recommended = primaryRoom ? evieRecommendZoneCount(primaryRoom) : 2;
+        if (sourceEl) {
+          if (savedCount > 0) {
+            sourceEl.textContent = savedCount + ' zone' + (savedCount === 1 ? '' : 's') + ' loaded from your saved room data. Adjust the count below to add or remove zones.';
+          } else {
+            sourceEl.textContent = 'No zones saved yet. Evie recommends ' + recommended + ' to start — adjust and apply below.';
+          }
+        }
+        if (recEl) {
+          recEl.textContent = 'Evie recommends ' + recommended + ' based on room area (' + (primaryRoom ? ((primaryRoom.length_m || '?') + 'm × ' + (primaryRoom.width_m || '?') + 'm') : 'no room yet') + ').';
+        }
+        if (countInput && document.activeElement !== countInput) {
+          countInput.value = String(savedCount || recommended);
+        }
         if (!allZones.length) {
           host.className = 'ff-empty';
-          host.textContent = 'No zones defined. Evie recommends starting with 2 zones per room so you can run independent photoperiods or clean one while the other produces.';
+          host.textContent = 'No zones defined yet. Use the picker above to create zones; Evie recommends ' + recommended + ' for this room.';
           if (advice) advice.style.display = 'none';
           return;
         }
@@ -1855,8 +1896,9 @@
       }
       function load() {
         var endpoints = ['/data/rooms.json', '/data/groups.json', '/data/grow-systems.json', '/data/iot-devices.json'];
+        var _fetchLoad = window.authFetch || fetch;
         return Promise.all(endpoints.map(function (url) {
-          return fetch(url).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; });
+          return _fetchLoad(url).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; });
         })).then(function (results) {
           state.rooms = Array.isArray(results[0]) ? results[0] : (results[0] && results[0].rooms) || [];
           state.groups = Array.isArray(results[1]) ? results[1] : (results[1] && results[1].groups) || [];
@@ -1900,6 +1942,63 @@
           a.classList.toggle('is-active', step === activeId);
         });
       }, { passive: true });
+
+      // Zones count stepper — Evie recommends, user picks.
+      (function wireZoneCountStepper() {
+        var input = document.getElementById('ffZonesCountInput');
+        var minus = document.getElementById('ffZonesCountMinus');
+        var plus = document.getElementById('ffZonesCountPlus');
+        var apply = document.getElementById('ffZonesCountApply');
+        var status = document.getElementById('ffZonesCountStatus');
+        if (!input || !apply) return;
+        function clamp(v) {
+          var n = parseInt(v, 10);
+          if (!Number.isFinite(n)) n = 1;
+          return Math.max(1, Math.min(12, n));
+        }
+        minus && minus.addEventListener('click', function () {
+          input.value = String(clamp(Number(input.value) - 1));
+        });
+        plus && plus.addEventListener('click', function () {
+          input.value = String(clamp(Number(input.value) + 1));
+        });
+        apply.addEventListener('click', function () {
+          var target = clamp(input.value);
+          input.value = String(target);
+          var primary = state.rooms[0];
+          if (!primary) {
+            if (status) { status.textContent = 'Create a room first.'; status.style.color = '#f87171'; }
+            return;
+          }
+          var existing = Array.isArray(primary.zones) ? primary.zones.slice() : [];
+          if (existing.length < target) {
+            for (var i = existing.length; i < target; i++) {
+              existing.push({ id: 'zone-' + (i + 1), name: 'Zone ' + (i + 1) });
+            }
+          } else if (existing.length > target) {
+            existing = existing.slice(0, target);
+          }
+          primary.zones = existing;
+          if (status) { status.textContent = 'Saving\u2026'; status.style.color = '#fbbf24'; }
+          var _f = window.authFetch || fetch;
+          _f('/api/setup/save-rooms', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ rooms: state.rooms })
+          }).then(function (resp) {
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            return resp.json();
+          }).then(function () {
+            if (status) { status.textContent = 'Saved \u2022 ' + target + ' zones'; status.style.color = '#4ade80'; }
+            document.dispatchEvent(new CustomEvent('rooms-updated'));
+            refresh();
+          }).catch(function (err) {
+            console.error('[ffFlow] zones count save failed:', err);
+            if (status) { status.textContent = 'Save failed'; status.style.color = '#f87171'; }
+          });
+        });
+      })();
+
       return { refresh: refresh };
     })();
 
@@ -1941,7 +2040,8 @@
         // rooms.json directly if the closure isn't available.
         var maybe = window.__ffFlowRooms;
         if (Array.isArray(maybe) && maybe.length) return Promise.resolve(maybe);
-        return fetch('/data/rooms.json')
+        var _fetchRR = window.authFetch || fetch;
+        return _fetchRR('/data/rooms.json')
           .then(function (r) { return r.ok ? r.json() : null; })
           .then(function (j) {
             return Array.isArray(j) ? j : (j && Array.isArray(j.rooms) ? j.rooms : []);
@@ -2224,10 +2324,10 @@
           };
         });
         statusEl.textContent = 'Saving…'; statusEl.style.color = '#fbbf24';
-        fetch('/api/setup/save-rooms', {
+        var _fetchZone = window.authFetch || fetch;
+        _fetchZone('/api/setup/save-rooms', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
           body: JSON.stringify({ rooms: state.rooms })
         }).then(function (resp) {
           if (!resp.ok) throw new Error('HTTP ' + resp.status);

@@ -470,7 +470,7 @@ async function initializeGroupsV2State() {
 
     try {
       g2debug('[Groups V2] Loading groups from /data/groups.json...');
-      const response = await fetch('/data/groups.json', { cache: 'no-store' });
+      const response = await (window.authFetch || fetch)('/data/groups.json', { cache: 'no-store' });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const payload = await response.json();
       if (Array.isArray(payload)) {
@@ -485,7 +485,7 @@ async function initializeGroupsV2State() {
 
     if (!groups.length) {
       g2debug('[Groups V2] Falling back to /api/groups...');
-      const response = await fetch('/api/groups');
+      const response = await (window.authFetch || fetch)('/api/groups');
       if (!response.ok) {
         console.warn('[Groups V2] Failed to load groups from /api/groups:', response.status);
         return;
@@ -2222,7 +2222,7 @@ async function saveGroupsV2Group(status = 'draft') {
   // Persist to server
   try {
     g2debug('[groups-v2] Saving groups to server...', window.STATE.groups.length, 'groups');
-    const response = await fetch('/data/groups.json', {
+    const response = await (window.authFetch || fetch)('/data/groups.json', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ groups: window.STATE.groups })
@@ -2310,7 +2310,7 @@ async function saveGroupsV2GroupObject(groupObject) {
   // Persist to server
   try {
     g2debug('[groups-v2] Saving group object to server:', groupObject.id);
-    const response = await fetch('/data/groups.json', {
+    const response = await (window.authFetch || fetch)('/data/groups.json', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ groups: window.STATE.groups })
@@ -2605,7 +2605,7 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log('[Groups V2]  About to POST delete to server, groups count:', window.STATE.groups.length);
         console.log('[Groups V2] Groups being sent:', window.STATE.groups.map(g => ({ id: g.id, name: g.name, lights: g.lights?.length || 0 })));
         try {
-          const response = await fetch('/data/groups.json', {
+          const response = await (window.authFetch || fetch)('/data/groups.json', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ groups: window.STATE.groups })
@@ -7198,7 +7198,7 @@ async function executeBuildStockGroups() {
 
   // Persist all groups to server in one write
   try {
-    const response = await fetch('/data/groups.json', {
+    const response = await (window.authFetch || fetch)('/data/groups.json', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ groups: window.STATE.groups })
@@ -7483,7 +7483,7 @@ async function executeBulkEditGroups() {
 
   // Persist to server
   try {
-    var response = await fetch('/data/groups.json', {
+    var response = await (window.authFetch || fetch)('/data/groups.json', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ groups: window.STATE.groups })
@@ -7540,7 +7540,7 @@ async function executeBulkDeleteGroups(prefix) {
   if (!deleted) return { deleted: 0 };
 
   try {
-    var response = await fetch('/data/groups.json', {
+    var response = await (window.authFetch || fetch)('/data/groups.json', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ groups: nextGroups })

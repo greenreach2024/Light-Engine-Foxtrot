@@ -102,7 +102,8 @@
 
   async function scoreTemplate(templateId, cropClass, room) {
     const body = { cropClass, quantity: 1, room };
-    const res = await fetch(`/api/grow-systems/${encodeURIComponent(templateId)}/score`, {
+    const _f = window.authFetch || fetch;
+    const res = await _f(`/api/grow-systems/${encodeURIComponent(templateId)}/score`, {
       method: 'POST',
       credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
@@ -124,6 +125,10 @@
     const t = scores?.transpiration;
     const h = scores?.heatManagement;
     const e = scores?.envBenchmark;
+    const siteSource = Number.isFinite(template.plantLocations?.totalByClass?.[cropClass])
+      ? template.plantLocations.totalByClass[cropClass]
+      : totalSites;
+    const authoritativeSites = Number.isFinite(siteSource) ? siteSource : totalSites;
 
     return `
       <article class="tg-card" data-template-id="${template.id}" tabindex="0" role="button" aria-label="Select ${template.name}">
@@ -137,7 +142,7 @@
           </header>
           <dl class="tg-card__specs">
             <div><dt>Dimensions</dt><dd>${footprintStr}</dd></div>
-            ${totalSites ? `<div><dt>Plant sites</dt><dd>${totalSites} (${cropClass.replace('_', ' ')})</dd></div>` : ''}
+            ${authoritativeSites ? `<div><dt>Plant sites</dt><dd>${authoritativeSites} (${cropClass.replace('_', ' ')})</dd></div>` : ''}
             ${template.lightingSpecSummary ? `<div><dt>Lighting</dt><dd>${template.lightingSpecSummary}</dd></div>` : ''}
           </dl>
           <div class="tg-card__scores">
@@ -157,9 +162,50 @@
               <span class="tg-score__unit">${scores?.tier || '\u2014'}</span>
             </div>
           </div>
+          <details class="tg-card__math">
+            <summary>Show your math</summary>
+            ${renderMath(template, scores, cropClass, authoritativeSites)}
+          </details>
         </div>
       </article>
     `;
+  }
+
+  function renderMath(template, scores, cropClass, siteCount) {
+    const t = scores?.transpiration || {};
+    const h = scores?.heatManagement || {};
+    const e = scores?.envBenchmark || {};
+    const fixture = template.defaultFixtureClass || {};
+    const gPerPlant = template.transpiration?.gPerPlantPerDayByClass?.[cropClass];
+    const kgDay = t.dailyWaterKg;
+    const fixtureW = fixture.fixtureWattsNominal || 0;
+    const fixturesPerTier = fixture.fixturesPerTierUnit || 1;
+    const tiers = template.tierCount || 1;
+    const totalFixtures = fixturesPerTier * tiers;
+    const lightingW = fixtureW * totalFixtures;
+    const volumeM3 = h.volumeM3;
+    const totalHeatW = h.totalHeatW;
+    const rows = [];
+    if (Number.isFinite(kgDay)) {
+      const derivation = (Number.isFinite(siteCount) && Number.isFinite(gPerPlant))
+        ? `${siteCount} plants \u00d7 ${gPerPlant} g/plant/day \u00f7 1000 = ${kgDay.toFixed(2)} kg/day`
+        : `${kgDay.toFixed(2)} kg/day (server-computed)`;
+      rows.push(mathRow('Transpiration', derivation, 'Daily latent load \u2014 sizes dehum.'));
+    }
+    if (Number.isFinite(lightingW) && Number.isFinite(volumeM3) && volumeM3 > 0) {
+      const wPerM3 = h.wPerM3;
+      rows.push(mathRow('Heat mgmt', `${totalFixtures} fixtures \u00d7 ${fixtureW} W = ${lightingW} W \u00f7 ${volumeM3.toFixed(1)} m\u00b3 = ${fmt(wPerM3, 0)} W/m\u00b3`, `+ transpiration latent = ${fmt(totalHeatW, 0)} W total cooling load.`));
+    }
+    if (Number.isFinite(e.score)) {
+      const inp = e.inputs || {};
+      const pp = inp.airflow?.requiredCFM ? `${fmt(inp.airflow.requiredCFM, 0)} CFM airflow, ` : '';
+      rows.push(mathRow('Env benchmark', `weighted \u0394 from setpoint across lighting, VPD, ${pp}humidity = ${fmt(e.score, 0)}`, `tier: ${scores?.tier || '\u2014'} \u2014 higher is easier to operate.`));
+    }
+    if (!rows.length) return '<p class="tg-math__empty">Scores unavailable for this template.</p>';
+    return `<div class="tg-math">${rows.join('')}</div>`;
+  }
+  function mathRow(label, formula, note) {
+    return `<div class="tg-math__row"><span class="tg-math__label">${label}</span><code class="tg-math__formula">${formula}</code>${note ? `<span class="tg-math__note">${note}</span>` : ''}</div>`;
   }
 
   function injectStyles() {
@@ -188,6 +234,16 @@
       .tg-gallery-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
       .tg-gallery-toolbar h2 { margin: 0; font-size: 1rem; color: #f8fafc; }
       .tg-gallery-toolbar p { margin: 0; font-size: 0.8rem; color: #94a3b8; }
+      .tg-card__math { border-top: 1px dashed #1e293b; padding-top: 8px; margin-top: 2px; }
+      .tg-card__math summary { cursor: pointer; font-size: 0.72rem; color: #60a5fa; list-style: none; user-select: none; }
+      .tg-card__math summary::-webkit-details-marker { display: none; }
+      .tg-card__math[open] summary { color: #93c5fd; }
+      .tg-math { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+      .tg-math__row { display: flex; flex-direction: column; gap: 2px; padding: 6px 8px; background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(59, 130, 246, 0.18); border-radius: 6px; }
+      .tg-math__label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.04em; color: #64748b; font-weight: 600; }
+      .tg-math__formula { font-size: 0.75rem; color: #e2e8f0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; white-space: normal; }
+      .tg-math__note { font-size: 0.7rem; color: #94a3b8; }
+      .tg-math__empty { margin: 6px 0 0; font-size: 0.72rem; color: #94a3b8; }
     `;
     document.head.appendChild(style);
   }
