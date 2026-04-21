@@ -41,21 +41,21 @@ GreenReach Central is **the business**: it onboards farms, manages users, operat
 **Agent:** `Setup-Agent` (`greenreach-central/routes/setup-agent.js`)
 **UI:** `greenreach-central/public/setup-wizard.html`
 
-Phases (high level):
-1. Farm owner identity + contact
-2. Business legal + tax
-3. Square OAuth connection (Playbook 03)
-4. Stripe subscription selection
-5. `farm_slug` selection + reservation (the slug is reserved today; DNS / `<slug>.greenreachgreens.com` activation is pending the subdomain rollout — see Playbook 01 §7)
-6. Hardware registry (SwitchBot devices + mapping)
-7. Rooms + groups (physical + logical layout)
-8. Crop registry + target ranges
-9. Schedules + photoperiod defaults
-10. Inventory seed + pricing
-11. Wholesale opt-in + SKU factor
-12. Go-live review + activation
+Phases (12 total, code-authoritative IDs in parentheses):
+1. Farm Profile (`farm_profile`) -- identity, contact, location
+2. Room Design (`room_design`) -- physical rooms with dimensions (length, width, area, ceiling height), installed grow-system templates from `grow-systems.json` (formerly separate `grow_rooms` + `room_specs` phases, merged Apr 2026)
+3. Build Plan (`build_plan`) -- computed electrical/climate load plan per room (uses `farm-load-calculator.js` via `/api/grow-systems/compute-room-load`)
+4. Climate Zones (`zones`) -- zone definitions within rooms
+5. Grow Groups (`groups`) -- plant groupings within zones
+6. Crop Selection (`crop_assignment`) -- assign crops to groups
+7. Environment Targets (`env_targets`) -- temp/RH/VPD/CO2 targets per zone
+8. Light Fixtures (`lights`) -- fixture types and placements
+9. Light Schedules (`schedules`) -- photoperiod on/off cycles
+10. IoT Devices (`devices`) -- SwitchBot sensor + relay mapping
+11. Planting Plan (`planting`) -- initial seeding schedule
+12. Integrations (`integrations`) -- Square, wholesale, external services
 
-Progress stored per farm; admin + Setup-Agent can resume mid-phase.
+Progress stored per farm; admin + Setup-Agent can resume mid-phase. Old phase IDs (`grow_rooms`, `room_specs`) remap to `room_design` for backwards compatibility.
 
 > **Source of truth:** the runtime phase catalogue lives in `greenreach-central/routes/setup-agent.js` `PHASES[]` and is what `GET /api/setup-agent/progress` evaluates. Each phase today performs **existence checks only** (did the farm enter X?), no recommendation logic. The active Farm-Builder paradigm — where the system recommends rooms / zones / equipment from location + growing system + crop plan — is layered on top of these phases via **Playbook 10**. Phase 7 ("Rooms + groups") and Phase 8 ("Crop registry + target ranges") will gain a new `growing_system_choice` sub-phase between them in Playbook 10 Phase B1, so the builder can be invoked before crops are picked.
 

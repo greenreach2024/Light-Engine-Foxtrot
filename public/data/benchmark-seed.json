@@ -38,5 +38,6 @@
       "ppfd_target": 200,
       "photoperiod_hours": 16
     }
-  }
+  },
+  "schemaVersion": "1.0.0"
 }

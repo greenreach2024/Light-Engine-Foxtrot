@@ -7,8 +7,8 @@
  *
  * Phases (12):
  *   1.  farm_profile    -- Business identity (name, contact, location, timezone)
- *   2.  grow_rooms      -- Physical room definitions
- *   3.  room_specs      -- Room dimensions, ceiling height, hydro system, HVAC
+ *   2.  room_design     -- Room shell + dimensions + grow-system templates (merged)
+ *   3.  build_plan      -- Agent-computed equipment plan from templates + crop class
  *   4.  zones           -- Climate zones within rooms
  *   5.  groups          -- Grow groups (benches/racks) within zones
  *   6.  crop_assignment -- Crops assigned to groups with matching recipes
@@ -20,6 +20,14 @@
  *   12. integrations    -- External service credentials (SwitchBot, etc.)
  *
  * All data is read-only. Write operations go through EVIE's existing tools.
+ *
+ * Phase evolution (2026-04-20):
+ *   - Merged grow_rooms + room_specs into room_design (template-aware).
+ *     room_design checks: rooms exist, dimensions set, grow-system templates
+ *     assigned from public/data/grow-systems.json via installedSystems[].
+ *   - Added build_plan phase: verifies the agent-computed load math
+ *     (lighting kW, cooling tons, controller slots) has been run and accepted.
+ *     Consumed by POST /api/grow-systems/compute-room-load on LE.
  */
 
 import { Router } from 'express';
@@ -39,21 +47,21 @@ const PHASES = [
     sidebar_target: 'farm-registration'
   },
   {
-    id: 'grow_rooms',
-    label: 'Grow Rooms',
-    description: 'Define your physical growing spaces',
-    weight: 10,
+    id: 'room_design',
+    label: 'Room Design',
+    description: 'Create rooms, set dimensions (L x W x H), and select grow-system templates',
+    weight: 14,
     order: 2,
-    evie_prompt: 'Help me create my grow rooms.',
+    evie_prompt: 'Help me design my grow rooms -- I need to set room dimensions and pick grow-system templates.',
     sidebar_target: 'grow-rooms'
   },
   {
-    id: 'room_specs',
-    label: 'Room Specifications',
-    description: 'Room dimensions, ceiling height, hydroponic system type, and HVAC',
-    weight: 8,
+    id: 'build_plan',
+    label: 'Build Plan',
+    description: 'Agent-computed equipment plan -- lighting, HVAC, pumps, controllers from room templates',
+    weight: 4,
     order: 3,
-    evie_prompt: 'I need to add dimensions and specs to my rooms so we can build the farm layout.',
+    evie_prompt: 'Compute my build plan from the room templates so I know what equipment I need.',
     sidebar_target: 'grow-rooms'
   },
   {
@@ -164,43 +172,86 @@ async function evaluatePhase(phaseId, farmId) {
         break;
       }
 
-      case 'grow_rooms': {
+      // -- room_design: merged grow_rooms + room_specs + template selection --
+      case 'room_design': {
         const rooms = await farmStore.get(farmId, 'rooms') || [];
-        result.count = rooms.length;
-        result.complete = rooms.length > 0;
-        result.items = rooms.map(r => ({
-          label: r.name || r.room_name || `Room ${r.id}`,
-          done: true
-        }));
+        const items = [];
+        let roomsWithSpecs = 0;
+        let roomsWithTemplates = 0;
+
+        for (const r of rooms) {
+          const roomName = r.name || r.room_name || `Room ${r.id}`;
+          const hasDims = !!(r.dimensions || (r.length_m && r.width_m) || r.area_m2);
+          const hasCeiling = !!(r.ceiling_height_m);
+          const hasTemplates = Array.isArray(r.installedSystems) && r.installedSystems.length > 0;
+          const specsOk = hasDims && hasCeiling;
+          if (specsOk) roomsWithSpecs++;
+          if (hasTemplates) roomsWithTemplates++;
+
+          const parts = [];
+          parts.push(hasDims ? 'dims' : 'no dims');
+          parts.push(hasCeiling ? 'ceiling' : 'no ceiling');
+          parts.push(hasTemplates
+            ? `${r.installedSystems.length} template${r.installedSystems.length !== 1 ? 's' : ''}`
+            : 'no templates');
+          items.push({ label: `${roomName}: ${parts.join(', ')}`, done: specsOk });
+        }
+
+        if (rooms.length === 0) {
+          items.push({ label: 'No rooms created', done: false });
+        }
+
+        // Summary items for overall tracking
+        const summaryItems = [
+          { label: `${rooms.length} room${rooms.length !== 1 ? 's' : ''} created`, done: rooms.length > 0 },
+          { label: `${roomsWithSpecs}/${rooms.length} with dimensions`, done: rooms.length > 0 && roomsWithSpecs === rooms.length },
+          { label: `${roomsWithTemplates}/${rooms.length} with grow-system templates`, done: roomsWithTemplates > 0 }
+        ];
+
+        result.items = [...summaryItems, ...items];
+        result.count = roomsWithSpecs;
+        // Complete when rooms exist and all have dimensions + ceiling.
+        // Templates are tracked but not blocking -- existing farms can progress.
+        result.complete = rooms.length > 0 && roomsWithSpecs === rooms.length;
         result.detail = result.complete
-          ? `${rooms.length} room${rooms.length !== 1 ? 's' : ''} configured`
-          : 'No grow rooms defined';
+          ? roomsWithTemplates > 0
+            ? `All ${rooms.length} room${rooms.length !== 1 ? 's' : ''} designed, ${roomsWithTemplates} with templates`
+            : `All ${rooms.length} room${rooms.length !== 1 ? 's have' : ' has'} dimensions -- add grow-system templates to unlock the build plan`
+          : rooms.length === 0
+            ? 'Create your first grow room to get started'
+            : `${roomsWithSpecs}/${rooms.length} room${rooms.length !== 1 ? 's' : ''} have full specs`;
         break;
       }
 
-      case 'room_specs': {
+      // -- build_plan: checks for agent-computed load math on rooms ----------
+      case 'build_plan': {
         const rooms = await farmStore.get(farmId, 'rooms') || [];
-        let specsComplete = 0;
+        let withPlan = 0;
         const items = [];
+
         for (const r of rooms) {
-          const hasDims = !!(r.dimensions || (r.length_m && r.width_m) || r.area_m2);
-          const hasCeiling = !!(r.ceiling_height_m);
-          const hasHydro = !!(r.hydro_system);
-          const roomDone = hasDims && hasCeiling;
-          if (roomDone) specsComplete++;
+          const roomName = r.name || r.room_name || `Room ${r.id}`;
+          const hasPlan = !!(r.buildPlan || r.build_plan);
+          const hasTemplates = Array.isArray(r.installedSystems) && r.installedSystems.length > 0;
+          if (hasPlan) withPlan++;
           items.push({
-            label: `${r.name || r.room_name || 'Room'}: ${hasDims ? 'dims' : 'no dims'}, ${hasCeiling ? 'ceiling' : 'no ceiling'}, ${hasHydro ? r.hydro_system : 'no hydro'}`,
-            done: roomDone
+            label: `${roomName}: ${hasPlan ? 'build plan computed' : hasTemplates ? 'templates set, plan not computed' : 'no templates assigned'}`,
+            done: hasPlan
           });
         }
+
+        if (rooms.length === 0) {
+          items.push({ label: 'Create rooms and add templates first', done: false });
+        }
+
         result.items = items;
-        result.count = specsComplete;
-        result.complete = rooms.length > 0 && specsComplete === rooms.length;
+        result.count = withPlan;
+        result.complete = rooms.length > 0 && withPlan > 0;
         result.detail = result.complete
-          ? `All ${rooms.length} room${rooms.length !== 1 ? 's have' : ' has'} dimensions and specs`
+          ? `${withPlan} room${withPlan !== 1 ? 's have' : ' has'} a computed build plan`
           : rooms.length === 0
-            ? 'Create rooms first, then add dimensions'
-            : `${specsComplete}/${rooms.length} room${rooms.length !== 1 ? 's' : ''} have full specs`;
+            ? 'Design rooms with templates first, then compute the build plan'
+            : 'No build plans computed -- ask EVIE to run the load calculator on your rooms';
         break;
       }
 
@@ -411,6 +462,12 @@ async function evaluatePhase(phaseId, farmId) {
           : 'No integrations configured';
         break;
       }
+
+      // Backwards compat: old phase IDs still resolve gracefully
+      case 'grow_rooms':
+      case 'room_specs': {
+        return evaluatePhase('room_design', farmId);
+      }
     }
   } catch (err) {
     result.detail = `Error checking ${phaseId}: ${err.message}`;
@@ -484,6 +541,25 @@ router.get('/guidance/:phaseId', async (req, res) => {
 
     const phase = PHASES.find(p => p.id === phaseId);
     if (!phase) {
+      // Check for legacy phase IDs
+      if (phaseId === 'grow_rooms' || phaseId === 'room_specs') {
+        const remapped = PHASES.find(p => p.id === 'room_design');
+        const evaluation = await evaluatePhase('room_design', farmId);
+        return res.json({
+          ok: true,
+          phase: {
+            id: remapped.id,
+            label: remapped.label,
+            description: remapped.description,
+            order: remapped.order,
+            sidebar_target: remapped.sidebar_target
+          },
+          status: evaluation,
+          steps: getPhaseSteps('room_design', evaluation),
+          evie_prompt: remapped.evie_prompt,
+          _note: `Phase "${phaseId}" has been merged into "room_design"`
+        });
+      }
       return res.status(404).json({ ok: false, error: `Unknown phase: ${phaseId}` });
     }
 
@@ -518,15 +594,17 @@ function getPhaseSteps(phaseId, evaluation) {
       { action: 'Add contact information (name, phone, email)', tool: 'update_farm_profile', done: evaluation.items?.[1]?.done },
       { action: 'Set your location (city, province, timezone)', tool: 'update_farm_profile', done: evaluation.items?.[2]?.done }
     ],
-    grow_rooms: [
-      { action: 'Create your first grow room', tool: 'create_room', done: evaluation.count > 0 },
-      { action: 'Add additional rooms as needed', tool: 'create_room', done: evaluation.count > 1 }
+    room_design: [
+      { action: 'Create your first grow room', tool: 'create_room', done: evaluation.items?.[0]?.done },
+      { action: 'Set room dimensions (length x width in meters)', tool: 'update_room_specs', done: evaluation.items?.[1]?.done },
+      { action: 'Set ceiling height', tool: 'update_room_specs', done: evaluation.items?.[1]?.done },
+      { action: 'Select grow-system templates (NFT rack, DWC pond, vertical tier, etc.)', tool: 'assign_grow_system', done: evaluation.items?.[2]?.done },
+      { action: 'Set quantity and crop class per template', tool: 'assign_grow_system', done: evaluation.items?.[2]?.done }
     ],
-    room_specs: [
-      { action: 'Tell EVIE your room dimensions (length x width in meters)', tool: 'update_room_specs', done: false },
-      { action: 'Specify ceiling height', tool: 'update_room_specs', done: false },
-      { action: 'Select your hydroponic system type', tool: 'update_room_specs', done: false },
-      { action: 'Indicate HVAC type (mini-split, portable, central, or none)', tool: 'update_room_specs', done: false }
+    build_plan: [
+      { action: 'Ensure at least one room has grow-system templates assigned', tool: 'assign_grow_system', done: evaluation.count > 0 || false },
+      { action: 'Ask EVIE to compute the build plan (lighting, HVAC, pumps, controllers)', tool: 'compute_build_plan', done: evaluation.count > 0 },
+      { action: 'Review and accept the proposed equipment list', tool: 'accept_build_plan', done: evaluation.count > 0 }
     ],
     zones: [
       { action: 'Define zones within each room', tool: 'create_zone', done: evaluation.count > 0 },

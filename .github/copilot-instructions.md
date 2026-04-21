@@ -31,6 +31,38 @@ The farm runs entirely on Google Cloud Run. The Light Engine Cloud Run service I
 10. **GitHub is the deployable source of truth.** Do not leave production fixes only in local branches or local `main`. Before any Cloud Run deploy, commit and push the exact code being deployed.
 11. **Production drift reconciliation is mandatory.** If the expected production fixes live on feature, salvage, or local-only branches, merge or cherry-pick them into the branch that will be pushed to GitHub first. Record the source branches and commit SHAs in `docs/operations/`.
 
+### Recent Fixes (Apr 19, 2026)
+
+41. **Phase 2 #9: 3D Viewer -- Zone Status Coloring from Live Sensor Targets**
+    - Branch: `impl/phase2-setup-template-aware` (continued).
+    - **3d-farm-viewer.html** (both copies): The viewer already fetched live sensor data via `/env?hours=24` (not mock). Added: (1) Fetch `target-ranges.json` in `loadAllData()` and store in `S.targetRanges`. (2) `computeZoneDeviations()` called from `buildZoneDataMap()` -- classifies each zone as ok/caution/warning/critical per metric (temperature, humidity, VPD) using severity thresholds. (3) Always-on zone tinting when overlay is `none` -- zones glow green (ok), amber (warning), or red (critical) at subtle opacity. (4) New "Status" overlay button -- prominent zone-level deviation coloring with legend showing in-range/warning/critical counts. (5) `findZoneDataForMesh()` helper resolves zone ID mismatches between room maps and env data.
+    - Implementation plan: `docs/IMPLEMENTATION_PLAN.md` item #9 marked SHIPPED.
+
+40. **Phase 2 #8: Zone-Aware Recommendation Rollup + Confidence**
+    - Branch: `impl/phase2-setup-template-aware` (continued).
+    - **LE route** (`routes/zone-recommendations.js`, NEW ~310 lines): `GET /api/zone-recommendations` (all zones), `GET /api/zone-recommendations/:zoneId` (single). Reads env-cache.json, target-ranges.json, groups.json, rooms.json. Zone ID normalization handles inconsistent formats (env-cache "zone-1" vs groups.json "room-xxx-zZone 1"). Per-zone output: readings (temp/rh/vpd/sensor_count), drift from midpoint, group context summary (crops, trays, equipment), actionable recommendations with priority, crop conflict detection (>3 unique crops), confidence scoring (1.0 base minus penalties for missing sensors/readings/groups/crops/targets, levels: high/medium/low).
+    - **E.V.I.E. tool** (`greenreach-central/routes/farm-ops-agent.js`): Added `get_zone_recommendations` tool to Central farm-ops-agent catalog. Reads same data files via `readJSON()`. Category: read. Optional param: zone_id.
+    - **server-foxtrot.js**: Added import + mount for zoneRecommendationsRouter at `/api/zone-recommendations`.
+    - Implementation plan: `docs/IMPLEMENTATION_PLAN.md` item #8 marked SHIPPED. Also un-checked 3 false-shipped items (env-recommendation routes that never existed).
+
+
+39. **Phase 2 #12: Template-Aware Setup Agent + Grow-Systems API**
+    - Branch: `impl/phase2-setup-template-aware`. Commit `9572ade6`.
+    - **Setup-agent phase merge**: Merged `grow_rooms` (order 2) + `room_specs` (order 3) into unified `room_design` (order 2, weight 14). Added `build_plan` (order 3, weight 4). Total phases still 12, weights sum 100. Backwards-compat: old phase IDs remap to `room_design` in both evaluatePhase() and guidance endpoint.
+    - **`room_design` evaluatePhase**: Checks rooms exist, have dimensions (length_m/width_m/area_m2), ceiling_height_m, and tracks installedSystems[] from grow-systems.json. Complete when all rooms have dims + ceiling. Templates tracked but not blocking.
+    - **`build_plan` evaluatePhase**: Checks rooms for buildPlan/build_plan property. Complete when at least one room has a computed plan.
+    - **Grow-Systems API** (new file `routes/grow-systems.js`): First runtime consumer of `public/data/grow-systems.json`. GET /api/grow-systems (all templates), GET /api/grow-systems/:templateId (single), POST /api/grow-systems/compute-room-load (runs farm-load-calculator), POST /api/grow-systems/reload (force-reload). Caches registry in memory.
+    - File: `greenreach-central/routes/setup-agent.js` (+78 lines, now ~650 lines)
+    - File: `routes/grow-systems.js` (NEW, ~120 lines)
+    - File: `server-foxtrot.js` (added import + mount for growSystemsRouter at /api/grow-systems)
+    - Implementation plan: `docs/IMPLEMENTATION_PLAN.md` item #12 marked SHIPPED.
+38. **Phase 1 Data Integrity: Server-Authoritative Timestamps + Groups.json Write Safety**
+    - Branch: `impl/phase1-data-integrity`. PR pending.
+    - **Server-authoritative timestamps (XC-5)**: Seed (`POST /api/trays/:trayId/seed`) and harvest (`POST /api/tray-runs/:id/harvest`) routes now validate client-provided timestamps against server time. Client hints accepted only if drift < 15 min; otherwise overridden with server time and warning logged. Responses include `timestamp_source` and `seeded_at`/`harvestedAt`. Event bus emissions include authoritative `timestamp` field.
+    - **Groups.json write safety (XC-2)**: Added `withGroupsLock()` async mutex (promise-chain pattern, no npm dependency) to serialize all read-modify-write operations on `groups.json`. All 5 LE write sites wrapped: `POST /data/groups.json`, `POST /groups`, `PUT /groups/:id`, seed route group sync, zone cascade in `syncZonesToRoomsJson()`.
+    - File changed: `server-foxtrot.js` (+135 -77 lines). 86/86 tests pass.
+    - Implementation plan: `docs/IMPLEMENTATION_PLAN.md` created and maintained.
+
 ### Recent Fixes (Apr 14, 2026)
 
 37. **Multi-Unit Equipment/Group Bulk Updates + 3D Viewer LE Visibility**
@@ -603,6 +635,17 @@ Agents MUST receive **"APPROVED FOR DEPLOYMENT"** message from user before execu
 **56+ consumers** depend on these formats. Changes require full impact analysis.
 
 See `.github/copilot-instructions-schema.md` for detailed guidance.
+
+
+## Nutrient System Architecture
+
+The nutrient management system supports N tanks (not hardcoded to 2).
+
+- **Tank config**: `DEFAULT_TANK_CONFIG` in `automation/recipe-nutrient-targets.js` defines the default 2-tank layout. Callers can pass `opts.tankConfig` for N-tank support.
+- **NutrientStore** (`services/nutrient-mqtt.js`): Already fully N-tank capable. `getScopes()` returns dynamic keys.
+- **API**: `GET /api/nutrient-profiles` serves crop compatibility data. `POST /api/nutrient-profiles/check-compatibility` validates tank sharing.
+- **Server**: `reconcileRecipeNutrientTargets()` and `ALLOWED_TANK_SCOPES` derive from `DEFAULT_TANK_CONFIG` dynamically -- do NOT re-hardcode tank IDs.
+- **Profile data**: `public/data/nutrient-profiles.json` contains EC/pH targets, compatible crops, and a pairwise compatibility matrix.
 
 ## Data Mapping Reference (REQUIRED)
 

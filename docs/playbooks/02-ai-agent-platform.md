@@ -19,7 +19,7 @@ Foxtrot is an **AI-first** platform: agents are not a feature; they are the prim
 |---|---|---|---|---|---|---|
 | **E.V.I.E.** | Environmental Vision & Intelligence Engine | **One farm** | Growers, visitors, demo viewers | OpenAI GPT-4o (primary) + Anthropic Claude (fallback) | Farm-scoped read + act through Farm-Ops tool gateway | `greenreach-central/routes/assistant-chat.js` |
 | **Farm-Ops-Agent** | Deterministic ops engine | One farm | Backend / E.V.I.E. tool gateway | Deterministic scoring + GPT-4o for NL parsing | Executes scored daily tasks, tool catalog, audit | `greenreach-central/routes/farm-ops-agent.js` |
-| **Setup-Agent** | Farm setup orchestrator | One farm | Onboarding via E.V.I.E. | GPT-4o | 12-phase setup progress, phase-aware guidance | `greenreach-central/routes/setup-agent.js` |
+| **Setup-Agent** | Farm setup orchestrator | One farm | Onboarding via E.V.I.E. | GPT-4o | 12-phase setup progress, template-aware room design, build-plan computation, phase-aware guidance | `greenreach-central/routes/setup-agent.js` |
 | **F.A.Y.E.** | Farm Autonomy & Yield Engine | **All farms** | Platform admins / ops | GPT-4o | Cross-farm observation, recommendations, progressive automation, safe-patch approval | `greenreach-central/routes/admin-assistant.js` |
 | **Admin-Ops-Agent** | Platform ops agent | Platform-wide | Admins | GPT-4o | Ops runbooks, system health, revenue analysis, feature flags | `greenreach-central/routes/admin-ops-agent.js` |
 | **G.W.E.N.** | Grants, Workplans, Evidence & Navigation | Research bubble | Researchers, PIs, HQP | Gemini 2.5 Pro (Vertex AI) | Research workspace actions; `execute_code` gated | `greenreach-central/routes/gwen-research-agent.js` |

@@ -12,8 +12,16 @@
       "integrationMethod": "email",
       "apiEndpoint": null,
       "apiKey": null,
-      "categories": ["nutrients", "growing-media", "ph-calibration", "testing"],
-      "shippingEstimateDays": { "min": 3, "max": 7 },
+      "categories": [
+        "nutrients",
+        "growing-media",
+        "ph-calibration",
+        "testing"
+      ],
+      "shippingEstimateDays": {
+        "min": 3,
+        "max": 7
+      },
       "returnPolicyDays": 30,
       "commissionRate": 0.08,
       "status": "active",
@@ -29,10 +37,17 @@
       "integrationMethod": "api",
       "apiEndpoint": "https://api.agrilight-tech.example.com/v1/orders",
       "apiKey": "",
-      "categories": ["lighting", "electrical", "controllers"],
-      "shippingEstimateDays": { "min": 5, "max": 10 },
+      "categories": [
+        "lighting",
+        "electrical",
+        "controllers"
+      ],
+      "shippingEstimateDays": {
+        "min": 5,
+        "max": 10
+      },
       "returnPolicyDays": 30,
-      "commissionRate": 0.10,
+      "commissionRate": 0.1,
       "status": "active",
       "notes": "LED grow light and electrical components supplier"
     },
@@ -46,8 +61,16 @@
       "integrationMethod": "email",
       "apiEndpoint": null,
       "apiKey": null,
-      "categories": ["equipment", "hvac", "pumps", "plumbing"],
-      "shippingEstimateDays": { "min": 5, "max": 14 },
+      "categories": [
+        "equipment",
+        "hvac",
+        "pumps",
+        "plumbing"
+      ],
+      "shippingEstimateDays": {
+        "min": 5,
+        "max": 14
+      },
       "returnPolicyDays": 60,
       "commissionRate": 0.07,
       "status": "active",
@@ -63,8 +86,15 @@
       "integrationMethod": "email",
       "apiEndpoint": null,
       "apiKey": null,
-      "categories": ["seeds", "propagation", "biological-controls"],
-      "shippingEstimateDays": { "min": 2, "max": 5 },
+      "categories": [
+        "seeds",
+        "propagation",
+        "biological-controls"
+      ],
+      "shippingEstimateDays": {
+        "min": 2,
+        "max": 5
+      },
       "returnPolicyDays": 14,
       "commissionRate": 0.12,
       "status": "active",
@@ -80,12 +110,21 @@
       "integrationMethod": "email",
       "apiEndpoint": null,
       "apiKey": null,
-      "categories": ["packaging", "labels", "cold-chain", "safety"],
-      "shippingEstimateDays": { "min": 3, "max": 7 },
+      "categories": [
+        "packaging",
+        "labels",
+        "cold-chain",
+        "safety"
+      ],
+      "shippingEstimateDays": {
+        "min": 3,
+        "max": 7
+      },
       "returnPolicyDays": 30,
       "commissionRate": 0.09,
       "status": "active",
       "notes": "Post-harvest packaging and cold chain supplies"
     }
-  ]
+  ],
+  "schemaVersion": "1.0.0"
 }

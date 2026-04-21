@@ -262,11 +262,16 @@ class NutrientStore extends EventEmitter {
   recordAppliedTargets(tankId, targets, meta = {}) {
     if (!tankId || !targets || typeof targets !== 'object') return;
     const now = new Date().toISOString();
+    const pending = this.state.pendingTargets[tankId];
+    const ackLatencyMs = pending?.requestedAt
+      ? (new Date(now).getTime() - new Date(pending.requestedAt).getTime())
+      : null;
     this.state.appliedTargets[tankId] = {
       targets: JSON.parse(JSON.stringify(targets)),
       appliedAt: meta.appliedAt || now,
       source: meta.source || 'ack',
-      correlationId: meta.correlationId || null
+      correlationId: meta.correlationId || pending?.correlationId || null,
+      ackLatencyMs
     };
     // Clear any matching pending entry — the publish has landed.
     delete this.state.pendingTargets[tankId];
@@ -361,6 +366,19 @@ class NutrientStore extends EventEmitter {
     alert.acknowledgedAt = new Date().toISOString();
     this._schedulePersist();
     return true;
+  }
+
+  getUnacknowledgedCommands(thresholdMs = 30000) {
+    const now = Date.now();
+    const stale = [];
+    for (const [tankId, entry] of Object.entries(this.state.pendingTargets || {})) {
+      if (!entry?.requestedAt) continue;
+      const age = now - new Date(entry.requestedAt).getTime();
+      if (age > thresholdMs) {
+        stale.push({ tankId, ...entry, ageMs: age });
+      }
+    }
+    return stale;
   }
 
   getHistory(tankId, sensor, limit = 50) {
@@ -510,6 +528,19 @@ class NutrientMqttSubscriber extends EventEmitter {
       this.store.recordAck(tankId, payload);
       return;
     }
+  }
+
+  publish(topic, payload, { qos = 1 } = {}) {
+    if (!this._connected || !this.client) {
+      return Promise.reject(new Error('subscriber-not-connected'));
+    }
+    const message = typeof payload === 'string' ? payload : JSON.stringify(payload);
+    return new Promise((resolve, reject) => {
+      this.client.publish(topic, message, { qos }, (err) => {
+        if (err) reject(err);
+        else resolve({ ok: true, topic, reusedClient: true });
+      });
+    });
   }
 
   stop() {

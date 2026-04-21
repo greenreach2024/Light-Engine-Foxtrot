@@ -84,7 +84,7 @@
             "pumpId": "ec",
             "action": "EC adjustment",
             "durationSeconds": 2.5,
-            "reason": "EC below target (1585 µS/cm)"
+            "reason": "EC below target (1585 \u00b5S/cm)"
           },
           {
             "timestamp": "2025-12-09T21:30:00.000Z",
@@ -98,7 +98,7 @@
             "pumpId": "ec",
             "action": "EC adjustment",
             "durationSeconds": 2.5,
-            "reason": "EC below target (1580 µS/cm)"
+            "reason": "EC below target (1580 \u00b5S/cm)"
           }
         ],
         "ecPumpDosesTotal": 145,
@@ -129,6 +129,45 @@
         }
       },
       "lastUpdated": "2025-12-09T22:00:00.000Z"
+    },
+    "tank1": {
+      "sensors": {
+        "ph": {
+          "value": null,
+          "unit": "pH",
+          "history": [],
+          "observedAt": null
+        },
+        "ec": {
+          "value": null,
+          "unit": "mS/cm",
+          "history": [],
+          "observedAt": null
+        },
+        "temperature": {
+          "value": null,
+          "unit": "\u00b0C",
+          "history": [],
+          "observedAt": null
+        }
+      },
+      "autodose": {
+        "enabled": false,
+        "phTarget": 6.0,
+        "phTolerance": 0.3,
+        "ecTarget": 1200,
+        "ecTolerance": 100,
+        "ecDoseSeconds": 2.0,
+        "phDownDoseSeconds": 1.0,
+        "minDoseIntervalSec": 180
+      },
+      "dosingHistory": [],
+      "calibration": {},
+      "metadata": {
+        "provider": "atlas-ezo",
+        "scope": "tank-1",
+        "label": "Tank 1 - Vegetative"
+      }
     }
   },
   "system": {
@@ -156,5 +195,6 @@
         "updatedAt": "2026-02-01T15:12:11.477Z"
       }
     }
-  }
+  },
+  "schemaVersion": "1.0.0"
 }

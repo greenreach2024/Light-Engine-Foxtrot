@@ -101,6 +101,7 @@ import SyncServiceClass from './services/sync-service.js';
 import { NutrientStore, NutrientMqttSubscriber } from './services/nutrient-mqtt.js';
 import {
   resolveTankTargets as resolveRecipeNutrientTankTargets,
+  DEFAULT_TANK_CONFIG,
   diffTargets as diffNutrientTargets
 } from './automation/recipe-nutrient-targets.js';
 import { hydrateAutomationStorageCache } from './automation/utils/file-storage.js';
@@ -270,6 +271,9 @@ import { coreAllocator } from './controller/coreAllocator.js';
 import outdoorSensorValidator from './lib/outdoor-sensor-validator.js';
 import anomalyHistory from './lib/anomaly-history.js';
 import eventBus from './lib/event-bus.js';
+import { initEventLog } from './lib/event-log.js';
+import decisionLedger from './lib/decision-ledger.js';
+import { resolveCropKey } from './lib/crop-resolver.js';
 import mlAutomation from './lib/ml-automation-controller.js';
 import { applyModifier as applyRecipeModifier, computeModifiers as computeRecipeModifiers } from './lib/recipe-modifier.js';
 import { logDailyFixtureRun, getFixtureHours } from './lib/led-aging.js';
@@ -1091,6 +1095,22 @@ async function startOperationalServices(trigger = 'startup') {
         }, NUTRIENT_BACKEND_SCOPE);
       });
       console.log('[nutrient-mqtt] Atlas dosing subscriber started');
+      // P2 #28: Persist applied setpoints back to nutrient-dashboard.json
+      nutrientStore.on('applied-targets', ({ tankId, targets }) => {
+        try {
+          const doc = loadNutrientDashboardCache() || { tanks: {} };
+          if (!doc.tanks) doc.tanks = {};
+          if (!doc.tanks[tankId]) doc.tanks[tankId] = {};
+          doc.tanks[tankId].autodose = {
+            ...(doc.tanks[tankId].autodose || {}),
+            ...targets,
+            lastAppliedAt: new Date().toISOString()
+          };
+          schedulePersistNutrientDashboard(doc);
+        } catch (err) {
+          console.warn('[nutrients] Failed to persist applied targets to dashboard:', err?.message);
+        }
+      });
     }
   } catch (error) {
     console.warn('[nutrient-mqtt] Failed to start:', error?.message || error);
@@ -1171,23 +1191,36 @@ async function startOperationalServices(trigger = 'startup') {
       if (mlScheduleInFlight) { console.log('[ML Schedule] Skipping — already in flight'); return; }
       mlScheduleInFlight = true;
       try {
-        // 1) Run anomaly detection
-        const { spawn } = await import('node:child_process');
-        const pyBin = process.env.PYTHON_BIN || 'python3';
-        const scriptPath = path.join(__dirname, 'scripts', 'simple-anomaly-detector.py');
-        const anomalyResult = await new Promise((resolve, reject) => {
-          const proc = spawn(pyBin, [scriptPath, '--json'], { stdio: ['ignore', 'pipe', 'pipe'], timeout: 30_000 });
-          let stdout = '', stderr = '';
-          proc.stdout.on('data', d => stdout += d);
-          proc.stderr.on('data', d => stderr += d);
-          proc.on('close', code => {
-            if (code !== 0) return reject(new Error(stderr.slice(0, 200)));
-            try { resolve(JSON.parse(stdout)); } catch { reject(new Error('Invalid JSON')); }
+        // 1) Run anomaly detection (Python with JS fallback -- Phase 4 #25)
+        let anomalyResult;
+        try {
+          const { spawn } = await import('node:child_process');
+          const pyBin = process.env.PYTHON_BIN || 'python3';
+          const scriptPath = path.join(__dirname, 'scripts', 'simple-anomaly-detector.py');
+          anomalyResult = await new Promise((resolve, reject) => {
+            const proc = spawn(pyBin, [scriptPath, '--json'], { stdio: ['ignore', 'pipe', 'pipe'], timeout: 30_000 });
+            let stdout = '', stderr = '';
+            proc.stdout.on('data', d => stdout += d);
+            proc.stderr.on('data', d => stderr += d);
+            proc.on('close', code => {
+              if (code !== 0) return reject(new Error(stderr.slice(0, 200)));
+              try { resolve(JSON.parse(stdout)); } catch { reject(new Error('Invalid JSON')); }
+            });
+            proc.on('error', reject);
           });
-          proc.on('error', reject);
-        });
+        } catch (pyErr) {
+          // Fallback to JS-based anomaly detection
+          try {
+            const { runFullScan } = await import('./lib/ml-anomaly-js.js');
+            anomalyResult = await runFullScan(DATA_DIR);
+            console.log('[ML Schedule] Python unavailable, used JS anomaly engine');
+          } catch (jsErr) {
+            console.warn('[ML Schedule] JS anomaly fallback also failed:', jsErr.message);
+            anomalyResult = { anomalies: [] };
+          }
+        }
         if (anomalyResult.anomalies?.length) {
-          console.log(`[ML Schedule] Detected ${anomalyResult.anomalies.length} anomalies`);
+          console.log('[ML Schedule] Detected ' + anomalyResult.anomalies.length + ' anomalies (engine: ' + (anomalyResult.engine || 'python') + ')');
         }
 
         // 2) Refresh harvest predictions
@@ -1410,6 +1443,32 @@ function saveGroupsFile(groups) {
   } catch (err) {
     console.error('[groups] Failed to write groups.json:', err.message);
     return false;
+  }
+}
+
+// ── groups.json mutex: serializes all read-modify-write operations ──────────
+// Prevents concurrent requests (e.g. two tablets seeding into the same group)
+// from racing on the shared JSON file. The `fn` callback receives the current
+// groups array, mutates it, and the result is written back atomically.
+let __groupsLock = Promise.resolve();
+
+async function withGroupsLock(fn) {
+  const release = __groupsLock;
+  let resolveLock;
+  __groupsLock = new Promise((resolve) => { resolveLock = resolve; });
+  try {
+    await release;
+    const groups = loadGroupsFile();
+    const result = await fn(groups);
+    if (result !== false) {
+      saveGroupsFile(groups);
+    }
+    return result;
+  } catch (err) {
+    console.error('[groups-lock] Error in locked operation:', err.message);
+    throw err;
+  } finally {
+    resolveLock();
   }
 }
 
@@ -5085,6 +5144,14 @@ const trayPlacementsDB = new Datastore({
   timestampData: true
 });
 
+// ── Durable Event Log (XC-3) ───────────────────────────────────────────────
+// Persist all event bus events to NeDB with per-consumer cursor tracking.
+const eventLog = initEventLog(eventBus, runtimeDbPath);
+
+// ── Agent Decision Ledger (R7) ────────────────────────────────────────────
+// Append-only NDJSON logs per agent per day: data/agent-decisions/<agent>/<yyyy-mm-dd>.ndjson
+decisionLedger.init(DATA_DIR);
+
 async function runDailyPlanResolver(trigger = 'manual') {
   if (dailyResolverRunning) {
     console.warn(`[daily] resolver already running (trigger: ${trigger})`);
@@ -5102,8 +5169,25 @@ async function runDailyPlanResolver(trigger = 'manual') {
     const calibrationMap = buildCalibrationMap();
     const envState = readEnv();
     const results = [];
+    const skippedGroups = [];
     const todayStart = new Date(startedAt);
     todayStart.setHours(0, 0, 0, 0);
+
+    // --- Autonomy kill switch (#15) ---
+    let agentPerms = {};
+    try { agentPerms = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'agent-permissions.json'), 'utf-8')); } catch (_) {}
+    const autonomyGlobal = agentPerms?.autonomy?.enabled;
+    if (autonomyGlobal === false) {
+      envState.lastDailyResolverAt = startedAt.toISOString();
+      envState.lastDailyResolverTrigger = trigger;
+      envState.planResolver = { lastRunAt: startedAt.toISOString(), trigger, groups: [], autonomy_killed: true };
+      envState.updatedAt = startedAt.toISOString();
+      writeEnv(envState);
+      console.log(`[daily] autonomy global kill switch is OFF -- skipping all groups (trigger: ${trigger})`);
+      dailyResolverRunning = false;
+      return [];
+    }
+    const autonomySchedulingDefault = agentPerms?.autonomy?.scheduling?.default !== false;
 
     if (!Array.isArray(groups) || !groups.length || !planIndex.size) {
       envState.lastDailyResolverAt = startedAt.toISOString();
@@ -5131,7 +5215,10 @@ async function runDailyPlanResolver(trigger = 'manual') {
           group?.planConfig?.preview?.planKey,
           group?.planConfig?.preview?.plan
         ].find((value) => typeof value === 'string' && value.trim());
-        if (!planKeyCandidate) continue;
+        if (!planKeyCandidate) {
+          skippedGroups.push({ group_id: group.id || group.name, reason: 'no_plan_key' });
+          continue;
+        }
         const planKey = planKeyCandidate.trim();
         let plan = planIndex.get(planKey);
         if (!plan) {
@@ -5145,11 +5232,23 @@ async function runDailyPlanResolver(trigger = 'manual') {
         }
         if (!plan) {
           console.warn(`[daily] plan '${planKey}' not found for group ${group.id || group.name || 'unknown'}`);
+          skippedGroups.push({ group_id: group.id || group.name, reason: 'plan_not_found', plan_key: planKey });
           continue;
         }
 
         const deviceIds = Array.from(new Set(getGroupDeviceIds(group)));
-        if (!deviceIds.length) continue;
+        if (!deviceIds.length) {
+          skippedGroups.push({ group_id: group.id || group.name, reason: 'no_devices' });
+          continue;
+        }
+
+        // Per-group autonomy override (#15)
+        const groupAutonomy = group.autonomy?.scheduling;
+        const isAutonomous = groupAutonomy !== undefined ? groupAutonomy : autonomySchedulingDefault;
+        if (!isAutonomous) {
+          skippedGroups.push({ group_id: group.id || group.name, reason: 'autonomy_disabled' });
+          continue;
+        }
 
         const planConfig = (group.planConfig && typeof group.planConfig === 'object') ? group.planConfig : {};
         const dayNumber = computePlanDayNumber(planConfig, group, todayStart);
@@ -5462,7 +5561,13 @@ async function runDailyPlanResolver(trigger = 'manual') {
 
     envState.lastDailyResolverAt = startedAt.toISOString();
     envState.lastDailyResolverTrigger = trigger;
-    envState.planResolver = { lastRunAt: startedAt.toISOString(), trigger, groups: results };
+    envState.planResolver = {
+      lastRunAt: startedAt.toISOString(),
+      trigger,
+      groups: results,
+      degraded: skippedGroups.length > 0,
+      skipped_groups: skippedGroups.length > 0 ? skippedGroups : undefined
+    };
     envState.updatedAt = startedAt.toISOString();
     writeEnv(envState);
 
@@ -11921,17 +12026,28 @@ app.get('/api/recipe-modifiers', async (req, res) => {
  * POST /api/recipe-modifiers/compute
  * Trigger recomputation of local recipe modifiers from experiment records.
  */
+let _recipeModifierComputeInFlight = null;
 app.post('/api/recipe-modifiers/compute', async (req, res) => {
   try {
-    const records = await harvestOutcomesDB.find({});
-    const result = computeRecipeModifiers(records, req.body?.minRecords || 10);
-    res.json({
-      ok: true,
-      crops_computed: Object.keys(result.modifiers).length,
-      modifiers: result.modifiers,
-      computed_at: result.computed_at
-    });
+    if (_recipeModifierComputeInFlight) {
+      const cached = await _recipeModifierComputeInFlight;
+      return res.json(cached);
+    }
+    _recipeModifierComputeInFlight = (async () => {
+      const records = await harvestOutcomesDB.find({});
+      const result = computeRecipeModifiers(records, req.body?.minRecords || 10);
+      return {
+        ok: true,
+        crops_computed: Object.keys(result.modifiers).length,
+        modifiers: result.modifiers,
+        computed_at: result.computed_at
+      };
+    })();
+    const computeResult = await _recipeModifierComputeInFlight;
+    _recipeModifierComputeInFlight = null;
+    res.json(computeResult);
   } catch (error) {
+    _recipeModifierComputeInFlight = null;
     res.status(500).json({ ok: false, error: error.message });
   }
 });
@@ -12302,7 +12418,13 @@ app.post('/api/ai/recommendations/receive', async (req, res) => {
     return projections;
   }
 
+  let _harvestReportInFlight = null;
   async function reportHarvestSchedule() {
+    if (_harvestReportInFlight) return _harvestReportInFlight;
+    _harvestReportInFlight = _doReportHarvestSchedule();
+    try { return await _harvestReportInFlight; } finally { _harvestReportInFlight = null; }
+  }
+  async function _doReportHarvestSchedule() {
     try {
       const projections = await computeProjectedHarvests();
       if (projections.length === 0) {
@@ -14708,6 +14830,76 @@ app.use('/api/wholesale/farm-performance', wholesaleFarmPerformanceRouter);
  */
 app.use('/api/audit', createAuditRoutes());
 
+// ── Event Log API (XC-3) ─────────────────────────────────────────────────
+// Query persisted events from the durable event log.
+app.get('/api/events', async (req, res) => {
+  try {
+    const { type, limit = '100', order = 'desc', consumer } = req.query;
+    const lim = Math.min(parseInt(limit, 10) || 100, 500);
+
+    // Consumer mode: return events since last cursor position and advance it
+    if (consumer) {
+      const result = await eventLog.consumeSince(String(consumer), lim);
+      return res.json({ ok: true, events: result.events, cursor: result.cursor, consumer });
+    }
+
+    // Query mode: return matching events
+    const filter = type ? { event_type: String(type) } : {};
+    const events = await eventLog.query(filter, lim, order);
+    return res.json({ ok: true, events, count: events.length });
+  } catch (err) {
+    console.error('[event-log] Query error:', err.message);
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// ── Agent Decision Ledger API (R7) ──────────────────────────────────────
+app.get('/api/agent-decisions/:agent', (req, res) => {
+  try {
+    const { agent } = req.params;
+    const date = req.query.date || new Date().toISOString().slice(0, 10);
+    const records = decisionLedger.read(agent, date);
+    res.json({ ok: true, agent, date, count: records.length, decisions: records });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.get('/api/agent-decisions/:agent/dates', (req, res) => {
+  try {
+    const dates = decisionLedger.listDates(req.params.agent);
+    res.json({ ok: true, agent: req.params.agent, dates });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.post('/api/agent-decisions', (req, res) => {
+  try {
+    const { agent, decision_type, inputs, alternatives, chosen, approval, farm_id } = req.body;
+    if (!agent || !chosen) {
+      return res.status(400).json({ ok: false, error: 'agent and chosen are required' });
+    }
+    const record = decisionLedger.record({ agent, decision_type, inputs, alternatives, chosen, approval, farm_id });
+    res.json({ ok: true, record });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.post('/api/agent-decisions/:agent/outcome', (req, res) => {
+  try {
+    const { ref_seq, outcome } = req.body;
+    if (!ref_seq || !outcome) {
+      return res.status(400).json({ ok: false, error: 'ref_seq and outcome are required' });
+    }
+    const update = decisionLedger.recordOutcome(req.params.agent, ref_seq, outcome);
+    res.json({ ok: true, update });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 // Apply audit middleware to all wholesale routes
 app.use('/api/wholesale', auditMiddleware);
 
@@ -14792,6 +14984,10 @@ import purchaseRouter from './routes/purchase.js';
 import purchaseLeadsRouter from './routes/purchase-leads.js';
 import kpisRouter from './routes/kpis.js';
 import setupWizardRouter from './routes/setup-wizard.js';
+import growSystemsRouter from './routes/grow-systems.js';
+import controllerBindingsRouter from './routes/controller-bindings.js';
+import zoneRecommendationsRouter from './routes/zone-recommendations.js';
+import nutrientProfilesRouter from './routes/nutrient-profiles.js';
 import pg from 'pg';
 
 // Initialize PostgreSQL pool for purchase flow (only if DB credentials provided)
@@ -15113,6 +15309,10 @@ app.get('/api/setup-wizard/status', async (req, res) => {
 
 // Setup wizard router with edge session authentication
 app.use('/api/setup-wizard', setupWizardRouter);
+app.use('/api/grow-systems', growSystemsRouter);
+app.use('/api/controller-bindings', controllerBindingsRouter);
+app.use('/api/zone-recommendations', zoneRecommendationsRouter);
+app.use('/api/nutrient-profiles', nutrientProfilesRouter);
 
 /**
  * Farm Sales: Customer Management
@@ -15307,6 +15507,7 @@ console.log(' Farm sales terminal initialized - POS, D2C, B2B, food security pro
  * ML Predictive Forecasting Endpoint
  * Predict indoor temperature/humidity 1-4 hours ahead using outdoor-aware SARIMAX model
  * GET /api/ml/forecast?zone=Grow Room 1&hours=2&metric=indoor_temp
+ * Falls back to JS Holt-Winters when Python is unavailable (Phase 4 #25)
  */
 app.get('/api/ml/forecast', asyncHandler(async (req, res) => {
   const { spawn } = await import('child_process');
@@ -16902,6 +17103,17 @@ async function publishNutrientCommand(payload, {
     throw new Error('nutrient-mqtt-config-missing');
   }
 
+  // P2 #28: Reuse the long-lived subscriber client when connected
+  if (nutrientSubscriber && nutrientSubscriber.isConnected()) {
+    try {
+      const result = await nutrientSubscriber.publish(publishTopic, publishPayload);
+      console.log(`[nutrients] Published via subscriber client to ${publishTopic}`);
+      return { ...result, brokerUrl: resolvedBroker, topic: publishTopic, translated: Boolean(translation) };
+    } catch (reuseErr) {
+      console.warn('[nutrients] Subscriber publish failed, falling back to ephemeral client:', reuseErr?.message);
+    }
+  }
+
   console.log(`[nutrients] Publishing nutrient command to ${publishTopic} via ${resolvedBroker}${translation ? ' (translated)' : ''}`);
 
   return await new Promise((resolve, reject) => {
@@ -17025,10 +17237,9 @@ const DRIFT_ALERT_COOLDOWN_MS = 30 * 60 * 1000; // 30 min
 function reconcileRecipeNutrientTargets() {
   try {
     const resolved = resolveRecipeNutrientTargetsFromDisk({ aggregator: 'weighted' });
-    const tankAssignments = [
-      { tankId: 'tank-1', tankKey: 'tank1', resolved: resolved.tank1 },
-      { tankId: NUTRIENT_SCOPE_ID, tankKey: 'tank2', resolved: resolved.tank2 }
-    ];
+    const tankAssignments = DEFAULT_TANK_CONFIG.map(tc => ({
+      tankId: tc.scopeId, tankKey: tc.id, resolved: resolved.tanks?.[tc.id] || resolved[tc.id]
+    }));
     const report = { calculatedAt: resolved.calculatedAt, tanks: {} };
     for (const { tankId, tankKey, resolved: tankResolved } of tankAssignments) {
       const applied = nutrientStore.getAppliedTargets(tankId);
@@ -17716,11 +17927,12 @@ app.post('/api/nutrients/targets', requireEdgeForControl, async (req, res) => {
       return res.status(400).json({ ok: false, error: 'invalid-targets' });
     }
 
-    const ALLOWED_TANK_SCOPES = new Set(['tank-1', 'tank-2', NUTRIENT_SCOPE_ID]);
+    const allowedTankScopes = new Set(DEFAULT_TANK_CONFIG.map(tc => tc.scopeId));
+    allowedTankScopes.add(NUTRIENT_SCOPE_ID);
     const rawScope = typeof body.tankScope === 'string' && body.tankScope.trim()
       ? body.tankScope.trim()
       : (typeof body.tank === 'string' && body.tank.trim() ? body.tank.trim() : null);
-    const tankScope = rawScope && ALLOWED_TANK_SCOPES.has(rawScope) ? rawScope : NUTRIENT_SCOPE_ID;
+    const tankScope = rawScope && allowedTankScopes.has(rawScope) ? rawScope : NUTRIENT_SCOPE_ID;
 
     const payload = {
       action: 'setTargets',
@@ -17945,18 +18157,31 @@ app.post('/api/nutrients/command', requireEdgeForControl, async (req, res) => {
     setCors(req, res);
     const body = req.body || {};
 
+    const action = typeof body.action === 'string' ? body.action.trim() : '';
+    const allowedActions = new Set(['phDown', 'ecMixA', 'ecMixB', 'stop', 'requestStatus']);
+    if (!allowedActions.has(action)) {
+      return res.status(400).json({ ok: false, error: 'invalid-action' });
+    }
+
+    // P2 #28: Rate limit manual dose commands (1 per 5s per action type)
+    const rateKey = `dose:${action}`;
+    const lastTs = _nutrientCommandTimestamps.get(rateKey) || 0;
+    const elapsed = Date.now() - lastTs;
+    if (elapsed < NUTRIENT_COMMAND_RATE_LIMIT_MS) {
+      return res.status(429).json({
+        ok: false,
+        error: 'rate-limited',
+        retryAfterMs: NUTRIENT_COMMAND_RATE_LIMIT_MS - elapsed
+      });
+    }
+    _nutrientCommandTimestamps.set(rateKey, Date.now());
+
     const brokerUrl = typeof body.brokerUrl === 'string' && body.brokerUrl.trim()
       ? body.brokerUrl.trim()
       : DEFAULT_NUTRIENT_MQTT_URL;
     const topic = typeof body.topic === 'string' && body.topic.trim()
       ? body.topic.trim()
       : DEFAULT_NUTRIENT_COMMAND_TOPIC;
-
-    const action = typeof body.action === 'string' ? body.action.trim() : '';
-    const allowedActions = new Set(['phDown', 'ecMixA', 'ecMixB', 'stop', 'requestStatus']);
-    if (!allowedActions.has(action)) {
-      return res.status(400).json({ ok: false, error: 'invalid-action' });
-    }
 
     const duration = toNumberOrNull(body.durationSec ?? body.duration ?? body.seconds);
 
@@ -18176,6 +18401,23 @@ app.get('/api/nutrients/resolved-targets', async (req, res) => {
     res.status(500).json({ ok: false, error: error?.message || 'resolve-failed' });
   }
 });
+
+// P2 #28: Unacknowledged command status -- surface "sent but not confirmed" state
+app.get('/api/nutrients/unacknowledged', async (req, res) => {
+  try {
+    setCors(req, res);
+    const thresholdMs = Math.max(5000, Math.min(300000, Number(req.query.threshold) || 30000));
+    const stale = nutrientStore.getUnacknowledgedCommands(thresholdMs);
+    res.json({ ok: true, unacknowledged: stale, thresholdMs });
+  } catch (error) {
+    console.error('[nutrients] unacknowledged check failed:', error?.message || error);
+    res.status(500).json({ ok: false, error: error?.message || 'check-failed' });
+  }
+});
+
+// P2 #28: Rate-limited manual dose command wrapper
+const _nutrientCommandTimestamps = new Map();
+const NUTRIENT_COMMAND_RATE_LIMIT_MS = 5000;
 
 // Legacy MQTT endpoint (retained for backward compatibility)
 app.get('/api/mqtt/nutrients', async (req, res) => {
@@ -21375,13 +21617,26 @@ function getCropHarvestDays(planId) {
     const recipesPath = path.join(PUBLIC_DIR, 'data/lighting-recipes.json');
     if (!fs.existsSync(recipesPath)) {
       console.warn('[getCropHarvestDays] lighting-recipes.json not found');
+      // Try crop registry before defaulting to 45
+      const cropName = extractCropDisplayName(planId);
+      if (cropName) {
+        const registryDays = cropUtils.getCropGrowDays(cropName);
+        if (registryDays) return registryDays;
+      }
       return 45;
     }
     
     const recipesData = JSON.parse(fs.readFileSync(recipesPath, 'utf8'));
-    if (!recipesData.crops) return 45;
+    if (!recipesData.crops) {
+      const cropName = extractCropDisplayName(planId);
+      if (cropName) {
+        const registryDays = cropUtils.getCropGrowDays(cropName);
+        if (registryDays) return registryDays;
+      }
+      return 45;
+    }
     
-    // Extract crop name from plan ID: "crop-bibb-butterhead" → "Bibb Butterhead"
+    // Extract crop name from plan ID: "crop-bibb-butterhead" -> "Bibb Butterhead"
     const cropSlug = planId.replace(/^crop-/, '');
     
     // Find matching crop (case-insensitive, handle variations)
@@ -21394,11 +21649,21 @@ function getCropHarvestDays(planId) {
       const schedule = cropEntry[1];
       // Get the max day value (final harvest day)
       const maxDay = Math.max(...schedule.map(d => Number(d.day) || 0));
-      console.log(`[getCropHarvestDays] ${planId} → ${cropEntry[0]} → ${maxDay} days`);
+      console.log(`[getCropHarvestDays] ${planId} -> ${cropEntry[0]} -> ${maxDay} days`);
       return Math.ceil(maxDay);
     }
     
-    console.warn(`[getCropHarvestDays] No recipe found for planId: ${planId}`);
+    // Recipe not found -- try crop registry before defaulting
+    const cropName = extractCropDisplayName(planId);
+    if (cropName) {
+      const registryDays = cropUtils.getCropGrowDays(cropName);
+      if (registryDays) {
+        console.log(`[getCropHarvestDays] ${planId} -> registry -> ${registryDays} days`);
+        return registryDays;
+      }
+    }
+    
+    console.warn(`[getCropHarvestDays] No recipe or registry entry for planId: ${planId}`);
     return 45;
   } catch (err) {
     console.error('[getCropHarvestDays] Error:', err.message);
@@ -21604,12 +21869,30 @@ app.use('/api/farm/products', proxyCorsMiddleware, createProxyMiddleware({
   }
 }));
 
+// ── Inventory cache + in-flight dedup (Phase 4 #20) ────────────────────
+const _inventoryCache = {
+  current: { data: null, at: 0, inFlight: null },
+  forecast: { data: null, at: 0, inFlight: null },
+  TTL: 30_000  // 30 seconds
+};
+
 /**
  * GET /api/inventory/current
  * Returns current inventory summary with detailed tray data
  */
 app.get('/api/inventory/current', async (req, res) => {
   try {
+    const now = Date.now();
+    const force = req.query.refresh === 'true';
+    if (!force) {
+      if (_inventoryCache.current.inFlight) {
+        const cached = await _inventoryCache.current.inFlight;
+        return res.json(cached);
+      }
+      if (_inventoryCache.current.data && (now - _inventoryCache.current.at) < _inventoryCache.TTL) {
+        return res.json(_inventoryCache.current.data);
+      }
+    }
     // Load from groups.json (real crop data)
     const groupsPath = path.join(PUBLIC_DIR, 'data', 'groups.json');
     if (!fs.existsSync(groupsPath)) {
@@ -21715,7 +21998,7 @@ app.get('/api/inventory/current', async (req, res) => {
       }
     }
 
-    res.json({
+    const result = {
       activeTrays: totalTrays,
       totalPlants: totalPlants,
       seedlingPlants: seedlingPlants,
@@ -21731,8 +22014,13 @@ app.get('/api/inventory/current', async (req, res) => {
           trays: allTrays
         }
       ]
-    });
+    };
+    _inventoryCache.current.data = result;
+    _inventoryCache.current.at = Date.now();
+    _inventoryCache.current.inFlight = null;
+    res.json(result);
   } catch (error) {
+    _inventoryCache.current.inFlight = null;
     console.error('[inventory] Failed to get current inventory:', error);
     res.status(500).json({ error: 'Failed to load inventory' });
   }
@@ -21745,6 +22033,12 @@ app.get('/api/inventory/current', async (req, res) => {
 // Inventory forecast endpoint with optional days parameter (cloud-compatible)
 app.get('/api/inventory/forecast/:days?', (req, res) => {
   try {
+    const _cacheNow = Date.now();
+    const force = req.query.refresh === 'true';
+    if (!force && _inventoryCache.forecast.data && (_cacheNow - _inventoryCache.forecast.at) < _inventoryCache.TTL) {
+      return res.json(_inventoryCache.forecast.data);
+    }
+
     // Load from groups.json (real crop data)
     const groupsPath = path.join(PUBLIC_DIR, 'data', 'groups.json');
     if (!fs.existsSync(groupsPath)) {
@@ -21830,7 +22124,7 @@ app.get('/api/inventory/forecast/:days?', (req, res) => {
       }
     });
 
-    res.json({
+    const forecastResult = {
       next7Days: {
         count: buckets.next7Days.reduce((sum, t) => sum + t.plantCount, 0),
         trays: buckets.next7Days
@@ -21847,7 +22141,10 @@ app.get('/api/inventory/forecast/:days?', (req, res) => {
         count: buckets.beyond30Days.reduce((sum, t) => sum + t.plantCount, 0),
         trays: buckets.beyond30Days
       }
-    });
+    };
+    _inventoryCache.forecast.data = forecastResult;
+    _inventoryCache.forecast.at = Date.now();
+    res.json(forecastResult);
   } catch (error) {
     console.error('[inventory] Failed to get forecast:', error);
     res.status(500).json({ error: 'Failed to load forecast' });
@@ -22202,6 +22499,36 @@ function savePlantingAssignments(data) {
 }
 
 /**
+ * GET /api/planting/recipes
+ * Return available crops from lighting-recipes.json for the manual scheduling form
+ */
+app.get('/api/planting/recipes', (req, res) => {
+  try {
+    const recipesPath = path.join(__dirname, 'public', 'data', 'lighting-recipes.json');
+    if (!fs.existsSync(recipesPath)) {
+      return res.json({ recipes: [] });
+    }
+    const recipes = JSON.parse(fs.readFileSync(recipesPath, 'utf8'));
+    const crops = recipes.crops || {};
+    const result = Object.entries(crops).map(([name, entry]) => {
+      const id = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+      const schedule = Array.isArray(entry?.schedule)
+        ? entry.schedule
+        : (Array.isArray(entry) ? entry : null);
+      return {
+        id: `crop-${id}`,
+        name,
+        harvestDays: schedule && schedule.length ? schedule.length : 30
+      };
+    });
+    res.json({ recipes: result });
+  } catch (err) {
+    console.error('[planting] Failed to load recipes:', err.message);
+    res.status(500).json({ error: 'Failed to load recipes' });
+  }
+});
+
+/**
  * GET /api/planting/assignments
  * Load saved planting assignments (optionally filtered by farm_id)
  */
@@ -22219,7 +22546,7 @@ app.get('/api/planting/assignments', (req, res) => {
  * POST /api/planting/assignments
  * Save or update a planting assignment for a group
  */
-app.post('/api/planting/assignments', (req, res) => {
+app.post('/api/planting/assignments', async (req, res) => {
   const { group_id, crop_id, crop_name, seed_date, harvest_date, status, notes } = req.body;
   if (!group_id) return res.status(400).json({ error: 'group_id is required' });
 
@@ -22249,6 +22576,27 @@ app.post('/api/planting/assignments', (req, res) => {
 
   savePlantingAssignments(store);
   console.log(`[planting] Assignment saved: group=${group_id}, crop=${crop_name}`);
+
+  // Stamp groups.json so daily resolver picks up the crop
+  try {
+    await withGroupsLock((groups) => {
+      const g = groups.find(gr => gr.id === group_id);
+      if (g) {
+        g.crop = crop_name || '';
+        g.plan = crop_id || '';
+        g.planId = crop_id || '';
+        g.recipe = crop_id || '';
+        if (!g.planConfig) g.planConfig = {};
+        if (!g.planConfig.anchor) g.planConfig.anchor = {};
+        g.planConfig.anchor.seedDate = seed_date || new Date().toISOString().slice(0, 10);
+        g.lastModified = now;
+        console.log(`[planting] Stamped group ${group_id} in groups.json`);
+      }
+    });
+  } catch (err) {
+    console.error(`[planting] Failed to stamp group ${group_id}:`, err.message);
+  }
+
   res.json({ ok: true, assignment });
 });
 
@@ -22257,7 +22605,7 @@ app.post('/api/planting/assignments', (req, res) => {
  * Create a planting plan (manual schedule, AI implementation, or scoped scheduling)
  * Supports scope: tray, group, zone, room
  */
-app.post('/api/planting/plan', (req, res) => {
+app.post('/api/planting/plan', async (req, res) => {
   const { scope, cadence, cropId, cropName, items, notes } = req.body;
 
   if (!scope || !cropId) {
@@ -22343,6 +22691,30 @@ app.post('/api/planting/plan', (req, res) => {
     });
     savePlantingAssignments(store);
     console.log(`[planting] Plan ${planId}: saved assignments for ${groupIds.length} groups`);
+
+    // Also stamp groups.json so daily resolver and other UIs see the crop assignment
+    try {
+      await withGroupsLock((groups) => {
+        let changed = 0;
+        groupIds.forEach(gid => {
+          const g = groups.find(gr => gr.id === gid);
+          if (!g) return;
+          g.crop = cropName || '';
+          g.plan = cropId || '';
+          g.planId = cropId || '';
+          g.recipe = cropId || '';
+          if (!g.planConfig) g.planConfig = {};
+          if (!g.planConfig.anchor) g.planConfig.anchor = {};
+          g.planConfig.anchor.seedDate = seedDate;
+          g.lastModified = now.toISOString();
+          changed++;
+        });
+        console.log(`[planting] Plan ${planId}: stamped ${changed} groups in groups.json`);
+      });
+    } catch (err) {
+      console.error(`[planting] Failed to stamp groups.json:`, err.message);
+      // Non-blocking: assignments are saved, groups.json stamp is best-effort
+    }
   }
 
   const plan = {
@@ -23202,6 +23574,15 @@ app.get('/api/trays', async (req, res) => {
       }
     }
     
+    // ── Recipe drift detection (#16 R4) ──────────────────────────────────
+    let liveRecipes = null;
+    try {
+      const recipesPath = path.join(DATA_DIR, 'lighting-recipes.json');
+      if (fs.existsSync(recipesPath)) {
+        liveRecipes = JSON.parse(fs.readFileSync(recipesPath, 'utf-8'))?.crops || {};
+      }
+    } catch (_) {}
+
     // Build tray list with enriched data
     const traysWithYield = trays.map(tray => {
       const format = formatMap.get(tray.tray_format_id);
@@ -23211,7 +23592,9 @@ app.get('/api/trays', async (req, res) => {
       // Determine status
       let status = 'available';
       if (currentRun) {
-        if (currentRun.harvested_at) {
+        if (currentRun.status === 'REGROWING') {
+          status = 'regrowing';
+        } else if (currentRun.harvested_at) {
           status = 'harvested';
         } else {
           status = 'active';
@@ -23262,6 +23645,19 @@ app.get('/api/trays', async (req, res) => {
         seededAt: currentRun?.seeded_at,
         plantedSiteCount: currentRun?.planted_site_count,
         daysSinceSeeding,
+        cutNumber: currentRun?.cut_number || null,
+        remainingCuts: currentRun?.remaining_cuts ?? null,
+        maxCuts: currentRun?.max_cuts || null,
+        nextExpectedCutDate: currentRun?.next_expected_cut_date || null,
+        lastCutAt: currentRun?.last_cut_at || null,
+        recipeSnapshotHash: currentRun?.recipe_snapshot_hash || null,
+        recipeDrift: (() => {
+          if (!currentRun?.recipe_snapshot_hash || !liveRecipes) return null;
+          const liveCrop = liveRecipes[currentRun.crop] || liveRecipes[currentRun.recipe_id];
+          if (!liveCrop) return null;
+          const liveHash = crypto.createHash('sha256').update(JSON.stringify(liveCrop)).digest('hex').slice(0, 16);
+          return liveHash !== currentRun.recipe_snapshot_hash;
+        })(),
         createdAt: tray.created_at,
         updatedAt: tray.updated_at
       };
@@ -23342,7 +23738,7 @@ app.get('/api/tray-runs/recent-harvests', async (req, res) => {
  */
 app.post('/api/tray-runs/:id/harvest', async (req, res) => {
   const trayRunId = req.params.id;
-  const { actualWeight, note, harvestedAt } = req.body;
+  const { actualWeight, note, harvestedAt, isFinalCut } = req.body;
 
   try {
     // Look up tray run from NeDB
@@ -23352,10 +23748,55 @@ app.post('/api/tray-runs/:id/harvest', async (req, res) => {
       return res.status(404).json({ error: 'Tray run not found', tray_run_id: trayRunId });
     }
 
+    // ── CCA (cut-and-come-again) detection ──────────────────────────
+    // If the crop supports multiple cuts (e.g. basil, lettuce, kale),
+    // a non-final harvest sets status to REGROWING instead of HARVESTED.
+    let ccaStrategy = null;
+    let isPartialHarvest = false;
+    let cutNumber = (trayRun.cut_number || 0) + 1;
+    let remainingCuts = 0;
+    let nextExpectedCutDate = null;
+    try {
+      const { lookupCCAStrategy } = await import('./lib/harvest-predictor.js');
+      const dataDir = path.join(process.cwd(), 'public', 'data');
+      ccaStrategy = lookupCCAStrategy(trayRun.crop_key || trayRun.crop || '', dataDir);
+      if (ccaStrategy) {
+        const maxCuts = ccaStrategy.maxHarvests || 4;
+        remainingCuts = Math.max(0, maxCuts - cutNumber);
+        // Partial harvest: CCA crop with remaining cuts AND caller didn't force final
+        isPartialHarvest = remainingCuts > 0 && isFinalCut !== true;
+        if (isPartialHarvest) {
+          const regrowthMs = (ccaStrategy.regrowthDays || 14) * 86400000;
+          nextExpectedCutDate = new Date(Date.now() + regrowthMs).toISOString();
+        }
+      }
+    } catch (ccaErr) {
+      console.warn('[tray-runs] CCA strategy lookup non-fatal:', ccaErr.message);
+    }
+
     // Generate lot code: ZONE-CROP-YYMMDD-BATCH
-    const now = new Date(harvestedAt || Date.now());
+    // Server-authoritative timestamp: accept client hint, override if drift > 15 min
+    const MAX_DRIFT_MS = 15 * 60 * 1000;
+    const serverNow = Date.now();
+    let now;
+    let timestampSource = 'server';
+    if (harvestedAt) {
+      const clientTime = new Date(harvestedAt).getTime();
+      if (!isNaN(clientTime) && Math.abs(clientTime - serverNow) <= MAX_DRIFT_MS) {
+        now = new Date(clientTime);
+        timestampSource = 'client';
+      } else {
+        now = new Date(serverNow);
+        timestampSource = 'server_override';
+        if (!isNaN(clientTime)) {
+          console.warn(`[tray-runs] Harvest timestamp drift: client=${new Date(clientTime).toISOString()} server=${new Date(serverNow).toISOString()} delta=${Math.round((clientTime - serverNow) / 60000)}min — using server time`);
+        }
+      }
+    } else {
+      now = new Date(serverNow);
+    }
     const dateStr = now.toISOString().slice(2, 10).replace(/-/g, '');
-    const cropName = (trayRun.recipe_id || trayRun.crop || 'CROP').toUpperCase().slice(0, 8).replace(/[^A-Z0-9]/g, '');
+    const cropName = (trayRun.crop_key || trayRun.crop || trayRun.recipe_id || 'CROP').toUpperCase().slice(0, 8).replace(/[^A-Z0-9]/g, '');
     const batchSuffix = Math.random().toString(36).slice(2, 6).toUpperCase();
     const lotCode = `A1-${cropName}-${dateStr}-${batchSuffix}`;
     const batchId = `B-${dateStr}-${batchSuffix}`;
@@ -23376,13 +23817,18 @@ app.post('/api/tray-runs/:id/harvest', async (req, res) => {
       { tray_run_id: trayRunId },
       {
         $set: {
-          status: 'HARVESTED',
-          harvested_at: now.toISOString(),
+          status: isPartialHarvest ? 'REGROWING' : 'HARVESTED',
+          harvested_at: isPartialHarvest ? undefined : now.toISOString(),
+          last_cut_at: now.toISOString(),
           lot_code: lotCode,
           actual_weight: weight,
           weight_unit: 'oz',
           harvested_count: harvestedCount,
           harvest_note: note || '',
+          cut_number: ccaStrategy ? cutNumber : undefined,
+          remaining_cuts: ccaStrategy ? remainingCuts : undefined,
+          max_cuts: ccaStrategy ? (ccaStrategy.maxHarvests || 4) : undefined,
+          next_expected_cut_date: nextExpectedCutDate || undefined,
           updated_at: now.toISOString()
         }
       }
@@ -23393,7 +23839,7 @@ app.post('/api/tray-runs/:id/harvest', async (req, res) => {
     // Crops with verified data get standard sampling rate (20%)
     let shouldWeigh = false;
     try {
-      const cropKey = trayRun.recipe_id || trayRun.crop;
+      const cropKey = trayRun.crop_key || trayRun.crop || trayRun.recipe_id;
       const hasVerifiedWeight = hasCropBenchmark(cropKey);
       const weighRatio = hasVerifiedWeight
         ? (parseFloat(process.env.WEIGH_IN_RATIO_VERIFIED) || 0.20)   // verified: 1-in-5
@@ -23429,7 +23875,7 @@ app.post('/api/tray-runs/:id/harvest', async (req, res) => {
         lot_code:           lotCode,
         batch_id:           batchId,
         tray_run_id:        trayRunId,
-        crop_name:          trayRun.recipe_id || trayRun.crop || 'Unknown',
+        crop_name:          trayRun.crop_key || trayRun.crop || trayRun.recipe_id || 'Unknown',
         variety:            trayRun.variety || null,
         recipe_id:          trayRun.recipe_id || null,
         zone:               placement?.location_qr || placement?.zone || trayRun.zone || '',
@@ -23456,7 +23902,7 @@ app.post('/api/tray-runs/:id/harvest', async (req, res) => {
     // automatically without a separate manual step.
     const labelPrintData = {
       lotCode,
-      cropName: (trayRun.recipe_id || trayRun.crop || 'Unknown'),
+      cropName: (trayRun.crop_key || trayRun.crop || trayRun.recipe_id || 'Unknown'),
       weight: weight || 'N/A',
       unit: 'oz',
       harvestedAt: now.toISOString(),
@@ -23491,7 +23937,8 @@ app.post('/api/tray-runs/:id/harvest', async (req, res) => {
 
       const experimentInput = {
         groupId: trayRun.group_id || trayRun.groupId || trayRunId,
-        crop: trayRun.recipe_id || trayRun.crop || null,
+        crop: trayRun.crop_key || trayRun.crop || trayRun.recipe_id || null,
+        crop_key: trayRun.crop_key || null,
         recipe_id: trayRun.recipe_id || null,
         grow_days: growDays,
         planned_grow_days: null,
@@ -23514,11 +23961,13 @@ app.post('/api/tray-runs/:id/harvest', async (req, res) => {
       console.warn('[tray-runs] Experiment record creation failed (non-fatal):', expErr.message);
     }
 
-    // Phase 1 Ticket 1.6 — emit standardized harvest event
-    eventBus.emitEvent('harvest', {
+    // Phase 1 Ticket 1.6 -- emit standardized harvest or partial_harvest event
+    const harvestEventType = isPartialHarvest ? 'partial_harvest' : 'harvest';
+    const harvestPayload = {
       tray_run_id: trayRunId,
       group_id: trayRun?.group_id || null,
-      crop: trayRun?.crop || trayRun?.recipe_id || null,
+      crop: trayRun?.crop_key || trayRun?.crop || trayRun?.recipe_id || null,
+      crop_key: trayRun?.crop_key || null,
       total_weight_oz: weight || null,
       harvested_count: harvestedCount,
       planted_count: trayRun?.planted_site_count || null,
@@ -23529,11 +23978,21 @@ app.post('/api/tray-runs/:id/harvest', async (req, res) => {
       zone: null,
       room: null,
       harvested_by: null,
-    });
+      timestamp: now.toISOString(),
+    };
+    if (isPartialHarvest) {
+      harvestPayload.cut_number = cutNumber;
+      harvestPayload.remaining_cuts = remainingCuts;
+      harvestPayload.max_cuts = ccaStrategy?.maxHarvests || 4;
+      harvestPayload.next_expected_cut_date = nextExpectedCutDate;
+      harvestPayload.regrowth_days = ccaStrategy?.regrowthDays || 14;
+      harvestPayload.yield_factor = ccaStrategy?.regrowthYieldFactor || 0.85;
+    }
+    eventBus.emitEvent(harvestEventType, harvestPayload);
 
     // Sync harvest data to Central farm_inventory (actual weights)
     try {
-      const cropName = trayRun.recipe_id || trayRun.crop || 'Unknown';
+      const cropName = trayRun.crop_key || trayRun.crop || trayRun.recipe_id || 'Unknown';
       getSyncService().syncHarvest([{
         crop: cropName,
         lot_code: lotCode,
@@ -23545,7 +24004,7 @@ app.post('/api/tray-runs/:id/harvest', async (req, res) => {
       console.warn('[tray-runs] Harvest sync call failed (non-fatal):', syncErr.message);
     }
 
-    res.json({
+    const harvestResponse = {
       success: true,
       trayRunId,
       lotCode,
@@ -23553,6 +24012,7 @@ app.post('/api/tray-runs/:id/harvest', async (req, res) => {
       actualWeight: weight,
       harvestedCount,
       harvestedAt: now.toISOString(),
+      timestamp_source: timestampSource,
       shouldWeigh,
       weighInReason: shouldWeigh
         ? 'This tray has been selected for a full weigh-in. Please weigh the entire cut crop and record the weight.'
@@ -23561,7 +24021,16 @@ app.post('/api/tray-runs/:id/harvest', async (req, res) => {
       experiment_id: experiment_id || null,
       label_print: labelPrintData,
       auto_print_result: autoPrintResult
-    });
+    };
+    if (isPartialHarvest) {
+      harvestResponse.partialHarvest = true;
+      harvestResponse.status = 'REGROWING';
+      harvestResponse.cutNumber = cutNumber;
+      harvestResponse.remainingCuts = remainingCuts;
+      harvestResponse.maxCuts = ccaStrategy?.maxHarvests || 4;
+      harvestResponse.nextExpectedCutDate = nextExpectedCutDate;
+    }
+    res.json(harvestResponse);
   } catch (error) {
     console.error('[tray-runs] Error recording harvest:', error);
     res.status(500).json({ error: 'Failed to record harvest', details: error.message });
@@ -23609,8 +24078,36 @@ app.post('/api/trays/:trayId/seed', async (req, res) => {
   }
 
   try {
-    const now = new Date(seedDate || Date.now());
+    // Server-authoritative timestamp: accept client hint, override if drift > 15 min
+    const MAX_DRIFT_MS = 15 * 60 * 1000;
+    const serverNow = Date.now();
+    let now;
+    let timestampSource = 'server';
+    if (seedDate) {
+      const clientTime = new Date(seedDate).getTime();
+      if (!isNaN(clientTime) && Math.abs(clientTime - serverNow) <= MAX_DRIFT_MS) {
+        now = new Date(clientTime);
+        timestampSource = 'client';
+      } else {
+        now = new Date(serverNow);
+        timestampSource = 'server_override';
+        if (!isNaN(clientTime)) {
+          console.warn(`[tray-runs] Seed timestamp drift: client=${new Date(clientTime).toISOString()} server=${new Date(serverNow).toISOString()} delta=${Math.round((clientTime - serverNow) / 60000)}min — using server time`);
+        }
+      }
+    } else {
+      now = new Date(serverNow);
+    }
     const trayRunId = `TR-${Date.now()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+
+    // ── Canonical crop key resolution (XC-4) ──────────────────────────────
+    // Resolve free-text recipe input to canonical crop key from crop-registry.json.
+    // Store both the canonical key and the raw input for traceability.
+    const canonicalCrop = resolveCropKey(recipe);
+    if (!canonicalCrop) {
+      console.warn(`[tray-runs] Unknown crop "${recipe}" — storing as-is (no canonical key)`);
+    }
+    const cropKey = canonicalCrop || recipe;
 
     // ── Determine target weight (progressive refinement) ──────────────────
     // Priority 1: Verified crop benchmark from reconciliation weigh-ins
@@ -23641,7 +24138,7 @@ app.post('/api/trays/:trayId/seed', async (req, res) => {
     let targetWeightOz = null;
     let targetWeightSource = null;
 
-    const cropBenchmark = getCropBenchmark(recipe);
+    const cropBenchmark = getCropBenchmark(cropKey);
     if (cropBenchmark && cropBenchmark.verified) {
       targetWeightOz = cropBenchmark.avg_weight_per_plant_oz;
       targetWeightSource = 'benchmark';
@@ -23650,11 +24147,32 @@ app.post('/api/trays/:trayId/seed', async (req, res) => {
       targetWeightSource = 'format';
     }
 
+    // ── Recipe snapshot pinning (#16 R4) ──────────────────────────────────
+    // Pin the recipe at seed time so the resolver can detect recipe drift.
+    let recipeSnapshotHash = null;
+    let recipeSnapshot = null;
+    try {
+      const recipesPath = path.join(DATA_DIR, 'lighting-recipes.json');
+      if (fs.existsSync(recipesPath)) {
+        const recipesData = JSON.parse(fs.readFileSync(recipesPath, 'utf-8'));
+        const cropRecipe = recipesData?.crops?.[cropKey] || recipesData?.crops?.[recipe];
+        if (cropRecipe) {
+          const snapshotJson = JSON.stringify(cropRecipe);
+          recipeSnapshotHash = crypto.createHash('sha256').update(snapshotJson).digest('hex').slice(0, 16);
+          recipeSnapshot = cropRecipe;
+        }
+      }
+    } catch (snapErr) {
+      console.warn(`[tray-runs] Could not pin recipe snapshot for ${cropKey}:`, snapErr.message);
+    }
+
     const trayRun = {
       tray_run_id:        trayRunId,
       tray_id:            trayId,
       recipe_id:          recipe,
-      crop:               recipe,
+      crop:               cropKey,
+      crop_key:           canonicalCrop,
+      crop_raw:           recipe,
       variety:            variety || null,
       seeded_at:          now.toISOString(),
       planted_site_count: resolvedPlantCount,
@@ -23665,6 +24183,8 @@ app.post('/api/trays/:trayId/seed', async (req, res) => {
       target_weight_source: targetWeightSource,
       group_id:           groupId || null,
       status:             'GROWING',
+      recipe_snapshot_hash: recipeSnapshotHash,
+      recipe_snapshot:    recipeSnapshot,
       created_at:         now.toISOString(),
       updated_at:         now.toISOString()
     };
@@ -23700,38 +24220,40 @@ app.post('/api/trays/:trayId/seed', async (req, res) => {
     // form, in which case we honour the registry to prevent alias drift.
     if (groupId) {
       try {
-        const groupsPath = path.join(__dirname, 'public', 'data', 'groups.json');
-        const groupsRaw = fs.readFileSync(groupsPath, 'utf8');
-        const groupsData = JSON.parse(groupsRaw);
-        const groupsArray = Array.isArray(groupsData) ? groupsData
-          : Array.isArray(groupsData.groups) ? groupsData.groups : [];
-        const targetGroup = groupsArray.find(g => g.id === groupId);
-        if (targetGroup) {
-          const seedDateStr = now.toISOString().slice(0, 10);
-          let registry = null;
-          try {
-            registry = JSON.parse(fs.readFileSync(path.join(PUBLIC_DIR, 'data/crop-registry.json'), 'utf8'));
-          } catch (_) { /* non-fatal — planAnchor handles a null registry */ }
-          planAnchor.assignCropToGroup(targetGroup, recipe, registry, {
-            seedDate: seedDateStr,
-            overwriteSeedDate: true
-          });
-          fs.writeFileSync(groupsPath, JSON.stringify(groupsData, null, 2));
-          console.log(`[tray-runs] Synced seed date ${seedDateStr} + crop ${targetGroup.crop} (plan ${targetGroup.planId}) to group ${groupId}`);
-          try { emitDataChange({ kind: 'groups', ids: [groupId], updatedAt: targetGroup.lastModified, source: 'tray-seed' }); } catch (_) {}
-        }
+        // Merges main's withGroupsLock() concurrency guard with the Phase A
+        // shared planAnchor stamping — the helper writes all five scheduling
+        // fields and the lock wrapper serializes disk writes so two tablets
+        // seeding into the same group can't race. Registry is loaded once
+        // outside the critical section to keep the lock short.
+        let registry = null;
+        try {
+          registry = JSON.parse(fs.readFileSync(path.join(PUBLIC_DIR, 'data/crop-registry.json'), 'utf8'));
+        } catch (_) { /* non-fatal — planAnchor handles a null registry */ }
+        const seedDateStr = now.toISOString().slice(0, 10);
+        await withGroupsLock((groupsArray) => {
+          const targetGroup = groupsArray.find(g => g.id === groupId);
+          if (targetGroup) {
+            planAnchor.assignCropToGroup(targetGroup, recipe, registry, {
+              seedDate: seedDateStr,
+              overwriteSeedDate: true
+            });
+            console.log(`[tray-runs] Synced seed date ${seedDateStr} + crop ${targetGroup.crop} (plan ${targetGroup.planId}) to group ${groupId}`);
+            try { emitDataChange({ kind: 'groups', ids: [groupId], updatedAt: targetGroup.lastModified, source: 'tray-seed' }); } catch (_) {}
+          }
+        });
       } catch (syncErr) {
         console.warn(`[tray-runs] Seed date sync to group failed (non-fatal):`, syncErr.message);
       }
     }
 
-    console.log(`[tray-runs] Seeded: ${trayRunId} tray=${trayId} crop=${recipe} plants=${resolvedPlantCount ?? 'unknown'} (${plantCountSource || 'no data'}) targetWeight=${targetWeightOz ?? 'none'} (${targetWeightSource || 'no data'})${seed_source ? ` source=${seed_source}` : ''}${groupId ? ` group=${groupId}` : ''}`);
+    console.log(`[tray-runs] Seeded: ${trayRunId} tray=${trayId} crop=${cropKey}${canonicalCrop ? '' : ' (UNRESOLVED)'} plants=${resolvedPlantCount ?? 'unknown'} (${plantCountSource || 'no data'}) targetWeight=${targetWeightOz ?? 'none'} (${targetWeightSource || 'no data'})${seed_source ? ` source=${seed_source}` : ''}${groupId ? ` group=${groupId}` : ''}`);
 
-    // Phase 1 Ticket 1.6 — emit standardized seed event
+    // Phase 1 Ticket 1.6 -- emit standardized seed event
     eventBus.emitEvent('seed', {
       tray_run_id: trayRunId,
       group_id: groupId || null,
-      crop: recipe,
+      crop: cropKey,
+      crop_key: canonicalCrop,
       variety: variety || null,
       seed_count: resolvedPlantCount,
       tray_format: trayFormat?.name || null,
@@ -23739,17 +24261,22 @@ app.post('/api/trays/:trayId/seed', async (req, res) => {
       room: null,
       recipe_id: recipe,
       seeded_by: null,
+      timestamp: now.toISOString(),
     });
 
     res.json({
       success: true,
       tray_run_id: trayRunId,
       placement_id: placementId,
+      crop: cropKey,
+      crop_key: canonicalCrop,
       planted_site_count: resolvedPlantCount,
       plant_count_source: plantCountSource,
       target_weight_oz: targetWeightOz,
       target_weight_source: targetWeightSource,
       group_id: groupId || null,
+      seeded_at: now.toISOString(),
+      timestamp_source: timestampSource,
       message: groupId ? `Seeding recorded + assigned to group ${groupId}` : 'Seeding recorded'
     });
   } catch (error) {
@@ -23936,7 +24463,8 @@ app.post('/api/tray-runs/:id/loss', async (req, res) => {
     eventBus.emitEvent('loss', {
       tray_run_id: trayRunId,
       group_id: trayRun?.group_id || null,
-      crop: crop_name || crop_id || trayRun?.crop || null,
+      crop: crop_name || crop_id || trayRun?.crop_key || trayRun?.crop || null,
+      crop_key: trayRun?.crop_key || null,
       loss_count: lost_quantity ? parseInt(lost_quantity) : null,
       loss_reason: loss_reason,
       loss_category: 'other',
@@ -25236,43 +25764,42 @@ app.get('/data/groups.json', (req, res, next) => {
 // the payload can be a full group record: { id, crop, plan, planId, planConfig,
 // status, dimensions, ... }. We merge field-by-field rather than whitelisting
 // gridX/gridY so neither caller silently drops operator edits.
-app.post('/data/groups.json', pinOrApiKeyGuard, (req, res) => {
+app.post('/data/groups.json', pinOrApiKeyGuard, async (req, res) => {
   setCors(req, res);
   const body = req.body || {};
   const incoming = Array.isArray(body) ? body : (body.groups || null);
   if (!Array.isArray(incoming)) {
     return res.status(400).json({ ok: false, error: 'Expected { groups: [...] } or array.' });
   }
-  const existing = loadGroupsFile();
-  const incomingMap = new Map();
-  for (const g of incoming) { if (g && g.id) incomingMap.set(g.id, g); }
-  const existingIds = new Set();
-  const nowIso = new Date().toISOString();
-  const touchedIds = [];
-  const merged = existing.map((g) => {
-    if (!g || !g.id) return g;
-    existingIds.add(g.id);
-    const inc = incomingMap.get(g.id);
-    if (!inc) return g;
-    touchedIds.push(g.id);
-    return {
-      ...g,
-      ...inc,
-      lastModified: inc.lastModified || nowIso,
-    };
-  });
-  // Append brand-new groups the incoming payload introduced.
-  for (const inc of incoming) {
-    if (inc && inc.id && !existingIds.has(inc.id)) {
-      touchedIds.push(inc.id);
-      merged.push({ ...inc, lastModified: inc.lastModified || nowIso });
-    }
+  try {
+    let touchedIds;
+    await withGroupsLock((existing) => {
+      const incomingMap = new Map();
+      for (const g of incoming) { if (g && g.id) incomingMap.set(g.id, g); }
+      const existingIds = new Set();
+      const nowIso = new Date().toISOString();
+      touchedIds = [];
+      for (let i = 0; i < existing.length; i++) {
+        const g = existing[i];
+        if (!g || !g.id) continue;
+        existingIds.add(g.id);
+        const inc = incomingMap.get(g.id);
+        if (!inc) continue;
+        touchedIds.push(g.id);
+        existing[i] = { ...g, ...inc, lastModified: inc.lastModified || nowIso };
+      }
+      for (const inc of incoming) {
+        if (inc && inc.id && !existingIds.has(inc.id)) {
+          touchedIds.push(inc.id);
+          existing.push({ ...inc, lastModified: inc.lastModified || nowIso });
+        }
+      }
+      emitDataChange({ kind: 'groups', ids: touchedIds, updatedAt: nowIso, source: 'data-groups-post' });
+    });
+    return res.json({ ok: true, touched: touchedIds.length });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: 'Failed to save groups.' });
   }
-  if (saveGroupsFile(merged)) {
-    emitDataChange({ kind: 'groups', ids: touchedIds, updatedAt: nowIso, source: 'data-groups-post' });
-    return res.json({ ok: true, updated: merged.length, touched: touchedIds.length });
-  }
-  return res.status(500).json({ ok: false, error: 'Failed to save groups.' });
 });
 
 app.get('/data/ctrl-map.json', (req, res, next) => {
@@ -27115,7 +27642,7 @@ app.post("/data/:name", (req, res) => {
               console.warn('[zone-sync] Post-save refresh failed:', err?.message || err);
             }
             // Sync zone names back to rooms.json so Grow Room Setup page stays current
-            try { syncZonesToRoomsJson(req.body, baseName); } catch (err) {
+            try { await syncZonesToRoomsJson(req.body, baseName); } catch (err) {
               console.warn('[zone-rooms-sync] Post-save refresh failed:', err?.message || err);
             }
           } catch (sideEffectErr) {
@@ -27189,14 +27716,80 @@ app.post('/groups', pinGuard, async (req, res) => {
       if (item.stored && !item.stored.lastModified) item.stored.lastModified = nowIso;
       return item.stored;
     });
-    if (!saveGroupsFile(stored)) {
-      return res.status(500).json({ ok: false, error: 'Failed to persist groups.' });
-    }
-    const touchedIds = stored.map((g) => g?.id).filter(Boolean);
-    emitDataChange({ kind: 'groups', ids: touchedIds, updatedAt: nowIso, source: 'groups-post' });
+    await withGroupsLock((groups) => {
+      // Full replacement (POST semantics) -- overwrite array contents
+      groups.length = 0;
+      stored.forEach(g => groups.push(g));
+      const touchedIds = stored.map((g) => g?.id).filter(Boolean);
+      emitDataChange({ kind: 'groups', ids: touchedIds, updatedAt: nowIso, source: 'groups-post' });
+    });
     return res.json({ ok: true, groups: parsed.map((item) => item.response) });
   } catch (err) {
     return res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+// ── Autonomy control endpoints (#15) ────────────────────────────────
+app.get('/api/autonomy', (req, res) => {
+  setCors(req, res);
+  try {
+    let perms = {};
+    try { perms = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'agent-permissions.json'), 'utf-8')); } catch (_) {}
+    const groups = loadGroupsFile();
+    const groupOverrides = groups.filter(g => g.autonomy?.scheduling !== undefined).map(g => ({
+      group_id: g.id || g.name,
+      scheduling: g.autonomy.scheduling
+    }));
+    res.json({
+      ok: true,
+      global_enabled: perms?.autonomy?.enabled !== false,
+      scheduling_default: perms?.autonomy?.scheduling?.default !== false,
+      group_overrides: groupOverrides
+    });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.put('/api/autonomy', pinGuard, (req, res) => {
+  setCors(req, res);
+  const { enabled } = req.body || {};
+  if (typeof enabled !== 'boolean') return res.status(400).json({ ok: false, error: 'enabled must be a boolean' });
+  try {
+    const permsPath = path.join(DATA_DIR, 'agent-permissions.json');
+    let perms = {};
+    try { perms = JSON.parse(fs.readFileSync(permsPath, 'utf-8')); } catch (_) {}
+    if (!perms.autonomy) perms.autonomy = {};
+    perms.autonomy.enabled = enabled;
+    fs.writeFileSync(permsPath, JSON.stringify(perms, null, 2) + '\n');
+    console.log(`[autonomy] global kill switch set to ${enabled}`);
+    res.json({ ok: true, enabled });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.put('/api/autonomy/group/:groupId', pinGuard, async (req, res) => {
+  setCors(req, res);
+  const groupId = String(req.params.groupId || '').trim();
+  if (!groupId) return res.status(400).json({ ok: false, error: 'groupId is required' });
+  const { scheduling } = req.body || {};
+  if (typeof scheduling !== 'boolean') return res.status(400).json({ ok: false, error: 'scheduling must be a boolean' });
+  try {
+    let found = false;
+    await withGroupsLock((groups) => {
+      const idx = groups.findIndex(g => String(g?.id || '').trim() === groupId);
+      if (idx === -1) return false;
+      if (!groups[idx].autonomy) groups[idx].autonomy = {};
+      groups[idx].autonomy.scheduling = scheduling;
+      groups[idx].lastModified = new Date().toISOString();
+      found = true;
+    });
+    if (!found) return res.status(404).json({ ok: false, error: 'Group not found' });
+    console.log(`[autonomy] group ${groupId} scheduling set to ${scheduling}`);
+    res.json({ ok: true, group_id: groupId, scheduling });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
   }
 });
 
@@ -27204,20 +27797,22 @@ app.put('/groups/:id', pinGuard, async (req, res) => {
   setCors(req, res);
   const id = String(req.params.id || '').trim();
   if (!id) return res.status(400).json({ ok: false, error: 'Group id is required.' });
-  const existing = loadGroupsFile();
-  const idx = existing.findIndex((group) => String(group?.id || '').trim() === id);
-  if (idx === -1) return res.status(404).json({ ok: false, error: `Group '${id}' not found.` });
   try {
     const nowIso = new Date().toISOString();
     const merged = { ...req.body, id, lastModified: req.body?.lastModified || nowIso };
     const knownIds = RUNNING_UNDER_NODE_TEST ? null : await fetchKnownDeviceIds();
     const { stored, response } = parseIncomingGroup(merged, knownIds);
     if (stored && !stored.lastModified) stored.lastModified = nowIso;
-    existing[idx] = stored;
-    // Async queued write to avoid blocking I/O
-    const payload = JSON.stringify({ groups: existing }, null, 2);
-    await writeJsonQueued(GROUPS_PATH, payload);
-    emitDataChange({ kind: 'groups', ids: [id], updatedAt: nowIso, source: 'groups-put' });
+    const found = await withGroupsLock((groups) => {
+      const idx = groups.findIndex((group) => String(group?.id || '').trim() === id);
+      if (idx === -1) return false; // signal: don't save
+      groups[idx] = stored;
+      emitDataChange({ kind: 'groups', ids: [id], updatedAt: nowIso, source: 'groups-put' });
+      return true;
+    });
+    if (found === false) {
+      return res.status(404).json({ ok: false, error: 'Group not found' });
+    }
     return res.json({ ok: true, group: response });
   } catch (err) {
     return res.status(400).json({ ok: false, error: err.message });
@@ -31549,7 +32144,7 @@ function initializeZoneSetpointsFromRoomMap() {
 }
 
 // Sync zone names from a room-map save back to rooms.json so the Grow Room Setup page stays current
-function syncZonesToRoomsJson(roomMapBody, baseName) {
+async function syncZonesToRoomsJson(roomMapBody, baseName) {
   try {
     // Extract roomId from filename: room-map-room-XXXX.json → room-XXXX
     const roomIdMatch = baseName.match(/^room-map-(.+)\.json$/);
@@ -31596,12 +32191,9 @@ function syncZonesToRoomsJson(roomMapBody, baseName) {
 
       // Cascade to groups.json: reassign groups from deleted zones
       try {
-        const groupsPath = path.join(DATA_DIR, 'groups.json');
-        if (fs.existsSync(groupsPath)) {
-          const groupsRaw = JSON.parse(fs.readFileSync(groupsPath, 'utf8'));
-          const groups = Array.isArray(groupsRaw) ? groupsRaw : (groupsRaw.groups || []);
+        const roomName = room.name || targetRoomId;
+        await withGroupsLock((groups) => {
           let groupsChanged = 0;
-          const roomName = room.name || targetRoomId;
           for (const g of groups) {
             const gRoom = g.room || g.roomName || '';
             const gZone = g.zone || '';
@@ -31610,12 +32202,9 @@ function syncZonesToRoomsJson(roomMapBody, baseName) {
               groupsChanged++;
             }
           }
-          if (groupsChanged > 0) {
-            const groupsPayload = Array.isArray(groupsRaw) ? groups : { ...groupsRaw, groups };
-            fs.writeFileSync(groupsPath, JSON.stringify(groupsPayload, null, 2));
-            console.log(`[zone-cascade] Reassigned ${groupsChanged} group(s) from removed zones to "${fallbackZone}"`);
-          }
-        }
+          if (groupsChanged === 0) return false; // no changes, skip write
+          console.log(`[zone-cascade] Reassigned ${groupsChanged} group(s) from removed zones to "${fallbackZone}"`);
+        });
       } catch (groupErr) {
         console.warn('[zone-cascade] Failed to cascade zone removal to groups.json:', groupErr.message);
       }
