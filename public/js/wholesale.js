@@ -2112,9 +2112,9 @@
       const addressType = String(result.addresstype || '').toLowerCase().trim();
       const acceptedAddressTypes = new Set([
         'postcode', 'street', 'road', 'house', 'house_number', 'building',
-        'residential', 'hamlet', 'village', 'town', 'city', 'municipality',
-        'suburb', 'neighbourhood', 'quarter', 'city_district', 'locality',
-        'county'
+        'residential', 'amenity', 'hamlet', 'village', 'town', 'city',
+        'municipality', 'suburb', 'neighbourhood', 'quarter', 'city_district',
+        'locality', 'county'
       ]);
       const rejectedAddressTypes = new Set([
         'country', 'state', 'region', 'province'
