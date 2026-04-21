@@ -1489,8 +1489,6 @@
       function renderControllers() {
         var host = document.getElementById('ffControllersBody');
         if (!host) return;
-        host.innerHTML = '';
-        host.className = '';
 
         Promise.all([
           fetch('/api/controller-bindings', { credentials: 'same-origin' })
@@ -1506,6 +1504,9 @@
           var bindingsData = results[0];
           var suggestData = results[1];
           state.bindings = (bindingsData && bindingsData.bindings) || [];
+          // Clear synchronously at the end so overlapping calls don't double-render.
+          host.innerHTML = '';
+          host.className = '';
           renderControllersPanels(host, bindingsData, suggestData);
           updateBreadcrumb();
         });
@@ -1590,9 +1591,14 @@
         row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:10px;padding:6px 10px;border:1px solid #233045;border-radius:6px;margin-bottom:4px;background:#0b1520;';
         var left = document.createElement('div');
         left.style.cssText = 'font-size:0.82rem;color:#d5def0;';
-        left.innerHTML = '<strong>' + (b.deviceName || b.controllerId) + '</strong> · '
-          + subsystemLabel(b.subsystem) + ' · ' + controllerCtlsLabel(b.controlType)
+        // Device names come from iot-devices.json (vendor SDKs, user-editable).
+        // Build the row via textContent + createElement to avoid XSS.
+        var strong = document.createElement('strong');
+        strong.textContent = b.deviceName || b.controllerId || '';
+        left.appendChild(strong);
+        var tail = ' · ' + subsystemLabel(b.subsystem) + ' · ' + controllerCtlsLabel(b.controlType)
           + (b.channel ? ' · ch ' + b.channel : '');
+        left.appendChild(document.createTextNode(tail));
         var btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'btn btn-ghost';
@@ -1615,10 +1621,16 @@
         var cand = (s.candidateDevices && s.candidateDevices[0]) || {};
         var left = document.createElement('div');
         left.style.cssText = 'font-size:0.82rem;color:#f3e8cc;';
-        left.innerHTML = '<strong>' + (s.roomName || s.roomId || 'room') + '</strong> · '
-          + subsystemLabel(s.subsystem) + ' · ' + controllerCtlsLabel(s.controlType)
-          + ' · ' + (s.channelsNeeded || 1) + ' ch'
-          + ' → candidate <em>' + (cand.name || cand.deviceId || 'unknown') + '</em>';
+        // Room + candidate names come from JSON files; build via textContent.
+        var strong = document.createElement('strong');
+        strong.textContent = s.roomName || s.roomId || 'room';
+        left.appendChild(strong);
+        var mid = ' · ' + subsystemLabel(s.subsystem) + ' · ' + controllerCtlsLabel(s.controlType)
+          + ' · ' + (s.channelsNeeded || 1) + ' ch → candidate ';
+        left.appendChild(document.createTextNode(mid));
+        var em = document.createElement('em');
+        em.textContent = cand.name || cand.deviceId || 'unknown';
+        left.appendChild(em);
         var btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'btn btn-primary';
