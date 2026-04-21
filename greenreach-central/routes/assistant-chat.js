@@ -4596,6 +4596,8 @@ async function executeExtendedTool(toolName, params, farmId) {
         const layout = buildFarmLayout({
           room_area_m2: area,
           ceiling_height_m: room.ceiling_height_m,
+          length_m: room.length_m || undefined,
+          width_m: room.width_m || undefined,
           hydro_system: room.hydro_system || undefined,
           hvac_type: room.hvac_type || undefined,
           crops: crops || [],
