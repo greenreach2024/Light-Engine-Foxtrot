@@ -1328,7 +1328,7 @@
         </section>
 
         <!-- ── Feature comparison ── -->
-        <section class="comparison-section">
+        <section class="comparison-section" id="farm-server">
             <div class="container">
                 <div class="narrow" style="text-align:center;">
                     <div class="feature-eyebrow">Cloud or on-site</div>
@@ -2087,16 +2087,18 @@
             openPurchaseModal(plan);
         }
 
-        // Check for product parameter in URL
+        // Check for product parameter in URL — map legacy ?product=edge|cloud
+        // deep links to the new single-pricing-card layout:
+        //  - ?product=cloud  → scroll to #pricing (the $29/mo card)
+        //  - ?product=edge   → scroll to #farm-server (Cloud vs Farm Server comparison)
         const urlParams = new URLSearchParams(window.location.search);
         const product = urlParams.get('product');
         if (product) {
             setTimeout(() => {
-                const cards = document.querySelectorAll('.product-card');
-                if (product === 'edge' && cards[0]) {
-                    cards[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
-                } else if (product === 'cloud' && cards[1]) {
-                    cards[1].scrollIntoView({ behavior: 'smooth', block: 'center' });
+                const targetId = product === 'edge' ? 'farm-server' : 'pricing';
+                const target = document.getElementById(targetId);
+                if (target) {
+                    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 }
             }, 500);
         }
