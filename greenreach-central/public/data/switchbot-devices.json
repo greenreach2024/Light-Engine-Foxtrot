@@ -50,7 +50,11 @@
       "battery": 60,
       "temperature": 15.6,
       "humidity": 29,
-      "lastSeen": "2026-03-06T13:53:31.681Z"
+      "lastSeen": "2026-03-06T13:53:31.681Z",
+      "status": {
+        "temperature": 21.7,
+        "humidity": 62
+      }
     },
     {
       "id": "D3F85167A57E",
