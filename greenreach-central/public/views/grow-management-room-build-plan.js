@@ -169,11 +169,12 @@
   function equipmentLines(template, scores, cropClass) {
     const lines = [];
 
+    const fixtureClass = template.defaultFixtureClass || {};
     const plantsPerTray = template.plantsPerTrayByClass?.[cropClass];
     const tiers = template.tierCount || 1;
     const traysPerTier = template.traysPerTier || 1;
     const totalSites = plantsPerTray ? plantsPerTray * traysPerTier * tiers : null;
-    const photoperiod = template.photoperiodHoursByClass?.[cropClass];
+    const photoperiod = fixtureClass.photoperiodHoursByClass?.[cropClass];
 
     lines.push({
       label: 'Crop class',
@@ -185,8 +186,8 @@
       lines.push({ label: 'Photoperiod', value: `${photoperiod} h/day`, note: 'from recipe (override in Crop Scheduler)' });
     }
 
-    const fixtureW = template.fixtureWattsNominal || 0;
-    const fixturesPerTier = template.fixturesPerTierUnit || 1;
+    const fixtureW = fixtureClass.fixtureWattsNominal || 0;
+    const fixturesPerTier = fixtureClass.fixturesPerTierUnit || 1;
     const totalFixtures = fixturesPerTier * (tiers || 1);
     const totalLightingW = sum([fixtureW * totalFixtures]);
     const lightingKW = scores?.heatManagement?.lightingKW ?? (totalLightingW / 1000);
@@ -195,7 +196,7 @@
       label: 'Lighting',
       value: `${fmt(lightingKW, 2)} kW`,
       note: totalFixtures
-        ? `${totalFixtures} fixture${totalFixtures !== 1 ? 's' : ''} \u00d7 ${fixtureW} W @ ${template.efficacyUmolPerJ || '--'} umol/J`
+        ? `${totalFixtures} fixture${totalFixtures !== 1 ? 's' : ''} \u00d7 ${fixtureW} W @ ${fixtureClass.efficacyUmolPerJ || '--'} umol/J`
         : (template.lightingSpecSummary || null)
     });
 
