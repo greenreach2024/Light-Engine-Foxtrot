@@ -879,6 +879,112 @@ function resolveCustomProductSearchRadiusKm(rawRadius) {
   return 120;
 }
 
+// Default service radius (km) for the wholesale portal. Buyers should only
+// see, be matched with, and transact against farms within this radius of
+// their registered coordinates. The wholesale portal markets a 50 km reach
+// today; operators can override via WHOLESALE_BUYER_SERVICE_RADIUS_KM when
+// piloting in larger regions.
+const DEFAULT_BUYER_SERVICE_RADIUS_KM = 50;
+
+function resolveBuyerServiceRadiusKm() {
+  const env = Number(process.env.WHOLESALE_BUYER_SERVICE_RADIUS_KM);
+  if (Number.isFinite(env) && env > 0) return env;
+  return DEFAULT_BUYER_SERVICE_RADIUS_KM;
+}
+
+// Given a list of farms (either the DB/network farm shape or a catalog
+// farm sub-record) and a buyer coordinate, drop farms whose haversine
+// distance exceeds the service radius and annotate the survivors with
+// distance_km. When buyerCoords is null we cannot filter, so the list is
+// returned unchanged (and the caller decides how to surface that). Farms
+// that carry no usable coordinates of their own are treated as "unknown
+// location" and dropped only when a buyer coordinate is available, so a
+// misconfigured farm record doesn't masquerade as nearby.
+function filterFarmsByBuyerRadius(farms, buyerCoords, radiusKm) {
+  const list = Array.isArray(farms) ? farms : [];
+  if (!buyerCoords) {
+    return list.map((farm) => ({ farm, distanceKm: null, inRange: true }));
+  }
+  const effectiveRadius = Number.isFinite(radiusKm) && radiusKm > 0
+    ? radiusKm
+    : resolveBuyerServiceRadiusKm();
+  return list
+    .map((farm) => {
+      const farmCoords = extractCoordinates(farm?.location || farm);
+      if (!farmCoords) {
+        return { farm, distanceKm: null, inRange: false };
+      }
+      const distanceKm = haversineDistanceKm(
+        buyerCoords.latitude,
+        buyerCoords.longitude,
+        farmCoords.latitude,
+        farmCoords.longitude
+      );
+      return {
+        farm,
+        distanceKm: Number(distanceKm.toFixed(2)),
+        inRange: distanceKm <= effectiveRadius
+      };
+    });
+}
+
+// Apply the buyer service radius to every catalog SKU, not just custom
+// items. When the buyer has coordinates, a SKU is kept only if it has at
+// least one farm within the service radius, and out-of-range farms are
+// dropped from its farms[] array so the client cannot select them for
+// allocation. Totals are re-aggregated from the retained farms.
+function filterCatalogItemsByBuyerRadius(items, options = {}) {
+  const list = Array.isArray(items) ? items : [];
+  const buyerCoords = extractCoordinates(options.buyerLocation || null);
+  if (!buyerCoords) return list;
+
+  const radiusKm = Number.isFinite(options.radiusKm) && options.radiusKm > 0
+    ? options.radiusKm
+    : resolveBuyerServiceRadiusKm();
+  const farmLocationById = options.farmLocationById instanceof Map
+    ? options.farmLocationById
+    : new Map();
+
+  return list
+    .map((item) => {
+      const farms = Array.isArray(item?.farms) ? item.farms : [];
+      if (farms.length === 0) return null;
+
+      const scopedFarms = farms
+        .map((farm) => {
+          const fallbackLocation = farmLocationById.get(
+            String(farm?.farm_id || farm?.id || '')
+          ) || {};
+          const farmLocation = farm?.farm_location || farm?.location || fallbackLocation;
+          const farmCoords = extractCoordinates(farmLocation);
+          if (!farmCoords) return null;
+          const distanceKm = haversineDistanceKm(
+            buyerCoords.latitude,
+            buyerCoords.longitude,
+            farmCoords.latitude,
+            farmCoords.longitude
+          );
+          if (distanceKm > radiusKm) return null;
+          return { ...farm, distance_km: Number(distanceKm.toFixed(2)) };
+        })
+        .filter(Boolean);
+
+      if (scopedFarms.length === 0) return null;
+
+      const totalAvailable = scopedFarms.reduce((sum, farm) => {
+        const qty = Number(farm.quantity_available ?? farm.qty_available ?? 0);
+        return sum + (Number.isFinite(qty) ? qty : 0);
+      }, 0);
+
+      const nextItem = { ...item, farms: scopedFarms };
+      if ('total_qty_available' in nextItem) nextItem.total_qty_available = totalAvailable;
+      if ('qty_available' in nextItem) nextItem.qty_available = totalAvailable;
+      if ('total_available' in nextItem) nextItem.total_available = totalAvailable;
+      return nextItem;
+    })
+    .filter(Boolean);
+}
+
 function isCustomCatalogItem(item) {
   if (!item || typeof item !== 'object') return false;
   if (item.is_custom === true || item.isCustom === true) return true;
@@ -1737,6 +1843,18 @@ router.get('/catalog', async (req, res, next) => {
         farmLocationById: networkFarmLocationById
       });
 
+      // Enforce the wholesale buyer service radius (50 km by default)
+      // across ALL catalog items, not just custom ones. When the buyer
+      // has coordinates this drops out-of-range farms from each SKU and
+      // removes SKUs whose farms are all out of range, so the client
+      // can't add inventory to their cart from farms outside their
+      // service area.
+      items = filterCatalogItemsByBuyerRadius(items, {
+        buyerLocation,
+        radiusKm: resolveBuyerServiceRadiusKm(),
+        farmLocationById: networkFarmLocationById
+      });
+
       items = applyFormulaPricingToCatalogSkus(items, pricingContext, discountProfile);
 
       return res.json({
@@ -2051,6 +2169,14 @@ router.get('/catalog', async (req, res, next) => {
       radiusKm: customSearchRadiusKm,
       farmLocationById: dbFarmLocationById
     });
+    // Enforce the 50 km buyer service radius across the DB catalog path
+    // as well, so an out-of-area buyer sees the same empty catalog
+    // regardless of which branch (network/DB) serves the request.
+    skus = filterCatalogItemsByBuyerRadius(skus, {
+      buyerLocation,
+      radiusKm: resolveBuyerServiceRadiusKm(),
+      farmLocationById: dbFarmLocationById
+    });
 
     const skuById = new Map(skus.map((sku) => [String(sku.sku_id), sku]));
     const pricedItems = items.map((item) => {
@@ -2294,9 +2420,52 @@ router.post('/buyers/register', registerLimiter, requireWholesaleDbForCriticalPa
       text: `Hi ${buyer.contactName || buyer.businessName},\n\nYour wholesale buyer account has been created.\n\nYou can now browse the catalog and place orders.\n\n— GreenReach Farms`
     }).catch(err => console.warn('[Email] Welcome email failed:', err.message));
 
+    // Surface service-radius coverage alongside the new account so the
+    // portal can show a "not live in your area yet" banner instead of
+    // letting the buyer click through a catalog that will be empty.
+    // Registration itself is still allowed so operators can keep the
+    // lead and notify the buyer when a farm joins their radius.
+    const serviceRadiusKm = resolveBuyerServiceRadiusKm();
+    let serviceRadiusInfo = {
+      serviceRadiusKm,
+      buyerCoordsAvailable: Boolean(resolvedCoords),
+      farmsInRange: null,
+      nearestFarmDistanceKm: null
+    };
+    if (resolvedCoords) {
+      try {
+        const allFarms = await listNetworkFarms();
+        for (const farm of allFarms) {
+          const loc = farm.location || {};
+          if (loc.latitude == null || loc.longitude == null) {
+            const city = String(loc.city || '').toLowerCase().trim();
+            if (city.startsWith('kingston')) {
+              loc.latitude = 44.2312;
+              loc.longitude = -76.4860;
+              farm.location = loc;
+            }
+          }
+        }
+        const annotated = filterFarmsByBuyerRadius(allFarms, resolvedCoords, serviceRadiusKm);
+        const inRange = annotated.filter((entry) => entry.inRange);
+        const nearest = annotated
+          .map((entry) => entry.distanceKm)
+          .filter((d) => Number.isFinite(d))
+          .sort((a, b) => a - b)[0];
+        serviceRadiusInfo = {
+          serviceRadiusKm,
+          buyerCoordsAvailable: true,
+          farmsInRange: inRange.length,
+          nearestFarmDistanceKm: Number.isFinite(nearest) ? Number(nearest.toFixed(2)) : null
+        };
+      } catch (err) {
+        console.warn('[Wholesale Register] service radius probe failed:', err.message);
+      }
+    }
+
     return res.json({
       status: 'ok',
-      data: { buyer, token }
+      data: { buyer, token, serviceRadius: serviceRadiusInfo }
     });
   } catch (error) {
     if (error?.code === 'EMAIL_EXISTS') {
@@ -4373,7 +4542,65 @@ router.get('/network/farms', async (req, res, next) => {
         farm.location = loc;
       }
     }
-    return res.json({ status: 'ok', data: { farms, lastSync: req.app?.locals?.wholesaleNetworkLastSync || null } });
+
+    // Resolve buyer coordinates: explicit nearLat/nearLng query params
+    // win so the portal can pass a pending registration coordinate; fall
+    // back to the authenticated buyer's persisted coordinates so that a
+    // signed-in buyer always gets a service-radius-filtered network view
+    // even without passing query params.
+    const nearLat = Number(req.query.nearLat ?? req.query.lat);
+    const nearLng = Number(req.query.nearLng ?? req.query.lng);
+    let buyerCoords = (Number.isFinite(nearLat) && Number.isFinite(nearLng))
+      ? { latitude: nearLat, longitude: nearLng }
+      : null;
+    if (!buyerCoords) {
+      const buyer = await resolveOptionalBuyerFromRequest(req);
+      if (buyer?.location) {
+        buyerCoords = extractCoordinates(buyer.location);
+      }
+    }
+
+    const radiusKm = resolveBuyerServiceRadiusKm();
+    const totalCount = farms.length;
+
+    if (!buyerCoords) {
+      // Without a buyer coordinate we cannot filter; return the full list
+      // and advertise the radius so the client can still display
+      // "radius-gated" messaging when it knows the buyer.
+      return res.json({
+        status: 'ok',
+        data: {
+          farms,
+          lastSync: req.app?.locals?.wholesaleNetworkLastSync || null,
+          serviceRadiusKm: radiusKm,
+          totalFarmCount: totalCount,
+          buyerCoordsAvailable: false
+        }
+      });
+    }
+
+    const annotated = filterFarmsByBuyerRadius(farms, buyerCoords, radiusKm);
+    const filteredFarms = annotated
+      .filter((entry) => entry.inRange)
+      .map((entry) => {
+        const farm = entry.farm;
+        if (entry.distanceKm != null) {
+          return { ...farm, distance_km: entry.distanceKm };
+        }
+        return farm;
+      });
+
+    return res.json({
+      status: 'ok',
+      data: {
+        farms: filteredFarms,
+        lastSync: req.app?.locals?.wholesaleNetworkLastSync || null,
+        serviceRadiusKm: radiusKm,
+        totalFarmCount: totalCount,
+        filteredFarmCount: filteredFarms.length,
+        buyerCoordsAvailable: true
+      }
+    });
   } catch (error) {
     return next(error);
   }

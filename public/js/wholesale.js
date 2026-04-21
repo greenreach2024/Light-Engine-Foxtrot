@@ -485,7 +485,28 @@
         // Registration successful - set buyer and token
         this.setActiveBuyer({ buyer: json.data.buyer, token: json.data.token });
         this.hideAuthModal();
-        this.showToast('Account created. Welcome to GreenReach!', 'success');
+
+        // Surface service-radius coverage so the buyer understands up
+        // front whether any GreenReach farm can actually fulfill to
+        // their area, instead of showing an empty catalog with no
+        // explanation.
+        const serviceRadius = json.data?.serviceRadius;
+        if (serviceRadius && serviceRadius.buyerCoordsAvailable && serviceRadius.farmsInRange === 0) {
+          const nearest = Number.isFinite(serviceRadius.nearestFarmDistanceKm)
+            ? `${serviceRadius.nearestFarmDistanceKm} km away`
+            : 'outside our current service area';
+          this.showToast(
+            'GreenReach is not yet live in your area',
+            'info',
+            {
+              prominent: true,
+              detail: `Your account is created, but no farm is operating within ${serviceRadius.serviceRadiusKm} km of your address yet — the nearest is ${nearest}. We'll email you as soon as a farm joins your area.`,
+              duration: 10000
+            }
+          );
+        } else {
+          this.showToast('Account created. Welcome to GreenReach!', 'success');
+        }
       } catch (error) {
         console.error('Register error:', error);
         this.showToast('Network error registering', 'error');
@@ -2623,10 +2644,30 @@
           : 'North American retailer coverage';
         const alertThreshold = Number(result.threshold || 7);
 
+        // Keep the card header honest: show the "+ AI" badge only when
+        // the AI narrative layer is actually live. While it's stale the
+        // card advertises "Retail observations" so we don't claim an
+        // AI-driven insight the backend isn't producing yet.
+        const titleEl = document.getElementById('price-watch-title');
+        const badgeEl = document.getElementById('price-watch-badge');
+        const aiLive = Boolean(result.aiNarrativeLive);
+        if (titleEl) {
+          titleEl.textContent = aiLive
+            ? 'Retail Price Watch + AI'
+            : 'Retail Price Watch';
+        }
+        if (badgeEl) {
+          badgeEl.textContent = aiLive ? 'Live + AI' : 'Retail observations';
+        }
+
         this.priceWatchState = { alerts, result };
-        
+
         if (alerts.length === 0) {
-          priceContent.innerHTML = `<div class="loading-state">No recent produce price changes above ${alertThreshold.toFixed(0)}% were detected in the last ${recencyWindowDays} days.</div>`;
+          const underReview = Number(result.underReviewCount || 0);
+          const underReviewNote = underReview > 0
+            ? ` ${underReview} entries are under data-quality review (above ${Number(result.outlierPolicy?.capPct || 100)}% swing with fewer than ${Number(result.outlierPolicy?.minConfirmRetailers || 2)} national retailers confirming).`
+            : '';
+          priceContent.innerHTML = `<div class="loading-state">No recent produce price changes above ${alertThreshold.toFixed(0)}% were detected in the last ${recencyWindowDays} days.${underReviewNote}</div>`;
           return;
         }
 
@@ -2638,10 +2679,14 @@
         if (collapseToModal) {
           const compactRows = alerts.slice(0, 2).map((alert) => {
             const changeColor = alert.type === 'increase' ? 'color: var(--warning)' : 'color: var(--info)';
+            const variantCount = Number(alert.variantCount || 1);
+            const rollupNote = variantCount > 1
+              ? `<span style="font-size:0.72rem; color:var(--text-secondary); font-weight:500;"> (${variantCount} variants tracked)</span>`
+              : '';
             return `
               <div style="padding: 0.55rem 0.65rem; margin-bottom: 0.45rem; background: var(--bg); border-radius: 6px;">
                 <div style="display:flex; justify-content:space-between; gap:0.5rem; align-items:center;">
-                  <strong style="font-size:0.86rem;">${escapeHtml(alert.product)}</strong>
+                  <strong style="font-size:0.86rem;">${escapeHtml(alert.product)}${rollupNote}</strong>
                   <span style="font-weight:700; ${escapeAttr(changeColor)}">${escapeHtml(alert.change)}</span>
                 </div>
                 <div style="font-size:0.76rem; color:var(--text-secondary); margin-top:0.2rem;">
@@ -2820,15 +2865,37 @@
           .filter(Boolean);
       }
       
-      // If no farms loaded yet, fetch buyer-safe wholesale network farms
+      // Buyer coords are needed both for the /network/farms query string
+      // and for the local distance calculation below, so derive them
+      // before we dispatch the request (declaring them inside the fetch
+      // block and then again in calculateDistance would create a TDZ
+      // ReferenceError in strict-mode execution).
+      const buyerLat = buyerLoc.latitude;
+      const buyerLng = buyerLoc.longitude;
+
+      // If no farms loaded yet, fetch buyer-safe wholesale network farms.
+      // Pass the buyer coordinates so the server can apply the service
+      // radius filter; record the returned serviceRadiusKm/meta on the
+      // controller so later renders (score, empty-state) stay consistent.
       if (farmsInCatalog.length === 0) {
         try {
           const headers = {};
           if (this.token) headers['Authorization'] = `Bearer ${this.token}`;
-          const response = await fetch('/api/wholesale/network/farms', { headers });
+          const nearParams = (Number.isFinite(buyerLat) && Number.isFinite(buyerLng))
+            ? `?nearLat=${encodeURIComponent(buyerLat)}&nearLng=${encodeURIComponent(buyerLng)}`
+            : '';
+          const response = await fetch(`/api/wholesale/network/farms${nearParams}`, { headers });
           const data = await response.json();
-          
+
           const farms = data?.data?.farms || [];
+          if (response.ok && data?.data) {
+            this.lastNetworkFarmsMeta = {
+              serviceRadiusKm: data.data.serviceRadiusKm || null,
+              totalFarmCount: data.data.totalFarmCount || farms.length,
+              filteredFarmCount: data.data.filteredFarmCount ?? farms.length,
+              buyerCoordsAvailable: Boolean(data.data.buyerCoordsAvailable)
+            };
+          }
           if (response.ok && Array.isArray(farms) && farms.length > 0) {
             farmsInCatalog = farms
               .map(mapFarmRecord)
@@ -2853,23 +2920,50 @@
         ];
       }
 
-      // Calculate distances from buyer to each farm
-      const buyerLat = buyerLoc.latitude;
-      const buyerLng = buyerLoc.longitude;
-
-      const farmDistances = farmsInCatalog.map(farm => {
+      const farmDistancesAll = farmsInCatalog.map(farm => {
         const distance = this.calculateDistance(
           buyerLat,
           buyerLng,
           farm.latitude,
           farm.longitude
         );
-        
-        return {
-          ...farm,
-          distance: distance
-        };
+        return { ...farm, distance };
       });
+
+      // Restrict the impact/score to farms inside the buyer service
+      // radius so a distant farm never skews the calculation. The
+      // server also filters /network/farms, but demo-mode data and
+      // cached responses may include out-of-range farms, so we
+      // defensively re-filter here.
+      const serviceRadiusKm = Number(
+        (this.lastNetworkFarmsMeta && this.lastNetworkFarmsMeta.serviceRadiusKm)
+        || 50
+      );
+      const farmDistances = farmDistancesAll.filter(f => f.distance <= serviceRadiusKm);
+
+      if (farmDistances.length === 0) {
+        impactContent.innerHTML = `
+          <div class="impact-metric">
+            <span class="impact-label">Service Radius</span>
+            <span class="impact-value">${serviceRadiusKm} km</span>
+          </div>
+          <div class="impact-metric">
+            <span class="impact-label">Farms In Range</span>
+            <span class="impact-value">0</span>
+          </div>
+          <div class="impact-comparison">
+            <div class="comparison-text">
+              GreenReach is not yet live within ${serviceRadiusKm} km of your registered address.
+              We'll notify you as soon as a farm joins your area.
+            </div>
+          </div>
+        `;
+        if (impactScore) {
+          impactScore.textContent = '—';
+          impactScore.className = 'impact-score grade-na';
+        }
+        return;
+      }
 
       // Calculate weighted average distance for multi-farm orders
       const avgDistance = farmDistances.reduce((sum, f) => sum + f.distance, 0) / farmDistances.length;
