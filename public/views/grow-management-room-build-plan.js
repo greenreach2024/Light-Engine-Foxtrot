@@ -513,6 +513,14 @@
         </div>`;
     }).join('');
 
+    // Preserve focus + caret position across the innerHTML swap so the
+    // operator can type multi-digit numbers in the grow-units input without
+    // losing focus after each keystroke.
+    const prevActive = document.activeElement;
+    const preserveUnits = prevActive && prevActive.id === UNIT_COUNT_ID;
+    const selStart = preserveUnits ? prevActive.selectionStart : null;
+    const selEnd   = preserveUnits ? prevActive.selectionEnd : null;
+
     el.innerHTML = `
       <div class="rbp-section-title">Zone capacity \u00b7 Evie spatial plan</div>
       ${controlsHtml}
@@ -529,6 +537,12 @@
 
     const unitsInput = $(UNIT_COUNT_ID);
     if (unitsInput) {
+      if (preserveUnits) {
+        try { unitsInput.focus({ preventScroll: true }); } catch (_) { unitsInput.focus(); }
+        if (typeof unitsInput.setSelectionRange === 'function' && selStart != null) {
+          try { unitsInput.setSelectionRange(selStart, selEnd); } catch (_) { /* ignore */ }
+        }
+      }
       unitsInput.addEventListener('input', (e) => {
         state.desiredUnits = Math.max(0, Number(e.target.value) || 0);
         renderSpatial();

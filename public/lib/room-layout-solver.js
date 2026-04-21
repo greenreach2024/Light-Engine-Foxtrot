@@ -157,8 +157,10 @@
       unitsPerRow = Math.floor(longM / rowUnitLength);
       rowsMax = Math.floor(shortM / rowDepth);
       if (rowsMax >= 2 && (rowsMax * rowDepth + mainWalkwayM) > shortM) {
-        rowsMax = Math.floor((shortM - mainWalkwayM) / rowDepth);
-        if (rowsMax < 0) rowsMax = 0;
+        // Reserve a main serving walkway between facing rows, but never go
+        // below 1 row when a single row obviously fits (rowDepth may be
+        // smaller than the default walkway for compact templates).
+        rowsMax = Math.max(1, Math.floor((shortM - mainWalkwayM) / rowDepth));
       }
       effectiveTileAreaM2 = rowDepth * rowUnitLength;
     }
