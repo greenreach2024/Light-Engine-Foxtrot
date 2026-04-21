@@ -1466,7 +1466,18 @@
           groups: S.groups,
           roomMaps: S.roomMaps,
           iotDevices: S.iotDevices,
-          cropRegistry: S.cropRegistry
+          cropRegistry: S.cropRegistry,
+          // Include a fingerprint of the grow-systems catalog so a change to
+          // template dimensions / clearances / orientation triggers a scene
+          // rebuild under skipRebuildIfUnchanged (SSE / auto-poll / focus).
+          // Fingerprint is (id + hash of the spatialContract) so routine
+          // non-spatial edits still refresh layout-affecting fields.
+          growSystems: (S.growSystems || []).map(function (t) {
+            return {
+              id: t && t.id,
+              sc: t && t.spatialContract ? JSON.stringify(t.spatialContract) : null
+            };
+          })
         });
         const structureChanged = structureSignature !== S.lastStructureSignature;
 
