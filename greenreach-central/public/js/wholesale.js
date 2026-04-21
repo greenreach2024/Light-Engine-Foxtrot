@@ -2575,10 +2575,30 @@
           : 'North American retailer coverage';
         const alertThreshold = Number(result.threshold || 7);
 
+        // Keep the card header honest: show the "+ AI" badge only when
+        // the AI narrative layer is actually live. While it's stale the
+        // card advertises "Retail observations" so we don't claim an
+        // AI-driven insight the backend isn't producing yet.
+        const titleEl = document.getElementById('price-watch-title');
+        const badgeEl = document.getElementById('price-watch-badge');
+        const aiLive = Boolean(result.aiNarrativeLive);
+        if (titleEl) {
+          titleEl.textContent = aiLive
+            ? 'Retail Price Watch + AI'
+            : 'Retail Price Watch';
+        }
+        if (badgeEl) {
+          badgeEl.textContent = aiLive ? 'Live + AI' : 'Retail observations';
+        }
+
         this.priceWatchState = { alerts, result };
-        
+
         if (alerts.length === 0) {
-          priceContent.innerHTML = `<div class="loading-state">No recent produce price changes above ${alertThreshold.toFixed(0)}% were detected in the last ${recencyWindowDays} days.</div>`;
+          const underReview = Number(result.underReviewCount || 0);
+          const underReviewNote = underReview > 0
+            ? ` ${underReview} entries are under data-quality review (above ${Number(result.outlierPolicy?.capPct || 100)}% swing with fewer than ${Number(result.outlierPolicy?.minConfirmRetailers || 2)} national retailers confirming).`
+            : '';
+          priceContent.innerHTML = `<div class="loading-state">No recent produce price changes above ${alertThreshold.toFixed(0)}% were detected in the last ${recencyWindowDays} days.${underReviewNote}</div>`;
           return;
         }
 
@@ -2590,10 +2610,14 @@
         if (collapseToModal) {
           const compactRows = alerts.slice(0, 2).map((alert) => {
             const changeColor = alert.type === 'increase' ? 'color: var(--warning)' : 'color: var(--info)';
+            const variantCount = Number(alert.variantCount || 1);
+            const rollupNote = variantCount > 1
+              ? `<span style="font-size:0.72rem; color:var(--text-secondary); font-weight:500;"> (${variantCount} variants tracked)</span>`
+              : '';
             return `
               <div style="padding: 0.55rem 0.65rem; margin-bottom: 0.45rem; background: var(--bg); border-radius: 6px;">
                 <div style="display:flex; justify-content:space-between; gap:0.5rem; align-items:center;">
-                  <strong style="font-size:0.86rem;">${escapeHtml(alert.product)}</strong>
+                  <strong style="font-size:0.86rem;">${escapeHtml(alert.product)}${rollupNote}</strong>
                   <span style="font-weight:700; ${escapeAttr(changeColor)}">${escapeHtml(alert.change)}</span>
                 </div>
                 <div style="font-size:0.76rem; color:var(--text-secondary); margin-top:0.2rem;">

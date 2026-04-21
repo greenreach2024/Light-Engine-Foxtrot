@@ -123,6 +123,18 @@ export async function refreshPriceTrends(pool) {
     for (const r of monthAgoResult.rows) monthAgoMap[r.product] = parseFloat(r.avg_price);
 
     let updated = 0;
+    // Sanity cap for trend comparisons: any |trendPercent| > 100%
+    // implies a 2x price move week-over-week, which is almost always
+    // either (a) a currency/unit scale change in the observation
+    // stream, or (b) a single outlier retailer dragging the average.
+    // If the 7-day baseline produces such a jump but the 30-day
+    // baseline is more sane, prefer the 30-day to avoid the "+361%
+    // Red Russian Kale" class of false alerts.
+    const TREND_SANITY_CAP_PCT = 100;
+    const computeTrend = (current, previous) => {
+      if (!previous || previous <= 0) return null;
+      return ((current - previous) / previous) * 100;
+    };
     for (const row of currentResult.rows) {
       const currentPrice = parseFloat(row.avg_price);
       const price7d = weekAgoMap[row.product] || null;
@@ -131,9 +143,20 @@ export async function refreshPriceTrends(pool) {
       // Compute trend from 7-day comparison (primary) or 30-day (fallback)
       let trendPercent = 0;
       let refPrice = price7d || price30d;
-      if (refPrice && refPrice > 0) {
+      const trend7d = computeTrend(currentPrice, price7d);
+      const trend30d = computeTrend(currentPrice, price30d);
+      if (trend7d !== null && Math.abs(trend7d) > TREND_SANITY_CAP_PCT
+          && trend30d !== null && Math.abs(trend30d) <= TREND_SANITY_CAP_PCT) {
+        // 7-day window is stale / outlier-heavy; trust the 30-day.
+        refPrice = price30d;
+        trendPercent = trend30d;
+      } else if (refPrice && refPrice > 0) {
         trendPercent = ((currentPrice - refPrice) / refPrice) * 100;
       }
+      // Persist the baseline we actually used for the trend so the
+      // downstream UI doesn't compute a different %-change from a
+      // stale price_7d_ago value.
+      const storedPrice7dAgo = (refPrice === price30d && price30d) ? price30d : price7d;
 
       let trend = 'stable';
       if (trendPercent > 5) trend = 'increasing';
@@ -155,7 +178,7 @@ export async function refreshPriceTrends(pool) {
         [
           row.product,
           currentPrice.toFixed(2),
-          price7d?.toFixed(2) || null,
+          storedPrice7dAgo?.toFixed(2) || null,
           price30d?.toFixed(2) || null,
           trend,
           trendPercent.toFixed(2),
