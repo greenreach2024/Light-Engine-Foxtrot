@@ -65,6 +65,7 @@ import plantingRoutes from './routes/planting.js';
 import planningRoutes from './routes/planning.js';
 import marketIntelligenceRoutes from './routes/market-intelligence.js';
 import cropPricingRoutes from './routes/crop-pricing.js';
+import growSystemsRouter from './routes/grow-systems.js';
 import qualityReportsRoutes from './routes/quality-reports.js';
 import sustainabilityRoutes from './routes/sustainability.js';
 import lotSystemRoutes, { startLotExpiryScheduler } from './routes/lot-system.js';
@@ -4122,6 +4123,7 @@ app.use('/api/planting', authMiddleware, plantingRoutes); // Planting scheduler 
 app.use('/api/planning', authMiddleware, planningRoutes); // Production planning (integrates market + crop pricing)
 app.use('/api/market-intelligence', authOrAdminMiddleware, marketIntelligenceRoutes); // North American market data + price alerts
 app.use('/api/crop-pricing', authOrAdminMiddleware, cropPricingRoutes); // Farm-specific crop pricing
+app.use('/api/grow-systems', growSystemsRouter); // Grow-system template registry + scoring (read-only, used by the grow-management template gallery)
 app.use('/api/admin/pricing', adminAuthMiddleware, adminPricingRoutes); // Wholesale pricing management
 app.use('/api/quality', authMiddleware, qualityReportsRoutes);                 // Quality reports + QA checkpoint proxies
 app.use('/api/sustainability', authMiddleware, sustainabilityRoutes);          // Sustainability & ESG dashboard
