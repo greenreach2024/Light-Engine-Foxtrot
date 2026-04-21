@@ -828,8 +828,12 @@ async function geocodeBuyerLocation(rawLocation) {
       if (!Array.isArray(results) || results.length === 0) continue;
 
       if (!isAcceptableBuyerGeocodeResult(results[0])) {
-        // Skip and try the next (more specific) query rather than persisting
-        // a country/state centroid as the buyer's coordinates.
+        // Skip and try the next fallback query rather than persisting
+        // a country/state centroid as the buyer's coordinates. Note the
+        // fallback cascade in buildBuyerGeocodeQueries goes from most-
+        // specific (address + city + postal) to least-specific
+        // (postal + country), so subsequent attempts broaden rather
+        // than narrow.
         continue;
       }
 

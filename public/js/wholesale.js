@@ -2101,16 +2101,34 @@
       return queries;
     },
 
+    // Mirror the server-side BUYER_GEOCODE_ACCEPTED_ADDRESSTYPES /
+    // BUYER_GEOCODE_REJECTED_ADDRESSTYPES gate so the two layers agree
+    // on what counts as a buyer-specific Nominatim hit. The server uses
+    // these coords directly when the client passes latitude/longitude
+    // on the registration payload, so the client must apply the same
+    // whitelist or it silently bypasses the server check.
     isAcceptableGeocodeResult(result) {
       if (!result || typeof result !== 'object') return false;
       const addressType = String(result.addresstype || '').toLowerCase().trim();
-      // Reject country/state/region-level hits outright; they are the
-      // centroids that caused the 2,795 km environmental-impact bug.
-      if (['country', 'state', 'region', 'province'].includes(addressType)) return false;
-      if (addressType) return true;
+      const acceptedAddressTypes = new Set([
+        'postcode', 'street', 'road', 'house', 'house_number', 'building',
+        'residential', 'hamlet', 'village', 'town', 'city', 'municipality',
+        'suburb', 'neighbourhood', 'quarter', 'city_district', 'locality',
+        'county'
+      ]);
+      const rejectedAddressTypes = new Set([
+        'country', 'state', 'region', 'province'
+      ]);
+      if (rejectedAddressTypes.has(addressType)) return false;
+      if (addressType && acceptedAddressTypes.has(addressType)) return true;
+      // Fall through to class/type — reject broad administrative
+      // boundaries (e.g. addresstype 'state_district' + class 'boundary'
+      // / type 'administrative') that would otherwise sneak through.
       const cls = String(result.class || '').toLowerCase().trim();
       const type = String(result.type || '').toLowerCase().trim();
-      if (cls === 'boundary' && (type === 'administrative' || type === 'political')) return false;
+      if (cls === 'boundary' && (type === 'administrative' || type === 'political')) {
+        return false;
+      }
       return true;
     },
 
