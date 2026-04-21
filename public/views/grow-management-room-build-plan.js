@@ -492,7 +492,7 @@
     const zonesHtml = perZonePlan.map((plan, i) => {
       const take = Math.max(0, Math.min(plan.maxUnits || 0, Math.max(0, desired - running)));
       running += take;
-      const fitClass = (take === 0 && desired > 0)
+      const fitClass = (take === 0 && desired > 0 && desired > running)
         ? 'rbp-zone--over'
         : (take >= (plan.maxUnits || 0) && desired > running - take ? 'rbp-zone--fit' : '');
       const pill = take > 0
