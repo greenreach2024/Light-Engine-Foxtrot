@@ -895,7 +895,16 @@ router.get('/price-alerts', async (req, res) => {
 
     const nationallyMonitored = sanitizedRecommendations.filter((entry) => entry.nationalRetailerCount > 0);
     const monitoredPool = nationallyMonitored.length > 0 ? nationallyMonitored : sanitizedRecommendations;
-    const recentPool = monitoredPool.filter((entry) => isRecentDate(entry.lastUpdated, recencyWindowDays));
+    // Re-sort by |trendPercent| descending: rollupRecommendationsByCategory
+    // appends rolled-up entries after passthrough, which destroys the sort
+    // order buildPricingRecommendationsFromSignals established. Without
+    // this, topSignals.slice(0, 5) would return the first 5 passthrough
+    // products instead of the 5 with the largest magnitude changes, and
+    // the UI's demand-context section would silently omit the biggest
+    // market movements.
+    const recentPool = monitoredPool
+      .filter((entry) => isRecentDate(entry.lastUpdated, recencyWindowDays))
+      .sort((a, b) => Math.abs(b.trendPercent || 0) - Math.abs(a.trendPercent || 0));
 
     const toAlertEntry = (entry) => ({
       product: entry.categoryLabel || entry.product,
