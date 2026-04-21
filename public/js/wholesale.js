@@ -2793,6 +2793,14 @@
           .filter(Boolean);
       }
       
+      // Buyer coords are needed both for the /network/farms query string
+      // and for the local distance calculation below, so derive them
+      // before we dispatch the request (declaring them inside the fetch
+      // block and then again in calculateDistance would create a TDZ
+      // ReferenceError in strict-mode execution).
+      const buyerLat = buyerLoc.latitude;
+      const buyerLng = buyerLoc.longitude;
+
       // If no farms loaded yet, fetch buyer-safe wholesale network farms.
       // Pass the buyer coordinates so the server can apply the service
       // radius filter; record the returned serviceRadiusKm/meta on the
@@ -2839,10 +2847,6 @@
           }
         ];
       }
-
-      // Calculate distances from buyer to each farm
-      const buyerLat = buyerLoc.latitude;
-      const buyerLng = buyerLoc.longitude;
 
       const farmDistancesAll = farmsInCatalog.map(farm => {
         const distance = this.calculateDistance(
