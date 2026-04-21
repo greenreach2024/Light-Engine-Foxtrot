@@ -716,7 +716,11 @@ function rollupRecommendationsByCategory(recommendations) {
     const averagedTrend = variants.reduce((acc, v) => acc + (v.trendPercent || 0), 0) / variants.length;
     rolled.push({
       ...rep,
-      categoryLabel: category,
+      // Only overwrite the display name when we've actually merged
+      // multiple variants. A lone "Red Russian Kale" should stay
+      // "Red Russian Kale" in the UI rather than get genericised to
+      // "Kale" just because it matches a rollup rule.
+      categoryLabel: variants.length > 1 ? category : null,
       variantCount: variants.length,
       variantProducts: variants.map((v) => v.product),
       categoryAverageTrendPercent: averagedTrend,
