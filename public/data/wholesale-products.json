@@ -66,5 +66,6 @@
       "farm_id": "TEST-FARM-E2E",
       "farm_name": "End-to-End Test Farm"
     }
-  ]
+  ],
+  "schemaVersion": "1.0.0"
 }

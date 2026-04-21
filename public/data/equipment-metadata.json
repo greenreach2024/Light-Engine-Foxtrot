@@ -61,5 +61,6 @@
   },
   "room-3xxjln-fans-19": {
     "control": "Manual"
-  }
+  },
+  "schemaVersion": "1.0.0"
 }

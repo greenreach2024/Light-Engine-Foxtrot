@@ -385,20 +385,25 @@
       <button data-overlay="humidity">Humidity</button>
       <button data-overlay="co2">CO2</button>
       <button data-overlay="vpd">VPD</button>
+      <button data-overlay="ppfd">PPFD</button>
+      <button data-overlay="dli">DLI</button>
+      <button data-overlay="status">Status</button>
       <div class="sep"></div>
-      <button id="btnWalls" class="active" title="Toggle walls and ceiling">Walls</button>
+      <button id="btnWalls" aria-label="Toggle walls and ceiling" class="active" title="Toggle walls and ceiling">Walls</button>
+      <button id="btnGear" aria-label="Toggle equipment visibility" title="Show/hide equipment (lights, fans, devices)">Gear</button>
       <div class="sep"></div>
-      <button id="btnTop" title="Top-down view">Top</button>
-      <button id="btnAngle" title="Angled view">3D</button>
-      <button id="btnReset" title="Reset camera">Reset</button>
-      <button id="btnRefresh" title="Reload rooms, groups, sensors, and heatmap data">Refresh</button>
+      <button id="btnTop" aria-label="Top-down camera view" title="Top-down view">Top</button>
+      <button id="btnAngle" aria-label="Angled 3D camera view" title="Angled view">3D</button>
+      <button id="btnReset" aria-label="Reset camera position" title="Reset camera">Reset</button>
+      <button id="btnRefresh" aria-label="Reload farm data" title="Reload rooms, groups, sensors, and heatmap data">Refresh</button>
       <div class="sep"></div>
-      <button id="btnEdit" title="Edit mode: drag sensors and equipment to reposition">Edit</button>
+      <button id="btnEdit" aria-label="Toggle edit mode" title="Edit mode: drag sensors and equipment to reposition">Edit</button>
     </div>
   </div>
 
   <div id="viewer-container">
-    <canvas id="farmCanvas"></canvas>
+    <canvas id="farmCanvas" role="img" tabindex="0" aria-label="3D farm environment viewer. Use arrow keys to orbit, plus/minus to zoom, Tab to cycle zones."></canvas>
+    <div id="a11yAnnouncer" aria-live="polite" aria-atomic="true" style="position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden"></div>
     <div class="loading-overlay" id="loadingOverlay">
       <div class="loading-spinner"></div>
       <div class="loading-text">Loading farm environment...</div>
@@ -436,7 +441,7 @@
       </div>
     </div>
     <div class="detail-panel" id="detailPanel">
-      <button class="close-btn" id="detailClose">&#10005;</button>
+      <button class="close-btn" id="detailClose" aria-label="Close detail panel">&#10005;</button>
       <div id="detailContent"></div>
     </div>
     <div class="status-bar" id="statusBar">Ready</div>
@@ -491,6 +496,7 @@
     const S = {
       rooms: [], groups: [], roomMaps: {}, envData: null,
       iotDevices: [], cropRegistry: {},
+      targetRanges: null,
       overlay: 'none', roomFilter: '__all',
       currentTimeIndex: -1,
       isPlaying: false,
@@ -511,6 +517,7 @@
       selectedMeshes: [],
       activeDetail: null,
       wallsVisible: true,
+      equipmentVisible: false,
       editMode: false,
       dragTarget: null,
       dragSelection: [],
@@ -552,6 +559,8 @@
       humidity:    { min: 20, max: 95, unit: '%',   label: 'Relative Humidity', colors: [0x1d4ed8, 0x06b6d4, 0x22c55e, 0xfacc15, 0xef4444], key: 'humidity' },
       co2:         { min: 300, max: 1800, unit: 'ppm', label: 'CO\u2082 Concentration', colors: [0x22c55e, 0xfacc15, 0xf59e0b, 0xef4444, 0x7f1d1d], key: 'co2' },
       vpd:         { min: 0.2, max: 2.0, unit: 'kPa', label: 'Vapor Pressure Deficit', colors: [0x1d4ed8, 0x06b6d4, 0x22c55e, 0xf59e0b, 0xef4444], key: 'vpd' },
+      ppfd:        { min: 0, max: 800, unit: 'umol', label: 'PPFD Target', colors: [0x0f172a, 0x1d4ed8, 0x06b6d4, 0x22c55e, 0xf59e0b], key: 'ppfd' },
+      dli:         { min: 0, max: 40, unit: 'mol/m2/d', label: 'DLI Target', colors: [0x0f172a, 0x1d4ed8, 0x06b6d4, 0x22c55e, 0xf59e0b], key: 'dli' },
     };
 
     function extractNumericReading(sample) {
@@ -631,6 +640,19 @@
 
     function getZoneMetricValueAtFrame(zoneData, metricKey) {
       if (!zoneData) return null;
+      // PPFD/DLI: aggregate from zone groups
+      if (metricKey === 'ppfd' || metricKey === 'dli') {
+        const groups = zoneData.groups || [];
+        const vals = [];
+        for (const g of groups) {
+          if (metricKey === 'ppfd' && g.targetPpfd != null) vals.push(Number(g.targetPpfd));
+          else if (metricKey === 'dli' && (g.dli != null || g.planConfig?.dli != null || g.planConfig?.preview?.dli != null))
+            vals.push(Number(g.dli || g.planConfig?.dli || g.planConfig?.preview?.dli));
+          else if (metricKey === 'ppfd' && g.planConfig?.preview?.ppfd != null) vals.push(Number(g.planConfig.preview.ppfd));
+        }
+        if (vals.length) return vals.reduce((a, b) => a + b, 0) / vals.length;
+        return null;
+      }
       const historyKey = { temp: 'tempHistory', humidity: 'humidityHistory', co2: 'co2History', vpd: 'vpdHistory' }[metricKey];
       const fallbackValue = getPlaybackFallbackValue(zoneData[metricKey]);
       return historyKey ? getHistoryValueForFrame(zoneData[historyKey], fallbackValue) : fallbackValue;
@@ -644,6 +666,8 @@
         humidity: getZoneMetricValueAtFrame(zoneData, 'humidity'),
         co2: getZoneMetricValueAtFrame(zoneData, 'co2'),
         vpd: getZoneMetricValueAtFrame(zoneData, 'vpd'),
+        ppfd: getZoneMetricValueAtFrame(zoneData, 'ppfd'),
+        dli: getZoneMetricValueAtFrame(zoneData, 'dli'),
         groups: zoneData.groups || [],
         tempHistory: zoneData.tempHistory || [],
         humidityHistory: zoneData.humidityHistory || [],
@@ -1370,12 +1394,13 @@
         if (!opts.silent) {
           status(opts.reason === 'manual' ? 'Refreshing viewer data...' : 'Loading farm data...');
         }
-        const [roomsRes, groupsRes, iotRes, envRes, regRes] = await Promise.all([
+        const [roomsRes, groupsRes, iotRes, envRes, regRes, trRes] = await Promise.all([
           authFetch('/data/rooms.json?t=' + Date.now()),
           authFetch('/data/groups.json?t=' + Date.now()),
           authFetch('/data/iot-devices.json?t=' + Date.now()),
           authFetch('/env?hours=24&t=' + Date.now(), { cache: 'no-store' }),
           authFetch('/data/crop-registry.json?t=' + Date.now()),
+          authFetch('/data/target-ranges.json?t=' + Date.now()),
         ]);
 
         // Room list: still a wholesale replace — this list rarely changes and
@@ -1395,6 +1420,7 @@
         }
         if (envRes.ok) { S.envData = await envRes.json(); }
         if (regRes.ok) { const d = await regRes.json(); S.cropRegistry = d.crops || d || {}; }
+        if (trRes.ok) { S.targetRanges = await trRes.json(); }
 
         status('Loading room layouts...');
         const freshRoomMaps = {};
@@ -1613,6 +1639,62 @@
         }
         if (entry) entry.groups.push(g);
       });
+      computeZoneDeviations();
+    }
+
+
+    // ---- Zone deviation from targets (for status coloring) ----
+    function computeZoneDeviations() {
+      if (!S.targetRanges) return;
+      const zones = S.targetRanges.zones || {};
+      const defaults = S.targetRanges.defaults || {};
+      const thr = S.targetRanges.severity_thresholds || {};
+      const tempThr = thr.temperature || { warning_deviation: 2, critical_deviation: 3 };
+      const rhThr = thr.humidity || { warning_deviation: 10, critical_deviation: 20 };
+      const vpdThr = thr.vpd || { warning_deviation: 0.3, critical_deviation: 0.5 };
+      Object.entries(S.zoneDataMap).forEach(([zId, data]) => {
+        const targets = zones[zId] || defaults;
+        const metrics = {};
+        let worst = 'ok';
+        function classify(val, min, max, warnDev, critDev, name) {
+          if (val == null) return;
+          let deviation = 0;
+          if (val < min) deviation = min - val;
+          else if (val > max) deviation = val - max;
+          let status = 'ok';
+          if (deviation >= critDev) status = 'critical';
+          else if (deviation >= warnDev) status = 'warning';
+          else if (deviation > 0) status = 'caution';
+          metrics[name] = { value: val, deviation: +deviation.toFixed(2), status };
+          if (status === 'critical') worst = 'critical';
+          else if (status === 'warning' && worst !== 'critical') worst = 'warning';
+          else if (status === 'caution' && worst === 'ok') worst = 'caution';
+        }
+        classify(data.temp, targets.temp_min ?? 18, targets.temp_max ?? 26,
+          tempThr.warning_deviation, tempThr.critical_deviation, 'temperature');
+        classify(data.humidity, targets.rh_min ?? 45, targets.rh_max ?? 70,
+          rhThr.warning_deviation, rhThr.critical_deviation, 'humidity');
+        if (data.vpd != null) {
+          classify(data.vpd, targets.vpd_min ?? 0.6, targets.vpd_max ?? 1.4,
+            vpdThr.warning_deviation, vpdThr.critical_deviation, 'vpd');
+        }
+        data.deviation = { worst, metrics };
+      });
+    }
+
+    function findZoneDataForMesh(mesh) {
+      const ud = mesh.userData;
+      const zId = ud.zoneId;
+      if (S.zoneDataMap[zId]) return S.zoneDataMap[zId];
+      const name = String(ud.zone?.name || ud.zone?.zone || '');
+      if (name) {
+        const key = Object.keys(S.zoneDataMap).find(k =>
+          k === name || S.zoneDataMap[k].name === name ||
+          k === 'zone-' + name || S.zoneDataMap[k].name === 'Zone ' + name
+        );
+        if (key) return S.zoneDataMap[key];
+      }
+      return null;
     }
 
     function getVal(sensors, ...keys) {
@@ -2209,6 +2291,9 @@
         S.controls.update();
       }
 
+      // Apply initial equipment visibility (hidden by default)
+      S.meshes.equipment.forEach(m => { m.visible = S.equipmentVisible; });
+
       applyOverlay(S.overlay);
     }
 
@@ -2343,6 +2428,22 @@
         if (v != null) return { value: v, source: 'iot-registry' };
       }
 
+      // PPFD/DLI: extract from group light assignments or zone plan targets
+      if (metricKey === 'ppfd' || metricKey === 'dli') {
+        // Check zone data for groups with PPFD/DLI targets
+        for (const zone of zones) {
+          const groups = zone.groups || [];
+          for (const g of groups) {
+            if (g.targetPpfd != null && metricKey === 'ppfd') return { value: g.targetPpfd, source: 'group-plan' };
+            if (g.dli != null && metricKey === 'dli') return { value: g.dli, source: 'group-plan' };
+            const pc = g.planConfig || {};
+            if (pc.preview?.ppfd != null && metricKey === 'ppfd') return { value: pc.preview.ppfd, source: 'plan-preview' };
+            if (pc.preview?.dli != null && metricKey === 'dli') return { value: pc.preview.dli, source: 'plan-preview' };
+            if (pc.dli != null && metricKey === 'dli') return { value: pc.dli, source: 'plan-config' };
+          }
+        }
+      }
+
       return { value: null, source: 'none' };
     }
 
@@ -2353,6 +2454,7 @@
       if (cat.includes('sensor') || cat.includes('temp') || cat.includes('humid') || cat.includes('environment')) return true;
       if (type.includes('sensor') || type.includes('woio')) return true;
       if (/^sen\b/.test(name) || name.includes('sensor')) return true;
+      if (cat.includes('light') || type.includes('light') || name.includes('light')) return true;
       const devId = dev.deviceId || dev.snapshot?.deviceId || '';
       if (devId && (S.envData?.zones || []).some(function(z) {
         return !!(z?.sensors?.tempC?.sources?.[devId] || z?.sensors?.rh?.sources?.[devId] || z?.sensors?.co2?.sources?.[devId]);
@@ -2397,7 +2499,56 @@
 
       const legend = document.getElementById('dataLegend');
       if (type === 'none') {
+        // Always-on zone status tinting when no overlay is active
+        if (S.targetRanges) {
+          const STATUS_TINT = { ok: 0x22c55e, caution: 0xfacc15, warning: 0xf59e0b, critical: 0xef4444 };
+          S.meshes.zones.forEach(m => {
+            if (!m.isMesh || m.userData.type !== 'zone') return;
+            const data = findZoneDataForMesh(m);
+            if (!data || !data.deviation) return;
+            const worst = data.deviation.worst;
+            if (worst !== 'ok') {
+              m.material.color.setHex(STATUS_TINT[worst]);
+              m.material.opacity = worst === 'critical' ? 0.30 : worst === 'warning' ? 0.25 : 0.20;
+            }
+          });
+        }
         legend.classList.remove('visible');
+        return;
+      }
+
+      // Dedicated status overlay: per-zone deviation from target ranges
+      if (type === 'status') {
+        const STATUS_COLORS = { ok: 0x22c55e, caution: 0xfacc15, warning: 0xf59e0b, critical: 0xef4444, unknown: 0x475569 };
+        const STATUS_OPACITY = { ok: 0.30, caution: 0.40, warning: 0.45, critical: 0.55, unknown: 0.15 };
+        let worstOverall = 'ok';
+        let okCount = 0, warnCount = 0, critCount = 0;
+        S.meshes.zones.forEach(m => {
+          if (!m.isMesh || m.userData.type !== 'zone') return;
+          const data = findZoneDataForMesh(m);
+          const worst = data?.deviation?.worst || 'unknown';
+          const color = STATUS_COLORS[worst] || STATUS_COLORS.unknown;
+          m.material.color.setHex(color);
+          m.material.opacity = STATUS_OPACITY[worst] || 0.15;
+          if (m.material.emissive) {
+            m.material.emissive.setHex(color);
+            m.material.emissiveIntensity = worst === 'critical' ? 0.18 : worst === 'warning' ? 0.10 : 0.03;
+          }
+          if (worst === 'critical') { critCount++; worstOverall = 'critical'; }
+          else if (worst === 'warning') { warnCount++; if (worstOverall !== 'critical') worstOverall = 'warning'; }
+          else if (worst === 'caution') { warnCount++; if (worstOverall === 'ok') worstOverall = 'caution'; }
+          else if (worst === 'ok') { okCount++; }
+        });
+        legend.classList.add('visible');
+        const parts = [];
+        if (okCount) parts.push(okCount + ' in range');
+        if (warnCount) parts.push(warnCount + ' warning');
+        if (critCount) parts.push(critCount + ' critical');
+        document.getElementById('legendTitle').textContent = 'Zone Status' + (parts.length ? ' -- ' + parts.join(', ') : '');
+        document.getElementById('legendMin').textContent = 'In Range';
+        document.getElementById('legendMax').textContent = 'Critical';
+        const gradBar = document.getElementById('legendGradient');
+        gradBar.style.background = 'linear-gradient(to right, #22c55e 0%, #facc15 33%, #f59e0b 66%, #ef4444 100%)';
         return;
       }
 
@@ -3298,6 +3449,7 @@
     }
 
     function onPointerDown(e) {
+      if (_touchCount > 1) return; // multi-touch = orbit, not drag
       if (!S.editMode) return;
       if (e.shiftKey || e.metaKey || e.ctrlKey) return;
       var container = document.getElementById('viewer-container');
@@ -4284,6 +4436,14 @@
       btn.classList.toggle('active', S.wallsVisible);
     }
 
+    // ---- Toggle equipment (lights, fans, devices) ----------
+    function toggleEquipment() {
+      S.equipmentVisible = !S.equipmentVisible;
+      S.meshes.equipment.forEach(m => { m.visible = S.equipmentVisible; });
+      const btn = document.getElementById('btnGear');
+      btn.classList.toggle('active', S.equipmentVisible);
+    }
+
     // ---- GWEN integration ------------------------------------
     function openGwenWithContext() {
       const envSummary = {};
@@ -4318,6 +4478,7 @@
       });
 
       document.getElementById('btnWalls').addEventListener('click', toggleWalls);
+      document.getElementById('btnGear').addEventListener('click', toggleEquipment);
       document.getElementById('btnTop').addEventListener('click', function() { var t = S.controls.target; animateTo({ x: t.x, y: 35, z: t.z + 0.1 }); });
       document.getElementById('btnAngle').addEventListener('click', function() { var t = S.controls.target; animateTo({ x: t.x - 10, y: 16, z: t.z + 18 }); });
       document.getElementById('btnReset').addEventListener('click', function() {
@@ -4355,12 +4516,85 @@
         }
       });
 
+      // ---- Phase 4 #24: Keyboard navigation for 3D viewer ----
+      var _kbFocusIdx = -1;
+      function _getZoneMeshes() {
+        var meshes = [];
+        S.scene.traverse(function(obj) {
+          if (obj.isMesh && obj.userData && (obj.userData.type === 'zone' || obj.userData.type === 'group' || obj.userData.type === 'sensor')) {
+            meshes.push(obj);
+          }
+        });
+        return meshes;
+      }
+      function _a11yAnnounce(msg) {
+        var el = document.getElementById('a11yAnnouncer');
+        if (el) { el.textContent = ''; requestAnimationFrame(function() { el.textContent = msg; }); }
+      }
+      document.addEventListener('keydown', function(e) {
+        var target = e.target;
+        if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT') return;
+        if (target.isContentEditable) return;
+        var handled = false;
+        var orbitStep = 0.05;
+        var zoomStep = 2;
+        if (e.key === 'ArrowLeft') {
+          if (S.controls) { S.controls.autoRotate = false; S.controls.object.position.applyAxisAngle(new THREE.Vector3(0,1,0), orbitStep); S.controls.update(); }
+          handled = true;
+        } else if (e.key === 'ArrowRight') {
+          if (S.controls) { S.controls.autoRotate = false; S.controls.object.position.applyAxisAngle(new THREE.Vector3(0,1,0), -orbitStep); S.controls.update(); }
+          handled = true;
+        } else if (e.key === 'ArrowUp') {
+          if (S.controls) { var d = S.controls.object.position.distanceTo(S.controls.target); if (d > S.controls.minDistance) { S.controls.object.position.lerp(S.controls.target, 0.08); S.controls.update(); } }
+          handled = true;
+        } else if (e.key === 'ArrowDown') {
+          if (S.controls) { var dir = S.controls.object.position.clone().sub(S.controls.target).normalize(); S.controls.object.position.add(dir.multiplyScalar(zoomStep)); S.controls.update(); }
+          handled = true;
+        } else if (e.key === '+' || e.key === '=') {
+          if (S.controls) { var d2 = S.controls.object.position.distanceTo(S.controls.target); if (d2 > S.controls.minDistance + zoomStep) { var dir2 = S.controls.target.clone().sub(S.controls.object.position).normalize(); S.controls.object.position.add(dir2.multiplyScalar(zoomStep)); S.controls.update(); } }
+          handled = true;
+        } else if (e.key === '-' || e.key === '_') {
+          if (S.controls) { var dir3 = S.controls.object.position.clone().sub(S.controls.target).normalize(); S.controls.object.position.add(dir3.multiplyScalar(zoomStep)); S.controls.update(); }
+          handled = true;
+        } else if (e.key === 'Tab' && !e.ctrlKey && !e.metaKey) {
+          var meshes = _getZoneMeshes();
+          if (meshes.length > 0) {
+            if (e.shiftKey) { _kbFocusIdx = (_kbFocusIdx - 1 + meshes.length) % meshes.length; }
+            else { _kbFocusIdx = (_kbFocusIdx + 1) % meshes.length; }
+            var mesh = meshes[_kbFocusIdx];
+            var ud = mesh.userData;
+            setSelection([mesh]);
+            var pos = new THREE.Vector3(); mesh.getWorldPosition(pos);
+            animateTo(pos, 500);
+            var label = (ud.label || ud.name || ud.zoneId || ud.groupId || 'Object');
+            var typeLabel = ud.type === 'zone' ? 'Zone' : ud.type === 'group' ? 'Group' : 'Sensor';
+            _a11yAnnounce(typeLabel + ': ' + label + '. Press Enter for details.');
+            handled = true;
+          }
+        } else if (e.key === 'Enter') {
+          if (S.selectedMeshes && S.selectedMeshes.length > 0) {
+            var ud2 = S.selectedMeshes[0].userData;
+            if (ud2) showDetailPanel(ud2);
+            handled = true;
+          }
+        }
+        if (handled) e.preventDefault();
+      });
+
       var canvas = document.getElementById('farmCanvas');
       canvas.style.touchAction = 'none';
       canvas.addEventListener('pointerdown', onPointerDown);
       canvas.addEventListener('pointermove', onPointerMove);
       canvas.addEventListener('pointerup', onPointerUp);
       canvas.addEventListener('click', function(e) { if (!S.isDragging && !S.editMode) onClick(e); else if (S.editMode && !S.isDragging) onClick(e); });
+
+      // ---- Phase 4 #24: Mobile touch refinements ----
+      // Prevent edit-mode drag from interfering with multi-touch orbit/zoom
+      var _touchCount = 0;
+      canvas.addEventListener('touchstart', function(e) { _touchCount = e.touches.length; }, { passive: true });
+      canvas.addEventListener('touchend', function(e) { _touchCount = e.touches.length; }, { passive: true });
+      canvas.addEventListener('touchcancel', function(e) { _touchCount = 0; }, { passive: true });
+
       document.getElementById('btnEdit').addEventListener('click', toggleEditMode);
       document.getElementById('detailClose').addEventListener('click', function() {
         closeDetailPanel({ confirm: true, message: 'Discard unsaved detail panel changes?' });

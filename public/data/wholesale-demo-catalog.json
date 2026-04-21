@@ -609,5 +609,6 @@
       ],
       "size": "1.5 lbs"
     }
-  ]
+  ],
+  "schemaVersion": "1.0.0"
 }

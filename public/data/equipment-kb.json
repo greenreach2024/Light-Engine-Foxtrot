@@ -796,5 +796,6 @@
     "Controllers"
   ],
   "lastUpdated": "2026-02-20",
-  "version": "1.1.0"
+  "version": "1.1.0",
+  "schemaVersion": "1.0.0"
 }
