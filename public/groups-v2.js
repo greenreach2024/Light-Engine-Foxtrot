@@ -7531,25 +7531,30 @@ async function executeBulkDeleteGroups(prefix) {
   var toDeleteIds = {};
   members.forEach(function(g) { if (g && g.id) toDeleteIds[g.id] = true; });
 
-  var before = groups.length;
-  window.STATE.groups = groups.filter(function(g) { return !g || !toDeleteIds[g.id]; });
-  var deleted = before - window.STATE.groups.length;
+  // Compute the post-delete array without yet mutating STATE. If the persist
+  // call fails, the in-memory state is left exactly as it was so the operator
+  // doesn't see groups vanish from the UI while the server still has them.
+  var originalGroups = groups;
+  var nextGroups = groups.filter(function(g) { return !g || !toDeleteIds[g.id]; });
+  var deleted = originalGroups.length - nextGroups.length;
   if (!deleted) return { deleted: 0 };
 
   try {
     var response = await fetch('/data/groups.json', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ groups: window.STATE.groups })
+      body: JSON.stringify({ groups: nextGroups })
     });
     if (!response.ok) {
       var errorText = await response.text();
       throw new Error('Server error: ' + response.status + ' ' + errorText);
     }
     await response.json();
+    window.STATE.groups = nextGroups;
     console.log('[Bulk Delete] Removed ' + deleted + ' groups in family "' + prefix + '"');
   } catch (error) {
     console.error('[Bulk Delete] Failed to persist:', error);
+    window.STATE.groups = originalGroups;
     if (typeof showToast === 'function') {
       showToast({ title: 'Bulk Delete Failed', msg: error.message, kind: 'error', icon: '' });
     } else {

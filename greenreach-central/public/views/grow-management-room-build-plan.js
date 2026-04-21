@@ -100,7 +100,7 @@
 
     lines.push({
       label: 'Crop class',
-      value: cropClass.replace('_', ' '),
+      value: cropClass.replace(/_/g, ' '),
       note: totalSites ? `${totalSites} plant sites (${tiers} tier\u00d7${traysPerTier} tray\u00d7${plantsPerTray}/tray)` : null
     });
 
