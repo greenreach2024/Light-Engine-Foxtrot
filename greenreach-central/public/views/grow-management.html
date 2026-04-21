@@ -515,6 +515,157 @@
       color: #ef4444 !important;
       border-color: rgba(239, 68, 68, 0.3) !important;
     }
+
+    /* =====================================================================
+       UNIFIED FARM FLOW BREADCRUMB
+       6-step guided workflow: Room -> Zones -> Grow units -> Lights ->
+       Equipment -> Controllers. Consolidates what used to live across
+       /views/farm-setup.html, /setup-wizard.html, and this page into a
+       single ordered flow per FARM_SETUP_WORKFLOW_PROPOSAL.md.
+       ===================================================================== */
+    .ff-breadcrumb {
+      position: sticky;
+      top: 0;
+      z-index: 90;
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      padding: 10px 24px;
+      background: rgba(15, 23, 42, 0.92);
+      border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+      backdrop-filter: blur(10px);
+      overflow-x: auto;
+      white-space: nowrap;
+    }
+    .ff-breadcrumb__step {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: 0.8125rem;
+      font-weight: 500;
+      color: #94a3b8;
+      background: rgba(30, 41, 59, 0.5);
+      border: 1px solid rgba(148, 163, 184, 0.15);
+      cursor: pointer;
+      transition: border-color 150ms ease, color 150ms ease, background 150ms ease;
+      text-decoration: none;
+    }
+    .ff-breadcrumb__step:hover {
+      border-color: rgba(59, 130, 246, 0.45);
+      color: #f1f5f9;
+    }
+    .ff-breadcrumb__step.is-active {
+      background: rgba(59, 130, 246, 0.18);
+      border-color: #3b82f6;
+      color: #f1f5f9;
+    }
+    .ff-breadcrumb__step.is-complete {
+      border-color: rgba(16, 185, 129, 0.55);
+      color: #a7f3d0;
+    }
+    .ff-breadcrumb__num {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      font-size: 11px;
+      font-weight: 700;
+      background: rgba(59, 130, 246, 0.25);
+      color: #dbeafe;
+    }
+    .ff-breadcrumb__step.is-complete .ff-breadcrumb__num {
+      background: rgba(16, 185, 129, 0.3);
+      color: #6ee7b7;
+    }
+    .ff-breadcrumb__sep {
+      color: #475569;
+      user-select: none;
+    }
+
+    /* Step sections — match the Tesla dark theme of existing gm-cards but
+       with a numbered accent strip so the operator always knows which step
+       of the flow they're in. */
+    .ff-step {
+      margin: 0 16px 18px;
+      scroll-margin-top: 88px;
+    }
+    .ff-step__head {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+    .ff-step__badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: rgba(59, 130, 246, 0.25);
+      color: #dbeafe;
+      font-weight: 700;
+      font-size: 13px;
+    }
+    .ff-step__title {
+      margin: 0;
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: #f1f5f9;
+    }
+    .ff-step__subtitle {
+      margin: 0;
+      font-size: 0.8125rem;
+      color: #94a3b8;
+    }
+    .ff-step-card {
+      background: rgba(15, 23, 42, 0.95);
+      border: 1px solid rgba(59, 130, 246, 0.2);
+      border-radius: 16px;
+      padding: 1.25rem 1.5rem;
+      color: #f1f5f9;
+    }
+    .ff-empty {
+      font-size: 0.875rem;
+      color: #94a3b8;
+      padding: 12px 0;
+    }
+    .ff-chip-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin: 4px 0 12px;
+    }
+    .ff-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: rgba(30, 41, 59, 0.75);
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      color: #e2e8f0;
+      font-size: 0.75rem;
+    }
+    .ff-chip--accent { border-color: rgba(59, 130, 246, 0.45); color: #dbeafe; }
+    .ff-chip--ok { border-color: rgba(16, 185, 129, 0.45); color: #a7f3d0; }
+    .ff-chip--warn { border-color: rgba(245, 158, 11, 0.45); color: #fcd34d; }
+    .ff-link-row {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-top: 12px;
+    }
+    .ff-link-row a {
+      color: #38bdf8;
+      text-decoration: none;
+      font-size: 0.8125rem;
+    }
+    .ff-link-row a:hover { text-decoration: underline; }
   </style>
   <script src="/js/console-wrapper.js"></script>
   <script src="/js/net.guard.js" defer></script>
@@ -528,12 +679,32 @@
 
   <!-- ===== HEADER ===== -->
   <header class="gm-header">
-    <h1>Grow Management</h1>
+    <h1>Farm Setup &amp; Grow Management</h1>
     <div class="gm-header-status">
       <span id="groupsV2Status" aria-live="polite"></span>
       <span id="groupsV2StatusBadge"></span>
     </div>
   </header>
+
+  <!-- ===== UNIFIED FARM FLOW BREADCRUMB =====
+       Single ordered workflow replacing the three parallel farm-setup
+       surfaces (farm-setup.html dashboard, setup-wizard.html, legacy
+       grow-management). Clicking a step smooth-scrolls to its section.
+       Active / complete states are driven by ffFlow.refresh() below.
+  -->
+  <nav class="ff-breadcrumb" id="ffBreadcrumb" aria-label="Farm setup steps">
+    <a href="#flow-room" class="ff-breadcrumb__step" data-step="room"><span class="ff-breadcrumb__num">1</span>Room</a>
+    <span class="ff-breadcrumb__sep">&rsaquo;</span>
+    <a href="#flow-zones" class="ff-breadcrumb__step" data-step="zones"><span class="ff-breadcrumb__num">2</span>Zones</a>
+    <span class="ff-breadcrumb__sep">&rsaquo;</span>
+    <a href="#flow-grow-units" class="ff-breadcrumb__step" data-step="grow-units"><span class="ff-breadcrumb__num">3</span>Grow units</a>
+    <span class="ff-breadcrumb__sep">&rsaquo;</span>
+    <a href="#flow-lights" class="ff-breadcrumb__step" data-step="lights"><span class="ff-breadcrumb__num">4</span>Lights</a>
+    <span class="ff-breadcrumb__sep">&rsaquo;</span>
+    <a href="#flow-equipment" class="ff-breadcrumb__step" data-step="equipment"><span class="ff-breadcrumb__num">5</span>Equipment</a>
+    <span class="ff-breadcrumb__sep">&rsaquo;</span>
+    <a href="#flow-controllers" class="ff-breadcrumb__step" data-step="controllers"><span class="ff-breadcrumb__num">6</span>Controllers</a>
+  </nav>
 
   <!-- ===== KPI ROW ===== -->
   <div class="gm-kpi-row">
@@ -565,11 +736,57 @@
   <!-- ===== MAIN CONTENT ===== -->
   <div class="gm-container">
 
-    <!-- ===== GROW-SYSTEM TEMPLATE GALLERY ===== -->
-    <section id="growTemplateGallery" data-template-gallery-mount style="margin:0 16px 18px;"></section>
+    <!-- ===== STEP 1 — ROOM ===== -->
+    <section id="flow-room" class="ff-step" aria-labelledby="ffRoomTitle">
+      <div class="ff-step__head">
+        <span class="ff-step__badge">1</span>
+        <div>
+          <h2 class="ff-step__title" id="ffRoomTitle">Room</h2>
+          <p class="ff-step__subtitle">Physical shell: name, dimensions (L &times; W &times; H), envelope class.</p>
+        </div>
+      </div>
+      <div class="ff-step-card">
+        <div id="ffRoomBody" class="ff-empty">Loading rooms&hellip;</div>
+        <div class="ff-link-row">
+          <a href="/views/farm-setup.html#rooms">Edit rooms in Farm Setup</a>
+          <a href="/views/3d-farm-viewer.html">Open 3D viewer</a>
+        </div>
+      </div>
+    </section>
 
-    <!-- ===== ROOM BUILD PLAN (populated on template click) ===== -->
-    <section id="roomBuildPlan" class="gm-card" style="display:none;margin:0 16px 18px;">
+    <!-- ===== STEP 2 — ZONES ===== -->
+    <section id="flow-zones" class="ff-step" aria-labelledby="ffZonesTitle">
+      <div class="ff-step__head">
+        <span class="ff-step__badge">2</span>
+        <div>
+          <h2 class="ff-step__title" id="ffZonesTitle">Zones</h2>
+          <p class="ff-step__subtitle">Independently controlled climate areas inside a room. Evie recommends splitting for photoperiod, cleaning, or crop-mix separation.</p>
+        </div>
+      </div>
+      <div class="ff-step-card">
+        <div id="ffZonesBody" class="ff-empty">Loading zones&hellip;</div>
+        <div id="ffZonesEvieAdvice" class="ff-chip-row" style="display:none;"></div>
+      </div>
+    </section>
+
+    <!-- ===== STEP 3 — GROW UNITS =====
+         Template gallery + Room Build Plan (auto-fit per template spatial
+         contract, Evie zone count advisor, solver-driven unit count).
+    -->
+    <section id="flow-grow-units" class="ff-step" aria-labelledby="ffGrowUnitsTitle">
+      <div class="ff-step__head">
+        <span class="ff-step__badge">3</span>
+        <div>
+          <h2 class="ff-step__title" id="ffGrowUnitsTitle">Grow units</h2>
+          <p class="ff-step__subtitle">Pick a growing system template. Evie sizes working clearance, main walkway, and computes units-per-zone.</p>
+        </div>
+      </div>
+
+      <!-- Template gallery (renders inside this wrapper) -->
+      <section id="growTemplateGallery" data-template-gallery-mount style="margin:0 0 18px;"></section>
+
+      <!-- Room Build Plan (populated on template click) -->
+      <section id="roomBuildPlan" class="gm-card" style="display:none;margin:0;">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:12px;">
         <div>
           <h3 id="rbpTitle" style="margin:0 0 4px;border:none;padding:0;">Room Build Plan</h3>
@@ -785,6 +1002,20 @@
           <div id="groupsV2GroupListBody"></div>
         </div>
 
+        <!-- ===== STEP 4 — LIGHTS =====
+             Anchor target for breadcrumb step 4. Light Assignment lives
+             inside the Groups V2 panel because groups-v2.js wires it to
+             the active group; rather than move the DOM we scroll to this
+             anchor and give the step a labeled header.
+        -->
+        <div id="flow-lights" class="ff-step__head" style="scroll-margin-top:88px;margin-top:8px;">
+          <span class="ff-step__badge">4</span>
+          <div>
+            <h2 class="ff-step__title">Lights</h2>
+            <p class="ff-step__subtitle">Assign fixtures to the active group. Fixture class + channel count prefill from the selected template.</p>
+          </div>
+        </div>
+
         <!-- ===== LIGHT ASSIGNMENT ===== -->
         <div class="gm-card">
           <h3>Light Assignment</h3>
@@ -910,6 +1141,56 @@
 
       </div>
     </section>
+    </section> <!-- /#flow-grow-units wraps template gallery + build plan + groups panel (steps 3 & 4 content) -->
+
+    <!-- ===== STEP 5 — EQUIPMENT =====
+         Reads the Room Build Plan output (from grow-management-room-build-plan.js)
+         and displays accepted equipment sizing: cooling tons, dehum L/day,
+         fan CFM, pump count. An "Accept plan" CTA persists the plan to
+         rooms.json.buildPlan in a later PR (currently deep-links to Farm
+         Setup IoT/equipment for manual provisioning).
+    -->
+    <section id="flow-equipment" class="ff-step" aria-labelledby="ffEquipmentTitle">
+      <div class="ff-step__head">
+        <span class="ff-step__badge">5</span>
+        <div>
+          <h2 class="ff-step__title" id="ffEquipmentTitle">Equipment</h2>
+          <p class="ff-step__subtitle">Cooling tons, dehumidification L/day, fan CFM, pump count — derived from template &times; quantity &times; room envelope.</p>
+        </div>
+      </div>
+      <div class="ff-step-card">
+        <div id="ffEquipmentBody" class="ff-empty">Pick a template in step 3 to compute equipment sizing.</div>
+        <div class="ff-link-row">
+          <a href="/views/farm-setup.html#iot">Provision equipment in Farm Setup</a>
+          <a href="/views/supplies.html">Supplies &amp; consumables</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== STEP 6 — CONTROLLERS =====
+         Phase B — device discovery and binding. Controllers are the final
+         step because you cannot pick specific controllers until template,
+         quantity, and equipment sizing are known. Discovery + binding
+         happens against cloud-owned vendor APIs and LAN/DMX probes rather
+         than the user typing MAC addresses; that work is tracked for a
+         follow-up PR.
+    -->
+    <section id="flow-controllers" class="ff-step" aria-labelledby="ffControllersTitle">
+      <div class="ff-step__head">
+        <span class="ff-step__badge">6</span>
+        <div>
+          <h2 class="ff-step__title" id="ffControllersTitle">Controllers</h2>
+          <p class="ff-step__subtitle">SwitchBot hub, Kasa account, Code3 gateway, DMX universes, wired bus segments — bound to the channels reserved in steps 3-5.</p>
+        </div>
+      </div>
+      <div class="ff-step-card">
+        <div id="ffControllersBody" class="ff-empty">Loading controllers&hellip;</div>
+        <div class="ff-link-row">
+          <a href="/views/farm-setup.html#iot">Pair IoT devices</a>
+          <a href="/views/farm-setup.html#integrations">Integrations &amp; vendor accounts</a>
+        </div>
+      </div>
+    </section>
 
   </div>
 
@@ -961,7 +1242,283 @@
       setTimeout(updateGrowKPIs, 2000);
       // Check for degraded plan resolver state (E1)
       checkDegradedCompromise();
+      // Hydrate Farm Flow step cards (Room / Zones / Equipment / Controllers).
+      ffFlow.refresh();
     });
+
+    // =====================================================================
+    // UNIFIED FARM FLOW CONTROLLER
+    // Hydrates read-only summaries for Room / Zones / Equipment /
+    // Controllers step cards and manages breadcrumb active state based on
+    // which section is currently in view. Grow units (step 3) and Lights
+    // (step 4) are driven by the pre-existing template-gallery +
+    // room-build-plan + groups-v2 scripts and need no extra hydration.
+    // =====================================================================
+    var ffFlow = (function () {
+      var state = {
+        rooms: [],
+        groups: [],
+        templates: [],
+        devices: []
+      };
+      function fmtEnvelope(r) {
+        var env = r.envelope || r.envelope_class || r.env || '';
+        if (!env) return 'envelope class unset';
+        return String(env).replace(/_/g, ' ');
+      }
+      function fmtDims(r) {
+        var l = r.length_m || (r.dimensions && r.dimensions.length_m) || null;
+        var w = r.width_m || (r.dimensions && r.dimensions.width_m) || null;
+        var h = r.ceiling_height_m || (r.dimensions && r.dimensions.height_m) || null;
+        if (l && w && h) return l + 'm × ' + w + 'm × ' + h + 'm';
+        if (l && w) return l + 'm × ' + w + 'm';
+        return 'dimensions unset';
+      }
+      function chip(label, variant) {
+        var cls = 'ff-chip' + (variant ? ' ff-chip--' + variant : '');
+        var span = document.createElement('span');
+        span.className = cls;
+        span.textContent = label;
+        return span;
+      }
+      function renderRoom() {
+        var host = document.getElementById('ffRoomBody');
+        if (!host) return;
+        host.innerHTML = '';
+        if (!state.rooms.length) {
+          host.className = 'ff-empty';
+          host.textContent = 'No rooms defined yet. Use Farm Setup to create one.';
+          return;
+        }
+        host.className = '';
+        var frag = document.createDocumentFragment();
+        state.rooms.forEach(function (r) {
+          var card = document.createElement('div');
+          card.style.cssText = 'padding:12px 14px;border:1px solid rgba(59,130,246,0.2);border-radius:12px;margin-bottom:8px;background:rgba(30,41,59,0.55);';
+          var title = document.createElement('div');
+          title.style.cssText = 'font-weight:600;color:#f1f5f9;margin-bottom:6px;';
+          title.textContent = r.name || r.room_name || r.id || 'Room';
+          card.appendChild(title);
+          var chips = document.createElement('div');
+          chips.className = 'ff-chip-row';
+          chips.style.margin = '0';
+          chips.appendChild(chip(fmtDims(r), 'accent'));
+          chips.appendChild(chip(fmtEnvelope(r), r.envelope ? 'ok' : 'warn'));
+          var zoneCount = Array.isArray(r.zones) ? r.zones.length : 0;
+          chips.appendChild(chip(zoneCount + ' zone' + (zoneCount === 1 ? '' : 's'), zoneCount ? 'ok' : 'warn'));
+          card.appendChild(chips);
+          frag.appendChild(card);
+        });
+        host.appendChild(frag);
+      }
+      function renderZones() {
+        var host = document.getElementById('ffZonesBody');
+        var advice = document.getElementById('ffZonesEvieAdvice');
+        if (!host) return;
+        host.innerHTML = '';
+        var allZones = [];
+        state.rooms.forEach(function (r) {
+          (r.zones || []).forEach(function (z) {
+            allZones.push({ room: r, zone: z });
+          });
+        });
+        if (!allZones.length) {
+          host.className = 'ff-empty';
+          host.textContent = 'No zones defined. Evie recommends starting with 2 zones per room so you can run independent photoperiods or clean one while the other produces.';
+          if (advice) advice.style.display = 'none';
+          return;
+        }
+        host.className = '';
+        var table = document.createElement('div');
+        table.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;';
+        allZones.forEach(function (entry) {
+          var z = entry.zone;
+          var r = entry.room;
+          var card = document.createElement('div');
+          card.style.cssText = 'padding:10px 12px;border:1px solid rgba(148,163,184,0.2);border-radius:10px;background:rgba(15,23,42,0.6);';
+          var name = document.createElement('div');
+          name.style.cssText = 'font-weight:600;color:#f1f5f9;font-size:0.875rem;';
+          name.textContent = (r.name || r.id) + ' · ' + (z.name || z.id || 'zone');
+          card.appendChild(name);
+          var meta = document.createElement('div');
+          meta.className = 'tiny';
+          meta.style.cssText = 'color:#94a3b8;margin-top:4px;';
+          var l = z.length_m || (z.dimensions && z.dimensions.length_m) || null;
+          var w = z.width_m || (z.dimensions && z.dimensions.width_m) || null;
+          meta.textContent = l && w ? (l + 'm × ' + w + 'm') : 'dimensions inherit from room';
+          card.appendChild(meta);
+          table.appendChild(card);
+        });
+        host.appendChild(table);
+        if (advice) {
+          advice.innerHTML = '';
+          advice.appendChild(chip('Evie: zones separate photoperiod + cleaning cycles', 'accent'));
+          advice.appendChild(chip('Zones can run independent crop recipes', 'ok'));
+          advice.style.display = '';
+        }
+      }
+      function renderEquipment() {
+        var host = document.getElementById('ffEquipmentBody');
+        if (!host) return;
+        // grow-management-room-build-plan.js exposes window.__roomBuildPlan
+        // with shape { template, cropClass, scores, desiredUnits, zoneRects,
+        // spatialPlan, zoneRecommendation }. Equipment metrics live under
+        // scores.{transpiration,heatManagement,envBenchmark}.
+        var rbp = window.__roomBuildPlan;
+        if (!rbp || !rbp.scores) {
+          host.className = 'ff-empty';
+          host.textContent = 'Pick a template in step 3 to compute equipment sizing. Cooling tons, dehumidification L/day, and fan CFM populate automatically from the Room Build Plan.';
+          return;
+        }
+        host.className = '';
+        host.innerHTML = '';
+        var grid = document.createElement('div');
+        grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;';
+        function metric(label, value, unit, note) {
+          var box = document.createElement('div');
+          box.style.cssText = 'padding:12px 14px;border:1px solid rgba(59,130,246,0.25);border-radius:10px;background:rgba(15,23,42,0.6);';
+          var l = document.createElement('div');
+          l.className = 'tiny';
+          l.style.cssText = 'color:#94a3b8;text-transform:uppercase;letter-spacing:0.05em;font-size:0.7rem;';
+          l.textContent = label;
+          var v = document.createElement('div');
+          v.style.cssText = 'font-size:1.25rem;font-weight:700;color:#f1f5f9;margin-top:4px;';
+          v.textContent = value + (unit ? ' ' + unit : '');
+          box.appendChild(l);
+          box.appendChild(v);
+          if (note) {
+            var n = document.createElement('div');
+            n.style.cssText = 'font-size:0.72rem;color:#94a3b8;margin-top:4px;';
+            n.textContent = note;
+            box.appendChild(n);
+          }
+          return box;
+        }
+        var s = rbp.scores || {};
+        var kgDay = s.transpiration && s.transpiration.dailyWaterKg;
+        if (Number.isFinite(kgDay)) {
+          grid.appendChild(metric('Transpiration', kgDay.toFixed(1), 'kg/day', '≈ ' + Math.round(kgDay) + ' L/day latent — dehum target'));
+        }
+        var totalHeatW = s.heatManagement && s.heatManagement.totalHeatW;
+        if (Number.isFinite(totalHeatW) && totalHeatW > 0) {
+          grid.appendChild(metric('Cooling load', (totalHeatW / 3517).toFixed(2), 'tons', Math.round(totalHeatW) + ' W total'));
+        }
+        var reqCFM = s.envBenchmark && s.envBenchmark.inputs && s.envBenchmark.inputs.airflow && s.envBenchmark.inputs.airflow.requiredCFM;
+        if (Number.isFinite(reqCFM) && reqCFM > 0) {
+          grid.appendChild(metric('Supply fan', Math.round(reqCFM), 'CFM', 'per envelope ACH'));
+        }
+        var envScore = s.envBenchmark && s.envBenchmark.score;
+        if (Number.isFinite(envScore)) {
+          grid.appendChild(metric('Env benchmark', Math.round(envScore), s.tier || '', 'higher = easier to operate'));
+        }
+        var pumps = rbp.template && rbp.template.requiredChannels && rbp.template.requiredChannels.pumpsPer10kPlants;
+        if (Number.isFinite(pumps) && pumps > 0) {
+          grid.appendChild(metric('Pumps', pumps + ' per 10k plants', '', 'scaled with plant count'));
+        }
+        if (!grid.children.length) {
+          host.className = 'ff-empty';
+          host.textContent = 'Room Build Plan scores not yet computed for the selected template.';
+          return;
+        }
+        host.appendChild(grid);
+      }
+      function renderControllers() {
+        var host = document.getElementById('ffControllersBody');
+        if (!host) return;
+        host.innerHTML = '';
+        var devices = state.devices || [];
+        if (!devices.length) {
+          host.className = 'ff-empty';
+          host.textContent = 'No controllers paired yet. Phase B device discovery binds SwitchBot / Kasa / Code3 / DMX identities to the channels reserved in steps 3–5. Use Farm Setup → IoT to pair devices.';
+          return;
+        }
+        host.className = '';
+        var byKind = {};
+        devices.forEach(function (d) {
+          var kind = d.kind || d.type || d.vendor || 'other';
+          byKind[kind] = (byKind[kind] || 0) + 1;
+        });
+        var chips = document.createElement('div');
+        chips.className = 'ff-chip-row';
+        chips.style.margin = '0';
+        Object.keys(byKind).forEach(function (k) {
+          chips.appendChild(chip(byKind[k] + ' × ' + k, 'ok'));
+        });
+        host.appendChild(chips);
+      }
+      function updateBreadcrumb() {
+        // Mark steps complete based on what's been populated.
+        var rooms = state.rooms;
+        var hasRoom = rooms.length > 0 && rooms.some(function (r) {
+          return (r.length_m || (r.dimensions && r.dimensions.length_m));
+        });
+        var hasZones = rooms.some(function (r) { return (r.zones || []).length > 0; });
+        var hasUnits = (state.groups || []).length > 0;
+        var hasLights = (state.groups || []).some(function (g) {
+          return Array.isArray(g.lights) && g.lights.length > 0;
+        });
+        var hasEquip = !!window.__roomBuildPlan;
+        var hasCtrl = (state.devices || []).length > 0;
+        var map = {
+          'room': hasRoom,
+          'zones': hasZones,
+          'grow-units': hasUnits,
+          'lights': hasLights,
+          'equipment': hasEquip,
+          'controllers': hasCtrl
+        };
+        var bc = document.getElementById('ffBreadcrumb');
+        if (!bc) return;
+        bc.querySelectorAll('.ff-breadcrumb__step').forEach(function (a) {
+          var step = a.getAttribute('data-step');
+          a.classList.toggle('is-complete', !!map[step]);
+        });
+      }
+      function load() {
+        var endpoints = ['/data/rooms.json', '/data/groups.json', '/data/grow-systems.json', '/data/iot-devices.json'];
+        return Promise.all(endpoints.map(function (url) {
+          return fetch(url).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; });
+        })).then(function (results) {
+          state.rooms = Array.isArray(results[0]) ? results[0] : (results[0] && results[0].rooms) || [];
+          state.groups = Array.isArray(results[1]) ? results[1] : (results[1] && results[1].groups) || [];
+          var gs = results[2];
+          state.templates = gs && Array.isArray(gs.templates) ? gs.templates : (Array.isArray(gs) ? gs : []);
+          state.devices = Array.isArray(results[3]) ? results[3] : (results[3] && results[3].devices) || [];
+        });
+      }
+      function refresh() {
+        load().then(function () {
+          renderRoom();
+          renderZones();
+          renderEquipment();
+          renderControllers();
+          updateBreadcrumb();
+        });
+      }
+      // Re-render equipment + breadcrumb when a template is selected.
+      document.addEventListener('grow-template:selected', function () {
+        setTimeout(function () { renderEquipment(); updateBreadcrumb(); }, 50);
+      });
+      document.addEventListener('groups-updated', updateBreadcrumb);
+      // Scroll-based active state: highlight whichever step is nearest the viewport top.
+      window.addEventListener('scroll', function () {
+        var steps = ['flow-room', 'flow-zones', 'flow-grow-units', 'flow-lights', 'flow-equipment', 'flow-controllers'];
+        var activeId = steps[0];
+        for (var i = 0; i < steps.length; i++) {
+          var el = document.getElementById(steps[i]);
+          if (!el) continue;
+          var rect = el.getBoundingClientRect();
+          if (rect.top <= 120) activeId = steps[i];
+        }
+        var bc = document.getElementById('ffBreadcrumb');
+        if (!bc) return;
+        bc.querySelectorAll('.ff-breadcrumb__step').forEach(function (a) {
+          var step = 'flow-' + a.getAttribute('data-step');
+          a.classList.toggle('is-active', step === activeId);
+        });
+      }, { passive: true });
+      return { refresh: refresh };
+    })();
 
     function checkDegradedCompromise() {
       fetch('/api/zone-recommendations')
