@@ -247,6 +247,8 @@ function selectLightForCrop(target_ppfd, crops = []) {
  * @param {object} params
  * @param {number} params.room_area_m2 - Room floor area in square meters
  * @param {number} params.ceiling_height_m - Ceiling height in meters
+ * @param {number} [params.length_m] - Room length in meters (long axis). Derived from area if omitted.
+ * @param {number} [params.width_m] - Room width in meters (short axis). Derived from area if omitted.
  * @param {string} [params.hydro_system] - Hydroponic system type from HYDRO_SYSTEM_DB
  * @param {string} [params.hvac_type] - 'mini_split' or 'portable' or 'central'
  * @param {string[]} [params.crops] - Array of crop names to grow
@@ -257,6 +259,8 @@ export function buildFarmLayout(params) {
   const {
     room_area_m2,
     ceiling_height_m,
+    length_m,
+    width_m,
     hydro_system,
     hvac_type,
     crops = [],
@@ -315,8 +319,8 @@ export function buildFarmLayout(params) {
     hydro_system
   });
 
-  // 5. Build placement recommendations
-  const placements = buildPlacementGuide(params, requirements);
+  // 5. Build placement recommendations (now aisle-aware)
+  const placements = buildPlacementGuide(params, requirements, estimated_plants);
 
   // 6. Assemble the complete layout
   return {
@@ -348,26 +352,160 @@ export function buildFarmLayout(params) {
 
 // ── Placement Guide Builder ────────────────────────────────────────────
 
-function buildPlacementGuide(params, requirements) {
-  const { room_area_m2, ceiling_height_m } = params;
-  const width_est = Math.sqrt(room_area_m2 * 1.5); // assume 3:2 aspect
-  const length_est = room_area_m2 / width_est;
+/**
+ * Compute a walkway-aware growing-unit layout.
+ *
+ * Contract: every row of units must abut a walkway (either the main aisle
+ * or a perimeter service lane). No row is ever boxed in. This replaces the
+ * previous naive sqrt-area grid which placed rows back-to-back and left
+ * interior rows unreachable.
+ *
+ * Defaults:
+ *   - Main aisle  = 1.2 m (ADA-ish; accepts a small cart)
+ *   - Perimeter   = 0.6 m (single-person working clearance along each wall)
+ *   - Cross-aisle = 0.9 m, added every ~8 m of row length for long rooms
+ *   - Unit footprint falls back to 1.2 m x 0.6 m per unit if template is unknown
+ */
+function computeRowLayout({ length_m, width_m, unit_length_m, unit_width_m }) {
+  const MAIN_AISLE_M = 1.2;
+  const PERIMETER_M = 0.6;
+  const CROSS_AISLE_M = 0.9;
+  const CROSS_AISLE_EVERY_M = 8.0;
+
+  // Orient rows along the longer wall.
+  const along = Math.max(length_m, width_m);
+  const across = Math.min(length_m, width_m);
+  const orientedAs = length_m >= width_m ? 'rows-run-lengthwise' : 'rows-run-widthwise';
+
+  // Usable depth across the room after main aisle + two perimeter lanes
+  const usable_across = across - MAIN_AISLE_M - 2 * PERIMETER_M;
+  if (usable_across <= 0 || along - 2 * PERIMETER_M <= 0) {
+    return {
+      ok: false,
+      error: `Room too small for a safe walkway layout (needs at least ${ (MAIN_AISLE_M + 2 * PERIMETER_M).toFixed(1) }m across and ${(2 * PERIMETER_M).toFixed(1)}m along).`
+    };
+  }
+
+  // Rows per side of the main aisle. Every row must have one long edge on the
+  // main aisle and the opposite long edge no further than one unit depth away
+  // from a perimeter lane -- so at most 1 row per side at unit_width, or 2
+  // rows per side if we can fit a 0.6 m service lane between them. Keep it
+  // simple: either 1 or 2 rows per side depending on available depth.
+  const side_depth = usable_across / 2;
+  let rows_per_side = 1;
+  if (side_depth >= 2 * unit_width_m + PERIMETER_M) {
+    rows_per_side = 2;
+  }
+
+  // Row length available along the long axis, minus end perimeters and any
+  // cross-aisles. Cross-aisles added when row length exceeds threshold.
+  const usable_along_raw = along - 2 * PERIMETER_M;
+  const cross_aisle_count = Math.max(0, Math.floor(usable_along_raw / CROSS_AISLE_EVERY_M) - 1);
+  const usable_along = usable_along_raw - cross_aisle_count * CROSS_AISLE_M;
+  const units_per_row = Math.max(0, Math.floor(usable_along / unit_length_m));
+
+  const total_rows = rows_per_side * 2;
+  const total_units = units_per_row * total_rows;
+
+  return {
+    ok: true,
+    orientation: orientedAs,
+    room: { length_m, width_m },
+    aisles: {
+      main_m: MAIN_AISLE_M,
+      perimeter_m: PERIMETER_M,
+      cross_aisle_m: CROSS_AISLE_M,
+      cross_aisle_count
+    },
+    unit: { length_m: unit_length_m, width_m: unit_width_m },
+    rows_per_side,
+    total_rows,
+    units_per_row,
+    total_units
+  };
+}
+
+function resolveUnitFootprint(hydro_system) {
+  // Default (conservative) footprint for a 'rack-ish' growing unit.
+  const FALLBACK = { length_m: 1.2, width_m: 0.6 };
+  if (!hydro_system) return FALLBACK;
+  const hydro = HYDRO_SYSTEM_DB[hydro_system];
+  if (!hydro) return FALLBACK;
+  // HYDRO_SYSTEM_DB doesn't carry explicit footprints (yet); approximate from
+  // type. These are intentionally conservative -- callers with a grow-systems
+  // template should pass unit_length_m / unit_width_m directly.
+  switch (hydro.type) {
+    case 'vertical_tower': return { length_m: 0.6, width_m: 0.6 }; // tower pair
+    case 'dwc':            return { length_m: 2.4, width_m: 1.2 }; // 4x8 pond
+    case 'nft':            return { length_m: 2.4, width_m: 0.6 }; // 8ft channel rack
+    case 'aeroponics':     return { length_m: 0.8, width_m: 0.8 }; // tower w/ clearance
+    case 'ebb_flow':       return { length_m: 1.2, width_m: 0.6 };
+    case 'dutch_bucket':   return { length_m: 0.4, width_m: 0.4 };
+    default:               return FALLBACK;
+  }
+}
+
+function buildPlacementGuide(params, requirements, estimated_plants) {
+  const { room_area_m2, ceiling_height_m, hydro_system } = params;
+
+  // Prefer explicit L/W from the room record; only fall back to sqrt(area)
+  // when the caller hasn't supplied dimensions.
+  let length_m = params.length_m;
+  let width_m = params.width_m;
+  if (!length_m || !width_m) {
+    // Fall back to a 3:2 aspect. 'length_m' is the long axis by convention.
+    const long = Math.sqrt(room_area_m2 * 1.5);
+    length_m = long;
+    width_m = room_area_m2 / long;
+  }
+
+  const unit = resolveUnitFootprint(hydro_system);
+  const row_layout = computeRowLayout({
+    length_m,
+    width_m,
+    unit_length_m: unit.length_m,
+    unit_width_m: unit.width_m
+  });
 
   const guide = [];
 
-  // Lighting placement
+  // Growing-unit layout + main walkway (replaces the old 'sqrt grid' lighting placement)
+  if (row_layout.ok) {
+    const cross_note = row_layout.aisles.cross_aisle_count > 0
+      ? ` ${row_layout.aisles.cross_aisle_count} cross-aisle${row_layout.aisles.cross_aisle_count === 1 ? '' : 's'} of ${row_layout.aisles.cross_aisle_m}m every ~8m.`
+      : '';
+    guide.push({
+      category: 'growing_units',
+      equipment: hydro_system ? (HYDRO_SYSTEM_DB[hydro_system]?.name || hydro_system) : 'Growing rack',
+      count: row_layout.total_units,
+      placement: `Main aisle ${row_layout.aisles.main_m}m wide runs along the ${row_layout.orientation === 'rows-run-lengthwise' ? 'long' : 'short'} axis, centered. Two sides of ${row_layout.rows_per_side} row${row_layout.rows_per_side === 1 ? '' : 's'} each (${row_layout.total_rows} rows total) so every row has at least one long edge on a walkway. ${row_layout.units_per_row} unit${row_layout.units_per_row === 1 ? '' : 's'} per row; ${row_layout.aisles.perimeter_m}m service clearance on all walls.${cross_note}`,
+      layout: row_layout
+    });
+  } else {
+    guide.push({
+      category: 'growing_units',
+      equipment: hydro_system ? (HYDRO_SYSTEM_DB[hydro_system]?.name || hydro_system) : 'Growing rack',
+      count: 0,
+      placement: row_layout.error,
+      layout: row_layout
+    });
+  }
+
+  // Lighting placement follows the grow-unit rows, not a naive grid.
   if (requirements.lighting?.ok) {
     const count = requirements.lighting.units_needed;
     const light = LIGHT_DB[requirements.lighting.light_id];
-    const rows = Math.ceil(Math.sqrt(count * (length_est / width_est)));
-    const cols = Math.ceil(count / rows);
-    const row_spacing = (length_est / rows).toFixed(2);
-    const col_spacing = (width_est / cols).toFixed(2);
+    const per_row = row_layout.ok && row_layout.total_rows > 0
+      ? Math.ceil(count / row_layout.total_rows)
+      : count;
+    const row_note = row_layout.ok
+      ? `Mount fixtures centered over each of the ${row_layout.total_rows} unit rows (~${per_row} fixture${per_row === 1 ? '' : 's'} per row).`
+      : `Mount ${count} fixtures in a line centered over the growing area.`;
     guide.push({
       category: 'lighting',
       equipment: light?.name || requirements.lighting.light_name,
       count,
-      placement: `Mount ${count} fixtures in a ${rows}x${cols} grid pattern at canopy height + 30-50cm. Row spacing: ~${row_spacing}m, column spacing: ~${col_spacing}m. Center the grid in the growing area.`,
+      placement: `${row_note} Hang at canopy height + 30-50cm.`,
       height: `${(ceiling_height_m * 0.7).toFixed(1)}m from floor (adjust based on crop stage)`
     });
   }
