@@ -1479,6 +1479,7 @@
             allZones.push({ room: r, zone: z });
           });
         });
+        // Hydrate the source-of-truth label + picker from saved state.
         var primaryRoom = state.rooms[0] || null;
         var savedCount = primaryRoom && Array.isArray(primaryRoom.zones) ? primaryRoom.zones.length : 0;
         var recommended = primaryRoom ? evieRecommendZoneCount(primaryRoom) : 2;
@@ -1490,7 +1491,7 @@
           }
         }
         if (recEl) {
-          recEl.textContent = 'Evie recommends ' + recommended + ' based on room area (' + (primaryRoom ? ((primaryRoom.length_m || '?') + 'm × ' + (primaryRoom.width_m || '?') + 'm') : 'no room yet') + ').';
+          recEl.textContent = 'Evie recommends ' + recommended + ' based on room area (' + (primaryRoom ? ((primaryRoom.length_m || '?') + 'm \u00d7 ' + (primaryRoom.width_m || '?') + 'm') : 'no room yet') + ').';
         }
         if (countInput && document.activeElement !== countInput) {
           countInput.value = String(savedCount || recommended);
@@ -1944,6 +1945,8 @@
       }, { passive: true });
 
       // Zones count stepper — Evie recommends, user picks.
+      // Writes rooms[0].zones[] (preserving saved dimensions / existing zone
+      // objects) and POSTs /api/setup/save-rooms with auth so it persists.
       (function wireZoneCountStepper() {
         var input = document.getElementById('ffZonesCountInput');
         var minus = document.getElementById('ffZonesCountMinus');
@@ -1971,6 +1974,9 @@
             return;
           }
           var existing = Array.isArray(primary.zones) ? primary.zones.slice() : [];
+          // Preserve as many existing zone objects (with saved dimensions) as
+          // possible. Add new placeholder zones ("Zone N") to grow, drop from
+          // the tail to shrink — that way shrinking never loses zone 1's dims.
           if (existing.length < target) {
             for (var i = existing.length; i < target; i++) {
               existing.push({ id: 'zone-' + (i + 1), name: 'Zone ' + (i + 1) });

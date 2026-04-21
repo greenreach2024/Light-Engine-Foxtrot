@@ -55,7 +55,10 @@
     if (token && farmId && !headers.has('x-farm-id') && !headers.has('X-Farm-ID')) {
       headers.set('x-farm-id', farmId);
     }
-    if (opts.body && !headers.has('Content-Type')) {
+    // Only auto-set JSON Content-Type for string bodies. FormData / Blob /
+    // URLSearchParams / ArrayBuffer need the browser's default handling so the
+    // right Content-Type (with boundary, etc.) is emitted.
+    if (typeof opts.body === 'string' && !headers.has('Content-Type')) {
       headers.set('Content-Type', 'application/json');
     }
     var finalOpts = Object.assign({}, opts, { headers: headers });

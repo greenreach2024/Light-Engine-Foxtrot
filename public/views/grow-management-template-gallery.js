@@ -164,14 +164,14 @@
           </div>
           <details class="tg-card__math">
             <summary>Show your math</summary>
-            ${renderMath(template, scores, cropClass, authoritativeSites)}
+            ${renderMath(template, scores, cropClass, totalSites, authoritativeSites)}
           </details>
         </div>
       </article>
     `;
   }
 
-  function renderMath(template, scores, cropClass, siteCount) {
+  function renderMath(template, scores, cropClass, derivedSites, authoritativeSites) {
     const t = scores?.transpiration || {};
     const h = scores?.heatManagement || {};
     const e = scores?.envBenchmark || {};
@@ -187,10 +187,21 @@
     const totalHeatW = h.totalHeatW;
     const rows = [];
     if (Number.isFinite(kgDay)) {
-      const derivation = (Number.isFinite(siteCount) && Number.isFinite(gPerPlant))
-        ? `${siteCount} plants \u00d7 ${gPerPlant} g/plant/day \u00f7 1000 = ${kgDay.toFixed(2)} kg/day`
-        : `${kgDay.toFixed(2)} kg/day (server-computed)`;
-      rows.push(mathRow('Transpiration', derivation, 'Daily latent load \u2014 sizes dehum.'));
+      // Server-side kgDay uses the derived count (tierCount x traysPerTier x
+      // plantsPerTrayByClass). Use the same count in the displayed formula so
+      // the equation balances, and show the authoritative override as a note
+      // when the two disagree.
+      const serverCount = Number.isFinite(derivedSites) ? derivedSites : null;
+      let derivation;
+      if (serverCount !== null && Number.isFinite(gPerPlant)) {
+        derivation = `${serverCount} plants \u00d7 ${gPerPlant} g/plant/day \u00f7 1000 = ${kgDay.toFixed(2)} kg/day`;
+      } else {
+        derivation = `${kgDay.toFixed(2)} kg/day (server-computed)`;
+      }
+      const note = (Number.isFinite(authoritativeSites) && serverCount !== null && authoritativeSites !== serverCount)
+        ? `Daily latent load \u2014 sizes dehum. (Card shows ${authoritativeSites} authoritative plant sites; scoring uses ${serverCount} derived from tier \u00d7 tray \u00d7 perTray.)`
+        : 'Daily latent load \u2014 sizes dehum.';
+      rows.push(mathRow('Transpiration', derivation, note));
     }
     if (Number.isFinite(lightingW) && Number.isFinite(volumeM3) && volumeM3 > 0) {
       const wPerM3 = h.wPerM3;
