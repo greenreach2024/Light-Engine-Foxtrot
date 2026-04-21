@@ -24,12 +24,12 @@
       "battery": 60,
       "version": "V0.9",
       "deviceId": "C3343035702D",
-      "humidity": 30,
+      "humidity": 61,
       "protocol": "switchbot",
       "deviceName": "Sen 3",
       "deviceType": "WoIOSensor",
       "hubDeviceId": "D3F85167A57E",
-      "temperature": 15.5
+      "temperature": 21.5
     },
     "deviceData": {
       "name": "Sen 3",
@@ -40,10 +40,10 @@
         "battery": 60,
         "version": "V0.9",
         "deviceId": "C3343035702D",
-        "humidity": 30,
+        "humidity": 61,
         "deviceType": "WoIOSensor",
         "hubDeviceId": "D3F85167A57E",
-        "temperature": 15.5
+        "temperature": 21.5
       },
       "deviceId": "C3343035702D",
       "protocol": "switchbot",
@@ -82,12 +82,12 @@
       "battery": 60,
       "version": "V0.9",
       "deviceId": "CE2A81460E78",
-      "humidity": 28,
+      "humidity": 64,
       "protocol": "switchbot",
       "deviceName": "Sen 1",
       "deviceType": "WoIOSensor",
       "hubDeviceId": "D3F85167A57E",
-      "temperature": 15.7
+      "temperature": 22.0
     },
     "deviceData": {
       "name": "Sen 1",
@@ -98,10 +98,10 @@
         "battery": 60,
         "version": "V0.9",
         "deviceId": "CE2A81460E78",
-        "humidity": 28,
+        "humidity": 64,
         "deviceType": "WoIOSensor",
         "hubDeviceId": "D3F85167A57E",
-        "temperature": 15.7
+        "temperature": 22.0
       },
       "deviceId": "CE2A81460E78",
       "protocol": "switchbot",
@@ -140,12 +140,12 @@
       "battery": 60,
       "version": "V0.9",
       "deviceId": "CE2A8606558E",
-      "humidity": 28,
+      "humidity": 63,
       "protocol": "switchbot",
       "deviceName": "Sen 2",
       "deviceType": "WoIOSensor",
       "hubDeviceId": "D3F85167A57E",
-      "temperature": 15.7
+      "temperature": 21.8
     },
     "deviceData": {
       "name": "Sen 2",
@@ -156,10 +156,10 @@
         "battery": 60,
         "version": "V0.9",
         "deviceId": "CE2A8606558E",
-        "humidity": 28,
+        "humidity": 63,
         "deviceType": "WoIOSensor",
         "hubDeviceId": "D3F85167A57E",
-        "temperature": 15.7
+        "temperature": 21.8
       },
       "deviceId": "CE2A8606558E",
       "protocol": "switchbot",
