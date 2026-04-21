@@ -46,11 +46,17 @@ async function getRegistry() {
 router.get('/', async (_req, res) => {
   try {
     const registry = await getRegistry();
+    // grow-systems.json uses camelCase keys; read them directly and expose
+    // both shapes in the response so existing snake_case consumers and newer
+    // camelCase consumers both work.
     res.json({
       ok: true,
-      schema_version: registry.schema_version,
-      data_version: registry.data_version,
-      crop_classes: registry.crop_classes,
+      schemaVersion: registry.schemaVersion,
+      version: registry.version,
+      cropClasses: registry.cropClasses,
+      schema_version: registry.schemaVersion,
+      data_version: registry.version,
+      crop_classes: registry.cropClasses,
       templates: registry.templates
     });
   } catch (err) {
@@ -136,12 +142,20 @@ router.post('/compute-room-load', async (req, res) => {
 
     const registry = await getRegistry();
 
-    // Resolve templates
+    // Resolve templates. farm-load-calculator expects camelCase
+    // `dimensions: { lengthM, widthM, ceilingHeightM }` and an envelope object
+    // with a `class` field; translate the route's snake_case body into that
+    // shape so computeSupplyFanCFM can actually read the room geometry.
     const roomSpec = {
-      length_m: room.length_m,
-      width_m: room.width_m,
-      ceiling_height_m: room.ceiling_height_m,
-      envelope: room.envelope || 'typical',
+      dimensions: {
+        lengthM: room.length_m,
+        widthM: room.width_m,
+        ceilingHeightM: room.ceiling_height_m
+      },
+      envelope:
+        room.envelope && typeof room.envelope === 'object'
+          ? room.envelope
+          : { class: room.envelope || 'typical' },
       installedSystems
     };
 

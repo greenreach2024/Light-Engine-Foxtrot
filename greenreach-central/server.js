@@ -4123,7 +4123,12 @@ app.use('/api/planting', authMiddleware, plantingRoutes); // Planting scheduler 
 app.use('/api/planning', authMiddleware, planningRoutes); // Production planning (integrates market + crop pricing)
 app.use('/api/market-intelligence', authOrAdminMiddleware, marketIntelligenceRoutes); // North American market data + price alerts
 app.use('/api/crop-pricing', authOrAdminMiddleware, cropPricingRoutes); // Farm-specific crop pricing
-app.use('/api/grow-systems', growSystemsRouter); // Grow-system template registry + scoring (read-only, used by the grow-management template gallery)
+// Grow-system template registry + scoring (used by the grow-management template gallery).
+// The router is public for read/score endpoints, but POST /reload is an admin action
+// (force-reads grow-systems.json from disk) so it's gated by adminAuthMiddleware here
+// before requests fall through to the router's own handler.
+app.use('/api/grow-systems/reload', adminAuthMiddleware);
+app.use('/api/grow-systems', growSystemsRouter);
 app.use('/api/admin/pricing', adminAuthMiddleware, adminPricingRoutes); // Wholesale pricing management
 app.use('/api/quality', authMiddleware, qualityReportsRoutes);                 // Quality reports + QA checkpoint proxies
 app.use('/api/sustainability', authMiddleware, sustainabilityRoutes);          // Sustainability & ESG dashboard
