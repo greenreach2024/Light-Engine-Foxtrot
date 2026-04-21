@@ -1484,7 +1484,7 @@
         return ct || 'controller';
       }
       function subsystemLabel(s) {
-        return ({ lights: 'Lights', pumps: 'Pumps', fans: 'Fans', sensors: 'Sensors' })[s] || s;
+        return ({ lights: 'Lights', pumps: 'Pumps', fans: 'Fans', sensors: 'Sensors' })[s] || s || 'general';
       }
       function renderControllers() {
         var host = document.getElementById('ffControllersBody');
