@@ -1303,7 +1303,7 @@
           chips.className = 'ff-chip-row';
           chips.style.margin = '0';
           chips.appendChild(chip(fmtDims(r), 'accent'));
-          chips.appendChild(chip(fmtEnvelope(r), r.envelope ? 'ok' : 'warn'));
+          chips.appendChild(chip(fmtEnvelope(r), (r.envelope || r.envelope_class || r.env) ? 'ok' : 'warn'));
           var zoneCount = Array.isArray(r.zones) ? r.zones.length : 0;
           chips.appendChild(chip(zoneCount + ' zone' + (zoneCount === 1 ? '' : 's'), zoneCount ? 'ok' : 'warn'));
           card.appendChild(chips);
@@ -1334,17 +1334,20 @@
         allZones.forEach(function (entry) {
           var z = entry.zone;
           var r = entry.room;
+          // Zones in rooms.json are often plain strings ("Zone 1") rather
+          // than objects — handle both shapes the way groups-v2.js does.
+          var zIsString = typeof z === 'string';
           var card = document.createElement('div');
           card.style.cssText = 'padding:10px 12px;border:1px solid rgba(148,163,184,0.2);border-radius:10px;background:rgba(15,23,42,0.6);';
           var name = document.createElement('div');
           name.style.cssText = 'font-weight:600;color:#f1f5f9;font-size:0.875rem;';
-          name.textContent = (r.name || r.id) + ' · ' + (z.name || z.id || 'zone');
+          name.textContent = (r.name || r.id) + ' \u00b7 ' + (zIsString ? z : (z.name || z.id || 'zone'));
           card.appendChild(name);
           var meta = document.createElement('div');
           meta.className = 'tiny';
           meta.style.cssText = 'color:#94a3b8;margin-top:4px;';
-          var l = z.length_m || (z.dimensions && z.dimensions.length_m) || null;
-          var w = z.width_m || (z.dimensions && z.dimensions.width_m) || null;
+          var l = !zIsString && (z.length_m || (z.dimensions && z.dimensions.length_m)) || null;
+          var w = !zIsString && (z.width_m || (z.dimensions && z.dimensions.width_m)) || null;
           meta.textContent = l && w ? (l + 'm × ' + w + 'm') : 'dimensions inherit from room';
           card.appendChild(meta);
           table.appendChild(card);
@@ -1453,8 +1456,11 @@
           return (r.length_m || (r.dimensions && r.dimensions.length_m));
         });
         var hasZones = rooms.some(function (r) { return (r.zones || []).length > 0; });
-        var hasUnits = (state.groups || []).length > 0;
-        var hasLights = (state.groups || []).some(function (g) {
+        // Prefer the live groups list (window.STATE.groups) over the closure
+        // cache so breadcrumb stays correct after groups-v2.js save/delete.
+        var liveGroups = (window.STATE && Array.isArray(window.STATE.groups)) ? window.STATE.groups : (state.groups || []);
+        var hasUnits = liveGroups.length > 0;
+        var hasLights = liveGroups.some(function (g) {
           return Array.isArray(g.lights) && g.lights.length > 0;
         });
         var hasEquip = !!window.__roomBuildPlan;
