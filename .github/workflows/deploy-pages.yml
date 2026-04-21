@@ -37,22 +37,51 @@ jobs:
       - name: Create static demo config
         run: |
           # Create a config file for static demo mode
+          mkdir -p public
           cat > public/demo-config.js << 'EOF'
           // Static demo configuration for GitHub Pages
           window.DEMO_MODE = true;
           window.STATIC_DEMO = true;
-          window.API_BASE = window.location.origin + '/Light-Engine-Delta';
+          window.API_BASE = window.location.origin + '/Light-Engine-Foxtrot';
           console.log('[Demo Config] Static demo mode enabled');
           EOF
-      
+
+      - name: Generate index.html for Pages if missing
+        run: |
+          # The canonical home page was removed in 054c55e2 when the landing UX
+          # was consolidated into Admin, so GitHub Pages would 404 at the root.
+          # Emit a lightweight directory listing that links to the top-level
+          # HTML entry points so the Pages artifact always has an index.
+          if [ ! -f public/index.html ]; then
+            {
+              echo '<!doctype html>'
+              echo '<html lang="en"><head><meta charset="utf-8">'
+              echo '<title>Light Engine Foxtrot — Static Demo</title>'
+              echo '<script src="./demo-config.js"></script>'
+              echo '<style>body{font-family:system-ui,sans-serif;max-width:720px;margin:2rem auto;padding:0 1rem;line-height:1.5;}li{margin:0.25rem 0;}</style>'
+              echo '</head><body>'
+              echo '<h1>Light Engine Foxtrot — Static Demo</h1>'
+              echo '<p>Auto-generated entry index. Pick a surface below:</p><ul>'
+              for f in public/*.html; do
+                [ -f "$f" ] || continue
+                name="$(basename "$f")"
+                [ "$name" = "index.html" ] && continue
+                echo "<li><a href=\"./$name\">$name</a></li>"
+              done
+              echo '</ul></body></html>'
+            } > public/index.html
+          fi
+
       - name: Update HTML files for GitHub Pages
         run: |
-          # Add demo config script to index.html
-          sed -i '/<head>/a\  <script src="./demo-config.js"><\/script>' public/index.html
-          
-          # Update base path for GitHub Pages subdirectory
-          find public -name "*.html" -type f -exec sed -i 's|href="\/|href="\/Light-Engine-Delta\/|g' {} \;
-          find public -name "*.html" -type f -exec sed -i 's|src="\/|src="\/Light-Engine-Delta\/|g' {} \;
+          # Inject the demo-config shim into index.html when it isn't already present.
+          if [ -f public/index.html ] && ! grep -q 'demo-config.js' public/index.html; then
+            sed -i '/<head>/a\  <script src="./demo-config.js"><\/script>' public/index.html
+          fi
+
+          # Rewrite absolute paths so assets resolve under the /Light-Engine-Foxtrot/ Pages prefix.
+          find public -name "*.html" -type f -exec sed -i 's|href="\/|href="\/Light-Engine-Foxtrot\/|g' {} \;
+          find public -name "*.html" -type f -exec sed -i 's|src="\/|src="\/Light-Engine-Foxtrot\/|g' {} \;
       
       - name: Setup Pages
         uses: actions/configure-pages@v4
