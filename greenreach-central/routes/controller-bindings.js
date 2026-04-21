@@ -124,9 +124,16 @@ router.post('/auto-suggest', (req, res) => {
 
     const existing = loadBindings();
     const boundDeviceIds = new Set(existing.bindings.map(b => b.controllerId));
-    const boundSlotKeys = new Set(existing.bindings
-      .filter(b => b.roomId && b.subsystem)
-      .map(b => `${b.roomId}::${b.zoneId || ''}::${b.subsystem}`));
+    // Count bindings per room::zone::subsystem. A room can legitimately have
+    // two installed systems sharing the same zone+subsystem (e.g. two rack
+    // types each needing a pump controller); each slot record consumes one
+    // unit of the count, so a Set would under-report demand.
+    const boundSlotCounts = new Map();
+    for (const b of existing.bindings) {
+      if (!b.roomId || !b.subsystem) continue;
+      const k = `${b.roomId}::${b.zoneId || ''}::${b.subsystem}`;
+      boundSlotCounts.set(k, (boundSlotCounts.get(k) || 0) + 1);
+    }
 
     const available = devices.filter(d => !boundDeviceIds.has(d.deviceId || d.id));
 
@@ -164,7 +171,11 @@ router.post('/auto-suggest', (req, res) => {
 
       for (const slot of slotRecords) {
         const slotKey = `${room.id}::${slot.zoneId || ''}::${slot.subsystem}`;
-        if (boundSlotKeys.has(slotKey)) continue;
+        const remaining = boundSlotCounts.get(slotKey) || 0;
+        if (remaining > 0) {
+          boundSlotCounts.set(slotKey, remaining - 1);
+          continue;
+        }
 
         const matches = available.filter(d => deviceMatchesControllerClass(d, slot.controllerClass));
 
