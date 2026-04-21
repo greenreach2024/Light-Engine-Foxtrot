@@ -444,6 +444,14 @@
     <button class="gwen-fab" id="gwenFab" title="Ask GWEN about this view">G<div class="gwen-tooltip">Ask GWEN to analyze zone data</div></button>
   </div>
 
+  <!-- Shared plan-anchor helper (window.planAnchor). Loaded as a classic script
+       so the UMD IIFE executes synchronously before the ESM module below runs.
+       Keeps the viewer's crop-assignment save path in sync with EVIE's
+       update_group_crop tool and the tray-seed endpoint — all three share
+       resolveCropRegistryEntry + stampPlanAnchor. See
+       docs/playbooks/10-farm-builder.md §10 Phase A. -->
+  <script src="/js/plan-anchor.js"></script>
+
   <script type="importmap">
   {
     "imports": {
@@ -739,42 +747,23 @@
       return group?.id || group?.group_id || group?.name || null;
     }
 
-    // Resolve a crop-name selection against S.cropRegistry (already loaded from
-    // /data/crop-registry.json) and return { resolvedName, planId }. The
-    // registry stores the canonical name as the object key and plan IDs in a
-    // `planIds` array (see public/js/crop-utils.js), so we key off that.
-    // Falls back to a slugified 'crop-<name>' so unregistered crops still get a
-    // plan anchor. Aliases like "Bok Choy" → "Mei Qing Pak Choi" are resolved
-    // by scanning entry.aliases before giving up.
+    // Thin wrapper around the shared window.planAnchor helper loaded via
+    // <script src="/js/plan-anchor.js">. Keeps the viewer's crop-resolver in
+    // lockstep with EVIE's update_group_crop tool and the tray-seed endpoint —
+    // aliases ("Bok Choy" → "Mei Qing Pak Choi"), `planIds[0]`, singular legacy
+    // `planId`, and slug fallback all behave identically everywhere. Defensive
+    // fallback preserves the previous inline behaviour if the helper fails to
+    // load (e.g. offline cache miss).
     function resolveCropRegistryEntry(cropName) {
+      const crops = (S.cropRegistry && typeof S.cropRegistry === 'object') ? S.cropRegistry : {};
+      if (window.planAnchor && typeof window.planAnchor.resolveCropRegistryEntry === 'function') {
+        const r = window.planAnchor.resolveCropRegistryEntry(cropName, crops);
+        return { resolvedName: r.resolvedName, planId: r.planId };
+      }
       const raw = String(cropName || '').trim();
       if (!raw) return { resolvedName: '', planId: '' };
-      const crops = (S.cropRegistry && typeof S.cropRegistry === 'object') ? S.cropRegistry : {};
-      const keys = Object.keys(crops);
-      const lowered = raw.toLowerCase();
-      let matchKey = keys.find(function(k) { return String(k).toLowerCase() === lowered; });
-      if (!matchKey) {
-        matchKey = keys.find(function(k) {
-          const e = crops[k];
-          if (!e || !Array.isArray(e.aliases)) return false;
-          return e.aliases.some(function(a) { return String(a || '').toLowerCase().trim() === lowered; });
-        }) || null;
-      }
-      const entry = matchKey ? crops[matchKey] : null;
-      const resolvedName = matchKey || raw;
-      // Most entries carry plan IDs in a `planIds` array, but a handful of
-      // legacy rows (e.g. "Breen Pelleted Organic", "Truchas Pelleted Organic",
-      // "Seaside F1 Spinach (baby leaf)") still use the singular `planId`
-      // field. Honour both before slugifying, so groups assigned those crops
-      // land with the registry's canonical planId.
-      let planId = '';
-      if (entry && Array.isArray(entry.planIds) && entry.planIds[0]) {
-        planId = entry.planIds[0];
-      } else if (entry && typeof entry.planId === 'string' && entry.planId.trim()) {
-        planId = entry.planId.trim();
-      } else {
-        planId = 'crop-' + resolvedName.toLowerCase().replace(/\s+/g, '-');
-      }
+      const resolvedName = raw;
+      const planId = 'crop-' + resolvedName.toLowerCase().replace(/\s+/g, '-');
       return { resolvedName, planId };
     }
 
@@ -3671,31 +3660,37 @@
         html += '<button class="dp-save-btn" id="saveGrpOne" style="margin-top:0.3rem">' + (similarCount > 1 ? 'Update This One Only' : 'Save Changes') + '</button>';
         content.innerHTML = html;
 
-        // Save handler for single group. When a crop is picked, we resolve the
-        // same downstream fields EVIE's update_group_crop tool sets (see
-        // greenreach-central/routes/assistant-chat.js) so the environment daily
-        // resolver and the nutrient management UI can actually key off the group
-        // after a save. Previously the viewer only set `crop` + `status`, which
-        // left `plan`/`planId`/`planConfig.anchor.seedDate` missing and downstream
-        // systems blind to the change.
+        // Save handler for single group. When a crop is picked, we stamp all
+        // five scheduling fields + lastModified via the shared planAnchor
+        // helper — identical to EVIE's update_group_crop and the tray-seed
+        // endpoint. Seed-date policy is "preserve existing" so a real tray-seed
+        // date is never clobbered by a later crop re-assignment from the UI.
         function applyGroupEdits(target) {
           const newCrop = document.getElementById('grpCrop').value;
           const newStatus = document.getElementById('grpStatus').value;
           if (newStatus) target.status = newStatus;
           if (newCrop) {
-            const resolved = resolveCropRegistryEntry(newCrop);
-            target.crop = resolved.resolvedName;
-            target.recipe = resolved.resolvedName;
-            target.plan = resolved.planId;
-            target.planId = resolved.planId;
-            if (!target.planConfig || typeof target.planConfig !== 'object') target.planConfig = {};
-            if (!target.planConfig.anchor || typeof target.planConfig.anchor !== 'object') target.planConfig.anchor = {};
-            // Only stamp seedDate if not already set (preserve a real seed date from tray-seed).
-            if (!target.planConfig.anchor.seedDate) {
-              target.planConfig.anchor.seedDate = new Date().toISOString().slice(0, 10);
+            const crops = (S.cropRegistry && typeof S.cropRegistry === 'object') ? S.cropRegistry : {};
+            if (window.planAnchor && typeof window.planAnchor.assignCropToGroup === 'function') {
+              window.planAnchor.assignCropToGroup(target, newCrop, crops);
+            } else {
+              // Defensive fallback — preserves the pre-extraction behaviour if
+              // /js/plan-anchor.js failed to load (cache miss, offline, etc.).
+              const resolved = resolveCropRegistryEntry(newCrop);
+              target.crop = resolved.resolvedName;
+              target.recipe = resolved.resolvedName;
+              target.plan = resolved.planId;
+              target.planId = resolved.planId;
+              if (!target.planConfig || typeof target.planConfig !== 'object') target.planConfig = {};
+              if (!target.planConfig.anchor || typeof target.planConfig.anchor !== 'object') target.planConfig.anchor = {};
+              if (!target.planConfig.anchor.seedDate) {
+                target.planConfig.anchor.seedDate = new Date().toISOString().slice(0, 10);
+              }
+              target.lastModified = new Date().toISOString();
             }
+          } else {
+            target.lastModified = new Date().toISOString();
           }
-          target.lastModified = new Date().toISOString();
         }
 
         document.getElementById('saveGrpOne').addEventListener('click', async () => {

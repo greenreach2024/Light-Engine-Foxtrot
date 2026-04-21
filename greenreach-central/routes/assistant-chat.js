@@ -84,6 +84,11 @@ async function writeToLE(filename, data) {
 // Load crop-utils for name resolution (alias/planId → canonical)
 const require_ = createRequire(import.meta.url);
 const cropUtils = require_(path.join(__dirname, '..', 'public', 'js', 'crop-utils.js'));
+// Load plan-anchor for shared "assign crop → group" field stamping (see
+// docs/playbooks/10-farm-builder.md §10 Phase A). Keeps the 3D viewer, EVIE's
+// update_group_crop tool, and the tray-seed endpoint on the same resolver so
+// aliases + planIds[] resolve identically everywhere.
+const planAnchor = require_(path.join(__dirname, '..', 'public', 'js', 'plan-anchor.js'));
 
 // Load lighting recipes lazily (1.2 MB file — parse once, cache in memory)
 let _recipesCache = null;
@@ -4921,14 +4926,6 @@ async function executeExtendedTool(toolName, params, farmId) {
         const cropName = params.crop_name;
         const seedDate = params.seed_date || new Date().toISOString().slice(0, 10);
 
-        // Resolve crop from registry
-        const registry = readJSON('crop-registry.json', {});
-        const crops = registry.crops || {};
-        const cropKey = Object.keys(crops).find(k => k.toLowerCase() === cropName.toLowerCase());
-        const cropEntry = cropKey ? crops[cropKey] : null;
-        const resolvedName = cropEntry?.name || cropName;
-        const planId = cropEntry?.planId || `crop-${cropName.toLowerCase().replace(/\s+/g, '-')}`;
-
         // Load current groups
         const groupsData = await farmStore.get(farmId, 'groups') || [];
         const groups = Array.isArray(groupsData) ? groupsData : (groupsData.groups || []);
@@ -4940,24 +4937,27 @@ async function executeExtendedTool(toolName, params, farmId) {
           return { ok: false, error: `Group "${groupId}" not found. Available groups: ${groups.map(g => g.name || g.id).join(', ') || 'none'}` };
         }
 
-        // Update the group crop assignment
-        groupMatch.crop = resolvedName;
-        groupMatch.recipe = resolvedName;
-        groupMatch.plan = planId;
-        groupMatch.planId = planId;
-        if (!groupMatch.planConfig) groupMatch.planConfig = {};
-        if (!groupMatch.planConfig.anchor) groupMatch.planConfig.anchor = {};
-        groupMatch.planConfig.anchor.seedDate = seedDate;
+        // Resolve crop + stamp the five scheduling fields via the shared helper
+        // so alias rows ("Bok Choy" → "Mei Qing Pak Choi" → crop-pak-choi) land
+        // the same planId EVIE, the viewer, and the daily resolver all agree on.
+        // Operator-supplied seed_date is authoritative here (admin explicitly
+        // said "assign X seeded on Y"), so overwrite any pre-existing anchor.
+        const registry = readJSON('crop-registry.json', {});
+        const resolved = planAnchor.assignCropToGroup(groupMatch, cropName, registry, {
+          seedDate,
+          overwriteSeedDate: true
+        });
 
         await farmStore.set(farmId, 'groups', Array.isArray(groupsData) ? groups : { ...groupsData, groups });
 
         return {
           ok: true,
           group: groupMatch.name || groupMatch.id,
-          crop: resolvedName,
+          crop: resolved.resolvedName,
+          plan_id: resolved.planId,
           seed_date: seedDate,
           trays: groupMatch.trays || 0,
-          message: `Group "${groupMatch.name || groupMatch.id}" updated: now seeding ${resolvedName} (${groupMatch.trays || 0} trays, seed date ${seedDate})`
+          message: `Group "${groupMatch.name || groupMatch.id}" updated: now seeding ${resolved.resolvedName} (${groupMatch.trays || 0} trays, seed date ${seedDate}${resolved.matched ? '' : ', registry miss — using slug plan id'})`
         };
       } catch (err) {
         return { ok: false, error: err.message };
