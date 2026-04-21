@@ -16,6 +16,7 @@ Foxtrot is the working name for GreenReach's cloud-native, multi-tenant indoor f
 - **GreenReach Central (GR-Central)** = "the hub". Multi-farm PostgreSQL/AlloyDB backend, admin + marketing + wholesale/distribution backends, AI assistant APIs, research platform, payments.
 - **Data model is deliberately split**: each farm's **financial, customer, and business data is tenant-isolated** (RLS + farm_id scoping + JWT-resolved tenant context); **growing-environment, crop, and research data is sharable** with researchers and cross-farm intelligence.
 - **GreenReach Central is the business**: distribution, admin, billing, marketing, wholesale marketplace, and network intelligence all live here.
+- **Farm Builder is active, not passive.** A dedicated server-side stack (`greenreach-central/lib/farm-builder.js`, `equipment-db.js`, EVIE tool `recommend_farm_layout`) is in place to recommend rooms / zones / lights / HVAC / irrigation from location + building + growing system + crop plan. Until **Playbook 10** lands the UI wiring, the setup surfaces (`farm-setup.html`, `setup-wizard.html`, `LE-migration-wizard.html`) remain passive (user enters equipment; system visualizes).
 
 ---
 

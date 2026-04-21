@@ -10,6 +10,8 @@
 
 Foxtrot is **100% cloud-based** on Google Cloud, deployed as **two independent Cloud Run services** from a single monorepo. AWS Elastic Beanstalk was deprecated April 2026. This playbook covers deployment, secrets, networking, the dual-deploy file registry rule, and the hard "never" list. Read this before running any `gcloud`, any `docker build`, any push to main, or any env-var change.
 
+> **Open item:** the dual-deploy registry has **no CI mirror-drift guard** today. Drift between `public/<path>` and `greenreach-central/public/<path>` is detected only at PR review time, and has silently landed in production before (e.g. #9/#16/#17 were fully merged in the `public/` copy but not in `greenreach-central/public/` until #37 reconciled). Proposed fix: CI step that sha256s every registry-listed pair, fails on mismatch, directs the author to the registry. Tracked in Playbook 10 Phase E2.
+
 ## 2. High-level topology
 
 ```
