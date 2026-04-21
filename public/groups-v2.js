@@ -7516,6 +7516,56 @@ async function executeBulkEditGroups() {
   return { updated: updated };
 }
 
+/**
+ * Delete every group whose name belongs to the given family prefix.
+ * Persists via the same POST /data/groups.json endpoint used by bulk edit.
+ * Returns { deleted: <count> }.
+ */
+async function executeBulkDeleteGroups(prefix) {
+  if (!prefix) return { deleted: 0 };
+  var groups = (window.STATE && Array.isArray(window.STATE.groups)) ? window.STATE.groups : [];
+  var families = detectGroupFamilies();
+  var members = families[prefix] || [];
+  if (!members.length) return { deleted: 0 };
+
+  var toDeleteIds = {};
+  members.forEach(function(g) { if (g && g.id) toDeleteIds[g.id] = true; });
+
+  var before = groups.length;
+  window.STATE.groups = groups.filter(function(g) { return !g || !toDeleteIds[g.id]; });
+  var deleted = before - window.STATE.groups.length;
+  if (!deleted) return { deleted: 0 };
+
+  try {
+    var response = await fetch('/data/groups.json', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ groups: window.STATE.groups })
+    });
+    if (!response.ok) {
+      var errorText = await response.text();
+      throw new Error('Server error: ' + response.status + ' ' + errorText);
+    }
+    await response.json();
+    console.log('[Bulk Delete] Removed ' + deleted + ' groups in family "' + prefix + '"');
+  } catch (error) {
+    console.error('[Bulk Delete] Failed to persist:', error);
+    if (typeof showToast === 'function') {
+      showToast({ title: 'Bulk Delete Failed', msg: error.message, kind: 'error', icon: '' });
+    } else {
+      alert('Failed to save: ' + error.message);
+    }
+    return { deleted: 0 };
+  }
+
+  document.dispatchEvent(new Event('groups-updated'));
+  if (typeof renderGroupsV2GroupList === 'function') renderGroupsV2GroupList();
+  if (typeof populateGroupsV2LoadGroupDropdown === 'function') populateGroupsV2LoadGroupDropdown();
+  document.dispatchEvent(new Event('lights-updated'));
+  if (typeof populateGroupsV2UnassignedLightsDropdown === 'function') populateGroupsV2UnassignedLightsDropdown();
+  return { deleted: deleted };
+}
+
 // Wire up Bulk Edit Groups modal
 document.addEventListener('DOMContentLoaded', function() {
   var dialog    = document.getElementById('bulkEditGroupModal');
@@ -7523,6 +7573,7 @@ document.addEventListener('DOMContentLoaded', function() {
   var closeBtn  = document.getElementById('bulkEditGroupClose');
   var cancelBtn = document.getElementById('bulkEditGroupCancel');
   var applyBtn  = document.getElementById('bulkEditGroupApply');
+  var deleteBtn = document.getElementById('bulkDeleteGroupsBtn');
 
   if (!dialog || !openBtn) return;
 
@@ -7555,6 +7606,45 @@ document.addEventListener('DOMContentLoaded', function() {
     var el = document.getElementById(id);
     if (el) el.addEventListener(el.type === 'checkbox' ? 'change' : 'input', updateBulkEditPreview);
   });
+
+  // Delete-all button
+  if (deleteBtn) {
+    deleteBtn.addEventListener('click', async function() {
+      var prefix = (document.getElementById('bulkEditPrefix') || {}).value || '';
+      if (!prefix) { alert('Please select a group family first.'); return; }
+
+      var families = detectGroupFamilies();
+      var count = (families[prefix] || []).length;
+      if (!count) { alert('No groups match that family.'); return; }
+
+      var warn = 'Permanently delete ' + count + ' group' + (count !== 1 ? 's' : '') +
+        ' in "' + prefix + '"?\n\nThis also removes their light assignments.\nThis action cannot be undone.';
+      if (!confirm(warn)) return;
+
+      deleteBtn.disabled = true;
+      deleteBtn.textContent = 'Deleting...';
+      try {
+        var result = await executeBulkDeleteGroups(prefix);
+        if (result.deleted > 0) {
+          dialog.close();
+          if (typeof showToast === 'function') {
+            showToast({
+              title: 'Bulk Delete Complete',
+              msg: 'Deleted ' + result.deleted + ' group' + (result.deleted !== 1 ? 's' : '') + ' in "' + prefix + '".',
+              kind: 'success',
+              icon: ''
+            }, 3000);
+          }
+        }
+      } catch (error) {
+        console.error('[Bulk Delete] Error:', error);
+        alert('Bulk delete failed: ' + error.message);
+      } finally {
+        deleteBtn.disabled = false;
+        deleteBtn.textContent = 'Delete all matching';
+      }
+    });
+  }
 
   // Apply button
   if (applyBtn) {
