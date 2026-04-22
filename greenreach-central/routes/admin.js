@@ -1360,23 +1360,36 @@ router.get('/farms', async (req, res) => {
             ucResult.rows.forEach(r => { userCounts[r.farm_id] = parseInt(r.cnt); });
         } catch (e) { /* farm_users table may not exist yet */ }
 
-        // Format farms data
-        const farms = result.rows.map(farm => ({
-            id: farm.id,
-            farm_id: farm.farm_id,
-            farmId: farm.farm_id,
-            name: farm.name,
-            email: farm.email || (farm.metadata && farm.metadata.email) || null,
-            status: farm.status,
-            tier: farm.tier || (farm.metadata && farm.metadata.tier) || 'starter',
-            user_count: userCounts[farm.farm_id] || 0,
-            lastUpdate: farm.last_heartbeat,
-            last_login: farm.last_login || null,
-            metadata: farm.metadata || {},
-            createdAt: farm.created_at,
-            created_at: farm.created_at,
-            updatedAt: farm.updated_at
-        }));
+        // Format farms data — prefer dedicated columns (source of truth for farm-side edits),
+        // fall back to metadata JSONB for legacy records.
+        const farms = result.rows.map(farm => {
+            let meta = farm.metadata || {};
+            if (typeof meta === 'string') { try { meta = JSON.parse(meta); } catch (e) { meta = {}; } }
+            let loc = farm.location || null;
+            if (typeof loc === 'string') { try { loc = JSON.parse(loc); } catch (e) { loc = null; } }
+            const locObj = (loc && typeof loc === 'object') ? loc : null;
+            return {
+                id: farm.id,
+                farm_id: farm.farm_id,
+                farmId: farm.farm_id,
+                name: farm.name,
+                email: farm.email || meta.email || meta.contact?.email || null,
+                contactName: farm.contact_name || meta.contactName || meta.contact?.name || null,
+                phone: farm.contact_phone || meta.phone || meta.contact?.phone || null,
+                website: farm.website || meta.website || meta.contact?.website || null,
+                city: (locObj && locObj.city) || farm.city || meta.city || null,
+                state: (locObj && (locObj.province || locObj.state)) || farm.state || meta.state || null,
+                status: farm.status,
+                tier: farm.tier || meta.tier || 'starter',
+                user_count: userCounts[farm.farm_id] || 0,
+                lastUpdate: farm.last_heartbeat,
+                last_login: farm.last_login || null,
+                metadata: meta,
+                createdAt: farm.created_at,
+                created_at: farm.created_at,
+                updatedAt: farm.updated_at
+            };
+        });
         
         res.json({
             success: true,
@@ -1693,7 +1706,22 @@ router.get('/farms/:farmId', async (req, res) => {
             try { parsedMeta = JSON.parse(parsedMeta); } catch (e) { parsedMeta = {}; }
         }
 
-        // Format farm data — expose camelCase fields for frontend + raw DB row
+        // Parse settings safely (farm-admin "Farm Configuration" save lands here)
+        let parsedSettings = farmRow.settings || {};
+        if (typeof parsedSettings === 'string') {
+            try { parsedSettings = JSON.parse(parsedSettings); } catch (e) { parsedSettings = {}; }
+        }
+
+        // `farms.location` is JSONB used by farm-side setup to store address {street,city,province,country}
+        let parsedLocation = farmRow.location || null;
+        if (typeof parsedLocation === 'string') {
+            try { parsedLocation = JSON.parse(parsedLocation); } catch (e) { parsedLocation = null; }
+        }
+        const locationAddress = (parsedLocation && typeof parsedLocation === 'object') ? parsedLocation : null;
+
+        // Format farm data — expose camelCase fields for frontend + raw DB row.
+        // Read from dedicated farms columns FIRST (source of truth for farm-side edits),
+        // then fall back to legacy metadata JSONB so older records still render.
         const farm = {
             farmId: farmRow.farm_id,
             name: farmRow.name || 'Unknown Farm',
@@ -1703,13 +1731,14 @@ router.get('/farms/:farmId', async (req, res) => {
             updatedAt: farmRow.updated_at || null,
             email: farmRow.email || parsedMeta.contact?.email || null,
             contactName: farmRow.contact_name || parsedMeta.contactName || parsedMeta.contact?.name || null,
-            phone: parsedMeta.phone || parsedMeta.contact?.phone || null,
-            website: parsedMeta.website || parsedMeta.contact?.website || null,
-            address: parsedMeta.address || null,
-            city: parsedMeta.city || null,
-            state: parsedMeta.state || null,
-            postalCode: parsedMeta.postalCode || null,
-            location: parsedMeta.location || null,
+            phone: farmRow.contact_phone || parsedMeta.phone || parsedMeta.contact?.phone || null,
+            website: farmRow.website || parsedMeta.website || parsedMeta.contact?.website || null,
+            address: locationAddress || parsedMeta.address || null,
+            city: (locationAddress && locationAddress.city) || farmRow.city || parsedMeta.city || null,
+            state: (locationAddress && (locationAddress.province || locationAddress.state)) || farmRow.state || parsedMeta.state || null,
+            postalCode: (locationAddress && (locationAddress.postalCode || locationAddress.postal_code)) || parsedMeta.postalCode || null,
+            location: parsedLocation || parsedMeta.location || null,
+            settings: parsedSettings,
             coordinates: parsedMeta.coordinates || null,
             apiUrl: farmRow.api_url || null,
             rooms: roomsCount,
@@ -2945,9 +2974,12 @@ router.get('/farms/:farmId/config', async (req, res) => {
             return res.json({ success: true, config, source: 'fallback' });
         }
 
-        // Query farm configuration
+        // Query farm configuration — pull the dedicated columns farm-side setup writes to,
+        // not just the legacy metadata JSONB (which is why admin saw stale data).
         const farmResult = await query(
-            'SELECT farm_id, name, email, api_url, metadata, settings, created_at, updated_at FROM farms WHERE farm_id = $1',
+            `SELECT farm_id, name, email, contact_name, contact_phone, website, location,
+                    city, state, api_url, metadata, settings, created_at, updated_at
+             FROM farms WHERE farm_id = $1`,
             [farmId]
         );
         
@@ -2990,18 +3022,25 @@ router.get('/farms/:farmId/config', async (req, res) => {
             console.warn('[Admin API] devices table not available');
         }
         
+        // Parse location JSONB (farm-side setup writes address here as an object)
+        let farmLocation = farm.location || null;
+        if (typeof farmLocation === 'string') {
+            try { farmLocation = JSON.parse(farmLocation); } catch (e) { farmLocation = null; }
+        }
+        const locObj = (farmLocation && typeof farmLocation === 'object') ? farmLocation : null;
+
         const config = {
             farmId: farm.farm_id,
             farmName: farm.name,
             contactEmail: farm.email || farmMeta.contact?.email || null,
             contactName: farm.contact_name || farmMeta.contactName || farmMeta.contact?.name || null,
-            phone: farmMeta.phone || farmMeta.contact?.phone || null,
-            website: farmMeta.website || farmMeta.contact?.website || null,
-            address: farmMeta.address || null,
-            city: farmMeta.city || null,
-            state: farmMeta.state || null,
-            postalCode: farmMeta.postalCode || null,
-            location: farmMeta.location || null,
+            phone: farm.contact_phone || farmMeta.phone || farmMeta.contact?.phone || null,
+            website: farm.website || farmMeta.website || farmMeta.contact?.website || null,
+            address: locObj || farmMeta.address || null,
+            city: (locObj && locObj.city) || farm.city || farmMeta.city || null,
+            state: (locObj && (locObj.province || locObj.state)) || farm.state || farmMeta.state || null,
+            postalCode: (locObj && (locObj.postalCode || locObj.postal_code)) || farmMeta.postalCode || null,
+            location: farmLocation || farmMeta.location || null,
             coordinates: farmMeta.coordinates || null,
             apiUrl: farm.api_url || null,
             network: {
