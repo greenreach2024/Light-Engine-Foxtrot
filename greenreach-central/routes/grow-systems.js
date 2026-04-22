@@ -24,10 +24,19 @@ import { scoreTemplate } from '../lib/grow-system-scoring.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-// Candidate registry paths: the canonical location first, then a repo-root
-// fallback for deployments that bundle a top-level `public/` dir instead of
-// the service-local one. The first readable path wins.
+// Candidate registry paths, in priority order:
+//   1. /opt/grow-systems.json — Docker-baked copy that lives OUTSIDE any GCS
+//      FUSE mount. This is the prod-safe location (same pattern as
+//      /opt/recipes-v2) and must always win on Cloud Run, where `/app/data`
+//      and potentially `/app/public/data` are shadowed by GCS mounts that do
+//      not contain this file.
+//   2. Service-local `public/data/grow-systems.json` — works for
+//      `npm run dev` from greenreach-central/.
+//   3. Repo-root `public/data/grow-systems.json` — works for top-level dev
+//      runs where the service is launched from the repo root.
+// The first readable path wins.
 const REGISTRY_PATHS = [
+  '/opt/grow-systems.json',
   resolve(__dirname, '..', 'public', 'data', 'grow-systems.json'),
   resolve(__dirname, '..', '..', 'public', 'data', 'grow-systems.json'),
 ];
