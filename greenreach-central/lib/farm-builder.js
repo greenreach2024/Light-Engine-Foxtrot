@@ -404,6 +404,18 @@ function computeRowLayout({ length_m, width_m, unit_length_m, unit_width_m }) {
   const usable_along = usable_along_raw - cross_aisle_count * CROSS_AISLE_M;
   const units_per_row = Math.max(0, Math.floor(usable_along / unit_length_m));
 
+  // Refuse layouts with no growing units. The perimeter/aisle math can pass
+  // while still leaving the room shorter than one unit footprint along the
+  // long axis; without this guard we would return ok:true with zero units and
+  // downstream sizing (lights, HVAC) would be built against a phantom plant
+  // count that has no matching equipment.
+  if (units_per_row === 0) {
+    return {
+      ok: false,
+      error: `Room too small along the long axis for a single growing unit (need at least ${(2 * PERIMETER_M + unit_length_m).toFixed(1)}m; have ${along.toFixed(1)}m).`
+    };
+  }
+
   const total_rows = rows_per_side * 2;
   const total_units = units_per_row * total_rows;
 

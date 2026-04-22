@@ -402,20 +402,18 @@
         .sister-portrait {
             aspect-ratio: 4 / 3;
             border-radius: 18px;
-            border: 1px dashed rgba(45, 80, 22, 0.3);
-            background: #fbfcf7;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            text-align: center;
-            padding: 20px;
-            color: var(--text-light);
-            font-style: italic;
-            font-size: 13px;
+            overflow: hidden;
+            background: #0a1f14;
             margin-bottom: 22px;
+            box-shadow: inset 0 0 0 1px rgba(45, 80, 22, 0.15);
         }
 
-        .sister-portrait strong { color: var(--primary); font-weight: 600; font-style: normal; display: block; margin-bottom: 4px; }
+        .sister-portrait img {
+            display: block;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
 
         .sister-card .role {
             color: var(--accent-dark);
@@ -484,6 +482,93 @@
         }
 
         .demo-video strong { color: var(--primary); font-weight: 600; font-style: normal; display: block; margin-bottom: 4px; }
+
+        /* ── Faye / overseer section ── */
+        .overseer {
+            background: linear-gradient(180deg, #f1f6e8 0%, #eef2ff 100%);
+            padding: 120px 22px;
+        }
+
+        .overseer-header { text-align: center; max-width: 760px; margin: 0 auto 56px; }
+
+        .overseer-card {
+            display: grid;
+            grid-template-columns: minmax(320px, 520px) 1fr;
+            gap: 48px;
+            align-items: center;
+            max-width: 1120px;
+            margin: 0 auto;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 28px;
+            padding: 40px;
+        }
+
+        .overseer-portrait {
+            aspect-ratio: 4 / 3;
+            border-radius: 18px;
+            overflow: hidden;
+            background: #080f1a;
+            box-shadow: inset 0 0 0 1px rgba(45, 80, 22, 0.15);
+        }
+
+        .overseer-portrait img {
+            display: block;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .overseer-card .role {
+            color: #b45309;
+            font-size: 13px;
+            font-weight: 600;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+        }
+
+        .overseer-card h3 {
+            font-size: 32px;
+            color: var(--primary);
+            margin-bottom: 14px;
+            font-weight: 700;
+            letter-spacing: -0.01em;
+        }
+
+        .overseer-card p {
+            color: var(--text);
+            font-size: 16px;
+            line-height: 1.55;
+            margin-bottom: 14px;
+        }
+
+        .overseer-card .bullets {
+            list-style: none;
+            padding: 0;
+            margin-top: 16px;
+            border-top: 1px solid var(--border);
+            padding-top: 16px;
+        }
+
+        .overseer-card .bullets li {
+            padding: 6px 0 6px 22px;
+            position: relative;
+            color: var(--text);
+            font-size: 15px;
+            line-height: 1.5;
+        }
+
+        .overseer-card .bullets li::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 14px;
+            width: 10px;
+            height: 2px;
+            background: #f59e0b;
+            border-radius: 1px;
+        }
 
         /* ── Pricing / subscribe ── */
         .pricing {
@@ -738,12 +823,15 @@
             .usage-grid,
             .steps-grid,
             .sister-grid,
+            .overseer-card,
             .feature-row { grid-template-columns: 1fr; }
             .feature-row { gap: 32px; margin-bottom: 72px; }
             .feature-row.reverse { direction: ltr; }
+            .overseer-card { padding: 28px; gap: 32px; }
             .footer-content { grid-template-columns: 1fr 1fr; }
             section { padding: 72px 20px; }
-            .sisters { padding: 80px 20px; }
+            .sisters,
+            .overseer { padding: 80px 20px; }
         }
 
         @media (max-width: 600px) {
@@ -1171,13 +1259,11 @@
                 <div class="sister-grid">
                     <!-- Evie -->
                     <div class="sister-card">
-                        <!-- TODO: user-provided portrait/avatar for Evie -->
                         <div class="sister-portrait">
-                            <div>
-                                <strong>Portrait placeholder</strong>
-                                Evie — hands-on grower assistant.<br>
-                                Suggested asset: <code>/images/marketing/evie-portrait.png</code>
-                            </div>
+                            <img src="/images/marketing/evie-portrait.png"
+                                 alt="Evie — hands-on grower assistant. Emerald orb framed by leaves over a deep greenhouse background."
+                                 width="1200" height="900"
+                                 loading="lazy" decoding="async">
                         </div>
                         <div class="role">Hands-on — Seed to table</div>
                         <h3>Evie</h3>
@@ -1197,13 +1283,11 @@
 
                     <!-- Gwen -->
                     <div class="sister-card">
-                        <!-- TODO: user-provided portrait/avatar for Gwen -->
                         <div class="sister-portrait">
-                            <div>
-                                <strong>Portrait placeholder</strong>
-                                Gwen — research and development partner.<br>
-                                Suggested asset: <code>/images/marketing/gwen-portrait.png</code>
-                            </div>
+                            <img src="/images/marketing/gwen-portrait.png"
+                                 alt="Gwen — research & development partner. Amber orb inside a molecular hexagonal cage with trial and grant panels."
+                                 width="1200" height="900"
+                                 loading="lazy" decoding="async">
                         </div>
                         <div class="role">Research — Sustainable food systems</div>
                         <h3>Gwen</h3>
@@ -1228,6 +1312,46 @@
                         <strong>Demo video placeholder</strong>
                         A short video of Evie scheduling a harvest or Gwen reviewing a multi-site trial.<br>
                         Suggested assets: <code>/images/marketing/evie-demo.mp4</code>, <code>/images/marketing/gwen-demo.mp4</code>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ── Faye ── -->
+        <section class="overseer" id="faye">
+            <div class="container">
+                <div class="overseer-header">
+                    <div class="feature-eyebrow">Meet the overseer</div>
+                    <h2 class="section-title">Faye watches the whole network.</h2>
+                    <p class="section-lede">
+                        Where Evie runs your farm and Gwen pushes the science, Faye is the network-level
+                        intelligence that keeps every farm on Light Engine honest — cross-farm diagnostics,
+                        fleet yield, and the wholesale marketplace all answer to her.
+                    </p>
+                </div>
+
+                <div class="overseer-card">
+                    <div class="overseer-portrait">
+                        <img src="/images/marketing/faye-portrait.png"
+                             alt="Faye — cross-farm overseer AI. Amber core in a starfield, linked to a violet network of farm nodes."
+                             width="1200" height="900"
+                             loading="lazy" decoding="async">
+                    </div>
+                    <div class="overseer-body">
+                        <div class="role">Overseer — Cross-farm &amp; marketplace</div>
+                        <h3>Faye</h3>
+                        <p>
+                            Faye is the command-center AI. She sits above the fleet, correlates signals
+                            across every Light Engine on the network, and keeps an eye on the wholesale
+                            market so your buyers, your sub-orders, and your prices stay in line with
+                            the real world — not someone's spreadsheet from 2019.
+                        </p>
+                        <ul class="bullets">
+                            <li>Diagnoses issues across farms, not just inside one room</li>
+                            <li>Runs the wholesale marketplace: 50&nbsp;km service radius, proximity-aware allocation, honest retail price watch</li>
+                            <li>Surfaces network-wide outages, yield drift, and pricing drift before they spread</li>
+                            <li>Hands actionable summaries to admins — no dashboards to hunt through</li>
+                        </ul>
                     </div>
                 </div>
             </div>

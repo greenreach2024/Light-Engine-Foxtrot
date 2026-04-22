@@ -1,0 +1,306 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 900"
+     width="1200" height="900" role="img"
+     aria-label="Evie — hands-on grower assistant">
+  <defs>
+    <radialGradient id="evie-bg" cx="50%" cy="42%" r="80%">
+      <stop offset="0%"   stop-color="#0f3d29"/>
+      <stop offset="55%"  stop-color="#072a1a"/>
+      <stop offset="100%" stop-color="#03150d"/>
+    </radialGradient>
+    <radialGradient id="evie-sun" cx="20%" cy="22%" r="28%">
+      <stop offset="0%"   stop-color="#fde68a" stop-opacity="0.5"/>
+      <stop offset="60%"  stop-color="#f59e0b" stop-opacity="0.08"/>
+      <stop offset="100%" stop-color="#f59e0b" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="evie-orb" cx="40%" cy="35%" r="60%">
+      <stop offset="0%"   stop-color="#d1fae5"/>
+      <stop offset="45%"  stop-color="#10b981"/>
+      <stop offset="100%" stop-color="#064e3b"/>
+    </radialGradient>
+    <linearGradient id="evie-leaf0" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#34d399"/>
+      <stop offset="100%" stop-color="#065f46"/>
+    </linearGradient>
+    <linearGradient id="evie-leaf1" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#6ee7b7"/>
+      <stop offset="100%" stop-color="#047857"/>
+    </linearGradient>
+    <linearGradient id="evie-guardian" x1="0" y1="0" x2="1" y2="0.4">
+      <stop offset="0%" stop-color="#10b981" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#064e3b" stop-opacity="0.2"/>
+    </linearGradient>
+    <pattern id="evie-hex" width="60" height="52" patternUnits="userSpaceOnUse">
+      <path d="M 30 0 L 60 15 L 60 45 L 30 60 L 0 45 L 0 15 Z"
+            fill="none" stroke="#115e3a" stroke-width="0.6" opacity="0.3"/>
+    </pattern>
+  </defs>
+
+  <rect width="1200" height="900" fill="url(#evie-bg)"/>
+  <rect width="1200" height="900" fill="url(#evie-hex)"/>
+  <rect width="1200" height="900" fill="url(#evie-sun)"/>
+
+  
+          <g transform="translate(1121.1,797.7) rotate(13.1)"
+             opacity="0.14">
+            <path d="M 0 0
+                     C -21.42892101792281 -33.333877138991035, -5.714378938112749 -59.524780605341135, 0 -66.66775427798207
+                     C  5.714378938112749 -59.524780605341135,  21.42892101792281 -33.333877138991035, 0 0 Z"
+                  fill="#14532d"/>
+          </g>
+          <g transform="translate(1127.6,97.7) rotate(-32.9)"
+             opacity="0.24">
+            <path d="M 0 0
+                     C -16.25311728301762 -25.282626884694075, -4.334164608804699 -45.14754800838227, 0 -50.56525376938815
+                     C  4.334164608804699 -45.14754800838227,  16.25311728301762 -25.282626884694075, 0 0 Z"
+                  fill="#14532d"/>
+          </g>
+          <g transform="translate(164.1,715.2) rotate(13.2)"
+             opacity="0.26">
+            <path d="M 0 0
+                     C -25.454778198966725 -39.596321642837125, -6.787940853057793 -70.707717219352, 0 -79.19264328567425
+                     C  6.787940853057793 -70.707717219352,  25.454778198966725 -39.596321642837125, 0 0 Z"
+                  fill="#14532d"/>
+          </g>
+          <g transform="translate(789.2,45.3) rotate(2.8)"
+             opacity="0.16">
+            <path d="M 0 0
+                     C -21.371592183378567 -33.24469895192221, -5.699091248900951 -59.36553384271824, 0 -66.48939790384442
+                     C  5.699091248900951 -59.36553384271824,  21.371592183378567 -33.24469895192221, 0 0 Z"
+                  fill="#14532d"/>
+          </g>
+          <g transform="translate(64.5,617.8) rotate(5.2)"
+             opacity="0.13">
+            <path d="M 0 0
+                     C -12.778488929964864 -19.87764944661201, -3.40759704799063 -35.49580258323574, 0 -39.75529889322402
+                     C  3.40759704799063 -35.49580258323574,  12.778488929964864 -19.87764944661201, 0 0 Z"
+                  fill="#14532d"/>
+          </g>
+          <g transform="translate(78.7,188.3) rotate(-27.9)"
+             opacity="0.22">
+            <path d="M 0 0
+                     C -13.842467880488746 -21.5327278140936, -3.691324768130332 -38.45129966802429, 0 -43.0654556281872
+                     C  3.691324768130332 -38.45129966802429,  13.842467880488746 -21.5327278140936, 0 0 Z"
+                  fill="#14532d"/>
+          </g>
+          <g transform="translate(46.7,108.9) rotate(-12.3)"
+             opacity="0.27">
+            <path d="M 0 0
+                     C -13.20466640502409 -20.540592185593027, -3.5212443746730906 -36.6796289028447, 0 -41.081184371186055
+                     C  3.5212443746730906 -36.6796289028447,  13.20466640502409 -20.540592185593027, 0 0 Z"
+                  fill="#14532d"/>
+          </g>
+          <g transform="translate(1020.8,727.6) rotate(16.5)"
+             opacity="0.24">
+            <path d="M 0 0
+                     C -14.846682055094199 -23.09483875236875, -3.959115214691786 -41.24078348637277, 0 -46.1896775047375
+                     C  3.959115214691786 -41.24078348637277,  14.846682055094199 -23.09483875236875, 0 0 Z"
+                  fill="#14532d"/>
+          </g>
+          <g transform="translate(946.4,689.6) rotate(-25.7)"
+             opacity="0.24">
+            <path d="M 0 0
+                     C -15.251969296939805 -23.725285573017473, -4.067191812517281 -42.36658138038835, 0 -47.450571146034946
+                     C  4.067191812517281 -42.36658138038835,  15.251969296939805 -23.725285573017473, 0 0 Z"
+                  fill="#14532d"/>
+          </g>
+          <g transform="translate(866.8,771.8) rotate(31.2)"
+             opacity="0.13">
+            <path d="M 0 0
+                     C -21.038401279072794 -32.72640198966879, -5.610240341086079 -58.44000355297999, 0 -65.45280397933757
+                     C  5.610240341086079 -58.44000355297999,  21.038401279072794 -32.72640198966879, 0 0 Z"
+                  fill="#14532d"/>
+          </g>
+          <g transform="translate(1112.0,765.3) rotate(-34.6)"
+             opacity="0.20">
+            <path d="M 0 0
+                     C -18.979819803594367 -29.52416413892457, -5.061285280958497 -52.721721676651015, 0 -59.04832827784914
+                     C  5.061285280958497 -52.721721676651015,  18.979819803594367 -29.52416413892457, 0 0 Z"
+                  fill="#14532d"/>
+          </g>
+  <line x1="350.0" y1="220.0" x2="410.0" y2="220.0" stroke="#fde68a" stroke-width="1" opacity="0.22"/><line x1="347.6" y1="242.9" x2="406.3" y2="255.3" stroke="#fde68a" stroke-width="1" opacity="0.22"/><line x1="340.5" y1="264.7" x2="395.3" y2="289.1" stroke="#fde68a" stroke-width="1" opacity="0.22"/><line x1="329.0" y1="284.7" x2="377.5" y2="319.9" stroke="#fde68a" stroke-width="1" opacity="0.22"/><line x1="313.6" y1="301.7" x2="353.8" y2="346.3" stroke="#fde68a" stroke-width="1" opacity="0.22"/><line x1="295.0" y1="315.3" x2="325.0" y2="367.2" stroke="#fde68a" stroke-width="1" opacity="0.22"/><line x1="274.0" y1="324.6" x2="292.5" y2="381.7" stroke="#fde68a" stroke-width="1" opacity="0.22"/><line x1="251.5" y1="329.4" x2="257.8" y2="389.1" stroke="#fde68a" stroke-width="1" opacity="0.22"/><line x1="228.5" y1="329.4" x2="222.2" y2="389.1" stroke="#fde68a" stroke-width="1" opacity="0.22"/><line x1="206.0" y1="324.6" x2="187.5" y2="381.7" stroke="#fde68a" stroke-width="1" opacity="0.22"/><line x1="185.0" y1="315.3" x2="155.0" y2="367.2" stroke="#fde68a" stroke-width="1" opacity="0.22"/><line x1="166.4" y1="301.7" x2="126.2" y2="346.3" stroke="#fde68a" stroke-width="1" opacity="0.22"/><line x1="151.0" y1="284.7" x2="102.5" y2="319.9" stroke="#fde68a" stroke-width="1" opacity="0.22"/><line x1="139.5" y1="264.7" x2="84.7" y2="289.1" stroke="#fde68a" stroke-width="1" opacity="0.22"/><line x1="132.4" y1="242.9" x2="73.7" y2="255.3" stroke="#fde68a" stroke-width="1" opacity="0.22"/><line x1="130.0" y1="220.0" x2="70.0" y2="220.0" stroke="#fde68a" stroke-width="1" opacity="0.22"/><line x1="132.4" y1="197.1" x2="73.7" y2="184.7" stroke="#fde68a" stroke-width="1" opacity="0.22"/><line x1="139.5" y1="175.3" x2="84.7" y2="150.9" stroke="#fde68a" stroke-width="1" opacity="0.22"/><line x1="151.0" y1="155.3" x2="102.5" y2="120.1" stroke="#fde68a" stroke-width="1" opacity="0.22"/><line x1="166.4" y1="138.3" x2="126.2" y2="93.7" stroke="#fde68a" stroke-width="1" opacity="0.22"/><line x1="185.0" y1="124.7" x2="155.0" y2="72.8" stroke="#fde68a" stroke-width="1" opacity="0.22"/><line x1="206.0" y1="115.4" x2="187.5" y2="58.3" stroke="#fde68a" stroke-width="1" opacity="0.22"/><line x1="228.5" y1="110.6" x2="222.2" y2="50.9" stroke="#fde68a" stroke-width="1" opacity="0.22"/><line x1="251.5" y1="110.6" x2="257.8" y2="50.9" stroke="#fde68a" stroke-width="1" opacity="0.22"/><line x1="274.0" y1="115.4" x2="292.5" y2="58.3" stroke="#fde68a" stroke-width="1" opacity="0.22"/><line x1="295.0" y1="124.7" x2="325.0" y2="72.8" stroke="#fde68a" stroke-width="1" opacity="0.22"/><line x1="313.6" y1="138.3" x2="353.8" y2="93.7" stroke="#fde68a" stroke-width="1" opacity="0.22"/><line x1="329.0" y1="155.3" x2="377.5" y2="120.1" stroke="#fde68a" stroke-width="1" opacity="0.22"/><line x1="340.5" y1="175.3" x2="395.3" y2="150.9" stroke="#fde68a" stroke-width="1" opacity="0.22"/><line x1="347.6" y1="197.1" x2="406.3" y2="184.7" stroke="#fde68a" stroke-width="1" opacity="0.22"/>
+
+  <!-- guardian leaf cradling the orb -->
+  
+      <g transform="translate(420, 490)" opacity="0.85">
+        <path d="M 0 0
+                 C -40 -180, 120 -320, 360 -240
+                 C 300 -60,  140 40,  0 0 Z"
+              fill="url(#evie-guardian)"/>
+        <path d="M 0 0 Q 180 -140, 340 -220" stroke="#022c1a"
+              stroke-width="2.5" fill="none" opacity="0.55"/>
+        <path d="M 60 -70 Q 150 -150, 220 -180" stroke="#022c1a"
+              stroke-width="1.5" fill="none" opacity="0.45"/>
+        <path d="M 120 -30 Q 200 -120, 290 -165" stroke="#022c1a"
+              stroke-width="1.5" fill="none" opacity="0.45"/>
+      </g>
+
+  <circle cx="600" cy="430" r="270" fill="none" stroke="#34d399" stroke-width="1.2" opacity="0.22"/>
+<circle cx="600" cy="430" r="230" fill="none" stroke="#10b981" stroke-width="1.2" opacity="0.32"/>
+<circle cx="600" cy="430" r="195" fill="none" stroke="#6ee7b7" stroke-width="1.2" opacity="0.22"/>
+  
+      <circle cx="600" cy="430" r="150" fill="url(#evie-orb)"/>
+      <circle cx="562.5" cy="385.0" r="42"
+              fill="#a7f3d0"/>
+    
+
+  
+          <g transform="translate(483.7,110.5) rotate(-20.0)"
+             opacity="0.92">
+            <path d="M 0 0
+                     C -31.5 -49.0, -8.4 -87.5, 0 -98.0
+                     C  8.4 -87.5,  31.5 -49.0, 0 0 Z"
+                  fill="url(#evie-leaf0)" />
+            <path d="M 0 0 L 0 -95.2" stroke="#022c1a"
+                  stroke-width="2" opacity="0.55"/>
+          </g>
+          <g transform="translate(581.7,90.5) rotate(-3.1)"
+             opacity="0.92">
+            <path d="M 0 0
+                     C -38.7 -60.199999999999996, -10.32 -107.5, 0 -120.39999999999999
+                     C  10.32 -107.5,  38.7 -60.199999999999996, 0 0 Z"
+                  fill="url(#evie-leaf1)" />
+            <path d="M 0 0 L 0 -116.96000000000001" stroke="#022c1a"
+                  stroke-width="2" opacity="0.55"/>
+          </g>
+          <g transform="translate(681.4,99.9) rotate(13.8)"
+             opacity="0.92">
+            <path d="M 0 0
+                     C -45.9 -71.39999999999999, -12.24 -127.5, 0 -142.79999999999998
+                     C  12.24 -127.5,  45.9 -71.39999999999999, 0 0 Z"
+                  fill="url(#evie-leaf0)" />
+            <path d="M 0 0 L 0 -138.72" stroke="#022c1a"
+                  stroke-width="2" opacity="0.55"/>
+          </g>
+          <g transform="translate(773.9,137.9) rotate(30.8)"
+             opacity="0.92">
+            <path d="M 0 0
+                     C -31.5 -49.0, -8.4 -87.5, 0 -98.0
+                     C  8.4 -87.5,  31.5 -49.0, 0 0 Z"
+                  fill="url(#evie-leaf1)" />
+            <path d="M 0 0 L 0 -95.2" stroke="#022c1a"
+                  stroke-width="2" opacity="0.55"/>
+          </g>
+          <g transform="translate(851.4,201.1) rotate(47.7)"
+             opacity="0.92">
+            <path d="M 0 0
+                     C -38.7 -60.199999999999996, -10.32 -107.5, 0 -120.39999999999999
+                     C  10.32 -107.5,  38.7 -60.199999999999996, 0 0 Z"
+                  fill="url(#evie-leaf0)" />
+            <path d="M 0 0 L 0 -116.96000000000001" stroke="#022c1a"
+                  stroke-width="2" opacity="0.55"/>
+          </g>
+          <g transform="translate(907.2,284.2) rotate(64.6)"
+             opacity="0.92">
+            <path d="M 0 0
+                     C -45.9 -71.39999999999999, -12.24 -127.5, 0 -142.79999999999998
+                     C  12.24 -127.5,  45.9 -71.39999999999999, 0 0 Z"
+                  fill="url(#evie-leaf1)" />
+            <path d="M 0 0 L 0 -138.72" stroke="#022c1a"
+                  stroke-width="2" opacity="0.55"/>
+          </g>
+          <g transform="translate(936.3,380.0) rotate(81.5)"
+             opacity="0.92">
+            <path d="M 0 0
+                     C -31.5 -49.0, -8.4 -87.5, 0 -98.0
+                     C  8.4 -87.5,  31.5 -49.0, 0 0 Z"
+                  fill="url(#evie-leaf0)" />
+            <path d="M 0 0 L 0 -95.2" stroke="#022c1a"
+                  stroke-width="2" opacity="0.55"/>
+          </g>
+          <g transform="translate(936.3,480.0) rotate(98.5)"
+             opacity="0.92">
+            <path d="M 0 0
+                     C -38.7 -60.199999999999996, -10.32 -107.5, 0 -120.39999999999999
+                     C  10.32 -107.5,  38.7 -60.199999999999996, 0 0 Z"
+                  fill="url(#evie-leaf1)" />
+            <path d="M 0 0 L 0 -116.96000000000001" stroke="#022c1a"
+                  stroke-width="2" opacity="0.55"/>
+          </g>
+          <g transform="translate(907.2,575.8) rotate(115.4)"
+             opacity="0.92">
+            <path d="M 0 0
+                     C -45.9 -71.39999999999999, -12.24 -127.5, 0 -142.79999999999998
+                     C  12.24 -127.5,  45.9 -71.39999999999999, 0 0 Z"
+                  fill="url(#evie-leaf0)" />
+            <path d="M 0 0 L 0 -138.72" stroke="#022c1a"
+                  stroke-width="2" opacity="0.55"/>
+          </g>
+          <g transform="translate(851.4,658.9) rotate(132.3)"
+             opacity="0.92">
+            <path d="M 0 0
+                     C -31.5 -49.0, -8.4 -87.5, 0 -98.0
+                     C  8.4 -87.5,  31.5 -49.0, 0 0 Z"
+                  fill="url(#evie-leaf1)" />
+            <path d="M 0 0 L 0 -95.2" stroke="#022c1a"
+                  stroke-width="2" opacity="0.55"/>
+          </g>
+          <g transform="translate(773.9,722.1) rotate(149.2)"
+             opacity="0.92">
+            <path d="M 0 0
+                     C -38.7 -60.199999999999996, -10.32 -107.5, 0 -120.39999999999999
+                     C  10.32 -107.5,  38.7 -60.199999999999996, 0 0 Z"
+                  fill="url(#evie-leaf0)" />
+            <path d="M 0 0 L 0 -116.96000000000001" stroke="#022c1a"
+                  stroke-width="2" opacity="0.55"/>
+          </g>
+          <g transform="translate(681.4,760.1) rotate(166.2)"
+             opacity="0.92">
+            <path d="M 0 0
+                     C -45.9 -71.39999999999999, -12.24 -127.5, 0 -142.79999999999998
+                     C  12.24 -127.5,  45.9 -71.39999999999999, 0 0 Z"
+                  fill="url(#evie-leaf1)" />
+            <path d="M 0 0 L 0 -138.72" stroke="#022c1a"
+                  stroke-width="2" opacity="0.55"/>
+          </g>
+          <g transform="translate(581.7,769.5) rotate(183.1)"
+             opacity="0.92">
+            <path d="M 0 0
+                     C -31.5 -49.0, -8.4 -87.5, 0 -98.0
+                     C  8.4 -87.5,  31.5 -49.0, 0 0 Z"
+                  fill="url(#evie-leaf0)" />
+            <path d="M 0 0 L 0 -95.2" stroke="#022c1a"
+                  stroke-width="2" opacity="0.55"/>
+          </g>
+          <g transform="translate(483.7,749.5) rotate(200.0)"
+             opacity="0.92">
+            <path d="M 0 0
+                     C -38.7 -60.199999999999996, -10.32 -107.5, 0 -120.39999999999999
+                     C  10.32 -107.5,  38.7 -60.199999999999996, 0 0 Z"
+                  fill="url(#evie-leaf1)" />
+            <path d="M 0 0 L 0 -116.96000000000001" stroke="#022c1a"
+                  stroke-width="2" opacity="0.55"/>
+          </g>
+
+  
+      <g font-family="ui-monospace, 'JetBrains Mono', Menlo, monospace"
+         font-size="12" fill="#a7f3d0">
+        <g transform="translate(140,420)" opacity="0.85">
+          <rect x="-6" y="-16" width="116" height="24" rx="6"
+                fill="#052e1e" stroke="#10b981" stroke-opacity="0.35"/>
+          <text y="1">VPD 1.12 kPa</text>
+        </g>
+        <g transform="translate(990,300)" opacity="0.85">
+          <rect x="-6" y="-16" width="104" height="24" rx="6"
+                fill="#052e1e" stroke="#10b981" stroke-opacity="0.35"/>
+          <text y="1">PPFD 420</text>
+        </g>
+        <g transform="translate(930,620)" opacity="0.85">
+          <rect x="-6" y="-16" width="138" height="24" rx="6"
+                fill="#052e1e" stroke="#10b981" stroke-opacity="0.35"/>
+          <text y="1">Harvest in 3d</text>
+        </g>
+      </g>
+
+  
+  <g font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">
+    <text x="72" y="118" font-size="18" letter-spacing="6"
+          fill="#6ee7b7" font-weight="600"
+          opacity="0.9">E.V.I.E.</text>
+    <text x="72" y="156" font-size="12" letter-spacing="4"
+          fill="#9ca3af" opacity="0.75">ENVIRONMENTAL · VITAL · INTELLIGENCE · ENGINE</text>
+    <text x="72" y="806" font-size="96" font-weight="700"
+          fill="#f0fdf4">Evie</text>
+    <text x="72" y="852" font-size="20" letter-spacing="2"
+          font-weight="500" fill="#86efac">Hands-on grower assistant</text>
+  </g>
+</svg>

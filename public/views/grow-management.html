@@ -2191,6 +2191,18 @@
 
       function mToPx(m, scale) { return PADDING_PX + m * scale.pxPerM; }
       function pxToM(px, scale) { return (px - PADDING_PX) * scale.mPerPx; }
+      // Normalize a mouse event to metres inside the room, using the svg's
+      // bounding rect as the single reference so draw/move share a basis.
+      // event.offsetX/Y varies by event target (svg vs rect vs background),
+      // which made the first frame of a move-drag jump — always clientX/Y
+      // minus svg.getBoundingClientRect().left/top instead.
+      function eventToMetres(e, svg, scale) {
+        var r = svg.getBoundingClientRect();
+        return {
+          mx: pxToM(e.clientX - r.left, scale),
+          my: pxToM(e.clientY - r.top,  scale)
+        };
+      }
 
       function render() {
         var r = room();
@@ -2256,7 +2268,8 @@
           rect.addEventListener('mousedown', function (e) {
             e.stopPropagation();
             state.selectedIdx = i;
-            state.dragging = { mode: 'move', startX: e.offsetX, startY: e.offsetY, idx: i, origX: z.x, origY: z.y };
+            var p = eventToMetres(e, svg, scale);
+            state.dragging = { mode: 'move', startX: p.mx, startY: p.my, idx: i, origX: z.x, origY: z.y };
             render();
           });
           svg.appendChild(rect);
@@ -2273,15 +2286,15 @@
 
         svg.addEventListener('mousedown', function (e) {
           if (e.target !== svg && e.target !== bg) return;
-          var mx = pxToM(e.offsetX, scale);
-          var my = pxToM(e.offsetY, scale);
-          state.dragging = { mode: 'draw', startX: mx, startY: my };
+          var p = eventToMetres(e, svg, scale);
+          state.dragging = { mode: 'draw', startX: p.mx, startY: p.my };
           state.selectedIdx = -1;
         });
         svg.addEventListener('mousemove', function (e) {
           if (!state.dragging) return;
-          var mx = pxToM(e.offsetX, scale);
-          var my = pxToM(e.offsetY, scale);
+          var p = eventToMetres(e, svg, scale);
+          var mx = p.mx;
+          var my = p.my;
           if (state.dragging.mode === 'draw') {
             // Remove any ephemeral rect from a previous move step, then draw new
             var ephemeral = svg.querySelector('.zone-ephemeral');
@@ -2303,8 +2316,8 @@
           } else if (state.dragging.mode === 'move') {
             var z = state.zones[state.dragging.idx];
             if (!z) return;
-            var dx = pxToM(e.offsetX, scale) - pxToM(state.dragging.startX, scale);
-            var dy = pxToM(e.offsetY, scale) - pxToM(state.dragging.startY, scale);
+            var dx = mx - state.dragging.startX;
+            var dy = my - state.dragging.startY;
             z.x = Math.max(0, Math.min(L - z.l, state.dragging.origX + dx));
             z.y = Math.max(0, Math.min(W - z.w, state.dragging.origY + dy));
             render();
@@ -2313,8 +2326,9 @@
         svg.addEventListener('mouseup', function (e) {
           if (!state.dragging) return;
           if (state.dragging.mode === 'draw') {
-            var mx = pxToM(e.offsetX, scale);
-            var my = pxToM(e.offsetY, scale);
+            var p = eventToMetres(e, svg, scale);
+            var mx = p.mx;
+            var my = p.my;
             var x0 = Math.max(0, Math.min(state.dragging.startX, mx));
             var y0 = Math.max(0, Math.min(state.dragging.startY, my));
             var l  = Math.min(L - x0, Math.abs(mx - state.dragging.startX));
