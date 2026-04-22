@@ -550,8 +550,9 @@
 
     <!-- 4. INTEGRATIONS (discovery + vendor scanning — comes before IoT so
          operators connect upstream sources before reviewing the resulting
-         device list) -->
-    <details class="fs-card">
+         device list). id=integrations lets grow-management.html#integrations
+         and wizard CTAs deep-link straight to this card. -->
+    <details class="fs-card" id="integrations">
       <summary>
         <h2>Integrations</h2>
         <span class="fs-card-badge" id="integrationsStatusBadge">Configure</span>
@@ -629,8 +630,9 @@
     <!-- 5. IOT DEVICES (lists devices surfaced by the discovery/integration
          flows above — the old standalone "Device Pairing" card was removed
          because Integrations > Device Manager already covers discovery,
-         assignment, and vendor pairing) -->
-    <details class="fs-card" open>
+         assignment, and vendor pairing). id=iot lets grow-management.html#iot
+         and wizard CTAs deep-link straight to this card. -->
+    <details class="fs-card" id="iot" open>
       <summary>
         <h2>IoT Devices</h2>
         <span class="fs-card-badge" id="iotStatusBadge">--</span>
@@ -1202,6 +1204,35 @@
   </div>
 
     <div id="toasts" class="toast-container" aria-live="polite" aria-atomic="true"></div>
+
+    <script>
+      // Deep-link support: when the wizard / Room Build Plan CTAs land here
+      // with a hash like #iot or #integrations, auto-open the matching
+      // <details> card and scroll it into view. Without this, <details>
+      // elements stay collapsed and the anchor lands on an invisible header.
+      (function openDetailsFromHash() {
+        function openAndScroll() {
+          var hash = (window.location.hash || '').replace(/^#/, '');
+          if (!hash) return;
+          var target = document.getElementById(hash);
+          if (!target) return;
+          if (target.tagName && target.tagName.toLowerCase() === 'details') {
+            target.open = true;
+          }
+          // Defer scroll until after layout settles so the opened card lands
+          // in view (not under the top of the newly-expanded region).
+          window.requestAnimationFrame(function () {
+            target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          });
+        }
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', openAndScroll);
+        } else {
+          openAndScroll();
+        }
+        window.addEventListener('hashchange', openAndScroll);
+      })();
+    </script>
 
 </body>
 </html>

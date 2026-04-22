@@ -782,7 +782,6 @@
              is no longer a separate link here. -->
         <div class="ff-link-row" style="display:flex;gap:14px;flex-wrap:wrap;">
           <a href="#" data-spatial-viewer="view" data-spatial-viewer-title="3D Farm Viewer">Open 3D viewer</a>
-          <a href="#" data-spatial-viewer="heatmap" data-spatial-viewer-title="Heat Map &middot; 3D viewer">Heat Map</a>
         </div>
       </div>
     </section>
@@ -882,19 +881,19 @@
       <section id="buildStockGroupsCard" class="gm-card" style="margin:0 0 18px;">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">
         <div>
-          <h3 style="margin:0 0 4px;border:none;padding:0;">Build Stock Groups</h3>
+          <h3 style="margin:0 0 4px;border:none;padding:0;">Build Growing Unit</h3>
           <p class="tiny text-muted" style="margin:0;max-width:640px;">
-            Batch-create identical groups from the selected template. Each group gets its own <strong>Group ID</strong>
+            Batch-create identical growing units from the selected template. Each unit gets its own <strong>Group ID</strong>
             (used by inventory, recipe assignment, wholesale portal, and the accounting pages), a printable QR label,
             and inline pickers for Standard Light and Standard Controller &mdash; no need to scroll to a separate card.
           </p>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <button id="buildStockGroupsCardOpenBtn" type="button" class="primary" style="min-height:32px;padding:6px 14px;">Build Stock Groups</button>
+          <button id="buildStockGroupsCardOpenBtn" type="button" class="primary" style="min-height:32px;padding:6px 14px;">Build Growing Unit</button>
           <button id="buildStockGroupsCardPrintBtn" type="button" class="ghost" style="min-height:32px;padding:6px 14px;" title="Download a PDF of group labels (QR + Group ID + name)">Print group codes</button>
         </div>
       </div>
-      <div id="buildStockGroupsSummary" class="tiny" style="margin-top:10px;color:#94a3b8;">No stock-group batches created yet.</div>
+      <div id="buildStockGroupsSummary" class="tiny" style="margin-top:10px;color:#94a3b8;">No growing units created yet.</div>
     </section>
 
       <!-- Room Build Plan (populated on template click; sits under Build Stock
@@ -1376,13 +1375,13 @@
         var groups = (window.STATE && Array.isArray(window.STATE.groups)) ? window.STATE.groups : [];
         var count = groups.length;
         if (count === 0) {
-          el.textContent = 'No stock-group batches created yet.';
+          el.textContent = 'No growing units created yet.';
           el.style.color = '#94a3b8';
         } else {
           var withLights = groups.filter(function (g) {
             return Array.isArray(g.lights) && g.lights.length > 0;
           }).length;
-          el.textContent = count + ' group(s) in this farm \u2022 ' + withLights + ' with light assignments \u2022 Group IDs are auto-assigned and printable via "Print group codes".';
+          el.textContent = count + ' growing unit(s) in this farm \u2022 ' + withLights + ' with light assignments \u2022 Group IDs are auto-assigned and printable via "Print group codes".';
           el.style.color = '#cbd5e1';
         }
       }
@@ -1464,6 +1463,10 @@
         }).then(function () {
           if (statusEl) { statusEl.textContent = 'Saved'; statusEl.style.color = '#4ade80'; }
           document.dispatchEvent(new CustomEvent('rooms-updated'));
+          if (window.DataFlowBus) {
+            window.DataFlowBus.emit('rooms', { source: 'grow-management-room-dimensions' });
+            window.DataFlowBus.emit('zones', { source: 'grow-management-room-dimensions' });
+          }
         }).catch(function (err) {
           console.error('[grow-management] rooms save failed:', err);
           if (statusEl) { statusEl.textContent = 'Save failed'; statusEl.style.color = '#f87171'; }
@@ -2687,10 +2690,10 @@
   <dialog id="buildStockGroupModal" style="max-width:540px;width:92vw;border:none;border-radius:16px;box-shadow:0 8px 32px rgba(0,0,0,0.18);padding:0;">
   <form method="dialog" id="buildStockGroupForm" style="padding:24px;display:flex;flex-direction:column;gap:16px;">
     <div style="display:flex;justify-content:space-between;align-items:center;">
-      <h3 style="margin:0;font-size:1.15rem;">Build Stock Groups</h3>
+      <h3 style="margin:0;font-size:1.15rem;">Build Growing Unit</h3>
       <button type="button" id="buildStockGroupClose" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:#64748b;">&times;</button>
     </div>
-    <p class="tiny" style="color:#64748b;margin:0;">Batch-create groups that share the same light fixture, tray count, and layout. Each group maintains its own individual control, inventory, and QR codes.</p>
+    <p class="tiny" style="color:#64748b;margin:0;">Batch-create growing units that share the same light fixture and tray setup. Each unit maintains its own individual control, inventory, and QR codes.</p>
 
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
       <label class="tiny" style="display:flex;flex-direction:column;gap:4px;">
@@ -2709,14 +2712,23 @@
         <input id="bsgPrefix" type="text" placeholder="e.g. Bench" style="min-height:32px;border-radius:6px;border:1px solid #cbd5e1;" required>
       </label>
       <label class="tiny" style="display:flex;flex-direction:column;gap:4px;">
-        Number of groups
+        Number of growing units
         <input id="bsgCount" type="number" min="1" max="100" value="4" style="min-height:32px;border-radius:6px;border:1px solid #cbd5e1;" required>
       </label>
     </div>
 
+    <div style="display:grid;grid-template-columns:1fr auto;gap:12px;align-items:end;">
+      <label class="tiny" style="display:flex;flex-direction:column;gap:4px;">
+        Tray format
+        <input id="bsgTrayFormatName" type="text" placeholder="Select tray format" readonly style="min-height:32px;border-radius:6px;border:1px solid #cbd5e1;background:#f8fafc;">
+        <input id="bsgTrayFormatId" type="hidden" value="">
+      </label>
+      <button id="bsgSelectTrayFormatBtn" type="button" class="ghost" style="min-height:32px;padding:6px 12px;">Select tray format</button>
+    </div>
+
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
       <label class="tiny" style="display:flex;flex-direction:column;gap:4px;">
-        Trays / group
+        Number of trays / growing unit
         <input id="bsgTrays" type="number" min="1" max="200" value="4" style="min-height:32px;border-radius:6px;border:1px solid #cbd5e1;">
       </label>
       <label class="tiny" style="display:flex;flex-direction:column;gap:4px;">
@@ -2757,10 +2769,24 @@
 
     <div style="display:flex;gap:8px;justify-content:flex-end;">
       <button type="button" id="buildStockGroupCancel" class="ghost">Cancel</button>
-      <button type="button" id="buildStockGroupCreate" class="primary" style="background:linear-gradient(135deg,#6366f1,#4f46e5);min-width:140px;">Create Groups</button>
+      <button type="button" id="buildStockGroupCreate" class="primary" style="background:linear-gradient(135deg,#6366f1,#4f46e5);min-width:140px;">Create Growing Units</button>
     </div>
   </form>
 </dialog>
+
+  <dialog id="bsgTrayFormatModal" style="max-width:560px;width:92vw;border:none;border-radius:16px;box-shadow:0 8px 32px rgba(0,0,0,0.18);padding:0;">
+    <form method="dialog" style="padding:20px;display:flex;flex-direction:column;gap:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <h3 style="margin:0;font-size:1.05rem;">Select Tray Format</h3>
+        <button type="button" id="bsgTrayFormatClose" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:#64748b;">&times;</button>
+      </div>
+      <p class="tiny" style="margin:0;color:#64748b;">Choose from available tray formats. This selection is required before creating growing units.</p>
+      <div id="bsgTrayFormatList" style="max-height:320px;overflow:auto;border:1px solid #e2e8f0;border-radius:10px;padding:8px;background:#f8fafc;"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button type="button" id="bsgTrayFormatCancel" class="ghost">Cancel</button>
+      </div>
+    </form>
+  </dialog>
 
     <div id="toasts" class="toast-container" aria-live="polite" aria-atomic="true"></div>
 
