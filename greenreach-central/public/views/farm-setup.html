@@ -443,6 +443,7 @@
   <script src="/js/net.guard.js" defer></script>
   <script src="/js/iot-manager.js" defer></script>
   <script src="/app.foxtrot.js?v=20260415-dark-card-fix" defer></script>
+  <script src="/js/spatial-viewer-popup.js?v=20260421-svp-v1" defer></script>
 </head>
 <body class="le-theme">
 
@@ -452,19 +453,24 @@
     <span id="status" class="tiny" aria-live="polite" style="color:#94a3b8;"></span>
   </header>
 
-  <!-- ===== UNIFIED FARM FLOW BANNER =====
-       Directs operators to the consolidated Room → Zones → Grow units →
-       Lights → Equipment → Controllers workflow. This dashboard remains
-       as the per-card editor for advanced fields (farm profile, IoT
-       pairing, integrations), but day-one onboarding happens in the
-       unified flow on grow-management.html.
+  <!-- ===== FARM SETUP — ADVANCED EDITOR BANNER =====
+       Day-one onboarding runs in the unified Room → Zones → Grow units →
+       Equipment → Controllers flow on grow-management.html. This page is
+       the "next level" advanced editor: grow rooms equipped details, IoT
+       pairing, wholesale + integrations, Wi-Fi provisioning, and the
+       per-card fields operators only touch occasionally.
   -->
   <aside style="margin:12px 24px 0;padding:14px 18px;border:1px solid rgba(59,130,246,0.4);border-radius:12px;background:linear-gradient(135deg, rgba(59,130,246,0.12), rgba(16,185,129,0.08));display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
     <div>
-      <div style="font-weight:600;color:#e0f2fe;">New: unified farm flow</div>
-      <div class="tiny" style="color:#cbd5e1;">Room → Zones → Grow units → Lights → Equipment → Controllers, in one guided page.</div>
+      <div style="font-weight:600;color:#e0f2fe;">Farm Setup &middot; advanced editor</div>
+      <div class="tiny" style="color:#cbd5e1;">Day-one onboarding lives in Grow Management. Use this page to equip grow rooms with additional detail, pair IoT devices, and manage integrations.</div>
     </div>
-    <a href="/views/grow-management.html#flow-room" class="primary" style="display:inline-block;padding:8px 16px;border-radius:8px;background:#3b82f6;color:#fff;text-decoration:none;font-weight:600;">Open unified flow &rsaquo;</a>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <a href="/views/grow-management.html#flow-room" class="primary" style="display:inline-block;padding:8px 16px;border-radius:8px;background:#3b82f6;color:#fff;text-decoration:none;font-weight:600;">Open guided flow &rsaquo;</a>
+      <a href="#" data-spatial-viewer="view" data-spatial-viewer-title="3D Farm Viewer" style="display:inline-block;padding:8px 14px;border-radius:8px;background:rgba(148,163,184,0.15);color:#e0f2fe;text-decoration:none;font-weight:600;border:1px solid rgba(148,163,184,0.3);">3D viewer</a>
+      <a href="#" data-spatial-viewer="draw-zones" data-spatial-viewer-title="Room Mapper &middot; 3D viewer" style="display:inline-block;padding:8px 14px;border-radius:8px;background:rgba(148,163,184,0.15);color:#e0f2fe;text-decoration:none;font-weight:600;border:1px solid rgba(148,163,184,0.3);">Room Mapper</a>
+      <a href="#" data-spatial-viewer="heatmap" data-spatial-viewer-title="Heat Map &middot; 3D viewer" style="display:inline-block;padding:8px 14px;border-radius:8px;background:rgba(148,163,184,0.15);color:#e0f2fe;text-decoration:none;font-weight:600;border:1px solid rgba(148,163,184,0.3);">Heat Map</a>
+    </div>
   </aside>
 
   <!-- ===== PROGRESS ===== -->
