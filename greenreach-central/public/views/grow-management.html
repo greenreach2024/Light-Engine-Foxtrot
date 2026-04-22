@@ -915,7 +915,12 @@
             </label>
             <div class="row" style="gap:8px;flex-wrap:wrap;">
               <button id="groupsV2SaveGroup" type="button" class="primary">Save Group</button>
-              <button id="buildStockGroupsBtn" type="button" class="ghost" title="Batch-create identical groups with same lights, trays, and layout">Build Stock Groups</button>
+              <!-- The secondary "Build Stock Groups" button was removed to stop
+                   two identical cards from appearing on step 3. The primary
+                   entry point is #buildStockGroupsCardOpenBtn in the
+                   #buildStockGroupsCard above; mirror-click wiring in the
+                   DOMContentLoaded block opens the same modal so the flow
+                   stays identical. -->
               <label class="tiny" style="display:flex;flex-direction:column;min-width:160px;">
                 Load group
                 <select id="groupsV2LoadGroup">
@@ -1313,14 +1318,12 @@
     // modal/print buttons inside the Groups V2 panel so the underlying
     // wiring (groups-v2.js) keeps owning the data-contract side of the flow.
     document.addEventListener('DOMContentLoaded', function () {
-      var cardOpen = document.getElementById('buildStockGroupsCardOpenBtn');
       var cardPrint = document.getElementById('buildStockGroupsCardPrintBtn');
-      if (cardOpen) {
-        cardOpen.addEventListener('click', function () {
-          var btn = document.getElementById('buildStockGroupsBtn');
-          if (btn) btn.click();
-        });
-      }
+      // #buildStockGroupsCardOpenBtn is now bound directly inside
+      // groups-v2.js (see the Build Stock Groups modal wiring block), so
+      // we no longer need a mirror-click that targeted the removed
+      // #buildStockGroupsBtn. Leaving the legacy mirror in place would
+      // silently no-op and mask regressions.
       if (cardPrint) {
         cardPrint.addEventListener('click', function () {
           var btn = document.getElementById('groupsV2PrintLabels');
@@ -2674,10 +2677,14 @@
       </label>
     </div>
 
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
       <label class="tiny" style="display:flex;flex-direction:column;gap:4px;">
         Trays / group
         <input id="bsgTrays" type="number" min="1" max="200" value="4" style="min-height:32px;border-radius:6px;border:1px solid #cbd5e1;">
+      </label>
+      <label class="tiny" style="display:flex;flex-direction:column;gap:4px;">
+        Plant locations / tray
+        <input id="bsgPlantsPerTray" type="number" min="1" max="500" placeholder="auto from template" style="min-height:32px;border-radius:6px;border:1px solid #cbd5e1;" title="How many individual plant sites each tray holds. Leave blank to read from the selected grow-system template.">
       </label>
       <label class="tiny" style="display:flex;flex-direction:column;gap:4px;">
         Lights / group
