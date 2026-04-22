@@ -88,9 +88,17 @@
   function roomPayload(room) {
     if (!room) return null;
     const dims = room.dimensions || room.dims || {};
-    const len = Number(dims.lengthM ?? dims.length_m ?? room.lengthM);
-    const wid = Number(dims.widthM ?? dims.width_m ?? room.widthM);
-    const hgt = Number(dims.ceilingHeightM ?? dims.heightM ?? dims.ceilingM ?? room.ceilingHeightM);
+    // Accept every shape rooms are written in across the codebase: nested
+    // {dimensions:{length_m,...}} (zone drawer, room editor), top-level
+    // snake_case {length_m, width_m, ceiling_height_m} (most common; see
+    // grow-management.html lines 1365-1400), and top-level camelCase
+    // {lengthM, widthM, ceilingHeightM}.
+    const len = Number(dims.lengthM ?? dims.length_m ?? room.lengthM ?? room.length_m);
+    const wid = Number(dims.widthM ?? dims.width_m ?? room.widthM ?? room.width_m);
+    const hgt = Number(
+      dims.ceilingHeightM ?? dims.heightM ?? dims.ceilingM ?? dims.height_m ?? dims.ceiling_height_m
+        ?? room.ceilingHeightM ?? room.ceiling_height_m ?? room.height_m
+    );
     const envelope = room.envelope?.class || room.envelopeClass || 'typical';
     const supplyCFM = Number(room.supplyCFM ?? room.supply_cfm ?? 0) || null;
     const out = {};
@@ -130,6 +138,24 @@
         lengthM: payload.dimensions.lengthM,
         widthM: payload.dimensions.widthM,
         heightM: payload.dimensions.ceilingHeightM
+      };
+    }
+    // Last-chance direct read from room — handles rooms saved with only
+    // length/width (no ceiling) so the solver still uses real dims instead
+    // of the 20x15 DEFAULT_ROOM fallback (which would otherwise recommend
+    // ~48 units for a small 6x3 room).
+    const dims = room.dimensions || room.dims || {};
+    const len = Number(dims.lengthM ?? dims.length_m ?? room.lengthM ?? room.length_m);
+    const wid = Number(dims.widthM ?? dims.width_m ?? room.widthM ?? room.width_m);
+    const hgt = Number(
+      dims.ceilingHeightM ?? dims.heightM ?? dims.ceilingM ?? dims.height_m ?? dims.ceiling_height_m
+        ?? room.ceilingHeightM ?? room.ceiling_height_m ?? room.height_m
+    );
+    if (Number.isFinite(len) && len > 0 && Number.isFinite(wid) && wid > 0) {
+      return {
+        lengthM: len,
+        widthM: wid,
+        heightM: Number.isFinite(hgt) && hgt > 0 ? hgt : DEFAULT_ROOM.heightM
       };
     }
     return { ...DEFAULT_ROOM };
@@ -476,7 +502,16 @@
     const totalCapacity = perZonePlan.reduce((a, z) => a + (z.maxUnits || 0), 0);
 
     if (state.autoFit) {
-      state.desiredUnits = Math.max(state.desiredUnits || 0, totalCapacity);
+      // Auto-fit sets desired to the zones' maximum capacity. Using Math.max
+      // against the previous value would silently clamp a manual 3 up to 48
+      // and feel like the field is ignoring the operator; the input listener
+      // below turns auto-fit off whenever the operator types, so by the time
+      // we reach this branch we genuinely want totalCapacity.
+      state.desiredUnits = totalCapacity;
+    } else {
+      // Keep the manual value inside [0, totalCapacity] so the spatial plan
+      // and the "max N across all zones" hint stay consistent.
+      state.desiredUnits = Math.max(0, Math.min(state.desiredUnits || 0, totalCapacity));
     }
     const desired = Math.max(0, Math.round(state.desiredUnits || 0));
 
@@ -495,8 +530,8 @@
       <div class="rbp-controls">
         <div class="rbp-ctl">
           <label for="${UNIT_COUNT_ID}">Grow units</label>
-          <input id="${UNIT_COUNT_ID}" type="number" min="0" step="1" value="${desired}" ${state.autoFit ? 'disabled' : ''}/>
-          <span class="rbp-ctl__hint">max ${totalCapacity} across all zones</span>
+          <input id="${UNIT_COUNT_ID}" type="number" min="0" max="${totalCapacity}" step="1" value="${desired}"/>
+          <span class="rbp-ctl__hint">${state.autoFit ? 'auto-fit: ' + totalCapacity : 'manual'} \u00b7 max ${totalCapacity} across all zones</span>
         </div>
         <div class="rbp-ctl rbp-ctl--toggle">
           <input id="${AUTOFIT_ID}" type="checkbox" ${state.autoFit ? 'checked' : ''}/>
@@ -569,6 +604,11 @@
         }
       }
       unitsInput.addEventListener('input', (e) => {
+        // Typing in the grow-units field means the operator wants to override
+        // the auto-fit recommendation. Flipping autoFit off here lets the
+        // render branch above respect the entered value instead of snapping
+        // it back to totalCapacity on re-render.
+        state.autoFit = false;
         state.desiredUnits = Math.max(0, Number(e.target.value) || 0);
         renderSpatial();
         renderEvie();
