@@ -57,20 +57,24 @@ export function computeWholesaleTotals(orders) {
   const arr = Array.isArray(orders) ? orders : [];
   const round2 = (n) => Math.round(Number(n || 0) * 100) / 100;
 
+  // Use ?? (nullish) not || so that an explicit 0 on the preferred field
+  // doesn't cascade through and pick up a non-zero sibling. Donation orders
+  // (routes/wholesale-donations.js) intentionally carry grand_total: 0 with
+  // non-zero line items; || would misread that donation as positive revenue.
   const totalRevenue = arr.reduce((sum, o) => {
     return sum + Number(
       o.grand_total
-        || o.totals?.grand_total
-        || o.totals?.subtotal
-        || 0
+        ?? o.totals?.grand_total
+        ?? o.totals?.subtotal
+        ?? 0
     );
   }, 0);
 
   const brokerFeeTotal = arr.reduce((sum, o) => {
     return sum + Number(
       o.broker_fee_total
-        || o.totals?.broker_fee_total
-        || 0
+        ?? o.totals?.broker_fee_total
+        ?? 0
     );
   }, 0);
 
