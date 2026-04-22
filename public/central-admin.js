@@ -13246,27 +13246,46 @@ async function loadCentralAccounting() {
         if (farmPayables > 0) expenseCategories['Farm Payables (COGS)'] = farmPayables;
         if (processingFees > 0) expenseCategories['Processing Fees'] = processingFees;
 
+        // Subscription revenue (source: checkout_sessions). This is a
+        // separate revenue stream from wholesale orders — it's the recurring
+        // Light Engine / Farm Server / Research plan income. Compute it
+        // before expenses so the subscription-side processing-fee estimate
+        // can be folded into Total Expenses; otherwise Net Margin would
+        // include subscription revenue but none of its acquisition cost
+        // and would be inflated.
+        const subData = subscriptionData?.data || null;
+        const subTotalRevenue = Number(subData?.totalRevenue || 0);
+        const subTotalCount = Number(subData?.totalSubscriptions || 0);
+
+        // Add an estimated Square processing fee on subscription revenue
+        // using the same 2.6% rate applied to wholesale. This is a lower
+        // bound (Square also charges a flat per-txn component we're not
+        // modelling here) but it keeps the Total Expenses / Net Margin
+        // comparison honest across both revenue streams. When the
+        // accounting ledger supplies a real 630000 balance above, that
+        // takes precedence and the subscription estimate is skipped to
+        // avoid double-counting.
+        const subscriptionProcessingFeeEstimate = (expData?.ok && expData.breakdown?.['630000'])
+            ? 0
+            : Math.round(subTotalRevenue * 0.026 * 100) / 100;
+        if (subscriptionProcessingFeeEstimate > 0) {
+            totalExpenses += subscriptionProcessingFeeEstimate;
+            expenseCategories['Subscription Processing Fees (est.)'] =
+                (expenseCategories['Subscription Processing Fees (est.)'] || 0)
+                + subscriptionProcessingFeeEstimate;
+        }
+
         // Update KPIs. Total Revenue rolls up BOTH wholesale orders and
         // subscription checkouts so the top-line number matches actual cash
         // into the business. The separate Wholesale/Subscription tiles below
         // split it so ops can see the mix.
-        const _subRev = Number(subscriptionData?.data?.totalRevenue || 0);
-        document.getElementById('central-total-revenue').textContent = `$${(totalRevenue + _subRev).toFixed(2)}`;
+        document.getElementById('central-total-revenue').textContent = `$${(totalRevenue + subTotalRevenue).toFixed(2)}`;
         document.getElementById('central-wholesale-revenue').textContent = `$${totalRevenue.toFixed(2)}`;
         document.getElementById('central-order-count').textContent = orderCount;
         document.getElementById('central-avg-order').textContent = `$${avgOrderValue.toFixed(2)}`;
         const brokerFeesEl = document.getElementById('central-broker-fees');
         if (brokerFeesEl) brokerFeesEl.textContent = `$${brokerFeeTotal.toFixed(2)}`;
         document.getElementById('central-total-expenses').textContent = `$${totalExpenses.toFixed(2)}`;
-
-        // Subscription revenue (source: checkout_sessions). This is a
-        // separate revenue stream from wholesale orders — it's the recurring
-        // Light Engine / Farm Server / Research plan income. Roll it into
-        // Net Margin so the headline number is honest, but display it in its
-        // own KPI card so ops can tell the two streams apart.
-        const subData = subscriptionData?.data || null;
-        const subTotalRevenue = Number(subData?.totalRevenue || 0);
-        const subTotalCount = Number(subData?.totalSubscriptions || 0);
         const subRevenueEl = document.getElementById('central-subscription-revenue');
         if (subRevenueEl) subRevenueEl.textContent = `$${subTotalRevenue.toFixed(2)}`;
         const subCountEl = document.getElementById('central-subscription-count');
