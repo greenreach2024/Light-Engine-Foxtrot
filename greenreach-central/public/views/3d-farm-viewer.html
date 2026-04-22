@@ -528,6 +528,7 @@
        resolveCropRegistryEntry + stampPlanAnchor. See
        docs/playbooks/10-farm-builder.md §10 Phase A. -->
   <script src="/js/plan-anchor.js"></script>
+  <script src="/js/data-flow-bus.js?v=20260422-bus-v1"></script>
 
   <script type="importmap">
   {
@@ -5348,6 +5349,234 @@
         console.warn('[3d-viewer] deep-link params failed:', e);
       }
     }
+
+    // ---- Cross-page data bus subscription --------------------
+    // Any save/delete in the rest of the app (zone-count stepper, draw-zones
+    // drawer on grow-management, Groups V2 delete, AI Crop Recommendations
+    // save, etc.) emits via window.DataFlowBus. Refresh the viewer's cache
+    // so rooms/zones/groups render the post-save state immediately instead
+    // of waiting for the next SSE tick or auto-poll.
+    function busRefresh(kind) {
+      try {
+        loadAllData({ reason: 'data-bus:' + kind, silent: true, skipRebuildIfUnchanged: false });
+      } catch (e) { /* non-fatal */ }
+    }
+    if (window.DataFlowBus && typeof window.DataFlowBus.on === 'function') {
+      window.DataFlowBus.on('rooms',     function (d) { busRefresh((d && d.kind) || 'rooms'); });
+      window.DataFlowBus.on('zones',     function (d) { busRefresh((d && d.kind) || 'zones'); });
+      window.DataFlowBus.on('groups',    function (d) { busRefresh((d && d.kind) || 'groups'); });
+      window.DataFlowBus.on('templates', function (d) { busRefresh((d && d.kind) || 'templates'); });
+      window.DataFlowBus.on('lights',    function (d) { busRefresh((d && d.kind) || 'lights'); });
+    }
+
+    // ---- Zone Editor (Room Mapper tool, lives inside this viewer) -----
+    // Floating panel that exposes add / rename / delete / save for the
+    // selected room's zones. Opens automatically when the viewer is loaded
+    // with ?mode=draw-zones and is available from any mode via the Zones
+    // button on the toolbar. Persists via /api/setup/save-rooms and emits
+    // on DataFlowBus so every other consumer (Room Build Plan, zone drawer,
+    // AI recommendations, planting scheduler, etc.) refetches.
+    (function () {
+      var panel = null;
+      var localZones = [];
+      var localRoomId = null;
+
+      function css() {
+        if (document.getElementById('zoneEditorStyles')) return;
+        var s = document.createElement('style');
+        s.id = 'zoneEditorStyles';
+        s.textContent = [
+          '#zoneEditorPanel{position:fixed;right:16px;top:72px;width:300px;max-height:calc(100vh - 120px);',
+          '  background:rgba(15,23,42,0.96);border:1px solid rgba(148,163,184,0.25);border-radius:12px;',
+          '  color:#e2e8f0;font:13px/1.4 "Segoe UI",system-ui,sans-serif;padding:12px 12px 10px;',
+          '  box-shadow:0 12px 32px rgba(0,0,0,0.45);z-index:1000;display:none;flex-direction:column;}',
+          '#zoneEditorPanel.visible{display:flex;}',
+          '#zoneEditorPanel h5{margin:0 0 8px;font-size:13px;color:#93c5fd;letter-spacing:.02em;',
+          '  text-transform:uppercase;display:flex;justify-content:space-between;align-items:center;}',
+          '#zoneEditorPanel .ze-close{background:transparent;border:0;color:#94a3b8;cursor:pointer;font-size:18px;line-height:1;}',
+          '#zoneEditorPanel .ze-row{display:flex;gap:6px;align-items:center;padding:6px 0;border-bottom:1px solid rgba(148,163,184,0.12);}',
+          '#zoneEditorPanel .ze-row:last-child{border-bottom:0;}',
+          '#zoneEditorPanel .ze-row input{flex:1;background:rgba(15,23,42,0.6);border:1px solid rgba(148,163,184,0.3);',
+          '  color:#e2e8f0;border-radius:6px;padding:5px 8px;font:inherit;}',
+          '#zoneEditorPanel .ze-row button{background:transparent;border:1px solid rgba(248,113,113,0.45);',
+          '  color:#fca5a5;border-radius:6px;padding:4px 8px;cursor:pointer;font-size:12px;}',
+          '#zoneEditorPanel .ze-row button:hover{background:rgba(248,113,113,0.1);}',
+          '#zoneEditorPanel .ze-list{overflow-y:auto;max-height:45vh;margin:6px 0 10px;}',
+          '#zoneEditorPanel .ze-empty{color:#94a3b8;font-style:italic;padding:12px 0;text-align:center;}',
+          '#zoneEditorPanel .ze-actions{display:flex;gap:8px;}',
+          '#zoneEditorPanel .ze-actions button{flex:1;padding:7px 10px;border-radius:7px;border:0;cursor:pointer;font:inherit;font-weight:600;}',
+          '#zoneEditorPanel .ze-add{background:rgba(59,130,246,0.18);color:#bfdbfe;border:1px solid rgba(59,130,246,0.4)!important;}',
+          '#zoneEditorPanel .ze-save{background:#3b82f6;color:#fff;}',
+          '#zoneEditorPanel .ze-status{font-size:12px;color:#94a3b8;min-height:16px;margin-top:6px;}',
+          '#zoneEditorPanel .ze-room-label{font-size:11px;color:#94a3b8;margin-bottom:6px;}'
+        ].join('');
+        document.head.appendChild(s);
+      }
+
+      function currentRoom() {
+        var sel = document.getElementById('roomSelect');
+        var id = sel && sel.value && sel.value !== '__all' ? sel.value : null;
+        if (!id && S.rooms && S.rooms.length) id = S.rooms[0].id;
+        return (S.rooms || []).find(function (r) { return r && r.id === id; }) || null;
+      }
+
+      function snapshotZones(room) {
+        if (!room || !Array.isArray(room.zones)) return [];
+        return room.zones.map(function (z, i) {
+          if (typeof z === 'string') return { id: 'zone-' + (i + 1), name: z };
+          return Object.assign({}, z, { name: z.name || ('Zone ' + (i + 1)), id: z.id || ('zone-' + (i + 1)) });
+        });
+      }
+
+      function render() {
+        if (!panel) return;
+        var room = currentRoom();
+        var list = panel.querySelector('.ze-list');
+        var roomLabel = panel.querySelector('.ze-room-label');
+        roomLabel.textContent = room ? ('Room: ' + (room.name || room.id)) : 'No room selected';
+        list.innerHTML = '';
+        if (!localZones.length) {
+          var empty = document.createElement('div');
+          empty.className = 'ze-empty';
+          empty.textContent = 'No zones yet. Click "Add Zone" to create one.';
+          list.appendChild(empty);
+          return;
+        }
+        localZones.forEach(function (z, i) {
+          var row = document.createElement('div');
+          row.className = 'ze-row';
+          var input = document.createElement('input');
+          input.type = 'text';
+          input.value = z.name || ('Zone ' + (i + 1));
+          input.setAttribute('aria-label', 'Zone ' + (i + 1) + ' name');
+          input.addEventListener('input', function () { localZones[i].name = input.value; });
+          var del = document.createElement('button');
+          del.type = 'button';
+          del.textContent = 'Delete';
+          del.addEventListener('click', function () {
+            localZones.splice(i, 1);
+            render();
+          });
+          row.appendChild(input);
+          row.appendChild(del);
+          list.appendChild(row);
+        });
+      }
+
+      function syncFromSelection() {
+        var room = currentRoom();
+        localRoomId = room ? room.id : null;
+        localZones = snapshotZones(room);
+        render();
+      }
+
+      function setStatus(msg, color) {
+        if (!panel) return;
+        var el = panel.querySelector('.ze-status');
+        el.textContent = msg || '';
+        el.style.color = color || '#94a3b8';
+      }
+
+      function save() {
+        var room = (S.rooms || []).find(function (r) { return r && r.id === localRoomId; });
+        if (!room) { setStatus('No room selected.', '#f87171'); return; }
+        // Write zones back preserving any geometry fields the operator set in
+        // the existing zone objects we didn't touch (we only let them rename
+        // + add + delete here — click-drag geometry is the drawer's job).
+        var byName = {};
+        (room.zones || []).forEach(function (z, i) {
+          if (!z) return;
+          var key = typeof z === 'string' ? z : (z.name || ('Zone ' + (i + 1)));
+          byName[key] = typeof z === 'string' ? { name: z } : z;
+        });
+        room.zones = localZones.map(function (z, i) {
+          var prior = byName[z.name] || {};
+          return Object.assign({}, prior, {
+            id: z.id || ('zone-' + (i + 1)),
+            name: z.name || ('Zone ' + (i + 1))
+          });
+        });
+        setStatus('Saving…', '#fbbf24');
+        // Use the viewer's closure-scoped authFetch (defined near line 571)
+        // which adds Bearer token + farm PIN headers. window.authFetch is
+        // undefined on this page (auth-fetch.js isn't loaded), so falling
+        // back to it would bypass authentication on PIN-protected farms.
+        var _f = typeof authFetch === 'function' ? authFetch : fetch;
+        _f('/api/setup/save-rooms', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ rooms: S.rooms })
+        }).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+          .then(function () {
+            setStatus('Saved \u2022 ' + localZones.length + ' zone(s).', '#4ade80');
+            if (window.DataFlowBus) {
+              window.DataFlowBus.emit('rooms', { source: '3d-viewer-zone-editor', roomId: room.id });
+              window.DataFlowBus.emit('zones', { source: '3d-viewer-zone-editor', roomId: room.id });
+            }
+            document.dispatchEvent(new CustomEvent('rooms-updated'));
+          })
+          .catch(function (err) {
+            console.error('[zone-editor] save failed:', err);
+            setStatus('Save failed: ' + err.message, '#f87171');
+          });
+      }
+
+      function ensurePanel() {
+        css();
+        if (panel) return panel;
+        panel = document.createElement('div');
+        panel.id = 'zoneEditorPanel';
+        panel.innerHTML = [
+          '<h5>Zone Editor <button class="ze-close" aria-label="Close">\u2715</button></h5>',
+          '<div class="ze-room-label"></div>',
+          '<div class="ze-list"></div>',
+          '<div class="ze-actions">',
+          '  <button type="button" class="ze-add">+ Add Zone</button>',
+          '  <button type="button" class="ze-save">Save</button>',
+          '</div>',
+          '<div class="ze-status"></div>'
+        ].join('');
+        document.body.appendChild(panel);
+        panel.querySelector('.ze-close').addEventListener('click', function () { panel.classList.remove('visible'); });
+        panel.querySelector('.ze-add').addEventListener('click', function () {
+          var nextIdx = localZones.length + 1;
+          localZones.push({ id: 'zone-' + nextIdx, name: 'Zone ' + nextIdx });
+          render();
+        });
+        panel.querySelector('.ze-save').addEventListener('click', save);
+        var sel = document.getElementById('roomSelect');
+        if (sel) sel.addEventListener('change', syncFromSelection);
+        return panel;
+      }
+
+      function open() {
+        ensurePanel();
+        syncFromSelection();
+        panel.classList.add('visible');
+      }
+
+      // Expose for the toolbar button and for the deep-link handler.
+      window.openZoneEditor = open;
+
+      // Auto-open on ?mode=draw-zones. The viewer takes a moment to hydrate
+      // rooms; wait until S.rooms is populated before pulling a snapshot.
+      var params = new URLSearchParams(window.location.search);
+      if ((params.get('mode') || '') === 'draw-zones') {
+        var tries = 0;
+        var waitForRooms = setInterval(function () {
+          tries++;
+          if (Array.isArray(S.rooms) && S.rooms.length) {
+            clearInterval(waitForRooms);
+            open();
+          } else if (tries > 40) {
+            clearInterval(waitForRooms);
+            // Still show the panel — the operator will see the "No room" copy
+            // and can switch to a room once they appear.
+            open();
+          }
+        }, 250);
+      }
+    })();
 
     // ---- Bootstrap -------------------------------------------
     document.addEventListener('DOMContentLoaded', function() {

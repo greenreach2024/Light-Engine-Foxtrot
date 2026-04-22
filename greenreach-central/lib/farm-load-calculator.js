@@ -92,7 +92,16 @@ const DEHUM_KW_PER_LPD = 2 / 300; // 6.67 W/L/day peak; see comment above
 /**
  * Count plants in a single installed-system instance.
  *
- * plants = quantity × tierCount × traysPerTier × plantsPerTrayByClass[cropClass]
+ * When `template.plantLocations.totalByClass[cropClass]` is present it is
+ * treated as authoritative (operator-facing capacity) and multiplied by
+ * quantity. Otherwise falls back to the derived figure:
+ *
+ *   plants = quantity × tierCount × traysPerTier × plantsPerTrayByClass[cropClass]
+ *
+ * The authoritative path exists because several templates (NFT, DWC, aeroponics
+ * towers) overcount when the raw tier×tray×plants math is used as input to
+ * transpiration / heat / pump loads — plantLocations.totalByClass is the
+ * single value that the UI, build plan, and load calculators must agree on.
  */
 export function countPlants(system) {
   const { template, quantity, cropClass } = system;
@@ -100,6 +109,10 @@ export function countPlants(system) {
     throw new Error(
       `countPlants: quantity must be a positive finite number (got ${quantity === undefined ? 'undefined' : JSON.stringify(quantity)}) on template "${template?.id}"`
     );
+  }
+  const override = template.plantLocations?.totalByClass?.[cropClass];
+  if (Number.isFinite(override) && override > 0) {
+    return quantity * override;
   }
   const perTray = template.plantsPerTrayByClass[cropClass];
   if (perTray === undefined) {

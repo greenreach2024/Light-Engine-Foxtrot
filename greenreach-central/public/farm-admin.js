@@ -1476,7 +1476,10 @@ async function loadCropsFromDatabase() {
                 localStorage.setItem('pricing_version', PRICING_VERSION);
             }
 
-            const response = await fetch(`${API_BASE}/data/groups.json`);
+            const groupsUrl = (window.DataFlowBus && window.DataFlowBus.cacheBust)
+                ? window.DataFlowBus.cacheBust(`${API_BASE}/data/groups.json`)
+                : `${API_BASE}/data/groups.json?t=${Date.now()}`;
+            const response = await fetch(groupsUrl, { cache: 'no-store' });
             const data = await response.json();
             const crops = [...new Set(data.groups.map(g => g.crop).filter(c => c && c.trim()))].sort();
 

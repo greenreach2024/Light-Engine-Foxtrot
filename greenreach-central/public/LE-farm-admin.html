@@ -1413,10 +1413,7 @@
                         <span class="nav-item-icon"></span>
                         Heat Map
                     </a>
-                    <a href="#iframe-view" class="nav-item" data-section="iframe-view" data-url="/views/3d-farm-viewer.html?mode=draw-zones" data-help-title="Room Mapper" data-help="Room Mapper is now a mode of the 3D Farm Viewer. Edit mode lets you draw zones on the floor plan, place devices, and adjust spatial layout in the same scene used for Heat Map and Build Plan review.">
-                        <span class="nav-item-icon">&#9632;</span>
-                        Room Mapper
-                    </a>
+                    <!-- Room Mapper removed from sidebar nav: zone drawing + device placement are edit-mode tools inside the 3D Farm Viewer (see above). -->
                     <a href="#iframe-view" class="nav-item" data-section="iframe-view" data-url="/views/crop-weight-analytics.html" data-help-title="Crop Weight Analytics" data-help="Track and compare harvest weights per plant and tray. View benchmarks by crop, environment, grow time, and tray type. Export data for AI training.">
                         <span class="nav-item-icon">[WEIGH]</span>
                         Crop Weight Analytics
@@ -4143,6 +4140,7 @@ Download QuickBooks CSV
         <script src="/js/crop-utils.js"></script>
         <!-- No defer: sync XHR below must complete before /farm-admin.js runs -->
         <script src="/js/admin/crop-registry-bootstrap.js"></script>
+        <script src="/js/data-flow-bus.js?v=20260422-bus-v1"></script>
         <script src="/farm-admin.js?v=20260419-page-reconcile"></script>
     <script src="/js/plan-features.js?v=20260313"></script>
     <script src="/js/onboarding-checklist.js?v=20260313"></script>
@@ -4383,12 +4381,12 @@ Download QuickBooks CSV
               </div>
             </div>
 
-            <!-- Room Mapper Tip -->
+            <!-- After-setup tip: zone drawing / device placement live inside the 3D Farm Viewer edit mode. -->
             <div id="setup-room-mapper-tip" style="display: none; margin-top: 16px; padding: 14px 18px; background: rgba(59,130,246,0.08); border: 1px solid rgba(59,130,246,0.25); border-radius: 8px;">
               <p style="margin: 0; font-size: 13px; color: var(--text-secondary); line-height: 1.5;">
-                <strong style="color: var(--accent-blue);">Tip:</strong> After setup, use the
-                <a href="/views/room-mapper.html" target="_blank" style="color: var(--accent-blue); text-decoration: underline;">Room Mapper</a>
-                to visually place sensors and equipment in each room for accurate heat maps and monitoring.
+                <strong style="color: var(--accent-blue);">Tip:</strong> After setup, open the
+                <a href="/views/3d-farm-viewer.html?mode=draw-zones" target="_blank" style="color: var(--accent-blue); text-decoration: underline;">3D Farm Viewer</a>
+                and switch to edit mode to draw zones on the floor plan and place sensors / equipment in-scene.
               </p>
             </div>
           </div>

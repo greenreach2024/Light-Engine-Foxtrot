@@ -119,10 +119,14 @@ test('scoreHeatManagement uses room volume when provided and it dilutes the scor
 });
 
 test('scoreHeatManagement in a cramped room pushes W/m3 up', () => {
+  // NFT_RACK has plantLocations.totalByClass.leafy_greens = 128 (authoritative
+  // override), so latent load per rack is lower than the old 900-plant derived
+  // figure. Quantity bumped to 8 to keep the cramped-room heat density above
+  // the 200 W/m3 assertion while exercising the same code path.
   const small = scoreHeatManagement({
     template: NFT_RACK,
     cropClass: 'leafy_greens',
-    quantity: 4,
+    quantity: 8,
     room: { dimensions: { lengthM: 3, widthM: 3, ceilingHeightM: 2.4 } } // ~21.6 m3
   });
   assert.ok(small.wPerM3 > 200, `expected >200 W/m3 in cramped deployment, got ${small.wPerM3}`);
