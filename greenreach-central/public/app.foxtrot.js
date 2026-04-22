@@ -9569,7 +9569,22 @@ class DeviceManagerWindow {
     if (this.statusEl) this.statusEl.textContent = 'Scanning local network, BLE hub, and MQTT broker…';
     try {
       const resp = await fetchWithFarmAuth('/discovery/devices');
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      if (!resp.ok) {
+        // Parse the proxy's structured 502/503/504 responses so the operator
+        // sees the real reason (no edge controller registered, timeout, etc.)
+        // instead of the old opaque "Discovery failed - no devices found".
+        let upstreamError = null;
+        try { upstreamError = await resp.json(); } catch (e) {}
+        const message = upstreamError?.message || upstreamError?.error || `HTTP ${resp.status}`;
+        const needsEdge = resp.status === 503 || /no farm endpoint|no eligible/i.test(message);
+        const friendly = needsEdge
+          ? 'Device discovery needs a Light Engine edge controller on the farm LAN. Register an edge farm or run this from the on-site terminal.'
+          : `Discovery upstream error: ${message}`;
+        const err = new Error(friendly);
+        err.status = resp.status;
+        err.friendly = friendly;
+        throw err;
+      }
       const body = await resp.json();
       this.discoveryRun = body;
       const list = Array.isArray(body.devices) ? body.devices : [];
@@ -9606,12 +9621,16 @@ class DeviceManagerWindow {
       console.error('Discovery failed', err);
       // NO DEMO DEVICES - Show error and require live discovery
       this.devices = [];
-      if (this.statusEl) this.statusEl.textContent = 'Discovery failed - no devices found';
-      showToast({ 
-        title: 'Discovery Failed', 
-        msg: 'Device discovery failed. Please check network connectivity and try again. No demo devices available.', 
-        kind: 'error', 
-        icon: '' 
+      const friendlyMessage = err?.friendly
+        || (err?.status === 503
+          ? 'Device discovery needs a Light Engine edge controller on the farm LAN. Register an edge farm or run this from the on-site terminal.'
+          : 'Device discovery failed. Please check network connectivity and try again.');
+      if (this.statusEl) this.statusEl.textContent = friendlyMessage;
+      showToast({
+        title: 'Discovery unavailable',
+        msg: friendlyMessage,
+        kind: err?.status === 503 ? 'warn' : 'error',
+        icon: ''
       });
     }
     this.render();

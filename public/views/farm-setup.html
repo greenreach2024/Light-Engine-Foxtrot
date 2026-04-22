@@ -548,36 +548,9 @@
       </div>
     </details>
 
-    <!-- 4. IOT DEVICES -->
-    <details class="fs-card" open>
-      <summary>
-        <h2>IoT Devices</h2>
-        <span class="fs-card-badge" id="iotStatusBadge">--</span>
-      </summary>
-      <div class="fs-card-body">
-        <section id="iotPanel" class="card card--compact" data-panel="iot-devices">
-          <div class="panel-body">
-            <div id="addedIoTDevicesContainer" style="display:none;margin-bottom:24px;">
-              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
-                <h3 style="margin:0;font-size:14px;font-weight:600;">My IoT Devices</h3>
-                <span id="addedIoTDevicesCount" style="font-size:12px;color:#64748b;"></span>
-              </div>
-              <div id="addedIoTDevicesList" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;"></div>
-            </div>
-            <div id="iotDevicesList"></div>
-          </div>
-          <!-- IoT Ecosystem Modal -->
-          <div id="iotEcosystemModal" class="modal" style="display:none;position:fixed;z-index:10001;left:0;top:0;width:100vw;height:100vh;background:rgba(0,0,0,0.6);align-items:center;justify-content:center;backdrop-filter:blur(4px);">
-            <div id="iotEcosystemModalContent" style="border-radius:16px;max-width:90vw;max-height:90vh;width:480px;position:relative;display:flex;flex-direction:column;padding:32px 24px 24px;">
-              <button id="closeIotEcosystemModal" style="position:absolute;top:10px;right:14px;background:none;border:none;font-size:1.5em;cursor:pointer;z-index:2;color:#94a3b8;">&times;</button>
-              <div id="iotEcosystemModalBody"></div>
-            </div>
-          </div>
-        </section>
-      </div>
-    </details>
-
-    <!-- 5. INTEGRATIONS -->
+    <!-- 4. INTEGRATIONS (discovery + vendor scanning — comes before IoT so
+         operators connect upstream sources before reviewing the resulting
+         device list) -->
     <details class="fs-card">
       <summary>
         <h2>Integrations</h2>
@@ -653,27 +626,39 @@
       </div>
     </details>
 
-    <!-- 6. DEVICE PAIRING -->
-    <details class="fs-card">
+    <!-- 5. IOT DEVICES (lists devices surfaced by the discovery/integration
+         flows above — the old standalone "Device Pairing" card was removed
+         because Integrations > Device Manager already covers discovery,
+         assignment, and vendor pairing) -->
+    <details class="fs-card" open>
       <summary>
-        <h2>Device Pairing</h2>
-        <span class="fs-card-badge">Wizard</span>
+        <h2>IoT Devices</h2>
+        <span class="fs-card-badge" id="iotStatusBadge">--</span>
       </summary>
       <div class="fs-card-body">
-        <section id="pairDevicesPanel" class="card" data-panel="pair-devices">
-          <div style="margin-bottom:12px;">
-              <p class="tiny">Use Device Manager for discovery, assignment, and vendor-specific setup. Pairing notes stay here, but the standalone scanner and add-device shortcuts have been removed from Farm Setup.</p>
+        <section id="iotPanel" class="card card--compact" data-panel="iot-devices">
+          <div class="panel-body">
+            <div id="addedIoTDevicesContainer" style="display:none;margin-bottom:24px;">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+                <h3 style="margin:0;font-size:14px;font-weight:600;">My IoT Devices</h3>
+                <span id="addedIoTDevicesCount" style="font-size:12px;color:#64748b;"></span>
+              </div>
+              <div id="addedIoTDevicesList" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;"></div>
+            </div>
+            <div id="iotDevicesList"></div>
           </div>
-          <div class="row row--gap-sm row--wrap">
-              <button id="btnOpenDeviceManagerPairing" type="button" class="primary">Open Device Manager</button>
-            <button id="btnPairWizardDocs" type="button" class="ghost">Pairing checklist</button>
+          <!-- IoT Ecosystem Modal -->
+          <div id="iotEcosystemModal" class="modal" style="display:none;position:fixed;z-index:10001;left:0;top:0;width:100vw;height:100vh;background:rgba(0,0,0,0.6);align-items:center;justify-content:center;backdrop-filter:blur(4px);">
+            <div id="iotEcosystemModalContent" style="border-radius:16px;max-width:90vw;max-height:90vh;width:480px;position:relative;display:flex;flex-direction:column;padding:32px 24px 24px;">
+              <button id="closeIotEcosystemModal" style="position:absolute;top:10px;right:14px;background:none;border:none;font-size:1.5em;cursor:pointer;z-index:2;color:#94a3b8;">&times;</button>
+              <div id="iotEcosystemModalBody"></div>
+            </div>
           </div>
-          <span id="pairDevicesStatus" class="tiny" aria-live="polite" style="color:#94a3b8;"></span>
         </section>
       </div>
     </details>
 
-    <!-- 7. FARM CHECKLISTS -->
+    <!-- 6. FARM CHECKLISTS -->
     <details class="fs-card">
       <summary>
         <h2>Farm Checklists</h2>

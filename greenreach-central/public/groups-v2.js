@@ -7012,6 +7012,8 @@ function updateBsgPreview() {
   const prefix = (document.getElementById('bsgPrefix')?.value || '').trim();
   const count = parseInt(document.getElementById('bsgCount')?.value) || 0;
   const trays = parseInt(document.getElementById('bsgTrays')?.value) || 4;
+  const plantsPerTrayRaw = parseInt(document.getElementById('bsgPlantsPerTray')?.value);
+  const plantsPerTray = Number.isFinite(plantsPerTrayRaw) && plantsPerTrayRaw > 0 ? plantsPerTrayRaw : 0;
   const lightsPerGroup = parseInt(document.getElementById('bsgLightsPerGroup')?.value) || 1;
   const autoAssign = document.getElementById('bsgAutoAssign')?.checked ?? true;
   const room = document.getElementById('bsgRoom')?.value || '';
@@ -7142,6 +7144,8 @@ async function executeBuildStockGroups() {
   const prefix = (document.getElementById('bsgPrefix')?.value || '').trim();
   const count = parseInt(document.getElementById('bsgCount')?.value) || 0;
   const trays = parseInt(document.getElementById('bsgTrays')?.value) || 4;
+  const plantsPerTrayRaw = parseInt(document.getElementById('bsgPlantsPerTray')?.value);
+  const plantsPerTray = Number.isFinite(plantsPerTrayRaw) && plantsPerTrayRaw > 0 ? plantsPerTrayRaw : 0;
   const lightsPerGroup = parseInt(document.getElementById('bsgLightsPerGroup')?.value) || 1;
   const autoAssign = document.getElementById('bsgAutoAssign')?.checked ?? true;
   const standardLightId = (document.getElementById('bsgStandardLight')?.value || '').trim();
@@ -7270,6 +7274,12 @@ async function executeBuildStockGroups() {
         }]
       : [];
 
+    // Per-group plant count. If the operator entered "Plant locations / tray"
+    // on the Build Stock Groups modal, use that directly; otherwise fall back
+    // to the previous behaviour of 0 (consumers will enrich from the template
+    // at planting time). Both snake_case and camelCase keys are written so
+    // admin.js / recipe assignment / wholesale rollups can read either shape.
+    const plantsPerGroup = plantsPerTray > 0 ? plantsPerTray * trays : 0;
     const group = {
       id,
       group_id: groupId,
@@ -7279,8 +7289,10 @@ async function executeBuildStockGroups() {
       roomId,
       zoneId,
       trays,
-      plants: 0,
-      plant_count: 0,
+      plants_per_tray: plantsPerTray > 0 ? plantsPerTray : undefined,
+      plantsPerTray: plantsPerTray > 0 ? plantsPerTray : undefined,
+      plants: plantsPerGroup,
+      plant_count: plantsPerGroup,
       lights: groupLights,
       controller_bindings: controllerBindings,
       deviceCount: groupLights.length,
@@ -7865,7 +7877,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Live preview updates
-  ['bsgRoom', 'bsgZone', 'bsgPrefix', 'bsgCount', 'bsgTrays', 'bsgLightsPerGroup', 'bsgAutoAssign', 'bsgStandardLight'].forEach(id => {
+  ['bsgRoom', 'bsgZone', 'bsgPrefix', 'bsgCount', 'bsgTrays', 'bsgPlantsPerTray', 'bsgLightsPerGroup', 'bsgAutoAssign', 'bsgStandardLight'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.addEventListener(el.type === 'checkbox' ? 'change' : 'input', updateBsgPreview);
   });
