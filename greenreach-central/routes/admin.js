@@ -2978,12 +2978,12 @@ router.get('/farms/:farmId/config', async (req, res) => {
             return res.json({ success: true, config, source: 'fallback' });
         }
 
-        // Query farm configuration — pull the dedicated columns farm-side setup writes to,
-        // not just the legacy metadata JSONB (which is why admin saw stale data).
+        // Query farm configuration — use SELECT * so missing optional columns
+        // (contact_phone/website/location are added lazily by setup-wizard, see
+        // routes/setup-wizard.js:414-415) don't cause "column does not exist" 500s
+        // on farms that haven't completed setup yet. Access via `farm.<col> ?? null`.
         const farmResult = await query(
-            `SELECT farm_id, name, email, contact_name, contact_phone, website, location,
-                    city, state, api_url, metadata, settings, created_at, updated_at
-             FROM farms WHERE farm_id = $1`,
+            'SELECT * FROM farms WHERE farm_id = $1',
             [farmId]
         );
         
