@@ -37,7 +37,7 @@
       ],
       "footprintM": {
         "length": 2.4,
-        "width": 0.6
+        "width": 1.2
       },
       "heightM": 2.4,
       "tierCount": 3,
@@ -132,7 +132,7 @@
       "spatialContract": {
         "unitFootprintM": {
           "length": 2.4,
-          "width": 0.6,
+          "width": 1.2,
           "height": 2.4
         },
         "workspaceClearanceM": {
@@ -142,7 +142,7 @@
         },
         "orientation": "butt_end_to_end",
         "plumbingSide": "wall",
-        "notes": "Three-tier NFT rack butts end-to-end along a plumbing wall. Operator aisle on the picking side; back manifold runs against wall."
+        "notes": "Three-tier NFT rack footprint matches DWC 4x8 raft pond (2.4m x 1.2m) so racks and ponds can be interchanged in a zone without rework. Racks butt end-to-end along a plumbing wall; operator aisle on the picking side."
       }
     },
     {

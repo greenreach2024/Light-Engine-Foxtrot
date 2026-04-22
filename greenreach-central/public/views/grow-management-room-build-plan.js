@@ -65,7 +65,8 @@
   function sum(a) { return a.reduce((t, x) => t + (Number.isFinite(x) ? x : 0), 0); }
 
   function fetchRooms() {
-    return fetch('/api/rooms', { credentials: 'same-origin' })
+    const _f = window.authFetch || fetch;
+    return _f('/api/rooms', { credentials: 'same-origin' })
       .then(r => r.ok ? r.json() : [])
       .then(body => Array.isArray(body) ? body : (body.rooms || body.items || []))
       .catch(() => []);
@@ -156,9 +157,9 @@
   }
 
   async function scoreFor(templateId, cropClass, room) {
-    const res = await fetch(`/api/grow-systems/${encodeURIComponent(templateId)}/score`, {
+    const _f = window.authFetch || fetch;
+    const res = await _f(`/api/grow-systems/${encodeURIComponent(templateId)}/score`, {
       method: 'POST',
-      credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ cropClass, quantity: 1, room })
     });
@@ -174,13 +175,26 @@
     const plantsPerTray = template.plantsPerTrayByClass?.[cropClass];
     const tiers = template.tierCount || 1;
     const traysPerTier = template.traysPerTier || 1;
-    const totalSites = plantsPerTray ? plantsPerTray * traysPerTier * tiers : null;
+    const derivedSites = plantsPerTray ? plantsPerTray * traysPerTier * tiers : null;
+    // plantLocations.totalByClass is the authoritative, user-facing count
+    // (manual_override on templates like NFT/DWC where the raw tier x tray x
+    // plants math over-counts). Fall back to the derived figure otherwise.
+    const overrideSites = template.plantLocations?.totalByClass?.[cropClass];
+    const totalSites = Number.isFinite(overrideSites) ? overrideSites : derivedSites;
+    const sitesNote = (() => {
+      if (!Number.isFinite(totalSites)) return null;
+      if (Number.isFinite(overrideSites)) {
+        const src = template.plantLocations?.source === 'manual_override' ? 'authoritative' : 'template';
+        return `${totalSites} plant sites (${src})`;
+      }
+      return `${totalSites} plant sites (${tiers} tier\u00d7${traysPerTier} tray\u00d7${plantsPerTray}/tray)`;
+    })();
     const photoperiod = fixtureClass.photoperiodHoursByClass?.[cropClass];
 
     lines.push({
       label: 'Crop class',
       value: cropClass.replace(/_/g, ' '),
-      note: totalSites ? `${totalSites} plant sites (${tiers} tier\u00d7${traysPerTier} tray\u00d7${plantsPerTray}/tray)` : null
+      note: sitesNote
     });
 
     if (photoperiod) {
@@ -753,7 +767,8 @@
       return;
     }
     try {
-      const roomsResp = await fetch('/data/rooms.json', { credentials: 'same-origin' });
+      const _fRooms = window.authFetch || fetch;
+      const roomsResp = await _fRooms('/data/rooms.json');
       const roomsDoc = roomsResp.ok ? await roomsResp.json() : { rooms: [] };
       const rooms = Array.isArray(roomsDoc.rooms) ? roomsDoc.rooms : [];
       const idx = rooms.findIndex(r => r.id === state.room.id);
@@ -821,10 +836,10 @@
         buildPlan: buildPlan
       });
 
-      const saveResp = await fetch('/api/setup/save-rooms', {
+      const _fSave = window.authFetch || fetch;
+      const saveResp = await _fSave('/api/setup/save-rooms', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'same-origin',
         body: JSON.stringify({ rooms })
       });
       if (!saveResp.ok) {

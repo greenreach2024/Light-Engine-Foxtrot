@@ -518,10 +518,13 @@
 
     /* =====================================================================
        UNIFIED FARM FLOW BREADCRUMB
-       6-step guided workflow: Room -> Zones -> Grow units -> Lights ->
-       Equipment -> Controllers. Consolidates what used to live across
-       /views/farm-setup.html, /setup-wizard.html, and this page into a
-       single ordered flow per FARM_SETUP_WORKFLOW_PROPOSAL.md.
+       5-step guided workflow: Room -> Zones -> Grow units & groups ->
+       Equipment -> Controllers. Lights were folded into step 3 (Grow units
+       & groups) via the Build Stock Groups card so operators pick
+       fixtures and controllers inline without bouncing down the page.
+       Consolidates what used to live across /views/farm-setup.html,
+       /setup-wizard.html, and this page into a single ordered flow per
+       FARM_SETUP_WORKFLOW_PROPOSAL.md.
        ===================================================================== */
     .ff-breadcrumb {
       position: sticky;
@@ -668,12 +671,14 @@
     .ff-link-row a:hover { text-decoration: underline; }
   </style>
   <script src="/js/console-wrapper.js"></script>
+  <script src="/js/auth-fetch.js?v=20260421-authfetch-v1"></script>
   <script src="/js/net.guard.js" defer></script>
   <script src="/app.foxtrot.js?v=20260419-standalone-panel-fix" defer></script>
-  <script src="/groups-v2.js?v=20260419-groupsv2-runtime-fix" defer></script>
+  <script src="/groups-v2.js?v=20260421-authfetch-v1" defer></script>
   <script src="/lib/room-layout-solver.js?v=20260421-rls-v1" defer></script>
-  <script src="/views/grow-management-template-gallery.js?v=20260420-tg-v1" defer></script>
-  <script src="/views/grow-management-room-build-plan.js?v=20260421-rbp-v2" defer></script>
+  <script src="/views/grow-management-template-gallery.js?v=20260421-tg-v2" defer></script>
+  <script src="/views/grow-management-room-build-plan.js?v=20260421-rbp-v3" defer></script>
+  <script src="/js/spatial-viewer-popup.js?v=20260421-svp-v1" defer></script>
 </head>
 <body class="le-theme">
 
@@ -697,13 +702,11 @@
     <span class="ff-breadcrumb__sep">&rsaquo;</span>
     <a href="#flow-zones" class="ff-breadcrumb__step" data-step="zones"><span class="ff-breadcrumb__num">2</span>Zones</a>
     <span class="ff-breadcrumb__sep">&rsaquo;</span>
-    <a href="#flow-grow-units" class="ff-breadcrumb__step" data-step="grow-units"><span class="ff-breadcrumb__num">3</span>Grow units</a>
+    <a href="#flow-grow-units" class="ff-breadcrumb__step" data-step="grow-units"><span class="ff-breadcrumb__num">3</span>Grow units &amp; groups</a>
     <span class="ff-breadcrumb__sep">&rsaquo;</span>
-    <a href="#flow-lights" class="ff-breadcrumb__step" data-step="lights"><span class="ff-breadcrumb__num">4</span>Lights</a>
+    <a href="#flow-equipment" class="ff-breadcrumb__step" data-step="equipment"><span class="ff-breadcrumb__num">4</span>Equipment</a>
     <span class="ff-breadcrumb__sep">&rsaquo;</span>
-    <a href="#flow-equipment" class="ff-breadcrumb__step" data-step="equipment"><span class="ff-breadcrumb__num">5</span>Equipment</a>
-    <span class="ff-breadcrumb__sep">&rsaquo;</span>
-    <a href="#flow-controllers" class="ff-breadcrumb__step" data-step="controllers"><span class="ff-breadcrumb__num">6</span>Controllers</a>
+    <a href="#flow-controllers" class="ff-breadcrumb__step" data-step="controllers"><span class="ff-breadcrumb__num">5</span>Controllers</a>
   </nav>
 
   <!-- ===== KPI ROW ===== -->
@@ -747,8 +750,14 @@
       </div>
       <div class="ff-step-card">
         <div id="ffRoomBody" class="ff-empty">Loading rooms&hellip;</div>
-        <div class="ff-link-row">
-          <a href="/views/3d-farm-viewer.html">Open 3D viewer</a>
+        <!-- In-place popup launchers. The 3D viewer, Room Mapper, and Heat Map
+             now live as modes of the same viewer so the operator never
+             bounces to a new page. Each link opens the shared popup overlay
+             (see /js/spatial-viewer-popup.js) instead of navigating. -->
+        <div class="ff-link-row" style="display:flex;gap:14px;flex-wrap:wrap;">
+          <a href="#" data-spatial-viewer="view" data-spatial-viewer-title="3D Farm Viewer">Open 3D viewer</a>
+          <a href="#" data-spatial-viewer="draw-zones" data-spatial-viewer-title="Room Mapper &middot; 3D viewer">Room Mapper</a>
+          <a href="#" data-spatial-viewer="heatmap" data-spatial-viewer-title="Heat Map &middot; 3D viewer">Heat Map</a>
         </div>
       </div>
     </section>
@@ -763,6 +772,16 @@
         </div>
       </div>
       <div class="ff-step-card">
+        <div id="ffZonesSource" class="tiny" style="color:#94a3b8;margin-bottom:6px;"></div>
+        <div id="ffZonesCountPicker" style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:10px;padding:10px 12px;border:1px dashed rgba(59,130,246,0.35);border-radius:10px;background:rgba(15,23,42,0.4);">
+          <span class="tiny" style="color:#cbd5e1;">Zones in this room:</span>
+          <button id="ffZonesCountMinus" type="button" class="ghost" style="min-height:30px;padding:2px 12px;">&minus;</button>
+          <input id="ffZonesCountInput" type="number" min="1" max="12" value="1" style="width:68px;min-height:30px;padding:2px 8px;background:rgba(15,23,42,0.6);border:1px solid rgba(148,163,184,0.3);border-radius:6px;color:#f1f5f9;text-align:center;">
+          <button id="ffZonesCountPlus" type="button" class="ghost" style="min-height:30px;padding:2px 12px;">+</button>
+          <span id="ffZonesRecommend" class="tiny" style="color:#60a5fa;"></span>
+          <button id="ffZonesCountApply" type="button" class="primary" style="min-height:30px;padding:4px 14px;">Apply</button>
+          <span id="ffZonesCountStatus" class="tiny" style="color:#94a3b8;"></span>
+        </div>
         <div style="display:flex;justify-content:flex-end;margin-bottom:8px;">
           <button id="ffZoneDrawerOpen" type="button" class="primary" style="min-height:32px;padding:6px 14px;">Draw zones on floor plan</button>
         </div>
@@ -810,16 +829,19 @@
       </div>
     </div>
 
-    <!-- ===== STEP 3 — GROW UNITS =====
+    <!-- ===== STEP 3 — GROW UNITS & GROUPS =====
          Template gallery + Room Build Plan (auto-fit per template spatial
-         contract, Evie zone count advisor, solver-driven unit count).
+         contract, Evie zone count advisor, solver-driven unit count) +
+         Build Stock Groups (batch-create identical groups with light and
+         controller assignment). All group- and light-level wiring lives in
+         this step so operators never bounce down the page.
     -->
     <section id="flow-grow-units" class="ff-step" aria-labelledby="ffGrowUnitsTitle">
       <div class="ff-step__head">
         <span class="ff-step__badge">3</span>
         <div>
-          <h2 class="ff-step__title" id="ffGrowUnitsTitle">Grow units</h2>
-          <p class="ff-step__subtitle">Pick a growing system template. Evie sizes working clearance and computes units per zone. Main walkway sizing follows in step 5.</p>
+          <h2 class="ff-step__title" id="ffGrowUnitsTitle">Grow units &amp; groups</h2>
+          <p class="ff-step__subtitle">Pick a growing system template, stage a Room Build Plan, and batch-create stock groups. Light and controller assignment happen in the Build Stock Groups card below so you can stay on this step.</p>
         </div>
       </div>
 
@@ -841,6 +863,32 @@
         </div>
       </div>
       <div id="rbpBody" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;"></div>
+    </section>
+
+    <!-- ===== BUILD STOCK GROUPS =====
+         Titled, visible card placed directly under the Room Build Plan so
+         the batch-create action is part of the same step as template
+         selection (no bouncing down the page). Duplicates the Build Stock
+         Groups + Print Labels actions from the Groups V2 panel so they're
+         reachable without scrolling; the legacy buttons inside the panel
+         stay for compatibility with existing wiring.
+    -->
+    <section id="buildStockGroupsCard" class="gm-card" style="margin:0 0 18px;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">
+        <div>
+          <h3 style="margin:0 0 4px;border:none;padding:0;">Build Stock Groups</h3>
+          <p class="tiny text-muted" style="margin:0;max-width:640px;">
+            Batch-create identical groups from the selected template. Each group gets its own <strong>Group ID</strong>
+            (used by inventory, recipe assignment, wholesale portal, and the accounting pages), a printable QR label,
+            and inline pickers for Standard Light and Standard Controller &mdash; no need to scroll to a separate card.
+          </p>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button id="buildStockGroupsCardOpenBtn" type="button" class="primary" style="min-height:32px;padding:6px 14px;">Build Stock Groups</button>
+          <button id="buildStockGroupsCardPrintBtn" type="button" class="ghost" style="min-height:32px;padding:6px 14px;" title="Download a PDF of group labels (QR + Group ID + name)">Print group codes</button>
+        </div>
+      </div>
+      <div id="buildStockGroupsSummary" class="tiny" style="margin-top:10px;color:#94a3b8;">No stock-group batches created yet.</div>
     </section>
 
     <!-- Groups V2 Panel (always visible, dark-themed) -->
@@ -1044,21 +1092,17 @@
           <div id="groupsV2GroupListBody"></div>
         </div>
 
-        <!-- ===== STEP 4 — LIGHTS =====
-             Anchor target for breadcrumb step 4. Light Assignment lives
-             inside the Groups V2 panel because groups-v2.js wires it to
-             the active group; rather than move the DOM we scroll to this
-             anchor and give the step a labeled header.
+        <!-- ===== PER-GROUP LIGHT ASSIGNMENT =====
+             Stays inside the Groups V2 panel because groups-v2.js wires it
+             to the active group. No longer a standalone breadcrumb step —
+             light assignment is part of step 3 (Grow units & groups) and
+             the primary entry point is the Build Stock Groups card above.
+             The #flow-lights anchor is retained so any legacy deep-links
+             (#flow-lights) still scroll into view here.
         -->
-        <div id="flow-lights" class="ff-step__head" style="scroll-margin-top:88px;margin-top:8px;">
-          <span class="ff-step__badge">4</span>
-          <div>
-            <h2 class="ff-step__title">Lights</h2>
-            <p class="ff-step__subtitle">Assign fixtures to the active group. Fixture class and channel count are pre-filled from the selected template.</p>
-          </div>
-        </div>
+        <div id="flow-lights" style="scroll-margin-top:88px;"></div>
 
-        <!-- ===== LIGHT ASSIGNMENT ===== -->
+        <!-- ===== LIGHT ASSIGNMENT (per active group) ===== -->
         <div class="gm-card">
           <h3>Light Assignment</h3>
           <div style="display:flex;flex-direction:column;gap:12px;">
@@ -1194,7 +1238,7 @@
     -->
     <section id="flow-equipment" class="ff-step" aria-labelledby="ffEquipmentTitle">
       <div class="ff-step__head">
-        <span class="ff-step__badge">5</span>
+        <span class="ff-step__badge">4</span>
         <div>
           <h2 class="ff-step__title" id="ffEquipmentTitle">Equipment</h2>
           <p class="ff-step__subtitle">Cooling tons, dehumidification capacity, fan CFM, and pump count. Derived from the template multiplied by unit quantity and the room envelope.</p>
@@ -1219,10 +1263,10 @@
     -->
     <section id="flow-controllers" class="ff-step" aria-labelledby="ffControllersTitle">
       <div class="ff-step__head">
-        <span class="ff-step__badge">6</span>
+        <span class="ff-step__badge">5</span>
         <div>
           <h2 class="ff-step__title" id="ffControllersTitle">Controllers</h2>
-          <p class="ff-step__subtitle">Bind controllers (SwitchBot hub, Kasa account, Code3 gateway, DMX universes, wired bus segments) to the channels reserved in steps 3 through 5.</p>
+          <p class="ff-step__subtitle">Bind controllers (SwitchBot hub, Kasa account, Code3 gateway, DMX universes, wired bus segments) to the channels reserved in steps 3 and 4. Per-group controller selection lives in the Build Stock Groups card so you can assign without leaving this page.</p>
         </div>
       </div>
       <div class="ff-step-card">
@@ -1292,10 +1336,52 @@
     // UNIFIED FARM FLOW CONTROLLER
     // Hydrates read-only summaries for Room / Zones / Equipment /
     // Controllers step cards and manages breadcrumb active state based on
-    // which section is currently in view. Grow units (step 3) and Lights
-    // (step 4) are driven by the pre-existing template-gallery +
-    // room-build-plan + groups-v2 scripts and need no extra hydration.
+    // which section is currently in view. Grow units & groups (step 3) is
+    // driven by the pre-existing template-gallery + room-build-plan +
+    // groups-v2 scripts and needs no extra hydration; lights / controllers
+    // are selected inline inside the Build Stock Groups card so operators
+    // stay on this page.
     // =====================================================================
+    // Mirror clicks on the Build Stock Groups card up to the legacy
+    // modal/print buttons inside the Groups V2 panel so the underlying
+    // wiring (groups-v2.js) keeps owning the data-contract side of the flow.
+    document.addEventListener('DOMContentLoaded', function () {
+      var cardOpen = document.getElementById('buildStockGroupsCardOpenBtn');
+      var cardPrint = document.getElementById('buildStockGroupsCardPrintBtn');
+      if (cardOpen) {
+        cardOpen.addEventListener('click', function () {
+          var btn = document.getElementById('buildStockGroupsBtn');
+          if (btn) btn.click();
+        });
+      }
+      if (cardPrint) {
+        cardPrint.addEventListener('click', function () {
+          var btn = document.getElementById('groupsV2PrintLabels');
+          if (btn) btn.click();
+        });
+      }
+      // Keep a small summary line on the card in sync with group count so
+      // the "No stock-group batches created yet." placeholder updates
+      // after a Build Stock Groups run.
+      function refreshSummary() {
+        var el = document.getElementById('buildStockGroupsSummary');
+        if (!el) return;
+        var groups = (window.STATE && Array.isArray(window.STATE.groups)) ? window.STATE.groups : [];
+        var count = groups.length;
+        if (count === 0) {
+          el.textContent = 'No stock-group batches created yet.';
+          el.style.color = '#94a3b8';
+        } else {
+          var withLights = groups.filter(function (g) {
+            return Array.isArray(g.lights) && g.lights.length > 0;
+          }).length;
+          el.textContent = count + ' group(s) in this farm \u2022 ' + withLights + ' with light assignments \u2022 Group IDs are auto-assigned and printable via "Print group codes".';
+          el.style.color = '#cbd5e1';
+        }
+      }
+      document.addEventListener('groups-updated', refreshSummary);
+      setTimeout(refreshSummary, 2500);
+    });
     var ffFlow = (function () {
       var state = {
         rooms: [],
@@ -1360,16 +1446,17 @@
         _saveRoomsTimer = null;
         var statusEl = _saveRoomsStatus;
         var payload = { rooms: state.rooms.map(function (r) { return r; }) };
-        fetch('/api/setup/save-rooms', {
+        var _fetch = window.authFetch || fetch;
+        _fetch('/api/setup/save-rooms', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
           body: JSON.stringify(payload)
         }).then(function (resp) {
           if (!resp.ok) throw new Error('HTTP ' + resp.status);
           return resp.json();
         }).then(function () {
           if (statusEl) { statusEl.textContent = 'Saved'; statusEl.style.color = '#4ade80'; }
+          document.dispatchEvent(new CustomEvent('rooms-updated'));
         }).catch(function (err) {
           console.error('[grow-management] rooms save failed:', err);
           if (statusEl) { statusEl.textContent = 'Save failed'; statusEl.style.color = '#f87171'; }
@@ -1443,9 +1530,22 @@
         });
         host.appendChild(frag);
       }
+      function evieRecommendZoneCount(room) {
+        // Evie's heuristic: ~1 zone per ~30m2 of room floor, minimum 1, maximum 4.
+        // Explicit so operators see what's advisory vs. their own choice.
+        var l = Number(room && room.length_m) || 0;
+        var w = Number(room && room.width_m) || 0;
+        var area = l * w;
+        if (!area) return 2;
+        var n = Math.max(1, Math.min(4, Math.round(area / 30)));
+        return n;
+      }
       function renderZones() {
         var host = document.getElementById('ffZonesBody');
         var advice = document.getElementById('ffZonesEvieAdvice');
+        var sourceEl = document.getElementById('ffZonesSource');
+        var recEl = document.getElementById('ffZonesRecommend');
+        var countInput = document.getElementById('ffZonesCountInput');
         if (!host) return;
         host.innerHTML = '';
         var allZones = [];
@@ -1454,9 +1554,26 @@
             allZones.push({ room: r, zone: z });
           });
         });
+        // Hydrate the source-of-truth label + picker from saved state.
+        var primaryRoom = state.rooms[0] || null;
+        var savedCount = primaryRoom && Array.isArray(primaryRoom.zones) ? primaryRoom.zones.length : 0;
+        var recommended = primaryRoom ? evieRecommendZoneCount(primaryRoom) : 2;
+        if (sourceEl) {
+          if (savedCount > 0) {
+            sourceEl.textContent = savedCount + ' zone' + (savedCount === 1 ? '' : 's') + ' loaded from your saved room data. Adjust the count below to add or remove zones.';
+          } else {
+            sourceEl.textContent = 'No zones saved yet. Evie recommends ' + recommended + ' to start — adjust and apply below.';
+          }
+        }
+        if (recEl) {
+          recEl.textContent = 'Evie recommends ' + recommended + ' based on room area (' + (primaryRoom ? ((primaryRoom.length_m || '?') + 'm \u00d7 ' + (primaryRoom.width_m || '?') + 'm') : 'no room yet') + ').';
+        }
+        if (countInput && document.activeElement !== countInput) {
+          countInput.value = String(savedCount || recommended);
+        }
         if (!allZones.length) {
           host.className = 'ff-empty';
-          host.textContent = 'No zones defined. Evie recommends starting with 2 zones per room so you can run independent photoperiods or clean one while the other produces.';
+          host.textContent = 'No zones defined yet. Use the picker above to create zones; Evie recommends ' + recommended + ' for this room.';
           if (advice) advice.style.display = 'none';
           return;
         }
@@ -1827,10 +1944,15 @@
         // cache so breadcrumb stays correct after groups-v2.js save/delete.
         var liveGroups = (window.STATE && Array.isArray(window.STATE.groups)) ? window.STATE.groups : (state.groups || []);
         var hasInstalled = rooms.some(function (r) { return Array.isArray(r.installedSystems) && r.installedSystems.length > 0; });
-        var hasUnits = liveGroups.length > 0 || hasInstalled;
+        // Lights were folded into step 3 (Grow units & groups). For
+        // breadcrumb completion we now require at least one group with
+        // fixtures assigned, in addition to an installed system / any
+        // group. This matches the consolidated per-group light assignment
+        // that lives in the Build Stock Groups card.
         var hasLights = liveGroups.some(function (g) {
           return Array.isArray(g.lights) && g.lights.length > 0;
         });
+        var hasUnits = (liveGroups.length > 0 && hasLights) || hasInstalled;
         var hasEquip = !!window.__roomBuildPlan || !!persistedBuildPlan();
         // Controllers step is complete when at least one physical device has
         // been bound to a reserved slot. Falls back to "any device paired"
@@ -1842,7 +1964,6 @@
           'room': hasRoom,
           'zones': hasZones,
           'grow-units': hasUnits,
-          'lights': hasLights,
           'equipment': hasEquip,
           'controllers': hasCtrl
         };
@@ -1855,8 +1976,9 @@
       }
       function load() {
         var endpoints = ['/data/rooms.json', '/data/groups.json', '/data/grow-systems.json', '/data/iot-devices.json'];
+        var _fetchLoad = window.authFetch || fetch;
         return Promise.all(endpoints.map(function (url) {
-          return fetch(url).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; });
+          return _fetchLoad(url).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; });
         })).then(function (results) {
           state.rooms = Array.isArray(results[0]) ? results[0] : (results[0] && results[0].rooms) || [];
           state.groups = Array.isArray(results[1]) ? results[1] : (results[1] && results[1].groups) || [];
@@ -1885,7 +2007,7 @@
       document.addEventListener('room-build-plan:saved', function () { refresh(); });
       // Scroll-based active state: highlight whichever step is nearest the viewport top.
       window.addEventListener('scroll', function () {
-        var steps = ['flow-room', 'flow-zones', 'flow-grow-units', 'flow-lights', 'flow-equipment', 'flow-controllers'];
+        var steps = ['flow-room', 'flow-zones', 'flow-grow-units', 'flow-equipment', 'flow-controllers'];
         var activeId = steps[0];
         for (var i = 0; i < steps.length; i++) {
           var el = document.getElementById(steps[i]);
@@ -1900,6 +2022,68 @@
           a.classList.toggle('is-active', step === activeId);
         });
       }, { passive: true });
+
+      // Zones count stepper — Evie recommends, user picks.
+      // Writes rooms[0].zones[] (preserving saved dimensions / existing zone
+      // objects) and POSTs /api/setup/save-rooms with auth so it persists.
+      (function wireZoneCountStepper() {
+        var input = document.getElementById('ffZonesCountInput');
+        var minus = document.getElementById('ffZonesCountMinus');
+        var plus = document.getElementById('ffZonesCountPlus');
+        var apply = document.getElementById('ffZonesCountApply');
+        var status = document.getElementById('ffZonesCountStatus');
+        if (!input || !apply) return;
+        function clamp(v) {
+          var n = parseInt(v, 10);
+          if (!Number.isFinite(n)) n = 1;
+          return Math.max(1, Math.min(12, n));
+        }
+        minus && minus.addEventListener('click', function () {
+          input.value = String(clamp(Number(input.value) - 1));
+        });
+        plus && plus.addEventListener('click', function () {
+          input.value = String(clamp(Number(input.value) + 1));
+        });
+        apply.addEventListener('click', function () {
+          var target = clamp(input.value);
+          input.value = String(target);
+          var primary = state.rooms[0];
+          if (!primary) {
+            if (status) { status.textContent = 'Create a room first.'; status.style.color = '#f87171'; }
+            return;
+          }
+          var existing = Array.isArray(primary.zones) ? primary.zones.slice() : [];
+          // Preserve as many existing zone objects (with saved dimensions) as
+          // possible. Add new placeholder zones ("Zone N") to grow, drop from
+          // the tail to shrink — that way shrinking never loses zone 1's dims.
+          if (existing.length < target) {
+            for (var i = existing.length; i < target; i++) {
+              existing.push({ id: 'zone-' + (i + 1), name: 'Zone ' + (i + 1) });
+            }
+          } else if (existing.length > target) {
+            existing = existing.slice(0, target);
+          }
+          primary.zones = existing;
+          if (status) { status.textContent = 'Saving\u2026'; status.style.color = '#fbbf24'; }
+          var _f = window.authFetch || fetch;
+          _f('/api/setup/save-rooms', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ rooms: state.rooms })
+          }).then(function (resp) {
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            return resp.json();
+          }).then(function () {
+            if (status) { status.textContent = 'Saved \u2022 ' + target + ' zones'; status.style.color = '#4ade80'; }
+            document.dispatchEvent(new CustomEvent('rooms-updated'));
+            refresh();
+          }).catch(function (err) {
+            console.error('[ffFlow] zones count save failed:', err);
+            if (status) { status.textContent = 'Save failed'; status.style.color = '#f87171'; }
+          });
+        });
+      })();
+
       return { refresh: refresh };
     })();
 
@@ -1941,7 +2125,8 @@
         // rooms.json directly if the closure isn't available.
         var maybe = window.__ffFlowRooms;
         if (Array.isArray(maybe) && maybe.length) return Promise.resolve(maybe);
-        return fetch('/data/rooms.json')
+        var _fetchRR = window.authFetch || fetch;
+        return _fetchRR('/data/rooms.json')
           .then(function (r) { return r.ok ? r.json() : null; })
           .then(function (j) {
             return Array.isArray(j) ? j : (j && Array.isArray(j.rooms) ? j.rooms : []);
@@ -2224,10 +2409,10 @@
           };
         });
         statusEl.textContent = 'Saving…'; statusEl.style.color = '#fbbf24';
-        fetch('/api/setup/save-rooms', {
+        var _fetchZone = window.authFetch || fetch;
+        _fetchZone('/api/setup/save-rooms', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
           body: JSON.stringify({ rooms: state.rooms })
         }).then(function (resp) {
           if (!resp.ok) throw new Error('HTTP ' + resp.status);
@@ -2510,6 +2695,18 @@
       <select id="bsgStandardLight" style="min-height:32px;border-radius:6px;border:1px solid #cbd5e1;">
         <option value="">(none - use auto-assign pool)</option>
       </select>
+    </label>
+
+    <label class="tiny" style="display:flex;flex-direction:column;gap:4px;">
+      Standard Controller <span style="font-weight:400;color:#94a3b8;">(optional &mdash; binds every group to the same controller slot)</span>
+      <select id="bsgStandardController" style="min-height:32px;border-radius:6px;border:1px solid #cbd5e1;">
+        <option value="">(none &mdash; assign later in step 5)</option>
+      </select>
+    </label>
+
+    <label class="tiny" style="display:flex;flex-direction:column;gap:4px;">
+      Group ID prefix <span style="font-weight:400;color:#94a3b8;">(printed on QR labels &mdash; consumed by inventory, recipes, wholesale portal, accounting)</span>
+      <input id="bsgGroupIdPrefix" type="text" placeholder="e.g. GID-LEAF-" maxlength="24" style="min-height:32px;border-radius:6px;border:1px solid #cbd5e1;">
     </label>
 
     <div id="bsgPreview" style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:12px;min-height:40px;font-size:0.8rem;color:#0c4a6e;"></div>
