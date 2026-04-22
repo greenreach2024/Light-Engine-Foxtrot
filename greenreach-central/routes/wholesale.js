@@ -695,6 +695,48 @@ function extractCoordinates(rawLocation) {
 const buyerGeocodeCache = new Map();
 const BUYER_GEOCODE_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 
+const PROVINCE_CODE_TO_NAME = {
+  AB: 'Alberta',
+  BC: 'British Columbia',
+  MB: 'Manitoba',
+  NB: 'New Brunswick',
+  NL: 'Newfoundland and Labrador',
+  NS: 'Nova Scotia',
+  NT: 'Northwest Territories',
+  NU: 'Nunavut',
+  ON: 'Ontario',
+  PE: 'Prince Edward Island',
+  QC: 'Quebec',
+  SK: 'Saskatchewan',
+  YT: 'Yukon'
+};
+
+function normalizeProvinceName(rawProvince) {
+  const cleaned = trimField(rawProvince);
+  if (!cleaned) return '';
+
+  const compact = cleaned
+    .toUpperCase()
+    .replace(/[^A-Z]/g, '');
+  if (PROVINCE_CODE_TO_NAME[compact]) return PROVINCE_CODE_TO_NAME[compact];
+
+  const titleCased = cleaned
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+
+  const mapped = Object.values(PROVINCE_CODE_TO_NAME).find((name) => name.toLowerCase() === titleCased.toLowerCase());
+  return mapped || titleCased;
+}
+
+function normalizeProvinceComparable(rawProvince) {
+  return normalizeProvinceName(rawProvince)
+    .toUpperCase()
+    .replace(/[^A-Z]/g, '');
+}
+
 function normalizePostalCode(rawPostalCode) {
   const compact = String(rawPostalCode || '')
     .toUpperCase()
@@ -709,7 +751,7 @@ function buildBuyerGeocodeQueries(rawLocation) {
 
   const address1 = trimField(rawLocation.address1 ?? rawLocation.address ?? rawLocation.street ?? rawLocation.street1 ?? '') || '';
   const city = trimField(rawLocation.city ?? rawLocation.town ?? rawLocation.municipality ?? '') || '';
-  const state = trimField(rawLocation.state ?? rawLocation.province ?? rawLocation.region ?? '') || '';
+  const state = normalizeProvinceName(rawLocation.state ?? rawLocation.province ?? rawLocation.region ?? '');
   const postalCode = normalizePostalCode(rawLocation.postalCode ?? rawLocation.zip ?? '');
   const country = trimField(rawLocation.country ?? 'Canada') || 'Canada';
 
@@ -730,19 +772,108 @@ function buildBuyerGeocodeQueries(rawLocation) {
   return queries;
 }
 
-async function geocodeBuyerLocation(rawLocation) {
-  const directCoords = extractCoordinates(rawLocation);
-  if (directCoords) return directCoords;
-
+function buildBuyerGeocodeCandidates(rawLocation) {
   const location = (rawLocation && typeof rawLocation === 'object') ? rawLocation : {};
-  const queries = buildBuyerGeocodeQueries(location);
-  if (!queries.length) return null;
+  const city = trimField(location.city ?? location.town ?? location.municipality ?? '') || '';
+  const state = normalizeProvinceName(location.state ?? location.province ?? location.region ?? '');
+  const postalCode = normalizePostalCode(location.postalCode ?? location.zip ?? '');
+  const country = trimField(location.country ?? 'Canada') || 'Canada';
+
+  const candidates = [];
+  const addStructured = (params) => {
+    const next = Object.entries(params)
+      .reduce((acc, [key, value]) => {
+        const text = String(value || '').trim();
+        if (text) acc[key] = text;
+        return acc;
+      }, {});
+    if (!Object.keys(next).length) return;
+    candidates.push({ type: 'structured', params: next });
+  };
+
+  if (postalCode) {
+    addStructured({
+      format: 'jsonv2',
+      limit: '3',
+      postalcode: postalCode,
+      country,
+      state
+    });
+  }
+
+  if (city || postalCode) {
+    addStructured({
+      format: 'jsonv2',
+      limit: '3',
+      city,
+      state,
+      postalcode: postalCode,
+      country
+    });
+  }
+
+  for (const queryText of buildBuyerGeocodeQueries(location)) {
+    candidates.push({
+      type: 'q',
+      params: {
+        format: 'jsonv2',
+        limit: '3',
+        q: queryText
+      }
+    });
+  }
+
+  return candidates;
+}
+
+function isBuyerGeocodeResultValid(result, expected) {
+  if (!result || typeof result !== 'object') return false;
+
+  const address = (result.address && typeof result.address === 'object') ? result.address : {};
+
+  if (expected.countryCodes) {
+    const resultCountryCode = String(address.country_code || '').toLowerCase();
+    if (resultCountryCode && resultCountryCode !== expected.countryCodes) return false;
+  }
+
+  if (expected.postalCode) {
+    const expectedPostal = normalizePostalCode(expected.postalCode);
+    const resultPostal = normalizePostalCode(address.postcode || '');
+    if (expectedPostal && resultPostal) {
+      if (expectedPostal !== resultPostal && expectedPostal.slice(0, 3) !== resultPostal.slice(0, 3)) {
+        return false;
+      }
+    }
+  }
+
+  if (expected.state) {
+    const expectedState = normalizeProvinceComparable(expected.state);
+    const resultState = normalizeProvinceComparable(
+      address.state
+        || address.province
+        || address.state_district
+        || ''
+    );
+    if (expectedState && resultState && expectedState !== resultState) return false;
+  }
+
+  return true;
+}
+
+async function geocodeBuyerLocation(rawLocation) {
+  const location = (rawLocation && typeof rawLocation === 'object') ? rawLocation : {};
+  const candidates = buildBuyerGeocodeCandidates(location);
+  if (!candidates.length) return null;
 
   const country = String(location.country || 'Canada').trim().toLowerCase();
   const countryCodes = (!country || country === 'canada') ? 'ca' : '';
+  const expectedState = normalizeProvinceName(location.state ?? location.province ?? location.region ?? '');
+  const expectedPostalCode = normalizePostalCode(location.postalCode ?? location.zip ?? '');
 
-  for (const queryText of queries) {
-    const cacheKey = `${countryCodes || 'all'}:${queryText.toLowerCase()}`;
+  for (const candidate of candidates) {
+    const params = new URLSearchParams(candidate.params);
+    if (countryCodes) params.set('countrycodes', countryCodes);
+    const cacheKey = `${countryCodes || 'all'}:${params.toString().toLowerCase()}`;
     const cached = buyerGeocodeCache.get(cacheKey);
     if (cached && (Date.now() - cached.ts) < BUYER_GEOCODE_CACHE_TTL_MS) {
       return { ...cached.coords };
@@ -751,13 +882,6 @@ async function geocodeBuyerLocation(rawLocation) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 4500);
     try {
-      const params = new URLSearchParams({
-        format: 'jsonv2',
-        limit: '1',
-        q: queryText
-      });
-      if (countryCodes) params.set('countrycodes', countryCodes);
-
       const response = await fetch(`https://nominatim.openstreetmap.org/search?${params.toString()}`, {
         headers: {
           Accept: 'application/json',
@@ -770,13 +894,23 @@ async function geocodeBuyerLocation(rawLocation) {
       const results = await response.json();
       if (!Array.isArray(results) || results.length === 0) continue;
 
-      const latitude = toFiniteNumber(results[0].lat);
-      const longitude = toFiniteNumber(results[0].lon);
-      if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) continue;
+      for (const result of results) {
+        if (!isBuyerGeocodeResultValid(result, {
+          countryCodes,
+          state: expectedState,
+          postalCode: expectedPostalCode
+        })) {
+          continue;
+        }
 
-      const coords = { latitude, longitude };
-      buyerGeocodeCache.set(cacheKey, { coords, ts: Date.now() });
-      return coords;
+        const latitude = toFiniteNumber(result.lat);
+        const longitude = toFiniteNumber(result.lon);
+        if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) continue;
+
+        const coords = { latitude, longitude };
+        buyerGeocodeCache.set(cacheKey, { coords, ts: Date.now() });
+        return coords;
+      }
     } catch {
       // Best-effort geocoding; continue with fallback queries.
     } finally {
@@ -2206,7 +2340,8 @@ router.post('/buyers/register', registerLimiter, requireWholesaleDbForCriticalPa
     };
 
     const providedCoords = extractCoordinates(location || null);
-    const resolvedCoords = providedCoords || await geocodeBuyerLocation(registrationLocation);
+    const geocodedCoords = await geocodeBuyerLocation(registrationLocation);
+    const resolvedCoords = geocodedCoords || providedCoords;
     registrationLocation.latitude = resolvedCoords?.latitude ?? null;
     registrationLocation.longitude = resolvedCoords?.longitude ?? null;
 
@@ -2452,7 +2587,8 @@ router.put('/buyers/me', requireBuyerPortalAuth, async (req, res, next) => {
       location: patchLocation.location
     });
     const existingCoords = extractCoordinates(req.wholesaleBuyer.location);
-    const resolvedCoords = providedCoords || existingCoords || await geocodeBuyerLocation(location);
+    const geocodedCoords = await geocodeBuyerLocation(location);
+    const resolvedCoords = geocodedCoords || providedCoords || existingCoords;
     location.latitude = resolvedCoords?.latitude ?? null;
     location.longitude = resolvedCoords?.longitude ?? null;
 
