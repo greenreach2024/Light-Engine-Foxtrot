@@ -6543,6 +6543,12 @@ async function saveEditCertifications(event) {
         if (statusEl) {
             statusEl.textContent = text;
             statusEl.style.color = color || '';
+            return;
+        }
+        // Fallback for pages without the inline status element (e.g. farm-admin.html)
+        if (typeof showToast === 'function') {
+            const level = (typeof color === 'string' && /red|error/i.test(color)) ? 'error' : 'success';
+            showToast(text, level);
         }
     };
 
