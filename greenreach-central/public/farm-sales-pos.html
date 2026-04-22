@@ -1202,27 +1202,51 @@
     
     // Load inventory
     async function loadInventory() {
+      const grid = document.getElementById('product-grid');
+      const table = document.getElementById('inventory-table');
       try {
         const data = await api('/farm-sales/inventory');
-        inventory = data.inventory;
-        
+        // Be tolerant of different response shapes and missing fields
+        const rawInventory = Array.isArray(data)
+          ? data
+          : (Array.isArray(data?.inventory) ? data.inventory : (Array.isArray(data?.products) ? data.products : []));
+        inventory = rawInventory.map(p => ({
+          sku_id: p.sku_id ?? p.sku ?? p.id ?? '',
+          name: p.name ?? p.product_name ?? 'Unnamed Product',
+          category: p.category ?? p.category_name ?? '—',
+          available: Number(p.available ?? p.quantity_available ?? p.stock ?? 0),
+          reserved: Number(p.reserved ?? p.quantity_reserved ?? 0),
+          unit: p.unit ?? p.unit_of_measure ?? 'ea',
+          retail_price: Number(p.retail_price ?? p.price ?? 0),
+          lot_code: p.lot_code ?? p.lotCode ?? '',
+          description: p.description ?? '',
+          thumbnail_url: p.thumbnail_url ?? p.image_url ?? '',
+          // Default to false when missing: products are only taxed when the API
+          // explicitly marks them taxable (preserves pre-PR behavior).
+          is_taxable: p.is_taxable ?? p.isTaxable ?? false,
+        }));
+
+        if (inventory.length === 0) {
+          if (grid) grid.innerHTML = '<div class="empty-state" style="padding: 2rem; text-align: center; color: var(--text-light);">No products available.</div>';
+          if (table) table.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:1.5rem; color: var(--text-light);">No inventory items yet.</td></tr>';
+          return;
+        }
+
         // Render product grid
-        const grid = document.getElementById('product-grid');
-        grid.innerHTML = inventory.map(product => `
+        if (grid) grid.innerHTML = inventory.map(product => `
           <div class="product-card" onclick="addToCart('${product.sku_id}')">
             ${product.thumbnail_url ? `<img src="${product.thumbnail_url}" alt="${product.name}" class="product-thumb" loading="lazy" />` : ''}
             <h3>${product.name}</h3>
-            <div class="price">$${Number(product.retail_price).toFixed(2)}</div>
+            <div class="price">$${product.retail_price.toFixed(2)}</div>
             <div class="stock">${product.available} ${product.unit} available</div>
             ${product.description ? `<div class="product-desc">${product.description}</div>` : ''}
           </div>
         `).join('');
-        
+
         // Render inventory table
-        const table = document.getElementById('inventory-table');
-        table.innerHTML = inventory.map(product => `
+        if (table) table.innerHTML = inventory.map(product => `
           <tr>
-            <td>${product.sku_id}</td>
+            <td>${product.sku_id || '—'}</td>
             <td>${product.name}</td>
             <td>${product.category}</td>
             <td>${product.available}</td>
@@ -1235,12 +1259,26 @@
               ` : '<span style="color: var(--text-light); font-size: 0.85rem;">No lot</span>'}
             </td>
             <td>
-              <button class="btn btn-sm" onclick="assignLotCode('${product.sku_id}')" style="font-size: 0.8rem; padding: 4px 8px;">🏷️ Assign Lot</button>
+              <button class="btn btn-sm" onclick="assignLotCode('${product.sku_id}')" style="font-size: 0.8rem; padding: 4px 8px;">Assign Lot</button>
             </td>
           </tr>
         `).join('');
       } catch (error) {
         console.error('Failed to load inventory:', error);
+        // Use textContent to avoid injecting unsanitized server-provided error strings as HTML.
+        if (grid) {
+          grid.innerHTML = '';
+          const d = document.createElement('div');
+          d.className = 'empty-state';
+          d.style.cssText = 'padding: 1.5rem; text-align: center; color: var(--error);';
+          d.textContent = 'Could not load inventory: ' + error.message;
+          grid.appendChild(d);
+        }
+        if (table) {
+          table.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:1.5rem; color: var(--error);"></td></tr>';
+          const cell = table.querySelector('td');
+          if (cell) cell.textContent = 'Failed to load inventory: ' + error.message;
+        }
       }
     }
     
