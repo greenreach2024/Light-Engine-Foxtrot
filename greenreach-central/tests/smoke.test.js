@@ -44,6 +44,11 @@ describe('Module import smoke tests', () => {
     expect(typeof mod.isDatabaseAvailable).toBe('function');
   });
 
+  test('reports routes load', async () => {
+    const mod = await import('../routes/reports.js');
+    expect(mod.default).toBeDefined();
+  });
+
   test('wholesaleMemoryStore loads', async () => {
     const mod = await import('../services/wholesaleMemoryStore.js');
     expect(typeof mod.createBuyer).toBe('function');
