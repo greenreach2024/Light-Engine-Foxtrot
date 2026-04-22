@@ -6385,7 +6385,7 @@ function renderGroupsV2GroupList() {
   if (!filtered.length) {
     container.innerHTML =
       '<p class="tiny text-muted" style="text-align:center;padding:20px;">' +
-      'No groups yet. Use <strong>Build Stock Groups</strong> or <strong>Save Group</strong> to create groups.</p>';
+      'No groups yet. Use <strong>Build Growing Unit</strong> or <strong>Save Group</strong> to create groups.</p>';
     return;
   }
 
@@ -6910,6 +6910,15 @@ function populateBsgModal() {
   // don't have to bounce to step 5 to assign a controller.
   populateStandardControllerDropdown('bsgStandardController', '(none \u2014 assign later in step 5)');
 
+  // Prefer Evie's room-dimension-based recommendation for initial group count.
+  // This prevents template-presented defaults from overriding spatial capacity.
+  const bsgCountInput = document.getElementById('bsgCount');
+  const rbp = window.__roomBuildPlan;
+  const evieUnits = Number(rbp && rbp.desiredUnits);
+  if (bsgCountInput && Number.isFinite(evieUnits) && evieUnits > 0) {
+    bsgCountInput.value = String(Math.max(1, Math.min(100, Math.round(evieUnits))));
+  }
+
   // Default group_id prefix from farm id if available
   var gidInput = document.getElementById('bsgGroupIdPrefix');
   if (gidInput && !gidInput.value) {
@@ -6917,6 +6926,83 @@ function populateBsgModal() {
     try { farmId = (localStorage && localStorage.getItem('farmId')) || ''; } catch (e) {}
     if (farmId) gidInput.placeholder = 'GID-' + String(farmId).slice(-8).toUpperCase() + '-';
   }
+}
+
+/**
+ * Fetch available tray formats from inventory API.
+ * Supports either array or {formats:[...]} response shapes.
+ */
+async function fetchBsgTrayFormats() {
+  try {
+    const f = window.authFetch || fetch;
+    let rows = [];
+    const endpoints = ['/api/tray-formats', '/api/inventory/tray-formats'];
+    for (const endpoint of endpoints) {
+      const res = await f(endpoint, { credentials: 'same-origin', cache: 'no-store' });
+      if (!res || !res.ok) continue;
+      const json = await res.json();
+      const next = Array.isArray(json) ? json : (Array.isArray(json.formats) ? json.formats : []);
+      if (next.length) {
+        rows = next;
+        break;
+      }
+    }
+    return rows.map(function(row) {
+      if (!row) return null;
+      return {
+        id: row.trayFormatId || row.tray_format_id || row.id || row._id || '',
+        name: row.name || row.trayFormatName || row.tray_format_name || 'Tray format',
+        plantSiteCount: Number(row.plantSiteCount || row.plant_site_count || row.cells || 0) || null,
+        systemType: row.systemType || row.system_type || ''
+      };
+    }).filter(function(row) { return row && row.id; });
+  } catch (err) {
+    console.warn('[Build Growing Unit] Failed to load tray formats:', err);
+    return [];
+  }
+}
+
+/**
+ * Render and open tray format picker popup.
+ */
+async function openBsgTrayFormatModal() {
+  const modal = document.getElementById('bsgTrayFormatModal');
+  const listEl = document.getElementById('bsgTrayFormatList');
+  const selectedId = (document.getElementById('bsgTrayFormatId')?.value || '').trim();
+  if (!modal || !listEl) return;
+
+  listEl.innerHTML = '<div class="tiny" style="color:#64748b;padding:8px;">Loading tray formats...</div>';
+  modal.showModal();
+
+  const formats = await fetchBsgTrayFormats();
+  if (!formats.length) {
+    listEl.innerHTML = '<div class="tiny" style="color:#b91c1c;padding:8px;">No tray formats available yet. Add tray formats in Farm Setup first.</div>';
+    return;
+  }
+
+  listEl.innerHTML = '';
+  formats.forEach(function(fmt) {
+    var row = document.createElement('button');
+    row.type = 'button';
+    row.style.cssText = 'width:100%;text-align:left;border:1px solid ' + (fmt.id === selectedId ? '#3b82f6' : '#cbd5e1') + ';border-radius:8px;padding:10px 12px;margin:0 0 8px;background:' + (fmt.id === selectedId ? 'rgba(59,130,246,0.12)' : '#fff') + ';cursor:pointer;';
+    var meta = [];
+    if (fmt.plantSiteCount) meta.push(String(fmt.plantSiteCount) + ' sites');
+    if (fmt.systemType) meta.push(String(fmt.systemType));
+    row.innerHTML = '<strong style="color:#0f172a;">' + escapeHtml(fmt.name) + '</strong>'
+      + '<div class="tiny" style="color:#475569;margin-top:3px;">'
+      + escapeHtml(fmt.id)
+      + (meta.length ? ' · ' + escapeHtml(meta.join(' · ')) : '')
+      + '</div>';
+    row.addEventListener('click', function() {
+      var idEl = document.getElementById('bsgTrayFormatId');
+      var nameEl = document.getElementById('bsgTrayFormatName');
+      if (idEl) idEl.value = fmt.id;
+      if (nameEl) nameEl.value = fmt.name;
+      updateBsgPreview();
+      modal.close();
+    });
+    listEl.appendChild(row);
+  });
 }
 
 /**
@@ -7025,6 +7111,7 @@ function updateBsgPreview() {
   const room = document.getElementById('bsgRoom')?.value || '';
   const zone = document.getElementById('bsgZone')?.value || '';
   const stdLightId = (document.getElementById('bsgStandardLight')?.value || '').trim();
+  const trayFormatName = (document.getElementById('bsgTrayFormatName')?.value || '').trim();
 
   if (!prefix || !count || !room) {
     previewEl.innerHTML = '<span style="color:#94a3b8;">Fill in Room, Prefix, and Count to see preview.</span>';
@@ -7063,8 +7150,8 @@ function updateBsgPreview() {
     : '';
 
   previewEl.innerHTML = `
-    <strong>Will create ${count} group${count > 1 ? 's' : ''}:</strong> ${names.join(', ')}<br>
-    Each: ${lightsPerGroup} light${lightsPerGroup > 1 ? 's' : ''}, ${trays} tray${trays > 1 ? 's' : ''}<br>
+    <strong>Will create ${count} growing unit${count > 1 ? 's' : ''}:</strong> ${names.join(', ')}<br>
+    Each: ${lightsPerGroup} light${lightsPerGroup > 1 ? 's' : ''}, ${trays} tray${trays > 1 ? 's' : ''}${trayFormatName ? (' · ' + escapeHtml(trayFormatName)) : ''}<br>
     <strong>Totals:</strong> ${totalLights} lights, ${totalTrays} trays
     ${lightsInfo || (autoAssign ? `<br><span style="color:#0369a1;">Auto-assigning ${Math.min(totalLights, unassigned.length)} of ${unassigned.length} available lights</span>` : '')}
     ${lightsWarning}${conflictWarning}
@@ -7153,6 +7240,8 @@ async function executeBuildStockGroups() {
   const plantsPerTrayRaw = parseInt(document.getElementById('bsgPlantsPerTray')?.value);
   const plantsPerTray = Number.isFinite(plantsPerTrayRaw) && plantsPerTrayRaw > 0 ? plantsPerTrayRaw : 0;
   const lightsPerGroup = parseInt(document.getElementById('bsgLightsPerGroup')?.value) || 1;
+  const trayFormatId = (document.getElementById('bsgTrayFormatId')?.value || '').trim();
+  const trayFormatName = (document.getElementById('bsgTrayFormatName')?.value || '').trim();
   const autoAssign = document.getElementById('bsgAutoAssign')?.checked ?? true;
   const standardLightId = (document.getElementById('bsgStandardLight')?.value || '').trim();
   const standardLightTemplate = standardLightId
@@ -7166,7 +7255,9 @@ async function executeBuildStockGroups() {
   if (!room) missing.push('Room');
   if (!zone) missing.push('Zone');
   if (!prefix) missing.push('Group name prefix');
-  if (!count || count < 1) missing.push('Number of groups');
+  if (!count || count < 1) missing.push('Number of growing units');
+  if (!trayFormatId) missing.push('Tray format');
+  if (!trays || trays < 1) missing.push('Number of trays / growing unit');
   if (missing.length) {
     alert('Please fill in: ' + missing.join(', '));
     return { created: 0, skipped: 0 };
@@ -7295,6 +7386,10 @@ async function executeBuildStockGroups() {
       roomId,
       zoneId,
       trays,
+      trayFormatId,
+      tray_format_id: trayFormatId,
+      trayFormatName: trayFormatName || null,
+      tray_format_name: trayFormatName || null,
       plants_per_tray: plantsPerTray > 0 ? plantsPerTray : undefined,
       plantsPerTray: plantsPerTray > 0 ? plantsPerTray : undefined,
       plants: plantsPerGroup,
@@ -7892,10 +7987,24 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Live preview updates
-  ['bsgRoom', 'bsgZone', 'bsgPrefix', 'bsgCount', 'bsgTrays', 'bsgPlantsPerTray', 'bsgLightsPerGroup', 'bsgAutoAssign', 'bsgStandardLight'].forEach(id => {
+  ['bsgRoom', 'bsgZone', 'bsgPrefix', 'bsgCount', 'bsgTrays', 'bsgPlantsPerTray', 'bsgLightsPerGroup', 'bsgAutoAssign', 'bsgStandardLight', 'bsgTrayFormatName'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.addEventListener(el.type === 'checkbox' ? 'change' : 'input', updateBsgPreview);
   });
+
+  // Tray format popup wiring
+  const trayBtn = document.getElementById('bsgSelectTrayFormatBtn');
+  const trayModal = document.getElementById('bsgTrayFormatModal');
+  const trayClose = document.getElementById('bsgTrayFormatClose');
+  const trayCancel = document.getElementById('bsgTrayFormatCancel');
+  if (trayBtn) trayBtn.addEventListener('click', openBsgTrayFormatModal);
+  if (trayClose && trayModal) trayClose.addEventListener('click', () => trayModal.close());
+  if (trayCancel && trayModal) trayCancel.addEventListener('click', () => trayModal.close());
+  if (trayModal) {
+    trayModal.addEventListener('click', (e) => {
+      if (e.target === trayModal) trayModal.close();
+    });
+  }
 
   // Room change → refresh zones + preview
   const bsgRoom = document.getElementById('bsgRoom');
@@ -7917,9 +8026,9 @@ document.addEventListener('DOMContentLoaded', () => {
           dialog.close();
           if (typeof showToast === 'function') {
             const msg = result.skipped > 0
-              ? `Created ${result.created} groups (${result.skipped} skipped — already exist).`
-              : `Created ${result.created} groups as drafts. Assign crop plans and deploy individually.`;
-            showToast({ title: 'Stock Groups Built', msg, kind: 'success', icon: '🏗️' }, 4000);
+              ? `Created ${result.created} growing units (${result.skipped} skipped — already exist).`
+              : `Created ${result.created} growing units as drafts. Assign crop plans and deploy individually.`;
+            showToast({ title: 'Growing Units Built', msg, kind: 'success', icon: '' }, 4000);
           }
         }
       } catch (error) {
@@ -7927,7 +8036,7 @@ document.addEventListener('DOMContentLoaded', () => {
         alert('Failed to create groups: ' + error.message);
       } finally {
         createBtn.disabled = false;
-        createBtn.textContent = 'Create Groups';
+        createBtn.textContent = 'Create Growing Units';
       }
     });
   }

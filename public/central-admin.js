@@ -1934,6 +1934,9 @@ function renderFarmsTable(farms) {
         const farmId = farm.farm_id || farm.farmId || 'unknown';
         const status = farm.status || 'unknown';
         const tier = farm.tier || farm.plan_type || 'standard';
+        const farmName = farm.name || farmId;
+        const safeFarmName = farmName.replace(/'/g, "\\'");
+        const safeFarmEmail = email.replace(/'/g, "\\'");
         
         return `
         <tr>
@@ -1947,6 +1950,7 @@ function renderFarmsTable(farms) {
             <td>${farm.user_count || 0}</td>
             <td>
                 <button class="btn" onclick="drillToFarm('${farmId}')">View</button>
+                <button class="btn" onclick="resetFarmCredentials('${farmId}', '${safeFarmName}', '${safeFarmEmail}')">Reset Password</button>
             </td>
             <td>
                 <button class="btn btn-danger" onclick="deleteFarm('${farmId}', '${farm.name}')">Delete</button>
@@ -1954,6 +1958,52 @@ function renderFarmsTable(farms) {
         </tr>
         `;
     }).join('');
+}
+
+/**
+ * Reset a farm's admin credentials and show temporary password
+ */
+async function resetFarmCredentials(farmId, farmName = '', farmEmail = '') {
+    const confirmed = await showConfirmModal({
+        title: 'Reset Farm Password',
+        message: `Reset credentials for ${farmId}?`,
+        submessage: 'This generates a new temporary password for the farm admin account and rotates the farm API key.',
+        confirmText: 'Reset Password',
+        tone: 'primary'
+    });
+    if (!confirmed) {
+        return;
+    }
+
+    try {
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/farms/${encodeURIComponent(farmId)}/reset-credentials`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+            throw new Error(data.message || data.error || 'Failed to reset farm credentials');
+        }
+
+        const targetEmail = data.email || farmEmail || 'N/A';
+        const displayName = farmName || farmId;
+        alert(
+            `Farm credentials reset successfully.\n\n` +
+            `Farm: ${displayName}\n` +
+            `Farm ID: ${farmId}\n` +
+            `Contact: ${targetEmail}\n\n` +
+            `Temporary Password:\n${data.temp_password}\n\n` +
+            `Share this password securely with the farm admin. They must change it after login.`
+        );
+
+        await loadFarms();
+    } catch (error) {
+        console.error('Error resetting farm credentials:', error);
+        alert(`Failed to reset farm credentials: ${error.message}`);
+    }
 }
 
 /**
