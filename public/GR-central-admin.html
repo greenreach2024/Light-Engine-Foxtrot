@@ -5477,6 +5477,16 @@
                         <div class="kpi-change neutral"><span>GreenReach commission</span></div>
                     </div>
                     <div class="kpi-card">
+                        <div class="kpi-label">Subscription Revenue</div>
+                        <div class="kpi-value" id="central-subscription-revenue">$0.00</div>
+                        <div class="kpi-change neutral"><span id="central-subscription-count">0 completed checkouts</span></div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Data Charges</div>
+                        <div class="kpi-value" id="central-data-charges">&mdash;</div>
+                        <div class="kpi-change neutral"><span id="central-data-charges-note">Metering not yet wired</span></div>
+                    </div>
+                    <div class="kpi-card">
                         <div class="kpi-label">Total Expenses</div>
                         <div class="kpi-value" id="central-total-expenses">$0.00</div>
                         <div class="kpi-change neutral"><span>Accounting ledger</span></div>
@@ -5485,6 +5495,62 @@
                         <div class="kpi-label">Net Margin</div>
                         <div class="kpi-value" id="central-net-margin">&mdash;</div>
                         <div class="kpi-change neutral"><span>Revenue &minus; Expenses</span></div>
+                    </div>
+                </div>
+
+                <!-- Subscription Revenue Detail -->
+                <div class="card" id="central-subscription-detail-card">
+                    <div class="card-header">
+                        <div class="card-title">Subscription Checkouts</div>
+                        <span id="central-subscription-source" class="tiny text-muted" style="font-size:12px;">Source: checkout_sessions</span>
+                    </div>
+                    <div class="card-body">
+                        <div id="central-subscription-by-plan" style="margin-bottom:12px;font-size:14px;color:var(--text-secondary);">
+                            <span class="tiny">Loading plan breakdown…</span>
+                        </div>
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Completed</th>
+                                        <th>Plan</th>
+                                        <th>Amount</th>
+                                        <th>Farm</th>
+                                        <th>Email</th>
+                                        <th>Farm ID</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="central-subscription-recent-tbody">
+                                    <tr><td colspan="7" class="loading">Loading subscriptions…</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <details id="central-subscription-stranded-wrap" style="margin-top:12px;">
+                            <summary style="cursor:pointer;color:var(--text-secondary);font-size:13px;">
+                                Stranded / pending sessions (last 30 days)
+                                <span id="central-subscription-stranded-count" class="tiny text-muted"></span>
+                            </summary>
+                            <div class="table-container" style="margin-top:8px;">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Created</th>
+                                            <th>Plan</th>
+                                            <th>Amount</th>
+                                            <th>Farm</th>
+                                            <th>Email</th>
+                                            <th>Status</th>
+                                            <th>Error</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="central-subscription-stranded-tbody">
+                                        <tr><td colspan="7" class="loading">&mdash;</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </details>
+                        <div id="central-wholesale-diagnostics" class="tiny text-muted" style="margin-top:12px;font-size:12px;"></div>
                     </div>
                 </div>
 

@@ -13251,6 +13251,32 @@ async function loadCentralAccounting() {
         const farmsData = farmsRes?.ok ? await farmsRes.json() : { farms: [] };
         const farms = farmsData.farms || farmsData || [];
 
+        // Fetch subscription checkouts (source: checkout_sessions). Query the
+        // lifetime total — the period filter above still applies to wholesale
+        // numbers, but for subscriptions we want the total so ops can see
+        // everything at a glance. We can re-introduce a period param here
+        // once the KPI card layout has room for a separate selector.
+        let subscriptionData = null;
+        try {
+            const subRes = await authenticatedFetch(
+                `${API_BASE}/api/reports/subscription-revenue`
+            );
+            subscriptionData = subRes?.ok ? await subRes.json() : null;
+        } catch (subErr) {
+            console.warn('[Central Accounting] Subscription revenue unavailable:', subErr);
+        }
+
+        // Fetch data-charge metering (stub until a metering source is wired)
+        let dataChargesData = null;
+        try {
+            const dcRes = await authenticatedFetch(
+                `${API_BASE}/api/reports/data-charges`
+            );
+            dataChargesData = dcRes?.ok ? await dcRes.json() : null;
+        } catch (dcErr) {
+            console.warn('[Central Accounting] Data charges unavailable:', dcErr);
+        }
+
         // Revenue numbers
         const totalRevenue = revenueData?.data?.totalRevenue || 0;
         const orderCount = revenueData?.data?.orderCount || 0;
@@ -13270,8 +13296,12 @@ async function loadCentralAccounting() {
         if (farmPayables > 0) expenseCategories['Farm Payables (COGS)'] = farmPayables;
         if (processingFees > 0) expenseCategories['Processing Fees'] = processingFees;
 
-        // Update KPIs
-        document.getElementById('central-total-revenue').textContent = `$${totalRevenue.toFixed(2)}`;
+        // Update KPIs. Total Revenue rolls up BOTH wholesale orders and
+        // subscription checkouts so the top-line number matches actual cash
+        // into the business. The separate Wholesale/Subscription tiles below
+        // split it so ops can see the mix.
+        const _subRev = Number(subscriptionData?.data?.totalRevenue || 0);
+        document.getElementById('central-total-revenue').textContent = `$${(totalRevenue + _subRev).toFixed(2)}`;
         document.getElementById('central-wholesale-revenue').textContent = `$${totalRevenue.toFixed(2)}`;
         document.getElementById('central-order-count').textContent = orderCount;
         document.getElementById('central-avg-order').textContent = `$${avgOrderValue.toFixed(2)}`;
@@ -13279,8 +13309,134 @@ async function loadCentralAccounting() {
         if (brokerFeesEl) brokerFeesEl.textContent = `$${brokerFeeTotal.toFixed(2)}`;
         document.getElementById('central-total-expenses').textContent = `$${totalExpenses.toFixed(2)}`;
 
-        const margin = totalRevenue > 0
-            ? ((totalRevenue - totalExpenses) / totalRevenue * 100).toFixed(1)
+        // Subscription revenue (source: checkout_sessions). This is a
+        // separate revenue stream from wholesale orders — it's the recurring
+        // Light Engine / Farm Server / Research plan income. Roll it into
+        // Net Margin so the headline number is honest, but display it in its
+        // own KPI card so ops can tell the two streams apart.
+        const subData = subscriptionData?.data || null;
+        const subTotalRevenue = Number(subData?.totalRevenue || 0);
+        const subTotalCount = Number(subData?.totalSubscriptions || 0);
+        const subRevenueEl = document.getElementById('central-subscription-revenue');
+        if (subRevenueEl) subRevenueEl.textContent = `$${subTotalRevenue.toFixed(2)}`;
+        const subCountEl = document.getElementById('central-subscription-count');
+        if (subCountEl) subCountEl.textContent = `${subTotalCount} completed checkout${subTotalCount === 1 ? '' : 's'}`;
+
+        // Plan-breakdown line (e.g. "cloud: $29.00 × 3 · edge: $29.00 × 1")
+        const byPlanEl = document.getElementById('central-subscription-by-plan');
+        if (byPlanEl) {
+            const byPlan = subData?.byPlan || {};
+            const entries = Object.entries(byPlan);
+            if (entries.length > 0) {
+                byPlanEl.textContent = entries
+                    .map(([plan, p]) => `${plan}: $${Number(p.total || 0).toFixed(2)} (${p.count} checkout${p.count === 1 ? '' : 's'})`)
+                    .join(' · ');
+            } else {
+                byPlanEl.textContent = 'No completed subscription checkouts yet.';
+            }
+        }
+
+        // Recent completed subscription checkouts table
+        const subRecentTbody = document.getElementById('central-subscription-recent-tbody');
+        if (subRecentTbody) {
+            const rows = Array.isArray(subData?.recentSessions) ? subData.recentSessions : [];
+            if (rows.length === 0) {
+                subRecentTbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:16px;color:var(--text-secondary);">No completed subscriptions yet.</td></tr>';
+            } else {
+                subRecentTbody.textContent = '';
+                for (const r of rows) {
+                    const tr = document.createElement('tr');
+                    const addCell = (txt) => {
+                        const td = document.createElement('td');
+                        td.textContent = txt ?? '—';
+                        tr.appendChild(td);
+                    };
+                    const completed = r.completed_at ? new Date(r.completed_at).toLocaleString() : (r.created_at ? new Date(r.created_at).toLocaleString() : '—');
+                    const amount = Number(r.amount_cents || 0) / 100;
+                    addCell(completed);
+                    addCell(r.plan_type || '—');
+                    addCell(`$${amount.toFixed(2)} ${r.currency || ''}`.trim());
+                    addCell(r.farm_name || '—');
+                    addCell(r.email || '—');
+                    addCell(r.provisioned_farm_id || '—');
+                    addCell(r.status || '—');
+                    subRecentTbody.appendChild(tr);
+                }
+            }
+        }
+
+        // Stranded / pending sessions — the reconciler (PR #84/#85) should
+        // clear these within 2-3 min of Square completion. If any remain,
+        // surface them so ops can hit /api/purchase/admin/recover-from-square.
+        const subStrandedTbody = document.getElementById('central-subscription-stranded-tbody');
+        const subStrandedCount = document.getElementById('central-subscription-stranded-count');
+        const subStrandedWrap = document.getElementById('central-subscription-stranded-wrap');
+        if (subStrandedTbody) {
+            const stranded = Array.isArray(subData?.strandedSessions) ? subData.strandedSessions : [];
+            if (subStrandedCount) subStrandedCount.textContent = stranded.length ? `(${stranded.length})` : '(0)';
+            if (subStrandedWrap) {
+                // Auto-open if we have anything to surface.
+                if (stranded.length > 0) subStrandedWrap.setAttribute('open', 'open');
+            }
+            if (stranded.length === 0) {
+                subStrandedTbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:12px;color:var(--text-secondary);">No stranded payments.</td></tr>';
+            } else {
+                subStrandedTbody.textContent = '';
+                for (const r of stranded) {
+                    const tr = document.createElement('tr');
+                    const addCell = (txt) => {
+                        const td = document.createElement('td');
+                        td.textContent = txt ?? '—';
+                        tr.appendChild(td);
+                    };
+                    const created = r.created_at ? new Date(r.created_at).toLocaleString() : '—';
+                    const amount = Number(r.amount_cents || 0) / 100;
+                    addCell(created);
+                    addCell(r.plan_type || '—');
+                    addCell(`$${amount.toFixed(2)} ${r.currency || ''}`.trim());
+                    addCell(r.farm_name || '—');
+                    addCell(r.email || '—');
+                    addCell(r.status || '—');
+                    addCell(r.error_message || '—');
+                    subStrandedTbody.appendChild(tr);
+                }
+            }
+        }
+
+        // Wholesale diagnostics — operator should be able to tell at a glance
+        // whether orders are landing in the DB vs silently missing.
+        const diagEl = document.getElementById('central-wholesale-diagnostics');
+        if (diagEl) {
+            const diag = revenueData?.diagnostics || {};
+            const parts = [];
+            if (diag.db_available === false) {
+                parts.push('Wholesale DB unavailable (memory-only mode).');
+            } else if (typeof diag.orders_in_db === 'number') {
+                parts.push(`Wholesale: ${diag.orders_in_db} order${diag.orders_in_db === 1 ? '' : 's'} in DB, ${diag.orders_returned} returned by API, ${diag.payments_in_memory || 0} payments in memory.`);
+            }
+            if (diag.db_error) parts.push(`DB error: ${diag.db_error}`);
+            diagEl.textContent = parts.join(' ');
+        }
+
+        // Data charges — stubbed until a metering source is wired
+        const dcEl = document.getElementById('central-data-charges');
+        const dcNoteEl = document.getElementById('central-data-charges-note');
+        if (dcEl) {
+            const dc = dataChargesData?.data || {};
+            if (dc.available) {
+                dcEl.textContent = `$${Number(dc.totalCharges || 0).toFixed(2)}`;
+                if (dcNoteEl) dcNoteEl.textContent = 'Metered usage';
+            } else {
+                dcEl.textContent = '—';
+                if (dcNoteEl) dcNoteEl.textContent = dc.reason || 'Metering not yet wired';
+            }
+        }
+
+        // Net Margin — include subscription revenue in the numerator so the
+        // headline stays honest.
+        const combinedRevenue = totalRevenue + subTotalRevenue;
+        const margin = combinedRevenue > 0
+            ? ((combinedRevenue - totalExpenses) / combinedRevenue * 100).toFixed(1)
             : '0.0';
         document.getElementById('central-net-margin').textContent = `${margin}%`;
 
