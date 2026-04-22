@@ -3390,7 +3390,7 @@ const SAMPLE_MAX_QTY_PER_ITEM = 2;
 
 function normalizeSampleCart(rawCart) {
   if (!Array.isArray(rawCart)) return [];
-  return rawCart.map((item) => {
+  const normalized = rawCart.map((item) => {
     const isSample = item?.is_sample === true || item?.is_sample === 'true';
     const quantity = Number(item?.quantity);
     return {
@@ -3401,6 +3401,33 @@ function normalizeSampleCart(rawCart) {
       is_sample: isSample
     };
   });
+
+  // Reject mixed carts outright. applySamplePricing zero-prices any allocated
+  // line item whose sku_id appears in a cart line flagged is_sample, so a
+  // cart like [{sku:X, qty:50, paid}, {sku:X, qty:1, sample}] would zero the
+  // 50-unit paid allocation too. Sample orders are a separate UX flow (the
+  // Request Sample button submits a 1-item all-sample cart), so requiring the
+  // cart to be either all samples or all paid keeps the invariant simple
+  // and makes the exploit structurally impossible.
+  const hasSample = normalized.some((it) => it.is_sample === true);
+  const hasPaid = normalized.some((it) => it.is_sample !== true);
+  if (hasSample && hasPaid) {
+    throw new ValidationError('Sample items cannot be combined with paid items in the same order');
+  }
+
+  if (hasSample) {
+    const seen = new Set();
+    for (const it of normalized) {
+      const key = String(it.sku_id || '');
+      if (!key) continue;
+      if (seen.has(key)) {
+        throw new ValidationError('Duplicate sample lines for the same SKU are not allowed');
+      }
+      seen.add(key);
+    }
+  }
+
+  return normalized;
 }
 
 function cartIsAllSamples(cart) {

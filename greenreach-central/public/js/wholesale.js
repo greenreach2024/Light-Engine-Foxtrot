@@ -315,6 +315,9 @@
         const addBtn = target.closest('[data-action="add-to-cart"]');
         if (addBtn) return this.addToCart(addBtn.dataset.skuid);
 
+        const sampleBtn = target.closest('[data-action="request-sample"]');
+        if (sampleBtn) return this.requestSample(sampleBtn.dataset.skuid);
+
         const removeBtn = target.closest('[data-action="remove-from-cart"]');
         if (removeBtn) return this.removeFromCart(removeBtn.dataset.skuid);
 
@@ -1303,6 +1306,7 @@
             <div class="sku-actions">
               <input type="number" id="qty-${escapeAttr(sku.sku_id)}" min="0.1" step="0.1" max="${Number(sku.total_qty_available) || 0}" value="1" />
               <button data-action="add-to-cart" data-skuid="${escapeAttr(sku.sku_id)}">Add to Cart</button>
+              <button data-action="request-sample" data-skuid="${escapeAttr(sku.sku_id)}" class="sku-sample-btn" title="Free sample \u2014 one case, no charge, no card required">Request Sample</button>
             </div>
           </div>
         `
@@ -1488,6 +1492,81 @@
       this.renderCart();
       this.saveCart();
       this.showToast('Removed from cart', 'info');
+    },
+
+    // Submits a free $0 sample order for a single SKU. Uses the buyer's
+    // stored delivery address + today+2d delivery date so a sample can be
+    // placed from the produce card in one click — no card required, even
+    // if the buyer has never saved one. Server enforces is_sample pricing
+    // and skips Square; see POST /api/wholesale/checkout/execute.
+    async requestSample(skuId) {
+      const sku = (this.catalog || []).find((s) => s.sku_id === skuId);
+      if (!sku) {
+        this.showToast('Unable to find that product', 'error');
+        return;
+      }
+      if (!this.currentBuyer) {
+        this.showAuthModal('sign-in');
+        this.showToast('Sign in to request free samples', 'info');
+        return;
+      }
+      if (this._requestingSample) return;
+      this._requestingSample = true;
+
+      const buyerLoc = this.currentBuyer.location || {};
+      const deliveryAddress = {
+        street: buyerLoc.address1 || buyerLoc.street || 'TBD',
+        city: buyerLoc.city || 'TBD',
+        province: buyerLoc.province || buyerLoc.state || 'ON',
+        postalCode: buyerLoc.postalCode || buyerLoc.zip || 'TBD',
+        zip: buyerLoc.postalCode || buyerLoc.zip || 'TBD',
+        country: buyerLoc.country || 'Canada',
+        instructions: 'Free sample request via wholesale portal'
+      };
+      const deliveryDate = this.getDefaultDeliveryDate
+        ? this.getDefaultDeliveryDate()
+        : new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 10);
+
+      try {
+        this.showToast(`Requesting sample of ${sku.product_name}…`, 'info');
+        const { response, json } = await this.apiFetch('/api/wholesale/checkout/execute', {
+          method: 'POST',
+          body: JSON.stringify({
+            buyer_id: this.currentBuyer?.id,
+            buyer_account: {
+              name: this.currentBuyer?.contactName || this.currentBuyer?.businessName || this.currentBuyer?.email,
+              email: this.currentBuyer?.email
+            },
+            delivery_date: deliveryDate,
+            delivery_address: deliveryAddress,
+            recurrence: { cadence: 'one_time' },
+            cart: [{ sku_id: sku.sku_id, quantity: 1, is_sample: true }],
+            allocation_strategy: 'cheapest',
+            payment_provider: 'sample',
+            fulfillment_method: 'delivery',
+            delivery_fee: 0,
+            sourcing: { mode: 'auto_network' }
+          })
+        });
+
+        if (!response.ok || json?.status !== 'ok') {
+          const msg = json?.message || json?.detail || 'Unable to request sample';
+          this.showToast(msg, 'error');
+          return;
+        }
+
+        this.orders = [json.data, ...(Array.isArray(this.orders) ? this.orders : [])];
+        this.showToast(
+          `Sample requested! ${sku.product_name} — your farm has been notified.`,
+          'success',
+          { prominent: true, duration: 6000 }
+        );
+      } catch (err) {
+        console.error('[Wholesale] Sample request error:', err);
+        this.showToast('Network error requesting sample', 'error');
+      } finally {
+        this._requestingSample = false;
+      }
     },
 
     updateCartQty(skuId, delta) {
