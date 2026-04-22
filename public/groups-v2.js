@@ -7239,7 +7239,7 @@ async function executeBuildStockGroups() {
     const groupIdSuffix = String(i).padStart(3, '0');
     const sanitizedPrefix = (prefix || 'GRP').replace(/\s+/g, '').toUpperCase();
     const groupId = groupIdPrefix
-      ? `${groupIdPrefix}${groupIdSuffix}`
+      ? `${groupIdPrefix}${sanitizedPrefix}-${groupIdSuffix}`
       : `GID-${(roomId || room || 'ROOM').replace(/\s+/g, '').toUpperCase()}-${(zone || 'Z').toString().toUpperCase()}-${sanitizedPrefix}-${groupIdSuffix}`;
 
     // If a Standard Controller was picked, pre-bind every group to it so
