@@ -2718,11 +2718,6 @@
 
                 </div>
 
-                <!-- Save Button -->
-                <div style="margin-top: 30px; display: flex; justify-content: flex-end; gap: 15px;">
-                    <button class="btn-secondary" onclick="resetSettings()">Reset to Defaults</button>
-                    <button class="btn-primary" onclick="saveSettings()">Save Settings</button>
-                </div>
             </div>
 
             <!-- Edit Certifications Modal -->
@@ -2811,9 +2806,9 @@
                             ============================================================================
                         -->
                         
-                        <div style="display: flex; gap: 10px; justify-content: flex-end;">
-                            <button type="button" class="btn-secondary" onclick="closeEditCertificationsModal()" style="padding: 10px 20px;">Cancel</button>
-                            <button type="submit" class="btn-primary" style="padding: 10px 20px;">Save Changes</button>
+                        <div style="display: flex; gap: 10px; justify-content: flex-end; padding-top: 15px; border-top: 1px solid var(--border); align-items: center;">
+                            <span id="cert-autosave-status" style="font-size: 12px; color: var(--text-muted); margin-right: auto;">Changes are saved automatically.</span>
+                            <button type="button" class="btn-evie" onclick="closeEditCertificationsModal()" style="padding: 10px 20px;">Close</button>
                         </div>
                     </form>
                 </div>
