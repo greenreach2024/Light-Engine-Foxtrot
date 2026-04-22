@@ -7231,11 +7231,16 @@ async function executeBuildStockGroups() {
 
     // Stable group_id separate from the human-facing id/name so downstream
     // consumers (inventory, recipe assignment, wholesale portal, accounting)
-    // have a durable identifier that survives rename/zone changes.
+    // have a durable identifier that survives rename/zone changes. The
+    // auto-generated form includes the sanitized name prefix so running
+    // Build Stock Groups twice in the same room+zone with different name
+    // prefixes (e.g. "Bench" then "Shelf") doesn't collide on the
+    // planting_assignments UNIQUE(farm_id, group_id) constraint.
     const groupIdSuffix = String(i).padStart(3, '0');
+    const sanitizedPrefix = (prefix || 'GRP').replace(/\s+/g, '').toUpperCase();
     const groupId = groupIdPrefix
       ? `${groupIdPrefix}${groupIdSuffix}`
-      : `GID-${(roomId || room || 'ROOM').replace(/\s+/g, '').toUpperCase()}-${(zone || 'Z').toString().toUpperCase()}-${groupIdSuffix}`;
+      : `GID-${(roomId || room || 'ROOM').replace(/\s+/g, '').toUpperCase()}-${(zone || 'Z').toString().toUpperCase()}-${sanitizedPrefix}-${groupIdSuffix}`;
 
     // If a Standard Controller was picked, pre-bind every group to it so
     // step 5 (Controllers) reflects the intent from step 3 without the
@@ -7304,6 +7309,46 @@ async function executeBuildStockGroups() {
       showToast({ title: 'Save Failed', msg: `Groups created in memory but failed to save: ${error.message}`, kind: 'error' });
     }
     return { created, skipped };
+  }
+
+  // Mirror any inline Standard Controller assignments to the controller-
+  // bindings store so step 5 (Controllers) renders them. The per-group
+  // controller_bindings[] on groups.json is the durable local record; this
+  // POST registers the same intent against /api/controller-bindings which
+  // is what grow-management.html#flow-controllers reads from.
+  if (standardControllerId) {
+    const createdGroups = window.STATE.groups.slice(-created);
+    const f = window.authFetch || fetch;
+    await Promise.all(createdGroups.map(async g => {
+      try {
+        const res = await f('/api/controller-bindings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            instanceId: g.id,
+            controllerId: standardControllerId,
+            channel: 0,
+            controlType: 'group_binding',
+            subsystem: 'groups',
+            roomId: g.roomId || null,
+            zoneId: g.zoneId || null,
+            deviceName: g.name
+          })
+        });
+        if (res && res.ok) {
+          const json = await res.json();
+          const newBinding = json && json.binding;
+          if (newBinding && newBinding.id && Array.isArray(g.controller_bindings) && g.controller_bindings[0]) {
+            // Enrich the local record with the server-assigned binding id
+            // so later edits/deletes can address it.
+            g.controller_bindings[0].bindingId = newBinding.id;
+          }
+        }
+      } catch (e) {
+        // Non-fatal — the local controller_bindings[] entry is still persisted.
+        console.warn('[Build Stock] controller-bindings POST failed for', g.id, e);
+      }
+    }));
   }
 
   // Update UI
