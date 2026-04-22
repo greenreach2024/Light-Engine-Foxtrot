@@ -1263,8 +1263,20 @@
         `).join('');
       } catch (error) {
         console.error('Failed to load inventory:', error);
-        if (grid) grid.innerHTML = `<div class="empty-state" style="padding: 1.5rem; text-align: center; color: var(--error);">Could not load inventory: ${error.message}</div>`;
-        if (table) table.innerHTML = `<tr><td colspan="9" style="text-align:center; padding:1.5rem; color: var(--error);">Failed to load inventory: ${error.message}</td></tr>`;
+        // Use textContent to avoid injecting unsanitized server-provided error strings as HTML.
+        if (grid) {
+          grid.innerHTML = '';
+          const d = document.createElement('div');
+          d.className = 'empty-state';
+          d.style.cssText = 'padding: 1.5rem; text-align: center; color: var(--error);';
+          d.textContent = 'Could not load inventory: ' + error.message;
+          grid.appendChild(d);
+        }
+        if (table) {
+          table.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:1.5rem; color: var(--error);"></td></tr>';
+          const cell = table.querySelector('td');
+          if (cell) cell.textContent = 'Failed to load inventory: ' + error.message;
+        }
       }
     }
     
