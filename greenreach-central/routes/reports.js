@@ -24,10 +24,17 @@ const router = express.Router();
 async function ensureDataChargesTable() {
   if (!isDatabaseAvailable()) return false;
   try {
+    // farm_id is NOT NULL DEFAULT '' (not nullable) so the composite UNIQUE
+    // constraint below actually enforces idempotency: in PostgreSQL, NULLs
+    // are treated as distinct in UNIQUE constraints, which would make the
+    // ON CONFLICT upsert a no-op for system-wide (unattributable) charges
+    // and silently create duplicates on re-ingest. The empty-string
+    // sentinel '' means "not attributable to any single farm" — callers
+    // that omit farm_id have their value coerced to '' before insert.
     await query(`
       CREATE TABLE IF NOT EXISTS data_charges (
         id SERIAL PRIMARY KEY,
-        farm_id VARCHAR(255),
+        farm_id VARCHAR(255) NOT NULL DEFAULT '',
         period_start TIMESTAMPTZ NOT NULL,
         period_end TIMESTAMPTZ NOT NULL,
         bytes_egress BIGINT DEFAULT 0,
@@ -39,6 +46,14 @@ async function ensureDataChargesTable() {
         UNIQUE(farm_id, period_start, period_end, source)
       )
     `);
+    // Best-effort in-place migration for an older deploy that created the
+    // table with a nullable farm_id. Safe to run every boot: the UPDATE is
+    // a no-op when nothing is NULL, and the ALTERs succeed idempotently.
+    try {
+      await query(`UPDATE data_charges SET farm_id = '' WHERE farm_id IS NULL`);
+      await query(`ALTER TABLE data_charges ALTER COLUMN farm_id SET DEFAULT ''`);
+      await query(`ALTER TABLE data_charges ALTER COLUMN farm_id SET NOT NULL`);
+    } catch (_) { /* older shapes or permission quirks — non-fatal */ }
     await query(`CREATE INDEX IF NOT EXISTS idx_data_charges_period_end ON data_charges(period_end)`);
     return true;
   } catch (err) {
@@ -307,9 +322,28 @@ router.get('/data-charges', async (req, res) => {
 
     const fromDate = parseDateParam(req.query.from);
     const toDate = parseDateParam(req.query.to);
-    const farmId = typeof req.query.farm_id === 'string' && req.query.farm_id.trim()
+    const requestedFarmId = typeof req.query.farm_id === 'string' && req.query.farm_id.trim()
       ? req.query.farm_id.trim()
       : null;
+
+    // Multi-tenant isolation (CONTRIBUTING.md): non-admin callers may only
+    // see their own farm's charges — a farm-JWT user cannot query across
+    // farms by omitting or spoofing ?farm_id. Only admin-JWT / API-key
+    // callers (farmId === 'ADMIN') may query network-wide or scope to an
+    // arbitrary farm. A non-admin with no farm context is rejected.
+    const isAdmin = req.user?.farmId === 'ADMIN' || req.user?.authMethod === 'admin-jwt';
+    let farmId;
+    if (isAdmin) {
+      farmId = requestedFarmId; // may be null = network-wide
+    } else {
+      const callerFarmId = req.user?.farmId || null;
+      if (!callerFarmId) {
+        return res.status(401).json({ success: false, error: 'farm context required' });
+      }
+      // Silently ignore any caller-supplied farm_id for non-admins so they
+      // can't leak across tenants by guessing query params.
+      farmId = callerFarmId;
+    }
 
     const clauses = [];
     const params = [];
@@ -374,6 +408,7 @@ router.get('/data-charges', async (req, res) => {
         from: fromDate ? fromDate.toISOString() : null,
         to: toDate ? toDate.toISOString() : null,
         farm_id: farmId,
+        scope: isAdmin ? (farmId ? 'admin_farm' : 'admin_network') : 'farm_self',
       },
       generatedAt: new Date().toISOString(),
     });
@@ -434,7 +469,11 @@ router.post('/data-charges/ingest', adminAuthMiddleware, express.json(), async (
              amount_usd   = EXCLUDED.amount_usd,
              note         = EXCLUDED.note`,
           [
-            r.farm_id || null,
+            // farm_id is NOT NULL DEFAULT '' so the UNIQUE constraint can
+            // enforce idempotency on records with no farm attribution;
+            // coerce to empty string on insert so the ON CONFLICT target
+            // matches both new and existing rows.
+            (r.farm_id && String(r.farm_id).trim()) || '',
             periodStart.toISOString(),
             periodEnd.toISOString(),
             Number(r.bytes_egress || 0),
