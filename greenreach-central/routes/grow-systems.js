@@ -23,17 +23,57 @@ import {
 import { scoreTemplate } from '../lib/grow-system-scoring.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const REGISTRY_PATH = resolve(__dirname, '..', 'public', 'data', 'grow-systems.json');
+
+// Candidate registry paths, in priority order:
+//   1. /opt/grow-systems.json — Docker-baked copy that lives OUTSIDE any GCS
+//      FUSE mount. This is the prod-safe location (same pattern as
+//      /opt/recipes-v2) and must always win on Cloud Run, where `/app/data`
+//      and potentially `/app/public/data` are shadowed by GCS mounts that do
+//      not contain this file.
+//   2. Service-local `public/data/grow-systems.json` — works for
+//      `npm run dev` from greenreach-central/.
+//   3. Repo-root `public/data/grow-systems.json` — works for top-level dev
+//      runs where the service is launched from the repo root.
+// The first readable path wins.
+const REGISTRY_PATHS = [
+  '/opt/grow-systems.json',
+  resolve(__dirname, '..', 'public', 'data', 'grow-systems.json'),
+  resolve(__dirname, '..', '..', 'public', 'data', 'grow-systems.json'),
+];
 
 const router = Router();
 
 // -- Cache the registry in memory (reload on first request + expose reload) --
 let registryCache = null;
+let lastLoadError = null;
 
 async function loadRegistry() {
-  const raw = await readFile(REGISTRY_PATH, 'utf-8');
-  registryCache = JSON.parse(raw);
-  return registryCache;
+  const attempts = [];
+  for (const p of REGISTRY_PATHS) {
+    try {
+      const raw = await readFile(p, 'utf-8');
+      registryCache = JSON.parse(raw);
+      lastLoadError = null;
+      return registryCache;
+    } catch (err) {
+      attempts.push(`${p}: ${err.code || err.name}: ${err.message}`);
+    }
+  }
+  // Full attempts list (with absolute paths) is only for server logs — do NOT
+  // propagate it to clients. Tag the error so the route handlers can recognise
+  // it and substitute a generic message before responding.
+  console.error('[GrowSystems] registry load failed. Tried:\n  ' + attempts.join('\n  '));
+  lastLoadError = new Error('grow-systems registry unavailable');
+  lastLoadError.isRegistryLoadError = true;
+  throw lastLoadError;
+}
+
+// Sanitize error messages bubbled up to clients: errors from loadRegistry()
+// must never expose filesystem paths (CWE-209). Any error flagged as a
+// registry-load failure is replaced with a generic string.
+function safeErrorMessage(err, fallback) {
+  if (err && err.isRegistryLoadError) return fallback;
+  return (err && err.message) || fallback;
 }
 
 async function getRegistry() {
@@ -60,6 +100,8 @@ router.get('/', async (_req, res) => {
       templates: registry.templates
     });
   } catch (err) {
+    // Full err.message contains absolute filesystem paths — log it server-side
+    // but DO NOT echo it to clients (CWE-209 information disclosure).
     console.error('[GrowSystems] Failed to load registry:', err.message);
     res.status(500).json({ ok: false, error: 'Failed to load grow-systems registry' });
   }
@@ -177,8 +219,13 @@ router.post('/compute-room-load', async (req, res) => {
     });
   } catch (err) {
     console.error('[GrowSystems] compute-room-load failed:', err.message);
-    const status = err.message.includes('not found in registry') ? 400 : 500;
-    res.status(status).json({ ok: false, error: err.message });
+    const status = err.isRegistryLoadError
+      ? 500
+      : err.message.includes('not found in registry') ? 400 : 500;
+    res.status(status).json({
+      ok: false,
+      error: safeErrorMessage(err, 'Failed to compute room load'),
+    });
   }
 });
 
@@ -224,7 +271,10 @@ router.post('/:templateId/score', async (req, res) => {
     res.json({ ok: true, scores });
   } catch (err) {
     console.error('[GrowSystems] score failed:', err.message);
-    res.status(500).json({ ok: false, error: err.message });
+    res.status(500).json({
+      ok: false,
+      error: safeErrorMessage(err, 'Failed to score template'),
+    });
   }
 });
 

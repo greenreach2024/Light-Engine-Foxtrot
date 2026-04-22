@@ -19,6 +19,10 @@ COPY . .
 # Copy recipe CSVs outside /app/data so GCS FUSE mount doesn't shadow them
 RUN cp -r data/recipes-v2 /opt/recipes-v2
 
+# Copy grow-systems registry outside /app so GCS FUSE mounts over public/data
+# cannot shadow it. Routes fall back to the in-repo path for local dev.
+RUN cp public/data/grow-systems.json /opt/grow-systems.json
+
 ENV NODE_ENV=production
 ENV PORT=8080
 ENV DEPLOYMENT_MODE=cloud
