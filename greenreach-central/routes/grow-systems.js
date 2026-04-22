@@ -50,10 +50,21 @@ async function loadRegistry() {
       attempts.push(`${p}: ${err.code || err.name}: ${err.message}`);
     }
   }
-  lastLoadError = new Error(
-    `grow-systems registry not found. Tried:\n  ${attempts.join('\n  ')}`
-  );
+  // Full attempts list (with absolute paths) is only for server logs — do NOT
+  // propagate it to clients. Tag the error so the route handlers can recognise
+  // it and substitute a generic message before responding.
+  console.error('[GrowSystems] registry load failed. Tried:\n  ' + attempts.join('\n  '));
+  lastLoadError = new Error('grow-systems registry unavailable');
+  lastLoadError.isRegistryLoadError = true;
   throw lastLoadError;
+}
+
+// Sanitize error messages bubbled up to clients: errors from loadRegistry()
+// must never expose filesystem paths (CWE-209). Any error flagged as a
+// registry-load failure is replaced with a generic string.
+function safeErrorMessage(err, fallback) {
+  if (err && err.isRegistryLoadError) return fallback;
+  return (err && err.message) || fallback;
 }
 
 async function getRegistry() {
@@ -199,8 +210,13 @@ router.post('/compute-room-load', async (req, res) => {
     });
   } catch (err) {
     console.error('[GrowSystems] compute-room-load failed:', err.message);
-    const status = err.message.includes('not found in registry') ? 400 : 500;
-    res.status(status).json({ ok: false, error: err.message });
+    const status = err.isRegistryLoadError
+      ? 500
+      : err.message.includes('not found in registry') ? 400 : 500;
+    res.status(status).json({
+      ok: false,
+      error: safeErrorMessage(err, 'Failed to compute room load'),
+    });
   }
 });
 
@@ -246,7 +262,10 @@ router.post('/:templateId/score', async (req, res) => {
     res.json({ ok: true, scores });
   } catch (err) {
     console.error('[GrowSystems] score failed:', err.message);
-    res.status(500).json({ ok: false, error: err.message });
+    res.status(500).json({
+      ok: false,
+      error: safeErrorMessage(err, 'Failed to score template'),
+    });
   }
 });
 
