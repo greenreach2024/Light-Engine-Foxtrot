@@ -335,12 +335,95 @@ function farmIdFromReq(req) {
   return process.env.FARM_ID || 'default';
 }
 
+// ─────────────────────────────────────────────────────────────
+// KEY CASE NORMALIZER (Gap #6)
+// ─────────────────────────────────────────────────────────────
+//
+// farm_data is schemaless JSONB — different writers (wizard, farm-admin
+// JS, edge sync, admin ops agent) have historically emitted the same
+// logical field in both snake_case (`length_m`, `pickup_schedule`) and
+// camelCase (`lengthM`, `pickupSchedule`). Readers compensate with long
+// `?? ?? ??` chains (see views/grow-management-room-build-plan.js:92-100),
+// but any reader that checks only one form silently misses the value,
+// causing things like the 20m×15m default-room fallback the user has
+// seen repeatedly. The normalizer below mirrors top-level string keys
+// (and one level of nested objects) between the two cases on both the
+// write path AND the read path, non-destructively: if both forms are
+// already present, neither is overwritten. Data types known to carry
+// drift are listed in NORMALIZED_TYPES; others pass through untouched
+// so large, hot-path payloads (telemetry, inventory arrays) aren't
+// walked every call.
+
+const NORMALIZED_TYPES = new Set([
+  'rooms', 'room_map', 'farm_settings', 'farm_profile', 'config',
+]);
+
+function _toCamel(key) {
+  return key.replace(/_+([a-z0-9])/gi, (_, c) => c.toUpperCase());
+}
+function _toSnake(key) {
+  return key
+    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+    .replace(/([A-Z])([A-Z][a-z])/g, '$1_$2')
+    .toLowerCase();
+}
+
+function _mirrorKeys(obj) {
+  if (obj == null || typeof obj !== 'object' || Array.isArray(obj)) return obj;
+  const out = { ...obj };
+  for (const [k, v] of Object.entries(obj)) {
+    if (typeof k !== 'string') continue;
+    // Only mirror simple identifier keys — skip quoted UUIDs, dotted
+    // paths, numeric strings, or anything with non-identifier chars.
+    if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(k)) continue;
+    const camel = _toCamel(k);
+    const snake = _toSnake(k);
+    if (camel !== k && !(camel in out)) out[camel] = v;
+    if (snake !== k && !(snake in out)) out[snake] = v;
+  }
+  return out;
+}
+
+function _normalizeDeep(value, depth) {
+  if (depth <= 0) return value;
+  if (Array.isArray(value)) {
+    return value.map(v => _normalizeDeep(v, depth - 1));
+  }
+  if (value && typeof value === 'object') {
+    const mirrored = _mirrorKeys(value);
+    const out = {};
+    for (const [k, v] of Object.entries(mirrored)) {
+      out[k] = _normalizeDeep(v, depth - 1);
+    }
+    return out;
+  }
+  return value;
+}
+
+/**
+ * Schema-guard / case normalizer for farm_data payloads. Applied symmetrically
+ * on write (set) and read (unwrap) for types known to carry snake/camel drift.
+ * Safe to call on any value — pass-through when dataType isn't registered.
+ * Exported for unit tests; also used by normalizeFarmDataPayload.
+ */
+export function normalizeFarmDataPayload(dataType, data) {
+  if (!NORMALIZED_TYPES.has(dataType)) return data;
+  if (data == null) return data;
+  // Cap depth so a pathological nested payload can't blow the stack.
+  // depth=3 covers rooms[0].dimensions.lengthM and farm_settings.fulfillment.pickup_schedule.
+  return _normalizeDeep(data, 3);
+}
+
 /**
  * Normalize data coming out of DB. Some data types store as {groups: [...]}
  * but callers expect just the array.
  */
 function unwrap(dataType, data) {
   if (data == null) return DEFAULTS[dataType] ?? null;
+  // Mirror snake/camel for drift-prone types before shape normalization.
+  if (NORMALIZED_TYPES.has(dataType)) {
+    data = normalizeFarmDataPayload(dataType, data);
+  }
 
   switch (dataType) {
     case 'groups':
@@ -377,9 +460,15 @@ function unwrap(dataType, data) {
 
 /**
  * Prepare data for DB storage — wrap arrays in objects for consistency.
+ * For drift-prone types (see NORMALIZED_TYPES), mirrors snake/camel keys
+ * at write time so the row is readable under either convention even if a
+ * caller bypasses the read-side normalizer (e.g. the sync connector, an
+ * admin SQL query, or another service that reads farm_data directly).
  */
 function wrap(dataType, data) {
-  // Store the data as-is — the unwrap function handles normalization on read
+  if (NORMALIZED_TYPES.has(dataType)) {
+    return normalizeFarmDataPayload(dataType, data);
+  }
   return data;
 }
 
