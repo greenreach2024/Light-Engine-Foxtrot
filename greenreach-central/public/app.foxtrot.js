@@ -9570,15 +9570,16 @@ class DeviceManagerWindow {
     try {
       const resp = await fetchWithFarmAuth('/discovery/devices');
       if (!resp.ok) {
-        // Parse the proxy's structured 502/503/504 responses so the operator
-        // sees the real reason (no edge controller registered, timeout, etc.)
-        // instead of the old opaque "Discovery failed - no devices found".
+        // Parse the proxy's structured 502/503/504 responses so the
+        // operator sees the real reason (discovery service unreachable,
+        // no farm endpoint configured, timeout, etc.) instead of the old
+        // opaque "Discovery failed - no devices found".
         let upstreamError = null;
         try { upstreamError = await resp.json(); } catch (e) {}
         const message = upstreamError?.message || upstreamError?.error || `HTTP ${resp.status}`;
-        const needsEdge = resp.status === 503 || /no farm endpoint|no eligible/i.test(message);
-        const friendly = needsEdge
-          ? 'Device discovery needs a Light Engine edge controller on the farm LAN. Register an edge farm or run this from the on-site terminal.'
+        const unavailable = resp.status === 503 || /no farm endpoint|no eligible/i.test(message);
+        const friendly = unavailable
+          ? 'Device discovery service is unavailable. The farm discovery endpoint did not respond — try again in a minute or contact support if the issue persists.'
           : `Discovery upstream error: ${message}`;
         const err = new Error(friendly);
         err.status = resp.status;
@@ -9623,7 +9624,7 @@ class DeviceManagerWindow {
       this.devices = [];
       const friendlyMessage = err?.friendly
         || (err?.status === 503
-          ? 'Device discovery needs a Light Engine edge controller on the farm LAN. Register an edge farm or run this from the on-site terminal.'
+          ? 'Device discovery service is unavailable. The farm discovery endpoint did not respond — try again in a minute or contact support if the issue persists.'
           : 'Device discovery failed. Please check network connectivity and try again.');
       if (this.statusEl) this.statusEl.textContent = friendlyMessage;
       showToast({
