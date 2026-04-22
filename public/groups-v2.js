@@ -6460,7 +6460,13 @@ function editStandardGroup(groupId) {
   // Show editing indicator
   showGroupsV2EditingIndicator(groupId);
 
-  // Scroll the plan form into view
+  // Scroll the plan form into view. The form now lives inside a collapsed
+  // <details id="groupsV2PlanFormWrap"> disclosure ("Advanced: manual group
+  // editor") so first-run operators don't see two identical cards. Editing
+  // a group from the group list must force that disclosure open so the
+  // fields are actually visible after scroll.
+  const wrap = document.getElementById('groupsV2PlanFormWrap');
+  if (wrap && 'open' in wrap) wrap.open = true;
   const form = document.getElementById('groupsV2PlanForm');
   if (form) form.scrollIntoView({ behavior: 'smooth', block: 'start' });
 

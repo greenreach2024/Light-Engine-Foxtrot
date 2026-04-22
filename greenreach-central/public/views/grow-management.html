@@ -892,12 +892,24 @@
         <div id="rbpBody" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;"></div>
       </section>
 
-    <!-- Groups V2 Panel (always visible, dark-themed) -->
+    <!-- Groups V2 Panel
+         The Build Stock Groups card above is the primary operator entry
+         point. The identity/actions row below duplicates those fields for
+         power users who want inline edit; it is collapsed into an
+         advanced-mode disclosure so first-run operators don't see two
+         visually identical cards in a row. -->
     <section id="groupsV2Panel" data-card-prefix="GR" data-card-code="GV2">
       <div class="panel-body" style="display:flex;flex-direction:column;gap:18px;">
 
-        <!-- ===== IDENTITY + ACTIONS ===== -->
-        <div class="gm-card" id="groupsV2PlanForm" style="display:flex;flex-direction:column;gap:16px;">
+        <!-- ===== IDENTITY + ACTIONS (advanced / inline editor) ===== -->
+        <details class="gm-card" id="groupsV2PlanFormWrap" style="padding:12px 14px;">
+          <summary style="cursor:pointer;color:#e2e8f0;font-weight:600;font-size:0.95rem;">
+            Advanced: manual group editor
+            <span class="tiny text-muted" style="font-weight:400;margin-left:6px;">
+              (prefer the Build Stock Groups card above for new groups)
+            </span>
+          </summary>
+        <div id="groupsV2PlanForm" style="display:flex;flex-direction:column;gap:16px;margin-top:12px;">
           <div class="row row--wrap" style="gap:12px;align-items:flex-end;" id="groupsV2PlanControls">
             <label class="tiny" style="display:flex;flex-direction:column;min-width:180px;">
               Room
@@ -1077,7 +1089,8 @@
           <div id="groupsV2PlanPreview"></div>
           <div id="groupsV2PlanCard" style="display:none;"></div>
           <div id="groupsV2PlanDeck" style="display:none;"></div>
-        </div>
+        </div><!-- /#groupsV2PlanForm -->
+        </details><!-- /#groupsV2PlanFormWrap -->
 
         <!-- ===== EDITING INDICATOR ===== -->
         <div id="groupsV2EditingIndicator" style="display:none;align-items:center;gap:8px;padding:8px 14px;border-radius:10px;font-size:0.85rem;">

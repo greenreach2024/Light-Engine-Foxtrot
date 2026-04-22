@@ -641,7 +641,7 @@
             0: "Welcome! I'm Evie, your farm assistant. I'll walk you through each step — reach out through the dashboard any time if you get stuck.",
             1: "Set a strong password (min. 8 chars). This is your admin login; everyone on your team can be invited after setup.",
             2: "Your farm profile shows up on invoices, the wholesale directory, and the storefront. A real contact email and phone help buyers reach you quickly.",
-            3: "Add every grow room you're using — size matters, so the 3D planner and grow-unit recommendations line up with reality. You can edit rooms later from Grow Management.",
+            3: "Add every grow room you're using — enter real length/width/ceiling height in metres and how many zones you want inside. These drive the 3D planner and my grow-unit recommendations, so don't leave them blank: without real dimensions I'll refuse to recommend a unit count. You can edit rooms later from Grow Management.",
             4: "Business Details: set operating hours, pick the certifications you actually hold, and flag whether you've already connected Square. Anything blank here I'll remind you about from the Getting Started checklist.",
             5: "Install the Activity Hub on the iPad you use on the farm floor. It's offline-ready, so crew tasks don't stall if Wi-Fi dips.",
             6: "Setup is complete. I'll be in the bottom-right of the dashboard — click me whenever you need help with payments, inventory, or orders."
@@ -770,6 +770,19 @@
                 alert('Please add at least one grow room');
                 return false;
             }
+            // Require real dimensions. Previously this step only asked for name
+            // + type, which left downstream surfaces (Room Build Plan, 3D
+            // viewer, grow-unit recommender) with no dims and they silently
+            // fell back to a 20x15 default, producing bogus "48 units" advice
+            // for a 6x3 room.
+            const missingDims = farmData.rooms.find(r =>
+                !(Number.isFinite(r.length_m) && r.length_m > 0) ||
+                !(Number.isFinite(r.width_m) && r.width_m > 0)
+            );
+            if (missingDims) {
+                alert(`Please enter length and width for "${missingDims.name}". Zero or blank dimensions break the grow-unit recommender.`);
+                return false;
+            }
             return true;
         }
 
@@ -822,6 +835,29 @@
                         ${discoveredDevices.length === 0 ? 'Run device scan above to auto-discover controllers' : 'Select from discovered devices or leave empty'}
                     </small>
                 </div>
+                <div class="form-group">
+                    <label class="form-label">Dimensions (metres)</label>
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem;">
+                        <label style="display: flex; flex-direction: column; font-size: 0.8rem; color: var(--text-muted);">
+                            Length
+                            <input type="number" class="form-input" data-field="lengthM" min="0.1" step="0.1" placeholder="e.g., 6">
+                        </label>
+                        <label style="display: flex; flex-direction: column; font-size: 0.8rem; color: var(--text-muted);">
+                            Width
+                            <input type="number" class="form-input" data-field="widthM" min="0.1" step="0.1" placeholder="e.g., 3">
+                        </label>
+                        <label style="display: flex; flex-direction: column; font-size: 0.8rem; color: var(--text-muted);">
+                            Ceiling height
+                            <input type="number" class="form-input" data-field="ceilingHeightM" min="0.1" step="0.1" placeholder="e.g., 3.5">
+                        </label>
+                    </div>
+                    <small style="color: var(--text-muted); display: block; margin-top: 0.35rem;">Real numbers only — the grow-unit recommender uses these to fit templates into your actual space.</small>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Zones inside this room</label>
+                    <input type="number" class="form-input" data-field="zoneCount" min="1" max="12" step="1" value="1" placeholder="e.g., 1">
+                    <small style="color: var(--text-muted);">Pick the number of photoperiod / maintenance zones you'll split this room into. Default 1 if unsure — you can add more later.</small>
+                </div>
             `;
             roomsContainer.appendChild(roomCard);
         }
@@ -834,16 +870,40 @@
         function collectRooms() {
             farmData.rooms = [];
             const roomCards = document.querySelectorAll('#rooms-container .room-card');
-            
+
             roomCards.forEach(card => {
                 const name = card.querySelector('[data-field="name"]').value.trim();
                 const type = card.querySelector('[data-field="type"]').value;
                 const lightControllerValue = card.querySelector('[data-field="lightController"]').value;
 
+                const readNum = (selector) => {
+                    const el = card.querySelector(selector);
+                    if (!el) return null;
+                    const raw = (el.value || '').trim();
+                    if (!raw) return null;
+                    const n = Number(raw);
+                    return Number.isFinite(n) && n > 0 ? n : null;
+                };
+                const lengthM = readNum('[data-field="lengthM"]');
+                const widthM  = readNum('[data-field="widthM"]');
+                const heightM = readNum('[data-field="ceilingHeightM"]');
+                const zoneCountRaw = readNum('[data-field="zoneCount"]');
+                const zoneCount = zoneCountRaw ? Math.min(12, Math.round(zoneCountRaw)) : 1;
+
                 if (name) {
+                    // Persist dims in the canonical snake_case shape every
+                    // downstream surface reads (grow-management.html lines
+                    // 1365-1400, 3d-farm-viewer, room-build-plan.js).
                     const room = {
                         name,
-                        type
+                        type,
+                        length_m: lengthM,
+                        width_m: widthM,
+                        ceiling_height_m: heightM,
+                        // Generate default zone names in walk-through order.
+                        zones: Array.from({ length: zoneCount }, (_, i) => ({
+                            name: zoneCount === 1 ? 'Zone 1' : `Zone ${i + 1}`
+                        }))
                     };
 
                     // Add light controller if selected

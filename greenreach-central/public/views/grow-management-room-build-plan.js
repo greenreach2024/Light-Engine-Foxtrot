@@ -112,21 +112,23 @@
 
   /**
    * Pull the current room's dimensions from the 3D-farm-viewer's localStorage
-   * store (written by its "edit room" dialog). Falls back to the room payload
-   * fields and, as a last resort, DEFAULT_ROOM.
+   * store (written by its "edit room" dialog), falling back to the room
+   * payload fields. Returns null (NOT a DEFAULT_ROOM) when no real dimensions
+   * are available so callers can show a prompt to set them instead of
+   * silently running the solver against a generic 20x15 box.
    */
   function readRoomDims(room) {
-    if (!room) return { ...DEFAULT_ROOM };
+    if (!room) return null;
     try {
       const raw = localStorage.getItem('farm3d_roomDims');
       if (raw) {
         const all = JSON.parse(raw) || {};
         const rd = all[room.id];
-        if (rd && Number.isFinite(+rd.length) && Number.isFinite(+rd.width)) {
+        if (rd && Number.isFinite(+rd.length) && Number.isFinite(+rd.width) && +rd.length > 0 && +rd.width > 0) {
           return {
             lengthM: +rd.length,
             widthM: +rd.width,
-            heightM: Number.isFinite(+rd.height) ? +rd.height : DEFAULT_ROOM.heightM
+            heightM: Number.isFinite(+rd.height) && +rd.height > 0 ? +rd.height : DEFAULT_ROOM.heightM
           };
         }
       }
@@ -141,9 +143,7 @@
       };
     }
     // Last-chance direct read from room — handles rooms saved with only
-    // length/width (no ceiling) so the solver still uses real dims instead
-    // of the 20x15 DEFAULT_ROOM fallback (which would otherwise recommend
-    // ~48 units for a small 6x3 room).
+    // length/width (no ceiling) so the solver still uses real dims.
     const dims = room.dimensions || room.dims || {};
     const len = Number(dims.lengthM ?? dims.length_m ?? room.lengthM ?? room.length_m);
     const wid = Number(dims.widthM ?? dims.width_m ?? room.widthM ?? room.width_m);
@@ -158,7 +158,11 @@
         heightM: Number.isFinite(hgt) && hgt > 0 ? hgt : DEFAULT_ROOM.heightM
       };
     }
-    return { ...DEFAULT_ROOM };
+    // Explicit null (no silent DEFAULT_ROOM). Previously we returned a
+    // generic 20x15 box here, which made the solver recommend ~48 units
+    // for a small 6x3 room and looked like the template was ignoring the
+    // operator's setup.
+    return null;
   }
 
   /**
@@ -167,6 +171,7 @@
    */
   function zoneRectsFromRoom(room, zoneNames) {
     const dims = readRoomDims(room);
+    if (!dims) return [];
     const long = Math.max(dims.lengthM, dims.widthM);
     const short = Math.min(dims.lengthM, dims.widthM);
     const names = Array.isArray(zoneNames) && zoneNames.length ? zoneNames : ['Zone 1'];
@@ -494,6 +499,44 @@
     }
     if (!state.template.spatialContract) {
       el.innerHTML = '<div class="tiny" style="color:#fde047;padding:8px;">No spatial contract on this template \u2014 spatial planning unavailable.</div>';
+      return;
+    }
+
+    // Refuse to invent a spatial plan when the operator hasn't given us real
+    // room dimensions. Silently falling back to a generic 20m x 15m room
+    // produced bogus "48 units" recommendations for small rooms. Tell the
+    // operator exactly what's missing and link them to where they can fix it.
+    // Build the node with DOM APIs (not innerHTML interpolation) so a room
+    // named `<img src=x onerror=alert(1)>` stays text, not script.
+    const dimsCheck = readRoomDims(state.room);
+    if (!state.room || !dimsCheck) {
+      el.textContent = '';
+      const box = document.createElement('div');
+      box.className = 'rbp-empty';
+      box.setAttribute('style', 'padding:12px 14px;border:1px dashed rgba(252,211,77,0.4);border-radius:10px;background:rgba(30,41,59,0.55);color:#fde68a;font-size:0.9rem;line-height:1.5;');
+      const strong = document.createElement('strong');
+      strong.setAttribute('style', 'color:#fef3c7;');
+      strong.textContent = 'Evie needs your room dimensions.';
+      box.appendChild(strong);
+      box.appendChild(document.createTextNode(" I can't recommend a grow-unit count \u2014 "));
+      if (state.room) {
+        const quote = document.createElement('span');
+        const rawName = (state.room.name || state.room.id || '').toString();
+        quote.textContent = `"${rawName}"`;
+        box.appendChild(quote);
+        box.appendChild(document.createTextNode(' has no length/width saved. Open '));
+      } else {
+        box.appendChild(document.createTextNode('no room is selected. Open '));
+      }
+      const link = document.createElement('a');
+      link.href = '/farm-admin.html#farm-setup';
+      link.setAttribute('style', 'color:#60a5fa;');
+      link.textContent = 'Farm Setup \u2192 Rooms';
+      box.appendChild(link);
+      box.appendChild(document.createTextNode(
+        ' or the 3D viewer\'s "Edit room" dialog and enter real length, width, and ceiling height in metres. I refuse to guess so you don\'t end up ordering 48 units for a 6 \u00d7 3 m room.'
+      ));
+      el.appendChild(box);
       return;
     }
 
