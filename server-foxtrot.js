@@ -7784,33 +7784,28 @@ app.post('/api/setup/business-details', asyncHandler(async (req, res) => {
           [JSON.stringify(normalizedHours), JSON.stringify(normalizedCerts), paymentFlag, farmId]
         );
 
-        // Mirror payment_configured into the farm_data key/value store that
-        // Central's onboarding-status endpoint reads (farm_profile document).
-        // Without this, the "Connect Square for payments" checklist item would
-        // stay unchecked even after the operator confirmed the flag on LE.
+        // Mirror payment_configured into the canonical farm_data store that
+        // Central's onboarding-status endpoint reads via
+        // farmStore.get(farmId, 'farm_profile'). The table is created by
+        // Central at boot (greenreach-central/config/database.js) with
+        // columns (farm_id, data_type, data) and UNIQUE(farm_id, data_type),
+        // so we do not attempt to create it here. Without this mirror, the
+        // "Connect Square for payments" checklist would stay unchecked even
+        // after the operator confirms the flag on LE.
         try {
-          await dbPool.query(
-            `CREATE TABLE IF NOT EXISTS farm_data (
-               farm_id TEXT NOT NULL,
-               key TEXT NOT NULL,
-               value JSONB,
-               updated_at TIMESTAMPTZ DEFAULT NOW(),
-               PRIMARY KEY (farm_id, key)
-             )`
-          );
           const existing = await dbPool.query(
-            'SELECT value FROM farm_data WHERE farm_id = $1 AND key = $2',
+            'SELECT data FROM farm_data WHERE farm_id = $1 AND data_type = $2 LIMIT 1',
             [farmId, 'farm_profile']
           );
-          const profile = (existing.rows[0]?.value) || {};
+          const profile = (existing.rows[0]?.data) || {};
           profile.business_hours = normalizedHours;
           profile.certifications = normalizedCerts;
           profile.payment_configured = paymentFlag;
           await dbPool.query(
-            `INSERT INTO farm_data (farm_id, key, value, updated_at)
+            `INSERT INTO farm_data (farm_id, data_type, data, updated_at)
              VALUES ($1, $2, $3, NOW())
-             ON CONFLICT (farm_id, key)
-             DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+             ON CONFLICT (farm_id, data_type)
+             DO UPDATE SET data = EXCLUDED.data, updated_at = NOW()`,
             [farmId, 'farm_profile', JSON.stringify(profile)]
           );
         } catch (kvErr) {
