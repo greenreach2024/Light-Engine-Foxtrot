@@ -5333,13 +5333,14 @@
             if (tempBtn) tempBtn.click();
           }, 600);
         } else if (mode === 'draw-zones') {
-          // Engage edit mode so zone drawing / repositioning affordances light up.
+          // Click the edit button so toggleEditMode() runs — that handler sets
+          // the viewer-container 'edit-mode' class (crosshair cursor) and the
+          // editIndicator 'visible' class (red banner). Duplicating the state
+          // flip manually would miss those side-effects.
           setTimeout(function () {
             if (!S.editMode) {
-              S.editMode = true;
-              var editBtn = document.getElementById('btnEdit') || document.getElementById('btnEditMode');
-              if (editBtn) editBtn.classList.add('active');
-              document.body.classList.add('spatial-viewer-edit');
+              var editBtn = document.getElementById('btnEdit');
+              if (editBtn) editBtn.click();
             }
           }, 600);
         }
