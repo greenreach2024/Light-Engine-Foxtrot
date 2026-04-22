@@ -66,7 +66,7 @@ import {
   listMarketEvents,
   listNetworkSnapshots
 } from '../services/wholesaleNetworkAggregator.js';
-import { listNetworkFarms, removeNetworkFarm, upsertNetworkFarm } from '../services/networkFarmsStore.js';
+import { listNetworkFarms, removeNetworkFarm, upsertNetworkFarm, enrichLocationCoords } from '../services/networkFarmsStore.js';
 import { getBatchFarmSquareCredentials } from '../services/squareCredentials.js';
 import { processSquarePayments, processGreenReachDirectPayment, refundPayment, saveCardOnFile, getCardOnFile, removeCardOnFile } from '../services/squarePaymentService.js';
 import { ingestPaymentRevenue, ingestFarmPayables, ingestFarmPayout } from '../services/revenue-accounting-connector.js';
@@ -955,7 +955,13 @@ function filterCatalogItemsByBuyerRadius(items, options = {}) {
           const fallbackLocation = farmLocationById.get(
             String(farm?.farm_id || farm?.id || '')
           ) || {};
-          const farmLocation = farm?.farm_location || farm?.location || fallbackLocation;
+          // Enrich with city-based coordinate fallbacks (e.g. Kingston) so a
+          // farm whose stored location has only a city does not get silently
+          // dropped from the catalog while the Environmental Impact panel
+          // still claims a nearby farm exists.
+          const farmLocation = enrichLocationCoords(
+            farm?.farm_location || farm?.location || fallbackLocation
+          );
           const farmCoords = extractCoordinates(farmLocation);
           if (!farmCoords) return null;
           const distanceKm = haversineDistanceKm(
@@ -1013,7 +1019,9 @@ function filterCustomCatalogItemsBySearchArea(items, options = {}) {
       const scopedFarms = farms
         .map((farm) => {
           const fallbackFarmLocation = farmLocationById.get(String(farm?.farm_id || farm?.id || '')) || {};
-          const farmLocation = farm?.farm_location || farm?.location || fallbackFarmLocation;
+          const farmLocation = enrichLocationCoords(
+            farm?.farm_location || farm?.location || fallbackFarmLocation
+          );
           const farmCoords = extractCoordinates(farmLocation);
 
           if (customItem) {
@@ -3372,9 +3380,92 @@ router.post('/orders/:orderId/contact-farms', requireBuyerPortalAuth, async (req
 });
 
 
+// ── Sample orders ────────────────────────────────────────────────────
+// Buyers can request a free sample of any SKU directly from the produce
+// card. Sample cart lines carry is_sample=true; the server forces their
+// price to $0 server-side so a client can't slip a paid item through as a
+// sample, and if every line in the cart is a sample the checkout skips
+// Square entirely so a buyer without a card on file can still submit.
+const SAMPLE_MAX_QTY_PER_ITEM = 2;
+
+function normalizeSampleCart(rawCart) {
+  if (!Array.isArray(rawCart)) return [];
+  return rawCart.map((item) => {
+    const isSample = item?.is_sample === true || item?.is_sample === 'true';
+    const quantity = Number(item?.quantity);
+    return {
+      ...item,
+      quantity: isSample
+        ? Math.min(Math.max(1, Number.isFinite(quantity) ? quantity : 1), SAMPLE_MAX_QTY_PER_ITEM)
+        : quantity,
+      is_sample: isSample
+    };
+  });
+}
+
+function cartIsAllSamples(cart) {
+  return Array.isArray(cart) && cart.length > 0 && cart.every((it) => it?.is_sample === true);
+}
+
+// Post-process an allocation result to zero-price sample lines and
+// recompute totals, broker fee splits, and payment splits. Mutates
+// allocation and split in place and returns the adjusted bundle.
+function applySamplePricing({ allocation, paymentSplit, cart, commissionRate }) {
+  const sampleSkus = new Set(
+    (cart || [])
+      .filter((it) => it?.is_sample === true)
+      .map((it) => String(it.sku_id || ''))
+      .filter(Boolean)
+  );
+  if (sampleSkus.size === 0) {
+    return { allocation, paymentSplit };
+  }
+
+  const rate = Number(commissionRate) || 0;
+  let subtotal = 0;
+  let brokerFeeTotal = 0;
+
+  for (const sub of allocation.farm_sub_orders || []) {
+    let subSubtotal = 0;
+    for (const item of sub.items || []) {
+      if (sampleSkus.has(String(item.sku_id || ''))) {
+        item.is_sample = true;
+        item.price_per_unit = 0;
+        item.line_total = 0;
+      }
+      subSubtotal += Number(item.line_total || 0);
+    }
+    sub.subtotal = Math.round(subSubtotal * 100) / 100;
+    sub.is_sample = (sub.items || []).length > 0 && (sub.items || []).every((it) => it.is_sample === true);
+    subtotal += sub.subtotal;
+    brokerFeeTotal += Math.round(sub.subtotal * rate * 100) / 100;
+  }
+
+  allocation.subtotal = Math.round(subtotal * 100) / 100;
+  allocation.broker_fee_total = Math.round(brokerFeeTotal * 100) / 100;
+  allocation.net_to_farms_total = Math.round((subtotal - brokerFeeTotal) * 100) / 100;
+  allocation.grand_total = Math.round(subtotal * 100) / 100;
+  allocation.is_sample_order = (allocation.farm_sub_orders || []).every((sub) => sub.is_sample === true);
+
+  const adjustedSplit = (paymentSplit || []).map((entry) => {
+    const sub = (allocation.farm_sub_orders || []).find((s) => String(s.farm_id) === String(entry.farm_id));
+    const gross = Number(sub?.subtotal || 0);
+    const brokerFee = Math.round(gross * rate * 100) / 100;
+    return {
+      ...entry,
+      gross_amount: gross,
+      broker_fee: brokerFee,
+      net_amount: Math.round((gross - brokerFee) * 100) / 100
+    };
+  });
+
+  return { allocation, paymentSplit: adjustedSplit };
+}
+
 router.post('/checkout/preview', checkoutLimiter, requireWholesaleDbForCriticalPaths, requireBuyerAuth, async (req, res, next) => {
   try {
-    const { cart, recurrence, sourcing } = req.body || {};
+    const { recurrence, sourcing } = req.body || {};
+    const cart = normalizeSampleCart(req.body?.cart);
     if (!Array.isArray(cart) || cart.length === 0) {
       throw new ValidationError('Cart is required');
     }
@@ -3390,6 +3481,12 @@ router.post('/checkout/preview', checkoutLimiter, requireWholesaleDbForCriticalP
       if (!result.allocation.farm_sub_orders?.length) {
         return res.status(400).json({ status: 'error', message: 'Unable to allocate items with current inventory' });
       }
+      applySamplePricing({
+        allocation: result.allocation,
+        paymentSplit: result.payment_split,
+        cart,
+        commissionRate
+      });
       return res.json({
         status: 'ok',
         data: {
@@ -3415,6 +3512,13 @@ router.post('/checkout/preview', checkoutLimiter, requireWholesaleDbForCriticalP
       return res.status(400).json({ status: 'error', message: 'Unable to allocate items with current inventory' });
     }
 
+    applySamplePricing({
+      allocation: result.allocation,
+      paymentSplit: result.payment_split,
+      cart,
+      commissionRate
+    });
+
     return res.json({
       status: 'ok',
       data: {
@@ -3436,13 +3540,14 @@ router.post('/checkout/execute', checkoutLimiter, requireWholesaleDbForCriticalP
       delivery_date,
       delivery_address,
       recurrence,
-      cart,
       payment_provider,
       sourcing,
       po_number,
       fulfillment_method,
       delivery_fee
       } = requestBody;
+    const cart = normalizeSampleCart(requestBody?.cart);
+    const sampleOrder = cartIsAllSamples(cart);
 
       const normalizedBuyerAccount = normalizeBuyerAccountPayload(buyer_account, req.wholesaleBuyer);
       const normalizedDeliveryAddress = normalizeDeliveryAddress(delivery_address);
@@ -3477,10 +3582,14 @@ router.post('/checkout/execute', checkoutLimiter, requireWholesaleDbForCriticalP
 
       if (!normalizedBuyerAccount?.email) throw new ValidationError('buyer_account.email is required');
     if (!delivery_date) throw new ValidationError('delivery_date is required');
-    const normalizedPaymentProvider = String(payment_provider || 'manual').toLowerCase();
+    // Sample-only orders bypass Square regardless of client-selected provider
+    // so a buyer without a card on file can still submit a free sample.
+    const normalizedPaymentProvider = sampleOrder
+      ? 'sample'
+      : String(payment_provider || 'manual').toLowerCase();
       const squareSourceId = requestBody?.payment_source?.source_id || requestBody?.payment_source?.sourceId || null;
       const squareCustomerId = req.wholesaleBuyer?.squareCustomerId || null;
-    if (normalizedPaymentProvider === 'square' && !squareSourceId) {
+    if (!sampleOrder && normalizedPaymentProvider === 'square' && !squareSourceId) {
       return res.status(400).json({
         status: 'error',
         message: 'Payment authorization is required. Please enter card details and try again.'
@@ -3539,10 +3648,20 @@ router.post('/checkout/execute', checkoutLimiter, requireWholesaleDbForCriticalP
         return res.status(400).json({ status: 'error', message: 'Unable to allocate items with current inventory' });
       }
 
+      applySamplePricing({
+        allocation: result.allocation,
+        paymentSplit: result.payment_split,
+        cart,
+        commissionRate
+      });
+      // Sample-only orders waive the delivery fee — a free sample with a
+      // paid delivery fee defeats the point of the Request Samples flow.
+      const effectiveDeliveryFee = sampleOrder ? 0 : deliveryFee;
+
       const orderTotals = {
         ...result.allocation,
-        delivery_fee: deliveryFee,
-        grand_total: Number((Number(result.allocation.grand_total || 0) + deliveryFee).toFixed(2))
+        delivery_fee: effectiveDeliveryFee,
+        grand_total: Number((Number(result.allocation.grand_total || 0) + effectiveDeliveryFee).toFixed(2))
       };
 
         const farmMetaById = new Map(
@@ -3624,7 +3743,9 @@ router.post('/checkout/execute', checkoutLimiter, requireWholesaleDbForCriticalP
         ));
 
       order.fulfillment_method = String(fulfillment_method || 'delivery').toLowerCase();
-      order.delivery_fee = deliveryFee;
+      order.delivery_fee = effectiveDeliveryFee;
+      order.is_sample = sampleOrder;
+      if (sampleOrder) order.order_type = 'sample';
         order.preferred_delivery_window = preferredDeliveryWindow;
         order.time_slot = preferredDeliveryWindow;
         order.delivery_schedule = deliveryScheduleList.join(' | ');
@@ -3640,7 +3761,7 @@ router.post('/checkout/execute', checkoutLimiter, requireWholesaleDbForCriticalP
 
       const payment = createPayment({
         orderId: order.master_order_id,
-        provider: payment_provider || 'square',
+        provider: sampleOrder ? 'sample' : (payment_provider || 'square'),
         split: result.payment_split,
         totals: orderTotals
       }, { persist: false, register: false });
@@ -3648,8 +3769,19 @@ router.post('/checkout/execute', checkoutLimiter, requireWholesaleDbForCriticalP
       // Attempt Square payment if farms have Square connected
       let paymentSuccess = false;
       const farmIds = result.allocation.farm_sub_orders.map(sub => sub.farm_id);
-      
-      try {
+
+      if (sampleOrder) {
+        // Free-sample orders skip Square entirely — they carry $0 value and
+        // must be submittable by buyers with no card on file. We still
+        // reserve inventory, notify farms, and alert Central admin below.
+        payment.status = 'completed';
+        payment.provider = 'sample';
+        payment.amount = 0;
+        payment.broker_fee_amount = 0;
+        payment.net_to_farms_total = 0;
+        payment.notes = 'Free sample order — no payment processed';
+        paymentSuccess = true;
+      } else try {
         const squareCredentials = await getBatchFarmSquareCredentials(farmIds);
         const allFarmsConnected = farmIds.every(farmId => 
           squareCredentials.get(farmId)?.success === true
@@ -4063,10 +4195,12 @@ router.post('/checkout/execute', checkoutLimiter, requireWholesaleDbForCriticalP
             }
             try {
               const notifyResult = await farmCallWithTimeout(farmUrl, '/api/wholesale/order-events', {
-                type: 'wholesale_order_created',
+                type: sampleOrder ? 'wholesale_sample_requested' : 'wholesale_order_created',
                 order_id: order.master_order_id,
                 farm_id: sub.farm_id,
                 farm_name: sub.farm_name || sub.farm_id,
+                is_sample: sampleOrder,
+                order_type: sampleOrder ? 'sample' : 'paid',
                 delivery_date: order.delivery_date,
                 created_at: order.created_at,
                 payment_status: payment.status,
@@ -4107,10 +4241,29 @@ router.post('/checkout/execute', checkoutLimiter, requireWholesaleDbForCriticalP
       })();
 
       // Order confirmation email + audit (non-blocking)
-      logOrderEvent(order.master_order_id, 'order_created', { buyer_id: req.wholesaleBuyer.id, payment_id: payment.payment_id, total: order.grand_total });
+      logOrderEvent(order.master_order_id, sampleOrder ? 'sample_order_created' : 'order_created', {
+        buyer_id: req.wholesaleBuyer.id,
+        payment_id: payment.payment_id,
+        total: order.grand_total,
+        is_sample: sampleOrder
+      });
       emailService.sendOrderConfirmation(order, req.wholesaleBuyer).catch(err => console.warn('[Email] Confirmation failed:', err.message));
 
-      return res.json({ status: 'ok', data: order, meta: { payment_id: payment.payment_id } });
+      if (sampleOrder) {
+        const adminEmail = process.env.ADMIN_ALERT_EMAIL || process.env.ADMIN_EMAIL;
+        if (adminEmail) {
+          const skuLines = (order.farm_sub_orders || [])
+            .flatMap((sub) => (sub.items || []).map((it) => `- ${it.product_name || it.sku_id} x${it.quantity} @ ${sub.farm_name || sub.farm_id}`))
+            .join('\n');
+          emailService.sendEmail({
+            to: adminEmail,
+            subject: `[Sample Request] ${normalizedBuyerAccount?.businessName || normalizedBuyerAccount?.email || 'Wholesale Buyer'} requested samples`,
+            text: `A wholesale buyer submitted a free sample order.\n\nOrder: ${order.master_order_id}\nBuyer: ${normalizedBuyerAccount?.email || 'unknown'} (${normalizedBuyerAccount?.businessName || 'n/a'})\nDelivery date: ${order.delivery_date}\nItems:\n${skuLines}\n\nFarms have been notified via Activity Hub.`
+          }).catch(err => console.error('[Email] Sample admin alert failed:', err.message));
+        }
+      }
+
+      return res.json({ status: 'ok', data: order, meta: { payment_id: payment.payment_id, is_sample: sampleOrder } });
     }
 
     // ── SAFETY: Never fall through to demo for checkout ──

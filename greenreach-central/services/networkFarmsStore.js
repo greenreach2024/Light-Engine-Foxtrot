@@ -54,6 +54,50 @@ function parseFarmUrlOverrides() {
   return overrides;
 }
 
+// Fallback lat/lng centroids for cities we know are covered by the wholesale
+// network today. Applied when a farm's stored location has a city but no
+// coordinates, so downstream consumers (Environmental Impact panel, catalog
+// service-radius filter, farm distance chips) stay consistent instead of
+// one panel enriching coords and another silently dropping the farm.
+// Keep keys lowercased and stripped of punctuation.
+const CITY_COORD_FALLBACKS = {
+  kingston: { latitude: 44.2312, longitude: -76.4860 }
+};
+
+function normalizeCityKey(value) {
+  return String(value || '')
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+// Pure helper: given a location object, return a new object with
+// lat/lng filled in from CITY_COORD_FALLBACKS when they are missing
+// and the city is recognized. Never overrides existing coordinates.
+export function enrichLocationCoords(rawLocation) {
+  const location = rawLocation && typeof rawLocation === 'object' ? { ...rawLocation } : {};
+  const latNum = Number(location.latitude ?? location.lat);
+  const lngNum = Number(location.longitude ?? location.lng ?? location.lon);
+  if (Number.isFinite(latNum) && Number.isFinite(lngNum)) {
+    location.latitude = latNum;
+    location.longitude = lngNum;
+    return location;
+  }
+
+  const cityKey = normalizeCityKey(location.city || location.town || location.municipality);
+  if (!cityKey) return location;
+
+  for (const [prefix, coords] of Object.entries(CITY_COORD_FALLBACKS)) {
+    if (cityKey === prefix || cityKey.startsWith(`${prefix} `)) {
+      location.latitude = coords.latitude;
+      location.longitude = coords.longitude;
+      return location;
+    }
+  }
+  return location;
+}
+
 function normalizeNetworkFarm(farmId, farmData = {}) {
   const name = farmData.farm_name || farmData.name || farmId;
   const apiUrl = farmData.base_url || farmData.api_url || farmData.url || null;
@@ -72,7 +116,7 @@ function normalizeNetworkFarm(farmId, farmData = {}) {
     auth_farm_id: farmData.auth_farm_id || null,
     api_key: farmData.api_key || null,
     contact: farmData.contact || {},
-    location: farmData.location || {},
+    location: enrichLocationCoords(farmData.location || {}),
     certifications: farmData.certifications || [],
     practices: farmData.practices || [],
     fulfillment_standards: fulfillmentStandards,
