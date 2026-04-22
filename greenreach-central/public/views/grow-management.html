@@ -20,6 +20,30 @@
   <style>
     /* ===== GROW MANAGEMENT - DARK GLASSMORPHIC OVERRIDES ===== */
     *, *::before, *::after { box-sizing: border-box; }
+
+    /* Native <dialog> backdrop. The browser default is barely visible on a
+       dark theme, so the Build Stock Group / Bulk Edit dialogs appeared to
+       "stack" over the page content (Room Build Plan + Stock Groups panels
+       bled through the unrendered backdrop). Explicit darker backdrop gives
+       clear separation. Also neutralises the default white dialog body on
+       dark surfaces so the contents aren't washed out when both modals are
+       briefly present during a close-then-open swap. */
+    dialog::backdrop {
+      background: rgba(15, 23, 42, 0.72);
+      backdrop-filter: blur(2px);
+      -webkit-backdrop-filter: blur(2px);
+    }
+    dialog#bulkEditGroupModal,
+    dialog#buildStockGroupModal {
+      background: #0f172a;
+      color: #f1f5f9;
+    }
+    dialog#bulkEditGroupModal[open],
+    dialog#buildStockGroupModal[open] {
+      /* Hard-center and raise above anything that escaped the top layer. */
+      margin: auto;
+      z-index: 10050;
+    }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
       background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
