@@ -672,7 +672,31 @@ async function provisionFarmAndUser(session) {
 const RECONCILE_MIN_AGE_MIN = parseInt(process.env.PURCHASE_RECONCILE_MIN_AGE_MIN || '3', 10);
 const RECONCILE_BATCH_LIMIT = parseInt(process.env.PURCHASE_RECONCILE_BATCH_LIMIT || '25', 10);
 
+// In-process guard so overlapping setInterval ticks (or a manual admin trigger
+// firing while the background run is still in flight) don't both pick up the
+// same pending checkout_sessions row. Without this, the `WHERE provisioned_farm_id
+// IS NULL` filter is evaluated at query time in both runs; since `provisionFarmAndUser`
+// uses a check-then-insert pattern (no UNIQUE(email) constraint on `farms`), two
+// concurrent runs could each create a farm row for the same email and overwrite
+// each other's `checkout_sessions.provisioned_farm_id`, leaking orphaned farms
+// and sending duplicate welcome emails.
+let _reconcilerRunning = false;
+
 export async function runPendingCheckoutReconciler({ verbose = false } = {}) {
+  if (_reconcilerRunning) {
+    if (verbose) console.log('[Reconciler] Previous run still in flight — skipping this tick');
+    return { scanned: 0, recovered: 0, skipped: 0, errors: 0, busy: true };
+  }
+  _reconcilerRunning = true;
+
+  try {
+    return await _runPendingCheckoutReconcilerImpl({ verbose });
+  } finally {
+    _reconcilerRunning = false;
+  }
+}
+
+async function _runPendingCheckoutReconcilerImpl({ verbose }) {
   if (!isDatabaseAvailable()) {
     if (verbose) console.log('[Reconciler] Database unavailable — skipping');
     return { scanned: 0, recovered: 0, skipped: 0, errors: 0, db_unavailable: true };

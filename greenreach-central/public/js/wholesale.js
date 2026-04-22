@@ -80,6 +80,7 @@
     networkFarms: [],
     farmPerformance: {},
     currentBuyer: null,
+    passwordResetToken: null,
     authTab: 'sign-in',
     productRequests: [],
     deliveryQuote: null,
@@ -142,6 +143,7 @@
       if (params.get('demo') === '1') this.demoMode = true;
       else if (params.get('demo') === '0') this.demoMode = false;
       else this.demoMode = false;
+      this.passwordResetToken = String(params.get('resetToken') || '').trim() || null;
 
       await this.loadAuthState();
 
@@ -156,6 +158,7 @@
       
       this.setupEventListeners();
       this.setDefaultDeliveryDate();
+      this.configurePasswordResetMode();
 
       this.setupSourcingControls();
       await this.loadNetworkFarms();
@@ -171,6 +174,71 @@
 
       // Initialize Square payment form (non-blocking)
       this.initializeSquare();
+    },
+
+    configurePasswordResetMode() {
+      const accountView = document.getElementById('account-view');
+      const passwordForm = document.getElementById('password-form');
+      const currentPasswordField = document.getElementById('current-password');
+      const newPasswordField = document.getElementById('new-password');
+      const confirmPasswordField = document.getElementById('confirm-password');
+      const passwordSection = passwordForm?.closest('.checkout-section');
+      const heading = passwordSection?.querySelector('h2');
+      const submitButton = passwordForm?.querySelector('button[type="submit"]');
+      const currentPasswordGroup = currentPasswordField?.closest('.form-group');
+      let resetNotice = document.getElementById('password-reset-notice');
+
+      if (!passwordForm || !passwordSection || !heading || !submitButton || !currentPasswordField || !newPasswordField || !confirmPasswordField) {
+        return;
+      }
+
+      if (!this.passwordResetToken) {
+        passwordForm.dataset.mode = 'change-password';
+        heading.textContent = 'Change Password';
+        submitButton.textContent = 'Update Password';
+        currentPasswordField.required = true;
+        if (currentPasswordGroup) currentPasswordGroup.style.display = '';
+        if (resetNotice) resetNotice.remove();
+        accountView?.querySelectorAll('.checkout-section').forEach((section) => {
+          section.style.display = '';
+        });
+        return;
+      }
+
+      passwordForm.dataset.mode = 'reset-password';
+      heading.textContent = 'Reset Password';
+      submitButton.textContent = 'Set New Password';
+      currentPasswordField.required = false;
+      currentPasswordField.value = '';
+      if (currentPasswordGroup) currentPasswordGroup.style.display = 'none';
+
+      if (!resetNotice) {
+        resetNotice = document.createElement('p');
+        resetNotice.id = 'password-reset-notice';
+        resetNotice.style.marginBottom = '1rem';
+        resetNotice.style.padding = '0.85rem 1rem';
+        resetNotice.style.borderRadius = '6px';
+        resetNotice.style.background = 'rgba(130, 195, 65, 0.12)';
+        resetNotice.style.color = 'var(--text)';
+        resetNotice.style.border = '1px solid var(--border)';
+        passwordSection.insertBefore(resetNotice, passwordForm);
+      }
+
+      resetNotice.textContent = 'Enter your new password to finish resetting your wholesale buyer account.';
+
+      accountView?.querySelectorAll('.checkout-section').forEach((section) => {
+        section.style.display = section === passwordSection ? '' : 'none';
+      });
+
+      this.currentView = 'account';
+      document.querySelectorAll('.nav-tab').forEach((tab) => {
+        tab.classList.toggle('active', tab.dataset.view === 'account');
+      });
+      document.querySelectorAll('.view').forEach((section) => {
+        section.classList.toggle('active', section.id === 'account-view');
+      });
+      document.getElementById('auth-modal')?.classList.remove('open');
+      newPasswordField.focus();
     },
 
     createDemoProfile() {
@@ -787,8 +855,6 @@
     },
 
     async updatePassword() {
-      if (!this.currentBuyer) return this.showAuthModal('sign-in');
-
       const currentPassword = document.getElementById('current-password').value;
       const newPassword = document.getElementById('new-password').value;
       const confirmPassword = document.getElementById('confirm-password').value;
@@ -797,6 +863,35 @@
         this.showToast('New passwords do not match', 'error');
         return;
       }
+
+      if (this.passwordResetToken) {
+        try {
+          const { response, json } = await this.apiFetch('/api/wholesale/buyers/reset-password', {
+            method: 'POST',
+            body: JSON.stringify({ token: this.passwordResetToken, newPassword })
+          });
+
+          if (response.ok && json?.status === 'ok') {
+            this.passwordResetToken = null;
+            document.getElementById('new-password').value = '';
+            document.getElementById('confirm-password').value = '';
+            this.configurePasswordResetMode();
+            const url = new URL(window.location.href);
+            url.searchParams.delete('resetToken');
+            window.history.replaceState({}, document.title, url.toString());
+            this.showAuthModal('sign-in');
+            this.showToast('Password reset successful. You can now sign in.', 'success');
+          } else {
+            this.showToast(json?.message || 'Failed to reset password', 'error');
+          }
+        } catch (error) {
+          console.error('Reset password error:', error);
+          this.showToast('Network error resetting password', 'error');
+        }
+        return;
+      }
+
+      if (!this.currentBuyer) return this.showAuthModal('sign-in');
 
       try {
         const { response, json } = await this.apiFetch('/api/wholesale/buyers/change-password', {
