@@ -1318,14 +1318,12 @@
     // modal/print buttons inside the Groups V2 panel so the underlying
     // wiring (groups-v2.js) keeps owning the data-contract side of the flow.
     document.addEventListener('DOMContentLoaded', function () {
-      var cardOpen = document.getElementById('buildStockGroupsCardOpenBtn');
       var cardPrint = document.getElementById('buildStockGroupsCardPrintBtn');
-      if (cardOpen) {
-        cardOpen.addEventListener('click', function () {
-          var btn = document.getElementById('buildStockGroupsBtn');
-          if (btn) btn.click();
-        });
-      }
+      // #buildStockGroupsCardOpenBtn is now bound directly inside
+      // groups-v2.js (see the Build Stock Groups modal wiring block), so
+      // we no longer need a mirror-click that targeted the removed
+      // #buildStockGroupsBtn. Leaving the legacy mirror in place would
+      // silently no-op and mask regressions.
       if (cardPrint) {
         cardPrint.addEventListener('click', function () {
           var btn = document.getElementById('groupsV2PrintLabels');

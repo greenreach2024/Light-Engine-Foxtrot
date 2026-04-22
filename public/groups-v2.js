@@ -7853,19 +7853,28 @@ document.addEventListener('DOMContentLoaded', function() {
 // Wire up Build Stock Groups modal
 document.addEventListener('DOMContentLoaded', () => {
   const dialog = document.getElementById('buildStockGroupModal');
-  const openBtn = document.getElementById('buildStockGroupsBtn');
+  // grow-management.html removed the secondary #buildStockGroupsBtn in
+  // favour of a single #buildStockGroupsCardOpenBtn card button; LE-dashboard
+  // and any other embedder may still ship the legacy id. Bind every
+  // button that is present so the modal always has at least one opener
+  // and the DOMContentLoaded registration never early-returns.
+  const openBtns = Array.from(new Set([
+    document.getElementById('buildStockGroupsBtn'),
+    document.getElementById('buildStockGroupsCardOpenBtn'),
+  ].filter(Boolean)));
   const closeBtn = document.getElementById('buildStockGroupClose');
   const cancelBtn = document.getElementById('buildStockGroupCancel');
   const createBtn = document.getElementById('buildStockGroupCreate');
 
-  if (!dialog || !openBtn) return;
+  if (!dialog || !openBtns.length) return;
 
   // Open modal
-  openBtn.addEventListener('click', () => {
+  const openModal = () => {
     populateBsgModal();
     updateBsgPreview();
     dialog.showModal();
-  });
+  };
+  openBtns.forEach(btn => btn.addEventListener('click', openModal));
 
   // Close modal
   if (closeBtn) closeBtn.addEventListener('click', () => dialog.close());
