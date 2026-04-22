@@ -97,9 +97,9 @@
   --font-mono:  ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
 
   --font-size-xs: 0.75rem;    /* 12px — floor for labels/badges */
-  --font-size-sm: 0.8125rem;  /* 13px — floor for body */
-  --font-size-md: 0.9375rem;  /* 15px */
-  --font-size-lg: 1.0625rem;  /* 17px */
+  --font-size-sm: 0.875rem;   /* 14px — raised floor for operator body copy */
+  --font-size-md: 1rem;       /* 16px */
+  --font-size-lg: 1.125rem;   /* 18px */
   --font-size-xl: 1.25rem;
   --font-size-2xl: 1.5rem;
   --font-size-3xl: 2rem;
@@ -140,6 +140,19 @@ body.le-theme {
   background: var(--surface-0);
   color: var(--text-1);
   font-family: var(--font-stack);
+  font-size: var(--font-size-md);
+  line-height: var(--line-height-body);
+}
+
+/* Operator readability floor. Legacy pages scatter inline font-size:11/12/13px
+   across tooltips, chips, captions and row labels which read too small on
+   tablets and the demo laptop. This raises the minimum effective size for
+   every LE-themed surface without forcing a rewrite of every inline style. */
+body.le-theme .tiny,
+body.le-theme small,
+body.le-theme caption,
+body.le-theme figcaption {
+  font-size: var(--font-size-sm);
   line-height: var(--line-height-body);
 }
 
