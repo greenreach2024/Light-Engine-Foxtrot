@@ -4225,18 +4225,21 @@
         }
       };
       
-      // Save to server
+      // Save to server — include bearer token so authMiddleware accepts the write
+      const token = sessionStorage.getItem('token') || localStorage.getItem('token');
+      const headers = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = 'Bearer ' + token;
       fetch('/api/farm/configuration', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify(config)
       })
-      .then(res => res.json())
-      .then(data => {
-        if (data.success) {
+      .then(res => res.json().then(data => ({ ok: res.ok, status: res.status, data })))
+      .then(({ ok, status, data }) => {
+        if (ok && data.success) {
           alert('Farm configuration saved successfully!');
         } else {
-          alert('Error saving configuration: ' + (data.error || 'Unknown error'));
+          alert('Error saving configuration (' + status + '): ' + (data.error || data.message || 'Unknown error'));
         }
       })
       .catch(err => {
@@ -4248,7 +4251,10 @@
     // Load existing configuration on page load
     async function loadFarmConfiguration() {
       try {
-        const response = await fetch('/api/farm/configuration');
+        const token = sessionStorage.getItem('token') || localStorage.getItem('token');
+        const headers = {};
+        if (token) headers['Authorization'] = 'Bearer ' + token;
+        const response = await fetch('/api/farm/configuration', { headers });
         const config = await response.json();
         
         if (config.network) {

@@ -23,17 +23,37 @@ import {
 import { scoreTemplate } from '../lib/grow-system-scoring.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const REGISTRY_PATH = resolve(__dirname, '..', 'public', 'data', 'grow-systems.json');
+
+// Candidate registry paths: the canonical location first, then a repo-root
+// fallback for deployments that bundle a top-level `public/` dir instead of
+// the service-local one. The first readable path wins.
+const REGISTRY_PATHS = [
+  resolve(__dirname, '..', 'public', 'data', 'grow-systems.json'),
+  resolve(__dirname, '..', '..', 'public', 'data', 'grow-systems.json'),
+];
 
 const router = Router();
 
 // -- Cache the registry in memory (reload on first request + expose reload) --
 let registryCache = null;
+let lastLoadError = null;
 
 async function loadRegistry() {
-  const raw = await readFile(REGISTRY_PATH, 'utf-8');
-  registryCache = JSON.parse(raw);
-  return registryCache;
+  const attempts = [];
+  for (const p of REGISTRY_PATHS) {
+    try {
+      const raw = await readFile(p, 'utf-8');
+      registryCache = JSON.parse(raw);
+      lastLoadError = null;
+      return registryCache;
+    } catch (err) {
+      attempts.push(`${p}: ${err.code || err.name}: ${err.message}`);
+    }
+  }
+  lastLoadError = new Error(
+    `grow-systems registry not found. Tried:\n  ${attempts.join('\n  ')}`
+  );
+  throw lastLoadError;
 }
 
 async function getRegistry() {
@@ -61,7 +81,11 @@ router.get('/', async (_req, res) => {
     });
   } catch (err) {
     console.error('[GrowSystems] Failed to load registry:', err.message);
-    res.status(500).json({ ok: false, error: 'Failed to load grow-systems registry' });
+    res.status(500).json({
+      ok: false,
+      error: 'Failed to load grow-systems registry',
+      detail: err.message,
+    });
   }
 });
 
@@ -77,7 +101,11 @@ router.get('/:templateId', async (req, res) => {
     res.json({ ok: true, template });
   } catch (err) {
     console.error('[GrowSystems] Template lookup failed:', err.message);
-    res.status(500).json({ ok: false, error: 'Failed to load template' });
+    res.status(500).json({
+      ok: false,
+      error: 'Failed to load template',
+      detail: err.message,
+    });
   }
 });
 
