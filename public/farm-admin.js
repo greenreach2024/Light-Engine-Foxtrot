@@ -6503,12 +6503,24 @@ async function openEditCertificationsModal() {
         // Removed: Woman-Owned, Veteran-Owned, Minority-Owned, Family Farm, Sustainable
         // Decision: Not relevant for farm operations (2026-01-22)
         
-        // Wire autosave once: persist on every checkbox change
+        // Wire autosave once: debounce rapid changes and serialize saves so
+        // concurrent POSTs can't race and overwrite newer state with stale data.
         if (!form.dataset.autosaveBound) {
             form.dataset.autosaveBound = '1';
+            let debounceTimer = null;
+            let pending = Promise.resolve();
+            const scheduleSave = () => {
+                if (debounceTimer) clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(() => {
+                    debounceTimer = null;
+                    pending = pending
+                        .catch(() => {})
+                        .then(() => saveEditCertifications());
+                }, 400);
+            };
             form.addEventListener('change', (e) => {
                 if (e.target && e.target.type === 'checkbox') {
-                    saveEditCertifications();
+                    scheduleSave();
                 }
             });
             // Prevent submission (autosave handles persistence)
