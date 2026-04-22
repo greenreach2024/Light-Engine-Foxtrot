@@ -348,7 +348,15 @@ router.get('/data-charges', async (req, res) => {
     const clauses = [];
     const params = [];
     if (fromDate) { params.push(fromDate.toISOString()); clauses.push(`period_end >= $${params.length}`); }
-    if (toDate)   { params.push(toDate.toISOString());   clauses.push(`period_end <= $${params.length}`); }
+    if (toDate) {
+      // `to` is documented as inclusive on the calendar day, but parseDateParam
+      // returns midnight UTC — using `period_end <= midnight` drops every row
+      // whose period_end falls later the same day. Bump to next-day midnight
+      // and use `<` (same pattern as /subscription-revenue above).
+      const toBoundary = new Date(toDate.getTime() + 24 * 60 * 60 * 1000);
+      params.push(toBoundary.toISOString());
+      clauses.push(`period_end < $${params.length}`);
+    }
     if (farmId)   { params.push(farmId);                 clauses.push(`farm_id = $${params.length}`); }
     const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
 
