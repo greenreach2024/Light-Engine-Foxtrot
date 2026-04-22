@@ -29,6 +29,8 @@
     "cleanup:reservations": "node scripts/cleanup-expired-reservations.js",
     "reports:weekly": "node scripts/send-weekly-reports.js",
     "validate-schemas": "node scripts/validate-all-schemas.js",
+    "guardrails:install": "bash scripts/git-hooks/install.sh",
+    "guardrails:status": "git config --get core.hooksPath && git rev-parse --abbrev-ref HEAD",
     "release:preflight": "bash scripts/release/preflight-clean-tree.sh --sha \"$(git rev-parse HEAD)\"",
     "release:candidate": "bash scripts/release/create-release-candidate.sh",
     "release:gates": "bash scripts/release/run-phase-a-gates.sh",

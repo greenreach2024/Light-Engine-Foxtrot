@@ -927,11 +927,9 @@
       }
       // Also hydrate from the canonical room objects. Rooms authored on the
       // Grow Management page save as snake_case top-level length_m / width_m /
-      // ceiling_height_m (see grow-management.html lines 1365-1400) and
-      // sometimes as nested dimensions.{lengthM,widthM,ceilingHeightM}. Without
-      // this step the 3D viewer ignores the edit and keeps the grid-default
-      // 20 m x 15 m size, which is what the "3d view is not being updated to
-      // reflect the room size" report boils down to.
+      // ceiling_height_m and sometimes as nested dimensions. Always prefer
+      // those canonical values over local cache so the 3D viewer reflects
+      // room-size edits immediately after they are saved.
       (Array.isArray(S.rooms) ? S.rooms : []).forEach(function(room) {
         if (!room || !room.id) return;
         const rId = room.id;
@@ -950,9 +948,9 @@
           room.ceiling_height_m ?? room.ceilingHeightM ?? room.height_m ?? room.heightM ??
           nested.ceiling_height_m ?? nested.ceilingHeightM ?? nested.height_m ?? nested.heightM ?? nested.height
         );
-        if (!dims.length && Number.isFinite(length) && length > 0) dims.length = length;
-        if (!dims.width && Number.isFinite(width) && width > 0) dims.width = width;
-        if (!dims.height && Number.isFinite(height) && height > 0) dims.height = height;
+        if (Number.isFinite(length) && length > 0) dims.length = length;
+        if (Number.isFinite(width) && width > 0) dims.width = width;
+        if (Number.isFinite(height) && height > 0) dims.height = height;
       });
       // Hydrate group dimensions from group objects (server-persisted fallback)
       // Keep browser-saved values authoritative and only backfill missing fields from the server.
