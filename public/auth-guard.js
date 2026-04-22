@@ -28,6 +28,45 @@
     '/healthz'                // Simple health check
   ];
 
+  // Central admin surfaces use `admin_token`, not the farm `token`. This guard
+  // must never redirect those surfaces (or iframes embedded inside them) to
+  // the farm login — admins logged in with admin_token were being bounced
+  // back to /farm-admin-login.html when Central loaded farm views in iframes.
+  const CENTRAL_ADMIN_PATTERNS = [
+    /^\/GR-central-admin/i,
+    /^\/GR-admin/i,
+    /^\/GR-wholesale/i,
+    /^\/GR-farm-performance/i,
+    /^\/GR-central-admin-login/i
+  ];
+
+  function isCentralAdminPath(pathname) {
+    if (!pathname) return false;
+    return CENTRAL_ADMIN_PATTERNS.some(rx => rx.test(pathname));
+  }
+
+  // When this page is embedded in an iframe, return the parent page's pathname
+  // if we can read it (same-origin) — otherwise fall back to document.referrer.
+  function getParentPathname() {
+    try {
+      if (window.parent && window.parent !== window && window.parent.location) {
+        return window.parent.location.pathname || '';
+      }
+    } catch (_) { /* cross-origin */ }
+    try {
+      if (document.referrer) {
+        return new URL(document.referrer, window.location.origin).pathname || '';
+      }
+    } catch (_) {}
+    return '';
+  }
+
+  function isInCentralAdminContext() {
+    if (isCentralAdminPath(window.location.pathname)) return true;
+    if (isEmbeddedFrame() && isCentralAdminPath(getParentPathname())) return true;
+    return false;
+  }
+
   function sanitizeReturnPath(rawPath) {
     const defaultPath = '/LE-farm-admin.html';
     let returnPath = rawPath || '';
@@ -108,7 +147,15 @@
   // Check if current page requires authentication
   function requiresAuth() {
     const currentPath = window.location.pathname;
-    
+
+    // Central admin surfaces are guarded by their own admin_token flow;
+    // the farm token this guard checks doesn't apply. Also bail when we are
+    // an iframe embedded inside a Central admin page so we never kick the
+    // top window out to the farm login.
+    if (isInCentralAdminContext()) {
+      return false;
+    }
+
     // Check if it's a public page
     if (PUBLIC_PAGES.some(page => currentPath.endsWith(page))) {
       return false;
@@ -219,16 +266,36 @@
 
   // Redirect to login page (cloud-aware)
   function redirectToLogin() {
+    // Never redirect when we're running inside a Central admin page — that
+    // would bounce an admin (logged in with admin_token) back to the farm
+    // login. The admin page has its own auth guard on admin_token.
+    if (isInCentralAdminContext()) return;
+
     // In cloud mode, login page is on the same subdomain
     const loginBase = window.IS_CLOUD ? window.location.origin : '';
     const returnPath = encodeURIComponent(buildReturnPath());
     const target = `${loginBase}/farm-admin-login.html?return=${returnPath}`;
 
     if (isEmbeddedFrame()) {
-      try {
-        window.top.location.href = target;
+      // Only navigate the top window if the parent is itself a farm surface.
+      // Otherwise, only redirect our own iframe so we don't hijack the parent.
+      const parentPath = getParentPathname();
+      const parentIsFarm = parentPath && (
+        parentPath.includes('farm-admin') ||
+        parentPath.includes('farm-sales-pos') ||
+        parentPath.startsWith('/views/')
+      );
+      if (parentIsFarm) {
+        try {
+          window.top.location.href = target;
+          return;
+        } catch (_) {}
+      } else {
+        // Parent is not a farm page (Central admin or unknown) — stay inside
+        // our iframe so we don't navigate the top window away.
+        window.location.href = target;
         return;
-      } catch (_) {}
+      }
     }
 
     window.location.href = target;

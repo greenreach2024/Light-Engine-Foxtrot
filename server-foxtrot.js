@@ -7730,6 +7730,86 @@ app.post('/api/setup/certifications', asyncHandler(async (req, res) => {
   }
 }));
 
+// Persist the first-run "Business Details" step (operating hours,
+// certifications/practices, payment-configured flag). The Central service
+// handles this in its own setup-wizard router — LE needs an inline handler
+// so the shared setup-wizard.html doesn't 404 when the wizard runs here.
+app.post('/api/setup/business-details', asyncHandler(async (req, res) => {
+  try {
+    const { hours, certifications = [], practices = [], paymentConfigured } = req.body || {};
+
+    const sanitizeArr = (arr) => {
+      if (!Array.isArray(arr)) return [];
+      return arr.filter(v => typeof v === 'string').map(v => String(v).trim()).filter(Boolean);
+    };
+    const sanitizeHours = (h) => {
+      if (!h || typeof h !== 'object') return {};
+      const out = {};
+      for (const [day, entry] of Object.entries(h)) {
+        if (!entry || typeof entry !== 'object') continue;
+        const closed = !!entry.closed;
+        out[String(day).toLowerCase().slice(0, 3)] = closed
+          ? { closed: true }
+          : {
+              closed: false,
+              open: typeof entry.open === 'string' ? entry.open.slice(0, 5) : '',
+              close: typeof entry.close === 'string' ? entry.close.slice(0, 5) : ''
+            };
+      }
+      return out;
+    };
+
+    const normalizedHours = sanitizeHours(hours);
+    const normalizedCerts = {
+      certifications: sanitizeArr(certifications),
+      practices: sanitizeArr(practices),
+      attributes: []
+    };
+    const paymentFlag = !!paymentConfigured;
+
+    const farmId = req.session?.farmId || req.user?.farmId || req.headers['x-farm-id'] || process.env.FARM_ID;
+
+    if (dbPool && farmId) {
+      try {
+        await dbPool.query('ALTER TABLE farms ADD COLUMN IF NOT EXISTS business_hours JSONB');
+        await dbPool.query('ALTER TABLE farms ADD COLUMN IF NOT EXISTS certifications JSONB');
+        await dbPool.query(
+          `UPDATE farms
+             SET business_hours = $1,
+                 certifications = $2,
+                 updated_at = NOW()
+           WHERE farm_id = $3`,
+          [JSON.stringify(normalizedHours), JSON.stringify(normalizedCerts), farmId]
+        );
+        console.log('[setup] Saved business-details to DB for farm:', farmId);
+      } catch (dbErr) {
+        console.warn('[setup] business-details DB write failed:', dbErr.message);
+      }
+    } else if (db) {
+      await db.update(
+        { key: 'setup_config' },
+        { $set: {
+            business_hours: normalizedHours,
+            certifications: normalizedCerts,
+            payment_configured: paymentFlag
+          } },
+        { upsert: true }
+      );
+      console.log('[setup] Saved business-details to NeDB');
+    }
+
+    res.json({
+      success: true,
+      hours: normalizedHours,
+      certifications: normalizedCerts,
+      paymentConfigured: paymentFlag
+    });
+  } catch (error) {
+    console.error('[setup] business-details error:', error);
+    res.status(500).json({ success: false, error: 'Failed to save business details' });
+  }
+}));
+
 // Get setup status endpoint
 app.get('/api/setup/status', asyncHandler(async (req, res) => {
   try {

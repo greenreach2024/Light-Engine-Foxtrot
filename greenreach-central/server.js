@@ -774,6 +774,24 @@ const _htmlDirs = [
   path.join(__dirname, '..', 'public')
 ];
 
+// Central admin surfaces use admin_token, not the farm token checked by
+// auth-guard.js. Injecting that guard on admin pages (or letting it run when
+// those pages load farm views in iframes) was kicking admins back to the
+// farm login page. The guard has an internal Central-admin bypass as a
+// safety net, but we also skip injection here entirely so the admin pages
+// don't even evaluate the guard at top-level.
+const _GUARD_SKIP_PATHS = new Set([
+  '/GR-central-admin.html',
+  '/GR-central-admin-login.html',
+  '/GR-admin.html',
+  '/GR-wholesale.html',
+  '/GR-wholesale-integrations.html',
+  '/GR-wholesale-order-review.html',
+  '/GR-wholesale-farm-performance.html',
+  '/GR-wholesale-legacy.html',
+  '/GR-farm-performance.html'
+]);
+
 app.use((req, res, next) => {
   // Only intercept .html requests (skip API routes, data files, JS/CSS/images)
   const reqPath = req.path;
@@ -790,12 +808,13 @@ app.use((req, res, next) => {
     let html = fs.readFileSync(filePath, 'utf8');
     // Don't double-inject
     if (!html.includes(_INJECT_MARK) && html.includes('<head')) {
+      const skipGuard = _GUARD_SKIP_PATHS.has(reqPath);
       // Skip injection if page already has both scripts
       const hasConfig = html.includes('api-config.js');
       const hasGuard  = html.includes('auth-guard.js');
       const inject = _INJECT_MARK + '\n  ' +
         (hasConfig ? '' : _CONFIG_TAG + '\n  ') +
-        (hasGuard  ? '' : _GUARD_TAG);
+        ((hasGuard || skipGuard) ? '' : _GUARD_TAG);
       html = html.replace(/(<head[^>]*>)/i, `$1\n  ${inject}`);
     }
     res.set('Cache-Control', 'no-cache, no-store, must-revalidate');

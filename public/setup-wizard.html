@@ -286,6 +286,18 @@
                 <div class="progress-dot" id="dot-3"></div>
                 <div class="progress-dot" id="dot-4"></div>
                 <div class="progress-dot" id="dot-5"></div>
+                <div class="progress-dot" id="dot-6"></div>
+            </div>
+        </div>
+
+        <!-- Evie on-screen guidance (updates per step). Hidden in passwordOnly
+             mode because the operator is an admin resetting a password, not
+             a first-time farm owner. -->
+        <div id="evie-guidance" class="card" style="margin: 0 0 1.25rem; background: rgba(16,185,129,0.08); border: 1px solid rgba(16,185,129,0.25); display: flex; gap: 0.75rem; align-items: flex-start;">
+            <div style="flex: 0 0 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg,#10b981,#059669); display: flex; align-items: center; justify-content: center; font-weight: 700; color: white;">E</div>
+            <div style="flex: 1;">
+                <div style="font-size: 0.8rem; font-weight: 600; color: var(--accent-green); text-transform: uppercase; letter-spacing: 0.05em;">Evie · Your farm assistant</div>
+                <div id="evie-guidance-text" style="margin-top: 0.25rem; color: var(--text-secondary); line-height: 1.4;">Welcome! I'll walk you through the quickest path to a running farm.</div>
             </div>
         </div>
 
@@ -411,8 +423,46 @@
             </div>
         </div>
 
-        <!-- Step 5: Activity Hub Setup -->
+        <!-- Step 5: Business Details (hours, certifications, payment) -->
         <div class="step" id="step-4">
+            <div class="step-content">
+                <h2 class="step-title">Business Details</h2>
+                <p class="step-description">
+                    Set your operating hours, certifications, and payment processing so your store, invoices, and wholesale profile are ready. Every field here is optional — skip anything that doesn't apply and finish it later from Settings.
+                </p>
+
+                <!-- Farm hours -->
+                <div class="card" style="margin-bottom: 1.25rem;">
+                    <h3 style="margin: 0 0 0.75rem; color: var(--accent-blue);">Operating Hours</h3>
+                    <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1rem;">Used on your online store, invoices, and wholesale directory. Tick "Closed" for any day the farm is offline.</p>
+                    <div id="farm-hours-rows" style="display: grid; gap: 0.5rem;"></div>
+                </div>
+
+                <!-- Certifications & practices -->
+                <div class="card" style="margin-bottom: 1.25rem;">
+                    <h3 style="margin: 0 0 0.75rem; color: var(--accent-blue);">Certifications &amp; Growing Practices</h3>
+                    <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1rem;">Select everything your farm already holds or follows. Buyers filter by these on the wholesale marketplace.</p>
+                    <div style="font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">Certifications</div>
+                    <div id="cert-chip-row" style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;"></div>
+                    <div style="font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">Practices</div>
+                    <div id="practice-chip-row" style="display: flex; flex-wrap: wrap; gap: 0.5rem;"></div>
+                </div>
+
+                <!-- Payment processing -->
+                <div class="card" style="margin-bottom: 0;">
+                    <h3 style="margin: 0 0 0.75rem; color: var(--accent-blue);">Payment Processing</h3>
+                    <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1rem;">Required before you accept POS sales or online orders. Connecting Square takes under a minute and can happen after setup.</p>
+                    <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                        <input type="checkbox" id="biz-payment-configured" style="width: 18px; height: 18px;">
+                        <span>I've already connected Square (or another processor) outside this wizard</span>
+                    </label>
+                    <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.75rem;">Prefer to do it after setup? Leave this unchecked — Evie's Getting Started checklist will remind you from the dashboard.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 6: Activity Hub Setup -->
+        <div class="step" id="step-5">
             <div class="step-content">
                 <h2 class="step-title">📱 Activity Hub</h2>
                 <p class="step-description">
@@ -455,8 +505,8 @@
             </div>
         </div>
 
-        <!-- Step 6: Complete -->
-        <div class="step" id="step-5">
+        <!-- Step 7: Complete -->
+        <div class="step" id="step-6">
             <div class="step-content">
                 <h2 class="step-title">Setup Complete</h2>
                 <p class="step-description">
@@ -484,7 +534,7 @@
     <script src="device-scanner.js"></script>
     <script>
         let currentStep = 0;
-        const totalSteps = 6;
+        const totalSteps = 7;
         let roomCounter = 0;
         let deviceScanner = null;
         let discoveredDevices = [];
@@ -524,8 +574,34 @@
             contactPhone: '',
             website: '',
             logoBase64: null,
-            rooms: []
+            rooms: [],
+            businessDetails: null
         };
+
+        // Supported certifications/practices. Kept in the HTML so the wizard
+        // stays a single file and the operator doesn't need a round-trip to
+        // see options. Extend this list if marketing adds new badges.
+        const CERT_OPTIONS = [
+            'USDA Organic',
+            'Certified Naturally Grown',
+            'GAP (Good Agricultural Practices)',
+            'GlobalG.A.P.',
+            'Rainforest Alliance',
+            'Demeter Biodynamic',
+            'Kosher',
+            'Halal'
+        ];
+        const PRACTICE_OPTIONS = [
+            'Pesticide-free',
+            'Hydroponic',
+            'Aeroponic',
+            'Aquaponic',
+            'Vertical farming',
+            'Regenerative',
+            'Local (within 100 mi)',
+            'Non-GMO seeds'
+        ];
+        const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
         
         // Pre-populate farm profile fields when DOM is ready
         setTimeout(() => {
@@ -559,6 +635,23 @@
             }
         }, 100);
 
+        // Per-step coaching from Evie. Kept short and actionable so the
+        // operator knows what the step is for without reading a wall of help.
+        const EVIE_STEP_MESSAGES = {
+            0: "Welcome! I'm Evie, your farm assistant. I'll walk you through each step — reach out through the dashboard any time if you get stuck.",
+            1: "Set a strong password (min. 8 chars). This is your admin login; everyone on your team can be invited after setup.",
+            2: "Your farm profile shows up on invoices, the wholesale directory, and the storefront. A real contact email and phone help buyers reach you quickly.",
+            3: "Add every grow room you're using — size matters, so the 3D planner and grow-unit recommendations line up with reality. You can edit rooms later from Grow Management.",
+            4: "Business Details: set operating hours, pick the certifications you actually hold, and flag whether you've already connected Square. Anything blank here I'll remind you about from the Getting Started checklist.",
+            5: "Install the Activity Hub on the iPad you use on the farm floor. It's offline-ready, so crew tasks don't stall if Wi-Fi dips.",
+            6: "Setup is complete. I'll be in the bottom-right of the dashboard — click me whenever you need help with payments, inventory, or orders."
+        };
+
+        function updateEvieGuidance(step) {
+            const el = document.getElementById('evie-guidance-text');
+            if (el) el.textContent = EVIE_STEP_MESSAGES[step] || EVIE_STEP_MESSAGES[0];
+        }
+
         function updateUI() {
             // Hide all steps
             document.querySelectorAll('.step').forEach(step => step.classList.remove('active'));
@@ -572,11 +665,20 @@
                 const navBtns = document.querySelector('.footer-nav');
                 const subtitle = document.querySelector('.wizard-subtitle');
                 const pwBtn = document.getElementById('password-only-submit');
+                const evie = document.getElementById('evie-guidance');
                 if (progressBar) progressBar.style.display = 'none';
                 if (navBtns) navBtns.style.display = 'none';
                 if (subtitle) subtitle.textContent = 'Please set a new password to continue';
                 if (pwBtn) pwBtn.style.display = 'block';
+                if (evie) evie.style.display = 'none';
                 return;
+            }
+
+            updateEvieGuidance(currentStep);
+
+            // Populate Business Details inputs the first time that step is shown.
+            if (currentStep === 4) {
+                try { populateBusinessDetailsStep(); } catch (e) { console.warn('[Setup Wizard] populateBusinessDetailsStep failed:', e); }
             }
 
             // Update progress dots
@@ -614,11 +716,17 @@
                 if (!validateFarmProfile()) return;
             } else if (currentStep === 3) {
                 if (!validateRooms()) return;
+            } else if (currentStep === 4) {
+                // Business Details is all-optional. Collect whatever's there.
+                collectBusinessDetails();
             }
 
-            // Save and complete on last data collection step (rooms)
+            // Save and complete on last data collection step (rooms).
+            // Business Details persists its own payload in saveBusinessDetails().
             if (currentStep === 3) {
                 await saveSetup();
+            } else if (currentStep === 4) {
+                await saveBusinessDetails();
             }
 
             if (currentStep < totalSteps - 1) {
@@ -801,6 +909,106 @@
                 console.error('Setup save error:', error);
                 alert(`Failed to save setup: ${error.message}. Please try again.`);
                 throw error;
+            }
+        }
+
+        // ── Business Details (step 4) ────────────────────────────────────────
+        // Renders hours rows + cert/practice chips the first time step 4 is
+        // shown. Idempotent — safe to call multiple times.
+        function populateBusinessDetailsStep() {
+            const hoursHost = document.getElementById('farm-hours-rows');
+            if (hoursHost && !hoursHost.dataset.rendered) {
+                hoursHost.innerHTML = DAYS.map(day => `
+                    <div style="display: grid; grid-template-columns: 60px 1fr 1fr auto; gap: 0.5rem; align-items: center;">
+                        <strong>${day}</strong>
+                        <input type="time" data-hours-open="${day}" class="form-input" value="08:00">
+                        <input type="time" data-hours-close="${day}" class="form-input" value="17:00">
+                        <label style="display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; color: var(--text-muted);">
+                            <input type="checkbox" data-hours-closed="${day}"> Closed
+                        </label>
+                    </div>
+                `).join('');
+                hoursHost.dataset.rendered = '1';
+
+                // Default weekends to Closed so the template reads sensibly.
+                const satClosed = hoursHost.querySelector('[data-hours-closed="Sat"]');
+                const sunClosed = hoursHost.querySelector('[data-hours-closed="Sun"]');
+                if (satClosed) satClosed.checked = true;
+                if (sunClosed) sunClosed.checked = true;
+            }
+
+            const certHost = document.getElementById('cert-chip-row');
+            if (certHost && !certHost.dataset.rendered) {
+                certHost.innerHTML = CERT_OPTIONS.map((name, i) => `
+                    <label class="cert-chip" style="display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.35rem 0.75rem; border: 1px solid var(--border); border-radius: 999px; cursor: pointer; background: var(--bg-secondary);">
+                        <input type="checkbox" data-cert-idx="${i}" value="${name.replace(/"/g, '&quot;')}">
+                        <span>${name}</span>
+                    </label>
+                `).join('');
+                certHost.dataset.rendered = '1';
+            }
+
+            const practiceHost = document.getElementById('practice-chip-row');
+            if (practiceHost && !practiceHost.dataset.rendered) {
+                practiceHost.innerHTML = PRACTICE_OPTIONS.map((name, i) => `
+                    <label class="practice-chip" style="display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.35rem 0.75rem; border: 1px solid var(--border); border-radius: 999px; cursor: pointer; background: var(--bg-secondary);">
+                        <input type="checkbox" data-practice-idx="${i}" value="${name.replace(/"/g, '&quot;')}">
+                        <span>${name}</span>
+                    </label>
+                `).join('');
+                practiceHost.dataset.rendered = '1';
+            }
+        }
+
+        function collectBusinessDetails() {
+            const hours = {};
+            DAYS.forEach(day => {
+                const closedEl = document.querySelector(`[data-hours-closed="${day}"]`);
+                const openEl = document.querySelector(`[data-hours-open="${day}"]`);
+                const closeEl = document.querySelector(`[data-hours-close="${day}"]`);
+                const closed = !!(closedEl && closedEl.checked);
+                hours[day.toLowerCase()] = closed
+                    ? { closed: true }
+                    : { closed: false, open: openEl ? openEl.value : '', close: closeEl ? closeEl.value : '' };
+            });
+            const certifications = Array.from(document.querySelectorAll('[data-cert-idx]:checked')).map(el => el.value);
+            const practices = Array.from(document.querySelectorAll('[data-practice-idx]:checked')).map(el => el.value);
+            const paymentEl = document.getElementById('biz-payment-configured');
+            const paymentConfigured = !!(paymentEl && paymentEl.checked);
+
+            farmData.businessDetails = { hours, certifications, practices, paymentConfigured };
+            return farmData.businessDetails;
+        }
+
+        async function saveBusinessDetails() {
+            if (!farmData.businessDetails) return;
+            try {
+                const token = sessionStorage.getItem('token') || localStorage.getItem('token');
+                if (!token || !farmData.farmId) {
+                    console.warn('[Setup Wizard] Skipping business-details save — no auth context');
+                    return;
+                }
+                const resp = await fetch('/api/setup/business-details', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        farmId: farmData.farmId,
+                        hours: farmData.businessDetails.hours,
+                        certifications: farmData.businessDetails.certifications,
+                        practices: farmData.businessDetails.practices,
+                        paymentConfigured: farmData.businessDetails.paymentConfigured
+                    })
+                });
+                if (!resp.ok) {
+                    const body = await resp.json().catch(() => ({}));
+                    console.warn('[Setup Wizard] Business Details save failed:', resp.status, body);
+                    // Don't block wizard progression — operator can fix these in Settings.
+                }
+            } catch (err) {
+                console.warn('[Setup Wizard] Business Details save error:', err);
             }
         }
 
@@ -1026,7 +1234,7 @@
                         if (!deviceScanner) {
                             initDeviceScanner();
                         }
-                    } else if (stepId === 'step-4') {
+                    } else if (stepId === 'step-5') {
                         generateActivityHubQR();
                     }
                 }
