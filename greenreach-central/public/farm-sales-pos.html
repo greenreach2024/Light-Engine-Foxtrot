@@ -1221,6 +1221,7 @@
           lot_code: p.lot_code ?? p.lotCode ?? '',
           description: p.description ?? '',
           thumbnail_url: p.thumbnail_url ?? p.image_url ?? '',
+          is_taxable: p.is_taxable ?? p.isTaxable ?? true,
         }));
 
         if (inventory.length === 0) {
