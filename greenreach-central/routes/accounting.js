@@ -2301,9 +2301,14 @@ router.get('/farm-payouts/outstanding', async (_req, res) => {
  *
  * Body: { farm_id, farm_name?, amount, order_id?, payout_id?, currency?, provider?, memo? }
  *
- * Idempotent on (order_id, farm_id, amount) — re-posting the same
- * settlement is a no-op. Provide a unique payout_id for true per-payout
- * idempotency if you'll settle the same order twice.
+ * Idempotency: the downstream connector keys on (payout_id || order_id,
+ * farm_id, amount). Supplying a stable, unique `payout_id` (e.g. the
+ * Square payout id, an internal settlement UUID, or a
+ * `YYYYMMDD-farm_id-N` style string) is the ONLY way to settle the same
+ * (order_id, farm_id, amount) twice — a second call with the same
+ * effective key is silently deduped. Defaults for `payout_id` and
+ * `order_id` are deterministic (derived from farm_id + amount) so naive
+ * retries and double-clicks can't double-post.
  */
 router.post('/farm-payouts', async (req, res) => {
   if (!await isDatabaseAvailable()) {
@@ -2318,9 +2323,20 @@ router.post('/farm-payouts', async (req, res) => {
     return res.status(400).json({ ok: false, error: 'amount_must_be_positive_number' });
   }
   try {
+    // Defaults must be deterministic — a Date.now()-based default would
+    // mint a new idempotency key on every retry, bypassing the
+    // ON CONFLICT (idempotency_key) guard in ingestFarmPayout and
+    // double-posting the ledger entry on network retries or user
+    // double-clicks. We derive from farm_id + amount so the same logical
+    // manual payout hashes to the same key every time; callers who need
+    // to record multiple distinct settlements for the same tuple MUST
+    // provide an explicit payout_id or order_id.
+    const amountKey = amt.toFixed(2);
+    const effectiveOrderId = order_id || `manual-${farm_id}-${amountKey}`;
+    const effectivePayoutId = payout_id || `manual-${farm_id}-${amountKey}`;
     const result = await ingestFarmPayout({
-      payout_id: payout_id || `manual-${order_id || 'adhoc'}-${farm_id}-${Date.now()}`,
-      order_id: order_id || `manual-${Date.now()}`,
+      payout_id: effectivePayoutId,
+      order_id: effectiveOrderId,
       farm_id,
       farm_name: farm_name || farm_id,
       amount: amt,
