@@ -3447,19 +3447,24 @@ function applySamplePricing({ allocation, paymentSplit, cart, commissionRate }) 
   allocation.grand_total = Math.round(subtotal * 100) / 100;
   allocation.is_sample_order = (allocation.farm_sub_orders || []).every((sub) => sub.is_sample === true);
 
-  const adjustedSplit = (paymentSplit || []).map((entry) => {
-    const sub = (allocation.farm_sub_orders || []).find((s) => String(s.farm_id) === String(entry.farm_id));
-    const gross = Number(sub?.subtotal || 0);
-    const brokerFee = Math.round(gross * rate * 100) / 100;
-    return {
-      ...entry,
-      gross_amount: gross,
-      broker_fee: brokerFee,
-      net_amount: Math.round((gross - brokerFee) * 100) / 100
-    };
-  });
+  // Mutate paymentSplit entries in place so callers that keep a reference to
+  // result.payment_split (e.g. checkout/execute passing it into createPayment,
+  // and preview responses that spread ...result.allocation alongside
+  // result.payment_split) see the zero-priced split without having to
+  // remember to reassign. Otherwise finalizePayment would persist the
+  // pre-sample non-zero amounts to the payments table.
+  if (Array.isArray(paymentSplit)) {
+    for (const entry of paymentSplit) {
+      const sub = (allocation.farm_sub_orders || []).find((s) => String(s.farm_id) === String(entry.farm_id));
+      const gross = Number(sub?.subtotal || 0);
+      const brokerFee = Math.round(gross * rate * 100) / 100;
+      entry.gross_amount = gross;
+      entry.broker_fee = brokerFee;
+      entry.net_amount = Math.round((gross - brokerFee) * 100) / 100;
+    }
+  }
 
-  return { allocation, paymentSplit: adjustedSplit };
+  return { allocation, paymentSplit };
 }
 
 router.post('/checkout/preview', checkoutLimiter, requireWholesaleDbForCriticalPaths, requireBuyerAuth, async (req, res, next) => {
@@ -4160,7 +4165,7 @@ router.post('/checkout/execute', checkoutLimiter, requireWholesaleDbForCriticalP
       await persistDeliveryLedger({
         order,
         allocation: result.allocation,
-        deliveryFee,
+        deliveryFee: effectiveDeliveryFee,
         deliveryDate: delivery_date,
         deliveryAddress: normalizedDeliveryAddress,
         fulfillmentMethod: order.fulfillment_method
