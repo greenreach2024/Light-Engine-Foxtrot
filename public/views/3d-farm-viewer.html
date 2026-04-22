@@ -31,6 +31,14 @@
       z-index: 100;
       flex-shrink: 0;
     }
+
+    /* When the viewer is hosted inside the in-place popup overlay (iframe)
+       from grow-management / farm-setup we suppress the duplicated page
+       chrome — the overlay provides its own title bar and close affordance.
+       Room Mapper + Heat Map are folded into this viewer so any caller that
+       used to navigate away now opens it as a popup instead. */
+    body.spatial-viewer-embedded .header { display: none; }
+    body.spatial-viewer-embedded { padding: 0; margin: 0; }
     .header-left { display: flex; align-items: center; gap: 1rem; }
     .header h1 { font-size: 1.1rem; font-weight: 700; letter-spacing: -0.3px; white-space: nowrap; }
     .header h1 em { font-style: normal; color: #818cf8; }
@@ -5283,6 +5291,64 @@
       }, 60000);
     }
 
+    // ---- Query-param deep-link handling ---------------------
+    // The spatial-viewer popup launches the viewer with ?mode=<...> so the
+    // old Heat Map and Room Mapper pages can be rolled into this one. We
+    // honor three modes:
+    //   - heatmap    : activate the Temperature overlay on load
+    //   - draw-zones : engage edit mode so operators can place/adjust zones
+    //   - view       : default (no-op)
+    // Also supports ?embedded=1 to drop the page chrome when hosted inside
+    // the <iframe> popup, and ?roomId=<id> to preselect the room filter.
+    function applyDeepLinkParams() {
+      try {
+        var qs = new URLSearchParams(window.location.search || '');
+        var mode = (qs.get('mode') || 'view').toLowerCase();
+        var embedded = qs.get('embedded') === '1';
+        var roomId = qs.get('roomId') || qs.get('room') || '';
+
+        if (embedded) {
+          document.body.classList.add('spatial-viewer-embedded');
+        }
+
+        if (roomId) {
+          var sel = document.getElementById('roomSelect');
+          if (sel) {
+            // Room list isn't hydrated yet; wait a tick so options exist.
+            setTimeout(function () {
+              var hasOption = Array.prototype.some.call(sel.options, function (o) { return o.value === roomId; });
+              if (hasOption) {
+                sel.value = roomId;
+                sel.dispatchEvent(new Event('change'));
+              }
+            }, 1500);
+          }
+        }
+
+        if (mode === 'heatmap') {
+          // Click the Temperature overlay button once the toolbar is wired.
+          setTimeout(function () {
+            var tempBtn = document.querySelector('.toolbar button[data-overlay="temp"]')
+              || document.querySelector('.toolbar button[data-overlay="temperature"]');
+            if (tempBtn) tempBtn.click();
+          }, 600);
+        } else if (mode === 'draw-zones') {
+          // Click the edit button so toggleEditMode() runs — that handler sets
+          // the viewer-container 'edit-mode' class (crosshair cursor) and the
+          // editIndicator 'visible' class (red banner). Duplicating the state
+          // flip manually would miss those side-effects.
+          setTimeout(function () {
+            if (!S.editMode) {
+              var editBtn = document.getElementById('btnEdit');
+              if (editBtn) editBtn.click();
+            }
+          }, 600);
+        }
+      } catch (e) {
+        console.warn('[3d-viewer] deep-link params failed:', e);
+      }
+    }
+
     // ---- Bootstrap -------------------------------------------
     document.addEventListener('DOMContentLoaded', function() {
       initScene();
@@ -5291,6 +5357,7 @@
       loadAllData({ reason: 'initial', skipRebuildIfUnchanged: false });
       startEventStream();
       startAutoRefresh();
+      applyDeepLinkParams();
     });
 
   })();

@@ -678,6 +678,7 @@
   <script src="/lib/room-layout-solver.js?v=20260421-rls-v1" defer></script>
   <script src="/views/grow-management-template-gallery.js?v=20260421-tg-v2" defer></script>
   <script src="/views/grow-management-room-build-plan.js?v=20260421-rbp-v3" defer></script>
+  <script src="/js/spatial-viewer-popup.js?v=20260421-svp-v1" defer></script>
 </head>
 <body class="le-theme">
 
@@ -749,8 +750,14 @@
       </div>
       <div class="ff-step-card">
         <div id="ffRoomBody" class="ff-empty">Loading rooms&hellip;</div>
-        <div class="ff-link-row">
-          <a href="/views/3d-farm-viewer.html">Open 3D viewer</a>
+        <!-- In-place popup launchers. The 3D viewer, Room Mapper, and Heat Map
+             now live as modes of the same viewer so the operator never
+             bounces to a new page. Each link opens the shared popup overlay
+             (see /js/spatial-viewer-popup.js) instead of navigating. -->
+        <div class="ff-link-row" style="display:flex;gap:14px;flex-wrap:wrap;">
+          <a href="#" data-spatial-viewer="view" data-spatial-viewer-title="3D Farm Viewer">Open 3D viewer</a>
+          <a href="#" data-spatial-viewer="draw-zones" data-spatial-viewer-title="Room Mapper &middot; 3D viewer">Room Mapper</a>
+          <a href="#" data-spatial-viewer="heatmap" data-spatial-viewer-title="Heat Map &middot; 3D viewer">Heat Map</a>
         </div>
       </div>
     </section>
