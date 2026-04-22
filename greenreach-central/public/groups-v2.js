@@ -6882,6 +6882,71 @@ function populateBsgModal() {
 
   // Populate standard light dropdown
   populateStandardLightDropdown('bsgStandardLight', '(none \u2014 use auto-assign pool)');
+
+  // Populate standard controller dropdown from bindings + iot-devices.
+  // Keeps the picker inline inside the Build Stock Groups card so operators
+  // don't have to bounce to step 5 to assign a controller.
+  populateStandardControllerDropdown('bsgStandardController', '(none \u2014 assign later in step 5)');
+
+  // Default group_id prefix from farm id if available
+  var gidInput = document.getElementById('bsgGroupIdPrefix');
+  if (gidInput && !gidInput.value) {
+    var farmId = '';
+    try { farmId = (localStorage && localStorage.getItem('farmId')) || ''; } catch (e) {}
+    if (farmId) gidInput.placeholder = 'GID-' + String(farmId).slice(-8).toUpperCase() + '-';
+  }
+}
+
+/**
+ * Populate a controller dropdown. Pulls from /api/controller-bindings
+ * (preferred) with a fallback to window.STATE.devices / iot-devices shapes.
+ * Silently leaves the (none) option in place on fetch failures so the
+ * modal stays usable offline or before auth is hydrated.
+ */
+async function populateStandardControllerDropdown(selectId, noneLabel) {
+  const select = document.getElementById(selectId);
+  if (!select) return;
+  const prior = select.value;
+  select.innerHTML = `<option value="">${noneLabel}</option>`;
+  const seen = new Set();
+  function addOption(value, label) {
+    if (!value || seen.has(value)) return;
+    seen.add(value);
+    const opt = document.createElement('option');
+    opt.value = value;
+    opt.textContent = label || value;
+    select.appendChild(opt);
+  }
+  // Live controller bindings from central
+  try {
+    const f = window.authFetch || fetch;
+    const res = await f('/api/controller-bindings', { credentials: 'same-origin' });
+    if (res && res.ok) {
+      const json = await res.json();
+      const bindings = (json && Array.isArray(json.bindings)) ? json.bindings
+        : (Array.isArray(json) ? json : []);
+      bindings.forEach(b => {
+        const id = (b && (b.controllerId || b.id)) || '';
+        const label = (b && (b.label || b.name || b.vendor)) || id;
+        addOption(id, label);
+      });
+    }
+  } catch (e) {
+    // Offline / unauthenticated — fall through to local state.
+  }
+  // Fallback to any controller-shaped devices cached in STATE
+  const devices = (window.STATE && Array.isArray(window.STATE.devices)) ? window.STATE.devices
+    : (window.STATE && Array.isArray(window.STATE.iotDevices)) ? window.STATE.iotDevices
+    : [];
+  devices.forEach(d => {
+    if (!d) return;
+    const type = (d.deviceType || d.type || '').toString().toLowerCase();
+    if (type !== 'controller' && type !== 'hub' && type !== 'gateway') return;
+    const id = d.id || d.deviceId || d.serial || '';
+    const label = d.name || d.deviceName || id;
+    addOption(id, label);
+  });
+  if (prior) select.value = prior;
 }
 
 /**
@@ -7067,6 +7132,8 @@ async function executeBuildStockGroups() {
   const standardLightTemplate = standardLightId
     ? getAvailableLightTemplates().find(t => t.id === standardLightId) || null
     : null;
+  const standardControllerId = (document.getElementById('bsgStandardController')?.value || '').trim();
+  const groupIdPrefix = (document.getElementById('bsgGroupIdPrefix')?.value || '').trim();
 
   // Validation
   const missing = [];
@@ -7162,8 +7229,29 @@ async function executeBuildStockGroups() {
       }
     }
 
+    // Stable group_id separate from the human-facing id/name so downstream
+    // consumers (inventory, recipe assignment, wholesale portal, accounting)
+    // have a durable identifier that survives rename/zone changes.
+    const groupIdSuffix = String(i).padStart(3, '0');
+    const groupId = groupIdPrefix
+      ? `${groupIdPrefix}${groupIdSuffix}`
+      : `GID-${(roomId || room || 'ROOM').replace(/\s+/g, '').toUpperCase()}-${(zone || 'Z').toString().toUpperCase()}-${groupIdSuffix}`;
+
+    // If a Standard Controller was picked, pre-bind every group to it so
+    // step 5 (Controllers) reflects the intent from step 3 without the
+    // operator leaving the page. Shape matches controller-bindings.json.
+    const controllerBindings = standardControllerId
+      ? [{
+          groupId: id,
+          controllerId: standardControllerId,
+          assignedAt: now,
+          source: 'build-stock-groups'
+        }]
+      : [];
+
     const group = {
       id,
+      group_id: groupId,
       name: groupName,
       room,
       zone,
@@ -7171,7 +7259,9 @@ async function executeBuildStockGroups() {
       zoneId,
       trays,
       plants: 0,
+      plant_count: 0,
       lights: groupLights,
+      controller_bindings: controllerBindings,
       deviceCount: groupLights.length,
       active: true,
       health: 'healthy',
