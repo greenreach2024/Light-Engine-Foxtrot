@@ -1,25 +1,38 @@
 /**
  * Onboarding Checklist Widget
  * Persistent, collapsible panel showing setup progress for new farms.
- * Renders into #onboarding-checklist-container on the Settings page
- * and optionally shows a banner on the Dashboard.
+ * Renders into any element with id "onboarding-checklist-container" OR
+ * the class "onboarding-checklist-container" (Dashboard, Settings,
+ * setup wizard, etc.) so first-time operators see progress outside
+ * the Settings page.
  */
 
+function getOnboardingChecklistContainers() {
+  const nodes = [];
+  const byId = document.getElementById('onboarding-checklist-container');
+  if (byId) nodes.push(byId);
+  document.querySelectorAll('.onboarding-checklist-container').forEach(el => {
+    if (!nodes.includes(el)) nodes.push(el);
+  });
+  return nodes;
+}
+
 async function loadOnboardingChecklist() {
-  const container = document.getElementById('onboarding-checklist-container');
-  if (!container) return;
+  const containers = getOnboardingChecklistContainers();
+  if (!containers.length) return;
+  const setAllDisplay = (value) => containers.forEach(c => { c.style.display = value; });
 
   // Check if user dismissed the checklist
   const dismissed = localStorage.getItem('onboarding_checklist_dismissed');
   if (dismissed === 'true') {
-    container.style.display = 'none';
+    setAllDisplay('none');
     return;
   }
 
   // Check if user snoozed the checklist
   const snoozedUntil = localStorage.getItem('onboarding_checklist_snoozed_until');
   if (snoozedUntil && Date.now() < parseInt(snoozedUntil, 10)) {
-    container.style.display = 'none';
+    setAllDisplay('none');
     return;
   }
   // Clear expired snooze
@@ -33,13 +46,13 @@ async function loadOnboardingChecklist() {
     const response = await fetch('/api/setup/onboarding-status', { headers });
     if (!response.ok) {
       console.warn('[Onboarding] Status API returned', response.status);
-      container.style.display = 'none';
+      setAllDisplay('none');
       return;
     }
 
     const data = await response.json();
     if (!data.success) {
-      container.style.display = 'none';
+      setAllDisplay('none');
       return;
     }
 
@@ -58,23 +71,29 @@ async function loadOnboardingChecklist() {
 
     // If all done, auto-dismiss
     if (completedCount === totalCount) {
-      container.style.display = 'none';
+      setAllDisplay('none');
       return;
     }
 
-    container.style.display = 'block';
-    container.innerHTML = renderChecklist(data.tasks, completedCount, totalCount, pct, data.planType);
+    containers.forEach((el, idx) => {
+      el.style.display = 'block';
+      // Only the first container owns the stable DOM ids so the
+      // existing toggle/dismiss/snooze helpers keep working. Extra
+      // containers get suffixed ids to avoid duplicate-id lint issues.
+      el.innerHTML = renderChecklist(data.tasks, completedCount, totalCount, pct, data.planType, idx === 0 ? '' : `-${idx}`);
+    });
 
     // Also show banner on Dashboard if not all done
     showDashboardOnboardingBanner(completedCount, totalCount, pct);
 
   } catch (error) {
     console.warn('[Onboarding] Failed to load checklist:', error);
-    container.style.display = 'none';
+    setAllDisplay('none');
   }
 }
 
-function renderChecklist(tasks, completedCount, totalCount, pct, planType) {
+function renderChecklist(tasks, completedCount, totalCount, pct, planType, idSuffix) {
+  const suffix = idSuffix || '';
   const isCollapsed = localStorage.getItem('onboarding_checklist_collapsed') !== 'false';
   const bodyDisplay = isCollapsed ? 'none' : 'block';
   const chevron = isCollapsed ? '▸' : '▾';
@@ -112,29 +131,28 @@ function renderChecklist(tasks, completedCount, totalCount, pct, planType) {
           <button onclick="event.stopPropagation(); snoozeOnboardingChecklist();" style="background: none; border: none; color: var(--text-muted); font-size: 11px; cursor: pointer; padding: 4px 8px;">Remind me next week</button>
           <button onclick="event.stopPropagation(); pauseOnboardingChecklist();" style="background: none; border: none; color: var(--text-muted); font-size: 11px; cursor: pointer; padding: 4px 8px;">Pause</button>
           <button onclick="event.stopPropagation(); dismissOnboardingChecklist();" style="background: none; border: none; color: var(--text-muted); font-size: 11px; cursor: pointer; padding: 4px 8px;">Dismiss</button>
-          <span id="onboarding-chevron" style="color: var(--text-muted); font-size: 14px;">${chevron}</span>
+          <span id="onboarding-chevron${suffix}" style="color: var(--text-muted); font-size: 14px;">${chevron}</span>
         </div>
       </div>
-      <div id="onboarding-checklist-body" style="display: ${bodyDisplay}; margin-top: 16px;">
+      <div id="onboarding-checklist-body${suffix}" style="display: ${bodyDisplay}; margin-top: 16px;">
         ${taskListHTML}
       </div>
     </div>`;
 }
 
 function toggleOnboardingChecklist() {
-  const body = document.getElementById('onboarding-checklist-body');
-  const chevron = document.getElementById('onboarding-chevron');
-  if (!body) return;
-  const isHidden = body.style.display === 'none';
-  body.style.display = isHidden ? 'block' : 'none';
-  if (chevron) chevron.textContent = isHidden ? '▾' : '▸';
+  const bodies = document.querySelectorAll('[id^="onboarding-checklist-body"]');
+  const chevrons = document.querySelectorAll('[id^="onboarding-chevron"]');
+  if (!bodies.length) return;
+  const isHidden = bodies[0].style.display === 'none';
+  bodies.forEach(b => { b.style.display = isHidden ? 'block' : 'none'; });
+  chevrons.forEach(c => { c.textContent = isHidden ? '▾' : '▸'; });
   localStorage.setItem('onboarding_checklist_collapsed', isHidden ? 'false' : 'true');
 }
 
 function dismissOnboardingChecklist() {
   localStorage.setItem('onboarding_checklist_dismissed', 'true');
-  const container = document.getElementById('onboarding-checklist-container');
-  if (container) container.style.display = 'none';
+  getOnboardingChecklistContainers().forEach(c => { c.style.display = 'none'; });
   const banner = document.getElementById('dashboard-onboarding-banner');
   if (banner) banner.style.display = 'none';
 }
@@ -143,8 +161,7 @@ function snoozeOnboardingChecklist() {
   // Snooze for 7 days
   const oneWeek = 7 * 24 * 60 * 60 * 1000;
   localStorage.setItem('onboarding_checklist_snoozed_until', String(Date.now() + oneWeek));
-  const container = document.getElementById('onboarding-checklist-container');
-  if (container) container.style.display = 'none';
+  getOnboardingChecklistContainers().forEach(c => { c.style.display = 'none'; });
   const banner = document.getElementById('dashboard-onboarding-banner');
   if (banner) banner.style.display = 'none';
 }
@@ -153,8 +170,7 @@ function pauseOnboardingChecklist() {
   // Pause for 24 hours
   const oneDay = 24 * 60 * 60 * 1000;
   localStorage.setItem('onboarding_checklist_snoozed_until', String(Date.now() + oneDay));
-  const container = document.getElementById('onboarding-checklist-container');
-  if (container) container.style.display = 'none';
+  getOnboardingChecklistContainers().forEach(c => { c.style.display = 'none'; });
   const banner = document.getElementById('dashboard-onboarding-banner');
   if (banner) banner.style.display = 'none';
 }

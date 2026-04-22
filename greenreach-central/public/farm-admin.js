@@ -298,7 +298,17 @@ async function initDashboard() {
     
     // Load dashboard data
     await loadDashboardData();
-    
+
+    // Surface the Getting Started checklist on first-run, not just on Settings.
+    // The helper bails early if no container is present on the current page.
+    try {
+        if (typeof loadOnboardingChecklist === 'function') {
+            loadOnboardingChecklist();
+        }
+    } catch (obErr) {
+        console.warn('[Dashboard] Onboarding checklist error (non-fatal):', obErr);
+    }
+
     // Check for first-time setup wizard
     await checkFirstTimeSetup();
     
