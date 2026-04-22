@@ -655,6 +655,150 @@ async function provisionFarmAndUser(session) {
   }
 }
 
+// ═══════════════════════════════════════════════════════════════
+// Stranded-payment reconciler
+//
+// Safety net for the case where Square's post-payment browser redirect
+// back to /purchase-success.html never fires (customer closes tab on the
+// Square receipt, webhook not configured, flaky network, etc.). Without
+// this, provisionFarmAndUser() + sendWelcomeEmail() never run, and the
+// customer is stuck with a Square receipt but no Light Engine account.
+//
+// Runs as a setInterval started from server.js. Scans checkout_sessions
+// where status IN ('pending','paid') and created_at is older than
+// MIN_AGE minutes, asks Square whether the order is COMPLETED, and if so
+// calls the same provisioning path the browser redirect would have.
+// ═══════════════════════════════════════════════════════════════
+const RECONCILE_MIN_AGE_MIN = parseInt(process.env.PURCHASE_RECONCILE_MIN_AGE_MIN || '3', 10);
+const RECONCILE_BATCH_LIMIT = parseInt(process.env.PURCHASE_RECONCILE_BATCH_LIMIT || '25', 10);
+
+export async function runPendingCheckoutReconciler({ verbose = false } = {}) {
+  if (!isDatabaseAvailable()) {
+    if (verbose) console.log('[Reconciler] Database unavailable — skipping');
+    return { scanned: 0, recovered: 0, skipped: 0, errors: 0, db_unavailable: true };
+  }
+
+  const client = await getSquareClient();
+  if (!client) {
+    if (verbose) console.log('[Reconciler] Square client unavailable — skipping');
+    return { scanned: 0, recovered: 0, skipped: 0, errors: 0, square_unavailable: true };
+  }
+
+  let scanned = 0;
+  let recovered = 0;
+  let skipped = 0;
+  let errors = 0;
+
+  try {
+    const { rows } = await query(
+      `SELECT * FROM checkout_sessions
+       WHERE status IN ('pending', 'paid')
+         AND provisioned_farm_id IS NULL
+         AND square_order_id IS NOT NULL
+         AND created_at < NOW() - ($1 || ' minutes')::interval
+       ORDER BY created_at ASC
+       LIMIT $2`,
+      [String(RECONCILE_MIN_AGE_MIN), RECONCILE_BATCH_LIMIT]
+    );
+
+    scanned = rows.length;
+    if (scanned === 0) {
+      if (verbose) console.log('[Reconciler] No stranded sessions found');
+      return { scanned, recovered, skipped, errors };
+    }
+
+    console.log(`[Reconciler] Checking ${scanned} stranded session(s) against Square...`);
+
+    for (const session of rows) {
+      try {
+        const orderResponse = await client.orders.get({ orderId: session.square_order_id });
+        const order = orderResponse.order;
+        let orderPaid = false;
+        let paymentId = null;
+
+        if (order?.state === 'COMPLETED') {
+          orderPaid = true;
+          if (order.tenders && order.tenders.length > 0) {
+            paymentId = order.tenders[0].paymentId || order.tenders[0].id;
+          }
+        } else if (order?.state === 'OPEN') {
+          const netDue = order.netAmountDueMoney?.amount;
+          if (netDue === 0n || netDue === BigInt(0)) orderPaid = true;
+        }
+
+        if (!orderPaid) {
+          skipped += 1;
+          if (verbose) console.log(`[Reconciler] Session ${session.session_id} Square state=${order?.state} — not paid, skipping`);
+          continue;
+        }
+
+        if (paymentId && !session.payment_id) {
+          await query(
+            `UPDATE checkout_sessions SET payment_id = $1, status = 'paid' WHERE session_id = $2`,
+            [paymentId, session.session_id]
+          );
+          session.payment_id = paymentId;
+          session.status = 'paid';
+        }
+
+        const result = await provisionFarmAndUser(session);
+        if (!result.success) {
+          errors += 1;
+          console.error(`[Reconciler] Provisioning failed for ${session.session_id}: ${result.error}`);
+          continue;
+        }
+
+        if (!result.existing_account && result.temp_password) {
+          try {
+            const emailResult = await sendWelcomeEmail({
+              email: result.email,
+              farmId: result.farm_id,
+              farmName: result.farm_name,
+              contactName: session.contact_name,
+              tempPassword: result.temp_password,
+              planType: result.plan_type,
+            });
+            if (!emailResult.sent) {
+              console.warn(`[Reconciler] Welcome email failed for ${result.email}: ${emailResult.error}`);
+            } else {
+              console.log(`[Reconciler] Welcome email sent to ${result.email}`);
+            }
+          } catch (emailErr) {
+            console.error(`[Reconciler] Welcome email error for ${result.email}:`, emailErr.message);
+          }
+        }
+
+        recovered += 1;
+        console.log(`[Reconciler] Recovered ${session.session_id} -> farm ${result.farm_id} (${result.farm_name}) for ${result.email}`);
+      } catch (sessErr) {
+        errors += 1;
+        console.error(`[Reconciler] Error processing session ${session.session_id}:`, sessErr.message);
+      }
+    }
+
+    if (recovered > 0 || errors > 0) {
+      console.log(`[Reconciler] Done: scanned=${scanned} recovered=${recovered} skipped=${skipped} errors=${errors}`);
+    }
+  } catch (error) {
+    console.error('[Reconciler] Top-level error:', error);
+    errors += 1;
+  }
+
+  return { scanned, recovered, skipped, errors };
+}
+
+// Admin-triggered manual reconcile (useful for immediate recovery of a single
+// stuck payment without waiting for the background interval).
+router.post('/api/purchase/admin/reconcile', adminAuthMiddleware, async (_req, res) => {
+  try {
+    const result = await runPendingCheckoutReconciler({ verbose: true });
+    return res.json({ success: true, ...result });
+  } catch (error) {
+    console.error('[Reconciler] Manual trigger error:', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 /** Generate a JWT for farm auto-login */
 function generateFarmJwt(farmId, email, farmJwtSecret) {
   try {
