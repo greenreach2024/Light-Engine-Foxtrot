@@ -1722,7 +1722,12 @@ router.get('/farms/:farmId', async (req, res) => {
         // Format farm data — expose camelCase fields for frontend + raw DB row.
         // Read from dedicated farms columns FIRST (source of truth for farm-side edits),
         // then fall back to legacy metadata JSONB so older records still render.
+        // IMPORTANT: spread `...farmRow` FIRST so explicit fields below take precedence.
+        // (Earlier version spread farmRow at the end, which clobbered parsed location,
+        // fallbacks, and parsedSettings with raw column values.)
         const farm = {
+            // Raw DB row first — camelCase fields below override any name collisions.
+            ...farmRow,
             farmId: farmRow.farm_id,
             name: farmRow.name || 'Unknown Farm',
             status: farmRow.status || 'unknown',
@@ -1739,6 +1744,7 @@ router.get('/farms/:farmId', async (req, res) => {
             postalCode: (locationAddress && (locationAddress.postalCode || locationAddress.postal_code)) || parsedMeta.postalCode || null,
             location: parsedLocation || parsedMeta.location || null,
             settings: parsedSettings,
+            metadata: parsedMeta,
             coordinates: parsedMeta.coordinates || null,
             apiUrl: farmRow.api_url || null,
             rooms: roomsCount,
@@ -1749,9 +1755,7 @@ router.get('/farms/:farmId', async (req, res) => {
             environmental: {
                 zones: zonesFromTelemetry,
                 summary: envSummary
-            },
-            // Include all raw data
-            ...farmRow
+            }
         };
 
         res.json({
