@@ -63,7 +63,8 @@
 
   async function fetchRooms() {
     try {
-      const res = await fetch('/api/rooms', { credentials: 'same-origin' });
+      const _f = window.authFetch || fetch;
+      const res = await _f('/api/rooms', { credentials: 'same-origin' });
       if (!res.ok) return [];
       const body = await res.json();
       if (Array.isArray(body)) return body;

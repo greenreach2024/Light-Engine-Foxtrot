@@ -65,7 +65,8 @@
   function sum(a) { return a.reduce((t, x) => t + (Number.isFinite(x) ? x : 0), 0); }
 
   function fetchRooms() {
-    return fetch('/api/rooms', { credentials: 'same-origin' })
+    const _f = window.authFetch || fetch;
+    return _f('/api/rooms', { credentials: 'same-origin' })
       .then(r => r.ok ? r.json() : [])
       .then(body => Array.isArray(body) ? body : (body.rooms || body.items || []))
       .catch(() => []);
