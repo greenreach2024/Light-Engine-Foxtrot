@@ -41,7 +41,6 @@
     { keywords: ['wholesale', 'orders', 'wholesale orders', 'buyer', 'bulk'], label: 'Wholesale Orders', icon: 'icon-wholesale', category: 'Business', catKey: 'business', itemId: 'wholesale-orders' },
     { keywords: ['procurement', 'purchase', 'supplier', 'order supplies', 'catalog'], label: 'Procurement', icon: 'icon-procurement', category: 'Business', catKey: 'business', itemId: 'procurement' },
     { keywords: ['pricing', 'price', 'prices', 'markup', 'margin', 'cost'], label: 'Pricing', icon: 'icon-pricing', category: 'Business', catKey: 'business', itemId: 'pricing' },
-    { keywords: ['crop value', 'value', 'revenue', 'crop revenue'], label: 'Crop Value', icon: 'icon-crop-value', category: 'Business', catKey: 'business', itemId: 'crop-value' },
     { keywords: ['traceability', 'trace', 'lot', 'lot code', 'sfcr', 'recall', 'chain'], label: 'Lot Traceability', icon: 'icon-traceability', category: 'Business', catKey: 'business', itemId: 'traceability' },
     { keywords: ['sustainability', 'esg', 'carbon', 'food miles', 'utility', 'environmental'], label: 'Sustainability', icon: 'icon-sustainability', category: 'Business', catKey: 'business', itemId: 'sustainability' },
     { keywords: ['quality', 'qa', 'inspection', 'standards', 'quality control'], label: 'Quality Control', icon: 'icon-quality', category: 'Business', catKey: 'business', itemId: 'quality' },

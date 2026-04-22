@@ -54,7 +54,6 @@
         { id: 'wholesale-orders', label: 'Wholesale Orders',    icon: 'icon-wholesale',     section: 'wholesale-orders' },
         { id: 'procurement',      label: 'Procurement',         icon: 'icon-procurement',   section: 'iframe-view', url: '/views/procurement-portal.html' },
         { id: 'pricing',          label: 'Pricing',             icon: 'icon-pricing',       section: 'pricing' },
-        { id: 'crop-value',       label: 'Crop Value',          icon: 'icon-crop-value',    section: 'crop-value' },
         { id: 'traceability',     label: 'Lot Traceability',    icon: 'icon-traceability',  section: 'traceability' },
         { id: 'harvest-donations', label: 'Harvest & Donations', icon: 'icon-sustainability', section: 'harvest-donations' },
         { id: 'sustainability',   label: 'Sustainability',      icon: 'icon-sustainability', section: 'sustainability' },

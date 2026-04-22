@@ -5645,8 +5645,9 @@ async function loadPaymentMethods() {
                     </div>
                     <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 15px; max-width: 500px; margin-left: auto; margin-right: auto;">
                         Connect your Square account to accept credit cards, debit cards, and digital payments from your customers.
+                    </p>
                     <div style="display: flex; gap: 10px; justify-content: center;">
-                        <button class="btn" onclick="navigateToPaymentWizard()" style="background: var(--accent-green);">
+                        <button class="btn-evie-primary" onclick="navigateToPaymentWizard()">
                             Set Up Square Payments
                         </button>
                     </div>
@@ -5669,7 +5670,7 @@ async function loadPaymentMethods() {
                     <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 15px;">
                         Connect your Square account to accept payments from customers.
                     </p>
-                    <button class="btn" onclick="navigateToPaymentWizard()" style="background: var(--accent-green);">
+                    <button class="btn-evie-primary" onclick="navigateToPaymentWizard()">
                         Set Up Square Payments
                     </button>
                 </div>
@@ -5804,35 +5805,41 @@ async function testSquareConnection() {
 function navigateToPaymentWizard() {
     // Navigate to Setup & Update page, then trigger the payment wizard from its sidebar
     const navItem = document.querySelector('.nav-item[data-url="/LE-dashboard.html"]');
-    if (navItem) {
-        navItem.click();
-        // After LE-dashboard loads in the iframe, open the payment wizard
-        const iframe = document.getElementById('admin-iframe');
-        if (iframe) {
-            iframe.addEventListener('load', function onWizardLoad() {
-                iframe.removeEventListener('load', onWizardLoad);
-                try {
-                    const iframeWin = iframe.contentWindow;
-                    if (iframeWin && typeof iframeWin.openPaymentWizard === 'function') {
-                        iframeWin.openPaymentWizard();
-                    } else {
-                        // Function may not be ready yet (deferred scripts), retry briefly
-                        let retries = 0;
-                        const interval = setInterval(() => {
-                            if (iframeWin && typeof iframeWin.openPaymentWizard === 'function') {
-                                clearInterval(interval);
-                                iframeWin.openPaymentWizard();
-                            } else if (++retries > 20) {
-                                clearInterval(interval);
-                            }
-                        }, 250);
-                    }
-                } catch (e) {
-                    console.warn('[Payment] Could not auto-open wizard:', e.message);
-                }
-            });
-        }
+    if (!navItem) {
+        console.warn('[Payment] Setup/Update nav item not found; falling back to direct navigation');
+        // Fallback: navigate directly so the button always does something useful
+        try { window.location.href = '/LE-dashboard.html#payment'; } catch (_) {}
+        return;
     }
+    navItem.click();
+    // After LE-dashboard loads in the iframe, open the payment wizard
+    const iframe = document.getElementById('admin-iframe');
+    if (!iframe) return;
+    iframe.addEventListener('load', function onWizardLoad() {
+        iframe.removeEventListener('load', onWizardLoad);
+        try {
+            const iframeWin = iframe.contentWindow;
+            if (iframeWin && typeof iframeWin.openPaymentWizard === 'function') {
+                iframeWin.openPaymentWizard();
+            } else {
+                // Function may not be ready yet (deferred scripts), retry briefly
+                let retries = 0;
+                const interval = setInterval(() => {
+                    if (iframeWin && typeof iframeWin.openPaymentWizard === 'function') {
+                        clearInterval(interval);
+                        iframeWin.openPaymentWizard();
+                    } else if (++retries > 20) {
+                        clearInterval(interval);
+                    }
+                }, 250);
+            }
+        } catch (e) {
+            console.warn('[Payment] Could not auto-open wizard:', e.message);
+        }
+    });
+}
+if (typeof window !== 'undefined') {
+    window.navigateToPaymentWizard = navigateToPaymentWizard;
 }
 
 /**
@@ -5910,7 +5917,7 @@ function renderReceiptRows(receipts) {
             <td>$${(receipt.amount || 0).toFixed(2)} ${receipt.currency || ''}</td>
             <td><span style="padding: 4px 8px; background: ${statusColor}; border-radius: 4px; font-size: 12px;">${(receipt.status || 'paid').toUpperCase()}</span></td>
             <td>
-                <button class="btn" onclick="downloadReceipt(${idx})" style="padding: 6px 12px; font-size: 12px;">
+                <button class="btn-evie" onclick="downloadReceipt(${idx})" style="padding: 6px 12px; font-size: 12px;">
                     Download
                 </button>
             </td>
@@ -6445,7 +6452,7 @@ async function openEditCertificationsModal() {
     try {
         // Load current certifications from setup status (farmStore is source of truth)
         let certifications = { certifications: [], practices: [], attributes: [] };
-        
+
         try {
             const headers = {};
             if (currentSession?.token) headers['Authorization'] = `Bearer ${currentSession.token}`;
@@ -6458,6 +6465,15 @@ async function openEditCertificationsModal() {
             }
         } catch (error) {
             console.warn('[Settings] Could not load certifications from /api/setup/status:', error);
+        }
+
+        // Fallback to local cache if API returned nothing
+        if ((!certifications.certifications || certifications.certifications.length === 0) &&
+            (!certifications.practices || certifications.practices.length === 0)) {
+            try {
+                const cached = JSON.parse(localStorage.getItem('farmCertifications') || 'null');
+                if (cached) certifications = cached;
+            } catch (_) {}
         }
         
         // Populate checkboxes with current values
@@ -6487,6 +6503,18 @@ async function openEditCertificationsModal() {
         // Removed: Woman-Owned, Veteran-Owned, Minority-Owned, Family Farm, Sustainable
         // Decision: Not relevant for farm operations (2026-01-22)
         
+        // Wire autosave once: persist on every checkbox change
+        if (!form.dataset.autosaveBound) {
+            form.dataset.autosaveBound = '1';
+            form.addEventListener('change', (e) => {
+                if (e.target && e.target.type === 'checkbox') {
+                    saveEditCertifications();
+                }
+            });
+            // Prevent submission (autosave handles persistence)
+            form.addEventListener('submit', (e) => e.preventDefault());
+        }
+
         // Show modal
         const modal = document.getElementById('editCertificationsModal');
         if (modal) modal.style.display = 'block';
@@ -6508,65 +6536,76 @@ function closeEditCertificationsModal() {
  * Save edited certifications
  */
 async function saveEditCertifications(event) {
-    event.preventDefault();
-    
+    if (event && typeof event.preventDefault === 'function') event.preventDefault();
+
+    const statusEl = document.getElementById('cert-autosave-status');
+    const setStatus = (text, color) => {
+        if (statusEl) {
+            statusEl.textContent = text;
+            statusEl.style.color = color || '';
+        }
+    };
+
     try {
         const form = document.getElementById('editCertificationsForm');
         if (!form) {
             showToast('Certifications form not found', 'error');
             return;
         }
-        
+
         // Collect selected values
         const certifications = Array.from(form.querySelectorAll('input[name="certifications"]:checked'))
             .map(cb => cb.value);
         const practices = Array.from(form.querySelectorAll('input[name="practices"]:checked'))
             .map(cb => cb.value);
-        
+
         // ATTRIBUTES REMOVED - DO NOT RE-ADD (Woman-Owned, Veteran-Owned, etc.)
         // Only certifications and practices are relevant for farm operations
-        
+
         const updatedCertifications = {
             certifications,
             practices,
             attributes: [] // Always empty - attributes section removed permanently
         };
-        
+
+        setStatus('Saving...', 'var(--text-muted)');
+
         // Save to API
         const token = currentSession?.token || sessionStorage.getItem('token') || localStorage.getItem('token');
         if (!token) {
             console.warn('[Farm Settings] No auth token available for certifications save');
-            showToast('Not authenticated -- please log in again', 'error');
+            setStatus('Not signed in -- changes not saved', 'var(--accent-red)');
             return;
         }
         const headers = { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token };
-        
+
         console.log('[Farm Settings] Saving certifications:', updatedCertifications);
         const response = await fetch('/api/setup/certifications', {
             method: 'POST',
             headers,
             body: JSON.stringify(updatedCertifications)
         });
-        
+
         const result = await response.json().catch(() => ({}));
         if (!response.ok || result.success === false) {
             console.error('[Farm Settings] Certifications save failed:', response.status, result);
             throw new Error(result.error || 'Server returned ' + response.status);
         }
-        
+
+        // Cache locally so selections persist across reloads even if API is transient
+        try {
+            localStorage.setItem('farmCertifications', JSON.stringify(updatedCertifications));
+        } catch (_) {}
+
         console.log('[Farm Settings] Certifications saved successfully');
-        
-        // Close modal and reload settings to show updates
-        closeEditCertificationsModal();
-        showToast('Certifications updated successfully', 'success');
-        
-        // Reload settings to show updated badges
+        setStatus('Saved ' + new Date().toLocaleTimeString(), 'var(--accent-green)');
+
+        // Refresh displayed badges without closing the modal
         await loadSettings();
-        
+
     } catch (error) {
         console.error('[Farm Settings] Error saving certifications:', error);
-        showToast('Error saving certifications: ' + error.message, 'error');
-        // Do NOT close modal on error -- let user retry
+        setStatus('Error: ' + error.message, 'var(--accent-red)');
     }
 }
 
@@ -7726,7 +7765,7 @@ function renderPlantingSuggestions(ni) {
         html += '</div>';
         html += '</div>';
         html += '<div style="display: flex; gap: 6px;">';
-        html += '<button onclick="acceptPlantingSuggestion(' + i + ', \'' + (s.crop || '').replace(/'/g, "\\'") + '\')" style="padding: 4px 12px; font-size: 11px; background: var(--accent-green); color: #fff; border: none; border-radius: 4px; cursor: pointer;">Accept</button>';
+        html += '<button class="btn-evie-primary" onclick="acceptPlantingSuggestion(' + i + ', \'' + (s.crop || '').replace(/'/g, "\\'") + '\')" style="padding: 4px 12px; font-size: 11px;">Accept</button>';
         html += '<button onclick="dismissPlantingSuggestion(' + i + ')" style="padding: 4px 12px; font-size: 11px; background: var(--bg-tertiary); color: var(--text-secondary); border: 1px solid var(--border); border-radius: 4px; cursor: pointer;">Dismiss</button>';
         html += '</div></div>';
     });
@@ -7796,7 +7835,7 @@ function renderRecipeModifiers(ni) {
         html += '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">';
         html += '<div style="font-weight: 500; font-size: 13px; text-transform: capitalize;">' + crop + ' <span style="font-size: 10px; color: var(--text-muted);">(confidence: ' + confidence + ')</span></div>';
         html += '<div style="display: flex; gap: 6px;">';
-        html += '<button onclick="acceptRecipeModifier(\'' + crop.replace(/'/g, "\\'") + '\')" style="padding: 4px 12px; font-size: 11px; background: var(--accent-green); color: #fff; border: none; border-radius: 4px; cursor: pointer;">Apply</button>';
+        html += '<button class="btn-evie-primary" onclick="acceptRecipeModifier(\'' + crop.replace(/'/g, "\\'") + '\')" style="padding: 4px 12px; font-size: 11px;">Apply</button>';
         html += '<button onclick="dismissRecipeModifier(\'' + crop.replace(/'/g, "\\'") + '\')" style="padding: 4px 12px; font-size: 11px; background: var(--bg-tertiary); color: var(--text-secondary); border: 1px solid var(--border); border-radius: 4px; cursor: pointer;">Dismiss</button>';
         html += '</div></div>';
 
@@ -8125,7 +8164,7 @@ function renderSetupRooms() {
             <!-- Add Zone Input -->
             <div style="display: flex; gap: 8px; margin-top: 10px;">
                 <input type="text" id="zone-input-${room.id}" placeholder="Add zone (optional)" style="flex: 1; padding: 8px 10px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-primary); color: var(--text-primary); font-size: 13px;">
-                <button type="button" onclick="addSetupZone('${room.id}')" style="padding: 8px 16px; background: var(--accent-green); border: none; color: white; border-radius: 4px; cursor: pointer; font-size: 12px; white-space: nowrap;">Add Zone</button>
+                <button type="button" class="btn-evie-primary" onclick="addSetupZone('${room.id}')" style="padding: 8px 16px; font-size: 12px; white-space: nowrap;">Add Zone</button>
             </div>
             
             <!-- Zones List -->
@@ -8603,8 +8642,22 @@ function filterUsers() {
  * Open invite user modal
  */
 function openInviteUserModal() {
-    document.getElementById('inviteUserModal').style.display = 'flex';
-    document.getElementById('invite-user-form').reset();
+    const modal = document.getElementById('inviteUserModal');
+    if (!modal) {
+        console.error('[Users] inviteUserModal element not found in DOM');
+        if (typeof showToast === 'function') showToast('Invite user dialog is unavailable', 'error');
+        return;
+    }
+    modal.style.display = 'flex';
+    const form = document.getElementById('invite-user-form');
+    if (form) form.reset();
+    // Focus the email field so the user can start typing immediately
+    const emailInput = document.getElementById('invite-email');
+    if (emailInput) setTimeout(() => emailInput.focus(), 50);
+}
+// Ensure inline onclick handlers can resolve the function even under module loaders
+if (typeof window !== 'undefined') {
+    window.openInviteUserModal = openInviteUserModal;
 }
 
 /**
