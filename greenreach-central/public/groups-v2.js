@@ -6882,6 +6882,71 @@ function populateBsgModal() {
 
   // Populate standard light dropdown
   populateStandardLightDropdown('bsgStandardLight', '(none \u2014 use auto-assign pool)');
+
+  // Populate standard controller dropdown from bindings + iot-devices.
+  // Keeps the picker inline inside the Build Stock Groups card so operators
+  // don't have to bounce to step 5 to assign a controller.
+  populateStandardControllerDropdown('bsgStandardController', '(none \u2014 assign later in step 5)');
+
+  // Default group_id prefix from farm id if available
+  var gidInput = document.getElementById('bsgGroupIdPrefix');
+  if (gidInput && !gidInput.value) {
+    var farmId = '';
+    try { farmId = (localStorage && localStorage.getItem('farmId')) || ''; } catch (e) {}
+    if (farmId) gidInput.placeholder = 'GID-' + String(farmId).slice(-8).toUpperCase() + '-';
+  }
+}
+
+/**
+ * Populate a controller dropdown. Pulls from /api/controller-bindings
+ * (preferred) with a fallback to window.STATE.devices / iot-devices shapes.
+ * Silently leaves the (none) option in place on fetch failures so the
+ * modal stays usable offline or before auth is hydrated.
+ */
+async function populateStandardControllerDropdown(selectId, noneLabel) {
+  const select = document.getElementById(selectId);
+  if (!select) return;
+  const prior = select.value;
+  select.innerHTML = `<option value="">${noneLabel}</option>`;
+  const seen = new Set();
+  function addOption(value, label) {
+    if (!value || seen.has(value)) return;
+    seen.add(value);
+    const opt = document.createElement('option');
+    opt.value = value;
+    opt.textContent = label || value;
+    select.appendChild(opt);
+  }
+  // Live controller bindings from central
+  try {
+    const f = window.authFetch || fetch;
+    const res = await f('/api/controller-bindings', { credentials: 'same-origin' });
+    if (res && res.ok) {
+      const json = await res.json();
+      const bindings = (json && Array.isArray(json.bindings)) ? json.bindings
+        : (Array.isArray(json) ? json : []);
+      bindings.forEach(b => {
+        const id = (b && (b.controllerId || b.id)) || '';
+        const label = (b && (b.label || b.name || b.vendor)) || id;
+        addOption(id, label);
+      });
+    }
+  } catch (e) {
+    // Offline / unauthenticated — fall through to local state.
+  }
+  // Fallback to any controller-shaped devices cached in STATE
+  const devices = (window.STATE && Array.isArray(window.STATE.devices)) ? window.STATE.devices
+    : (window.STATE && Array.isArray(window.STATE.iotDevices)) ? window.STATE.iotDevices
+    : [];
+  devices.forEach(d => {
+    if (!d) return;
+    const type = (d.deviceType || d.type || '').toString().toLowerCase();
+    if (type !== 'controller' && type !== 'hub' && type !== 'gateway') return;
+    const id = d.id || d.deviceId || d.serial || '';
+    const label = d.name || d.deviceName || id;
+    addOption(id, label);
+  });
+  if (prior) select.value = prior;
 }
 
 /**
@@ -7067,6 +7132,8 @@ async function executeBuildStockGroups() {
   const standardLightTemplate = standardLightId
     ? getAvailableLightTemplates().find(t => t.id === standardLightId) || null
     : null;
+  const standardControllerId = (document.getElementById('bsgStandardController')?.value || '').trim();
+  const groupIdPrefix = (document.getElementById('bsgGroupIdPrefix')?.value || '').trim();
 
   // Validation
   const missing = [];
@@ -7162,8 +7229,34 @@ async function executeBuildStockGroups() {
       }
     }
 
+    // Stable group_id separate from the human-facing id/name so downstream
+    // consumers (inventory, recipe assignment, wholesale portal, accounting)
+    // have a durable identifier that survives rename/zone changes. The
+    // auto-generated form includes the sanitized name prefix so running
+    // Build Stock Groups twice in the same room+zone with different name
+    // prefixes (e.g. "Bench" then "Shelf") doesn't collide on the
+    // planting_assignments UNIQUE(farm_id, group_id) constraint.
+    const groupIdSuffix = String(i).padStart(3, '0');
+    const sanitizedPrefix = (prefix || 'GRP').replace(/\s+/g, '').toUpperCase();
+    const groupId = groupIdPrefix
+      ? `${groupIdPrefix}${sanitizedPrefix}-${groupIdSuffix}`
+      : `GID-${(roomId || room || 'ROOM').replace(/\s+/g, '').toUpperCase()}-${(zone || 'Z').toString().toUpperCase()}-${sanitizedPrefix}-${groupIdSuffix}`;
+
+    // If a Standard Controller was picked, pre-bind every group to it so
+    // step 5 (Controllers) reflects the intent from step 3 without the
+    // operator leaving the page. Shape matches controller-bindings.json.
+    const controllerBindings = standardControllerId
+      ? [{
+          groupId: id,
+          controllerId: standardControllerId,
+          assignedAt: now,
+          source: 'build-stock-groups'
+        }]
+      : [];
+
     const group = {
       id,
+      group_id: groupId,
       name: groupName,
       room,
       zone,
@@ -7171,7 +7264,9 @@ async function executeBuildStockGroups() {
       zoneId,
       trays,
       plants: 0,
+      plant_count: 0,
       lights: groupLights,
+      controller_bindings: controllerBindings,
       deviceCount: groupLights.length,
       active: true,
       health: 'healthy',
@@ -7214,6 +7309,46 @@ async function executeBuildStockGroups() {
       showToast({ title: 'Save Failed', msg: `Groups created in memory but failed to save: ${error.message}`, kind: 'error' });
     }
     return { created, skipped };
+  }
+
+  // Mirror any inline Standard Controller assignments to the controller-
+  // bindings store so step 5 (Controllers) renders them. The per-group
+  // controller_bindings[] on groups.json is the durable local record; this
+  // POST registers the same intent against /api/controller-bindings which
+  // is what grow-management.html#flow-controllers reads from.
+  if (standardControllerId) {
+    const createdGroups = window.STATE.groups.slice(-created);
+    const f = window.authFetch || fetch;
+    await Promise.all(createdGroups.map(async g => {
+      try {
+        const res = await f('/api/controller-bindings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            instanceId: g.id,
+            controllerId: standardControllerId,
+            channel: 0,
+            controlType: 'group_binding',
+            subsystem: 'groups',
+            roomId: g.roomId || null,
+            zoneId: g.zoneId || null,
+            deviceName: g.name
+          })
+        });
+        if (res && res.ok) {
+          const json = await res.json();
+          const newBinding = json && json.binding;
+          if (newBinding && newBinding.id && Array.isArray(g.controller_bindings) && g.controller_bindings[0]) {
+            // Enrich the local record with the server-assigned binding id
+            // so later edits/deletes can address it.
+            g.controller_bindings[0].bindingId = newBinding.id;
+          }
+        }
+      } catch (e) {
+        // Non-fatal — the local controller_bindings[] entry is still persisted.
+        console.warn('[Build Stock] controller-bindings POST failed for', g.id, e);
+      }
+    }));
   }
 
   // Update UI

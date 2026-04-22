@@ -518,10 +518,13 @@
 
     /* =====================================================================
        UNIFIED FARM FLOW BREADCRUMB
-       6-step guided workflow: Room -> Zones -> Grow units -> Lights ->
-       Equipment -> Controllers. Consolidates what used to live across
-       /views/farm-setup.html, /setup-wizard.html, and this page into a
-       single ordered flow per FARM_SETUP_WORKFLOW_PROPOSAL.md.
+       5-step guided workflow: Room -> Zones -> Grow units & groups ->
+       Equipment -> Controllers. Lights were folded into step 3 (Grow units
+       & groups) via the Build Stock Groups card so operators pick
+       fixtures and controllers inline without bouncing down the page.
+       Consolidates what used to live across /views/farm-setup.html,
+       /setup-wizard.html, and this page into a single ordered flow per
+       FARM_SETUP_WORKFLOW_PROPOSAL.md.
        ===================================================================== */
     .ff-breadcrumb {
       position: sticky;
@@ -698,13 +701,11 @@
     <span class="ff-breadcrumb__sep">&rsaquo;</span>
     <a href="#flow-zones" class="ff-breadcrumb__step" data-step="zones"><span class="ff-breadcrumb__num">2</span>Zones</a>
     <span class="ff-breadcrumb__sep">&rsaquo;</span>
-    <a href="#flow-grow-units" class="ff-breadcrumb__step" data-step="grow-units"><span class="ff-breadcrumb__num">3</span>Grow units</a>
+    <a href="#flow-grow-units" class="ff-breadcrumb__step" data-step="grow-units"><span class="ff-breadcrumb__num">3</span>Grow units &amp; groups</a>
     <span class="ff-breadcrumb__sep">&rsaquo;</span>
-    <a href="#flow-lights" class="ff-breadcrumb__step" data-step="lights"><span class="ff-breadcrumb__num">4</span>Lights</a>
+    <a href="#flow-equipment" class="ff-breadcrumb__step" data-step="equipment"><span class="ff-breadcrumb__num">4</span>Equipment</a>
     <span class="ff-breadcrumb__sep">&rsaquo;</span>
-    <a href="#flow-equipment" class="ff-breadcrumb__step" data-step="equipment"><span class="ff-breadcrumb__num">5</span>Equipment</a>
-    <span class="ff-breadcrumb__sep">&rsaquo;</span>
-    <a href="#flow-controllers" class="ff-breadcrumb__step" data-step="controllers"><span class="ff-breadcrumb__num">6</span>Controllers</a>
+    <a href="#flow-controllers" class="ff-breadcrumb__step" data-step="controllers"><span class="ff-breadcrumb__num">5</span>Controllers</a>
   </nav>
 
   <!-- ===== KPI ROW ===== -->
@@ -821,16 +822,19 @@
       </div>
     </div>
 
-    <!-- ===== STEP 3 — GROW UNITS =====
+    <!-- ===== STEP 3 — GROW UNITS & GROUPS =====
          Template gallery + Room Build Plan (auto-fit per template spatial
-         contract, Evie zone count advisor, solver-driven unit count).
+         contract, Evie zone count advisor, solver-driven unit count) +
+         Build Stock Groups (batch-create identical groups with light and
+         controller assignment). All group- and light-level wiring lives in
+         this step so operators never bounce down the page.
     -->
     <section id="flow-grow-units" class="ff-step" aria-labelledby="ffGrowUnitsTitle">
       <div class="ff-step__head">
         <span class="ff-step__badge">3</span>
         <div>
-          <h2 class="ff-step__title" id="ffGrowUnitsTitle">Grow units</h2>
-          <p class="ff-step__subtitle">Pick a growing system template. Evie sizes working clearance and computes units per zone. Main walkway sizing follows in step 5.</p>
+          <h2 class="ff-step__title" id="ffGrowUnitsTitle">Grow units &amp; groups</h2>
+          <p class="ff-step__subtitle">Pick a growing system template, stage a Room Build Plan, and batch-create stock groups. Light and controller assignment happen in the Build Stock Groups card below so you can stay on this step.</p>
         </div>
       </div>
 
@@ -852,6 +856,32 @@
         </div>
       </div>
       <div id="rbpBody" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;"></div>
+    </section>
+
+    <!-- ===== BUILD STOCK GROUPS =====
+         Titled, visible card placed directly under the Room Build Plan so
+         the batch-create action is part of the same step as template
+         selection (no bouncing down the page). Duplicates the Build Stock
+         Groups + Print Labels actions from the Groups V2 panel so they're
+         reachable without scrolling; the legacy buttons inside the panel
+         stay for compatibility with existing wiring.
+    -->
+    <section id="buildStockGroupsCard" class="gm-card" style="margin:0 0 18px;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">
+        <div>
+          <h3 style="margin:0 0 4px;border:none;padding:0;">Build Stock Groups</h3>
+          <p class="tiny text-muted" style="margin:0;max-width:640px;">
+            Batch-create identical groups from the selected template. Each group gets its own <strong>Group ID</strong>
+            (used by inventory, recipe assignment, wholesale portal, and the accounting pages), a printable QR label,
+            and inline pickers for Standard Light and Standard Controller &mdash; no need to scroll to a separate card.
+          </p>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button id="buildStockGroupsCardOpenBtn" type="button" class="primary" style="min-height:32px;padding:6px 14px;">Build Stock Groups</button>
+          <button id="buildStockGroupsCardPrintBtn" type="button" class="ghost" style="min-height:32px;padding:6px 14px;" title="Download a PDF of group labels (QR + Group ID + name)">Print group codes</button>
+        </div>
+      </div>
+      <div id="buildStockGroupsSummary" class="tiny" style="margin-top:10px;color:#94a3b8;">No stock-group batches created yet.</div>
     </section>
 
     <!-- Groups V2 Panel (always visible, dark-themed) -->
@@ -1055,21 +1085,17 @@
           <div id="groupsV2GroupListBody"></div>
         </div>
 
-        <!-- ===== STEP 4 — LIGHTS =====
-             Anchor target for breadcrumb step 4. Light Assignment lives
-             inside the Groups V2 panel because groups-v2.js wires it to
-             the active group; rather than move the DOM we scroll to this
-             anchor and give the step a labeled header.
+        <!-- ===== PER-GROUP LIGHT ASSIGNMENT =====
+             Stays inside the Groups V2 panel because groups-v2.js wires it
+             to the active group. No longer a standalone breadcrumb step —
+             light assignment is part of step 3 (Grow units & groups) and
+             the primary entry point is the Build Stock Groups card above.
+             The #flow-lights anchor is retained so any legacy deep-links
+             (#flow-lights) still scroll into view here.
         -->
-        <div id="flow-lights" class="ff-step__head" style="scroll-margin-top:88px;margin-top:8px;">
-          <span class="ff-step__badge">4</span>
-          <div>
-            <h2 class="ff-step__title">Lights</h2>
-            <p class="ff-step__subtitle">Assign fixtures to the active group. Fixture class and channel count are pre-filled from the selected template.</p>
-          </div>
-        </div>
+        <div id="flow-lights" style="scroll-margin-top:88px;"></div>
 
-        <!-- ===== LIGHT ASSIGNMENT ===== -->
+        <!-- ===== LIGHT ASSIGNMENT (per active group) ===== -->
         <div class="gm-card">
           <h3>Light Assignment</h3>
           <div style="display:flex;flex-direction:column;gap:12px;">
@@ -1205,7 +1231,7 @@
     -->
     <section id="flow-equipment" class="ff-step" aria-labelledby="ffEquipmentTitle">
       <div class="ff-step__head">
-        <span class="ff-step__badge">5</span>
+        <span class="ff-step__badge">4</span>
         <div>
           <h2 class="ff-step__title" id="ffEquipmentTitle">Equipment</h2>
           <p class="ff-step__subtitle">Cooling tons, dehumidification capacity, fan CFM, and pump count. Derived from the template multiplied by unit quantity and the room envelope.</p>
@@ -1230,10 +1256,10 @@
     -->
     <section id="flow-controllers" class="ff-step" aria-labelledby="ffControllersTitle">
       <div class="ff-step__head">
-        <span class="ff-step__badge">6</span>
+        <span class="ff-step__badge">5</span>
         <div>
           <h2 class="ff-step__title" id="ffControllersTitle">Controllers</h2>
-          <p class="ff-step__subtitle">Bind controllers (SwitchBot hub, Kasa account, Code3 gateway, DMX universes, wired bus segments) to the channels reserved in steps 3 through 5.</p>
+          <p class="ff-step__subtitle">Bind controllers (SwitchBot hub, Kasa account, Code3 gateway, DMX universes, wired bus segments) to the channels reserved in steps 3 and 4. Per-group controller selection lives in the Build Stock Groups card so you can assign without leaving this page.</p>
         </div>
       </div>
       <div class="ff-step-card">
@@ -1303,10 +1329,52 @@
     // UNIFIED FARM FLOW CONTROLLER
     // Hydrates read-only summaries for Room / Zones / Equipment /
     // Controllers step cards and manages breadcrumb active state based on
-    // which section is currently in view. Grow units (step 3) and Lights
-    // (step 4) are driven by the pre-existing template-gallery +
-    // room-build-plan + groups-v2 scripts and need no extra hydration.
+    // which section is currently in view. Grow units & groups (step 3) is
+    // driven by the pre-existing template-gallery + room-build-plan +
+    // groups-v2 scripts and needs no extra hydration; lights / controllers
+    // are selected inline inside the Build Stock Groups card so operators
+    // stay on this page.
     // =====================================================================
+    // Mirror clicks on the Build Stock Groups card up to the legacy
+    // modal/print buttons inside the Groups V2 panel so the underlying
+    // wiring (groups-v2.js) keeps owning the data-contract side of the flow.
+    document.addEventListener('DOMContentLoaded', function () {
+      var cardOpen = document.getElementById('buildStockGroupsCardOpenBtn');
+      var cardPrint = document.getElementById('buildStockGroupsCardPrintBtn');
+      if (cardOpen) {
+        cardOpen.addEventListener('click', function () {
+          var btn = document.getElementById('buildStockGroupsBtn');
+          if (btn) btn.click();
+        });
+      }
+      if (cardPrint) {
+        cardPrint.addEventListener('click', function () {
+          var btn = document.getElementById('groupsV2PrintLabels');
+          if (btn) btn.click();
+        });
+      }
+      // Keep a small summary line on the card in sync with group count so
+      // the "No stock-group batches created yet." placeholder updates
+      // after a Build Stock Groups run.
+      function refreshSummary() {
+        var el = document.getElementById('buildStockGroupsSummary');
+        if (!el) return;
+        var groups = (window.STATE && Array.isArray(window.STATE.groups)) ? window.STATE.groups : [];
+        var count = groups.length;
+        if (count === 0) {
+          el.textContent = 'No stock-group batches created yet.';
+          el.style.color = '#94a3b8';
+        } else {
+          var withLights = groups.filter(function (g) {
+            return Array.isArray(g.lights) && g.lights.length > 0;
+          }).length;
+          el.textContent = count + ' group(s) in this farm \u2022 ' + withLights + ' with light assignments \u2022 Group IDs are auto-assigned and printable via "Print group codes".';
+          el.style.color = '#cbd5e1';
+        }
+      }
+      document.addEventListener('groups-updated', refreshSummary);
+      setTimeout(refreshSummary, 2500);
+    });
     var ffFlow = (function () {
       var state = {
         rooms: [],
@@ -1869,10 +1937,15 @@
         // cache so breadcrumb stays correct after groups-v2.js save/delete.
         var liveGroups = (window.STATE && Array.isArray(window.STATE.groups)) ? window.STATE.groups : (state.groups || []);
         var hasInstalled = rooms.some(function (r) { return Array.isArray(r.installedSystems) && r.installedSystems.length > 0; });
-        var hasUnits = liveGroups.length > 0 || hasInstalled;
+        // Lights were folded into step 3 (Grow units & groups). For
+        // breadcrumb completion we now require at least one group with
+        // fixtures assigned, in addition to an installed system / any
+        // group. This matches the consolidated per-group light assignment
+        // that lives in the Build Stock Groups card.
         var hasLights = liveGroups.some(function (g) {
           return Array.isArray(g.lights) && g.lights.length > 0;
         });
+        var hasUnits = (liveGroups.length > 0 && hasLights) || hasInstalled;
         var hasEquip = !!window.__roomBuildPlan || !!persistedBuildPlan();
         // Controllers step is complete when at least one physical device has
         // been bound to a reserved slot. Falls back to "any device paired"
@@ -1884,7 +1957,6 @@
           'room': hasRoom,
           'zones': hasZones,
           'grow-units': hasUnits,
-          'lights': hasLights,
           'equipment': hasEquip,
           'controllers': hasCtrl
         };
@@ -1928,7 +2000,7 @@
       document.addEventListener('room-build-plan:saved', function () { refresh(); });
       // Scroll-based active state: highlight whichever step is nearest the viewport top.
       window.addEventListener('scroll', function () {
-        var steps = ['flow-room', 'flow-zones', 'flow-grow-units', 'flow-lights', 'flow-equipment', 'flow-controllers'];
+        var steps = ['flow-room', 'flow-zones', 'flow-grow-units', 'flow-equipment', 'flow-controllers'];
         var activeId = steps[0];
         for (var i = 0; i < steps.length; i++) {
           var el = document.getElementById(steps[i]);
@@ -2616,6 +2688,18 @@
       <select id="bsgStandardLight" style="min-height:32px;border-radius:6px;border:1px solid #cbd5e1;">
         <option value="">(none - use auto-assign pool)</option>
       </select>
+    </label>
+
+    <label class="tiny" style="display:flex;flex-direction:column;gap:4px;">
+      Standard Controller <span style="font-weight:400;color:#94a3b8;">(optional &mdash; binds every group to the same controller slot)</span>
+      <select id="bsgStandardController" style="min-height:32px;border-radius:6px;border:1px solid #cbd5e1;">
+        <option value="">(none &mdash; assign later in step 5)</option>
+      </select>
+    </label>
+
+    <label class="tiny" style="display:flex;flex-direction:column;gap:4px;">
+      Group ID prefix <span style="font-weight:400;color:#94a3b8;">(printed on QR labels &mdash; consumed by inventory, recipes, wholesale portal, accounting)</span>
+      <input id="bsgGroupIdPrefix" type="text" placeholder="e.g. GID-LEAF-" maxlength="24" style="min-height:32px;border-radius:6px;border:1px solid #cbd5e1;">
     </label>
 
     <div id="bsgPreview" style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:12px;min-height:40px;font-size:0.8rem;color:#0c4a6e;"></div>
