@@ -7773,15 +7773,46 @@ app.post('/api/setup/business-details', asyncHandler(async (req, res) => {
       try {
         await dbPool.query('ALTER TABLE farms ADD COLUMN IF NOT EXISTS business_hours JSONB');
         await dbPool.query('ALTER TABLE farms ADD COLUMN IF NOT EXISTS certifications JSONB');
+        await dbPool.query('ALTER TABLE farms ADD COLUMN IF NOT EXISTS payment_configured BOOLEAN DEFAULT FALSE');
         await dbPool.query(
           `UPDATE farms
              SET business_hours = $1,
                  certifications = $2,
+                 payment_configured = $3,
                  updated_at = NOW()
-           WHERE farm_id = $3`,
-          [JSON.stringify(normalizedHours), JSON.stringify(normalizedCerts), farmId]
+           WHERE farm_id = $4`,
+          [JSON.stringify(normalizedHours), JSON.stringify(normalizedCerts), paymentFlag, farmId]
         );
-        console.log('[setup] Saved business-details to DB for farm:', farmId);
+
+        // Mirror payment_configured into the canonical farm_data store that
+        // Central's onboarding-status endpoint reads via
+        // farmStore.get(farmId, 'farm_profile'). The table is created by
+        // Central at boot (greenreach-central/config/database.js) with
+        // columns (farm_id, data_type, data) and UNIQUE(farm_id, data_type),
+        // so we do not attempt to create it here. Without this mirror, the
+        // "Connect Square for payments" checklist would stay unchecked even
+        // after the operator confirms the flag on LE.
+        try {
+          const existing = await dbPool.query(
+            'SELECT data FROM farm_data WHERE farm_id = $1 AND data_type = $2 LIMIT 1',
+            [farmId, 'farm_profile']
+          );
+          const profile = (existing.rows[0]?.data) || {};
+          profile.business_hours = normalizedHours;
+          profile.certifications = normalizedCerts;
+          profile.payment_configured = paymentFlag;
+          await dbPool.query(
+            `INSERT INTO farm_data (farm_id, data_type, data, updated_at)
+             VALUES ($1, $2, $3, NOW())
+             ON CONFLICT (farm_id, data_type)
+             DO UPDATE SET data = EXCLUDED.data, updated_at = NOW()`,
+            [farmId, 'farm_profile', JSON.stringify(profile)]
+          );
+        } catch (kvErr) {
+          console.warn('[setup] business-details farm_data mirror failed:', kvErr.message);
+        }
+
+        console.log('[setup] Saved business-details to DB for farm:', farmId, 'paymentConfigured:', paymentFlag);
       } catch (dbErr) {
         console.warn('[setup] business-details DB write failed:', dbErr.message);
       }
