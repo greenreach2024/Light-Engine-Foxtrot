@@ -53,14 +53,16 @@ function approx(actual, expected, tolerance = 1e-6) {
 // ============================================================================
 
 describe('countPlants', () => {
-  it('multiplies quantity × tierCount × traysPerTier × plantsPerTrayByClass', () => {
-    // nft-rack-3tier: 3 tiers × 10 trays/tier × 30 plants/tray (leafy) = 900
+  it('uses authoritative plantLocations.totalByClass override when present', () => {
+    // nft-rack-3tier has plantLocations.totalByClass.leafy_greens = 128
+    // (authoritative physical capacity). Derived formula 3×10×30=900 is
+    // superseded. This is the user-facing count every consumer must agree on.
     const plants = countPlants({
       template: nft,
       quantity: 1,
       cropClass: 'leafy_greens'
     });
-    assert.equal(plants, 900);
+    assert.equal(plants, 128);
   });
 
   it('scales linearly with quantity', () => {
@@ -69,11 +71,12 @@ describe('countPlants', () => {
       quantity: 4,
       cropClass: 'leafy_greens'
     });
-    assert.equal(plants, 3600);
+    assert.equal(plants, 4 * 128);
   });
 
-  it('picks different densities by cropClass', () => {
-    // microgreens have plantsPerTrayByClass.microgreens = 200 for nft template
+  it('falls back to derived math when cropClass has no totalByClass override', () => {
+    // microgreens is not in nft.plantLocations.totalByClass, so the derived
+    // formula applies: 3 tiers × 10 trays × 200 plants/tray = 6000.
     const plants = countPlants({
       template: nft,
       quantity: 1,
@@ -232,14 +235,15 @@ describe('computeLightingLoad', () => {
 describe('computePumpLoad', () => {
   it('computes peak pump kW from supplyW + returnW scaled by plants/10000', () => {
     // VFC: 300W supply + 150W return = 450W per 10k plants.
-    // nft-rack 1 rack, leafy_greens = 900 plants → 450 × 900/10000 = 40.5W = 0.0405 kW
+    // nft-rack 1 rack, leafy_greens = 128 plants (authoritative override)
+    //   → 450 × 128/10000 = 5.76W = 0.00576 kW
     const load = computePumpLoad({
       template: nft,
       quantity: 1,
       cropClass: 'leafy_greens'
     });
-    approx(load.pumpKWPeak, 0.0405);
-    assert.equal(load.plants, 900);
+    approx(load.pumpKWPeak, 0.00576);
+    assert.equal(load.plants, 128);
   });
 
   it('applies duty cycle for averaged load', () => {
@@ -256,10 +260,9 @@ describe('computePumpLoad', () => {
     // 40,000 plants × 450W / 10000 = 1800W peak
     // × 0.5 duty = 900W avg = 0.9 kW avg
     // × 24h × 30d = 648 kWh/month ✓
-    // 40,000 / (3×10×30) = 44.4 racks. Round to quantity that yields 40k:
-    // quantity where 3 × 10 × 30 × q = 40000 → q = 44.444... irrational.
-    // Use quantity=44.444 as a direct math check.
-    const q = 40000 / (nft.tierCount * nft.traysPerTier * nft.plantsPerTrayByClass.leafy_greens);
+    // With the authoritative 128-plants-per-rack override, reaching 40k plants
+    // requires q = 40000 / 128 = 312.5 racks (fractional math check).
+    const q = 40000 / nft.plantLocations.totalByClass.leafy_greens;
     const load = computePumpLoad({
       template: nft,
       quantity: q,
@@ -286,7 +289,7 @@ describe('computeTranspirationLoad', () => {
     // The original VFC spec said 1.43 tons because it treated 1055 BTU/lb as
     // if it were BTU/kg. Fixed alongside this calculator — see header comment
     // in lib/farm-load-calculator.js.
-    const q = 10000 / (nft.tierCount * nft.traysPerTier * nft.plantsPerTrayByClass.leafy_greens);
+    const q = 10000 / nft.plantLocations.totalByClass.leafy_greens;
     const load = computeTranspirationLoad({
       template: nft,
       quantity: q,
@@ -326,9 +329,9 @@ describe('computeTranspirationLoad', () => {
       quantity: 1,
       cropClass: 'microgreens'
     });
-    // gPerPlantPerDay: leafy=30, micro=8, but micro has 200 plants/tray vs 30.
-    // Per rack: leafy 900 × 30 = 27,000 g/day; micro 6000 × 8 = 48,000 g/day.
-    // So per-rack micro is actually HIGHER even though per-plant is lower.
+    // Per rack: leafy 128 plants (authoritative) × 30 = 3,840 g/day;
+    // microgreens have no override so falls back to 6000 plants × 8 = 48,000 g/day.
+    // Per-rack micro is dramatically higher even though per-plant is lower.
     assert.ok(micro.dehumLPerDay > leafy.dehumLPerDay);
     assert.ok(micro.gPerPlantPerDay < leafy.gPerPlantPerDay);
   });
@@ -454,7 +457,7 @@ describe('computeReservedSlots', () => {
   });
 
   it('pumps channels round up and have a floor of 1', () => {
-    // 1 rack, 900 plants, pumpsPer10kPlants=2 → ceil(2*900/10000)=ceil(0.18)=1
+    // 1 rack, 128 plants (authoritative), pumpsPer10kPlants=2 → ceil(2*128/10000)=ceil(0.0256)=1
     const slots = computeReservedSlots({
       template: nft,
       quantity: 1,

@@ -873,6 +873,25 @@
       <div id="buildStockGroupsSummary" class="tiny" style="margin-top:10px;color:#94a3b8;">No stock-group batches created yet.</div>
     </section>
 
+      <!-- Room Build Plan (populated on template click; sits under Build Stock
+           Groups so the electrical/transpiration breakdown follows the batch
+           action in the same step). -->
+      <section id="roomBuildPlan" class="gm-card" style="display:none;margin:0 0 18px;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:12px;">
+          <div>
+            <h3 id="rbpTitle" style="margin:0 0 4px;border:none;padding:0;">Room Build Plan</h3>
+            <p id="rbpSubtitle" class="tiny text-muted" style="margin:0;">Select a template above to stage a build plan.</p>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button id="rbpPrefillBtn" type="button" class="primary" style="min-height:32px;padding:6px 14px;">Stage group from template</button>
+            <button id="rbpAssignLightsBtn" type="button" class="ghost" style="min-height:32px;padding:6px 14px;">Assign lights</button>
+            <button id="rbpSavePlanBtn" type="button" class="primary" style="min-height:32px;padding:6px 14px;background:#10b981;border-color:#10b981;" title="Persist this build plan to rooms.json (installedSystems + buildPlan). Makes Equipment step durable across reloads.">Save plan to room</button>
+            <button id="rbpClearBtn" type="button" class="ghost" style="min-height:32px;padding:6px 14px;">Clear</button>
+          </div>
+        </div>
+        <div id="rbpBody" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;"></div>
+      </section>
+
     <!-- Groups V2 Panel (always visible, dark-themed) -->
     <section id="groupsV2Panel" data-card-prefix="GR" data-card-code="GV2">
       <div class="panel-body" style="display:flex;flex-direction:column;gap:18px;">

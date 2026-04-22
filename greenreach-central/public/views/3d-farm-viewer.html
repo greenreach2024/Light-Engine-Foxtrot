@@ -5497,7 +5497,11 @@
           });
         });
         setStatus('Saving…', '#fbbf24');
-        var _f = window.authFetch || fetch;
+        // Use the viewer's closure-scoped authFetch (defined near line 571)
+        // which adds Bearer token + farm PIN headers. window.authFetch is
+        // undefined on this page (auth-fetch.js isn't loaded), so falling
+        // back to it would bypass authentication on PIN-protected farms.
+        var _f = typeof authFetch === 'function' ? authFetch : fetch;
         _f('/api/setup/save-rooms', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
