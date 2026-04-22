@@ -2387,10 +2387,64 @@
       return `${normalized.slice(0, 3)} ${normalized.slice(3)}`;
     },
 
+    normalizeProvinceName(province) {
+      const map = {
+        AB: 'Alberta',
+        BC: 'British Columbia',
+        MB: 'Manitoba',
+        NB: 'New Brunswick',
+        NL: 'Newfoundland and Labrador',
+        NS: 'Nova Scotia',
+        NT: 'Northwest Territories',
+        NU: 'Nunavut',
+        ON: 'Ontario',
+        PE: 'Prince Edward Island',
+        QC: 'Quebec',
+        SK: 'Saskatchewan',
+        YT: 'Yukon'
+      };
+
+      const raw = String(province || '').trim();
+      if (!raw) return '';
+
+      const compact = raw.toUpperCase().replace(/[^A-Z]/g, '');
+      if (map[compact]) return map[compact];
+
+      return raw
+        .toLowerCase()
+        .split(/\s+/)
+        .filter(Boolean)
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(' ');
+    },
+
+    isGeocodeResultValid(result, location = {}) {
+      if (!result || typeof result !== 'object') return false;
+
+      const address = (result.address && typeof result.address === 'object') ? result.address : {};
+      const expectedPostal = this.normalizePostalCode(location.postalCode || location.zip || '');
+      const actualPostal = this.normalizePostalCode(address.postcode || '');
+      if (expectedPostal && actualPostal && expectedPostal !== actualPostal && expectedPostal.slice(0, 3) !== actualPostal.slice(0, 3)) {
+        return false;
+      }
+
+      const expectedProvince = this.normalizeProvinceName(location.state || location.province || '').toUpperCase().replace(/[^A-Z]/g, '');
+      const actualProvince = this.normalizeProvinceName(address.state || address.province || address.state_district || '').toUpperCase().replace(/[^A-Z]/g, '');
+      if (expectedProvince && actualProvince && expectedProvince !== actualProvince) return false;
+
+      const expectedCountry = String(location.country || 'Canada').trim().toLowerCase();
+      if (expectedCountry === 'canada') {
+        const countryCode = String(address.country_code || '').trim().toLowerCase();
+        if (countryCode && countryCode !== 'ca') return false;
+      }
+
+      return true;
+    },
+
     buildGeocodeQueries(location = {}) {
       const address = String(location.address1 || location.address || location.street || '').trim();
       const city = String(location.city || '').trim();
-      const state = String(location.state || location.province || '').trim();
+      const state = this.normalizeProvinceName(location.state || location.province || '');
       const postalCode = this.normalizePostalCode(location.postalCode || location.zip || '');
       const country = String(location.country || 'Canada').trim() || 'Canada';
 
@@ -2447,13 +2501,51 @@
 
     async geocodeCoordinates(location = {}) {
       const queries = this.buildGeocodeQueries(location);
-      if (!queries.length) return null;
+      const candidates = [];
 
-      for (const query of queries) {
+      const city = String(location.city || '').trim();
+      const state = this.normalizeProvinceName(location.state || location.province || '');
+      const postalCode = this.normalizePostalCode(location.postalCode || location.zip || '');
+      const country = String(location.country || 'Canada').trim() || 'Canada';
+
+      if (postalCode) {
+        candidates.push({
+          format: 'jsonv2',
+          limit: '3',
+          postalcode: postalCode,
+          state,
+          country
+        });
+      }
+
+      if (city || postalCode) {
+        candidates.push({
+          format: 'jsonv2',
+          limit: '3',
+          city,
+          state,
+          postalcode: postalCode,
+          country
+        });
+      }
+
+      queries.forEach((query) => {
+        candidates.push({
+          format: 'jsonv2',
+          limit: '3',
+          q: query
+        });
+      });
+
+      if (!candidates.length) return null;
+
+      for (const params of candidates) {
         try {
           const country = String(location.country || 'Canada').trim().toLowerCase();
-          const countryCodes = (!country || country === 'canada') ? '&countrycodes=ca' : '';
-          const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1${countryCodes}&q=${encodeURIComponent(query)}`;
+          const countryCodes = (!country || country === 'canada') ? 'ca' : '';
+          const searchParams = new URLSearchParams(params);
+          if (countryCodes) searchParams.set('countrycodes', countryCodes);
+          const url = `https://nominatim.openstreetmap.org/search?${searchParams.toString()}`;
           const response = await fetch(url, {
             headers: {
               'Accept': 'application/json'
@@ -2464,12 +2556,15 @@
           const results = await response.json();
           if (!Array.isArray(results) || results.length === 0) continue;
 
-          if (!this.isAcceptableGeocodeResult(results[0])) continue;
+          for (const result of results) {
+            if (!this.isAcceptableGeocodeResult(result)) continue;
+            if (!this.isGeocodeResultValid(result, location)) continue;
 
-          const latitude = Number(results[0].lat);
-          const longitude = Number(results[0].lon);
-          if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
-            return { latitude, longitude };
+            const latitude = Number(result.lat);
+            const longitude = Number(result.lon);
+            if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+              return { latitude, longitude };
+            }
           }
         } catch {
           // Best-effort geocoding; continue trying fallback queries.

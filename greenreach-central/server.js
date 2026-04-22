@@ -106,7 +106,7 @@ import researchPublicationsRouter from './routes/research-publications.js';
 import researchEquipmentRouter from './routes/research-equipment.js';
 import researchLineageRouter from './routes/research-lineage.js';
 import { requireResearchTier } from './middleware/feature-gate.js';
-import purchaseRouter from './routes/purchase.js';
+import purchaseRouter, { runPendingCheckoutReconciler } from './routes/purchase.js';
 import farmOpsAgentRouter from './routes/farm-ops-agent.js';
 import assistantChatRouter from './routes/assistant-chat.js';
 import setupAgentRouter from './routes/setup-agent.js';
@@ -5406,6 +5406,20 @@ async function startServer() {
 
       // Start nightly sensor readings cleanup (90-day retention)
       startSensorCleanupScheduler().catch(e => logger.warn('[Boot] Sensor cleanup scheduler error:', e.message));
+
+      // Stranded-payment reconciler — auto-provision farms for Square payments
+      // where the post-checkout browser redirect back to /purchase-success.html
+      // never fired (customer closed the Square receipt page, etc.). Without
+      // this a paid customer would be stuck with a Square receipt but no
+      // Light Engine account + no welcome email. Runs every 2 minutes.
+      const PURCHASE_RECONCILE_INTERVAL_MS = parseInt(process.env.PURCHASE_RECONCILE_INTERVAL_MS || String(2 * 60 * 1000), 10);
+      setTimeout(() => {
+        runPendingCheckoutReconciler().catch(e => logger.warn('[Boot] Initial purchase reconciler run failed', { error: e.message }));
+      }, 30 * 1000);
+      setInterval(() => {
+        runPendingCheckoutReconciler().catch(e => logger.warn('[Boot] Purchase reconciler run failed', { error: e.message }));
+      }, PURCHASE_RECONCILE_INTERVAL_MS);
+      logger.info(`[Boot] Purchase reconciler scheduled every ${Math.round(PURCHASE_RECONCILE_INTERVAL_MS / 1000)}s`);
     } catch (error) {
       app.locals.databaseReady = false;
       logger.warn('Database unavailable; starting in limited mode', {

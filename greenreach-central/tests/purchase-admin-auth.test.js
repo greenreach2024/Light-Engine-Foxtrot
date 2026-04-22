@@ -49,6 +49,8 @@ describe('Purchase admin endpoints auth migration', () => {
     { method: 'patch', path: '/api/purchase/farm/:farmId' },
     { method: 'get', path: '/api/purchase/farms' },
     { method: 'post', path: '/api/purchase/fix-admin-role' },
+    { method: 'post', path: '/api/purchase/admin/reconcile' },
+    { method: 'post', path: '/api/purchase/admin/recover-from-square' },
   ];
 
   const routes = getRoutes(router);
