@@ -1221,7 +1221,9 @@
           lot_code: p.lot_code ?? p.lotCode ?? '',
           description: p.description ?? '',
           thumbnail_url: p.thumbnail_url ?? p.image_url ?? '',
-          is_taxable: p.is_taxable ?? p.isTaxable ?? true,
+          // Default to false when missing: products are only taxed when the API
+          // explicitly marks them taxable (preserves pre-PR behavior).
+          is_taxable: p.is_taxable ?? p.isTaxable ?? false,
         }));
 
         if (inventory.length === 0) {
