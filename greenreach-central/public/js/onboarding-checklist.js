@@ -75,16 +75,26 @@ async function loadOnboardingChecklist() {
       return;
     }
 
+    let checklistOnDashboard = false;
     containers.forEach((el, idx) => {
       el.style.display = 'block';
       // Only the first container owns the stable DOM ids so the
       // existing toggle/dismiss/snooze helpers keep working. Extra
       // containers get suffixed ids to avoid duplicate-id lint issues.
       el.innerHTML = renderChecklist(data.tasks, completedCount, totalCount, pct, data.planType, idx === 0 ? '' : `-${idx}`);
+      if (el.closest && el.closest('#section-dashboard')) checklistOnDashboard = true;
     });
 
-    // Also show banner on Dashboard if not all done
-    showDashboardOnboardingBanner(completedCount, totalCount, pct);
+    // The compact banner only exists for pages where the full checklist is
+    // NOT rendered. If the dashboard now hosts the checklist directly, skip
+    // the banner to avoid a redundant "View Checklist →" link that points
+    // away from the checklist the operator can already see.
+    if (!checklistOnDashboard) {
+      showDashboardOnboardingBanner(completedCount, totalCount, pct);
+    } else {
+      const banner = document.getElementById('dashboard-onboarding-banner');
+      if (banner && banner.parentNode) banner.parentNode.removeChild(banner);
+    }
 
   } catch (error) {
     console.warn('[Onboarding] Failed to load checklist:', error);

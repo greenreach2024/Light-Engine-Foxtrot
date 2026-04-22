@@ -6707,6 +6707,73 @@ async function saveOperationDefaults() {
 }
 
 /**
+ * Save Fulfillment Standards (pickup/delivery schedule + requirements) without
+ * round-tripping the entire settings object. The Fulfillment Standards card
+ * had no Save button and its sibling cards (Save Profile, Save Defaults) do
+ * not touch these fields, so operator edits were being silently dropped on
+ * page reload. This dedicated save merges into the existing farm-settings
+ * blob so display prefs, notifications, and webhooks are preserved.
+ */
+async function saveFulfillmentStandards() {
+    try {
+        const val = (id) => { const el = document.getElementById(id); return el ? el.value : ''; };
+        const pickupRequirements = normalizeWholesaleList(val('settings-pickup-requirements'));
+        const deliveryRequirements = normalizeWholesaleList(val('settings-delivery-requirements'));
+        const pickupSchedule = val('settings-pickup-schedule').trim();
+        const deliverySchedule = val('settings-delivery-schedule').trim();
+
+        const token = currentSession?.token || sessionStorage.getItem('token') || localStorage.getItem('token');
+        const authHeaders = {};
+        if (token) authHeaders['Authorization'] = 'Bearer ' + token;
+
+        // Load the current settings blob so we merge rather than overwrite.
+        let existing = {};
+        try {
+            const resp = await fetch('/data/farm-settings.json', { headers: authHeaders });
+            if (resp.ok) existing = await resp.json() || {};
+        } catch (_) { /* best effort */ }
+        if (!existing || typeof existing !== 'object') existing = {};
+
+        const merged = {
+            ...existing,
+            fulfillmentStandards: {
+                pickup_schedule: pickupSchedule,
+                delivery_schedule: deliverySchedule,
+                pickup_requirements: pickupRequirements,
+                delivery_requirements: deliveryRequirements
+            },
+            pickupSchedule,
+            deliverySchedule,
+            pickupRequirements,
+            deliveryRequirements,
+            lastUpdated: new Date().toISOString()
+        };
+
+        localStorage.setItem('farmSettings', JSON.stringify(merged));
+
+        const resp = await fetch('/data/farm-settings.json', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...authHeaders },
+            body: JSON.stringify(merged)
+        });
+        if (!resp.ok) {
+            const status = resp.status;
+            console.warn('[Fulfillment Standards] Server save returned', status);
+            showToast(`Fulfillment Standards save failed (HTTP ${status})`, 'error');
+            return;
+        }
+
+        try {
+            window.dispatchEvent(new CustomEvent('farmSettingsUpdated', { detail: merged }));
+        } catch (_) {}
+        showToast('Fulfillment Standards saved', 'success');
+    } catch (error) {
+        console.error('Error saving Fulfillment Standards:', error);
+        showToast('Error saving Fulfillment Standards', 'error');
+    }
+}
+
+/**
  * Save farm profile (contact/identity) to the API
  */
 async function saveProfileSettings(options = {}) {

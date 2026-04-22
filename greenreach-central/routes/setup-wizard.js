@@ -1221,6 +1221,99 @@ router.post('/certifications', authenticateToken, async (req, res) => {
 });
 
 /**
+ * POST /api/setup/business-details
+ * Persist the first-run "Business Details" step: operating hours, buyer-facing
+ * certifications/practices, and the payment-configured flag. Writes both to
+ * farmStore (source of truth for farm_profile in no-DB mode) and the farms
+ * table (business_hours + certifications columns) when the DB is available,
+ * mirroring the behavior of /certifications and /farm-profile above.
+ *
+ * Body: {
+ *   hours: { mon:{closed,open,close}, tue:..., ... sun:... },
+ *   certifications: string[],
+ *   practices: string[],
+ *   paymentConfigured: boolean
+ * }
+ */
+router.post('/business-details', authenticateToken, async (req, res) => {
+  try {
+    const farmId = req.farmId;
+    const { hours, certifications, practices, paymentConfigured } = req.body || {};
+
+    const sanitizeArr = (arr) => {
+      if (!Array.isArray(arr)) return [];
+      return arr.filter(v => typeof v === 'string').map(v => validator.escape(validator.trim(v))).filter(Boolean);
+    };
+    const sanitizeHours = (h) => {
+      if (!h || typeof h !== 'object') return {};
+      const out = {};
+      for (const [day, entry] of Object.entries(h)) {
+        if (!entry || typeof entry !== 'object') continue;
+        const closed = !!entry.closed;
+        out[String(day).toLowerCase().slice(0, 3)] = closed
+          ? { closed: true }
+          : {
+              closed: false,
+              open: typeof entry.open === 'string' ? entry.open.slice(0, 5) : '',
+              close: typeof entry.close === 'string' ? entry.close.slice(0, 5) : ''
+            };
+      }
+      return out;
+    };
+
+    const normalizedHours = sanitizeHours(hours);
+    const normalizedCerts = {
+      certifications: sanitizeArr(certifications),
+      practices: sanitizeArr(practices),
+      attributes: []
+    };
+    const paymentFlag = !!paymentConfigured;
+
+    // farmStore is the source of truth for no-DB mode and also backs the
+    // onboarding-status checklist calculations.
+    if (req.farmStore) {
+      try {
+        const existing = await req.farmStore.get(farmId, 'farm_profile') || {};
+        existing.business_hours = normalizedHours;
+        existing.certifications = normalizedCerts;
+        existing.payment_configured = paymentFlag;
+        await req.farmStore.set(farmId, 'farm_profile', existing);
+      } catch (e) {
+        console.warn('[Setup Wizard] farmStore business-details write error:', e.message);
+      }
+    }
+
+    const pool = req.db;
+    if (pool) {
+      try {
+        await pool.query(
+          `UPDATE farms
+             SET business_hours = $1,
+                 certifications = $2,
+                 updated_at = CURRENT_TIMESTAMP
+           WHERE farm_id = $3`,
+          [JSON.stringify(normalizedHours), JSON.stringify(normalizedCerts), farmId]
+        );
+      } catch (dbErr) {
+        console.warn('[Setup Wizard] DB business-details update failed:', dbErr.message);
+      }
+    }
+
+    console.log('[Setup Wizard] Business details saved for farm:', farmId);
+    res.json({
+      success: true,
+      hours: normalizedHours,
+      certifications: normalizedCerts,
+      paymentConfigured: paymentFlag
+    });
+
+  } catch (error) {
+    console.error('[Setup Wizard] business-details error:', error);
+    res.status(500).json({ success: false, error: 'Failed to save business details' });
+  }
+});
+
+/**
  * GET /api/setup/onboarding-status
  * Returns onboarding checklist completion status
  */
