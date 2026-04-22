@@ -506,19 +506,37 @@
     // room dimensions. Silently falling back to a generic 20m x 15m room
     // produced bogus "48 units" recommendations for small rooms. Tell the
     // operator exactly what's missing and link them to where they can fix it.
+    // Build the node with DOM APIs (not innerHTML interpolation) so a room
+    // named `<img src=x onerror=alert(1)>` stays text, not script.
     const dimsCheck = readRoomDims(state.room);
     if (!state.room || !dimsCheck) {
-      const missingLabel = state.room
-        ? `"${state.room.name || state.room.id}" has no length/width saved`
-        : 'no room is selected';
-      el.innerHTML = `
-        <div class="rbp-empty" style="padding:12px 14px;border:1px dashed rgba(252,211,77,0.4);border-radius:10px;background:rgba(30,41,59,0.55);color:#fde68a;font-size:0.9rem;line-height:1.5;">
-          <strong style="color:#fef3c7;">Evie needs your room dimensions.</strong>
-          I can't recommend a grow-unit count &mdash; ${missingLabel}. Open
-          <a href="/farm-admin.html#farm-setup" style="color:#60a5fa;">Farm Setup &rarr; Rooms</a>
-          or the 3D viewer's "Edit room" dialog and enter real length, width, and ceiling height in metres. I refuse to guess so you don't end up ordering 48 units for a 6&nbsp;&times;&nbsp;3&nbsp;m room.
-        </div>
-      `;
+      el.textContent = '';
+      const box = document.createElement('div');
+      box.className = 'rbp-empty';
+      box.setAttribute('style', 'padding:12px 14px;border:1px dashed rgba(252,211,77,0.4);border-radius:10px;background:rgba(30,41,59,0.55);color:#fde68a;font-size:0.9rem;line-height:1.5;');
+      const strong = document.createElement('strong');
+      strong.setAttribute('style', 'color:#fef3c7;');
+      strong.textContent = 'Evie needs your room dimensions.';
+      box.appendChild(strong);
+      box.appendChild(document.createTextNode(" I can't recommend a grow-unit count \u2014 "));
+      if (state.room) {
+        const quote = document.createElement('span');
+        const rawName = (state.room.name || state.room.id || '').toString();
+        quote.textContent = `"${rawName}"`;
+        box.appendChild(quote);
+        box.appendChild(document.createTextNode(' has no length/width saved. Open '));
+      } else {
+        box.appendChild(document.createTextNode('no room is selected. Open '));
+      }
+      const link = document.createElement('a');
+      link.href = '/farm-admin.html#farm-setup';
+      link.setAttribute('style', 'color:#60a5fa;');
+      link.textContent = 'Farm Setup \u2192 Rooms';
+      box.appendChild(link);
+      box.appendChild(document.createTextNode(
+        ' or the 3D viewer\'s "Edit room" dialog and enter real length, width, and ceiling height in metres. I refuse to guess so you don\'t end up ordering 48 units for a 6 \u00d7 3 m room.'
+      ));
+      el.appendChild(box);
       return;
     }
 
