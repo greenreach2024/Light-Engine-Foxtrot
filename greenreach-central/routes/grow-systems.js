@@ -80,12 +80,10 @@ router.get('/', async (_req, res) => {
       templates: registry.templates
     });
   } catch (err) {
+    // Full err.message contains absolute filesystem paths — log it server-side
+    // but DO NOT echo it to clients (CWE-209 information disclosure).
     console.error('[GrowSystems] Failed to load registry:', err.message);
-    res.status(500).json({
-      ok: false,
-      error: 'Failed to load grow-systems registry',
-      detail: err.message,
-    });
+    res.status(500).json({ ok: false, error: 'Failed to load grow-systems registry' });
   }
 });
 
@@ -101,11 +99,7 @@ router.get('/:templateId', async (req, res) => {
     res.json({ ok: true, template });
   } catch (err) {
     console.error('[GrowSystems] Template lookup failed:', err.message);
-    res.status(500).json({
-      ok: false,
-      error: 'Failed to load template',
-      detail: err.message,
-    });
+    res.status(500).json({ ok: false, error: 'Failed to load template' });
   }
 });
 
