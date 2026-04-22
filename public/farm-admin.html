@@ -1121,6 +1121,12 @@
                     </div>
                 </div>
 
+                <!-- Getting Started checklist. Hidden until loadOnboardingChecklist()
+                     fetches /api/setup/onboarding-status. Operators were previously
+                     only seeing this inside Settings; surfacing it on the Dashboard
+                     is the intended first-run experience. -->
+                <div class="onboarding-checklist-container" style="display: none; margin-top: 20px;"></div>
+
                 <!-- KPI Grid -->
                 <div class="kpi-grid">
                     <div class="kpi-card">
@@ -2330,6 +2336,9 @@
                     <p class="header-subtitle">Configure your farm profile, integrations, and system preferences</p>
                 </div>
 
+                <!-- Onboarding Checklist (also rendered on Dashboard). -->
+                <div id="onboarding-checklist-container" style="display: none; margin-top: 20px;"></div>
+
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 20px; margin-top: 20px;">
                     <!-- Farm Profile -->
                     <div class="card">
@@ -2855,6 +2864,7 @@
     </div>
 
     <script src="/js/data-flow-bus.js?v=20260422-bus-v1"></script>
+    <script src="/js/onboarding-checklist.js?v=20260422-firstrun"></script>
     <script src="/farm-admin.js?v=20260402-wholesale-queue-hotfix"></script>
     
     <!-- Production Planning System JavaScript -->
