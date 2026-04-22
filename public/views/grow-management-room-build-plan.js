@@ -781,6 +781,42 @@
 
     try {
       const rooms = await fetchRooms();
+
+      // groupsV2RoomSelect lives in the collapsed "Advanced" panel so the
+      // operator may never open it. Auto-populate its options from the API
+      // response and auto-select a room so Evie can derive dimensions without
+      // requiring the user to manually open the advanced panel.
+      const roomSel = $(ROOM_SELECT_ID);
+      if (roomSel && rooms.length > 0 && !roomSel.value) {
+        // Populate options if the select is still empty (groups-v2.js populates
+        // at DOMContentLoaded via window.STATE.rooms which may not be ready yet).
+        if (!Array.from(roomSel.options).some(o => o.value)) {
+          rooms.forEach(r => {
+            const opt = document.createElement('option');
+            opt.value = r.id || r.name;
+            opt.textContent = r.name || r.id;
+            roomSel.appendChild(opt);
+          });
+        }
+        // Prefer a room that already has dimensions saved; fall back to first.
+        const roomWithDims = rooms.find(r => readRoomDims(r));
+        const target = roomWithDims || rooms[0];
+        const targetValue = target.id || target.name;
+        const targetName = target.name || target.id;
+        const existing = Array.from(roomSel.options).find(
+          o => o.value === targetValue || o.value === targetName
+        );
+        if (existing) {
+          roomSel.value = existing.value;
+        } else {
+          const newOpt = document.createElement('option');
+          newOpt.value = targetValue;
+          newOpt.textContent = targetName;
+          roomSel.appendChild(newOpt);
+          roomSel.value = targetValue;
+        }
+      }
+
       state.room = selectedRoom(rooms);
       state.zoneRects = zoneRectsFromRoom(state.room, zoneNamesForRoom(state.room));
       // Reset desired units when switching templates; auto-fit will pick up capacity on render.
