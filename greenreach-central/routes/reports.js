@@ -4,7 +4,7 @@
  */
 import express from 'express';
 import { query, isDatabaseAvailable } from '../config/database.js';
-import { listAllOrders, listPayments, listAllBuyers } from '../services/wholesaleMemoryStore.js';
+import { listAllOrders, listPayments, listAllBuyers, computeWholesaleTotals } from '../services/wholesaleMemoryStore.js';
 
 const router = express.Router();
 
@@ -45,18 +45,11 @@ router.get('/revenue-summary', async (_req, res) => {
     const orders = await listAllOrders({ page: 1, limit: 50000 });
     const payments = listPayments() || [];
 
-    const totalRevenue = (orders || []).reduce((sum, o) => {
-      return sum + Number(o.grand_total || o.totals?.grand_total || o.totals?.subtotal || 0);
-    }, 0);
-
-    const brokerFeeTotal = (orders || []).reduce((sum, o) => {
-      return sum + Number(o.broker_fee_total || o.totals?.broker_fee_total || 0);
-    }, 0);
-
-    const totalPayments = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
-
-    const orderCount = (orders || []).length;
-    const avgOrderValue = orderCount > 0 ? totalRevenue / orderCount : 0;
+    // Canonical totals — shared with /api/admin/wholesale/dashboard so both
+    // admin surfaces report the same numbers. See computeWholesaleTotals in
+    // services/wholesaleMemoryStore.js.
+    const totals = computeWholesaleTotals(orders);
+    const totalPayments = Math.round(payments.reduce((sum, p) => sum + (p.amount || 0), 0) * 100) / 100;
 
     // Diagnostics — surface whether wholesale orders are actually landing in
     // the DB. A silent persistOrder() failure (it has a .catch that only
@@ -69,7 +62,7 @@ router.get('/revenue-summary', async (_req, res) => {
       try {
         const dbCountRes = await query('SELECT COUNT(*)::int AS c FROM wholesale_orders');
         diagnostics.orders_in_db = dbCountRes.rows?.[0]?.c ?? 0;
-        diagnostics.orders_returned = orderCount;
+        diagnostics.orders_returned = totals.orderCount;
         diagnostics.payments_in_memory = payments.length;
       } catch (err) {
         diagnostics.db_error = err.message;
@@ -80,12 +73,13 @@ router.get('/revenue-summary', async (_req, res) => {
       success: true,
       report: 'revenue-summary',
       data: {
-        totalRevenue: Math.round(totalRevenue * 100) / 100,
-        totalPayments: Math.round(totalPayments * 100) / 100,
-        orderCount,
-        avgOrderValue: Math.round(avgOrderValue * 100) / 100,
-        brokerFeeTotal: Math.round(brokerFeeTotal * 100) / 100,
-        outstanding: Math.round((totalRevenue - totalPayments) * 100) / 100,
+        totalRevenue: totals.totalRevenue,
+        totalPayments,
+        orderCount: totals.orderCount,
+        avgOrderValue: totals.avgOrderValue,
+        brokerFeeTotal: totals.brokerFeeTotal,
+        activeFarms: totals.activeFarms,
+        outstanding: Math.round((totals.totalRevenue - totalPayments) * 100) / 100,
       },
       diagnostics,
       generatedAt: new Date().toISOString(),
