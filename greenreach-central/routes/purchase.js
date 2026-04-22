@@ -210,6 +210,16 @@ router.post('/api/farms/create-checkout-session', async (req, res) => {
       return res.status(400).json({ ok: false, error: 'Farm name, contact name, and email are required' });
     }
 
+    // Fail fast if the checkout session cannot be persisted: otherwise the user
+    // completes payment on Square and we have no record to provision against.
+    if (!isDatabaseAvailable()) {
+      console.error('[Purchase] create-checkout-session refused: database unavailable — would have stranded payment');
+      return res.status(503).json({
+        ok: false,
+        error: 'Checkout is temporarily unavailable. Please try again in a few minutes.',
+      });
+    }
+
     const planConfig = PLANS[plan] || PLANS.cloud;
     const locationId = process.env.SQUARE_LOCATION_ID;
     const client = await getSquareClient();
@@ -950,6 +960,198 @@ router.post('/api/purchase/manual-verify/:sessionId', adminAuthMiddleware, async
   } catch (error) {
     console.error('[Purchase] manual-verify error:', error);
     res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// POST /api/purchase/admin/recover-from-square
+// Admin-only: recover an orphaned Square payment that never got a
+// checkout_sessions row (e.g. DB was down when the buy button was clicked).
+// Accepts a Square payment_id or order_id, plus the buyer's details, and
+// provisions the farm/user/JWT + sends the welcome email.
+//
+// Body: { square_payment_id?, square_order_id?, email, farm_name, contact_name, plan_type? }
+// ═══════════════════════════════════════════════════════════════
+router.post('/api/purchase/admin/recover-from-square', adminAuthMiddleware, async (req, res) => {
+  try {
+    await ensureTables();
+
+    if (!isDatabaseAvailable()) {
+      return res.status(503).json({ success: false, error: 'Database unavailable' });
+    }
+
+    const {
+      square_payment_id,
+      square_order_id: squareOrderIdInput,
+      email,
+      farm_name,
+      contact_name,
+      plan_type,
+    } = req.body || {};
+
+    if (!email || !farm_name || !contact_name) {
+      return res.status(400).json({
+        success: false,
+        error: 'email, farm_name, and contact_name are required',
+      });
+    }
+
+    if (!square_payment_id && !squareOrderIdInput) {
+      return res.status(400).json({
+        success: false,
+        error: 'square_payment_id or square_order_id is required',
+      });
+    }
+
+    const planKey = PLANS[plan_type] ? plan_type : 'cloud';
+    const planConfig = PLANS[planKey];
+
+    // Short-circuit: already provisioned?
+    const existingFarm = await query(
+      'SELECT farm_id, name, plan_type FROM farms WHERE email = $1',
+      [email.toLowerCase()]
+    );
+    if (existingFarm.rows.length > 0) {
+      return res.json({
+        success: true,
+        already_provisioned: true,
+        farm_id: existingFarm.rows[0].farm_id,
+        farm_name: existingFarm.rows[0].name,
+        plan_type: existingFarm.rows[0].plan_type,
+        message: 'A farm already exists for this email.',
+      });
+    }
+
+    // Verify with Square
+    const client = await getSquareClient();
+    if (!client) {
+      return res.status(500).json({ success: false, error: 'Square client not configured' });
+    }
+
+    let squareOrderId = squareOrderIdInput || null;
+    let paymentId = square_payment_id || null;
+    let paymentAmount = null;
+    let paymentCurrency = null;
+    let paymentStatus = null;
+
+    try {
+      if (square_payment_id) {
+        const payResp = await client.payments.get({ paymentId: square_payment_id });
+        const payment = payResp.payment;
+        if (!payment) {
+          return res.status(404).json({ success: false, error: 'Square payment not found' });
+        }
+        paymentStatus = payment.status;
+        paymentAmount = Number(payment.amountMoney?.amount ?? 0n);
+        paymentCurrency = payment.amountMoney?.currency || null;
+        if (!squareOrderId) squareOrderId = payment.orderId || null;
+      } else {
+        const orderResp = await client.orders.get({ orderId: squareOrderId });
+        const order = orderResp.order;
+        if (!order) {
+          return res.status(404).json({ success: false, error: 'Square order not found' });
+        }
+        paymentStatus = order.state;
+        paymentAmount = Number(order.totalMoney?.amount ?? 0n);
+        paymentCurrency = order.totalMoney?.currency || null;
+        if (!paymentId && order.tenders && order.tenders.length > 0) {
+          paymentId = order.tenders[0].paymentId || order.tenders[0].id;
+        }
+      }
+    } catch (sqErr) {
+      console.error('[Purchase] admin-recover Square lookup failed:', sqErr.message);
+      return res.status(502).json({
+        success: false,
+        error: `Square lookup failed: ${sqErr.message}`,
+      });
+    }
+
+    const isCompleted = paymentStatus === 'COMPLETED' || paymentStatus === 'APPROVED';
+    if (!isCompleted && req.query.force !== 'true') {
+      return res.status(402).json({
+        success: false,
+        error: `Payment not confirmed by Square (status: ${paymentStatus}). Add ?force=true to override.`,
+        square_status: paymentStatus,
+      });
+    }
+
+    // Synthesize or reuse a checkout_sessions row
+    let session;
+    if (squareOrderId) {
+      const existing = await query(
+        'SELECT * FROM checkout_sessions WHERE square_order_id = $1 ORDER BY created_at DESC LIMIT 1',
+        [squareOrderId]
+      );
+      if (existing.rows.length > 0) session = existing.rows[0];
+    }
+
+    if (!session) {
+      const sessionId = `admin_recover_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
+      const inserted = await query(
+        `INSERT INTO checkout_sessions
+           (session_id, square_order_id, plan_type, amount_cents, currency,
+            farm_name, contact_name, email, status, payment_id, metadata)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'paid', $9, $10)
+         RETURNING *`,
+        [
+          sessionId,
+          squareOrderId,
+          planConfig.type,
+          paymentAmount || planConfig.amount_cents,
+          paymentCurrency || planConfig.currency,
+          farm_name,
+          contact_name,
+          email.toLowerCase(),
+          paymentId,
+          JSON.stringify({
+            recovered_by: 'admin',
+            recovered_at: new Date().toISOString(),
+            admin_email: req.admin?.email || null,
+            square_status: paymentStatus,
+          }),
+        ]
+      );
+      session = inserted.rows[0];
+      console.log(`[Purchase] admin-recover inserted session ${sessionId} for ${email}`);
+    } else if (paymentId && !session.payment_id) {
+      await query(
+        `UPDATE checkout_sessions SET payment_id = $1, status = 'paid' WHERE session_id = $2`,
+        [paymentId, session.session_id]
+      );
+      session.payment_id = paymentId;
+      session.status = 'paid';
+    }
+
+    const result = await provisionFarmAndUser(session);
+    if (!result.success) {
+      return res.status(500).json({ success: false, error: result.error || 'Provisioning failed' });
+    }
+
+    // Welcome email (best-effort)
+    if (!result.existing_account && result.temp_password) {
+      try {
+        const emailResult = await sendWelcomeEmail({
+          email: result.email,
+          farmId: result.farm_id,
+          farmName: result.farm_name,
+          contactName: session.contact_name,
+          tempPassword: result.temp_password,
+          planType: result.plan_type,
+        });
+        result.email_sent = emailResult.sent;
+      } catch (emailErr) {
+        console.error('[Purchase] admin-recover email error:', emailErr.message);
+        result.email_sent = false;
+      }
+    }
+
+    console.log(
+      `[Purchase] admin-recover — farm provisioned: ${result.farm_id} (${result.farm_name}) for ${email}`
+    );
+    return res.json(result);
+  } catch (error) {
+    console.error('[Purchase] admin-recover error:', error);
+    return res.status(500).json({ success: false, error: error.message });
   }
 });
 
