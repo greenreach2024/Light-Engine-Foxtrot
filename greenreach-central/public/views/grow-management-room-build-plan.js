@@ -66,7 +66,13 @@
 
   function fetchRooms() {
     const _f = window.authFetch || fetch;
-    return _f('/api/rooms', { credentials: 'same-origin' })
+    // Cache-bust so we always read the post-save snapshot. The underlying
+    // service-worker / CDN otherwise serves stale /api/rooms responses and
+    // the plan re-renders with the old zone count.
+    const url = (window.DataFlowBus && window.DataFlowBus.cacheBust)
+      ? window.DataFlowBus.cacheBust('/api/rooms')
+      : '/api/rooms';
+    return _f(url, { credentials: 'same-origin', cache: 'no-store' })
       .then(r => r.ok ? r.json() : [])
       .then(body => Array.isArray(body) ? body : (body.rooms || body.items || []))
       .catch(() => []);
@@ -149,11 +155,15 @@
   }
 
   function zoneNamesForRoom(room) {
-    if (!room) return ['Zone 1', 'Zone 2'];
+    // The operator is the source of truth for zone count. Only fall back to a
+    // single default zone if room.zones is missing entirely — never multiply
+    // zones silently (historical default was 2, which caused the Room Build
+    // Plan to show 2 zones after the operator explicitly set the count to 1).
+    if (!room) return ['Zone 1'];
     if (Array.isArray(room.zones) && room.zones.length) {
       return room.zones.map((z) => typeof z === 'string' ? z : (z?.name || 'Zone'));
     }
-    return ['Zone 1', 'Zone 2'];
+    return ['Zone 1'];
   }
 
   async function scoreFor(templateId, cropClass, room) {
@@ -884,6 +894,22 @@
         await handleSelection({ templateId: state.template.id, template: state.template });
       });
     }
+
+    // Subscribe to the cross-page data bus so zone-count changes in the
+    // stepper or the draw-zones drawer re-run the plan with the new zone
+    // names. Without this the RBP keeps its in-memory closure and renders
+    // the old (pre-save) zone count even after /api/rooms reflects the new
+    // value. Also listen to the legacy `rooms-updated` DOM event for older
+    // producers that haven't adopted the bus yet.
+    function refetchAndRender() {
+      if (!state.template) return;
+      handleSelection({ templateId: state.template.id, template: state.template });
+    }
+    if (window.DataFlowBus && typeof window.DataFlowBus.on === 'function') {
+      window.DataFlowBus.on('rooms', refetchAndRender);
+      window.DataFlowBus.on('zones', refetchAndRender);
+    }
+    document.addEventListener('rooms-updated', refetchAndRender);
   }
 
   if (document.readyState === 'loading') {

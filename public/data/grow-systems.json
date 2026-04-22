@@ -190,9 +190,9 @@
       },
       "transpiration": {
         "gPerPlantPerDayByClass": {
-          "leafy_greens": 35,
+          "leafy_greens": 30,
           "microgreens": 8,
-          "herbs": 28,
+          "herbs": 25,
           "fruiting": 120
         },
         "sensibleHeatFactor": 0.3

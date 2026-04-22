@@ -2250,6 +2250,15 @@ async function saveGroupsV2Group(status = 'draft') {
   
   // Update UI
   document.dispatchEvent(new Event('groups-updated'));
+  // Broadcast to the cross-page bus so AI Crop Recommendations, Planting
+  // Scheduler, Farm Sales POS, 3D viewer, Tray Inventory and anything else
+  // that reads /data/groups.json refetches with cache busted. Without this a
+  // save in Groups V2 is invisible to every other consumer until the page
+  // is reloaded (the root cause of the "delete 78 groups did not affect AI
+  // Crop Recommendations" regression).
+  if (window.DataFlowBus) {
+    window.DataFlowBus.emit('groups', { source: 'groups-v2-save', groupId: id, status: status });
+  }
   updateGroupsV2StatusBadge(groupRecord);
   
   // Update load dropdown to show this group as selected
@@ -2327,6 +2336,9 @@ async function saveGroupsV2GroupObject(groupObject) {
     
     // Update UI
     document.dispatchEvent(new Event('groups-updated'));
+    if (window.DataFlowBus) {
+      window.DataFlowBus.emit('groups', { source: 'groups-v2-save-object', groupId: groupObject.id });
+    }
     
     return groupObject;
   } catch (error) {
@@ -2640,6 +2652,10 @@ document.addEventListener('DOMContentLoaded', () => {
         // Update UI
         document.dispatchEvent(new Event('groups-updated'));
         document.dispatchEvent(new Event('lights-updated'));
+        if (window.DataFlowBus) {
+          window.DataFlowBus.emit('groups', { source: 'groups-v2-delete', groupId: group && group.id, groupName: group && group.name });
+          window.DataFlowBus.emit('lights', { source: 'groups-v2-delete', groupId: group && group.id });
+        }
         populateGroupsV2LoadGroupDropdown();
         populateGroupsV2UnassignedLightsDropdown(); // Refresh unassigned lights to show newly available lights
         renderGroupsV2LightCard(null);

@@ -25,8 +25,7 @@
         { id: 'nutrient-mgmt',      label: 'Nutrient Management', icon: 'icon-nutrient',          section: 'iframe-view', url: '/views/nutrient-management.html' },
         { id: 'farm-inventory',     label: 'Crop Inventory',      icon: 'icon-crop-inventory',    section: 'iframe-view', url: '/views/farm-inventory.html' },
         { id: 'crop-weight',        label: 'Crop Weight Analytics', icon: 'icon-weight-analytics', section: 'iframe-view', url: '/views/crop-weight-analytics.html' },
-        { id: 'room-heatmap',       label: 'Heat Map',            icon: 'icon-heatmap',           section: 'iframe-view', url: '/views/room-heatmap.html' },
-        { id: 'room-mapper',       label: 'Room Mapper',          icon: 'icon-heatmap',           section: 'iframe-view', url: '/views/room-mapper.html' },
+        { id: 'room-heatmap',       label: 'Heat Map',            icon: 'icon-heatmap',           section: 'iframe-view', url: '/views/3d-farm-viewer.html?mode=heatmap' },
         { id: 'farm-vitality',      label: 'Farm Vitality',       icon: 'icon-vitality',          section: 'external',    url: '/farm-vitality.html' }
       ]
     },
@@ -78,8 +77,7 @@
       icon: 'icon-visualization',
       items: [
         { id: '3d-farm-viewer', label: '3D Farm Viewer',  icon: 'icon-visualization', section: 'iframe-view', url: '/views/3d-farm-viewer.html' },
-        { id: 'room-heatmap-viz', label: 'Room Heatmap',  icon: 'icon-heatmap',       section: 'iframe-view', url: '/views/room-heatmap.html' },
-        { id: 'room-mapper-viz',  label: 'Room Mapper',   icon: 'icon-heatmap',       section: 'iframe-view', url: '/views/room-mapper.html' }
+        { id: 'room-heatmap-viz', label: 'Room Heatmap',  icon: 'icon-heatmap',       section: 'iframe-view', url: '/views/3d-farm-viewer.html?mode=heatmap' }
       ]
     }
   };

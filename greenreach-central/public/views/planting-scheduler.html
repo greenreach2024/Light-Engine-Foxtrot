@@ -1466,6 +1466,7 @@ Remix Recommendations
   </div>
 
   <script src="/js/crop-utils.js"></script>
+  <script src="/js/data-flow-bus.js?v=20260422-bus-v1"></script>
   <script>
     // ============================================================================
     // HELPER FUNCTIONS
@@ -1782,6 +1783,18 @@ Remix Recommendations
       
       // Set up form submission
       document.getElementById('manualSchedulingForm').addEventListener('submit', handleManualScheduling);
+
+      // Re-run loadSchedulerData() whenever groups / rooms / templates change
+      // in another page (Groups V2 delete, zone stepper save, grow template
+      // edit, etc.). Without this the scheduler holds the pre-save snapshot
+      // and AI Crop Recommendations keeps rendering deleted groups.
+      if (window.DataFlowBus && typeof window.DataFlowBus.on === 'function') {
+        var refetch = function () { try { loadSchedulerData(); } catch (_) {} };
+        window.DataFlowBus.on('groups', refetch);
+        window.DataFlowBus.on('rooms', refetch);
+        window.DataFlowBus.on('zones', refetch);
+        window.DataFlowBus.on('templates', refetch);
+      }
     });
 
     async function initializeManualForm() {
@@ -2030,9 +2043,15 @@ Remix Recommendations
           console.warn('Inventory API unavailable, using empty data:', err.message);
         }
         
-        // Load groups from data file
+        // Load groups from data file (cache-busted so deletes/saves in
+        // Groups V2 propagate here without a page reload — this is the
+        // regression path that made AI Crop Recommendations keep showing
+        // deleted groups).
         try {
-          const groupsResponse = await fetch('/data/groups.json');
+          const groupsUrl = (window.DataFlowBus && window.DataFlowBus.cacheBust)
+            ? window.DataFlowBus.cacheBust('/data/groups.json')
+            : '/data/groups.json?t=' + Date.now();
+          const groupsResponse = await fetch(groupsUrl, { cache: 'no-store' });
           if (groupsResponse.ok) {
             groupsData = await groupsResponse.json();
           } else {

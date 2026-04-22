@@ -672,6 +672,7 @@
   </style>
   <script src="/js/console-wrapper.js"></script>
   <script src="/js/auth-fetch.js?v=20260421-authfetch-v1"></script>
+  <script src="/js/data-flow-bus.js?v=20260422-bus-v1"></script>
   <script src="/js/net.guard.js" defer></script>
   <script src="/app.foxtrot.js?v=20260419-standalone-panel-fix" defer></script>
   <script src="/groups-v2.js?v=20260421-authfetch-v1" defer></script>
@@ -750,13 +751,13 @@
       </div>
       <div class="ff-step-card">
         <div id="ffRoomBody" class="ff-empty">Loading rooms&hellip;</div>
-        <!-- In-place popup launchers. The 3D viewer, Room Mapper, and Heat Map
-             now live as modes of the same viewer so the operator never
-             bounces to a new page. Each link opens the shared popup overlay
-             (see /js/spatial-viewer-popup.js) instead of navigating. -->
+        <!-- In-place popup launchers. The 3D viewer and Heat Map live as
+             modes of the same viewer so the operator never bounces to a new
+             page. Room Mapper has been folded into the 3D viewer's edit
+             mode (zone drawing + device placement happen in-scene) so there
+             is no longer a separate link here. -->
         <div class="ff-link-row" style="display:flex;gap:14px;flex-wrap:wrap;">
           <a href="#" data-spatial-viewer="view" data-spatial-viewer-title="3D Farm Viewer">Open 3D viewer</a>
-          <a href="#" data-spatial-viewer="draw-zones" data-spatial-viewer-title="Room Mapper &middot; 3D viewer">Room Mapper</a>
           <a href="#" data-spatial-viewer="heatmap" data-spatial-viewer-title="Heat Map &middot; 3D viewer">Heat Map</a>
         </div>
       </div>
@@ -848,32 +849,13 @@
       <!-- Template gallery (renders inside this wrapper) -->
       <section id="growTemplateGallery" data-template-gallery-mount style="margin:0 0 18px;"></section>
 
-      <!-- Room Build Plan (populated on template click) -->
-      <section id="roomBuildPlan" class="gm-card" style="display:none;margin:0;">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:12px;">
-        <div>
-          <h3 id="rbpTitle" style="margin:0 0 4px;border:none;padding:0;">Room Build Plan</h3>
-          <p id="rbpSubtitle" class="tiny text-muted" style="margin:0;">Select a template above to stage a build plan.</p>
-        </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <button id="rbpPrefillBtn" type="button" class="primary" style="min-height:32px;padding:6px 14px;">Stage group from template</button>
-          <button id="rbpAssignLightsBtn" type="button" class="ghost" style="min-height:32px;padding:6px 14px;">Assign lights</button>
-          <button id="rbpSavePlanBtn" type="button" class="primary" style="min-height:32px;padding:6px 14px;background:#10b981;border-color:#10b981;" title="Persist this build plan to rooms.json (installedSystems + buildPlan). Makes Equipment step durable across reloads.">Save plan to room</button>
-          <button id="rbpClearBtn" type="button" class="ghost" style="min-height:32px;padding:6px 14px;">Clear</button>
-        </div>
-      </div>
-      <div id="rbpBody" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;"></div>
-    </section>
-
-    <!-- ===== BUILD STOCK GROUPS =====
-         Titled, visible card placed directly under the Room Build Plan so
-         the batch-create action is part of the same step as template
-         selection (no bouncing down the page). Duplicates the Build Stock
-         Groups + Print Labels actions from the Groups V2 panel so they're
-         reachable without scrolling; the legacy buttons inside the panel
-         stay for compatibility with existing wiring.
-    -->
-    <section id="buildStockGroupsCard" class="gm-card" style="margin:0 0 18px;">
+      <!-- ===== BUILD STOCK GROUPS =====
+           Sits directly below the template gallery so the batch-create action
+           is the first thing an operator sees after picking a system. The
+           Room Build Plan follows underneath so the electrical/transpiration
+           breakdown reads top-to-bottom in the same step.
+      -->
+      <section id="buildStockGroupsCard" class="gm-card" style="margin:0 0 18px;">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">
         <div>
           <h3 style="margin:0 0 4px;border:none;padding:0;">Build Stock Groups</h3>
@@ -1102,62 +1084,28 @@
         -->
         <div id="flow-lights" style="scroll-margin-top:88px;"></div>
 
-        <!-- ===== LIGHT ASSIGNMENT (per active group) ===== -->
-        <div class="gm-card">
-          <h3>Light Assignment</h3>
-          <div style="display:flex;flex-direction:column;gap:12px;">
-            <label class="tiny" style="display:flex;flex-direction:column;">
-              Available Lights (Not Yet Assigned)
-              <select id="groupsV2UnassignedLightsSelect" multiple size="5" style="min-height:120px;">
-                <option disabled>Loading...</option>
-              </select>
-              <span class="tiny text-muted" style="margin-top:4px;">Select light(s) from setup wizard or IoT devices</span>
-            </label>
-            <div class="row" style="gap:8px;flex-wrap:wrap;align-items:center;">
-              <button id="assignLightsToGroupBtn" type="button" class="primary">Assign Selected Light</button>
-              <span class="tiny text-muted">Assign the selected light to the current group</span>
-            </div>
-            <div id="lightInfoCard" style="display:none;padding:12px;border-radius:12px;">
-              <div id="lightInfoCardBody"></div>
-              <canvas id="lightInfoSpectrumCanvas" width="300" height="120" style="max-width:100%;margin-top:8px;"></canvas>
-            </div>
+        <!-- Light Assignment and Assigned Lights cards removed per PO:
+             light/controller assignment now lives inline on each group card
+             in the Build Stock Groups flow (see groups-v2.js group row).
+             We keep the hidden DOM stubs below so groups-v2.js's element
+             lookups (groupsV2UnassignedLightsSelect, groupsV2AssignController,
+             groupLightList, groupsV2SaveLightAssignments, etc.) don't throw
+             and the spectrum/solver pipeline still runs. -->
+        <div style="display:none;" aria-hidden="true">
+          <select id="groupsV2UnassignedLightsSelect" multiple size="5"></select>
+          <button id="assignLightsToGroupBtn" type="button"></button>
+          <div id="lightInfoCard"><div id="lightInfoCardBody"></div><canvas id="lightInfoSpectrumCanvas" width="300" height="120"></canvas></div>
+          <div id="groupsV2Comparison">
+            <div id="groupsV2PlanComparisonCard"></div>
+            <div id="groupsV2LightComparisonCard"></div>
           </div>
-        </div>
-
-        <!-- ===== PLAN VS LIGHT COMPARISON ===== -->
-        <div id="groupsV2Comparison" style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px;display:none;">
-          <div class="gm-card" style="border: 2px solid rgba(56, 189, 248, 0.3);">
-            <h3 style="display:flex;align-items:center;gap:8px;">Plan Target</h3>
-            <div id="groupsV2PlanComparisonCard" class="tiny"></div>
-          </div>
-          <div class="gm-card" style="border: 2px solid rgba(167, 139, 250, 0.3);">
-            <h3 style="display:flex;align-items:center;gap:8px;">Light Capability</h3>
-            <div id="groupsV2LightComparisonCard" class="tiny"></div>
-          </div>
-        </div>
-
-        <!-- ===== ASSIGNED LIGHTS ===== -->
-        <div class="gm-card">
-          <div class="row row--between row--center" style="margin-bottom:12px;gap:8px;flex-wrap:wrap;">
-            <h3 style="margin:0;border:none;padding:0;">Assigned Lights</h3>
-            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-              <select id="groupsV2AssignController" style="padding:6px 10px;font-size:13px;">
-                <option value="">Assign Controller...</option>
-              </select>
-              <button id="groupsV2SaveLightAssignments" type="button" class="primary tiny">Save Assigned Lights</button>
-              <button id="groupsV2TestGroupLights" type="button" class="primary tiny" style="background:linear-gradient(135deg, #f59e0b, #d97706) !important;">Test Assigned Lights</button>
-              <button id="groupsV2RunGroup" type="button" class="primary" style="background:linear-gradient(135deg, #10b981, #059669) !important;">Run Group</button>
-              <div id="groupsV2RunningIndicator" style="display:none;align-items:center;gap:6px;padding:4px 12px;color:#fff;border-radius:8px;font-size:13px;font-weight:600;">
-                <span style="display:inline-block;width:8px;height:8px;background:#fff;border-radius:50%;animation:pulse 1.5s ease-in-out infinite;"></span>
-                RUNNING
-              </div>
-              <div id="groupsV2TestingIndicator" style="display:none;align-items:center;gap:6px;padding:4px 12px;color:#fff;border-radius:8px;font-size:13px;font-weight:600;">
-                <span style="display:inline-block;width:8px;height:8px;background:#fff;border-radius:50%;animation:pulse 1.5s ease-in-out infinite;"></span>
-                TESTING
-              </div>
-              <button id="groupLightRemoveSelected" type="button" class="ghost danger tiny" disabled>Remove selected</button>
-            </div>
-          </div>
+          <select id="groupsV2AssignController"><option value=""></option></select>
+          <button id="groupsV2SaveLightAssignments" type="button"></button>
+          <button id="groupsV2TestGroupLights" type="button"></button>
+          <button id="groupsV2RunGroup" type="button"></button>
+          <div id="groupsV2RunningIndicator"></div>
+          <div id="groupsV2TestingIndicator"></div>
+          <button id="groupLightRemoveSelected" type="button" disabled></button>
           <div id="groupLightList"></div>
         </div>
 
@@ -2064,6 +2012,12 @@
             existing = existing.slice(0, target);
           }
           primary.zones = existing;
+          // Keep the exposed rooms snapshot in lock-step with the state we
+          // just mutated so any downstream consumer (Zone Drawer, Room Build
+          // Plan, 3D viewer, AI recommendations) reading via
+          // `window.__ffFlowRooms` sees the new zone count immediately — not
+          // the stale value from the last hydrate.
+          try { window.__ffFlowRooms = state.rooms; } catch (_) {}
           if (status) { status.textContent = 'Saving\u2026'; status.style.color = '#fbbf24'; }
           var _f = window.authFetch || fetch;
           _f('/api/setup/save-rooms', {
@@ -2076,6 +2030,10 @@
           }).then(function () {
             if (status) { status.textContent = 'Saved \u2022 ' + target + ' zones'; status.style.color = '#4ade80'; }
             document.dispatchEvent(new CustomEvent('rooms-updated'));
+            if (window.DataFlowBus) {
+              window.DataFlowBus.emit('rooms', { source: 'zone-count-stepper', zoneCount: target });
+              window.DataFlowBus.emit('zones', { source: 'zone-count-stepper', zoneCount: target });
+            }
             refresh();
           }).catch(function (err) {
             console.error('[ffFlow] zones count save failed:', err);
@@ -2122,11 +2080,15 @@
 
       function resolveRooms() {
         // Use the same rooms array ffFlow hydrated. Fall back to fetching
-        // rooms.json directly if the closure isn't available.
+        // rooms.json directly if the closure isn't available. Cache-busted
+        // via DataFlowBus so the drawer always reads the post-save snapshot.
         var maybe = window.__ffFlowRooms;
         if (Array.isArray(maybe) && maybe.length) return Promise.resolve(maybe);
         var _fetchRR = window.authFetch || fetch;
-        return _fetchRR('/data/rooms.json')
+        var url = (window.DataFlowBus && window.DataFlowBus.cacheBust)
+          ? window.DataFlowBus.cacheBust('/data/rooms.json')
+          : '/data/rooms.json';
+        return _fetchRR(url, { cache: 'no-store' })
           .then(function (r) { return r.ok ? r.json() : null; })
           .then(function (j) {
             return Array.isArray(j) ? j : (j && Array.isArray(j.rooms) ? j.rooms : []);
@@ -2420,7 +2382,12 @@
         }).then(function () {
           statusEl.textContent = 'Saved.';
           statusEl.style.color = '#4ade80';
+          try { window.__ffFlowRooms = state.rooms; } catch (_) {}
           document.dispatchEvent(new CustomEvent('rooms-updated'));
+          if (window.DataFlowBus) {
+            window.DataFlowBus.emit('rooms', { source: 'zone-drawer', roomId: state.roomId });
+            window.DataFlowBus.emit('zones', { source: 'zone-drawer', roomId: state.roomId });
+          }
         }).catch(function (err) {
           console.error('[grow-management] zone save failed:', err);
           statusEl.textContent = 'Save failed.';
