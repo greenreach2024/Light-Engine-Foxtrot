@@ -3,7 +3,7 @@
  * ==================================================================================
  * POST /api/assistant/chat          — Standard request/response chat
  * POST /api/assistant/chat/stream   — SSE streaming chat with real-time tokens
- * POST /api/assistant/upload-image  — Image upload for crop diagnosis (GPT-4o vision)
+ * POST /api/assistant/upload-image  — Image upload for crop diagnosis (Gemini Flash multimodal vision)
  * GET  /api/assistant/state         — Presence state (rooms, crops, tasks, alerts)
  *
  * Features: Streaming SSE, trust-tier autonomous actions, workflow orchestration,
@@ -6221,7 +6221,7 @@ async function logSystemAlert(alertData) {
  * Returns: { reply, conversation_id, actions?, tool_calls? }
  */
 
-// ── Rate limiter — protect OpenAI credits ──
+// ── Rate limiter — protect Gemini (Vertex AI) credits ──
 const rateLimitMap = new Map();
 const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
 const RATE_LIMIT_MAX = 20; // max 20 messages per minute per farm
@@ -7517,8 +7517,12 @@ router.post('/chat/stream', async (req, res) => {
 
 /**
  * POST /api/assistant/upload-image
- * Accepts multipart/form-data with an image file.
- * Stores temporarily and returns a data URL for GPT-4o vision.
+ * Accepts a JSON body { image_data (base64), content_type }.
+ * Returns a data URL. The data URL is then passed back into
+ * /api/assistant/chat as `image_url`, where Gemini Flash
+ * handles it as a multimodal input (see streamModel comment
+ * in the chat loop — Gemini Flash handles multimodal natively).
+ * No separate GPT-4o / OpenAI call is made.
  */
 router.post('/upload-image', async (req, res) => {
   try {
@@ -7541,7 +7545,8 @@ router.post('/upload-image', async (req, res) => {
       return res.status(400).json({ ok: false, error: 'Image too large. Maximum 5MB.' });
     }
 
-    // Return as data URL for GPT-4o vision
+    // Return as data URL; the chat endpoint feeds this to Gemini Flash
+    // as a multimodal input (not GPT-4o).
     const dataUrl = `data:${mimeType};base64,${image_data}`;
     return res.json({ ok: true, image_url: dataUrl, size_bytes: sizeBytes });
   } catch (err) {
