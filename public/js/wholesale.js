@@ -1637,11 +1637,19 @@
       
       // If no products, show availability messaging
       if (this.catalog.length === 0) {
+        const hasReportingFarms = Array.isArray(this.farms) && this.farms.length > 0;
+        const emptyTitle = hasReportingFarms
+          ? 'Catalog Is Refreshing'
+          : 'Not Yet Available in Your Area';
+        const emptyMessage = hasReportingFarms
+          ? 'We found farms in your network, but no live inventory is currently available right now. Please refresh in a minute while inventory sync completes.'
+          : 'The GreenReach Wholesale and Delivery is not live in your area. Access to the portal is free and we encourage you to create a profile. As more geographies go live, you will be notified. Thank you for supporting your local growers!';
+
         grid.innerHTML = `
           <div style="grid-column: 1 / -1; text-align: center; padding: 2rem; background: var(--surface); border-radius: 8px; border: 1px solid var(--border);">
-            <h3 style="color: var(--primary); margin-bottom: 1rem;">Not Yet Available in Your Area</h3>
+            <h3 style="color: var(--primary); margin-bottom: 1rem;">${emptyTitle}</h3>
             <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">
-              The GreenReach Wholesale and Delivery is not live in your area. Access to the portal is free and we encourage you to create a profile. As more geographies go live, you will be notified. Thank you for supporting your local growers!
+              ${emptyMessage}
             </p>
           </div>
         `;

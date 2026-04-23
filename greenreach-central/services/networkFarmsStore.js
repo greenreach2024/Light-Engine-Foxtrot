@@ -261,12 +261,28 @@ async function seedFromDatabase() {
   try {
     if (!(await isDatabaseAvailable())) return;
     const localFarmLocationById = loadLocalFarmProfileLocationById();
-    const result = await query(
-      `SELECT farm_id, name, api_url, location, metadata, status, created_at, updated_at, last_sync
-       FROM farms
-       WHERE status IN ('active', 'online', 'pending')
-       ORDER BY COALESCE(last_heartbeat, updated_at, created_at) DESC NULLS LAST`
-    );
+    let result;
+    try {
+      result = await query(
+        `SELECT farm_id, name, api_url, location, metadata, status, created_at, updated_at, last_sync
+         FROM farms
+         WHERE status IN ('active', 'online', 'pending')
+         ORDER BY COALESCE(last_heartbeat, updated_at, created_at) DESC NULLS LAST`
+      );
+    } catch (queryErr) {
+      const message = String(queryErr?.message || '');
+      if (!message.includes('column "location" does not exist')) throw queryErr;
+
+      // Some production schemas store farm location only inside metadata JSON.
+      // Fall back to a location-less SELECT so deploy/restart bootstrap keeps
+      // working even when the legacy farms.location column is absent.
+      result = await query(
+        `SELECT farm_id, name, api_url, NULL::jsonb AS location, metadata, status, created_at, updated_at, last_sync
+         FROM farms
+         WHERE status IN ('active', 'online', 'pending')
+         ORDER BY COALESCE(last_heartbeat, updated_at, created_at) DESC NULLS LAST`
+      );
+    }
     for (const row of result.rows) {
       const meta = typeof row.metadata === 'string' ? JSON.parse(row.metadata) : (row.metadata || {});
       const dbLocation = parseLocationLike(row.location);
@@ -431,30 +447,75 @@ export async function upsertNetworkFarm(farmId, farmData) {
           fulfillment_standards: normalizedFarm.fulfillment_standards || {}
       };
 
-      await query(
-        `INSERT INTO farms (farm_id, name, contact_name, api_url, api_key, api_secret, jwt_secret, status, plan_type, metadata, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'cloud', $9::jsonb, NOW(), NOW())
-         ON CONFLICT (farm_id) DO UPDATE SET
-           name = COALESCE(NULLIF(NULLIF($2, ''), $1), farms.name),
-           api_url = COALESCE(NULLIF($4, ''), farms.api_url),
-           api_key = COALESCE(NULLIF($5, ''), farms.api_key),
-           api_secret = COALESCE(farms.api_secret, EXCLUDED.api_secret),
-           jwt_secret = COALESCE(farms.jwt_secret, EXCLUDED.jwt_secret),
-           status = COALESCE(NULLIF($8, ''), farms.status),
-           metadata = COALESCE(farms.metadata, '{}'::jsonb) || $9::jsonb,
-           updated_at = NOW()`,
-        [
-          normalizedFarm.farm_id,
-          normalizedFarm.farm_name || normalizedFarm.farm_id,
-          normalizedFarm.contact?.name || normalizedFarm.contact?.contactName || 'Farm Admin',
-          normalizedFarm.api_url,
-          normalizedFarm.api_key || 'pending',
-          crypto.randomBytes(32).toString('hex'),
-          crypto.randomBytes(32).toString('hex'),
-          normalizedFarm.status || 'active',
-          JSON.stringify(metadata)
-        ]
-      );
+      const farmName = normalizedFarm.farm_name || normalizedFarm.farm_id;
+      const contactName = normalizedFarm.contact?.name || normalizedFarm.contact?.contactName || 'Farm Admin';
+      const apiUrl = normalizedFarm.api_url;
+      const apiKey = normalizedFarm.api_key || 'pending';
+      const apiSecret = crypto.randomBytes(32).toString('hex');
+      const jwtSecret = crypto.randomBytes(32).toString('hex');
+      const farmStatus = normalizedFarm.status || 'active';
+      const metadataJson = JSON.stringify(metadata);
+
+      try {
+        await query(
+          `INSERT INTO farms (farm_id, name, contact_name, api_url, api_key, api_secret, jwt_secret, status, plan_type, metadata, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'cloud', $9::jsonb, NOW(), NOW())
+           ON CONFLICT (farm_id) DO UPDATE SET
+             name = COALESCE(NULLIF(NULLIF($2, ''), $1), farms.name),
+             api_url = COALESCE(NULLIF($4, ''), farms.api_url),
+             api_key = COALESCE(NULLIF($5, ''), farms.api_key),
+             api_secret = COALESCE(farms.api_secret, EXCLUDED.api_secret),
+             jwt_secret = COALESCE(farms.jwt_secret, EXCLUDED.jwt_secret),
+             status = COALESCE(NULLIF($8, ''), farms.status),
+             metadata = COALESCE(farms.metadata, '{}'::jsonb) || $9::jsonb,
+             updated_at = NOW()`,
+          [
+            normalizedFarm.farm_id,
+            farmName,
+            contactName,
+            apiUrl,
+            apiKey,
+            apiSecret,
+            jwtSecret,
+            farmStatus,
+            metadataJson
+          ]
+        );
+      } catch (upsertErr) {
+        const message = String(upsertErr?.message || '');
+        if (!message.includes('null value in column "registration_code"')) throw upsertErr;
+
+        const fallbackRegistrationCode = (
+          `AUTO${String(normalizedFarm.farm_id || '').toUpperCase()}`
+        ).replace(/[^A-Z0-9]/g, '').slice(0, 32) || `AUTO${crypto.randomBytes(8).toString('hex').toUpperCase()}`;
+
+        await query(
+          `INSERT INTO farms (farm_id, name, contact_name, api_url, api_key, api_secret, jwt_secret, registration_code, status, plan_type, metadata, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'cloud', $10::jsonb, NOW(), NOW())
+           ON CONFLICT (farm_id) DO UPDATE SET
+             name = COALESCE(NULLIF(NULLIF($2, ''), $1), farms.name),
+             api_url = COALESCE(NULLIF($4, ''), farms.api_url),
+             api_key = COALESCE(NULLIF($5, ''), farms.api_key),
+             api_secret = COALESCE(farms.api_secret, EXCLUDED.api_secret),
+             jwt_secret = COALESCE(farms.jwt_secret, EXCLUDED.jwt_secret),
+             registration_code = COALESCE(farms.registration_code, EXCLUDED.registration_code),
+             status = COALESCE(NULLIF($9, ''), farms.status),
+             metadata = COALESCE(farms.metadata, '{}'::jsonb) || $10::jsonb,
+             updated_at = NOW()`,
+          [
+            normalizedFarm.farm_id,
+            farmName,
+            contactName,
+            apiUrl,
+            apiKey,
+            apiSecret,
+            jwtSecret,
+            fallbackRegistrationCode,
+            farmStatus,
+            metadataJson
+          ]
+        );
+      }
     }
   } catch (err) {
     console.warn(`[NetworkFarmsStore] Failed to persist farm ${farmId} to DB:`, err.message);

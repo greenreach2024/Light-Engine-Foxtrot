@@ -494,7 +494,7 @@ async function buildDynamicPricingContext() {
     const retailResult = await query(
       `SELECT i.product_name, i.category, i.retail_price, i.wholesale_price
          FROM farm_inventory i
-         JOIN farms f ON f.farm_id = i.farm_id
+         JOIN farms f ON f.farm_id::text = i.farm_id::text
         WHERE f.status = 'active'
           AND COALESCE(i.quantity_available, i.manual_quantity_lbs, 0) > 0
           AND (COALESCE(i.retail_price, 0) > 0 OR COALESCE(i.wholesale_price, 0) > 0)`
@@ -926,7 +926,212 @@ function isBuyerGeocodeResultValid(result, expected) {
   return true;
 }
 
+const GOOGLE_BUYER_GEOCODE_ACCEPTED_TYPES = new Set([
+  'street_address',
+  'premise',
+  'subpremise',
+  'route',
+  'intersection',
+  'postal_code',
+  'postal_code_prefix',
+  'locality',
+  'sublocality',
+  'sublocality_level_1',
+  'neighborhood',
+  'administrative_area_level_3',
+  'administrative_area_level_4'
+]);
+
+const GOOGLE_BUYER_GEOCODE_REJECTED_TYPES = new Set([
+  'country',
+  'administrative_area_level_1'
+]);
+
+function getGoogleGeocodingApiKey() {
+  return String(
+    process.env.GOOGLE_GEOCODING_API_KEY
+      || process.env.GOOGLE_MAPS_API_KEY
+      || process.env.GMAPS_API_KEY
+      || ''
+  ).trim();
+}
+
+function getGoogleAddressComponent(result, type, useShort = false) {
+  const components = Array.isArray(result?.address_components)
+    ? result.address_components
+    : [];
+  for (const component of components) {
+    const types = Array.isArray(component?.types) ? component.types : [];
+    if (types.includes(type)) {
+      const value = useShort ? component?.short_name : component?.long_name;
+      if (typeof value === 'string' && value.trim()) return value.trim();
+    }
+  }
+  return '';
+}
+
+function isAcceptableGoogleBuyerGeocodeResult(result) {
+  if (!result || typeof result !== 'object') return false;
+  const types = new Set(Array.isArray(result.types)
+    ? result.types.map((type) => String(type || '').trim().toLowerCase())
+    : []);
+  if (types.size === 0) return false;
+
+  for (const rejected of GOOGLE_BUYER_GEOCODE_REJECTED_TYPES) {
+    if (types.has(rejected)) return false;
+  }
+
+  for (const accepted of GOOGLE_BUYER_GEOCODE_ACCEPTED_TYPES) {
+    if (types.has(accepted)) return true;
+  }
+
+  return false;
+}
+
+function isGoogleBuyerGeocodeResultValid(result, expected) {
+  if (!result || typeof result !== 'object') return false;
+
+  let postalMatched = false;
+
+  if (expected.countryCode) {
+    const resultCountryCode = String(
+      getGoogleAddressComponent(result, 'country', true)
+    ).toUpperCase();
+    if (resultCountryCode && resultCountryCode !== expected.countryCode) return false;
+  }
+
+  if (expected.postalCode) {
+    const expectedPostal = normalizePostalCode(expected.postalCode);
+    const resultPostal = normalizePostalCode(
+      getGoogleAddressComponent(result, 'postal_code', false)
+    );
+    if (expectedPostal && resultPostal) {
+      if (expectedPostal !== resultPostal && expectedPostal.slice(0, 3) !== resultPostal.slice(0, 3)) {
+        return false;
+      }
+      postalMatched = true;
+    }
+  }
+
+  if (expected.state) {
+    const expectedState = normalizeProvinceComparable(expected.state);
+    const resultStateLong = normalizeProvinceComparable(
+      getGoogleAddressComponent(result, 'administrative_area_level_1', false)
+    );
+    const resultStateShort = normalizeProvinceComparable(
+      getGoogleAddressComponent(result, 'administrative_area_level_1', true)
+    );
+    const resultState = resultStateLong || resultStateShort;
+    if (expectedState && resultState && expectedState !== resultState && !postalMatched) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function buildGoogleBuyerGeocodeCandidates(rawLocation) {
+  if (!rawLocation || typeof rawLocation !== 'object') return [];
+
+  const location = rawLocation;
+  const queryTexts = buildBuyerGeocodeQueries(location);
+  if (!queryTexts.length) return [];
+
+  const country = String(location.country || 'Canada').trim();
+  const countryCode = (!country || country.toLowerCase() === 'canada') ? 'CA' : '';
+  const state = normalizeProvinceName(location.state ?? location.province ?? location.region ?? '');
+  const postalCode = normalizePostalCode(location.postalCode ?? location.zip ?? '');
+
+  return queryTexts.map((address) => ({
+    address,
+    countryCode,
+    state,
+    postalCode
+  }));
+}
+
+async function geocodeBuyerLocationWithGoogle(rawLocation) {
+  const apiKey = getGoogleGeocodingApiKey();
+  if (!apiKey) return null;
+
+  const location = (rawLocation && typeof rawLocation === 'object') ? rawLocation : {};
+  const candidates = buildGoogleBuyerGeocodeCandidates(location);
+  if (!candidates.length) return null;
+
+  const expectedState = normalizeProvinceName(location.state ?? location.province ?? location.region ?? '');
+  const expectedPostalCode = normalizePostalCode(location.postalCode ?? location.zip ?? '');
+  const expectedCountryCode = String(location.country || 'Canada').trim().toLowerCase() === 'canada' ? 'CA' : '';
+
+  for (const candidate of candidates) {
+    const params = new URLSearchParams();
+    params.set('address', candidate.address);
+    params.set('key', apiKey);
+    params.set('language', 'en');
+
+    if (candidate.countryCode) {
+      params.set('region', candidate.countryCode.toLowerCase());
+    }
+
+    const components = [];
+    if (candidate.countryCode) components.push(`country:${candidate.countryCode}`);
+    if (candidate.state) components.push(`administrative_area:${candidate.state}`);
+    if (candidate.postalCode) components.push(`postal_code:${candidate.postalCode.replace(/\s+/g, '')}`);
+    if (components.length > 0) {
+      params.set('components', components.join('|'));
+    }
+
+    const cacheKey = `google:${candidate.countryCode || 'all'}:${candidate.address.toLowerCase()}`;
+    const cached = buyerGeocodeCache.get(cacheKey);
+    if (cached && (Date.now() - cached.ts) < BUYER_GEOCODE_CACHE_TTL_MS) {
+      return { ...cached.coords };
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 4500);
+    try {
+      const response = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?${params.toString()}`, {
+        headers: { Accept: 'application/json' },
+        signal: controller.signal
+      });
+
+      if (!response.ok) continue;
+      const payload = await response.json();
+      if (!payload || payload.status !== 'OK' || !Array.isArray(payload.results) || payload.results.length === 0) {
+        continue;
+      }
+
+      for (const result of payload.results) {
+        if (!isAcceptableGoogleBuyerGeocodeResult(result)) continue;
+        if (!isGoogleBuyerGeocodeResultValid(result, {
+          countryCode: expectedCountryCode,
+          state: expectedState,
+          postalCode: expectedPostalCode
+        })) {
+          continue;
+        }
+
+        const latitude = toFiniteNumber(result?.geometry?.location?.lat);
+        const longitude = toFiniteNumber(result?.geometry?.location?.lng);
+        if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) continue;
+
+        const coords = { latitude, longitude };
+        buyerGeocodeCache.set(cacheKey, { coords, ts: Date.now() });
+        return coords;
+      }
+    } catch {
+      // Best-effort geocoding; continue with fallback candidates.
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
+  return null;
+}
+
 async function geocodeBuyerLocation(rawLocation) {
+  const googleCoords = await geocodeBuyerLocationWithGoogle(rawLocation);
+  if (googleCoords) return googleCoords;
+
   const location = (rawLocation && typeof rawLocation === 'object') ? rawLocation : {};
   const candidates = buildBuyerGeocodeCandidates(location);
   if (!candidates.length) return null;
@@ -1797,7 +2002,7 @@ router.get('/catalog', async (req, res, next) => {
                     i.description, i.thumbnail_url,
                     f.name AS farm_name, f.metadata AS farm_metadata
              FROM farm_inventory i
-             JOIN farms f ON f.farm_id = i.farm_id
+             JOIN farms f ON f.farm_id::text = i.farm_id::text
              WHERE f.status IN ('active','online')
                AND COALESCE(i.quantity_available, i.manual_quantity_lbs, 0) > 0
              ORDER BY i.product_name`
@@ -1869,7 +2074,7 @@ router.get('/catalog', async (req, res, next) => {
                     i.description, i.thumbnail_url,
                     f.name AS farm_name, f.metadata AS farm_metadata
              FROM farm_inventory i
-             JOIN farms f ON f.farm_id = i.farm_id
+             JOIN farms f ON f.farm_id::text = i.farm_id::text
              WHERE f.status IN ('active','online')
                AND (i.is_custom = TRUE OR LOWER(i.inventory_source) = 'custom')
                AND COALESCE(i.quantity_available, i.manual_quantity_lbs, 0) > 0
@@ -1927,7 +2132,7 @@ router.get('/catalog', async (req, res, next) => {
                     i.category, i.farm_id, i.inventory_source, i.source_data,
                     f.name AS farm_name, f.metadata AS farm_metadata
              FROM farm_inventory i
-             JOIN farms f ON f.farm_id = i.farm_id
+             JOIN farms f ON f.farm_id::text = i.farm_id::text
              WHERE f.status IN ('active','online')
                AND LOWER(i.inventory_source) = 'mix'
                AND COALESCE(i.quantity_available, i.manual_quantity_lbs, 0) > 0
@@ -2099,7 +2304,7 @@ router.get('/catalog', async (req, res, next) => {
     params.push(minQuantity);
 
     if (farmId) {
-      conditions.push('f.farm_id = $' + paramIndex++);
+      conditions.push('f.farm_id::text = $' + paramIndex++);
       params.push(farmId);
     }
 
@@ -2142,7 +2347,7 @@ router.get('/catalog', async (req, res, next) => {
     const countResult = await query(`
       SELECT COUNT(DISTINCT i.id) as total
       FROM farm_inventory i
-      JOIN farms f ON i.farm_id = f.farm_id
+      JOIN farms f ON i.farm_id::text = f.farm_id::text
       ${whereClause}
     `, params);
 
@@ -2180,7 +2385,7 @@ router.get('/catalog', async (req, res, next) => {
         f.practices as farm_practices,
         f.attributes as farm_attributes
       FROM farm_inventory i
-      JOIN farms f ON i.farm_id = f.farm_id
+      JOIN farms f ON i.farm_id::text = f.farm_id::text
       ${whereClause}
       ORDER BY i.synced_at DESC
       LIMIT $${paramIndex++} OFFSET $${paramIndex++}
