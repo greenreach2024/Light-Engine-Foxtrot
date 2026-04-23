@@ -16,6 +16,25 @@ let lastDbSyncAt = 0;
 let bootstrapDone = false;
 const DB_SYNC_INTERVAL_MS = 60 * 1000;
 
+function parseLocationLike(value) {
+  if (!value) return {};
+  if (typeof value === 'object' && !Array.isArray(value)) return value;
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) return {};
+    if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed;
+      } catch {
+        // Fall through to string-address fallback below.
+      }
+    }
+    return { address: trimmed };
+  }
+  return {};
+}
+
 /**
  * Load farm API keys from the local keys file (same file GC uses for inbound auth).
  * Used to auto-populate auth credentials for farms missing them in the DB.
@@ -137,13 +156,15 @@ async function seedFromDatabase() {
   try {
     if (!(await isDatabaseAvailable())) return;
     const result = await query(
-      `SELECT farm_id, name, api_url, metadata, status, created_at, updated_at, last_sync
+      `SELECT farm_id, name, api_url, location, metadata, status, created_at, updated_at, last_sync
        FROM farms
        WHERE status IN ('active', 'online', 'pending')
        ORDER BY COALESCE(last_heartbeat, updated_at, created_at) DESC NULLS LAST`
     );
     for (const row of result.rows) {
       const meta = typeof row.metadata === 'string' ? JSON.parse(row.metadata) : (row.metadata || {});
+      const dbLocation = parseLocationLike(row.location);
+      const metadataLocation = parseLocationLike(meta.location);
       // Self-heal: if name column was overwritten with farm_id, recover from metadata
       let farmName = row.name || row.farm_id;
       if (farmName === row.farm_id && meta.name && meta.name !== row.farm_id) {
@@ -160,7 +181,7 @@ async function seedFromDatabase() {
         auth_farm_id: meta.auth_farm_id || null,
         api_key: meta.api_key || null,
         contact: meta.contact || {},
-        location: meta.location || {},
+        location: Object.keys(metadataLocation).length > 0 ? metadataLocation : dbLocation,
         certifications: Array.isArray(meta.certifications) ? meta.certifications : [],
         practices: Array.isArray(meta.practices) ? meta.practices : [],
           fulfillment_standards: meta.fulfillment_standards || {},
