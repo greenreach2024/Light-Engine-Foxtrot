@@ -144,6 +144,32 @@
       font-weight: 500;
     }
 
+    .nav-tab-with-notification {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+    }
+
+    .nav-tab-with-notification.has-update {
+      color: var(--primary-dark);
+      font-weight: 600;
+    }
+
+    .nav-update-badge {
+      min-width: 1.15rem;
+      height: 1.15rem;
+      border-radius: 999px;
+      background: var(--warning);
+      color: white;
+      font-size: 0.72rem;
+      line-height: 1;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0.1rem 0.35rem;
+    }
+
     /* Main Container */
     main {
       max-width: 1400px;
@@ -2057,6 +2083,10 @@
 
   <nav>
     <button class="nav-tab active" data-view="catalog">Browse Catalog</button>
+    <button class="nav-tab nav-tab-with-notification" data-view="market-watch" id="market-watch-tab">
+      <span>Market Watch</span>
+      <span class="nav-update-badge" id="market-watch-notification" style="display: none;">1</span>
+    </button>
     <button class="nav-tab" data-view="checkout">Checkout</button>
     <button class="nav-tab" data-view="orders">My Orders</button>
     <button class="nav-tab" data-view="requests">My Requests</button>
@@ -2069,38 +2099,47 @@
   </div>
 
   <main>
-    <!-- Buyer Insights Dashboard -->
-    <div id="insights-dashboard" class="insights-dashboard">
-      <!-- In Demand Card -->
-      <div class="insight-card demand-card">
-        <div class="insight-header">
-          <h3>In Demand</h3>
-          <span class="insight-period">Last 4 Weeks</span>
-        </div>
-        <div id="demand-content" class="insight-content">
-          <div class="loading-state">Loading trending data...</div>
+    <!-- Market Watch View -->
+    <div id="market-watch-view" class="view">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; gap: 1rem; flex-wrap: wrap;">
+        <div>
+          <h2 style="margin: 0;">Market Watch</h2>
+          <p style="margin: 0.35rem 0 0 0; color: var(--text-secondary);">Track demand momentum, retail price movement, and your sustainability impact.</p>
         </div>
       </div>
 
-      <!-- Price Insights Card -->
-      <div class="insight-card price-card">
-        <div class="insight-header">
-          <h3 id="price-watch-title">Retail Price Watch</h3>
-          <span class="insight-badge" id="price-watch-badge">Retail observations</span>
+      <div id="insights-dashboard" class="insights-dashboard">
+        <!-- In Demand Card -->
+        <div class="insight-card demand-card">
+          <div class="insight-header">
+            <h3>In Demand</h3>
+            <span class="insight-period">Last 4 Weeks</span>
+          </div>
+          <div id="demand-content" class="insight-content">
+            <div class="loading-state">Loading trending data...</div>
+          </div>
         </div>
-        <div id="price-content" class="insight-content">
-          <div class="loading-state">Loading price data...</div>
-        </div>
-      </div>
 
-      <!-- Environmental Impact Card -->
-      <div class="insight-card impact-card">
-        <div class="insight-header">
-          <h3>Your Environmental Impact</h3>
-          <span class="impact-score" id="impact-score">Loading...</span>
+        <!-- Price Insights Card -->
+        <div class="insight-card price-card">
+          <div class="insight-header">
+            <h3 id="price-watch-title">Retail Price Watch</h3>
+            <span class="insight-badge" id="price-watch-badge">Retail observations</span>
+          </div>
+          <div id="price-content" class="insight-content">
+            <div class="loading-state">Loading price data...</div>
+          </div>
         </div>
-        <div id="impact-content" class="insight-content">
-          <div class="loading-state">Calculating your carbon footprint...</div>
+
+        <!-- Environmental Impact Card -->
+        <div class="insight-card impact-card">
+          <div class="insight-header">
+            <h3>Your Environmental Impact</h3>
+            <span class="impact-score" id="impact-score">Loading...</span>
+          </div>
+          <div id="impact-content" class="insight-content">
+            <div class="loading-state">Calculating your carbon footprint...</div>
+          </div>
         </div>
       </div>
     </div>
@@ -2776,6 +2815,6 @@
   <!-- Square Web Payments SDK -->
   <script src="https://web.squarecdn.com/v1/square.js"></script>
   
-  <script src="/js/wholesale.js?v=2026-04-13-price-watch-2pct" defer></script>
+  <script src="/js/wholesale.js?v=2026-04-23-price-standardization" defer></script>
 </body>
 </html>

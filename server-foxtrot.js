@@ -14273,7 +14273,7 @@ app.use("/api/admin/pricing", adminPricingRouter);
 // Keeps sync/webhooks/admin/fulfillment/reservations local for inter-service use
 const WHOLESALE_PROXY_PATHS = [
   '/buyers', '/catalog', '/checkout', '/orders',
-  '/delivery', '/network/farms', '/inventory', '/payment'
+  '/delivery', '/network/farms', '/inventory', '/payment', '/market'
 ];
 
 const wholesaleCentralProxy = createProxyMiddleware({
@@ -26564,6 +26564,14 @@ app.use((req, res, next) => {
 // Wholesale landing page route - marketing page with features and signup
 app.get('/wholesale', (req, res) => {
   res.sendFile(path.join(PUBLIC_DIR, 'wholesale-landing.html'));
+});
+
+// Canonical buyer portal route. Keep legacy wholesale.html path for
+// backwards compatibility but redirect it server-side to prevent UI drift.
+app.get('/wholesale.html', (req, res) => {
+  const queryIndex = req.originalUrl.indexOf('?');
+  const queryString = queryIndex >= 0 ? req.originalUrl.slice(queryIndex) : '';
+  res.redirect(302, `/GR-wholesale.html${queryString}`);
 });
 
 // GreenReach organization page - about GreenReach R&D and mission

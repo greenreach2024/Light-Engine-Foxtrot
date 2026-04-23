@@ -4,6 +4,15 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>GreenReach Wholesale | Order Fresh Produce</title>
+  <script>
+    // Canonical wholesale buyer UI lives at GR-wholesale.html.
+    (function redirectToCanonicalWholesalePage() {
+      const target = '/GR-wholesale.html' + window.location.search + window.location.hash;
+      if (window.location.pathname.endsWith('/wholesale.html')) {
+        window.location.replace(target);
+      }
+    })();
+  </script>
   <style>
     :root {
       --primary: #2d5016;
