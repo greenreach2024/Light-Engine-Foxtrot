@@ -382,14 +382,33 @@ export async function updateBuyer(buyerId, updates) {
 
 export async function resetBuyerPassword(email, newPasswordHash) {
   const normalizedEmail = String(email || '').trim().toLowerCase();
-  let buyer = buyersByEmail.get(normalizedEmail);
-  // Fall back to DB if not in memory (e.g. after restart with partial hydration)
-  if (!buyer && isDatabaseAvailable()) {
-    const result = await query('SELECT * FROM wholesale_buyers WHERE LOWER(email) = $1 LIMIT 1', [normalizedEmail]);
-    if (result.rows.length > 0) {
-      buyer = hydrateRowIntoMaps(result.rows[0]);
+  let buyer = null;
+
+  // Authoritative path: update DB rows directly by normalized email.
+  // This avoids stale in-memory lookups and ensures login (which queries DB)
+  // immediately sees the new hash.
+  if (isDatabaseAvailable()) {
+    const updated = await query(
+      `UPDATE wholesale_buyers
+          SET password_hash = $1,
+              updated_at = NOW()
+        WHERE LOWER(email) = $2
+      RETURNING *`,
+      [newPasswordHash, normalizedEmail]
+    );
+
+    if (updated.rows.length > 0) {
+      // Hydrate all updated rows so in-memory state matches DB immediately.
+      for (const row of updated.rows) {
+        const hydrated = hydrateRowIntoMaps(row, { force: true });
+        if (!buyer) buyer = hydrated;
+      }
+      return sanitizeBuyer(buyer);
     }
   }
+
+  // Fallback for non-DB environments/tests.
+  buyer = buyersByEmail.get(normalizedEmail);
   if (!buyer) return null;
   buyer.passwordHash = newPasswordHash;
   await persistBuyer(buyer);
