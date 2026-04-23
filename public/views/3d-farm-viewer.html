@@ -2099,22 +2099,60 @@
         const dimStr = Number(roomW).toFixed(1) + 'm L x ' + Number(roomD).toFixed(1) + 'm W x ' + Number(wallH).toFixed(1) + 'm H';
         makeLabel(dimStr, offsetX + 1.5, 0.3, 0.4, { size: 8, color: '#475569', opacity: 0.5 });
 
-        // Build zones from env data if room-map doesn't have explicit zone boundaries
-        const mapZones = map?.zones || [];
-        const roomZoneNames = room.zones || [];
-        let zones = [];
+        // Scale: convert room-map grid cells to meters.
+        const zScaleX = roomW / gridSize;
+        const zScaleZ = roomD / gridSize;
 
-        if (mapZones.length > 0) {
+        // Build zones with precedence:
+        // 1) rooms.json zone geometry (x_m/y_m/length_m/width_m) saved by Grow Management
+        // 2) room-map zone boundaries
+        // 3) synthesized equal split from zone names
+        const mapZones = map?.zones || [];
+        const roomZonesRaw = Array.isArray(room.zones) ? room.zones : [];
+        const roomZonesWithGeometry = roomZonesRaw
+          .map((z, zi) => {
+            if (!z || typeof z !== 'object') return null;
+            const x = Number(z.x_m);
+            const y = Number(z.y_m);
+            const l = Number(z.length_m);
+            const w = Number(z.width_m);
+            if (![x, y, l, w].every(Number.isFinite) || l <= 0 || w <= 0) return null;
+            const zoneName = String(z.name || z.id || ('Zone ' + (zi + 1)));
+            const zoneId = String(z.id || zoneName);
+            return {
+              zone: zoneId,
+              name: zoneName,
+              // Convert meters from rooms.json to map-grid units so downstream
+              // layout code can use one coordinate system.
+              x1: x / zScaleX,
+              y1: y / zScaleZ,
+              x2: (x + l) / zScaleX,
+              y2: (y + w) / zScaleZ,
+            };
+          })
+          .filter(Boolean);
+
+        let zones = [];
+        if (roomZonesWithGeometry.length > 0) {
+          zones = roomZonesWithGeometry;
+        } else if (mapZones.length > 0) {
           zones = mapZones;
-        } else if (roomZoneNames.length > 0) {
-          // Synthesize zone rectangles from room zone name list
-          const nz = roomZoneNames.length;
+        } else if (roomZonesRaw.length > 0) {
+          // Synthesize zone rectangles from room zone names when geometry has
+          // not been drawn yet.
+          const nz = roomZonesRaw.length;
           const zoneW = roomW / nz;
-          roomZoneNames.forEach((zName, zi) => {
+          roomZonesRaw.forEach((zEntry, zi) => {
+            const zoneName = typeof zEntry === 'string'
+              ? zEntry
+              : String(zEntry?.name || zEntry?.id || ('Zone ' + (zi + 1)));
             zones.push({
-              zone: zName, name: zName,
-              x1: zi * zoneW, y1: 0,
-              x2: (zi + 1) * zoneW, y2: roomD,
+              zone: zoneName,
+              name: zoneName,
+              x1: zi * zoneW,
+              y1: 0,
+              x2: (zi + 1) * zoneW,
+              y2: roomD,
             });
           });
         } else {
@@ -2122,13 +2160,12 @@
           zones.push({
             zone: room.name || room.id,
             name: room.name || room.id,
-            x1: 0, y1: 0, x2: roomW, y2: roomD,
+            x1: 0,
+            y1: 0,
+            x2: roomW,
+            y2: roomD,
           });
         }
-
-        // Scale: convert grid cells to meters
-        const zScaleX = roomW / gridSize;
-        const zScaleZ = roomD / gridSize;
 
         zones.forEach((zone, zi) => {
           const x1 = (zone.x1 ?? 0) * zScaleX + offsetX, y1 = (zone.y1 ?? 0) * zScaleZ;
