@@ -1748,19 +1748,23 @@ router.get('/catalog', async (req, res, next) => {
     const buyer = await resolveOptionalBuyerFromRequest(req);
     const discountProfile = await getBuyerRollingDiscountProfile(buyer?.id);
     const pricingContext = await buildDynamicPricingContext();
+    const nearLat = req.query.nearLat ?? req.query.lat;
+    const nearLng = req.query.nearLng ?? req.query.lng;
+    const nearLatNum = Number(nearLat);
+    const nearLngNum = Number(nearLng);
+    const queryBuyerLocation = (Number.isFinite(nearLatNum) && Number.isFinite(nearLngNum))
+      ? { latitude: nearLatNum, longitude: nearLngNum }
+      : null;
+    const profileBuyerLocation = extractCoordinates(buyer?.location || null);
+    const buyerLocation = profileBuyerLocation || queryBuyerLocation;
+    const buyerCoordsAvailable = Boolean(buyerLocation);
+    const serviceRadiusKm = resolveBuyerServiceRadiusKm();
 
     // Use network aggregation when env flag is set or DB is not ready.
     // Set WHOLESALE_CATALOG_MODE=network in production to use farm-network catalog;
     // omit or set to 'db' to use the database catalog path.
     const catalogMode = (process.env.WHOLESALE_CATALOG_MODE || 'network').toLowerCase();
     if (catalogMode === 'network' || req.app?.locals?.databaseReady === false) {
-      const nearLat = req.query.nearLat ?? req.query.lat;
-      const nearLng = req.query.nearLng ?? req.query.lng;
-      const nearLatNum = Number(nearLat);
-      const nearLngNum = Number(nearLng);
-      const buyerLocation = (Number.isFinite(nearLatNum) && Number.isFinite(nearLngNum))
-        ? { latitude: nearLatNum, longitude: nearLngNum }
-        : null;
       const customSearchRadiusKm = resolveCustomProductSearchRadiusKm(req.query.searchRadiusKm ?? req.query.radiusKm);
 
       const catalog = await buildAggregateCatalog({
@@ -1993,21 +1997,34 @@ router.get('/catalog', async (req, res, next) => {
       // service area.
       items = filterCatalogItemsByBuyerRadius(items, {
         buyerLocation,
-        radiusKm: resolveBuyerServiceRadiusKm(),
+        radiusKm: serviceRadiusKm,
         farmLocationById: networkFarmLocationById
       });
 
       items = applyFormulaPricingToCatalogSkus(items, pricingContext, discountProfile);
 
+      const filteredFarmIds = new Set(
+        items.flatMap((item) => (item.farms || []).map((farm) => String(farm.farm_id || farm.id || '')))
+          .filter(Boolean)
+      );
+      const totalFarmCount = Array.isArray(catalog.farms) ? catalog.farms.length : 0;
+      const visibleFarms = (catalog.farms || []).filter((farm) => (
+        filteredFarmIds.has(String(farm.farm_id || farm.id || ''))
+      ));
+
       return res.json({
         status: 'ok',
         data: {
           skus: items,
-          farms: catalog.farms || []
+          farms: visibleFarms,
+          serviceRadiusKm,
+          buyerCoordsAvailable,
+          totalFarmCount,
+          filteredFarmCount: filteredFarmIds.size
         },
         // Keep legacy fields for any existing callers
         items,
-        farms: catalog.farms || [],
+        farms: visibleFarms,
         pagination: { page: 1, limit: items.length, totalItems: items.length, totalPages: 1 },
         filters: {
           farmId
@@ -2026,7 +2043,11 @@ router.get('/catalog', async (req, res, next) => {
             { min_avg: 3000, rate: 0.06 },
             { min_avg: 5000, rate: 0.08 }
           ],
-          pricing_formula: 'max(floor, max(floor, retail * sku_factor) * (1 - discount_rate))'
+          pricing_formula: 'max(floor, max(floor, retail * sku_factor) * (1 - discount_rate))',
+          serviceRadiusKm,
+          buyerCoordsAvailable,
+          totalFarmCount,
+          filteredFarmCount: filteredFarmIds.size
         }
       });
     }
@@ -2043,13 +2064,6 @@ router.get('/catalog', async (req, res, next) => {
     } = req.query;
 
     const farmId = req.query.farmId ? String(req.query.farmId) : null;
-    const nearLat = req.query.nearLat ?? req.query.lat;
-    const nearLng = req.query.nearLng ?? req.query.lng;
-    const nearLatNum = Number(nearLat);
-    const nearLngNum = Number(nearLng);
-    const buyerLocation = (Number.isFinite(nearLatNum) && Number.isFinite(nearLngNum))
-      ? { latitude: nearLatNum, longitude: nearLngNum }
-      : null;
     const customSearchRadiusKm = resolveCustomProductSearchRadiusKm(req.query.searchRadiusKm ?? req.query.radiusKm);
 
     // Parse array parameters
@@ -2316,9 +2330,17 @@ router.get('/catalog', async (req, res, next) => {
     // regardless of which branch (network/DB) serves the request.
     skus = filterCatalogItemsByBuyerRadius(skus, {
       buyerLocation,
-      radiusKm: resolveBuyerServiceRadiusKm(),
+      radiusKm: serviceRadiusKm,
       farmLocationById: dbFarmLocationById
     });
+
+    const totalFarmCount = new Set(
+      catalogRows.map((row) => String(row.farm_id || '')).filter(Boolean)
+    ).size;
+    const filteredFarmCount = new Set(
+      skus.flatMap((sku) => (sku.farms || []).map((farm) => String(farm.farm_id || farm.id || '')))
+        .filter(Boolean)
+    ).size;
 
     const skuById = new Map(skus.map((sku) => [String(sku.sku_id), sku]));
     const pricedItems = items.map((item) => {
@@ -2339,7 +2361,11 @@ router.get('/catalog', async (req, res, next) => {
     res.json({
       status: 'ok',
       data: {
-        skus
+        skus,
+        serviceRadiusKm,
+        buyerCoordsAvailable,
+        totalFarmCount,
+        filteredFarmCount
       },
       // Keep legacy fields for any existing callers
       items: pricedItems,
@@ -2380,7 +2406,11 @@ router.get('/catalog', async (req, res, next) => {
           { min_avg: 3000, rate: 0.06 },
           { min_avg: 5000, rate: 0.08 }
         ],
-        pricing_formula: 'max(floor, max(floor, retail * sku_factor) * (1 - discount_rate))'
+        pricing_formula: 'max(floor, max(floor, retail * sku_factor) * (1 - discount_rate))',
+        serviceRadiusKm,
+        buyerCoordsAvailable,
+        totalFarmCount,
+        filteredFarmCount
       }
     });
 

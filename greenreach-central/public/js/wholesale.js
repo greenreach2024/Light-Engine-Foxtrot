@@ -3175,7 +3175,7 @@
       
       if (!this.currentBuyer) {
         // Show general network info even without auth
-        const farmCount = (this.networkFarms || []).length || 1;
+        const farmCount = (this.networkFarms || []).length;
         impactContent.innerHTML = `
           <div class="impact-metric">
             <span class="impact-label">GreenReach Network</span>
@@ -3215,7 +3215,7 @@
         impactContent.innerHTML = `
           <div class="impact-metric">
             <span class="impact-label">GreenReach Network</span>
-            <span class="impact-value">${(this.networkFarms || []).length || 1} local farm${((this.networkFarms || []).length || 1) !== 1 ? 's' : ''}</span>
+            <span class="impact-value">${(this.networkFarms || []).length} local farm${(this.networkFarms || []).length !== 1 ? 's' : ''}</span>
           </div>
           <div class="impact-metric">
             <span class="impact-label">Growing Method</span>
@@ -3307,8 +3307,8 @@
         }
       }
       
-      // Fallback to Kingston-based demo farm if no farms found
-      if (farmsInCatalog.length === 0) {
+      // Demo-only fallback: never inject mock farm data in live mode.
+      if (farmsInCatalog.length === 0 && this.demoMode) {
         farmsInCatalog = [
           { 
             farm_id: 'GR-00001', 

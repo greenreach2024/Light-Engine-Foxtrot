@@ -740,6 +740,13 @@ function rollupRecommendationsByCategory(recommendations) {
 // the richer topSignals list for debugging).
 const DEFAULT_SUSPECT_CAP_PCT = 100;
 const DEFAULT_MIN_CONFIRM_RETAILERS = 2;
+const DEFAULT_MIN_SIGNAL_OBSERVATIONS = 4;
+const DEFAULT_MIN_SIGNAL_RETAILERS = 2;
+const DEFAULT_HIGH_SWING_PCT = 25;
+const DEFAULT_HIGH_SWING_MIN_OBSERVATIONS = 12;
+const DEFAULT_EXTREME_SWING_PCT = 100;
+const DEFAULT_EXTREME_SWING_MIN_OBSERVATIONS = 120;
+const DEFAULT_EXTREME_SWING_MIN_EVIDENCE_DRIVERS = 2;
 
 function applyOutlierSanityCap(recommendations, options = {}) {
   const capPct = Number.isFinite(options.capPct) ? options.capPct : DEFAULT_SUSPECT_CAP_PCT;
@@ -761,6 +768,82 @@ function applyOutlierSanityCap(recommendations, options = {}) {
       ...entry,
       dataQualityFlag: 'under_review',
       dataQualityReason: `Observed ${entry.change || `${trendPct.toFixed(1)}%`} swing exceeds ${capPct}% but fewer than ${minConfirmRetailers} national retailers confirmed it within the recency window.`,
+    };
+  });
+}
+
+function countIndependentEvidenceDrivers(entry) {
+  return (Array.isArray(entry?.movementDrivers) ? entry.movementDrivers : [])
+    .filter((driver) => driver && driver.hasEvidence !== false)
+    .filter((driver) => String(driver.source || '').toLowerCase() !== 'observed_data')
+    .length;
+}
+
+function applySignalReliabilityScreen(recommendations, options = {}) {
+  const minObservations = Number.isFinite(options.minObservations)
+    ? options.minObservations
+    : DEFAULT_MIN_SIGNAL_OBSERVATIONS;
+  const minRetailers = Number.isFinite(options.minRetailers)
+    ? options.minRetailers
+    : DEFAULT_MIN_SIGNAL_RETAILERS;
+  const highSwingPct = Number.isFinite(options.highSwingPct)
+    ? options.highSwingPct
+    : DEFAULT_HIGH_SWING_PCT;
+  const highSwingMinObservations = Number.isFinite(options.highSwingMinObservations)
+    ? options.highSwingMinObservations
+    : DEFAULT_HIGH_SWING_MIN_OBSERVATIONS;
+  const extremeSwingPct = Number.isFinite(options.extremeSwingPct)
+    ? options.extremeSwingPct
+    : DEFAULT_EXTREME_SWING_PCT;
+  const extremeSwingMinObservations = Number.isFinite(options.extremeSwingMinObservations)
+    ? options.extremeSwingMinObservations
+    : DEFAULT_EXTREME_SWING_MIN_OBSERVATIONS;
+  const extremeSwingMinEvidenceDrivers = Number.isFinite(options.extremeSwingMinEvidenceDrivers)
+    ? options.extremeSwingMinEvidenceDrivers
+    : DEFAULT_EXTREME_SWING_MIN_EVIDENCE_DRIVERS;
+
+  return (recommendations || []).map((entry) => {
+    if (entry?.dataQualityFlag === 'under_review') return entry;
+
+    const trendPct = Math.abs(Number(entry?.trendPercent || 0));
+    const observations = Math.max(0, Number(entry?.observationCount || 0));
+    const retailerCount = Math.max(
+      Number(entry?.nationalRetailerCount || 0),
+      Array.isArray(entry?.nationalRetailers) ? entry.nationalRetailers.length : 0,
+      Array.isArray(entry?.retailers) ? entry.retailers.length : 0
+    );
+    const evidenceDriverCount = countIndependentEvidenceDrivers(entry);
+    const analysisFreshness = String(entry?.analysisFreshness || 'missing');
+
+    const reviewReasons = [];
+
+    if (observations < minObservations) {
+      reviewReasons.push(`only ${observations} observations in recency window`);
+    }
+    if (retailerCount < minRetailers) {
+      reviewReasons.push(`only ${retailerCount} national retailers represented`);
+    }
+    if (trendPct > highSwingPct && observations < highSwingMinObservations) {
+      reviewReasons.push(`high swing (${trendPct.toFixed(1)}%) with limited observations (${observations})`);
+    }
+    if (trendPct > extremeSwingPct) {
+      if (observations < extremeSwingMinObservations) {
+        reviewReasons.push(`extreme swing (${trendPct.toFixed(1)}%) needs >= ${extremeSwingMinObservations} observations`);
+      }
+      if (evidenceDriverCount < extremeSwingMinEvidenceDrivers) {
+        reviewReasons.push(`extreme swing (${trendPct.toFixed(1)}%) has only ${evidenceDriverCount} independent driver${evidenceDriverCount === 1 ? '' : 's'}`);
+      }
+    }
+    if (trendPct >= highSwingPct && analysisFreshness !== 'fresh') {
+      reviewReasons.push(`AI narrative freshness is ${analysisFreshness}`);
+    }
+
+    if (reviewReasons.length === 0) return entry;
+
+    return {
+      ...entry,
+      dataQualityFlag: 'under_review',
+      dataQualityReason: reviewReasons.join('; ')
     };
   });
 }
@@ -880,6 +963,43 @@ router.get('/price-alerts', async (req, res) => {
       pool ? getLatestAnalyses(pool) : Promise.resolve([]),
     ]);
 
+    // Never present static fallback snapshots as if they are current market
+    // observations. If we don't have recent DB-backed observations, return an
+    // explicit "no live data" payload and let the UI show unavailable state.
+    const hasLiveRecentDatabaseData = Object.values(marketData || {}).some((entry) => (
+      String(entry?.dataSource || '').toLowerCase() === 'database'
+      && Number(entry?.observationCount || 0) > 0
+      && isRecentDate(entry?.lastUpdated, recencyWindowDays)
+    ));
+    if (!hasLiveRecentDatabaseData) {
+      return res.json({
+        ok: true,
+        alerts: [],
+        topSignals: [],
+        timestamp: new Date().toISOString(),
+        threshold: thresholdValue,
+        recencyWindowDays,
+        totalProductsMonitored: 0,
+        recentlyChangedProducts: 0,
+        alertsGenerated: 0,
+        categoriesRolledUp: 0,
+        underReviewCount: 0,
+        aiNarrativeLive: false,
+        displayLabel: 'Retail Price Watch',
+        outlierPolicy: {
+          capPct: DEFAULT_SUSPECT_CAP_PCT,
+          minConfirmRetailers: DEFAULT_MIN_CONFIRM_RETAILERS,
+          note: `Changes greater than ${DEFAULT_SUSPECT_CAP_PCT}% require ${DEFAULT_MIN_CONFIRM_RETAILERS}+ national retailers within the recency window before they surface as alerts.`,
+        },
+        monitorScope: 'unavailable',
+        sourceBasis: [
+          'Live retailer observations are currently unavailable',
+          'Static fallback snapshots are intentionally suppressed for buyer-facing insights',
+        ],
+        newsPolicy: 'Only verifiable external links are attached. Some crops may have no linked articles in the current feed.',
+      });
+    }
+
     const fxRate = getLastFxRate();
     const rawRecommendations = buildPricingRecommendationsFromSignals(marketData, aiAnalyses, fxRate);
 
@@ -888,13 +1008,14 @@ router.get('/price-alerts', async (req, res) => {
     // card doesn't get visually swamped. Then drop / flag any entry
     // whose %-change is clearly an ingestion artefact.
     const rolledRecommendations = rollupRecommendationsByCategory(rawRecommendations);
-    const sanitizedRecommendations = applyOutlierSanityCap(rolledRecommendations, {
+    const outlierScreenedRecommendations = applyOutlierSanityCap(rolledRecommendations, {
       capPct: DEFAULT_SUSPECT_CAP_PCT,
       minConfirmRetailers: DEFAULT_MIN_CONFIRM_RETAILERS,
     });
+    const qualityScreenedRecommendations = applySignalReliabilityScreen(outlierScreenedRecommendations);
 
-    const nationallyMonitored = sanitizedRecommendations.filter((entry) => entry.nationalRetailerCount > 0);
-    const monitoredPool = nationallyMonitored.length > 0 ? nationallyMonitored : sanitizedRecommendations;
+    const nationallyMonitored = qualityScreenedRecommendations.filter((entry) => entry.nationalRetailerCount > 0);
+    const monitoredPool = nationallyMonitored.length > 0 ? nationallyMonitored : qualityScreenedRecommendations;
     // Re-sort by |trendPercent| descending: rollupRecommendationsByCategory
     // appends rolled-up entries after passthrough, which destroys the sort
     // order buildPricingRecommendationsFromSignals established. Without
@@ -905,6 +1026,7 @@ router.get('/price-alerts', async (req, res) => {
     const recentPool = monitoredPool
       .filter((entry) => isRecentDate(entry.lastUpdated, recencyWindowDays))
       .sort((a, b) => Math.abs(b.trendPercent || 0) - Math.abs(a.trendPercent || 0));
+    const reliableRecentPool = recentPool.filter((entry) => entry.dataQualityFlag !== 'under_review');
 
     const toAlertEntry = (entry) => ({
       product: entry.categoryLabel || entry.product,
@@ -936,13 +1058,12 @@ router.get('/price-alerts', async (req, res) => {
       dataQualityReason: entry.dataQualityReason || null,
     });
 
-    const alerts = recentPool
+    const alerts = reliableRecentPool
       .filter((entry) => Math.abs(entry.trendPercent) >= thresholdValue)
-      .filter((entry) => entry.dataQualityFlag !== 'under_review')
       .map(toAlertEntry)
       .sort((a, b) => Math.abs(parseFloat(b.change)) - Math.abs(parseFloat(a.change)));
 
-    const topSignals = recentPool
+    const topSignals = reliableRecentPool
       .slice(0, 5)
       .map((entry) => ({
         ...toAlertEntry(entry),
@@ -951,7 +1072,7 @@ router.get('/price-alerts', async (req, res) => {
 
     const underReviewCount = recentPool.filter((entry) => entry.dataQualityFlag === 'under_review').length;
     const categoriesRolledUp = rolledRecommendations.filter((entry) => entry.isCategoryRollup).length;
-    const aiLive = sanitizedRecommendations.some((entry) => entry.analysisFreshness === 'fresh');
+    const aiLive = reliableRecentPool.some((entry) => entry.analysisFreshness === 'fresh');
 
     return res.json({
       ok: true,
@@ -975,7 +1096,9 @@ router.get('/price-alerts', async (req, res) => {
       monitorScope: nationallyMonitored.length > 0 ? 'national_retailers' : 'all_retailers',
       sourceBasis: [
         'North American national retailer observations',
-        aiLive ? 'AI movement-driver analysis' : 'AI narrative currently stale; showing retailer observations only',
+        aiLive
+          ? 'AI movement-driver analysis'
+          : 'Only corroborated signals are shown; low-reference or extreme swings are held for data-quality review',
       ],
       newsPolicy: 'Only verifiable external links are attached. Some crops may have no linked articles in the current feed.',
     });
