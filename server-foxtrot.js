@@ -14693,6 +14693,13 @@ app.use('/api/wholesale/product-requests', wholesaleProductRequestsRouter);
  */
 app.use('/api/market-intelligence', marketIntelligenceRouter);
 
+// Keep buyer-market endpoint parity with Central so the wholesale portal
+// can use the same relative API path on both hosts.
+app.get('/api/wholesale/market/price-alerts', (req, res, next) => {
+  req.url = '/price-alerts';
+  next();
+}, marketIntelligenceRouter);
+
 /**
  * GreenReach: Admin Wholesale Buyer Management
  * - GET /api/admin/wholesale/buyers: List all buyers (paginated)
