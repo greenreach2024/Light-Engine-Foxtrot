@@ -415,6 +415,35 @@ export async function resetBuyerPassword(email, newPasswordHash) {
   return sanitizeBuyer(buyer);
 }
 
+export async function resetBuyerPasswordById(buyerId, newPasswordHash) {
+  const normalizedBuyerId = String(buyerId || '').trim();
+  if (!normalizedBuyerId) return null;
+
+  let buyer = null;
+
+  if (isDatabaseAvailable()) {
+    const updated = await query(
+      `UPDATE wholesale_buyers
+          SET password_hash = $1,
+              updated_at = NOW()
+        WHERE id = $2
+      RETURNING *`,
+      [newPasswordHash, normalizedBuyerId]
+    );
+
+    if (updated.rows.length > 0) {
+      buyer = hydrateRowIntoMaps(updated.rows[0], { force: true });
+      return sanitizeBuyer(buyer);
+    }
+  }
+
+  buyer = buyersById.get(normalizedBuyerId);
+  if (!buyer) return null;
+  buyer.passwordHash = newPasswordHash;
+  await persistBuyer(buyer);
+  return sanitizeBuyer(buyer);
+}
+
 export async function deactivateBuyer(buyerId) {
   const buyer = buyersById.get(buyerId);
   if (!buyer) return null;
