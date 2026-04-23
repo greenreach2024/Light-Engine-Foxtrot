@@ -2259,17 +2259,33 @@ router.get('/farm-payouts/outstanding', async (_req, res) => {
     // Sum AP-Farms activity grouped by the farm_id embedded in the
     // transaction's raw_payload (the wholesale payable connector writes
     // farm_id into every txn's metadata).
+    // Group on farm_id only — grouping on farm_name too would split a
+    // farm's payables and payouts into separate rows whenever the name
+    // differs across writers (wholesale ingest uses farmSub.farm_name;
+    // POST /farm-payouts uses req.body.farm_name || farm_id), causing a
+    // phantom outstanding balance on one row and a negative balance
+    // silently dropped by the HAVING clause on the other. MAX(farm_name)
+    // is a display-only choice for the UI.
     const result = await query(
-      `SELECT COALESCE(t.raw_payload->>'farm_id', t.metadata->>'farm_id') AS farm_id,
-              COALESCE(t.raw_payload->>'farm_name', t.metadata->>'farm_name') AS farm_name,
-              SUM(e.credit - e.debit)::float AS outstanding,
-              COUNT(DISTINCT t.id)::int AS txn_count,
-              MAX(t.txn_date) AS last_activity
-       FROM accounting_entries e
-       JOIN accounting_transactions t ON t.id = e.transaction_id
-       WHERE e.account_code = '250000'
-       GROUP BY farm_id, farm_name
-       HAVING SUM(e.credit - e.debit) > 0.005
+      `SELECT farm_id,
+              MAX(farm_name) AS farm_name,
+              SUM(credit - debit)::float AS outstanding,
+              COUNT(DISTINCT txn_id)::int AS txn_count,
+              MAX(txn_date) AS last_activity
+       FROM (
+         SELECT COALESCE(t.raw_payload->>'farm_id', t.metadata->>'farm_id') AS farm_id,
+                COALESCE(t.raw_payload->>'farm_name', t.metadata->>'farm_name') AS farm_name,
+                e.credit,
+                e.debit,
+                t.id AS txn_id,
+                t.txn_date
+         FROM accounting_entries e
+         JOIN accounting_transactions t ON t.id = e.transaction_id
+         WHERE e.account_code = '250000'
+       ) sub
+       WHERE farm_id IS NOT NULL
+       GROUP BY farm_id
+       HAVING SUM(credit - debit) > 0.005
        ORDER BY outstanding DESC`
     );
     const rows = (result.rows || []).map(r => ({
