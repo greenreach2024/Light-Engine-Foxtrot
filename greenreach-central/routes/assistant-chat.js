@@ -3,7 +3,7 @@
  * ==================================================================================
  * POST /api/assistant/chat          — Standard request/response chat
  * POST /api/assistant/chat/stream   — SSE streaming chat with real-time tokens
- * POST /api/assistant/upload-image  — Image upload for crop diagnosis (GPT-4o vision)
+ * POST /api/assistant/upload-image  — Image upload for crop diagnosis (Gemini Flash multimodal vision)
  * GET  /api/assistant/state         — Presence state (rooms, crops, tasks, alerts)
  *
  * Features: Streaming SSE, trust-tier autonomous actions, workflow orchestration,
@@ -50,12 +50,22 @@ function readJSON(filename, fallback) {
 
 // Write data back to Light Engine via POST /data/{filename}
 // Room Mapper is the source of truth on LE — GWEN must sync changes back.
+//
+// Returns a structured result so callers can surface edge-sync failures in
+// their tool response instead of swallowing them in a logger.warn. Shape:
+//   { ok: true }                                   — synced
+//   { ok: false, reason: 'no_edge_url', ... }       — no LE URL configured
+//   { ok: false, reason: 'http_<status>', status }  — LE replied non-2xx
+//   { ok: false, reason: 'network_error', message } — fetch threw / timed out
 async function writeToLE(filename, data) {
   try {
     let url = process.env.FARM_EDGE_URL;
     if (!url) {
       const farmData = readJSON('farm.json', {});
-      if (!farmData.url) { logger.warn('[GWEN->LE] No Light Engine URL configured'); return false; }
+      if (!farmData.url) {
+        logger.warn('[GWEN->LE] No Light Engine URL configured');
+        return { ok: false, reason: 'no_edge_url', filename };
+      }
       url = farmData.url;
     }
     const headers = { 'Content-Type': 'application/json', 'Accept': 'application/json' };
@@ -71,13 +81,13 @@ async function writeToLE(filename, data) {
     clearTimeout(timeout);
     if (res.ok) {
       logger.info(`[GWEN->LE] Wrote ${filename} to Light Engine`);
-      return true;
+      return { ok: true, filename };
     }
     logger.warn(`[GWEN->LE] Failed to write ${filename}: ${res.status}`);
-    return false;
+    return { ok: false, reason: `http_${res.status}`, status: res.status, filename };
   } catch (err) {
     logger.warn(`[GWEN->LE] Error writing ${filename}:`, err.message);
-    return false;
+    return { ok: false, reason: 'network_error', message: err.message, filename };
   }
 }
 
@@ -4129,8 +4139,12 @@ async function executeExtendedTool(toolName, params, farmId) {
         }
         // Write back to LE rooms.json so Room Mapper, 3D Viewer, and Heatmap see it
         const leRooms = existing.map(r => ({ id: r.id || r.room_id, name: r.name, zones: r.zones || [], type: r.type }));
-        writeToLE('rooms.json', { rooms: leRooms }).catch(() => {});
-        return { ok: true, room: newRoom, message: `Room "${name}" created`, total_rooms: existing.length };
+        const leSync = await writeToLE('rooms.json', { rooms: leRooms });
+        const resp = { ok: true, room: newRoom, message: `Room "${name}" created`, total_rooms: existing.length, le_sync: leSync };
+        if (!leSync.ok) {
+          resp.message = `Room "${name}" created (saved to Central) but the Light Engine edge sync failed (${leSync.reason}). Room Mapper / 3D Viewer / Heatmap may not reflect this change until the edge reconnects.`;
+        }
+        return resp;
       } catch (err) {
         return { ok: false, error: err.message };
       }
@@ -4158,8 +4172,12 @@ async function executeExtendedTool(toolName, params, farmId) {
         await farmStore.set(farmId, 'rooms', rooms);
         // Write back to LE rooms.json so zone changes propagate to Room Mapper, 3D Viewer, Heatmap
         const leRooms = rooms.map(r => ({ id: r.id || r.room_id, name: r.name, zones: Array.isArray(r.zones) ? r.zones.map(z => typeof z === 'string' ? z : z.name) : [], type: r.type }));
-        writeToLE('rooms.json', { rooms: leRooms }).catch(() => {});
-        return { ok: true, zone: newZone, room_name: room.name, message: `Zone "${name}" added to ${room.name}`, total_zones: room.zones.length };
+        const leSync = await writeToLE('rooms.json', { rooms: leRooms });
+        const resp = { ok: true, zone: newZone, room_name: room.name, message: `Zone "${name}" added to ${room.name}`, total_zones: room.zones.length, le_sync: leSync };
+        if (!leSync.ok) {
+          resp.message = `Zone "${name}" added to ${room.name} (saved to Central) but the Light Engine edge sync failed (${leSync.reason}). Room Mapper / 3D Viewer / Heatmap may not reflect this change until the edge reconnects.`;
+        }
+        return resp;
       } catch (err) {
         return { ok: false, error: err.message };
       }
@@ -6203,7 +6221,7 @@ async function logSystemAlert(alertData) {
  * Returns: { reply, conversation_id, actions?, tool_calls? }
  */
 
-// ── Rate limiter — protect OpenAI credits ──
+// ── Rate limiter — protect Gemini (Vertex AI) credits ──
 const rateLimitMap = new Map();
 const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
 const RATE_LIMIT_MAX = 20; // max 20 messages per minute per farm
@@ -7499,8 +7517,12 @@ router.post('/chat/stream', async (req, res) => {
 
 /**
  * POST /api/assistant/upload-image
- * Accepts multipart/form-data with an image file.
- * Stores temporarily and returns a data URL for GPT-4o vision.
+ * Accepts a JSON body { image_data (base64), content_type }.
+ * Returns a data URL. The data URL is then passed back into
+ * /api/assistant/chat as `image_url`, where Gemini Flash
+ * handles it as a multimodal input (see streamModel comment
+ * in the chat loop — Gemini Flash handles multimodal natively).
+ * No separate GPT-4o / OpenAI call is made.
  */
 router.post('/upload-image', async (req, res) => {
   try {
@@ -7523,7 +7545,8 @@ router.post('/upload-image', async (req, res) => {
       return res.status(400).json({ ok: false, error: 'Image too large. Maximum 5MB.' });
     }
 
-    // Return as data URL for GPT-4o vision
+    // Return as data URL; the chat endpoint feeds this to Gemini Flash
+    // as a multimodal input (not GPT-4o).
     const dataUrl = `data:${mimeType};base64,${image_data}`;
     return res.json({ ok: true, image_url: dataUrl, size_bytes: sizeBytes });
   } catch (err) {
