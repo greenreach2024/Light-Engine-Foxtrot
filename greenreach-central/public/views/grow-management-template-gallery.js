@@ -64,14 +64,26 @@
   async function fetchRooms() {
     try {
       const _f = window.authFetch || fetch;
-      const res = await _f('/api/rooms', { credentials: 'same-origin' });
-      if (!res.ok) return [];
-      const body = await res.json();
-      if (Array.isArray(body)) return body;
-      if (Array.isArray(body.rooms)) return body.rooms;
-      if (Array.isArray(body.items)) return body.items;
-      return [];
+      const bust = (url) => (window.DataFlowBus && window.DataFlowBus.cacheBust)
+        ? window.DataFlowBus.cacheBust(url)
+        : url;
+      async function fetchOne(url) {
+        const res = await _f(bust(url), { credentials: 'same-origin', cache: 'no-store' });
+        if (!res.ok) return [];
+        const body = await res.json();
+        if (Array.isArray(body)) return body;
+        if (Array.isArray(body.rooms)) return body.rooms;
+        if (Array.isArray(body.items)) return body.items;
+        return [];
+      }
+      let rooms = await fetchOne('/api/rooms');
+      if (!rooms.length) rooms = await fetchOne('/data/rooms.json');
+      if (!rooms.length && Array.isArray(window.__ffFlowRooms)) rooms = window.__ffFlowRooms;
+      if (!rooms.length && window.STATE && Array.isArray(window.STATE.rooms)) rooms = window.STATE.rooms;
+      return Array.isArray(rooms) ? rooms : [];
     } catch (_) {
+      if (Array.isArray(window.__ffFlowRooms) && window.__ffFlowRooms.length) return window.__ffFlowRooms;
+      if (window.STATE && Array.isArray(window.STATE.rooms) && window.STATE.rooms.length) return window.STATE.rooms;
       return [];
     }
   }
@@ -80,20 +92,21 @@
     const sel = document.getElementById(ROOM_SELECT_ID);
     const id = sel && sel.value;
     const normalize = (value) => String(value || '').trim().toLowerCase();
+    const roomKeys = (room) => [room?.id, room?.room_id, room?.roomId, room?.name, room?.room_name];
     const hasRealDims = (room) => {
       const dims = room?.dimensions || room?.dims || {};
-      const len = Number(dims.lengthM ?? dims.length_m ?? room?.lengthM ?? room?.length_m);
-      const wid = Number(dims.widthM ?? dims.width_m ?? room?.widthM ?? room?.width_m);
+      const len = Number(dims.lengthM ?? dims.length_m ?? room?.lengthM ?? room?.length_m ?? room?.length);
+      const wid = Number(dims.widthM ?? dims.width_m ?? room?.widthM ?? room?.width_m ?? room?.width);
       const hgt = Number(
         dims.ceilingHeightM ?? dims.heightM ?? dims.ceilingM ?? dims.height_m ?? dims.ceiling_height_m
-          ?? room?.ceilingHeightM ?? room?.ceiling_height_m ?? room?.height_m
+          ?? room?.ceilingHeightM ?? room?.ceiling_height_m ?? room?.height_m ?? room?.height
       );
       return [len, wid, hgt].every(v => Number.isFinite(v) && v > 0);
     };
 
     if (id) {
       const wanted = normalize(id);
-      const matched = rooms.find((room) => normalize(room?.id) === wanted || normalize(room?.name) === wanted);
+      const matched = rooms.find((room) => roomKeys(room).some((key) => normalize(key) === wanted));
       if (matched) return matched;
     }
 
@@ -104,9 +117,12 @@
     if (!room) return null;
     // Room schema varies; normalize.
     const dims = room.dimensions || room.dims || {};
-    const len = Number(dims.lengthM ?? dims.length_m ?? room.lengthM);
-    const wid = Number(dims.widthM ?? dims.width_m ?? room.widthM);
-    const hgt = Number(dims.ceilingHeightM ?? dims.heightM ?? dims.ceilingM ?? room.ceilingHeightM);
+    const len = Number(dims.lengthM ?? dims.length_m ?? room.lengthM ?? room.length_m ?? room.length);
+    const wid = Number(dims.widthM ?? dims.width_m ?? room.widthM ?? room.width_m ?? room.width);
+    const hgt = Number(
+      dims.ceilingHeightM ?? dims.heightM ?? dims.ceilingM ?? dims.height_m ?? dims.ceiling_height_m
+        ?? room.ceilingHeightM ?? room.ceiling_height_m ?? room.height_m ?? room.height
+    );
     const envelope = room.envelope?.class || room.envelopeClass || 'typical';
     const supplyCFM = Number(room.supplyCFM ?? room.supply_cfm ?? 0) || null;
     const out = {};
