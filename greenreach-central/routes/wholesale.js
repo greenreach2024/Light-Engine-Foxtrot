@@ -892,6 +892,7 @@ function isBuyerGeocodeResultValid(result, expected) {
   if (!result || typeof result !== 'object') return false;
 
   const address = (result.address && typeof result.address === 'object') ? result.address : {};
+  let postalMatched = false;
 
   if (expected.countryCodes) {
     const resultCountryCode = String(address.country_code || '').toLowerCase();
@@ -905,6 +906,7 @@ function isBuyerGeocodeResultValid(result, expected) {
       if (expectedPostal !== resultPostal && expectedPostal.slice(0, 3) !== resultPostal.slice(0, 3)) {
         return false;
       }
+      postalMatched = true;
     }
   }
 
@@ -916,7 +918,9 @@ function isBuyerGeocodeResultValid(result, expected) {
         || address.state_district
         || ''
     );
-    if (expectedState && resultState && expectedState !== resultState) return false;
+    // Postal codes are more specific than province/state values. If postal
+    // already matched, tolerate stale state mismatches in legacy buyer rows.
+    if (expectedState && resultState && expectedState !== resultState && !postalMatched) return false;
   }
 
   return true;
