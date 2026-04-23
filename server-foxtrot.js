@@ -25799,6 +25799,20 @@ app.get('/data/iot-devices.json', (req, res, next) => {
 });
 
 app.get('/data/groups.json', (req, res, next) => {
+  // Authoritative source: persisted groups file.
+  // This intentionally returns [] after a delete-all operation so clients
+  // do not get silently repopulated by demo snapshot data.
+  try {
+    const persisted = loadGroupsFile();
+    if (Array.isArray(persisted)) {
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Cache-Control', 'no-cache');
+      return res.json({ groups: persisted });
+    }
+  } catch (e) {
+    console.warn('[groups] Failed to load persisted groups for /data/groups.json:', e?.message || e);
+  }
+
   const farm = loadDemoFarmSnapshot();
   if (!farm) return next();
   const groups = [];
