@@ -8077,10 +8077,14 @@ let credentialManager = null;
 // Initialize certificate and credential managers
 async function initializeSecurity() {
   if (!certificateManager) {
+    const centralUrl = process.env.GREENREACH_CENTRAL_URL || process.env.CENTRAL_URL;
+    if (!centralUrl) {
+      console.warn('[security] GREENREACH_CENTRAL_URL or CENTRAL_URL not set; certificate manager may not function correctly');
+    }
     certificateManager = new CertificateManager({
       farmId: process.env.FARM_ID || 'unknown',
       certDir: process.env.CERT_DIR || '/etc/greenreach/certs',
-      centralUrl: process.env.GREENREACH_CENTRAL_URL || 'https://api.greenreach.com',
+      centralUrl: centralUrl || process.env.CENTRAL_URL || 'https://api.greenreach.com',
       apiKey: process.env.GREENREACH_API_KEY,
       renewBeforeDays: 30,
       checkInterval: 24 * 60 * 60 * 1000 // 24 hours
@@ -12498,9 +12502,14 @@ app.post('/api/ai/recommendations/receive', async (req, res) => {
  * Runs on startup (after 2 min) and daily. Also callable via POST endpoint.
  */
 (function wireHarvestScheduleReporter() {
-  const CENTRAL_URL = process.env.CENTRAL_URL || process.env.GREENREACH_CENTRAL_URL || 'https://greenreachgreens.com';
+  const CENTRAL_URL = process.env.CENTRAL_URL || process.env.GREENREACH_CENTRAL_URL;
   const EDGE_API_KEY = process.env.GREENREACH_API_KEY || process.env.EDGE_API_KEY || '';
   const FARM_ID = process.env.FARM_ID || 'light-engine-demo';
+  
+  if (!CENTRAL_URL) {
+    console.warn('[harvest-reporter] CENTRAL_URL or GREENREACH_CENTRAL_URL not set; harvest schedule reporting disabled');
+    return;
+  }
 
   async function computeProjectedHarvests() {
     const groups = loadGroupsFile();

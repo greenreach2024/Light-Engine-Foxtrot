@@ -115,7 +115,7 @@
     return data.scores;
   }
 
-  function renderCard(template, scores) {
+  function renderCard(template, scores, templateNameById) {
     const cropClass = template.defaultCropClass || (template.suitableCropClasses || [])[0] || 'leafy_greens';
     const footprintStr = template.footprintM
       ? `${template.footprintM.length} m \u00d7 ${template.footprintM.width} m \u00d7 ${template.heightM || '?'} m`
@@ -135,11 +135,13 @@
       <article class="tg-card" data-template-id="${template.id}" tabindex="0" role="button" aria-label="Select ${template.name}">
         <div class="tg-card__art">
           <img src="${template.image || ''}" alt="" loading="lazy">
+          ${template.deprecated ? `<div style="position:absolute;top:8px;right:8px;background:#ef4444;color:#fff;font-size:0.65rem;padding:4px 8px;border-radius:4px;font-weight:600;text-transform:uppercase;">Deprecated</div>` : ''}
         </div>
         <div class="tg-card__body">
           <header class="tg-card__head">
-            <h3>${template.name}</h3>
+            <h3>${template.name}${template.deprecated ? ' <span style="color:#f87171">(Legacy)</span>' : ''}</h3>
             ${template.tagline ? `<p class="tg-card__tagline">${template.tagline}</p>` : ''}
+            ${template.deprecated && template.mergedTemplateId ? `<p class="tg-card__tagline" style="color:#fca5a5;">Merged into <strong>${templateNameById[template.mergedTemplateId] || template.mergedTemplateId}</strong></p>` : ''}
           </header>
           <dl class="tg-card__specs">
             <div><dt>Dimensions</dt><dd>${footprintStr}</dd></div>
@@ -271,16 +273,18 @@
     const grid = mount.querySelector('[data-tg-grid]');
     try {
       const [allTemplates, rooms] = await Promise.all([fetchRegistry(), fetchRooms()]);
-      const templates = allTemplates.filter((t) => !t?.deprecated);
+      // Include deprecated templates but mark them visually; users should be able to edit legacy rooms
+      const templates = allTemplates; // All templates, including deprecated
       const room = roomScoringPayload(selectedRoom(rooms));
+      const templateNameById = Object.fromEntries(templates.map((template) => [template.id, template.name]));
       const cards = await Promise.all(templates.map(async t => {
         const cropClass = t.defaultCropClass || (t.suitableCropClasses || [])[0] || 'leafy_greens';
         try {
           const scores = await scoreTemplate(t.id, cropClass, room);
-          return renderCard(t, scores);
+          return renderCard(t, scores, templateNameById);
         } catch (err) {
           console.warn('[template-gallery] score failed for', t.id, err);
-          return renderCard(t, null);
+          return renderCard(t, null, templateNameById);
         }
       }));
       grid.innerHTML = cards.join('');
