@@ -38,6 +38,61 @@ const ARCHIVE_DAYS = Math.max(1, parseInt(process.env.WHOLESALE_ORDER_ARCHIVE_DA
 const ARCHIVE_INTERVAL_MS = Math.max(60_000, parseInt(process.env.WHOLESALE_ORDER_ARCHIVE_INTERVAL_MS || '600000', 10));
 let lastArchiveRun = 0;
 
+/**
+ * Canonical wholesale-revenue totals. Used by BOTH
+ * /api/reports/revenue-summary AND /api/admin/wholesale/dashboard so the
+ * two admin surfaces can never disagree on "total wholesale revenue".
+ *
+ * Call shape: pass the array returned by listAllOrders(). The helper tolerates
+ * both the flat-order shape (order.grand_total, order.broker_fee_total) and
+ * the nested-totals shape (order.totals.grand_total, order.totals.subtotal,
+ * order.totals.broker_fee_total) because wholesale orders can arrive from
+ * three writers (buyer checkout, farm-side wholesale create, webhook
+ * back-fill) with slightly different payload shapes.
+ *
+ * Returns money as numbers rounded to 2 decimals so JSON clients don't need
+ * to re-round.
+ */
+export function computeWholesaleTotals(orders) {
+  const arr = Array.isArray(orders) ? orders : [];
+  const round2 = (n) => Math.round(Number(n || 0) * 100) / 100;
+
+  // Use ?? (nullish) not || so that an explicit 0 on the preferred field
+  // doesn't cascade through and pick up a non-zero sibling. Donation orders
+  // (routes/wholesale-donations.js) intentionally carry grand_total: 0 with
+  // non-zero line items; || would misread that donation as positive revenue.
+  const totalRevenue = arr.reduce((sum, o) => {
+    return sum + Number(
+      o.grand_total
+        ?? o.totals?.grand_total
+        ?? o.totals?.subtotal
+        ?? 0
+    );
+  }, 0);
+
+  const brokerFeeTotal = arr.reduce((sum, o) => {
+    return sum + Number(
+      o.broker_fee_total
+        ?? o.totals?.broker_fee_total
+        ?? 0
+    );
+  }, 0);
+
+  const orderCount = arr.length;
+  const activeFarms = new Set(
+    arr.flatMap((o) => (o.farm_sub_orders || []).map((sub) => sub.farm_id).filter(Boolean))
+  ).size;
+  const avgOrderValue = orderCount > 0 ? totalRevenue / orderCount : 0;
+
+  return {
+    totalRevenue: round2(totalRevenue),
+    brokerFeeTotal: round2(brokerFeeTotal),
+    orderCount,
+    activeFarms,
+    avgOrderValue: round2(avgOrderValue),
+  };
+}
+
 export async function createBuyer({ businessName, contactName, email, password, buyerType, location }) {
   const normalizedEmail = String(email || '').trim().toLowerCase();
   if (!normalizedEmail) throw new Error('Email is required');
