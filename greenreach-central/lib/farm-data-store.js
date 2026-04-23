@@ -225,10 +225,13 @@ async function set(farmId, dataType, data) {
     _memoryStore[dataType].set(farmId, wrapped);
   }
 
-  // 3. In no-DB mode, also persist to flat files so data survives restarts/deploys
+  // 3. In no-DB mode, also persist to flat files so data survives restarts/deploys.
+  // Use `wrapped` (not `data`) so the on-disk payload carries the same mirrored
+  // keys the DB and in-memory copies have. Otherwise a no-DB restart would load
+  // an un-normalized flat file and defeat the schema guard for NORMALIZED_TYPES.
   if (!dbUp) {
     try {
-      await writeFile(dataType, data);
+      await writeFile(dataType, wrapped);
     } catch (err) {
       logger.warn(`[FarmStore] Flat-file write failed (${dataType}/${farmId}):`, err.message);
     }
