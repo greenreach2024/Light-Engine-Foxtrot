@@ -35,6 +35,7 @@
   const STORAGE_BUYER = 'greenreach_wholesale_buyer';
   const STORAGE_CART_PREFIX = 'greenreach_wholesale_cart';
   const STORAGE_CART_LEGACY = 'greenreach_wholesale_cart';
+  const STORAGE_MARKET_WATCH_STATE_PREFIX = 'greenreach_wholesale_market_watch_state';
 
   function cartStorageKey(buyerId) {
     const scope = buyerId ? String(buyerId) : 'anon';
@@ -89,6 +90,17 @@
       alerts: [],
       result: null,
     },
+    marketWatchNotifications: {
+      signatures: {
+        demand: '',
+        price: ''
+      },
+      seenSignatures: {
+        demand: '',
+        price: ''
+      }
+    },
+    marketWatchPollTimer: null,
 
     normalizeBuyer(buyer) {
       if (!buyer) return null;
@@ -137,6 +149,133 @@
       else localStorage.setItem(STORAGE_TOKEN, value);
     },
 
+    marketWatchStorageKey() {
+      const scope = this.currentBuyer?.id ? String(this.currentBuyer.id) : 'anon';
+      return `${STORAGE_MARKET_WATCH_STATE_PREFIX}:${scope}`;
+    },
+
+    loadMarketWatchNotificationState() {
+      const blankState = {
+        demand: '',
+        price: ''
+      };
+
+      this.marketWatchNotifications.signatures = { ...blankState };
+      this.marketWatchNotifications.seenSignatures = { ...blankState };
+
+      try {
+        const raw = localStorage.getItem(this.marketWatchStorageKey());
+        if (!raw) {
+          this.updateMarketWatchNotificationBadge();
+          return;
+        }
+
+        const parsed = JSON.parse(raw);
+        const seen = parsed?.seenSignatures || {};
+        this.marketWatchNotifications.seenSignatures = {
+          demand: typeof seen.demand === 'string' ? seen.demand : '',
+          price: typeof seen.price === 'string' ? seen.price : ''
+        };
+      } catch (error) {
+        console.warn('[Wholesale] Failed to load Market Watch notification state:', error);
+      }
+
+      this.updateMarketWatchNotificationBadge();
+    },
+
+    persistMarketWatchNotificationState() {
+      try {
+        localStorage.setItem(this.marketWatchStorageKey(), JSON.stringify({
+          seenSignatures: this.marketWatchNotifications.seenSignatures,
+          updatedAt: new Date().toISOString()
+        }));
+      } catch (error) {
+        console.warn('[Wholesale] Failed to persist Market Watch notification state:', error);
+      }
+    },
+
+    serializeMarketWatchSignature(payload) {
+      try {
+        return JSON.stringify(payload ?? null);
+      } catch {
+        return String(Date.now());
+      }
+    },
+
+    recordMarketWatchUpdate(type, payload) {
+      if (type !== 'demand' && type !== 'price') return;
+
+      const signature = this.serializeMarketWatchSignature(payload);
+      const state = this.marketWatchNotifications;
+      state.signatures[type] = signature;
+
+      if (!state.seenSignatures[type] || this.currentView === 'market-watch') {
+        state.seenSignatures[type] = signature;
+        this.persistMarketWatchNotificationState();
+      }
+
+      this.updateMarketWatchNotificationBadge();
+    },
+
+    getUnreadMarketWatchCount() {
+      const state = this.marketWatchNotifications;
+      let count = 0;
+      ['demand', 'price'].forEach((type) => {
+        if (
+          state.signatures[type]
+          && state.seenSignatures[type]
+          && state.signatures[type] !== state.seenSignatures[type]
+        ) {
+          count += 1;
+        }
+      });
+      return count;
+    },
+
+    updateMarketWatchNotificationBadge() {
+      const badge = document.getElementById('market-watch-notification');
+      const tab = document.getElementById('market-watch-tab');
+      if (!badge || !tab) return;
+
+      const unreadCount = this.getUnreadMarketWatchCount();
+      if (unreadCount > 0) {
+        badge.textContent = String(unreadCount);
+        badge.style.display = 'inline-flex';
+        tab.classList.add('has-update');
+      } else {
+        badge.style.display = 'none';
+        tab.classList.remove('has-update');
+      }
+    },
+
+    markMarketWatchUpdatesSeen() {
+      let changed = false;
+      ['demand', 'price'].forEach((type) => {
+        const currentSig = this.marketWatchNotifications.signatures[type];
+        if (currentSig && this.marketWatchNotifications.seenSignatures[type] !== currentSig) {
+          this.marketWatchNotifications.seenSignatures[type] = currentSig;
+          changed = true;
+        }
+      });
+
+      if (changed) {
+        this.persistMarketWatchNotificationState();
+      }
+      this.updateMarketWatchNotificationBadge();
+    },
+
+    startMarketWatchPolling() {
+      if (this.marketWatchPollTimer) {
+        clearInterval(this.marketWatchPollTimer);
+      }
+
+      this.marketWatchPollTimer = setInterval(() => {
+        this.loadBuyerInsights({ includeImpact: false }).catch((error) => {
+          console.warn('[Wholesale] Market Watch refresh failed:', error);
+        });
+      }, 5 * 60 * 1000);
+    },
+
     async init() {
       const params = new URLSearchParams(window.location.search);
       // Prefer live/network mode by default; demo mode is opt-in.
@@ -146,6 +285,7 @@
       this.passwordResetToken = String(params.get('resetToken') || '').trim() || null;
 
       await this.loadAuthState();
+        this.loadMarketWatchNotificationState();
 
       // Migrate any legacy un-scoped cart into the anonymous bucket so it
       // never leaks into a freshly registered buyer's session.
@@ -171,6 +311,7 @@
       
       // Load insights after all data is ready
       await this.loadBuyerInsights();
+      this.startMarketWatchPolling();
 
       // Initialize Square payment form (non-blocking)
       this.initializeSquare();
@@ -277,7 +418,8 @@
     setupEventListeners() {
       document.querySelectorAll('.nav-tab').forEach((tab) => {
         tab.addEventListener('click', (event) => {
-          this.navigateTo(event.target.dataset.view);
+          const view = event.currentTarget?.dataset?.view || event.target?.dataset?.view;
+          if (view) this.navigateTo(view);
         });
       });
 
@@ -480,6 +622,7 @@
       this.updateBuyerProfile();
       this.populateCheckoutForm();
       this.loadOrders();
+      this.loadMarketWatchNotificationState();
       this.loadBuyerInsights();
       this.updateDonationsTabVisibility();
 
@@ -703,6 +846,7 @@
       this.currentBuyer = null;
       localStorage.removeItem(STORAGE_TOKEN);
       localStorage.removeItem(STORAGE_BUYER);
+      this.loadMarketWatchNotificationState();
 
       // Drop the in-memory cart so the next visitor on this device (e.g.
       // a fresh registration) doesn't inherit the signed-out buyer's items.
@@ -745,6 +889,10 @@
       document.querySelectorAll('.view').forEach((section) => {
         section.classList.toggle('active', section.id === `${view}-view`);
       });
+
+      if (view === 'market-watch') {
+        this.markMarketWatchUpdatesSeen();
+      }
 
       if (view === 'checkout') {
         this.updateCheckoutCardDisplay();
@@ -1334,6 +1482,59 @@
       return '/product-images/crops/' + encodeURIComponent(resolved) + '.webp';
     },
 
+    normalizeWeightUnit(unit) {
+      return String(unit || '')
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z]/g, '');
+    },
+
+    getUnitWeightInOunces(unit) {
+      const normalized = this.normalizeWeightUnit(unit);
+      if (!normalized) return null;
+
+      const unitToOunces = {
+        oz: 1,
+        ounce: 1,
+        ounces: 1,
+        lb: 16,
+        lbs: 16,
+        pound: 16,
+        pounds: 16,
+        g: 0.03527396195,
+        gram: 0.03527396195,
+        grams: 0.03527396195,
+        kg: 35.27396195,
+        kgs: 35.27396195,
+        kilogram: 35.27396195,
+        kilograms: 35.27396195
+      };
+
+      return unitToOunces[normalized] || null;
+    },
+
+    getStandardizedProduceCosts(pricePerUnit, unit) {
+      const numericPrice = Number(pricePerUnit);
+      const unitWeightOz = this.getUnitWeightInOunces(unit);
+
+      if (!Number.isFinite(numericPrice) || numericPrice < 0 || !unitWeightOz) {
+        return {
+          convertible: false,
+          perOz: null,
+          per100g: null
+        };
+      }
+
+      const perOz = numericPrice / unitWeightOz;
+      const per100g = perOz * 3.527396195;
+
+      return {
+        convertible: Number.isFinite(perOz) && Number.isFinite(per100g),
+        perOz,
+        per100g
+      };
+    },
+
     renderCatalog() {
       const sortBy = document.getElementById('sort-by')?.value || 'name';
       const sorted = [...this.catalog].sort((a, b) => {
@@ -1354,7 +1555,11 @@
 
       grid.innerHTML = sorted
         .map(
-          (sku) => `
+          (sku) => {
+            const standardCosts = this.getStandardizedProduceCosts(sku.price_per_unit, sku.unit);
+            const costPerOz = standardCosts.convertible ? `$${standardCosts.perOz.toFixed(2)}` : 'N/A';
+            const costPer100g = standardCosts.convertible ? `$${standardCosts.per100g.toFixed(2)}` : 'N/A';
+            return `
           <div class="sku-card">
             <div class="sku-thumbnail"><img src="${escapeAttr(this.getSkuThumbnailUrl(sku))}" alt="${escapeAttr(sku.product_name)}" loading="lazy" onerror="this.onerror=null;this.src=&quot;/images/default-product.svg&quot;" /></div>
             <div class="sku-header">
@@ -1380,6 +1585,14 @@
               <div class="sku-meta-row">
                 <span class="sku-meta-label">Price:</span>
                 <span>$${Number(sku.price_per_unit).toFixed(2)}/${escapeHtml(sku.unit)}</span>
+              </div>
+              <div class="sku-meta-row">
+                <span class="sku-meta-label">Cost / oz:</span>
+                <span>${escapeHtml(costPerOz)}</span>
+              </div>
+              <div class="sku-meta-row">
+                <span class="sku-meta-label">Cost / 100g:</span>
+                <span>${escapeHtml(costPer100g)}</span>
               </div>
               ${Number(sku.base_wholesale_price || 0) > 0 ? `
               <div class="sku-meta-row">
@@ -1418,6 +1631,7 @@
             </div>
           </div>
         `
+          }
         )
         .join('');
       
@@ -2777,14 +2991,19 @@
     /**
      * Load buyer insights dashboard
      */
-    async loadBuyerInsights() {
+    async loadBuyerInsights(options = {}) {
+      const includeImpact = options.includeImpact !== false;
       const marketSnapshot = await this.fetchMarketInsightSnapshot(2);
-
-      await Promise.all([
+      const tasks = [
         this.loadDemandTrends(marketSnapshot),
-        this.loadPriceAlerts(marketSnapshot),
-        this.loadEnvironmentalImpact()
-      ]);
+        this.loadPriceAlerts(marketSnapshot)
+      ];
+
+      if (includeImpact) {
+        tasks.push(this.loadEnvironmentalImpact());
+      }
+
+      await Promise.all(tasks);
     },
 
     /**
@@ -2812,6 +3031,19 @@
       const contextualSignals = Array.isArray(marketSnapshot?.topSignals)
         ? marketSnapshot.topSignals.slice(0, 3)
         : [];
+      const contextualSignalSummary = contextualSignals.map((signal) => ({
+        product: signal?.product || '',
+        change: signal?.change || '',
+        confidence: signal?.confidence || '',
+        lastUpdated: signal?.lastUpdated || ''
+      }));
+      const updateDemandNotification = (items, mode) => {
+        this.recordMarketWatchUpdate('demand', {
+          mode,
+          contextualSignals: contextualSignalSummary,
+          items: Array.isArray(items) ? items : []
+        });
+      };
 
       const aiContextHtml = contextualSignals.length > 0
         ? `
@@ -2847,6 +3079,7 @@
           const catalog = this.catalog || [];
           if (catalog.length === 0) {
             demandContent.innerHTML = '<div class="loading-state">Catalog loading...</div>';
+            updateDemandNotification([], 'catalog-loading');
             return;
           }
           const top = [...catalog]
@@ -2855,6 +3088,7 @@
             .slice(0, 5);
           if (top.length === 0) {
             demandContent.innerHTML = '<div class="loading-state">No products currently in stock</div>';
+            updateDemandNotification([], 'no-stock');
             return;
           }
           demandContent.innerHTML = top.map((sku, i) => `
@@ -2867,6 +3101,11 @@
               <div class="demand-trend trending-stable">In Stock</div>
             </div>
           `).join('') + aiContextHtml;
+          updateDemandNotification(top.map((sku) => ({
+            product: sku.product_name || sku.sku_id || 'Unknown',
+            quantity: Number(sku.total_qty_available || 0),
+            farmCount: Array.isArray(sku.farms) ? sku.farms.length : 0
+          })), 'catalog-availability');
           return;
         }
 
@@ -2893,6 +3132,7 @@
 
         if (sorted.length === 0) {
           demandContent.innerHTML = '<div class="loading-state">No product data yet</div>';
+          updateDemandNotification([], 'no-order-data');
           return;
         }
 
@@ -2910,6 +3150,11 @@
         `).join('');
 
         demandContent.innerHTML = html + aiContextHtml;
+        updateDemandNotification(sorted.map((item) => ({
+          product: item.productName || 'Unknown',
+          orderCount: Number(item.orderCount || 0),
+          quantity: Number(item.totalQty || 0)
+        })), 'order-history');
       } catch (err) {
         console.error('[Wholesale] Demand trends error:', err);
         demandContent.innerHTML = '<div class="loading-state">Unable to load demand data</div>';
@@ -3043,6 +3288,21 @@
           ? 'National + North American retailers'
           : 'North American retailer coverage';
         const alertThreshold = Number(result.threshold || 7);
+
+        this.recordMarketWatchUpdate('price', {
+          threshold: alertThreshold,
+          recencyWindowDays,
+          aiNarrativeLive: Boolean(result.aiNarrativeLive),
+          underReviewCount: Number(result.underReviewCount || 0),
+          alerts: alerts.slice(0, 10).map((alert) => ({
+            product: alert?.product || '',
+            type: alert?.type || '',
+            change: alert?.change || '',
+            lastUpdated: alert?.lastUpdated || '',
+            confidence: alert?.confidence || '',
+            dataPoints: Number(alert?.dataPoints || 0)
+          }))
+        });
 
         // Keep the card header honest: show the "+ AI" badge only when
         // the AI narrative layer is actually live. While it's stale the
