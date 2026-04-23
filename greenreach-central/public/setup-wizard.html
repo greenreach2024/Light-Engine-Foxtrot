@@ -10,6 +10,22 @@
         if (!token || token === 'local-access') {
             window.location.replace('/farm-admin-login.html');
         }
+
+        // Legacy deep-link redirects after setup-flow consolidation.
+        (function redirectLegacySetupAnchors() {
+            const map = {
+                'farm-profile': '/LE-farm-admin.html#settings',
+                'business-details': '/LE-farm-admin.html#settings',
+                'grow-rooms': '/views/grow-management.html#flow-room',
+                'room-setup': '/views/grow-management.html#flow-room',
+                'light-setup': '/views/grow-management.html#flow-grow-units',
+                'lights': '/views/grow-management.html#flow-grow-units'
+            };
+            const key = (window.location.hash || '').replace(/^#/, '').toLowerCase();
+            if (key && map[key]) {
+                window.location.replace(map[key]);
+            }
+        })();
     </script>
     <link rel="stylesheet" href="/styles/evie-core.css">
     <style>
@@ -284,9 +300,6 @@
                 <div class="progress-dot" id="dot-1"></div>
                 <div class="progress-dot" id="dot-2"></div>
                 <div class="progress-dot" id="dot-3"></div>
-                <div class="progress-dot" id="dot-4"></div>
-                <div class="progress-dot" id="dot-5"></div>
-                <div class="progress-dot" id="dot-6"></div>
             </div>
         </div>
 
@@ -336,133 +349,8 @@
             </div>
         </div>
 
-        <!-- Step 3: Farm Profile -->
+        <!-- Step 3: Activity Hub Setup -->
         <div class="step" id="step-2">
-            <div class="step-content">
-                <h2 class="step-title">Farm Profile</h2>
-                <p class="step-description">
-                    Enter your farm's basic information
-                </p>
-
-                <div class="form-group">
-                    <label class="form-label required">Farm Name</label>
-                    <input type="text" class="form-input" id="farm-name" placeholder="e.g., Green Valley Farms" required>
-                </div>
-
-                <div class="form-group">
-                    <label class="form-label required">Contact Name</label>
-                    <input type="text" class="form-input" id="contact-name" placeholder="e.g., John Smith" required>
-                </div>
-
-                <div class="form-group">
-                    <label class="form-label required">Contact Email</label>
-                    <input type="email" class="form-input" id="contact-email" placeholder="e.g., john@greenvalley.com" required>
-                </div>
-
-                <div class="form-group">
-                    <label class="form-label">Phone Number</label>
-                    <input type="tel" class="form-input" id="contact-phone" placeholder="e.g., (555) 123-4567">
-                </div>
-
-                <div class="form-group">
-                    <label class="form-label">Website</label>
-                    <input type="url" class="form-input" id="farm-website" placeholder="e.g., https://greenvalleyfarms.com">
-                </div>
-
-                <div class="form-group">
-                    <label class="form-label">Farm Logo</label>
-                    <div style="display: flex; align-items: center; gap: 1rem;">
-                        <img id="logo-preview" style="width: 64px; height: 64px; border-radius: 8px; object-fit: cover; display: none; border: 1px solid var(--border);" alt="Logo preview">
-                        <div style="flex: 1;">
-                            <input type="file" id="farm-logo-file" accept="image/png,image/jpeg,image/webp,image/svg+xml" style="display: none;">
-                            <button type="button" class="btn" onclick="document.getElementById('farm-logo-file').click()" style="margin-bottom: 0.5rem;">Choose File</button>
-                            <p style="font-size: 0.8rem; color: var(--text-muted);">PNG, JPG, WebP, or SVG. Max 2 MB.</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Step 4: Grow Rooms -->
-        <div class="step" id="step-3">
-            <div class="step-content">
-                <h2 class="step-title">Grow Rooms & Light Controllers</h2>
-                <p class="step-description">
-                    Add the growing spaces in your farm and discover light controllers automatically.
-                </p>
-
-                <!-- Device Discovery Section -->
-                <div class="card" id="device-discovery-section" style="margin-bottom: 2rem; background: rgba(16, 185, 129, 0.05); border: 2px solid rgba(16, 185, 129, 0.2);">
-                    <h3 style="color: var(--accent-green); margin-bottom: 1rem;">🔍 Auto-Discover Light Controllers</h3>
-                    <p style="color: var(--text-muted); margin-bottom: 1rem;">
-                        Scan your network to find GROW3 and DMX light controllers automatically - no manual IP entry needed!
-                    </p>
-                    <div id="device-scanner-container"></div>
-                    <div id="device-results" style="margin-top: 1rem;"></div>
-                </div>
-
-                <!-- Cloud info panel (shown instead of auto-discover for cloud users) -->
-                <div class="card" id="cloud-info-panel" style="display: none; margin-bottom: 2rem; background: rgba(59, 130, 246, 0.05); border: 2px solid rgba(59, 130, 246, 0.2);">
-                    <h3 style="color: #60a5fa; margin-bottom: 1rem;">☁️ Light Engine Cloud</h3>
-                    <p style="color: var(--text-muted); margin-bottom: 1rem;">
-                        Light controller management requires Light Engine Edge hardware. Your Cloud plan includes environment monitoring, inventory, POS, and online sales.
-                    </p>
-                    <p style="color: var(--text-muted); margin-bottom: 1rem; font-size: 0.9rem;">
-                        You can still add grow rooms below for inventory tracking, planting schedules, and crop management.
-                    </p>
-                    <a href="/purchase.html?upgrade=edge" style="display: inline-block; padding: 8px 16px; background: #8b5cf6; color: white; border-radius: 6px; text-decoration: none; font-size: 0.9rem; font-weight: 500;">
-                        Upgrade to Edge →
-                    </a>
-                </div>
-
-                <div id="rooms-container"></div>
-
-                <button type="button" class="btn btn-secondary" onclick="addRoom()" style="width: 100%;">
-                    Add Room
-                </button>
-            </div>
-        </div>
-
-        <!-- Step 5: Business Details (hours, certifications, payment) -->
-        <div class="step" id="step-4">
-            <div class="step-content">
-                <h2 class="step-title">Business Details</h2>
-                <p class="step-description">
-                    Set your operating hours, certifications, and payment processing so your store, invoices, and wholesale profile are ready. Every field here is optional — skip anything that doesn't apply and finish it later from Settings.
-                </p>
-
-                <!-- Farm hours -->
-                <div class="card" style="margin-bottom: 1.25rem;">
-                    <h3 style="margin: 0 0 0.75rem; color: var(--accent-blue);">Operating Hours</h3>
-                    <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1rem;">Used on your online store, invoices, and wholesale directory. Tick "Closed" for any day the farm is offline.</p>
-                    <div id="farm-hours-rows" style="display: grid; gap: 0.5rem;"></div>
-                </div>
-
-                <!-- Certifications & practices -->
-                <div class="card" style="margin-bottom: 1.25rem;">
-                    <h3 style="margin: 0 0 0.75rem; color: var(--accent-blue);">Certifications &amp; Growing Practices</h3>
-                    <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1rem;">Select everything your farm already holds or follows. Buyers filter by these on the wholesale marketplace.</p>
-                    <div style="font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">Certifications</div>
-                    <div id="cert-chip-row" style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;"></div>
-                    <div style="font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">Practices</div>
-                    <div id="practice-chip-row" style="display: flex; flex-wrap: wrap; gap: 0.5rem;"></div>
-                </div>
-
-                <!-- Payment processing -->
-                <div class="card" style="margin-bottom: 0;">
-                    <h3 style="margin: 0 0 0.75rem; color: var(--accent-blue);">Payment Processing</h3>
-                    <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1rem;">Required before you accept POS sales or online orders. Connecting Square takes under a minute and can happen after setup.</p>
-                    <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
-                        <input type="checkbox" id="biz-payment-configured" style="width: 18px; height: 18px;">
-                        <span>I've already connected Square (or another processor) outside this wizard</span>
-                    </label>
-                    <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.75rem;">Prefer to do it after setup? Leave this unchecked — Evie's Getting Started checklist will remind you from the dashboard.</p>
-                </div>
-            </div>
-        </div>
-
-        <!-- Step 6: Activity Hub Setup -->
-        <div class="step" id="step-5">
             <div class="step-content">
                 <h2 class="step-title">📱 Activity Hub</h2>
                 <p class="step-description">
@@ -505,8 +393,8 @@
             </div>
         </div>
 
-        <!-- Step 7: Complete -->
-        <div class="step" id="step-6">
+        <!-- Step 4: Complete -->
+        <div class="step" id="step-3">
             <div class="step-content">
                 <h2 class="step-title">Setup Complete</h2>
                 <p class="step-description">
@@ -531,13 +419,9 @@
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-    <script src="device-scanner.js"></script>
     <script>
         let currentStep = 0;
-        const totalSteps = 7;
-        let roomCounter = 0;
-        let deviceScanner = null;
-        let discoveredDevices = [];
+        const totalSteps = 4;
         let passwordChanged = false;
 
         // Detect passwordOnly mode (admin password reset for already-setup farms)
@@ -565,76 +449,6 @@
             }
         }
 
-        const tokenData = getDataFromToken();
-        const farmData = {
-            farmId: tokenData.farmId || localStorage.getItem('farmId') || localStorage.getItem('farm_id'),
-            farmName: localStorage.getItem('farm_name') || '',
-            contactName: tokenData.name || '',
-            contactEmail: tokenData.email || localStorage.getItem('email') || '',
-            contactPhone: '',
-            website: '',
-            logoBase64: null,
-            rooms: [],
-            businessDetails: null
-        };
-
-        // Supported certifications/practices. Kept in the HTML so the wizard
-        // stays a single file and the operator doesn't need a round-trip to
-        // see options. Extend this list if marketing adds new badges.
-        const CERT_OPTIONS = [
-            'USDA Organic',
-            'Certified Naturally Grown',
-            'GAP (Good Agricultural Practices)',
-            'GlobalG.A.P.',
-            'Rainforest Alliance',
-            'Demeter Biodynamic',
-            'Kosher',
-            'Halal'
-        ];
-        const PRACTICE_OPTIONS = [
-            'Pesticide-free',
-            'Hydroponic',
-            'Aeroponic',
-            'Aquaponic',
-            'Vertical farming',
-            'Regenerative',
-            'Local (within 100 mi)',
-            'Non-GMO seeds'
-        ];
-        const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-        
-        // Pre-populate farm profile fields when DOM is ready
-        setTimeout(() => {
-            const farmNameEl = document.getElementById('farm-name');
-            const contactNameEl = document.getElementById('contact-name');
-            const contactEmailEl = document.getElementById('contact-email');
-            if (farmData.farmName && farmNameEl) farmNameEl.value = farmData.farmName;
-            if (farmData.contactName && contactNameEl) contactNameEl.value = farmData.contactName;
-            if (farmData.contactEmail && contactEmailEl) contactEmailEl.value = farmData.contactEmail;
-
-            // Logo file preview handler
-            const logoInput = document.getElementById('farm-logo-file');
-            if (logoInput) {
-                logoInput.addEventListener('change', function(e) {
-                    const file = e.target.files[0];
-                    if (!file) return;
-                    if (file.size > 2 * 1024 * 1024) {
-                        alert('Logo file must be under 2 MB.');
-                        e.target.value = '';
-                        return;
-                    }
-                    const reader = new FileReader();
-                    reader.onload = function(ev) {
-                        farmData.logoBase64 = ev.target.result;
-                        const preview = document.getElementById('logo-preview');
-                        preview.src = ev.target.result;
-                        preview.style.display = 'block';
-                    };
-                    reader.readAsDataURL(file);
-                });
-            }
-        }, 100);
-
         // Per-step coaching fallback. The live `/api/assistant/chat` call in
         // `updateEvieGuidance` runs against the same Evie that serves the
         // dashboard, so during setup the agent can see setup state and respond
@@ -644,11 +458,8 @@
         const EVIE_STEP_MESSAGES = {
             0: "Welcome! I'm Evie, your farm assistant. I'll walk you through each step — reach out through the dashboard any time if you get stuck.",
             1: "Set a strong password (min. 8 chars). This is your admin login; everyone on your team can be invited after setup.",
-            2: "Your farm profile shows up on invoices, the wholesale directory, and the storefront. A real contact email and phone help buyers reach you quickly.",
-            3: "Add every grow room you're using — enter real length/width/ceiling height in metres and how many zones you want inside. These drive the 3D planner and my grow-unit recommendations, so don't leave them blank: without real dimensions I'll refuse to recommend a unit count. You can edit rooms later from Grow Management.",
-            4: "Business Details: set operating hours, pick the certifications you actually hold, and flag whether you've already connected Square. Anything blank here I'll remind you about from the Getting Started checklist.",
-            5: "Install the Activity Hub on the iPad you use on the farm floor. It's offline-ready, so crew tasks don't stall if Wi-Fi dips.",
-            6: "Setup is complete. I'll be in the bottom-right of the dashboard — click me whenever you need help with payments, inventory, or orders."
+            2: "Install the Activity Hub on the iPad you use on the farm floor. It's offline-ready, so crew tasks don't stall if Wi-Fi dips.",
+            3: "Setup is complete. I'll be in the bottom-right of the dashboard — click me whenever you need help with payments, inventory, or orders."
         };
 
         // Short step identifiers the agent can ground its response on. Kept
@@ -657,11 +468,8 @@
         const EVIE_STEP_CONTEXT = {
             0: { key: 'welcome',           title: 'Welcome / introduction' },
             1: { key: 'password',          title: 'Set admin password' },
-            2: { key: 'farm-profile',      title: 'Farm profile (name, contact, logo)' },
-            3: { key: 'rooms',             title: 'Rooms (length, width, ceiling height, zone count)' },
-            4: { key: 'business-details',  title: 'Business details (hours, certifications, Square)' },
-            5: { key: 'activity-hub',      title: 'Activity Hub install on iPad' },
-            6: { key: 'complete',          title: 'Setup complete' }
+            2: { key: 'activity-hub',      title: 'Activity Hub install on iPad' },
+            3: { key: 'complete',          title: 'Setup complete' }
         };
 
         // One conversation for the whole wizard so Evie has continuity across
@@ -740,11 +548,6 @@
 
             updateEvieGuidance(currentStep);
 
-            // Populate Business Details inputs the first time that step is shown.
-            if (currentStep === 4) {
-                try { populateBusinessDetailsStep(); } catch (e) { console.warn('[Setup Wizard] populateBusinessDetailsStep failed:', e); }
-            }
-
             // Update progress dots
             for (let i = 0; i < totalSteps; i++) {
                 const dot = document.getElementById(`dot-${i}`);
@@ -776,28 +579,10 @@
                     goToDashboard();
                     return;
                 }
-            } else if (currentStep === 2) {
-                if (!validateFarmProfile()) return;
-            } else if (currentStep === 3) {
-                if (!validateRooms()) return;
-            } else if (currentStep === 4) {
-                // Business Details is all-optional. Collect whatever's there.
-                collectBusinessDetails();
-            }
-
-            // Save and complete on last data collection step (rooms).
-            // Business Details persists its own payload in saveBusinessDetails().
-            if (currentStep === 3) {
-                await saveSetup();
-            } else if (currentStep === 4) {
-                await saveBusinessDetails();
             }
 
             if (currentStep < totalSteps - 1) {
                 currentStep++;
-                if (currentStep === 3 && farmData.rooms.length === 0) {
-                    addRoom(); // Add default room
-                }
                 updateUI();
             }
         }
@@ -806,333 +591,6 @@
             if (currentStep > 0) {
                 currentStep--;
                 updateUI();
-            }
-        }
-
-        function validateFarmProfile() {
-            const farmName = document.getElementById('farm-name').value.trim();
-            const contactName = document.getElementById('contact-name').value.trim();
-            const contactEmail = document.getElementById('contact-email').value.trim();
-
-            if (!farmName || !contactName || !contactEmail) {
-                alert('Please fill in all required fields');
-                return false;
-            }
-
-            farmData.farmName = farmName;
-            farmData.contactName = contactName;
-            farmData.contactEmail = contactEmail;
-            farmData.contactPhone = document.getElementById('contact-phone').value.trim();
-            farmData.website = document.getElementById('farm-website').value.trim();
-
-            return true;
-        }
-
-        function validateRooms() {
-            collectRooms();
-            if (farmData.rooms.length === 0) {
-                alert('Please add at least one grow room');
-                return false;
-            }
-            // Require real dimensions. Previously this step only asked for name
-            // + type, which left downstream surfaces (Room Build Plan, 3D
-            // viewer, grow-unit recommender) with no dims and they silently
-            // fell back to a 20x15 default, producing bogus "48 units" advice
-            // for a 6x3 room.
-            const missingDims = farmData.rooms.find(r =>
-                !(Number.isFinite(r.length_m) && r.length_m > 0) ||
-                !(Number.isFinite(r.width_m) && r.width_m > 0)
-            );
-            if (missingDims) {
-                alert(`Please enter length and width for "${missingDims.name}". Zero or blank dimensions break the grow-unit recommender.`);
-                return false;
-            }
-            return true;
-        }
-
-        function addRoom() {
-            roomCounter++;
-            const roomId = `room-${roomCounter}`;
-            const roomsContainer = document.getElementById('rooms-container');
-
-            // Build light controller options from discovered devices
-            let lightControllerOptions = '<option value="">No light controller</option>';
-            if (discoveredDevices.length > 0) {
-                discoveredDevices.forEach((device, idx) => {
-                    const label = `${device.manufacturer || 'Unknown'} - ${device.ip}:${device.port} (${device.protocol})`;
-                    const value = JSON.stringify({
-                        ip: device.ip,
-                        port: device.port,
-                        protocol: device.protocol
-                    });
-                    lightControllerOptions += `<option value='${value}'>${label}</option>`;
-                });
-            }
-
-            const roomCard = document.createElement('div');
-            roomCard.className = 'room-card';
-            roomCard.id = roomId;
-            roomCard.innerHTML = `
-                <div class="room-header">
-                    <div class="room-title">Room ${roomCounter}</div>
-                    <button type="button" class="btn btn-danger" onclick="removeRoom('${roomId}')" style="padding: 0.5rem 1rem;">Remove</button>
-                </div>
-                <div class="form-group">
-                    <label class="form-label required">Room Name</label>
-                    <input type="text" class="form-input" data-field="name" placeholder="e.g., North Growing Room" required>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Room Type</label>
-                    <select class="form-select" data-field="type">
-                        <option value="grow">Growing Room</option>
-                        <option value="nursery">Nursery</option>
-                        <option value="harvest">Harvest/Processing</option>
-                        <option value="storage">Storage</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Light Controller</label>
-                    <select class="form-select" data-field="lightController">
-                        ${lightControllerOptions}
-                    </select>
-                    <small style="color: var(--text-muted);">
-                        ${discoveredDevices.length === 0 ? 'Run device scan above to auto-discover controllers' : 'Select from discovered devices or leave empty'}
-                    </small>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Dimensions (metres)</label>
-                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem;">
-                        <label style="display: flex; flex-direction: column; font-size: 0.8rem; color: var(--text-muted);">
-                            Length
-                            <input type="number" class="form-input" data-field="lengthM" min="0.1" step="0.1" placeholder="e.g., 6">
-                        </label>
-                        <label style="display: flex; flex-direction: column; font-size: 0.8rem; color: var(--text-muted);">
-                            Width
-                            <input type="number" class="form-input" data-field="widthM" min="0.1" step="0.1" placeholder="e.g., 3">
-                        </label>
-                        <label style="display: flex; flex-direction: column; font-size: 0.8rem; color: var(--text-muted);">
-                            Ceiling height
-                            <input type="number" class="form-input" data-field="ceilingHeightM" min="0.1" step="0.1" placeholder="e.g., 3.5">
-                        </label>
-                    </div>
-                    <small style="color: var(--text-muted); display: block; margin-top: 0.35rem;">Real numbers only — the grow-unit recommender uses these to fit templates into your actual space.</small>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Zones inside this room</label>
-                    <input type="number" class="form-input" data-field="zoneCount" min="1" max="12" step="1" value="1" placeholder="e.g., 1">
-                    <small style="color: var(--text-muted);">Pick the number of photoperiod / maintenance zones you'll split this room into. Default 1 if unsure — you can add more later.</small>
-                </div>
-            `;
-            roomsContainer.appendChild(roomCard);
-        }
-
-        function removeRoom(roomId) {
-            const element = document.getElementById(roomId);
-            if (element) element.remove();
-        }
-
-        function collectRooms() {
-            farmData.rooms = [];
-            const roomCards = document.querySelectorAll('#rooms-container .room-card');
-
-            roomCards.forEach(card => {
-                const name = card.querySelector('[data-field="name"]').value.trim();
-                const type = card.querySelector('[data-field="type"]').value;
-                const lightControllerValue = card.querySelector('[data-field="lightController"]').value;
-
-                const readNum = (selector) => {
-                    const el = card.querySelector(selector);
-                    if (!el) return null;
-                    const raw = (el.value || '').trim();
-                    if (!raw) return null;
-                    const n = Number(raw);
-                    return Number.isFinite(n) && n > 0 ? n : null;
-                };
-                const lengthM = readNum('[data-field="lengthM"]');
-                const widthM  = readNum('[data-field="widthM"]');
-                const heightM = readNum('[data-field="ceilingHeightM"]');
-                const zoneCountRaw = readNum('[data-field="zoneCount"]');
-                const zoneCount = zoneCountRaw ? Math.min(12, Math.round(zoneCountRaw)) : 1;
-
-                if (name) {
-                    // Persist dims in the canonical snake_case shape every
-                    // downstream surface reads (grow-management.html lines
-                    // 1365-1400, 3d-farm-viewer, room-build-plan.js).
-                    const room = {
-                        name,
-                        type,
-                        length_m: lengthM,
-                        width_m: widthM,
-                        ceiling_height_m: heightM,
-                        // Generate default zone names in walk-through order.
-                        zones: Array.from({ length: zoneCount }, (_, i) => ({
-                            name: zoneCount === 1 ? 'Zone 1' : `Zone ${i + 1}`
-                        }))
-                    };
-
-                    // Add light controller if selected
-                    if (lightControllerValue) {
-                        try {
-                            room.lightController = JSON.parse(lightControllerValue);
-                        } catch (e) {
-                            console.error('Failed to parse light controller:', e);
-                        }
-                    }
-
-                    farmData.rooms.push(room);
-                }
-            });
-        }
-
-        async function saveSetup() {
-            try {
-                const token = sessionStorage.getItem('token') || localStorage.getItem('token');
-                if (!token) {
-                    alert('Authentication token not found. Please log in again.');
-                    window.location.href = '/farm-admin-login.html';
-                    throw new Error('Authentication required');
-                }
-
-                if (!farmData.farmId) {
-                    alert('Farm ID not found. Please log in again.');
-                    window.location.href = '/farm-admin-login.html';
-                    throw new Error('Farm ID required');
-                }
-
-                console.log('Saving setup for farm:', farmData.farmId);
-                
-                const response = await fetch('/api/setup/complete', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                    },
-                    body: JSON.stringify({
-                        farmId: farmData.farmId,
-                        farmName: farmData.farmName,
-                        ownerName: farmData.contactName,
-                        contactEmail: farmData.contactEmail,
-                        contactPhone: farmData.contactPhone,
-                        website: farmData.website,
-                        logoBase64: farmData.logoBase64,
-                        rooms: farmData.rooms
-                    })
-                });
-
-                if (!response.ok) {
-                    const errorData = await response.json().catch(() => ({}));
-                    console.error('Server error:', errorData);
-                    const errorMsg = errorData.detail || errorData.message || errorData.error || `Server returned ${response.status}`;
-                    throw new Error(errorMsg);
-                }
-
-                const data = await response.json();
-                console.log('Setup saved successfully:', data);
-
-            } catch (error) {
-                console.error('Setup save error:', error);
-                alert(`Failed to save setup: ${error.message}. Please try again.`);
-                throw error;
-            }
-        }
-
-        // ── Business Details (step 4) ────────────────────────────────────────
-        // Renders hours rows + cert/practice chips the first time step 4 is
-        // shown. Idempotent — safe to call multiple times.
-        function populateBusinessDetailsStep() {
-            const hoursHost = document.getElementById('farm-hours-rows');
-            if (hoursHost && !hoursHost.dataset.rendered) {
-                hoursHost.innerHTML = DAYS.map(day => `
-                    <div style="display: grid; grid-template-columns: 60px 1fr 1fr auto; gap: 0.5rem; align-items: center;">
-                        <strong>${day}</strong>
-                        <input type="time" data-hours-open="${day}" class="form-input" value="08:00">
-                        <input type="time" data-hours-close="${day}" class="form-input" value="17:00">
-                        <label style="display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; color: var(--text-muted);">
-                            <input type="checkbox" data-hours-closed="${day}"> Closed
-                        </label>
-                    </div>
-                `).join('');
-                hoursHost.dataset.rendered = '1';
-
-                // Default weekends to Closed so the template reads sensibly.
-                const satClosed = hoursHost.querySelector('[data-hours-closed="Sat"]');
-                const sunClosed = hoursHost.querySelector('[data-hours-closed="Sun"]');
-                if (satClosed) satClosed.checked = true;
-                if (sunClosed) sunClosed.checked = true;
-            }
-
-            const certHost = document.getElementById('cert-chip-row');
-            if (certHost && !certHost.dataset.rendered) {
-                certHost.innerHTML = CERT_OPTIONS.map((name, i) => `
-                    <label class="cert-chip" style="display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.35rem 0.75rem; border: 1px solid var(--border); border-radius: 999px; cursor: pointer; background: var(--bg-secondary);">
-                        <input type="checkbox" data-cert-idx="${i}" value="${name.replace(/"/g, '&quot;')}">
-                        <span>${name}</span>
-                    </label>
-                `).join('');
-                certHost.dataset.rendered = '1';
-            }
-
-            const practiceHost = document.getElementById('practice-chip-row');
-            if (practiceHost && !practiceHost.dataset.rendered) {
-                practiceHost.innerHTML = PRACTICE_OPTIONS.map((name, i) => `
-                    <label class="practice-chip" style="display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.35rem 0.75rem; border: 1px solid var(--border); border-radius: 999px; cursor: pointer; background: var(--bg-secondary);">
-                        <input type="checkbox" data-practice-idx="${i}" value="${name.replace(/"/g, '&quot;')}">
-                        <span>${name}</span>
-                    </label>
-                `).join('');
-                practiceHost.dataset.rendered = '1';
-            }
-        }
-
-        function collectBusinessDetails() {
-            const hours = {};
-            DAYS.forEach(day => {
-                const closedEl = document.querySelector(`[data-hours-closed="${day}"]`);
-                const openEl = document.querySelector(`[data-hours-open="${day}"]`);
-                const closeEl = document.querySelector(`[data-hours-close="${day}"]`);
-                const closed = !!(closedEl && closedEl.checked);
-                hours[day.toLowerCase()] = closed
-                    ? { closed: true }
-                    : { closed: false, open: openEl ? openEl.value : '', close: closeEl ? closeEl.value : '' };
-            });
-            const certifications = Array.from(document.querySelectorAll('[data-cert-idx]:checked')).map(el => el.value);
-            const practices = Array.from(document.querySelectorAll('[data-practice-idx]:checked')).map(el => el.value);
-            const paymentEl = document.getElementById('biz-payment-configured');
-            const paymentConfigured = !!(paymentEl && paymentEl.checked);
-
-            farmData.businessDetails = { hours, certifications, practices, paymentConfigured };
-            return farmData.businessDetails;
-        }
-
-        async function saveBusinessDetails() {
-            if (!farmData.businessDetails) return;
-            try {
-                const token = sessionStorage.getItem('token') || localStorage.getItem('token');
-                if (!token || !farmData.farmId) {
-                    console.warn('[Setup Wizard] Skipping business-details save — no auth context');
-                    return;
-                }
-                const resp = await fetch('/api/setup/business-details', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                    },
-                    body: JSON.stringify({
-                        farmId: farmData.farmId,
-                        hours: farmData.businessDetails.hours,
-                        certifications: farmData.businessDetails.certifications,
-                        practices: farmData.businessDetails.practices,
-                        paymentConfigured: farmData.businessDetails.paymentConfigured
-                    })
-                });
-                if (!resp.ok) {
-                    const body = await resp.json().catch(() => ({}));
-                    console.warn('[Setup Wizard] Business Details save failed:', resp.status, body);
-                    // Don't block wizard progression — operator can fix these in Settings.
-                }
-            } catch (err) {
-                console.warn('[Setup Wizard] Business Details save error:', err);
             }
         }
 
@@ -1262,103 +720,12 @@
         // Initialize
         updateUI();
 
-        // Detect plan type and gate cloud/edge features
-        (async function detectPlanType() {
-            try {
-                const token = sessionStorage.getItem('token') || localStorage.getItem('token');
-                const headers = {};
-                if (token) headers['Authorization'] = `Bearer ${token}`;
-                const resp = await fetch('/api/setup/status', { headers });
-                if (resp.ok) {
-                    const data = await resp.json();
-                    const planType = data.farm?.planType || localStorage.getItem('plan_type') || 'cloud';
-                    localStorage.setItem('plan_type', planType);
-
-                    if (planType === 'cloud') {
-                        // Hide auto-discover, show cloud info
-                        const discoverSection = document.getElementById('device-discovery-section');
-                        const cloudPanel = document.getElementById('cloud-info-panel');
-                        if (discoverSection) discoverSection.style.display = 'none';
-                        if (cloudPanel) cloudPanel.style.display = 'block';
-                    }
-                }
-            } catch (e) {
-                console.warn('[Setup Wizard] Could not detect plan type:', e);
-            }
-        })();
-        
-        // Initialize device scanner
-        function initDeviceScanner() {
-            deviceScanner = new DeviceScanner({
-                baseUrl: '',
-                onDevicesFound: (devices, summary) => {
-                    discoveredDevices = devices;
-                    const resultsDiv = document.getElementById('device-results');
-                    resultsDiv.innerHTML = `
-                        <div class="alert alert-success">
-                            ✅ Found ${summary.devicesFound} device(s) in ${summary.duration}
-                            ${summary.lightControllers > 0 ? `<br>🎯 ${summary.lightControllers} light controller(s) ready to use` : ''}
-                        </div>
-                    `;
-                    
-                    // Refresh existing room cards to show discovered devices
-                    const existingRooms = document.querySelectorAll('#rooms-container .room-card');
-                    if (existingRooms.length > 0) {
-                        alert(`${devices.length} device(s) discovered! Remove and re-add rooms to see the new controllers in the dropdown.`);
-                    }
-                },
-                onError: (error) => {
-                    const resultsDiv = document.getElementById('device-results');
-                    resultsDiv.innerHTML = `
-                        <div class="alert" style="background: rgba(239, 68, 68, 0.1); border-left: 3px solid var(--accent-red);">
-                            ❌ Scan failed: ${error.message}
-                        </div>
-                    `;
-                },
-                onProgress: (progress) => {
-                    console.log('Scan progress:', progress);
-                }
-            });
-
-            // Inject styles
-            deviceScanner.injectStyles();
-
-            // Render scan button
-            const container = document.getElementById('device-scanner-container');
-            container.innerHTML = deviceScanner.renderScanButton(false);
-
-            // Add click handler
-            const scanBtn = container.querySelector('.scan-button');
-            scanBtn.addEventListener('click', async () => {
-                scanBtn.disabled = true;
-                scanBtn.classList.add('scanning');
-                scanBtn.querySelector('.scan-text').textContent = 'Scanning Network...';
-                scanBtn.querySelector('.scan-icon').textContent = '⟳';
-
-                try {
-                    await deviceScanner.scanLightControllers();
-                } catch (error) {
-                    console.error('Scan failed:', error);
-                } finally {
-                    scanBtn.disabled = false;
-                    scanBtn.classList.remove('scanning');
-                    scanBtn.querySelector('.scan-text').textContent = 'Scan Again';
-                    scanBtn.querySelector('.scan-icon').textContent = '🔍';
-                }
-            });
-        }
-        
         // Generate Activity Hub QR when step loads
         const observer = new MutationObserver((mutations) => {
             mutations.forEach((mutation) => {
                 if (mutation.target.classList.contains('active')) {
                     const stepId = mutation.target.id;
-                    if (stepId === 'step-3') {
-                        // Initialize device scanner when room setup step loads
-                        if (!deviceScanner) {
-                            initDeviceScanner();
-                        }
-                    } else if (stepId === 'step-5') {
+                    if (stepId === 'step-2') {
                         generateActivityHubQR();
                     }
                 }

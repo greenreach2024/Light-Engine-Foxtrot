@@ -1,193 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Farm Setup - Light Engine</title>
-  <link rel="stylesheet" href="/styles.foxtrot.css">
-  <link rel="stylesheet" href="/styles/le-foundation.css">
-  <link rel="stylesheet" href="/styles/le-dashboard-theme.css">
-  <link rel="stylesheet" href="/styles/switchbot-manager.css">
-  <link rel="stylesheet" href="/styles/iot-manager.css">
-  <link rel="stylesheet" href="/styles/nav-color-palette.css">
-  <link rel="stylesheet" href="/css/setup-orchestrator.css">
-  <style>
-    /* ===== FARM SETUP — LE dark cinematic overrides =====
-       Reads tokens from /styles/le-foundation.css. The !important walls that
-       used to live here are still necessary where we are fighting the
-       globally-loaded foxtrot light theme (/styles.foxtrot.css), but every
-       hardcoded color now routes through a token so the palette stays
-       consistent and can be tuned in one place. */
-    *, *::before, *::after { box-sizing: border-box; }
-    /* Matches le-foundation.css `body.le-theme` specificity (0,1,1) so the
-       gradient wins over the flat `--surface-0` background set there. */
-    body.le-theme {
-      background: linear-gradient(135deg, var(--surface-0, #0f172a) 0%, var(--surface-1, #1e293b) 100%);
-      min-height: 100vh;
-      overflow-x: hidden;
-      margin: 0;
-      padding: 0;
-    }
-
-    /* ---- Header ---- */
-    .fs-header {
-      background: rgba(0, 0, 0, 0.3);
-      padding: 1.25rem 2rem;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      border-bottom: 1px solid var(--border-subtle, rgba(148, 163, 184, 0.12));
-      backdrop-filter: blur(10px);
-      position: sticky;
-      top: 0;
-      z-index: 100;
-    }
-    .fs-header h1 {
-      font-size: var(--font-size-2xl, 1.5rem);
-      font-weight: 700;
-      color: var(--text-1, #f1f5f9);
-      letter-spacing: -0.5px;
-      margin: 0;
-    }
-
-    /* ---- Progress Bar ---- */
-    .fs-progress {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 1.25rem 2rem 0;
-    }
-    .fs-progress-bar {
-      flex: 1;
-      height: 6px;
-      background: var(--surface-2, rgba(30, 41, 59, 0.7));
-      border-radius: 3px;
-      overflow: hidden;
-    }
-    .fs-progress-fill {
-      height: 100%;
-      background: linear-gradient(90deg, var(--accent-blue, #3b82f6), var(--accent-green, #10b981));
-      border-radius: 3px;
-      transition: width var(--motion-slow, 400ms) var(--motion-easing, ease);
-      width: 0%;
-    }
-    .fs-progress-label {
-      font-size: var(--font-size-sm, 0.8125rem);
-      color: var(--text-4, #64748b);
-      white-space: nowrap;
-    }
-
-    /* ---- Container ---- */
-    .fs-container {
-      max-width: 1200px;
-      margin: 0 auto;
-      padding: 1rem 2rem 3rem;
-    }
-
-    /* ---- Expandable Card (using details/summary) ---- */
-    .fs-card {
-      background: var(--surface-1, #1e293b);
-      border: 1px solid var(--border-subtle, rgba(148, 163, 184, 0.12));
-      border-radius: var(--radius-lg, 16px);
-      margin-bottom: 1rem;
-      box-shadow: var(--elevation-3, 0 8px 32px rgba(0, 0, 0, 0.35));
-      overflow: hidden;
-    }
-    .fs-card[open] {
-      border-color: var(--border-focus, rgba(59, 130, 246, 0.55));
-    }
-    .fs-card summary {
-      padding: 1.25rem 1.5rem;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      list-style: none;
-      user-select: none;
-      transition: background var(--motion-fast, 150ms) var(--motion-easing, ease);
-    }
-    .fs-card summary::-webkit-details-marker { display: none; }
-    .fs-card summary::before {
-      content: '';
-      display: inline-block;
-      width: 8px;
-      height: 8px;
-      border-right: 2px solid var(--text-3, #94a3b8);
-      border-bottom: 2px solid var(--text-3, #94a3b8);
-      transform: rotate(-45deg);
-      transition: transform var(--motion-normal, 250ms) var(--motion-easing, ease);
-      flex-shrink: 0;
-    }
-    .fs-card[open] summary::before {
-      transform: rotate(45deg);
-    }
-    .fs-card summary:hover {
-      background: var(--accent-blue-soft, rgba(59, 130, 246, 0.05));
-    }
-    .fs-card summary h2 {
-      font-size: var(--font-size-lg, 1.0625rem);
-      font-weight: 600;
-      color: var(--text-1, #f1f5f9);
-      margin: 0;
-      flex: 1;
-    }
-    .fs-card summary .fs-card-badge {
-      font-size: var(--font-size-xs, 0.75rem);
-      padding: 3px 10px;
-      border-radius: var(--radius-pill, 9999px);
-      font-weight: 600;
-      background: var(--accent-blue-soft, rgba(59, 130, 246, 0.14));
-      color: var(--accent-blue, #60a5fa);
-      border: 1px solid var(--accent-blue-edge, rgba(59, 130, 246, 0.35));
-    }
-    .fs-card-body {
-      padding: 0 1.5rem 1.5rem;
-    }
-
-    /* ---- Override foxtrot card/panel styles inside our container ---- */
-    .fs-container [data-panel] { display: block !important; }
-    .fs-container .card,
-    .fs-container [class*="card--compact"] {
-      background: transparent !important;
-      border: none !important;
-      box-shadow: none !important;
-      padding: 0 !important;
-      margin: 0 !important;
-    }
-    .fs-container .panel-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      margin-bottom: 1rem;
-      flex-wrap: wrap;
-      background: rgba(15, 23, 42, 0.82) !important;
-      border: 1px solid rgba(59, 130, 246, 0.14) !important;
-      border-radius: 12px !important;
-      padding: 12px !important;
-    }
-    .fs-container .panel-header h2 {
-      display: none; /* Title is in the summary */
-    }
-    .fs-container .panel-body {
-      padding: 0 !important;
-      background: transparent !important;
-    }
-    .fs-container .card-header {
-      display: none; /* Title is in the summary */
-    }
-    .fs-container .hint {
-      display: none; /* Tips in summary badge instead */
-    }
-
-    /* ---- Text colors (fighting foxtrot light palette) ---- */
-    .fs-container label,
-    .fs-container .tiny {
-      color: var(--text-3, #94a3b8) !important;
-    }
-    .fs-container h2,
-    .fs-container h3,
-    .fs-container strong {
+  <!-- Legacy modal DOM removed (Farm / Room / Light). These flows are now
+       routed to Grow Management and Settings to avoid duplicate save paths. -->
       color: var(--text-1, #f1f5f9) !important;
     }
     /* Body copy sits at --text-2 (9.46:1 on --surface-1 — AAA) so fine print
@@ -480,374 +295,28 @@
     <div class="fs-progress-bar">
       <div class="fs-progress-fill" id="setupProgressFill"></div>
     </div>
-    <span class="fs-progress-label" id="setupProgressLabel">0 / 2 configured</span>
+    <span class="fs-progress-label" id="setupProgressLabel">0 / 5 configured</span>
   </div>
 
   <!-- ===== CONTENT ===== -->
   <div class="fs-container" id="mainDashboardCards">
 
-    <!-- ===== ONBOARDING CONSOLIDATION (Phase 1) =====
-         Farm Registration, Grow Rooms, and Light Fixtures cards used to live
-         here. They created three overlapping onboarding surfaces (this page,
-         setup-wizard.html, grow-management.html) with duplicate form fields
-         and drift risk.
-
-         Ownership matrix:
-           - Grow Management  → rooms, zones, grow units/groups, equipment, controllers
-           - Farm Setup       → integrations + IoT pairing + checklists (this page)
-           - Settings         → farm profile, contact, business identity, payment
-
-         The launcher buttons (btnLaunchFarm / btnEditFarm / btnLaunchRoom /
-         btnLaunchLightSetup) and the farmBadge / farmSummaryChip / roomsList
-         / lightSetupsList / lightSetupSummary hosts are kept in the DOM as
-         hidden legacy-wiring hosts so:
-           (a) app.foxtrot.js wizard constructors still resolve their targets
-           (b) btnLaunchLightSetup's setTimeout retry loop terminates
-           (c) deep-link callers from grow-management can still programmatically
-               trigger the modals without the UI exposing direct card launchers.
-         The modal DOM (farmModal / roomModal / freshLightModal) is preserved
-         below.
-    -->
-
-    <!-- 1. ROOMS, ZONES & LIGHTS → GROW MANAGEMENT -->
+    <!-- 1. FARM REGISTRATION -->
     <details class="fs-card" open>
       <summary>
-        <h2>Rooms, zones &amp; lights</h2>
-        <span class="fs-card-badge">Moved</span>
+        <h2>Farm Registration</h2>
+        <span class="fs-card-badge" id="farmStatusBadge">Not started</span>
       </summary>
       <div class="fs-card-body">
-        <section class="card card--compact">
-          <div class="panel-body">
-            <p style="margin:0 0 12px;color:#cbd5e1;">
-              Room setup, zone layout, grow units, light fixtures, equipment
-              sizing, and controller planning now live in the single unified
-              flow on <strong>Grow Management</strong>.
-            </p>
-            <div class="row row--gap-xs" style="flex-wrap:wrap;gap:8px;">
-              <a href="/views/grow-management.html#flow-room" class="primary" style="display:inline-block;padding:8px 16px;border-radius:8px;background:#3b82f6;color:#fff;text-decoration:none;font-weight:600;">Open Grow Management &rsaquo;</a>
-              <a href="/views/grow-management.html#flow-lights" style="display:inline-block;padding:8px 14px;border-radius:8px;background:rgba(148,163,184,0.15);color:#e0f2fe;text-decoration:none;font-weight:600;border:1px solid rgba(148,163,184,0.3);">Light fixtures</a>
-              <a href="/views/grow-management.html#flow-equipment" style="display:inline-block;padding:8px 14px;border-radius:8px;background:rgba(148,163,184,0.15);color:#e0f2fe;text-decoration:none;font-weight:600;border:1px solid rgba(148,163,184,0.3);">Equipment</a>
-            </div>
-          </div>
-        </section>
-      </div>
-    </details>
+        <section id="farmPanel" class="card card--compact" data-panel="farm-registration">
+          <header class="panel-header">
+            <div class="row row--gap-xs">
+              <button id="btnLaunchFarm" type="button" class="primary">Register Farm</button>
+              <button id="btnEditFarm" type="button" class="primary pulse-button cta-start is-hidden">Edit in Settings</button>
+            <!-- Legacy modal DOM removed (Farm / Room / Light). These flows are now
+                 routed to Grow Management and Settings to avoid duplicate save paths. -->
 
-    <!-- 2. FARM PROFILE → SETTINGS -->
-    <details class="fs-card" open>
-      <summary>
-        <h2>Farm profile &amp; business identity</h2>
-        <span class="fs-card-badge">Moved</span>
-      </summary>
-      <div class="fs-card-body">
-        <section class="card card--compact">
-          <div class="panel-body">
-            <p style="margin:0 0 12px;color:#cbd5e1;">
-              Farm name, contact, address, timezone, certifications, hours,
-              fulfillment, and payment processor now live in
-              <strong>Settings</strong>, which is the single canonical record.
-            </p>
-            <div class="row row--gap-xs" style="flex-wrap:wrap;gap:8px;">
-              <a href="/LE-farm-admin.html#settings" class="primary" style="display:inline-block;padding:8px 16px;border-radius:8px;background:#3b82f6;color:#fff;text-decoration:none;font-weight:600;">Edit in Settings &rsaquo;</a>
-              <a href="/LE-farm-admin.html#payments" style="display:inline-block;padding:8px 14px;border-radius:8px;background:rgba(148,163,184,0.15);color:#e0f2fe;text-decoration:none;font-weight:600;border:1px solid rgba(148,163,184,0.3);">Payment methods</a>
-            </div>
-          </div>
-        </section>
-      </div>
-    </details>
-
-    <!-- Legacy wiring hosts — NOT shown in the UI. Preserved so existing JS
-         selectors (app.foxtrot.js FarmWizard / RoomWizard / setupLightSetupButton)
-         resolve targets without crashing or polling forever. -->
-    <div hidden aria-hidden="true" style="display:none;">
-      <button id="btnLaunchFarm" type="button"></button>
-      <button id="btnEditFarm" type="button" class="is-hidden"></button>
-      <button id="btnLaunchRoom" type="button"></button>
-      <button id="btnLaunchLightSetup" type="button"></button>
-      <span id="farmStatusBadge"></span>
-      <span id="roomsStatusBadge"></span>
-      <span id="lightsStatusBadge"></span>
-      <span id="farmSummaryChip"></span>
-      <div id="farmBadge" class="is-hidden"></div>
-      <div id="roomsList"></div>
-      <div id="lightSetupsList"></div>
-      <div id="lightSetupSummary"></div>
-    </div>
-
-    <!-- 4. INTEGRATIONS (discovery + vendor scanning — comes before IoT so
-         operators connect upstream sources before reviewing the resulting
-         device list). id=integrations lets grow-management.html#integrations
-         and wizard CTAs deep-link straight to this card. -->
-    <details class="fs-card" id="integrations">
-      <summary>
-        <h2>Integrations</h2>
-        <span class="fs-card-badge" id="integrationsStatusBadge">Configure</span>
-      </summary>
-      <div class="fs-card-body">
-        <section id="integrationsPanel" class="card card--compact" data-panel="integrations">
-          <div class="panel-body">
-              <div class="switchbot-card" style="margin-bottom:16px;">
-                <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:8px;">
-                  <div style="display:flex;align-items:center;gap:8px;">
-                    <span class="switchbot-dot"></span>
-                    <strong>Device Discovery</strong>
-                  </div>
-                  <button id="btnOpenDeviceManagerIntegrations" type="button" class="primary">Open Device Manager</button>
-                </div>
-                <div class="tiny" style="color:#94a3b8;">Discovery and add-to-farm actions now run through Device Manager so Farm Setup does not expose parallel scanner and pairing tools.</div>
-              </div>
-
-            <!-- Code3 Controller Card -->
-            <div class="switchbot-card" id="code3ControllerCard" style="margin-bottom:16px;">
-              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-                <div style="display:flex;align-items:center;gap:8px;">
-                  <span class="switchbot-dot" id="code3StatusDot"></span>
-                  <strong>Code3 Light Controller</strong>
-                </div>
-                <button id="btnTestGrow3" type="button" class="primary">Test Connection</button>
-              </div>
-              <div class="tiny" style="color:#94a3b8;">Primary light control endpoint - 4-channel spectrum control (CW/WW/Blue/Red)</div>
-              <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:4px;">
-                <div class="tiny" style="display:flex;align-items:center;gap:6px;">
-                  <span style="font-weight:600;">Address:</span>
-                  <code>http://192.168.2.80:3000</code>
-                </div>
-                <div id="grow3Status" class="tiny" style="display:flex;align-items:center;gap:6px;">
-                  <span class="switchbot-dot switchbot-dot--warn" id="code3StatusPill"></span>
-                  <span id="code3StatusText">Checking...</span>
-                </div>
-              </div>
-            </div>
-
-            <!-- SwitchBot Card -->
-            <div class="switchbot-card" id="switchbotOverviewCard" style="margin-bottom:16px;">
-              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-                <div style="display:flex;align-items:center;gap:8px;">
-                  <span class="switchbot-dot" id="switchbotStatusDot"></span>
-                  <strong>SwitchBot Ecosystem</strong>
-                </div>
-                <div style="display:flex;gap:8px;">
-                  <button id="btnRefreshSwitchBot" type="button" class="ghost tiny">Refresh</button>
-                  <button id="btnConfigSwitchBot" type="button" class="primary tiny">Configure</button>
-                </div>
-              </div>
-              <div class="tiny" style="color:#94a3b8;">Cloud-connected sensors and automation via SwitchBot API</div>
-              <div id="switchbotDevicesGrid" style="margin-top:12px;display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;"></div>
-              <div id="switchbotStatusBar" class="tiny" style="margin-top:8px;color:#64748b;"></div>
-            </div>
-
-            <!-- Kasa Card -->
-            <div class="switchbot-card" id="kasaOverviewCard">
-              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-                <div style="display:flex;align-items:center;gap:8px;">
-                  <span class="switchbot-dot" id="kasaStatusDot"></span>
-                  <strong>TP-Link Kasa</strong>
-                </div>
-                <button id="btnDiscoverKasa" type="button" class="primary tiny">Discover</button>
-              </div>
-              <div class="tiny" style="color:#94a3b8;">Local network smart plugs and switches for power control</div>
-              <div id="kasaDevicesGrid" style="margin-top:12px;display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;"></div>
-            </div>
-          </div>
-        </section>
-      </div>
-    </details>
-
-    <!-- 5. IOT DEVICES (lists devices surfaced by the discovery/integration
-         flows above — the old standalone "Device Pairing" card was removed
-         because Integrations > Device Manager already covers discovery,
-         assignment, and vendor pairing). id=iot lets grow-management.html#iot
-         and wizard CTAs deep-link straight to this card. -->
-    <details class="fs-card" id="iot" open>
-      <summary>
-        <h2>IoT Devices</h2>
-        <span class="fs-card-badge" id="iotStatusBadge">--</span>
-      </summary>
-      <div class="fs-card-body">
-        <section id="iotPanel" class="card card--compact" data-panel="iot-devices">
-          <div class="panel-body">
-            <div id="addedIoTDevicesContainer" style="display:none;margin-bottom:24px;">
-              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
-                <h3 style="margin:0;font-size:14px;font-weight:600;">My IoT Devices</h3>
-                <span id="addedIoTDevicesCount" style="font-size:12px;color:#64748b;"></span>
-              </div>
-              <div id="addedIoTDevicesList" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;"></div>
-            </div>
-            <div id="iotDevicesList"></div>
-          </div>
-          <!-- IoT Ecosystem Modal -->
-          <div id="iotEcosystemModal" class="modal" style="display:none;position:fixed;z-index:10001;left:0;top:0;width:100vw;height:100vh;background:rgba(0,0,0,0.6);align-items:center;justify-content:center;backdrop-filter:blur(4px);">
-            <div id="iotEcosystemModalContent" style="border-radius:16px;max-width:90vw;max-height:90vh;width:480px;position:relative;display:flex;flex-direction:column;padding:32px 24px 24px;">
-              <button id="closeIotEcosystemModal" style="position:absolute;top:10px;right:14px;background:none;border:none;font-size:1.5em;cursor:pointer;z-index:2;color:#94a3b8;">&times;</button>
-              <div id="iotEcosystemModalBody"></div>
-            </div>
-          </div>
-        </section>
-      </div>
-    </details>
-
-    <!-- 6. FARM CHECKLISTS -->
-    <details class="fs-card">
-      <summary>
-        <h2>Farm Checklists</h2>
-        <span class="fs-card-badge">Maintenance</span>
-      </summary>
-      <div class="fs-card-body">
-        <section id="farmChecklistsPanel" class="card card--compact" data-panel="farm-checklists">
-          <div class="panel-body">
-            <div class="row row--gap-sm row--wrap">
-              <a href="/views/farm-maintenance-checklist.html?tab=daily&print=1" rel="noopener" target="_blank" class="primary" style="text-decoration:none;display:inline-block;">Daily</a>
-              <a href="/views/farm-maintenance-checklist.html?tab=weekly&print=1" rel="noopener" target="_blank" class="primary" style="text-decoration:none;display:inline-block;">Weekly</a>
-              <a href="/views/farm-maintenance-checklist.html?tab=monthly&print=1" rel="noopener" target="_blank" class="primary" style="text-decoration:none;display:inline-block;">Monthly</a>
-              <a href="/views/farm-maintenance-checklist.html?tab=quarterly&print=1" rel="noopener" target="_blank" class="primary" style="text-decoration:none;display:inline-block;">Quarterly</a>
-            </div>
-          </div>
-        </section>
-      </div>
-    </details>
-
-    <!-- Hidden panels (app.foxtrot.js may reference these) -->
-    <section id="calibrationPanel" class="card" data-panel="calibration" style="display:none;"></section>
-    <section id="profilePanel" class="card" data-panel="profile" style="display:none;"></section>
-    <section id="equipmentPanel" class="card" data-panel="equipment-overview" style="display:none;"></section>
-
-  </div>
-
-  <!-- ===== PROGRESS UPDATER + PANEL OVERRIDE ===== -->
-  <script>
-    // Override setActivePanel to scroll-to instead of hide/show
-    // (all panels visible as expandable cards in this layout)
-    window.setActivePanel = function(panelName) {
-      // Find the details card containing this panel
-      var panel = document.querySelector('[data-panel="' + panelName + '"]');
-      if (!panel) return;
-      var card = panel.closest('details.fs-card');
-      if (card) {
-        card.open = true;
-        card.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
-    };
-
-    // Update progress bar based on configured sections.
-    // Phase 1 consolidation: Farm / Rooms / Lights moved to Grow Management +
-    // Settings, so Farm Setup progress only counts IoT + Integrations.
-    function updateSetupProgress() {
-      var total = 2;
-      var done = 0;
-      var S = window.STATE || {};
-
-      // IoT devices?
-      if (Array.isArray(S.iotDevices) && S.iotDevices.length > 0) {
-        done++;
-        var b = document.getElementById('iotStatusBadge');
-        if (b) b.textContent = S.iotDevices.length + ' device' + (S.iotDevices.length > 1 ? 's' : '');
-      }
-      // Integrations (SwitchBot or Kasa configured)?
-      if ((S.switchbotToken) || (Array.isArray(S.kasaDevices) && S.kasaDevices.length > 0)) {
-        done++;
-        var b = document.getElementById('integrationsStatusBadge');
-        if (b) { b.textContent = 'Connected'; b.style.color = '#10b981'; b.style.borderColor = 'rgba(16,185,129,0.3)'; }
-      }
-
-      var pct = Math.round((done / total) * 100);
-      var fill = document.getElementById('setupProgressFill');
-      var label = document.getElementById('setupProgressLabel');
-      if (fill) fill.style.width = pct + '%';
-      if (label) label.textContent = done + ' / ' + total + ' configured';
-    }
-
-    // Run after data loads
-    document.addEventListener('rooms-updated', updateSetupProgress);
-    document.addEventListener('lights-updated', updateSetupProgress);
-    window.addEventListener('load', function() {
-      setTimeout(updateSetupProgress, 2000);
-      setTimeout(updateSetupProgress, 5000);
-    });
-  </script>
-
-  <!-- ===== WIZARD MODALS (extracted from LE-dashboard.html) ===== -->
-
-  <div id="farmModal" class="farm-modal" aria-hidden="true">
-    <div class="farm-modal__backdrop" id="farmModalBackdrop"></div>
-    <div class="farm-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="farmModalTitle">
-      <button type="button" class="farm-modal__close" id="farmModalClose" aria-label="Close">×</button>
-      <form id="farmWizardForm" novalidate>
-        <p class="tiny" id="farmModalProgress" aria-live="polite">Step 1 of 6</p>
-        <h2 id="farmModalTitle" style="margin:0 0 12px">Let’s get you online</h2>
-        <div id="farmSteps">
-          <section class="farm-step" data-step="connection-choice">
-            <p class="farm-question">Let’s get you online—are you connecting this reTerminal to Wi‑Fi or Ethernet today?</p>
-            <div class="chip-row" id="farmConnectionChoice" role="radiogroup" aria-label="Connection type">
-              <button type="button" class="chip-option" data-value="wifi">Wi‑Fi</button>
-              <button type="button" class="chip-option" data-value="ethernet">Ethernet</button>
-            </div>
-            <p class="tiny" style="margin-top:8px;color:#475569">Switch anytime—Wi‑Fi walks you through SSID, password, and a connection test.</p>
-          </section>
-
-          <section class="farm-step" data-step="wifi-select">
-            <p class="farm-question">Great—let’s pick the Wi‑Fi network.</p>
-            <div class="farm-step__stack">
-              <!-- Wi-Fi Scanner (Step 2) -->
-              <div id="wifiStep2Scanner" class="scanning-container" style="display: none;">
-                <div class="scanning-radar"></div>
-                <div class="scanning-text">Scanning for Wi-Fi networks (Step 2)</div>
-                <div class="scanning-status">Please wait while we discover available networks for setup...</div>
-              </div>
-              <div class="row row--gap-xs row--center row--wrap">
-                <button id="btnScanWifi" type="button" class="ghost">Scan again</button>
-                <span id="wifiScanStatus" class="tiny" aria-live="polite"></span>
-                <button id="btnManualSsid" type="button" class="ghost">Add hidden network</button>
-              </div>
-              <div id="wifiNetworkList" class="chip-grid" role="listbox" aria-label="Available Wi‑Fi networks"></div>
-            </div>
-          </section>
-
-          <section class="farm-step" data-step="wifi-password">
-            <p class="farm-question">Enter the password for <span id="wifiChosenSsid" class="inline-chip"></span>.</p>
-            <div class="farm-step__stack">
-              <input id="wifiPassword" type="password" autocomplete="new-password" placeholder="Wi‑Fi password" required>
-              <label class="tiny" style="display:flex;align-items:center;gap:6px"><input id="wifiShowPassword" type="checkbox">Show password</label>
-              <label class="tiny" style="display:flex;align-items:center;gap:6px">
-                <input id="wifiReuseDevices" type="checkbox" checked>
-                Use this network for device discovery
-              </label>
-            </div>
-          </section>
-
-          <section class="farm-step" data-step="wifi-test">
-            <p class="farm-question">Testing that connection…</p>
-            <div class="farm-step__stack">
-              <!-- Wi-Fi Test Scanner (Step 4) -->
-              <div id="wifiTestingIndicator" class="scanning-container" style="display: none;">
-                <div class="scanning-radar"></div>
-                <div class="scanning-text">Testing Wi-Fi Connection (Step 4)</div>
-                <div class="scanning-status">Verifying network connectivity and internet access...</div>
-              </div>
-              <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                <button id="btnTestWifi" type="button" class="primary">Test connection</button>
-                <button id="btnSkipWifiTest" type="button" class="ghost" title="Skip if already connected via Ethernet or WiFi">Skip (Already Connected)</button>
-              </div>
-              <div id="wifiTestStatus" class="farm-review" aria-live="polite"></div>
-            </div>
-          </section>
-
-          <section class="farm-step" data-step="location">
-            <p class="farm-question">Where is this farm?</p>
-            <div class="farm-step__stack">
-              <input id="farmName" name="farmName" type="text" autocomplete="organization" placeholder="Farm name" required>
-              
-              <!-- Use Current Location moved to top -->
-              <div style="display: flex; gap: 6px; align-items: center; margin: 8px 0; flex-wrap: wrap;">
-                <button type="button" id="btnUseMyLocation" class="btn-secondary" style="font-size: 14px;" title="Uses your device's current location to automatically fill address and get GPS coordinates">🧭 Use Current Location</button>
-                <span id="locationStatus" class="tiny" style="color: #666;"></span>
-              </div>
-              <div class="tiny" style="color:#666;margin-bottom:8px;line-height:1.3">
-                <strong>🧭 Use Current Location:</strong> Uses your device's GPS to automatically fill in your current address and coordinates for subscription services
-              </div>
-              
-              <p class="tiny" style="color:#64748b;margin:4px 0">Or enter your farm's address manually below (this information will be used for subscriptions):</p>
-              <input id="farmAddress" type="text" autocomplete="street-address" placeholder="Street address">
-              <div class="row row--gap-xs row--wrap">
+              <div id="toasts" class="toast-container" aria-live="polite" aria-atomic="true"></div>
                 <input id="farmCity" type="text" autocomplete="address-level2" placeholder="City">
                 <input id="farmState" type="text" autocomplete="address-level1" placeholder="State / Province" style="max-width:140px">
                 <input id="farmPostal" type="text" autocomplete="postal-code" placeholder="Postal code" style="max-width:140px">
@@ -920,190 +389,8 @@
     </div>
   </div>
 
-  <div id="roomModal" class="room-modal" aria-hidden="true">
-    <div class="room-modal__backdrop" id="roomModalBackdrop"></div>
-    <div class="room-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="roomModalTitle">
-      <form id="roomWizardForm" novalidate style="display:flex; flex-direction:column; height:100%; min-height:0;">
-        <!-- Close button at top -->
-        <div style="display:flex; justify-content:flex-end; margin-bottom:16px;">
-          <button type="button" class="room-modal__close" id="roomModalClose" aria-label="Close">×</button>
-        </div>
-        
-        <!-- Header with progress, title, and navigation buttons -->
-        <div class="room-modal__header" style="flex-shrink:0; display:flex; align-items:center; justify-content:space-between; padding:0 0 12px 0; border-bottom:1px solid #e2e8f0;">
-          <div>
-            <p class="tiny" id="roomModalProgress" aria-live="polite" style="margin:0 0 4px 0;">Step 1 of 5</p>
-            <h2 id="roomModalTitle" style="margin:0;">Set up a Grow Room</h2>
-          </div>
-          <div style="display:flex; gap:8px; align-items:center;">
-            <button id="roomTopPrev" type="button" class="ghost" style="font-size:12px; padding:6px 12px; display:none;">Previous</button>
-            <button id="roomTopNext" type="button" class="primary" style="font-size:12px; padding:6px 12px;">Next</button>
-            <button id="roomTopSaveClose" type="button" class="primary" style="font-size:12px; padding:6px 12px; display:none;">Save & Close</button>
-          </div>
-        </div>
-        
-        <div id="roomSteps" style="flex:1; overflow-y:auto; min-height:0; position:relative; padding-top:16px;">
-
-          
-
-          <section class="room-step" data-step="room-info">
-            <p class="room-question">Name the grow room.</p>
-            <div class="farm-step__stack">
-              <div id="roomInfoError" class="tiny" style="color:#e11d48;margin-bottom:8px;display:none"></div>
-              <label class="tiny" for="roomInfoName">Grow room name</label>
-              <input id="roomInfoName" type="text" placeholder="e.g., Flower A" required>
-              <p class="tiny" style="color: #64748b; margin-top: 12px;">
-                Note: Zone setup is now done in the Groups V2 panel for better organization and scheduling.
-              </p>
-            </div>
-          </section>
-          <section class="room-step" data-step="hardware">
-            <p class="room-question">Which equipment are you setting up in this room?</p>
-            <div class="farm-step__stack">
-              <div id="hardwareError" class="tiny" style="color:#e11d48;margin-bottom:8px;display:none"></div>
-              <div class="tiny">Select all that apply</div>
-              <div id="roomHardwareCats" class="chip-row" role="group" aria-label="Hardware categories">
-                <button type="button" class="chip-option" data-value="hvac">Central HVAC</button>
-                <button type="button" class="chip-option" data-value="mini-split">Mini Split</button>
-                <button type="button" class="chip-option" data-value="dehumidifier">Dehumidifier</button>
-                <button type="button" class="chip-option" data-value="fans">Fans</button>
-                <button type="button" class="chip-option" data-value="vents">Vents</button>
-                <button type="button" class="chip-option" data-value="controllers">Controllers / hubs</button>
-                <button type="button" class="chip-option" data-value="energy-monitor">Energy Monitor</button>
-                <button type="button" class="chip-option" data-value="other">Other</button>
-              </div>
-              <!-- Removed the hardware search UI here to reduce confusion; use Fixtures or Devices steps instead. -->
-            </div>
-          </section>
-
-          <!-- Dynamic per-category setup host (used for HVAC, mini-split, dehumidifier, fans, vents, controllers, other) -->
-          <section class="room-step" data-step="category-setup">
-            <p class="room-question" id="catSetupTitle">Category setup</p>
-            <p class="tiny" id="catSetupIntro" style="color:#475569">We’ll capture a quick count, control method, and energy metering for each device type.</p>
-            <p class="tiny" id="catSetupStatusLine" aria-live="polite" style="color:#0f172a"></p>
-            <div class="farm-step__stack" id="catSetupBody"></div>
-            <p class="tiny" id="catSetupStatus" aria-live="polite" style="color:#0f172a"></p>
-            <div class="row" id="catSetupNav" style="gap:8px;align-items:center;margin-top:8px;justify-content:center">
-              <button type="button" class="ghost" id="catPrevType">Previous Equipment</button>
-              <span class="tiny" id="catSetupProgress" style="color:#475569"></span>
-              <button type="button" class="ghost" id="catNextType">Next Equipment</button>
-            </div>
-            </div>
-          </section>
-
-
-
-          <section class="room-step" data-step="review">
-            <p class="room-question">Review this room before saving.</p>
-            <div id="roomReview" class="farm-review"></div>
-          </section>
-
-        </div>
-
-      </form>
-    </div>
-
-  <div id="freshLightModal" class="fresh-light-modal" aria-hidden="true">
-    <div class="fresh-light-modal__backdrop"></div>
-    <div class="fresh-light-modal__dialog">
-      <div class="fresh-light-modal__header">
-        <h2>Light Setup Wizard</h2>
-        <button type="button" class="fresh-light-modal__close" id="freshLightClose">×</button>
-      </div>
-      
-      <div class="fresh-light-modal__content">
-        <div class="fresh-light-step" id="freshStep1" data-active>
-          <h3>Select Room</h3>
-          
-          <div style="margin-bottom: 20px;">
-            <label style="display: block; margin-bottom: 8px;">Room:</label>
-            <select id="freshRoomSelect" style="width: 100%; padding: 8px; font-size: 14px;">
-              <option value="">Select a room</option>
-            </select>
-          </div>
-          
-          <p class="tiny" style="color: #64748b; margin-top: 12px;">
-            Note: Zone assignment is now done in the Groups V2 panel after saving your light setup.
-          </p>
-        </div>
-        
-        <div class="fresh-light-step" id="freshStep2">
-          <h3>Select Fixtures</h3>
-          
-          <div style="margin-bottom: 20px;">
-            
-            
-            <div style="margin-bottom: 12px;">
-              <label style="display: block; margin-bottom: 8px; font-size: 13px;">Search fixtures:</label>
-              <input id="freshFixtureSearch" type="text" placeholder="Search models (e.g., Gavita 1700e)" 
-                     style="width: 100%; padding: 8px; font-size: 14px;">
-            </div>
-            
-            <div style="margin-bottom: 12px;">
-              <div style="font-size: 12px; color: #64748b; margin-bottom: 4px;">Search Results:</div>
-              <div id="freshFixtureResults" style="max-height: 150px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 4px; min-height: 60px;">
-                <div style="padding: 20px; text-align: center; color: #64748b; font-size: 13px;">
-                  Type to search for fixture models...
-                </div>
-              </div>
-            </div>
-            
-            <div>
-              <div style="font-size: 12px; color: #64748b; margin-bottom: 4px;">Selected Fixtures:</div>
-              <div id="freshSelectedFixtures" style="min-height: 60px; border: 1px solid #e2e8f0; border-radius: 4px; padding: 8px;">
-                <div style="color: #64748b; font-size: 13px;">No fixtures selected yet</div>
-              </div>
-            </div>
-          </div>
-        </div>
-        
-        <div class="fresh-light-step" id="freshStep3">
-          <h3>Control Method</h3>
-          
-          <div style="margin-bottom: 20px;">
-            <div style="font-size: 13px; margin-bottom: 12px;">How will the fixtures be controlled?</div>
-            
-            <div id="freshControlMethod" style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px;">
-              <button type="button" class="fresh-control-option" data-value="wifi">Wi‑Fi / App</button>
-              <button type="button" class="fresh-control-option" data-value="smart-plug">Smart Plug</button>
-              <button type="button" class="fresh-control-option" data-value="0-10v">0‑10V / Wired</button>
-              <button type="button" class="fresh-control-option" data-value="rs485">RS‑485 / Modbus</button>
-              <button type="button" class="fresh-control-option" data-value="other">Other</button>
-            </div>
-            
-            <div id="freshControlDetails" style="font-size: 13px; color: #64748b; padding: 12px; background: #f8fafc; border-radius: 4px; display: none;">
-              Control method details will appear here...
-            </div>
-          </div>
-        </div>
-        
-        <div class="fresh-light-step" id="freshStep4">
-          <h3>Review Setup</h3>
-          
-          <div style="margin-bottom: 20px;">
-            <div id="freshReviewSummary" style="background: #f8fafc; border-radius: 8px; padding: 16px;">
-              <div style="font-weight: 600; margin-bottom: 12px;">Light Setup Summary</div>
-              <div id="freshReviewDetails" style="font-size: 14px; line-height: 1.5;">
-                <!-- Review details will be populated here -->
-              </div>
-            </div>
-            
-            <div style="margin-top: 16px; padding: 12px; background: #fef3c7; border-radius: 6px; border-left: 4px solid #f59e0b;">
-              <div style="font-size: 13px; color: #92400e;">
-                <strong>Ready to save:</strong> This will create your light setup configuration for the selected room. Use Groups V2 to assign lights to zones.
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      <div class="fresh-light-modal__footer">
-        <button id="freshPrev" type="button" style="display: none;">Previous</button>
-        <button id="freshNext" type="button">Next</button>
-        <button id="freshSave" type="button" style="display: none;">Save</button>
-      </div>
-    </div>
-  </div>
+  <!-- Legacy modal DOM removed (Farm / Room / Light). These flows are now
+       routed to Grow Management and Settings to avoid duplicate save paths. -->
 
   <div id="devicePairModal" class="device-pair-modal" aria-hidden="true">
     <div class="device-pair-modal__backdrop" id="devicePairBackdrop"></div>
@@ -1213,9 +500,36 @@
     </div>
   </div>
 
-    <div id="toasts" class="toast-container" aria-live="polite" aria-atomic="true"></div>
-
     <script>
+      (function routeLegacySetupEntrypoints() {
+        var redirects = {
+          'farm-profile': '/LE-farm-admin.html#settings',
+          'business-details': '/LE-farm-admin.html#settings',
+          'grow-rooms': '/views/grow-management.html#flow-room',
+          'room-setup': '/views/grow-management.html#flow-room',
+          'light-setup': '/views/grow-management.html#flow-grow-units',
+          'lights': '/views/grow-management.html#flow-grow-units'
+        };
+        var hash = (window.location.hash || '').replace(/^#/, '').toLowerCase();
+        if (hash && redirects[hash]) {
+          window.location.replace(redirects[hash]);
+          return;
+        }
+
+        function wire(btnId, href) {
+          var btn = document.getElementById(btnId);
+          if (!btn) return;
+          btn.addEventListener('click', function (ev) {
+            ev.preventDefault();
+            window.location.href = href;
+          }, true);
+        }
+        wire('btnLaunchFarm', '/LE-farm-admin.html#settings');
+        wire('btnEditFarm', '/LE-farm-admin.html#settings');
+        wire('btnLaunchRoom', '/views/grow-management.html#flow-room');
+        wire('btnLaunchLightSetup', '/views/grow-management.html#flow-grow-units');
+      })();
+
       // Deep-link support: when the wizard / Room Build Plan CTAs land here
       // with a hash like #iot or #integrations, auto-open the matching
       // <details> card and scroll it into view. Without this, <details>
