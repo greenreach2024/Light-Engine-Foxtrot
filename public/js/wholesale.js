@@ -3280,8 +3280,9 @@
       if (farmsInCatalog.length === 0) {
         try {
           const headers = {};
-          if (this.token) headers['Authorization'] = `Bearer ${this.token}`;
-          const nearParams = (Number.isFinite(buyerLat) && Number.isFinite(buyerLng))
+          const hasAuthToken = Boolean(this.token);
+          if (hasAuthToken) headers['Authorization'] = `Bearer ${this.token}`;
+          const nearParams = (!hasAuthToken && Number.isFinite(buyerLat) && Number.isFinite(buyerLng))
             ? `?nearLat=${encodeURIComponent(buyerLat)}&nearLng=${encodeURIComponent(buyerLng)}`
             : '';
           const response = await fetch(`/api/wholesale/network/farms${nearParams}`, { headers });
