@@ -2779,6 +2779,22 @@ function needPinOrApiKey(req, res) {
       || (rawAuth.toLowerCase().startsWith('bearer ') ? rawAuth.slice(7) : '');
     if (providedKey && String(providedKey) === configuredKey) return false;
   }
+
+  // Browser writes from authenticated farm/admin sessions use Bearer JWTs.
+  // Accept a valid non-viewer JWT here so /data/groups.json does not require
+  // operators to manually carry farm PIN query params in every page.
+  try {
+    const rawAuth = req.headers['authorization'] || '';
+    if (rawAuth.toLowerCase().startsWith('bearer ')) {
+      const token = rawAuth.slice(7);
+      const decoded = jwt.verify(token, JWT_SECRET_KEY);
+      const role = String(decoded?.role || '').toLowerCase();
+      if (decoded && role !== 'viewer') return false;
+    }
+  } catch (_) {
+    // Ignore JWT parse/verify errors and continue to deny below.
+  }
+
   res.status(403).json({ ok: false, error: 'pin-or-api-key-required' });
   return true;
 }
@@ -25734,6 +25750,21 @@ app.get('/data/farm.json', (req, res, next) => {
 });
 
 app.get('/data/rooms.json', (req, res, next) => {
+  // Authoritative source: persisted rooms file.
+  // Grow Management writes here via /api/setup/save-rooms; always prefer it
+  // so edited room dimensions survive refresh even when demo snapshots exist.
+  try {
+    const persisted = readJSON('rooms.json', { rooms: [] });
+    const rooms = Array.isArray(persisted) ? persisted : (persisted && Array.isArray(persisted.rooms) ? persisted.rooms : []);
+    if (Array.isArray(rooms)) {
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Cache-Control', 'no-cache');
+      return res.json({ rooms });
+    }
+  } catch (e) {
+    console.warn('[rooms] Failed to load persisted rooms for /data/rooms.json:', e?.message || e);
+  }
+
   const farm = loadDemoFarmSnapshot();
   if (!farm) return next();
   
