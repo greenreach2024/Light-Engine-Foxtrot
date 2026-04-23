@@ -16,9 +16,68 @@ let lastDbSyncAt = 0;
 let bootstrapDone = false;
 const DB_SYNC_INTERVAL_MS = 60 * 1000;
 
+function inferCityFromAddressString(value) {
+  const raw = String(value || '').trim();
+  if (!raw.includes(',')) return null;
+  const cityCandidate = raw.split(',')[0]?.trim();
+  if (!cityCandidate || /\d/.test(cityCandidate)) return null;
+  return cityCandidate;
+}
+
+function hasFiniteCoordinates(rawLocation) {
+  if (!rawLocation || typeof rawLocation !== 'object') return false;
+  const latitude = Number(
+    rawLocation.latitude
+    ?? rawLocation.lat
+    ?? rawLocation.coordinates?.latitude
+    ?? rawLocation.coordinates?.lat
+  );
+  const longitude = Number(
+    rawLocation.longitude
+    ?? rawLocation.lng
+    ?? rawLocation.lon
+    ?? rawLocation.coordinates?.longitude
+    ?? rawLocation.coordinates?.lng
+    ?? rawLocation.coordinates?.lon
+  );
+  return Number.isFinite(latitude) && Number.isFinite(longitude);
+}
+
+function resolveSeedLocation(...locations) {
+  const list = locations
+    .filter((location) => location && typeof location === 'object' && Object.keys(location).length > 0);
+  if (list.length === 0) return {};
+
+  const withCoords = list.find((location) => hasFiniteCoordinates(location));
+  if (withCoords) return withCoords;
+
+  return list[0];
+}
+
 function parseLocationLike(value) {
   if (!value) return {};
-  if (typeof value === 'object' && !Array.isArray(value)) return value;
+  if (typeof value === 'object' && !Array.isArray(value)) {
+    const location = { ...value };
+    const latitude = Number(
+      location.latitude
+      ?? location.lat
+      ?? location.coordinates?.latitude
+      ?? location.coordinates?.lat
+    );
+    const longitude = Number(
+      location.longitude
+      ?? location.lng
+      ?? location.lon
+      ?? location.coordinates?.longitude
+      ?? location.coordinates?.lng
+      ?? location.coordinates?.lon
+    );
+    if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+      location.latitude = latitude;
+      location.longitude = longitude;
+    }
+    return location;
+  }
   if (typeof value === 'string') {
     const trimmed = value.trim();
     if (!trimmed) return {};
@@ -30,9 +89,55 @@ function parseLocationLike(value) {
         // Fall through to string-address fallback below.
       }
     }
-    return { address: trimmed };
+    const city = inferCityFromAddressString(trimmed);
+    return {
+      address: trimmed,
+      ...(city ? { city } : {})
+    };
   }
   return {};
+}
+
+function loadLocalFarmProfileLocationById() {
+  try {
+    const __dirname = dirname(fileURLToPath(import.meta.url));
+    const farmPath = resolve(__dirname, '..', 'public', 'data', 'farm.json');
+    const farmJson = JSON.parse(readFileSync(farmPath, 'utf8'));
+    const farmId = String(farmJson.farmId || farmJson.farm_id || '').trim();
+    if (!farmId) return {};
+
+    const parsedLocation = parseLocationLike(farmJson.location);
+    const location = {
+      ...parsedLocation,
+      ...(farmJson.address ? { address: farmJson.address } : {}),
+      ...(farmJson.city ? { city: farmJson.city } : {}),
+      ...(farmJson.state ? { state: farmJson.state } : {}),
+      ...(farmJson.postalCode ? { postalCode: farmJson.postalCode } : {})
+    };
+
+    const latitude = Number(
+      farmJson.coordinates?.lat
+      ?? farmJson.coordinates?.latitude
+      ?? farmJson.latitude
+      ?? location.latitude
+    );
+    const longitude = Number(
+      farmJson.coordinates?.lng
+      ?? farmJson.coordinates?.longitude
+      ?? farmJson.longitude
+      ?? location.longitude
+    );
+    if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+      location.latitude = latitude;
+      location.longitude = longitude;
+    }
+
+    if (Object.keys(location).length === 0) return {};
+    return { [farmId]: location };
+  } catch (err) {
+    console.warn('[NetworkFarmsStore] Failed to load farm.json location fallback:', err.message);
+    return {};
+  }
 }
 
 /**
@@ -155,6 +260,7 @@ async function seedFromDatabase() {
   seeded = true;
   try {
     if (!(await isDatabaseAvailable())) return;
+    const localFarmLocationById = loadLocalFarmProfileLocationById();
     const result = await query(
       `SELECT farm_id, name, api_url, location, metadata, status, created_at, updated_at, last_sync
        FROM farms
@@ -165,6 +271,8 @@ async function seedFromDatabase() {
       const meta = typeof row.metadata === 'string' ? JSON.parse(row.metadata) : (row.metadata || {});
       const dbLocation = parseLocationLike(row.location);
       const metadataLocation = parseLocationLike(meta.location);
+      const localProfileLocation = parseLocationLike(localFarmLocationById[row.farm_id]);
+      const resolvedLocation = resolveSeedLocation(metadataLocation, dbLocation, localProfileLocation);
       // Self-heal: if name column was overwritten with farm_id, recover from metadata
       let farmName = row.name || row.farm_id;
       if (farmName === row.farm_id && meta.name && meta.name !== row.farm_id) {
@@ -181,7 +289,7 @@ async function seedFromDatabase() {
         auth_farm_id: meta.auth_farm_id || null,
         api_key: meta.api_key || null,
         contact: meta.contact || {},
-        location: Object.keys(metadataLocation).length > 0 ? metadataLocation : dbLocation,
+        location: resolvedLocation,
         certifications: Array.isArray(meta.certifications) ? meta.certifications : [],
         practices: Array.isArray(meta.practices) ? meta.practices : [],
           fulfillment_standards: meta.fulfillment_standards || {},
