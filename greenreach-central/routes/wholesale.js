@@ -4870,25 +4870,6 @@ router.get('/network/farms', async (req, res, next) => {
     if (resolvedBuyer?.location) {
       buyerCoords = extractCoordinates(resolvedBuyer.location);
 
-        // Self-heal legacy buyer records that carry stale coordinates from an
-        // older geocode path. If we can resolve a postal/city based coordinate,
-        // prefer it when missing or clearly drifted, then persist so future
-        // requests are consistent.
-        const locationHint = {
-          address1: trimField(
-            resolvedBuyer.location.address1
-            || resolvedBuyer.location.address
-            || resolvedBuyer.location.street
-          ) || null,
-          city: trimField(resolvedBuyer.location.city) || null,
-          state: trimField(resolvedBuyer.location.state || resolvedBuyer.location.province) || null,
-          postalCode: normalizePostalCode(
-            resolvedBuyer.location.postalCode || resolvedBuyer.location.zip
-          ) || null,
-          country: trimField(resolvedBuyer.location.country) || 'Canada'
-        };
-
-    if (resolvedBuyer?.location) {
       const locationHint = {
         address1: trimField(
           resolvedBuyer.location.address1
