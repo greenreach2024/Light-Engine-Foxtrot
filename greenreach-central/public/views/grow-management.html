@@ -1331,6 +1331,16 @@
     }
 
     document.addEventListener('groups-updated', updateGrowKPIs);
+    if (window.DataFlowBus && typeof window.DataFlowBus.on === 'function') {
+      window.DataFlowBus.on('groups', function () { updateGrowKPIs(); });
+      window.DataFlowBus.on('rooms', function () {
+        updateGrowKPIs();
+        try { ffFlow.refresh(); } catch (_) {}
+      });
+      window.DataFlowBus.on('zones', function () {
+        try { ffFlow.refresh(); } catch (_) {}
+      });
+    }
     // Also run after initial load
     window.addEventListener('load', function() {
       setTimeout(updateGrowKPIs, 2000);
