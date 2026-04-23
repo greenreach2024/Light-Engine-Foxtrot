@@ -66,36 +66,59 @@
 
   function fetchRooms() {
     const _f = window.authFetch || fetch;
-    // Cache-bust so we always read the post-save snapshot. The underlying
-    // service-worker / CDN otherwise serves stale /api/rooms responses and
-    // the plan re-renders with the old zone count.
-    const url = (window.DataFlowBus && window.DataFlowBus.cacheBust)
-      ? window.DataFlowBus.cacheBust('/api/rooms')
-      : '/api/rooms';
-    return _f(url, { credentials: 'same-origin', cache: 'no-store' })
-      .then(r => r.ok ? r.json() : [])
-      .then(body => Array.isArray(body) ? body : (body.rooms || body.items || []))
-      .catch(() => []);
+    const bust = (url) => (window.DataFlowBus && window.DataFlowBus.cacheBust)
+      ? window.DataFlowBus.cacheBust(url)
+      : url;
+
+    async function fetchOne(url) {
+      const r = await _f(bust(url), { credentials: 'same-origin', cache: 'no-store' });
+      if (!r.ok) return [];
+      const body = await r.json();
+      if (Array.isArray(body)) return body;
+      if (Array.isArray(body.rooms)) return body.rooms;
+      if (Array.isArray(body.items)) return body.items;
+      return [];
+    }
+
+    // Grow Management itself hydrates from /data/rooms.json while some pages
+    // use /api/rooms; try both so EVIE always sees the same room snapshot.
+    return fetchOne('/api/rooms')
+      .then((rooms) => {
+        if (Array.isArray(rooms) && rooms.length) return rooms;
+        return fetchOne('/data/rooms.json');
+      })
+      .then((rooms) => {
+        if (Array.isArray(rooms) && rooms.length) return rooms;
+        if (Array.isArray(window.__ffFlowRooms) && window.__ffFlowRooms.length) return window.__ffFlowRooms;
+        if (window.STATE && Array.isArray(window.STATE.rooms) && window.STATE.rooms.length) return window.STATE.rooms;
+        return [];
+      })
+      .catch(() => {
+        if (Array.isArray(window.__ffFlowRooms) && window.__ffFlowRooms.length) return window.__ffFlowRooms;
+        if (window.STATE && Array.isArray(window.STATE.rooms) && window.STATE.rooms.length) return window.STATE.rooms;
+        return [];
+      });
   }
 
   function selectedRoom(rooms) {
     const sel = $(ROOM_SELECT_ID);
     const id = sel && sel.value;
     const normalize = (value) => String(value || '').trim().toLowerCase();
+    const roomKeys = (room) => [room?.id, room?.room_id, room?.roomId, room?.name, room?.room_name];
     const hasRealDims = (room) => {
       const dims = room?.dimensions || room?.dims || {};
-      const len = Number(dims.lengthM ?? dims.length_m ?? room?.lengthM ?? room?.length_m);
-      const wid = Number(dims.widthM ?? dims.width_m ?? room?.widthM ?? room?.width_m);
+      const len = Number(dims.lengthM ?? dims.length_m ?? room?.lengthM ?? room?.length_m ?? room?.length);
+      const wid = Number(dims.widthM ?? dims.width_m ?? room?.widthM ?? room?.width_m ?? room?.width);
       const hgt = Number(
         dims.ceilingHeightM ?? dims.heightM ?? dims.ceilingM ?? dims.height_m ?? dims.ceiling_height_m
-          ?? room?.ceilingHeightM ?? room?.ceiling_height_m ?? room?.height_m
+          ?? room?.ceilingHeightM ?? room?.ceiling_height_m ?? room?.height_m ?? room?.height
       );
       return [len, wid, hgt].every(v => Number.isFinite(v) && v > 0);
     };
 
     if (id) {
       const wanted = normalize(id);
-      const matched = rooms.find((room) => normalize(room?.id) === wanted || normalize(room?.name) === wanted);
+      const matched = rooms.find((room) => roomKeys(room).some((key) => normalize(key) === wanted));
       if (matched) return matched;
     }
 
@@ -112,11 +135,11 @@
     // snake_case {length_m, width_m, ceiling_height_m} (most common; see
     // grow-management.html lines 1365-1400), and top-level camelCase
     // {lengthM, widthM, ceilingHeightM}.
-    const len = Number(dims.lengthM ?? dims.length_m ?? room.lengthM ?? room.length_m);
-    const wid = Number(dims.widthM ?? dims.width_m ?? room.widthM ?? room.width_m);
+    const len = Number(dims.lengthM ?? dims.length_m ?? room.lengthM ?? room.length_m ?? room.length);
+    const wid = Number(dims.widthM ?? dims.width_m ?? room.widthM ?? room.width_m ?? room.width);
     const hgt = Number(
       dims.ceilingHeightM ?? dims.heightM ?? dims.ceilingM ?? dims.height_m ?? dims.ceiling_height_m
-        ?? room.ceilingHeightM ?? room.ceiling_height_m ?? room.height_m
+        ?? room.ceilingHeightM ?? room.ceiling_height_m ?? room.height_m ?? room.height
     );
     const envelope = room.envelope?.class || room.envelopeClass || 'typical';
     const supplyCFM = Number(room.supplyCFM ?? room.supply_cfm ?? 0) || null;
@@ -164,11 +187,11 @@
     // Last-chance direct read from room — handles rooms saved with only
     // length/width (no ceiling) so the solver still uses real dims.
     const dims = room.dimensions || room.dims || {};
-    const len = Number(dims.lengthM ?? dims.length_m ?? room.lengthM ?? room.length_m);
-    const wid = Number(dims.widthM ?? dims.width_m ?? room.widthM ?? room.width_m);
+    const len = Number(dims.lengthM ?? dims.length_m ?? room.lengthM ?? room.length_m ?? room.length);
+    const wid = Number(dims.widthM ?? dims.width_m ?? room.widthM ?? room.width_m ?? room.width);
     const hgt = Number(
       dims.ceilingHeightM ?? dims.heightM ?? dims.ceilingM ?? dims.height_m ?? dims.ceiling_height_m
-        ?? room.ceilingHeightM ?? room.ceiling_height_m ?? room.height_m
+        ?? room.ceilingHeightM ?? room.ceiling_height_m ?? room.height_m ?? room.height
     );
     if (Number.isFinite(len) && len > 0 && Number.isFinite(wid) && wid > 0) {
       return {
@@ -788,6 +811,7 @@
 
   async function handleSelection({ templateId, template }) {
     if (!template) return;
+    const isSameTemplate = !!(state.template && template && state.template.id === template.id);
     injectStyles();
     state.template = template;
     state.cropClass = template.defaultCropClass
@@ -802,9 +826,13 @@
       const rooms = await fetchRooms();
       state.room = selectedRoom(rooms);
       state.zoneRects = zoneRectsFromRoom(state.room, zoneNamesForRoom(state.room));
-      // Reset desired units when switching templates; auto-fit will pick up capacity on render.
-      state.autoFit = true;
-      state.desiredUnits = 0;
+      // Only reset unit controls when the operator changes template.
+      // For room/zone refresh events on the same template, preserve the
+      // operator's manual grow-unit selection.
+      if (!isSameTemplate) {
+        state.autoFit = true;
+        state.desiredUnits = 0;
+      }
       state.scores = await scoreFor(templateId, state.cropClass, roomPayload(state.room));
     } catch (err) {
       console.warn('[room-build-plan] score failed', err);
