@@ -14273,7 +14273,7 @@ app.use("/api/admin/pricing", adminPricingRouter);
 // Keeps sync/webhooks/admin/fulfillment/reservations local for inter-service use
 const WHOLESALE_PROXY_PATHS = [
   '/buyers', '/catalog', '/checkout', '/orders',
-  '/delivery', '/network/farms', '/inventory', '/payment'
+  '/delivery', '/network/farms', '/inventory', '/payment', '/market'
 ];
 
 const wholesaleCentralProxy = createProxyMiddleware({
@@ -14692,13 +14692,6 @@ app.use('/api/wholesale/product-requests', wholesaleProductRequestsRouter);
  * - GET /api/market-intelligence/product/:productName: Detailed product pricing
  */
 app.use('/api/market-intelligence', marketIntelligenceRouter);
-
-// Keep buyer-market endpoint parity with Central so the wholesale portal
-// can use the same relative API path on both hosts.
-app.get('/api/wholesale/market/price-alerts', (req, res, next) => {
-  req.url = '/price-alerts';
-  next();
-}, marketIntelligenceRouter);
 
 /**
  * GreenReach: Admin Wholesale Buyer Management
