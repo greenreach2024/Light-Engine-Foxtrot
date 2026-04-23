@@ -635,8 +635,12 @@
             }
         }, 100);
 
-        // Per-step coaching from Evie. Kept short and actionable so the
-        // operator knows what the step is for without reading a wall of help.
+        // Per-step coaching fallback. The live `/api/assistant/chat` call in
+        // `updateEvieGuidance` runs against the same Evie that serves the
+        // dashboard, so during setup the agent can see setup state and respond
+        // to the specific step. These strings are the graceful-degradation
+        // copy — used before the agent responds, and left in place if the
+        // agent is unreachable (503 / no network / unauthenticated).
         const EVIE_STEP_MESSAGES = {
             0: "Welcome! I'm Evie, your farm assistant. I'll walk you through each step — reach out through the dashboard any time if you get stuck.",
             1: "Set a strong password (min. 8 chars). This is your admin login; everyone on your team can be invited after setup.",
@@ -647,9 +651,69 @@
             6: "Setup is complete. I'll be in the bottom-right of the dashboard — click me whenever you need help with payments, inventory, or orders."
         };
 
-        function updateEvieGuidance(step) {
+        // Short step identifiers the agent can ground its response on. Kept
+        // separate from the fallback copy so the agent isn't primed with the
+        // exact wording we'd use offline.
+        const EVIE_STEP_CONTEXT = {
+            0: { key: 'welcome',           title: 'Welcome / introduction' },
+            1: { key: 'password',          title: 'Set admin password' },
+            2: { key: 'farm-profile',      title: 'Farm profile (name, contact, logo)' },
+            3: { key: 'rooms',             title: 'Rooms (length, width, ceiling height, zone count)' },
+            4: { key: 'business-details',  title: 'Business details (hours, certifications, Square)' },
+            5: { key: 'activity-hub',      title: 'Activity Hub install on iPad' },
+            6: { key: 'complete',          title: 'Setup complete' }
+        };
+
+        // One conversation for the whole wizard so Evie has continuity across
+        // steps (e.g. knows the user already named their farm when she
+        // explains the business-details step). Stored only in memory; the
+        // dashboard Evie chat uses its own conversation.
+        let evieWizardConvId = null;
+        // Guards stale responses when the user clicks Next/Back faster than
+        // the agent responds — only the most recent request's reply is
+        // written to the DOM.
+        let evieRequestSeq = 0;
+
+        async function updateEvieGuidance(step) {
             const el = document.getElementById('evie-guidance-text');
-            if (el) el.textContent = EVIE_STEP_MESSAGES[step] || EVIE_STEP_MESSAGES[0];
+            if (!el) return;
+
+            const fallback = EVIE_STEP_MESSAGES[step] || EVIE_STEP_MESSAGES[0];
+            // Paint the fallback immediately so the user sees something
+            // actionable while the agent is generating.
+            el.textContent = fallback;
+
+            const token = sessionStorage.getItem('token') || localStorage.getItem('token');
+            if (!token) return; // unauthenticated path — keep static copy
+            const ctx = EVIE_STEP_CONTEXT[step];
+            if (!ctx) return;
+
+            const mySeq = ++evieRequestSeq;
+            const prompt = `I'm on step ${step} of the setup wizard: "${ctx.title}" (key: ${ctx.key}). In 1–2 short sentences (no preamble, no greeting, no markdown), tell me what this step is for and what to watch out for. Speak directly to me as the operator.`;
+            try {
+                const resp = await fetch('/api/assistant/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        message: prompt,
+                        conversation_id: evieWizardConvId,
+                        page_context: { page: 'setup-wizard', step, step_key: ctx.key, step_title: ctx.title }
+                    })
+                });
+                if (!resp.ok) return; // 401/429/503 → keep fallback copy
+                const data = await resp.json().catch(() => null);
+                if (!data || data.ok === false || !data.reply) return;
+                // A newer step change has already fired — don't overwrite it.
+                if (mySeq !== evieRequestSeq) return;
+                if (data.conversation_id) evieWizardConvId = data.conversation_id;
+                el.textContent = String(data.reply).trim();
+            } catch (err) {
+                // Network error — fallback copy already on-screen, nothing to do.
+                console.warn('[Setup Wizard] Evie guidance fetch failed:', err);
+            }
         }
 
         function updateUI() {
