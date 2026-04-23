@@ -2333,7 +2333,14 @@ router.post('/farm-payouts', async (req, res) => {
     // provide an explicit payout_id or order_id.
     const amountKey = amt.toFixed(2);
     const effectiveOrderId = order_id || `manual-${farm_id}-${amountKey}`;
-    const effectivePayoutId = payout_id || `manual-${farm_id}-${amountKey}`;
+    // Chain order_id into the payout_id default so the downstream
+    // (payoutIdKey || order_id) fallback in ingestFarmPayout actually
+    // takes effect when a caller supplies order_id but no payout_id.
+    // Otherwise the always-truthy `manual-<farm_id>-<amount>` default
+    // defeats that fallback and two distinct settlements for the same
+    // (farm_id, amount) with different order_ids would hash to the
+    // same idempotency key and silently dedupe.
+    const effectivePayoutId = payout_id || order_id || `manual-${farm_id}-${amountKey}`;
     const result = await ingestFarmPayout({
       payout_id: effectivePayoutId,
       order_id: effectiveOrderId,
