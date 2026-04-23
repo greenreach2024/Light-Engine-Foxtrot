@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.1.0",
-  "version": "2026-04-18-v2",
+  "version": "2026-04-23-v3",
   "description": "Class-level catalog of physical growing apparatuses. Templates declare class and required channel counts only; device identities live in iot-devices.json. Consumers are documented in docs/features/GROW_SYSTEMS_TEMPLATE_SCHEMA.md. Formula sources are in docs/features/VERTICAL_FARM_CALCULATOR_SPEC.md.",
   "lightingSizingRule": {
     "wattsPerFt2": 30,
@@ -20,38 +20,38 @@
   "templates": [
     {
       "id": "nft-rack-3tier",
-      "name": "NFT Rack, 3-Tier",
+      "name": "NFT/DWC 3-Tier Grow Rack",
       "category": "nft_rack",
-      "description": "Three-level nutrient film technique rack. 128 plant locations across three tiers. A recirculating nutrient solution flows as a thin film through each channel.",
+      "description": "Unified 4x8 three-tier hydro rack for NFT or DWC operation. Plant-site capacity is calculated from 6 in on-center spacing across each 4x8 tier.",
       "plantLocations": {
         "totalByClass": {
-          "leafy_greens": 128,
-          "herbs": 128
+          "leafy_greens": 384,
+          "herbs": 384
         },
         "source": "manual_override",
-        "notes": "Authoritative user-facing plant count. Overrides anything derived from tierCount x traysPerTier x plantsPerTrayByClass for UI labels and build planning."
+        "notes": "Authoritative user-facing plant count. 4x8 ft per tier at 6 in centers = 128 sites/tier; 3 tiers = 384 sites."
       },
       "suitableCropClasses": [
         "leafy_greens",
         "herbs"
       ],
       "footprintM": {
-        "length": 2.4,
-        "width": 1.2
+        "length": 2.44,
+        "width": 1.22
       },
       "heightM": 2.4,
       "tierCount": 3,
-      "traysPerTier": 10,
+      "traysPerTier": 8,
       "trayFormat": {
-        "lengthIn": 24,
-        "widthIn": 28,
-        "plantsPerTrayDefault": 30
+        "lengthIn": 48,
+        "widthIn": 24,
+        "plantsPerTrayDefault": 16
       },
       "plantsPerTrayByClass": {
-        "leafy_greens": 30,
-        "microgreens": 200,
-        "herbs": 15,
-        "fruiting": 4
+        "leafy_greens": 16,
+        "microgreens": 64,
+        "herbs": 16,
+        "fruiting": 0
       },
       "irrigation": {
         "type": "nft",
@@ -84,8 +84,8 @@
           "fruiting": 30
         },
         "efficacyUmolPerJ": 2.7,
-        "fixtureWattsNominal": 100,
-        "fixturesPerTierUnit": 2,
+        "fixtureWattsNominal": 240,
+        "fixturesPerTierUnit": 4,
         "photoperiodHoursByClass": {
           "leafy_greens": 16,
           "microgreens": 18,
@@ -112,27 +112,27 @@
         }
       },
       "requiredChannels": {
-        "lightsPerTier": 2,
+        "lightsPerTier": 4,
         "pumpsPer10kPlants": 2,
         "fansPer5Racks": 1,
         "sensorsPerZone": 2
       },
       "powerClassW": {
-        "lightsPerTierUnit": 200,
+        "lightsPerTierUnit": 960,
         "pumpsPer10kPlants": 450,
         "fansPerUnit": 80
       },
       "references": {
         "spec": "docs/features/VERTICAL_FARM_CALCULATOR_SPEC.md#hydroponic-system",
-        "notes": "Baseline template. Matches VFC \u00a7'Container-Scale System' 3-level assumption. Calibration of plantsPerTrayByClass for fruiting is nominal; fruiting crops are not recommended on this footprint."
+        "notes": "Merged NFT/DWC rack profile. Uses 4x8 footprint and 6 in on-center plant spacing. Lighting is normalized to 30 W/ft2 canopy rule across 3 tiers (96 ft2 canopy total)."
       },
       "image": "/images/grow-systems/nft-rack-3tier.jpg",
       "defaultCropClass": "leafy_greens",
-      "lightingSpecSummary": "LED bars, 2.7 umol/J efficacy, ~16 h photoperiod, 350 PPFD target for leafy greens.",
+      "lightingSpecSummary": "4x8 x 3-tier rack, 2.88 kW total LED (30 W/ft2 canopy), 2.7 umol/J, 16 h photoperiod, 350 PPFD target.",
       "spatialContract": {
         "unitFootprintM": {
-          "length": 2.4,
-          "width": 1.2,
+          "length": 2.44,
+          "width": 1.22,
           "height": 2.4
         },
         "workspaceClearanceM": {
@@ -142,51 +142,53 @@
         },
         "orientation": "butt_end_to_end",
         "plumbingSide": "wall",
-        "notes": "Three-tier NFT rack footprint matches DWC 4x8 raft pond (2.4m x 1.2m) so racks and ponds can be interchanged in a zone without rework. Racks butt end-to-end along a plumbing wall; operator aisle on the picking side."
+        "notes": "Unified NFT/DWC rack envelope. Racks butt end-to-end along a plumbing wall with one primary operator aisle on the picking side."
       }
     },
     {
       "id": "dwc-pond-4x8",
-      "name": "DWC Shallow Pond, 4x8",
+      "name": "NFT/DWC 3-Tier Grow Rack",
       "category": "dwc_pond",
-      "description": "Single-level deep water culture pond. 128 plant locations on floating rafts. Roots are suspended in aerated nutrient solution.",
+      "description": "Compatibility alias of the merged NFT/DWC rack profile. Retained for legacy references.",
+      "deprecated": true,
+      "mergedTemplateId": "nft-rack-3tier",
       "plantLocations": {
         "totalByClass": {
-          "leafy_greens": 128,
-          "herbs": 128
+          "leafy_greens": 384,
+          "herbs": 384
         },
         "source": "manual_override",
-        "notes": "Authoritative user-facing plant count. Overrides anything derived from tierCount x traysPerTier x plantsPerTrayByClass for UI labels and build planning."
+        "notes": "Alias of merged NFT/DWC rack profile. 4x8 ft per tier at 6 in centers = 128 sites/tier; 3 tiers = 384 sites."
       },
       "suitableCropClasses": [
         "leafy_greens",
         "herbs"
       ],
       "footprintM": {
-        "length": 2.4,
-        "width": 1.2
+        "length": 2.44,
+        "width": 1.22
       },
-      "heightM": 0.9,
-      "tierCount": 1,
-      "traysPerTier": 12,
+      "heightM": 2.4,
+      "tierCount": 3,
+      "traysPerTier": 8,
       "trayFormat": {
-        "lengthIn": 24,
-        "widthIn": 28,
-        "plantsPerTrayDefault": 24
+        "lengthIn": 48,
+        "widthIn": 24,
+        "plantsPerTrayDefault": 16
       },
       "plantsPerTrayByClass": {
-        "leafy_greens": 24,
-        "microgreens": 150,
-        "herbs": 12,
-        "fruiting": 4
+        "leafy_greens": 16,
+        "microgreens": 64,
+        "herbs": 16,
+        "fruiting": 0
       },
       "irrigation": {
-        "type": "dwc",
-        "supplyPumpWattsPer10kPlants": 200,
-        "returnPumpWattsPer10kPlants": 0,
-        "dutyCycle": 0.15,
-        "reservoirGalPerPlant": 2.0,
-        "plumbingCostPer10kPlantsUsd": 300
+        "type": "nft",
+        "supplyPumpWattsPer10kPlants": 300,
+        "returnPumpWattsPer10kPlants": 150,
+        "dutyCycle": 0.5,
+        "reservoirGalPerPlant": 1.0,
+        "plumbingCostPer10kPlantsUsd": 500
       },
       "transpiration": {
         "gPerPlantPerDayByClass": {
@@ -211,8 +213,8 @@
           "fruiting": 30
         },
         "efficacyUmolPerJ": 2.7,
-        "fixtureWattsNominal": 100,
-        "fixturesPerTierUnit": 2,
+        "fixtureWattsNominal": 240,
+        "fixturesPerTierUnit": 4,
         "photoperiodHoursByClass": {
           "leafy_greens": 16,
           "microgreens": 18,
@@ -239,28 +241,28 @@
         }
       },
       "requiredChannels": {
-        "lightsPerTier": 2,
-        "pumpsPer10kPlants": 1,
+        "lightsPerTier": 4,
+        "pumpsPer10kPlants": 2,
         "fansPer5Racks": 1,
         "sensorsPerZone": 2
       },
       "powerClassW": {
-        "lightsPerTierUnit": 200,
-        "pumpsPer10kPlants": 200,
+        "lightsPerTierUnit": 960,
+        "pumpsPer10kPlants": 450,
         "fansPerUnit": 80
       },
       "references": {
         "spec": "docs/features/VERTICAL_FARM_CALCULATOR_SPEC.md#hydroponic-system",
-        "notes": "Lower plumbing load than NFT but larger reservoir footprint (2 gal/plant). Single-tier; not suitable for vertical-only rooms with low ceilings."
+        "notes": "Legacy alias to preserve existing references while NFT + DWC are merged into one canonical 4x8 3-tier rack profile."
       },
       "image": "/images/grow-systems/dwc-pond-4x8.jpg",
       "defaultCropClass": "leafy_greens",
-      "lightingSpecSummary": "Horizontal LED canopy, 2.7 umol/J, 16 h photoperiod, 350 PPFD target.",
+      "lightingSpecSummary": "4x8 x 3-tier rack, 2.88 kW total LED (30 W/ft2 canopy), 2.7 umol/J, 16 h photoperiod, 350 PPFD target.",
       "spatialContract": {
         "unitFootprintM": {
-          "length": 2.4,
-          "width": 1.2,
-          "height": 0.9
+          "length": 2.44,
+          "width": 1.22,
+          "height": 2.4
         },
         "workspaceClearanceM": {
           "front": 0.9,
@@ -269,7 +271,7 @@
         },
         "orientation": "butt_end_to_end",
         "plumbingSide": "wall",
-        "notes": "Shallow DWC ponds butt end-to-end; single-tier canopy needs access on one long side only. Plumbing manifold routes along the wall-side."
+        "notes": "Alias copy of the merged NFT/DWC rack envelope for backward compatibility."
       }
     },
     {

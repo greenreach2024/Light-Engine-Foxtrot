@@ -188,21 +188,18 @@
     const totalHeatW = h.totalHeatW;
     const rows = [];
     if (Number.isFinite(kgDay)) {
-      // Server-side kgDay uses the derived count (tierCount x traysPerTier x
-      // plantsPerTrayByClass). Use the same count in the displayed formula so
-      // the equation balances, and show the authoritative override as a note
-      // when the two disagree.
-      const serverCount = Number.isFinite(derivedSites) ? derivedSites : null;
+      // Scoring now uses authoritative plantLocations.totalByClass when
+      // present, so show that count in the visible formula.
+      const plantCountForMath = Number.isFinite(authoritativeSites)
+        ? authoritativeSites
+        : (Number.isFinite(derivedSites) ? derivedSites : null);
       let derivation;
-      if (serverCount !== null && Number.isFinite(gPerPlant)) {
-        derivation = `${serverCount} plants \u00d7 ${gPerPlant} g/plant/day \u00f7 1000 = ${kgDay.toFixed(2)} kg/day`;
+      if (plantCountForMath !== null && Number.isFinite(gPerPlant)) {
+        derivation = `${plantCountForMath} plants \u00d7 ${gPerPlant} g/plant/day \u00f7 1000 = ${kgDay.toFixed(2)} kg/day`;
       } else {
         derivation = `${kgDay.toFixed(2)} kg/day (server-computed)`;
       }
-      const note = (Number.isFinite(authoritativeSites) && serverCount !== null && authoritativeSites !== serverCount)
-        ? `Daily latent load \u2014 sizes dehum. (Card shows ${authoritativeSites} authoritative plant sites; scoring uses ${serverCount} derived from tier \u00d7 tray \u00d7 perTray.)`
-        : 'Daily latent load \u2014 sizes dehum.';
-      rows.push(mathRow('Transpiration', derivation, note));
+      rows.push(mathRow('Transpiration', derivation, 'Daily latent load \u2014 sizes dehumidification.'));
     }
     if (Number.isFinite(lightingW) && Number.isFinite(volumeM3) && volumeM3 > 0) {
       const wPerM3 = h.wPerM3;
@@ -273,7 +270,8 @@
     `;
     const grid = mount.querySelector('[data-tg-grid]');
     try {
-      const [templates, rooms] = await Promise.all([fetchRegistry(), fetchRooms()]);
+      const [allTemplates, rooms] = await Promise.all([fetchRegistry(), fetchRooms()]);
+      const templates = allTemplates.filter((t) => !t?.deprecated);
       const room = roomScoringPayload(selectedRoom(rooms));
       const cards = await Promise.all(templates.map(async t => {
         const cropClass = t.defaultCropClass || (t.suitableCropClasses || [])[0] || 'leafy_greens';
