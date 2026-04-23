@@ -1321,6 +1321,19 @@
       this.loadCatalog();
     },
 
+    getSkuThumbnailUrl(sku) {
+      if (sku?.thumbnail_url) return sku.thumbnail_url;
+      const raw = String(sku?.product_name || '').trim().toLowerCase();
+      const slug = raw.replace(/\s+/g, '-');
+      const aliases = {
+        'baby-pak-choi': 'little-gem',
+        'pak-choi': 'little-gem',
+        'bok-choy': 'little-gem'
+      };
+      const resolved = aliases[slug] || slug;
+      return '/product-images/crops/' + encodeURIComponent(resolved) + '.webp';
+    },
+
     renderCatalog() {
       const sortBy = document.getElementById('sort-by')?.value || 'name';
       const sorted = [...this.catalog].sort((a, b) => {
@@ -1343,7 +1356,7 @@
         .map(
           (sku) => `
           <div class="sku-card">
-            <div class="sku-thumbnail"><img src="${sku.thumbnail_url ? escapeAttr(sku.thumbnail_url) : '/product-images/crops/' + encodeURIComponent(sku.product_name.toLowerCase().replace(/\s+/g, '-')) + '.webp'}" alt="${escapeAttr(sku.product_name)}" loading="lazy" onerror="this.onerror=null;this.src=&quot;/images/default-product.svg&quot;" /></div>
+            <div class="sku-thumbnail"><img src="${escapeAttr(this.getSkuThumbnailUrl(sku))}" alt="${escapeAttr(sku.product_name)}" loading="lazy" onerror="this.onerror=null;this.src=&quot;/images/default-product.svg&quot;" /></div>
             <div class="sku-header">
               <div class="sku-name-row">
                 <span class="sku-name">${escapeHtml(sku.product_name)}</span>

@@ -164,7 +164,17 @@ export async function authenticateBuyer({ email, password }) {
   // (Cloud Run multi-instance: another instance may have updated the password)
   if (isDatabaseAvailable()) {
     try {
-      const result = await query('SELECT * FROM wholesale_buyers WHERE LOWER(email) = $1 LIMIT 1', [normalizedEmail]);
+      const result = await query(
+        `SELECT *
+           FROM wholesale_buyers
+          WHERE LOWER(email) = $1
+          ORDER BY
+            CASE WHEN status = 'active' THEN 0 ELSE 1 END,
+            updated_at DESC NULLS LAST,
+            created_at DESC NULLS LAST
+          LIMIT 1`,
+        [normalizedEmail]
+      );
       if (result.rows.length > 0) {
         buyer = hydrateRowIntoMaps(result.rows[0], { force: true });
       } else if (!buyer) {

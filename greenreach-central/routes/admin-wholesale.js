@@ -188,6 +188,12 @@ router.post('/buyers/reset-password', async (req, res) => {
                     message: 'Selected buyer does not match the provided email'
                 });
             }
+            if (updated) {
+                // Defensive sync for legacy duplicate-email rows.
+                // Login reads by normalized email, so ensure every matching
+                // row now carries the same hash as the selected buyer.
+                await resetBuyerPassword(String(updated.email || '').trim().toLowerCase(), passwordHash);
+            }
         } else {
             // Backward compatibility for older clients that only send email.
             updated = await resetBuyerPassword(normalizedEmail, passwordHash);
