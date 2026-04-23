@@ -7474,6 +7474,14 @@ app.post('/api/setup/save-rooms', asyncHandler(async (req, res) => {
     const payload = JSON.stringify({ rooms }, null, 2);
     await writeJsonQueued(fullPath, payload);
     console.log(`[setup/save-rooms] Saved ${rooms.length} room(s) to rooms.json`);
+
+    // Notify SSE subscribers (3D viewer, dashboards) so room/zone edits from
+    // setup, EVIE, and admin flows appear immediately instead of waiting for
+    // the low-frequency poll refresh window.
+    const nowIso = new Date().toISOString();
+    emitDataChange({ kind: 'rooms', updatedAt: nowIso, source: 'setup-save-rooms' });
+    emitDataChange({ kind: 'zones', updatedAt: nowIso, source: 'setup-save-rooms' });
+
     res.json({ success: true, saved: rooms.length });
   } catch (err) {
     console.error('[setup/save-rooms] Error:', err);
