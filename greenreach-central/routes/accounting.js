@@ -2301,14 +2301,18 @@ router.get('/farm-payouts/outstanding', async (_req, res) => {
  *
  * Body: { farm_id, farm_name?, amount, order_id?, payout_id?, currency?, provider?, memo? }
  *
- * Idempotency: the downstream connector keys on (payout_id || order_id,
- * farm_id, amount). Supplying a stable, unique `payout_id` (e.g. the
- * Square payout id, an internal settlement UUID, or a
- * `YYYYMMDD-farm_id-N` style string) is the ONLY way to settle the same
- * (order_id, farm_id, amount) twice — a second call with the same
- * effective key is silently deduped. Defaults for `payout_id` and
- * `order_id` are deterministic (derived from farm_id + amount) so naive
- * retries and double-clicks can't double-post.
+ * Idempotency: the downstream connector hashes on
+ * (order_id, farm_id, amount). To let callers record multiple distinct
+ * settlements for the same logical order (split deliveries, reissue
+ * after cancel, multiple manual adjustments), this route COMPOSES the
+ * downstream order_id from `order_id` + `payout_id` when both are
+ * supplied. When only one of the two is supplied it's used directly;
+ * when neither is supplied a deterministic `manual-<farm_id>-<amount>`
+ * default is used so naive retries and double-clicks still dedupe.
+ *
+ * To settle the same (order_id, farm_id, amount) tuple twice, supply a
+ * stable, unique `payout_id` on each call (e.g. the Square payout id,
+ * an internal settlement UUID, or a `YYYYMMDD-farm_id-N` string).
  */
 router.post('/farm-payouts', async (req, res) => {
   if (!await isDatabaseAvailable()) {
@@ -2323,24 +2327,28 @@ router.post('/farm-payouts', async (req, res) => {
     return res.status(400).json({ ok: false, error: 'amount_must_be_positive_number' });
   }
   try {
-    // Defaults must be deterministic — a Date.now()-based default would
-    // mint a new idempotency key on every retry, bypassing the
-    // ON CONFLICT (idempotency_key) guard in ingestFarmPayout and
-    // double-posting the ledger entry on network retries or user
-    // double-clicks. We derive from farm_id + amount so the same logical
-    // manual payout hashes to the same key every time; callers who need
-    // to record multiple distinct settlements for the same tuple MUST
-    // provide an explicit payout_id or order_id.
+    // Compose a disambiguated effectiveOrderId so the connector's
+    // (order_id, farm_id, amount) idempotency key can distinguish
+    // multiple settlements for the same logical order. The connector
+    // itself preserves backward compat with existing wholesale rows by
+    // keying on order_id alone — so the per-settlement distinction
+    // happens HERE in the route, not in the connector. Defaults are
+    // deterministic (derived from farm_id + amount) so retries and
+    // double-clicks still dedupe when the caller provides no identifiers.
     const amountKey = amt.toFixed(2);
-    const effectiveOrderId = order_id || `manual-${farm_id}-${amountKey}`;
-    // Chain order_id into the payout_id default so the downstream
-    // (payoutIdKey || order_id) fallback in ingestFarmPayout actually
-    // takes effect when a caller supplies order_id but no payout_id.
-    // Otherwise the always-truthy `manual-<farm_id>-<amount>` default
-    // defeats that fallback and two distinct settlements for the same
-    // (farm_id, amount) with different order_ids would hash to the
-    // same idempotency key and silently dedupe.
-    const effectivePayoutId = payout_id || order_id || `manual-${farm_id}-${amountKey}`;
+    let effectiveOrderId;
+    if (order_id && payout_id) {
+      effectiveOrderId = `${order_id}#${payout_id}`;
+    } else if (order_id) {
+      effectiveOrderId = order_id;
+    } else if (payout_id) {
+      effectiveOrderId = payout_id;
+    } else {
+      effectiveOrderId = `manual-${farm_id}-${amountKey}`;
+    }
+    // payout_id is still passed to the connector for metadata/audit even
+    // though it no longer drives the idempotency key.
+    const effectivePayoutId = payout_id || order_id || effectiveOrderId;
     const result = await ingestFarmPayout({
       payout_id: effectivePayoutId,
       order_id: effectiveOrderId,
@@ -2354,8 +2362,16 @@ router.post('/farm-payouts', async (req, res) => {
       return res.status(500).json({ ok: false, error: 'payout_ingest_failed', reason: result.reason });
     }
     if (memo && result.transaction_id) {
+      // Append the caller's memo to the per-line descriptions the
+      // connector already wrote ("Payout to {farm}" on the debit line,
+      // "Farm payout — {provider}" on the credit line) instead of
+      // clobbering them — preserves the double-entry distinction that
+      // matters for audit. COALESCE guards against NULL rows returning
+      // NULL from string concatenation.
       await query(
-        `UPDATE accounting_entries SET memo = $1 WHERE transaction_id = $2`,
+        `UPDATE accounting_entries
+            SET memo = COALESCE(memo || ' | ', '') || $1
+          WHERE transaction_id = $2`,
         [String(memo).slice(0, 500), result.transaction_id]
       ).catch(() => null);
     }

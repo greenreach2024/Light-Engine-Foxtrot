@@ -318,14 +318,17 @@ export async function ingestFarmPayout({
     if (!_isDatabaseAvailable || !(await _isDatabaseAvailable())) return { ok: false, reason: 'db_unavailable' };
 
     const crypto = await import('crypto');
-    // Idempotency key prefers payout_id when provided so that two separate
-    // settlements of the same (order_id, farm_id, amount) — e.g. split
-    // deliveries or a re-issue after a cancel — aren't silently deduped.
-    // Callers that don't have a stable payout_id fall back to order_id,
-    // which preserves the previous behaviour for single-settlement flows.
-    const payoutIdKey = payout_id && String(payout_id).trim() ? String(payout_id).trim() : null;
+    // Idempotency key hashes on order_id (+ farm_id + amount) — this matches
+    // the pre-existing format so retries for rows already written by the
+    // wholesale payout flow (routes/wholesale.js:~4302, always supplies a
+    // payout_id that differs from order_id) still dedupe correctly after
+    // this change ships. Callers that need per-settlement distinction for
+    // the same (order_id, farm_id, amount) tuple — e.g. split deliveries,
+    // reissue-after-cancel, multiple manual settlements — are expected to
+    // pass distinct order_ids (the /farm-payouts POST endpoint composes
+    // `order_id + payout_id` for them when both are supplied).
     const idempotencyKey = crypto.createHash('sha256')
-      .update(`farm_payout|${payoutIdKey || order_id}|${farm_id}|${Number(amount).toFixed(2)}`)
+      .update(`farm_payout|${order_id}|${farm_id}|${Number(amount).toFixed(2)}`)
       .digest('hex');
 
     const sourceKey = `payout_${provider}`;
