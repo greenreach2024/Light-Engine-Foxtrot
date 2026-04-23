@@ -421,10 +421,15 @@ async function resolveOptionalBuyerFromRequest(req) {
     const buyerId = String(payload?.sub || '').trim();
     if (!buyerId) return null;
 
-    let buyer = getBuyerById(buyerId);
+    // Prefer an authoritative DB read first so radius checks do not rely on
+    // stale in-memory buyer location values after profile/address updates.
+    let buyer = await hydrateBuyerById(buyerId);
     if (!buyer) {
-      await loadBuyersFromDb();
       buyer = getBuyerById(buyerId);
+      if (!buyer) {
+        await loadBuyersFromDb();
+        buyer = getBuyerById(buyerId);
+      }
     }
     return buyer || null;
   } catch {
@@ -887,6 +892,7 @@ function isBuyerGeocodeResultValid(result, expected) {
   if (!result || typeof result !== 'object') return false;
 
   const address = (result.address && typeof result.address === 'object') ? result.address : {};
+  let postalMatched = false;
 
   if (expected.countryCodes) {
     const resultCountryCode = String(address.country_code || '').toLowerCase();
@@ -900,6 +906,7 @@ function isBuyerGeocodeResultValid(result, expected) {
       if (expectedPostal !== resultPostal && expectedPostal.slice(0, 3) !== resultPostal.slice(0, 3)) {
         return false;
       }
+      postalMatched = true;
     }
   }
 
@@ -911,7 +918,9 @@ function isBuyerGeocodeResultValid(result, expected) {
         || address.state_district
         || ''
     );
-    if (expectedState && resultState && expectedState !== resultState) return false;
+    // Postal codes are more specific than province/state values. If postal
+    // already matched, tolerate stale state mismatches in legacy buyer rows.
+    if (expectedState && resultState && expectedState !== resultState && !postalMatched) return false;
   }
 
   return true;
@@ -4855,21 +4864,68 @@ router.get('/network/farms', async (req, res, next) => {
       }
     }
 
-    // Resolve buyer coordinates: explicit nearLat/nearLng query params
-    // win so the portal can pass a pending registration coordinate; fall
-    // back to the authenticated buyer's persisted coordinates so that a
-    // signed-in buyer always gets a service-radius-filtered network view
-    // even without passing query params.
+    // Resolve buyer coordinates with authenticated profile taking
+    // precedence over query params. This prevents stale client-cached
+    // coordinates from forcing false "out of range" results when a
+    // signed-in buyer has an updated location on file.
     const nearLat = Number(req.query.nearLat ?? req.query.lat);
     const nearLng = Number(req.query.nearLng ?? req.query.lng);
-    let buyerCoords = (Number.isFinite(nearLat) && Number.isFinite(nearLng))
+    const queryCoords = (Number.isFinite(nearLat) && Number.isFinite(nearLng))
       ? { latitude: nearLat, longitude: nearLng }
       : null;
-    if (!buyerCoords) {
-      const buyer = await resolveOptionalBuyerFromRequest(req);
-      if (buyer?.location) {
-        buyerCoords = extractCoordinates(buyer.location);
+
+    let resolvedBuyer = await resolveOptionalBuyerFromRequest(req);
+    let buyerCoords = null;
+    if (resolvedBuyer?.location) {
+      buyerCoords = extractCoordinates(resolvedBuyer.location);
+
+      const locationHint = {
+        address1: trimField(
+          resolvedBuyer.location.address1
+          || resolvedBuyer.location.address
+          || resolvedBuyer.location.street
+        ) || null,
+        city: trimField(resolvedBuyer.location.city) || null,
+        state: trimField(resolvedBuyer.location.state || resolvedBuyer.location.province) || null,
+        postalCode: normalizePostalCode(
+          resolvedBuyer.location.postalCode || resolvedBuyer.location.zip
+        ) || null,
+        country: trimField(resolvedBuyer.location.country) || 'Canada'
+      };
+
+      if (locationHint.address1 || locationHint.city || locationHint.postalCode) {
+        const geocoded = await geocodeBuyerLocation(locationHint);
+        if (geocoded) {
+          const driftKm = buyerCoords
+            ? haversineDistanceKm(
+                buyerCoords.latitude,
+                buyerCoords.longitude,
+                geocoded.latitude,
+                geocoded.longitude
+              )
+            : null;
+          const shouldHeal = !buyerCoords || (Number.isFinite(driftKm) && driftKm > 5);
+          if (shouldHeal) {
+            buyerCoords = geocoded;
+            try {
+              await updateBuyer(resolvedBuyer.id, {
+                location: {
+                  ...(resolvedBuyer.location || {}),
+                  ...locationHint,
+                  latitude: geocoded.latitude,
+                  longitude: geocoded.longitude
+                }
+              });
+            } catch (healErr) {
+              console.warn('[Wholesale Network] buyer location heal failed:', healErr.message);
+            }
+          }
+        }
       }
+    }
+
+    if (!buyerCoords && queryCoords) {
+      buyerCoords = queryCoords;
     }
 
     const radiusKm = resolveBuyerServiceRadiusKm();

@@ -11,6 +11,7 @@ import {
   listAllBuyers,
   getBuyerById,
   resetBuyerPassword,
+    resetBuyerPasswordById,
   deactivateBuyer,
   reactivateBuyer,
   hydrateBuyerById,
@@ -156,12 +157,14 @@ router.post('/buyers/reset-password', async (req, res) => {
                 message: 'Database not available'
             });
         }
-        const { email, newPassword } = req.body;
+        const { email, buyerId, newPassword } = req.body || {};
+        const normalizedEmail = String(email || '').trim().toLowerCase();
+        const normalizedBuyerId = String(buyerId || '').trim();
         
-        if (!email || !newPassword) {
+        if ((!normalizedEmail && !normalizedBuyerId) || !newPassword) {
             return res.status(400).json({
                 status: 'error',
-                message: 'Email and new password are required'
+                message: 'buyerId or email and new password are required'
             });
         }
         
@@ -174,9 +177,27 @@ router.post('/buyers/reset-password', async (req, res) => {
         
         // Hash the new password
         const passwordHash = await bcrypt.hash(newPassword, 10);
-        
-        // Update buyer password in memory store + DB
-        const updated = await resetBuyerPassword(email, passwordHash);
+
+        let updated = null;
+        // Prefer buyerId to guarantee we reset the exact selected account.
+        if (normalizedBuyerId) {
+            updated = await resetBuyerPasswordById(normalizedBuyerId, passwordHash);
+            if (updated && normalizedEmail && String(updated.email || '').trim().toLowerCase() !== normalizedEmail) {
+                return res.status(409).json({
+                    status: 'error',
+                    message: 'Selected buyer does not match the provided email'
+                });
+            }
+            if (updated) {
+                // Defensive sync for legacy duplicate-email rows.
+                // Login reads by normalized email, so ensure every matching
+                // row now carries the same hash as the selected buyer.
+                await resetBuyerPassword(String(updated.email || '').trim().toLowerCase(), passwordHash);
+            }
+        } else {
+            // Backward compatibility for older clients that only send email.
+            updated = await resetBuyerPassword(normalizedEmail, passwordHash);
+        }
         
         if (!updated) {
             return res.status(404).json({
@@ -187,7 +208,11 @@ router.post('/buyers/reset-password', async (req, res) => {
         
         res.json({
             status: 'ok',
-            message: 'Password reset successfully'
+            message: 'Password reset successfully',
+            data: {
+                buyerId: updated.id,
+                email: updated.email
+            }
         });
     } catch (error) {
         const message = error?.message || '';

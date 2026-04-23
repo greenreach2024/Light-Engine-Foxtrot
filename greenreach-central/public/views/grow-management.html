@@ -701,8 +701,8 @@
   <script src="/app.foxtrot.js?v=20260419-standalone-panel-fix" defer></script>
   <script src="/groups-v2.js?v=20260421-authfetch-v1" defer></script>
   <script src="/lib/room-layout-solver.js?v=20260421-rls-v1" defer></script>
-  <script src="/views/grow-management-template-gallery.js?v=20260421-tg-v2" defer></script>
-  <script src="/views/grow-management-room-build-plan.js?v=20260421-rbp-v3" defer></script>
+  <script src="/views/grow-management-template-gallery.js?v=20260423-tg-v3" defer></script>
+  <script src="/views/grow-management-room-build-plan.js?v=20260423-rbp-v4" defer></script>
   <script src="/js/spatial-viewer-popup.js?v=20260421-svp-v1" defer></script>
 </head>
 <body class="le-theme">
@@ -927,9 +927,9 @@
         <!-- ===== IDENTITY + ACTIONS (advanced / inline editor) ===== -->
         <details class="gm-card" id="groupsV2PlanFormWrap" style="padding:12px 14px;">
           <summary style="cursor:pointer;color:#e2e8f0;font-weight:600;font-size:0.95rem;">
-            Advanced: manual group editor
+             Advanced: edit & deploy groups
             <span class="tiny text-muted" style="font-weight:400;margin-left:6px;">
-              (prefer the Build Stock Groups card above for new groups)
+               (load/edit/deploy existing groups created via Build Growing Units)
             </span>
           </summary>
         <div id="groupsV2PlanForm" style="display:flex;flex-direction:column;gap:16px;margin-top:12px;">
@@ -949,7 +949,7 @@
               <input id="groupsV2ZoneName" type="text" placeholder="Propagation North - Bench A">
             </label>
             <div class="row" style="gap:8px;flex-wrap:wrap;">
-              <button id="groupsV2SaveGroup" type="button" class="primary">Save Group</button>
+               <button id="groupsV2SaveGroup" type="button" class="primary" style="display:none;" aria-label="Deprecated: use Build Growing Units to create new groups">Save Group</button>
               <!-- The secondary "Build Stock Groups" button was removed to stop
                    two identical cards from appearing on step 3. The primary
                    entry point is #buildStockGroupsCardOpenBtn in the
@@ -1331,6 +1331,16 @@
     }
 
     document.addEventListener('groups-updated', updateGrowKPIs);
+    if (window.DataFlowBus && typeof window.DataFlowBus.on === 'function') {
+      window.DataFlowBus.on('groups', function () { updateGrowKPIs(); });
+      window.DataFlowBus.on('rooms', function () {
+        updateGrowKPIs();
+        try { ffFlow.refresh(); } catch (_) {}
+      });
+      window.DataFlowBus.on('zones', function () {
+        try { ffFlow.refresh(); } catch (_) {}
+      });
+    }
     // Also run after initial load
     window.addEventListener('load', function() {
       setTimeout(updateGrowKPIs, 2000);

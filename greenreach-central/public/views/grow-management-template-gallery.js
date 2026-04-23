@@ -64,14 +64,26 @@
   async function fetchRooms() {
     try {
       const _f = window.authFetch || fetch;
-      const res = await _f('/api/rooms', { credentials: 'same-origin' });
-      if (!res.ok) return [];
-      const body = await res.json();
-      if (Array.isArray(body)) return body;
-      if (Array.isArray(body.rooms)) return body.rooms;
-      if (Array.isArray(body.items)) return body.items;
-      return [];
+      const bust = (url) => (window.DataFlowBus && window.DataFlowBus.cacheBust)
+        ? window.DataFlowBus.cacheBust(url)
+        : url;
+      async function fetchOne(url) {
+        const res = await _f(bust(url), { credentials: 'same-origin', cache: 'no-store' });
+        if (!res.ok) return [];
+        const body = await res.json();
+        if (Array.isArray(body)) return body;
+        if (Array.isArray(body.rooms)) return body.rooms;
+        if (Array.isArray(body.items)) return body.items;
+        return [];
+      }
+      let rooms = await fetchOne('/data/rooms.json');
+      if (!rooms.length) rooms = await fetchOne('/api/rooms');
+      if (!rooms.length && Array.isArray(window.__ffFlowRooms)) rooms = window.__ffFlowRooms;
+      if (!rooms.length && window.STATE && Array.isArray(window.STATE.rooms)) rooms = window.STATE.rooms;
+      return Array.isArray(rooms) ? rooms : [];
     } catch (_) {
+      if (Array.isArray(window.__ffFlowRooms) && window.__ffFlowRooms.length) return window.__ffFlowRooms;
+      if (window.STATE && Array.isArray(window.STATE.rooms) && window.STATE.rooms.length) return window.STATE.rooms;
       return [];
     }
   }
@@ -79,17 +91,38 @@
   function selectedRoom(rooms) {
     const sel = document.getElementById(ROOM_SELECT_ID);
     const id = sel && sel.value;
-    if (!id) return null;
-    return rooms.find(r => r.id === id || r.name === id) || null;
+    const normalize = (value) => String(value || '').trim().toLowerCase();
+    const roomKeys = (room) => [room?.id, room?.room_id, room?.roomId, room?.name, room?.room_name];
+    const hasRealDims = (room) => {
+      const dims = room?.dimensions || room?.dims || {};
+      const len = Number(dims.lengthM ?? dims.length_m ?? room?.lengthM ?? room?.length_m ?? room?.length);
+      const wid = Number(dims.widthM ?? dims.width_m ?? room?.widthM ?? room?.width_m ?? room?.width);
+      const hgt = Number(
+        dims.ceilingHeightM ?? dims.heightM ?? dims.ceilingM ?? dims.height_m ?? dims.ceiling_height_m
+          ?? room?.ceilingHeightM ?? room?.ceiling_height_m ?? room?.height_m ?? room?.height
+      );
+      return [len, wid, hgt].every(v => Number.isFinite(v) && v > 0);
+    };
+
+    if (id) {
+      const wanted = normalize(id);
+      const matched = rooms.find((room) => roomKeys(room).some((key) => normalize(key) === wanted));
+      if (matched) return matched;
+    }
+
+    return rooms.find(hasRealDims) || rooms[0] || null;
   }
 
   function roomScoringPayload(room) {
     if (!room) return null;
     // Room schema varies; normalize.
     const dims = room.dimensions || room.dims || {};
-    const len = Number(dims.lengthM ?? dims.length_m ?? room.lengthM);
-    const wid = Number(dims.widthM ?? dims.width_m ?? room.widthM);
-    const hgt = Number(dims.ceilingHeightM ?? dims.heightM ?? dims.ceilingM ?? room.ceilingHeightM);
+    const len = Number(dims.lengthM ?? dims.length_m ?? room.lengthM ?? room.length_m ?? room.length);
+    const wid = Number(dims.widthM ?? dims.width_m ?? room.widthM ?? room.width_m ?? room.width);
+    const hgt = Number(
+      dims.ceilingHeightM ?? dims.heightM ?? dims.ceilingM ?? dims.height_m ?? dims.ceiling_height_m
+        ?? room.ceilingHeightM ?? room.ceiling_height_m ?? room.height_m ?? room.height
+    );
     const envelope = room.envelope?.class || room.envelopeClass || 'typical';
     const supplyCFM = Number(room.supplyCFM ?? room.supply_cfm ?? 0) || null;
     const out = {};
@@ -115,7 +148,7 @@
     return data.scores;
   }
 
-  function renderCard(template, scores) {
+  function renderCard(template, scores, templateNameById) {
     const cropClass = template.defaultCropClass || (template.suitableCropClasses || [])[0] || 'leafy_greens';
     const footprintStr = template.footprintM
       ? `${template.footprintM.length} m \u00d7 ${template.footprintM.width} m \u00d7 ${template.heightM || '?'} m`
@@ -135,11 +168,13 @@
       <article class="tg-card" data-template-id="${template.id}" tabindex="0" role="button" aria-label="Select ${template.name}">
         <div class="tg-card__art">
           <img src="${template.image || ''}" alt="" loading="lazy">
+          ${template.deprecated ? `<div style="position:absolute;top:8px;right:8px;background:#ef4444;color:#fff;font-size:0.65rem;padding:4px 8px;border-radius:4px;font-weight:600;text-transform:uppercase;">Deprecated</div>` : ''}
         </div>
         <div class="tg-card__body">
           <header class="tg-card__head">
-            <h3>${template.name}</h3>
+            <h3>${template.name}${template.deprecated ? ' <span style="color:#f87171">(Legacy)</span>' : ''}</h3>
             ${template.tagline ? `<p class="tg-card__tagline">${template.tagline}</p>` : ''}
+            ${template.deprecated && template.mergedTemplateId ? `<p class="tg-card__tagline" style="color:#fca5a5;">Merged into <strong>${templateNameById[template.mergedTemplateId] || template.mergedTemplateId}</strong></p>` : ''}
           </header>
           <dl class="tg-card__specs">
             <div><dt>Dimensions</dt><dd>${footprintStr}</dd></div>
@@ -188,21 +223,18 @@
     const totalHeatW = h.totalHeatW;
     const rows = [];
     if (Number.isFinite(kgDay)) {
-      // Server-side kgDay uses the derived count (tierCount x traysPerTier x
-      // plantsPerTrayByClass). Use the same count in the displayed formula so
-      // the equation balances, and show the authoritative override as a note
-      // when the two disagree.
-      const serverCount = Number.isFinite(derivedSites) ? derivedSites : null;
+      // Scoring now uses authoritative plantLocations.totalByClass when
+      // present, so show that count in the visible formula.
+      const plantCountForMath = Number.isFinite(authoritativeSites)
+        ? authoritativeSites
+        : (Number.isFinite(derivedSites) ? derivedSites : null);
       let derivation;
-      if (serverCount !== null && Number.isFinite(gPerPlant)) {
-        derivation = `${serverCount} plants \u00d7 ${gPerPlant} g/plant/day \u00f7 1000 = ${kgDay.toFixed(2)} kg/day`;
+      if (plantCountForMath !== null && Number.isFinite(gPerPlant)) {
+        derivation = `${plantCountForMath} plants \u00d7 ${gPerPlant} g/plant/day \u00f7 1000 = ${kgDay.toFixed(2)} kg/day`;
       } else {
         derivation = `${kgDay.toFixed(2)} kg/day (server-computed)`;
       }
-      const note = (Number.isFinite(authoritativeSites) && serverCount !== null && authoritativeSites !== serverCount)
-        ? `Daily latent load \u2014 sizes dehum. (Card shows ${authoritativeSites} authoritative plant sites; scoring uses ${serverCount} derived from tier \u00d7 tray \u00d7 perTray.)`
-        : 'Daily latent load \u2014 sizes dehum.';
-      rows.push(mathRow('Transpiration', derivation, note));
+      rows.push(mathRow('Transpiration', derivation, 'Daily latent load \u2014 sizes dehumidification.'));
     }
     if (Number.isFinite(lightingW) && Number.isFinite(volumeM3) && volumeM3 > 0) {
       const wPerM3 = h.wPerM3;
@@ -273,16 +305,19 @@
     `;
     const grid = mount.querySelector('[data-tg-grid]');
     try {
-      const [templates, rooms] = await Promise.all([fetchRegistry(), fetchRooms()]);
+      const [allTemplates, rooms] = await Promise.all([fetchRegistry(), fetchRooms()]);
+      // Include deprecated templates but mark them visually; users should be able to edit legacy rooms
+      const templates = allTemplates; // All templates, including deprecated
       const room = roomScoringPayload(selectedRoom(rooms));
+      const templateNameById = Object.fromEntries(templates.map((template) => [template.id, template.name]));
       const cards = await Promise.all(templates.map(async t => {
         const cropClass = t.defaultCropClass || (t.suitableCropClasses || [])[0] || 'leafy_greens';
         try {
           const scores = await scoreTemplate(t.id, cropClass, room);
-          return renderCard(t, scores);
+          return renderCard(t, scores, templateNameById);
         } catch (err) {
           console.warn('[template-gallery] score failed for', t.id, err);
-          return renderCard(t, null);
+          return renderCard(t, null, templateNameById);
         }
       }));
       grid.innerHTML = cards.join('');

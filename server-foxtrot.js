@@ -2779,6 +2779,22 @@ function needPinOrApiKey(req, res) {
       || (rawAuth.toLowerCase().startsWith('bearer ') ? rawAuth.slice(7) : '');
     if (providedKey && String(providedKey) === configuredKey) return false;
   }
+
+  // Browser writes from authenticated farm/admin sessions use Bearer JWTs.
+  // Accept a valid non-viewer JWT here so /data/groups.json does not require
+  // operators to manually carry farm PIN query params in every page.
+  try {
+    const rawAuth = req.headers['authorization'] || '';
+    if (rawAuth.toLowerCase().startsWith('bearer ')) {
+      const token = rawAuth.slice(7);
+      const decoded = jwt.verify(token, JWT_SECRET_KEY);
+      const role = String(decoded?.role || '').toLowerCase();
+      if (decoded && role !== 'viewer') return false;
+    }
+  } catch (_) {
+    // Ignore JWT parse/verify errors and continue to deny below.
+  }
+
   res.status(403).json({ ok: false, error: 'pin-or-api-key-required' });
   return true;
 }
@@ -7450,14 +7466,69 @@ app.get('/api/hardware/scan', asyncHandler(async (req, res) => {
 // Save rooms endpoint (matches greenreach-central route for cross-mode compatibility)
 app.post('/api/setup/save-rooms', asyncHandler(async (req, res) => {
   try {
-    const rooms = req.body?.rooms;
-    if (!Array.isArray(rooms)) {
+    const incomingRooms = req.body?.rooms;
+    if (!Array.isArray(incomingRooms)) {
       return res.status(400).json({ success: false, message: 'rooms array required' });
     }
+
+    const roomKey = (room) => String(
+      room?.id || room?.room_id || room?.roomId || room?.name || room?.room_name || ''
+    ).trim().toLowerCase();
+    const mergeRoom = (existing, incoming) => {
+      const merged = { ...(existing || {}), ...(incoming || {}) };
+
+      // Preserve canonical geometry when incoming payload is sparse.
+      const existingDims = (existing && (existing.dimensions || existing.dims)) || {};
+      const incomingDims = (incoming && (incoming.dimensions || incoming.dims)) || {};
+      merged.dimensions = { ...existingDims, ...incomingDims };
+
+      if (incoming?.length_m == null && existing?.length_m != null) merged.length_m = existing.length_m;
+      if (incoming?.width_m == null && existing?.width_m != null) merged.width_m = existing.width_m;
+      if (incoming?.ceiling_height_m == null && existing?.ceiling_height_m != null) merged.ceiling_height_m = existing.ceiling_height_m;
+
+      // Preserve richer planner payloads when a caller only updates room shells.
+      if (!incoming || typeof incoming !== 'object') {
+        merged.buildPlan = existing?.buildPlan;
+        merged.installedSystems = existing?.installedSystems;
+        merged.equipment = existing?.equipment;
+      } else {
+        if (incoming.buildPlan == null && existing?.buildPlan != null) merged.buildPlan = existing.buildPlan;
+        if (incoming.installedSystems == null && existing?.installedSystems != null) merged.installedSystems = existing.installedSystems;
+        if (incoming.equipment == null && existing?.equipment != null) merged.equipment = existing.equipment;
+      }
+
+      return merged;
+    };
+
+    const persisted = readJSON('rooms.json', { rooms: [] });
+    const existingRooms = Array.isArray(persisted)
+      ? persisted
+      : (persisted && Array.isArray(persisted.rooms) ? persisted.rooms : []);
+
+    const existingByKey = new Map();
+    existingRooms.forEach((room) => {
+      const key = roomKey(room);
+      if (key) existingByKey.set(key, room);
+    });
+
+    const rooms = incomingRooms.map((room) => {
+      const key = roomKey(room);
+      if (!key) return room;
+      return mergeRoom(existingByKey.get(key), room);
+    });
+
     const fullPath = path.join(DATA_DIR, 'rooms.json');
     const payload = JSON.stringify({ rooms }, null, 2);
     await writeJsonQueued(fullPath, payload);
     console.log(`[setup/save-rooms] Saved ${rooms.length} room(s) to rooms.json`);
+
+    // Notify SSE subscribers (3D viewer, dashboards) so room/zone edits from
+    // setup, EVIE, and admin flows appear immediately instead of waiting for
+    // the low-frequency poll refresh window.
+    const nowIso = new Date().toISOString();
+    emitDataChange({ kind: 'rooms', updatedAt: nowIso, source: 'setup-save-rooms' });
+    emitDataChange({ kind: 'zones', updatedAt: nowIso, source: 'setup-save-rooms' });
+
     res.json({ success: true, saved: rooms.length });
   } catch (err) {
     console.error('[setup/save-rooms] Error:', err);
@@ -8077,10 +8148,14 @@ let credentialManager = null;
 // Initialize certificate and credential managers
 async function initializeSecurity() {
   if (!certificateManager) {
+    const centralUrl = process.env.GREENREACH_CENTRAL_URL || process.env.CENTRAL_URL;
+    if (!centralUrl) {
+      console.warn('[security] GREENREACH_CENTRAL_URL or CENTRAL_URL not set; certificate manager may not function correctly');
+    }
     certificateManager = new CertificateManager({
       farmId: process.env.FARM_ID || 'unknown',
       certDir: process.env.CERT_DIR || '/etc/greenreach/certs',
-      centralUrl: process.env.GREENREACH_CENTRAL_URL || 'https://api.greenreach.com',
+      centralUrl: centralUrl || process.env.CENTRAL_URL || 'https://api.greenreach.com',
       apiKey: process.env.GREENREACH_API_KEY,
       renewBeforeDays: 30,
       checkInterval: 24 * 60 * 60 * 1000 // 24 hours
@@ -12498,9 +12573,14 @@ app.post('/api/ai/recommendations/receive', async (req, res) => {
  * Runs on startup (after 2 min) and daily. Also callable via POST endpoint.
  */
 (function wireHarvestScheduleReporter() {
-  const CENTRAL_URL = process.env.CENTRAL_URL || process.env.GREENREACH_CENTRAL_URL || 'https://greenreachgreens.com';
+  const CENTRAL_URL = process.env.CENTRAL_URL || process.env.GREENREACH_CENTRAL_URL;
   const EDGE_API_KEY = process.env.GREENREACH_API_KEY || process.env.EDGE_API_KEY || '';
   const FARM_ID = process.env.FARM_ID || 'light-engine-demo';
+  
+  if (!CENTRAL_URL) {
+    console.warn('[harvest-reporter] CENTRAL_URL or GREENREACH_CENTRAL_URL not set; harvest schedule reporting disabled');
+    return;
+  }
 
   async function computeProjectedHarvests() {
     const groups = loadGroupsFile();
@@ -25020,7 +25100,21 @@ app.get('/api/groups', asyncHandler(async (req, res) => {
 
 // Get list of rooms for edge mode
 app.get('/api/rooms', asyncHandler(async (req, res) => {
-  // When database is available, read from PostgreSQL; otherwise fallback to rooms.json
+  // Canonical source is persisted rooms.json because Grow Management, EVIE,
+  // Room Mapper, and 3D editor all write rich room payloads there.
+  try {
+    const roomsData = readJSON('rooms.json', { rooms: [] });
+    const rooms = Array.isArray(roomsData)
+      ? roomsData
+      : (roomsData && Array.isArray(roomsData.rooms) ? roomsData.rooms : []);
+    if (Array.isArray(rooms) && rooms.length) {
+      return res.json(rooms);
+    }
+  } catch (error) {
+    console.error('[API /rooms] rooms.json read failed:', error.message);
+  }
+
+  // Fallback to database rows only when no persisted room payload exists.
   const dbPool = req.app.locals?.db;
   if (dbPool) {
     try {
@@ -25032,14 +25126,10 @@ app.get('/api/rooms', asyncHandler(async (req, res) => {
       return res.json(result.rows);
     } catch (error) {
       console.error('[API /rooms] Database query failed:', error.message);
-      // Fallback to JSON on database error
     }
   }
-  
-  // Fallback: read from rooms.json file
-  const roomsData = readJSON('rooms.json', { rooms: [] });
-  const rooms = roomsData?.rooms || [];
-  res.json(rooms);
+
+  res.json([]);
 }));
 
 // Get list of zones for edge mode
@@ -25725,6 +25815,21 @@ app.get('/data/farm.json', (req, res, next) => {
 });
 
 app.get('/data/rooms.json', (req, res, next) => {
+  // Authoritative source: persisted rooms file.
+  // Grow Management writes here via /api/setup/save-rooms; always prefer it
+  // so edited room dimensions survive refresh even when demo snapshots exist.
+  try {
+    const persisted = readJSON('rooms.json', { rooms: [] });
+    const rooms = Array.isArray(persisted) ? persisted : (persisted && Array.isArray(persisted.rooms) ? persisted.rooms : []);
+    if (Array.isArray(rooms)) {
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Cache-Control', 'no-cache');
+      return res.json({ rooms });
+    }
+  } catch (e) {
+    console.warn('[rooms] Failed to load persisted rooms for /data/rooms.json:', e?.message || e);
+  }
+
   const farm = loadDemoFarmSnapshot();
   if (!farm) return next();
   
@@ -25799,6 +25904,20 @@ app.get('/data/iot-devices.json', (req, res, next) => {
 });
 
 app.get('/data/groups.json', (req, res, next) => {
+  // Authoritative source: persisted groups file.
+  // This intentionally returns [] after a delete-all operation so clients
+  // do not get silently repopulated by demo snapshot data.
+  try {
+    const persisted = loadGroupsFile();
+    if (Array.isArray(persisted)) {
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Cache-Control', 'no-cache');
+      return res.json({ groups: persisted });
+    }
+  } catch (e) {
+    console.warn('[groups] Failed to load persisted groups for /data/groups.json:', e?.message || e);
+  }
+
   const farm = loadDemoFarmSnapshot();
   if (!farm) return next();
   const groups = [];
@@ -25879,16 +25998,32 @@ app.post('/data/groups.json', pinOrApiKeyGuard, async (req, res) => {
   setCors(req, res);
   const body = req.body || {};
   const incoming = Array.isArray(body) ? body : (body.groups || null);
+  const replaceMode = body && (body.replace === true || String(body.mode || '').toLowerCase() === 'replace');
   if (!Array.isArray(incoming)) {
     return res.status(400).json({ ok: false, error: 'Expected { groups: [...] } or array.' });
   }
   try {
     let touchedIds;
     await withGroupsLock((existing) => {
+      const nowIso = new Date().toISOString();
+
+      // Replacement mode is required for true delete semantics.
+      // Merge mode remains available for partial payload callers (for example
+      // optimize-layout style updates that only touch a subset of fields).
+      if (replaceMode) {
+        existing.length = 0;
+        incoming.forEach((inc) => {
+          if (!inc || typeof inc !== 'object') return;
+          existing.push({ ...inc, lastModified: inc.lastModified || nowIso });
+        });
+        touchedIds = existing.map((g) => g && g.id).filter(Boolean);
+        emitDataChange({ kind: 'groups', ids: touchedIds, updatedAt: nowIso, source: 'data-groups-post-replace' });
+        return;
+      }
+
       const incomingMap = new Map();
       for (const g of incoming) { if (g && g.id) incomingMap.set(g.id, g); }
       const existingIds = new Set();
-      const nowIso = new Date().toISOString();
       touchedIds = [];
       for (let i = 0; i < existing.length; i++) {
         const g = existing[i];
@@ -25907,7 +26042,7 @@ app.post('/data/groups.json', pinOrApiKeyGuard, async (req, res) => {
       }
       emitDataChange({ kind: 'groups', ids: touchedIds, updatedAt: nowIso, source: 'data-groups-post' });
     });
-    return res.json({ ok: true, touched: touchedIds.length });
+    return res.json({ ok: true, touched: touchedIds.length, mode: replaceMode ? 'replace' : 'merge' });
   } catch (err) {
     return res.status(500).json({ ok: false, error: 'Failed to save groups.' });
   }
@@ -27777,6 +27912,9 @@ app.post("/data/:name", (req, res) => {
           const roomIdMatch = baseName.match(/^room-map-(.+)\.json$/);
           const roomId = roomIdMatch ? roomIdMatch[1] : (req.body?.roomId || null);
           emitDataChange({ kind: 'room-map', roomId, file: baseName, updatedAt: nowIso, source: 'data-post' });
+        } else if (baseName === 'rooms.json') {
+          emitDataChange({ kind: 'rooms', updatedAt: nowIso, source: 'data-post-rooms' });
+          emitDataChange({ kind: 'zones', updatedAt: nowIso, source: 'data-post-rooms' });
         } else if (isIotDevices) {
           emitDataChange({ kind: 'iot-devices', updatedAt: nowIso, source: 'data-post' });
         } else if (baseName === 'groups.json') {

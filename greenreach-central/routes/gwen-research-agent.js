@@ -691,9 +691,11 @@ ${sections.includes('bibliography') && bibItems ? `<h2>Bibliography</h2><ol>${bi
         ).catch(() => {});
 
         // Determine base URL for download link
-        const baseUrl = process.env.K_SERVICE
-          ? `https://greenreach-central-1029387937866.us-east1.run.app`
-          : `http://localhost:${process.env.PORT || 3000}`;
+        // Prefer explicit env vars, fall back to request host, finally to default
+        const baseUrl = process.env.GREENREACH_CENTRAL_URL
+          || process.env.CENTRAL_URL
+          || (process.env.K_SERVICE ? `https://${process.env.K_SERVICE}.us-east1.run.app` : null)
+          || `http://localhost:${process.env.PORT || 3000}`;
 
         return {
           ok: true,
