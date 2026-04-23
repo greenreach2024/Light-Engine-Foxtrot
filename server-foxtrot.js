@@ -26566,6 +26566,14 @@ app.get('/wholesale', (req, res) => {
   res.sendFile(path.join(PUBLIC_DIR, 'wholesale-landing.html'));
 });
 
+// Canonical buyer portal route. Keep legacy wholesale.html path for
+// backwards compatibility but redirect it server-side to prevent UI drift.
+app.get('/wholesale.html', (req, res) => {
+  const queryIndex = req.originalUrl.indexOf('?');
+  const queryString = queryIndex >= 0 ? req.originalUrl.slice(queryIndex) : '';
+  res.redirect(302, `/GR-wholesale.html${queryString}`);
+});
+
 // GreenReach organization page - about GreenReach R&D and mission
 app.get('/greenreach-org', (req, res) => {
   res.sendFile(path.join(PUBLIC_DIR, 'greenreach-org.html'));

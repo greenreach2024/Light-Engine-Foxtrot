@@ -836,6 +836,14 @@ app.get('/farm-admin.html', (req, res) => {
   res.redirect(302, `/LE-farm-admin.html${queryString}`);
 });
 
+// Canonical buyer portal route. Redirect the legacy wholesale.html path
+// before static middleware so users always land on the maintained page.
+app.get('/wholesale.html', (req, res) => {
+  const queryIndex = req.originalUrl.indexOf('?');
+  const queryString = queryIndex >= 0 ? req.originalUrl.slice(queryIndex) : '';
+  res.redirect(302, `/GR-wholesale.html${queryString}`);
+});
+
 // Static UI — non-HTML assets (JS, CSS, images, JSON, fonts)
 // ── Static asset caching (#21) ──
 const staticCacheOptions = {
