@@ -3409,8 +3409,20 @@
       if (!floor || !map) return null;
       const dims = S.roomDimensions[roomId] || {};
       const gridSize = map.gridSize || 20;
-      const roomW = floor.userData?.roomW || dims.length || map.roomLength || gridSize;
-      const roomD = floor.userData?.roomD || dims.width || map.roomWidth || gridSize;
+       // Check server-side room object for dimensions in case they weren't cached in dims
+       const serverRoom = (S.rooms || []).find(r => r && r.id === roomId);
+       const fallbackLength = serverRoom?.length_m || serverRoom?.dimensions?.length_m;
+       const fallbackWidth = serverRoom?.width_m || serverRoom?.dimensions?.width_m;
+       const roomW = floor.userData?.roomW || dims.length || fallbackLength || map.roomLength || gridSize;
+       const roomD = floor.userData?.roomD || dims.width || fallbackWidth || map.roomWidth || gridSize;
+     
+       // Diagnostic logging: warn if dimensions defaulted to 20
+       if ((!dims.length && !fallbackLength && !map.roomLength) || (!dims.width && !fallbackWidth && !map.roomWidth)) {
+         const missingDims = [];
+         if (!dims.length && !fallbackLength && !map.roomLength) missingDims.push('length_m');
+         if (!dims.width && !fallbackWidth && !map.roomWidth) missingDims.push('width_m');
+         console.warn(`[3D-Viewer] Room "${(serverRoom?.name || roomId)}" defaulted to ${gridSize}m; missing: ${missingDims.join(', ')}`);
+       }
       return {
         roomId,
         room: floor.userData?.room || null,
@@ -5523,6 +5535,26 @@
             name: z.name || ('Zone ' + (i + 1))
           });
         });
+         // CRITICAL: Preserve room dimensions when saving zones.
+         // The zone editor may be working with an older copy of S.rooms that lacks
+         // recent dimension updates from grow-management. Ensure length_m, width_m,
+         // and ceiling_height_m are retained if they exist (don't overwrite with null).
+         if (!room.length_m && room.dimensions && room.dimensions.length_m) {
+           room.length_m = room.dimensions.length_m;
+         }
+         if (!room.width_m && room.dimensions && room.dimensions.width_m) {
+           room.width_m = room.dimensions.width_m;
+         }
+         if (!room.ceiling_height_m && room.dimensions && room.dimensions.height_m) {
+           room.ceiling_height_m = room.dimensions.height_m;
+         }
+         // Also check S.roomDimensions for room geometry that may have been set in-viewer.
+         if (S.roomDimensions && S.roomDimensions[room.id]) {
+           var viewerDims = S.roomDimensions[room.id];
+           if (viewerDims.length && !room.length_m) room.length_m = viewerDims.length;
+           if (viewerDims.width && !room.width_m) room.width_m = viewerDims.width;
+           if (viewerDims.height && !room.ceiling_height_m) room.ceiling_height_m = viewerDims.height;
+         }
         setStatus('Saving…', '#fbbf24');
         // Use the viewer's closure-scoped authFetch (defined near line 571)
         // which adds Bearer token + farm PIN headers. window.authFetch is
