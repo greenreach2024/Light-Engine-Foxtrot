@@ -927,9 +927,9 @@
         <!-- ===== IDENTITY + ACTIONS (advanced / inline editor) ===== -->
         <details class="gm-card" id="groupsV2PlanFormWrap" style="padding:12px 14px;">
           <summary style="cursor:pointer;color:#e2e8f0;font-weight:600;font-size:0.95rem;">
-            Advanced: manual group editor
+             Advanced: edit & deploy groups
             <span class="tiny text-muted" style="font-weight:400;margin-left:6px;">
-              (prefer the Build Stock Groups card above for new groups)
+               (load/edit/deploy existing groups created via Build Growing Units)
             </span>
           </summary>
         <div id="groupsV2PlanForm" style="display:flex;flex-direction:column;gap:16px;margin-top:12px;">
@@ -949,7 +949,7 @@
               <input id="groupsV2ZoneName" type="text" placeholder="Propagation North - Bench A">
             </label>
             <div class="row" style="gap:8px;flex-wrap:wrap;">
-              <button id="groupsV2SaveGroup" type="button" class="primary">Save Group</button>
+               <button id="groupsV2SaveGroup" type="button" class="primary" style="display:none;" aria-label="Deprecated: use Build Growing Units to create new groups">Save Group</button>
               <!-- The secondary "Build Stock Groups" button was removed to stop
                    two identical cards from appearing on step 3. The primary
                    entry point is #buildStockGroupsCardOpenBtn in the
