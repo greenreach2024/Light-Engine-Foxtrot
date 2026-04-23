@@ -81,8 +81,27 @@
   function selectedRoom(rooms) {
     const sel = $(ROOM_SELECT_ID);
     const id = sel && sel.value;
-    if (!id) return null;
-    return rooms.find(r => r.id === id || r.name === id) || null;
+    const normalize = (value) => String(value || '').trim().toLowerCase();
+    const hasRealDims = (room) => {
+      const dims = room?.dimensions || room?.dims || {};
+      const len = Number(dims.lengthM ?? dims.length_m ?? room?.lengthM ?? room?.length_m);
+      const wid = Number(dims.widthM ?? dims.width_m ?? room?.widthM ?? room?.width_m);
+      const hgt = Number(
+        dims.ceilingHeightM ?? dims.heightM ?? dims.ceilingM ?? dims.height_m ?? dims.ceiling_height_m
+          ?? room?.ceilingHeightM ?? room?.ceiling_height_m ?? room?.height_m
+      );
+      return [len, wid, hgt].every(v => Number.isFinite(v) && v > 0);
+    };
+
+    if (id) {
+      const wanted = normalize(id);
+      const matched = rooms.find((room) => normalize(room?.id) === wanted || normalize(room?.name) === wanted);
+      if (matched) return matched;
+    }
+
+    // Resilient fallback: when the room select has not been initialized yet,
+    // prefer the first room with valid dimensions so EVIE can still compute.
+    return rooms.find(hasRealDims) || rooms[0] || null;
   }
 
   function roomPayload(room) {
