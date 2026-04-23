@@ -421,10 +421,15 @@ async function resolveOptionalBuyerFromRequest(req) {
     const buyerId = String(payload?.sub || '').trim();
     if (!buyerId) return null;
 
-    let buyer = getBuyerById(buyerId);
+    // Prefer an authoritative DB read first so radius checks do not rely on
+    // stale in-memory buyer location values after profile/address updates.
+    let buyer = await hydrateBuyerById(buyerId);
     if (!buyer) {
-      await loadBuyersFromDb();
       buyer = getBuyerById(buyerId);
+      if (!buyer) {
+        await loadBuyersFromDb();
+        buyer = getBuyerById(buyerId);
+      }
     }
     return buyer || null;
   } catch {
