@@ -480,73 +480,99 @@
     <div class="fs-progress-bar">
       <div class="fs-progress-fill" id="setupProgressFill"></div>
     </div>
-    <span class="fs-progress-label" id="setupProgressLabel">0 / 5 configured</span>
+    <span class="fs-progress-label" id="setupProgressLabel">0 / 2 configured</span>
   </div>
 
   <!-- ===== CONTENT ===== -->
   <div class="fs-container" id="mainDashboardCards">
 
-    <!-- 1. FARM REGISTRATION -->
+    <!-- ===== ONBOARDING CONSOLIDATION (Phase 1) =====
+         Farm Registration, Grow Rooms, and Light Fixtures cards used to live
+         here. They created three overlapping onboarding surfaces (this page,
+         setup-wizard.html, grow-management.html) with duplicate form fields
+         and drift risk.
+
+         Ownership matrix:
+           - Grow Management  → rooms, zones, grow units/groups, equipment, controllers
+           - Farm Setup       → integrations + IoT pairing + checklists (this page)
+           - Settings         → farm profile, contact, business identity, payment
+
+         The launcher buttons (btnLaunchFarm / btnEditFarm / btnLaunchRoom /
+         btnLaunchLightSetup) and the farmBadge / farmSummaryChip / roomsList
+         / lightSetupsList / lightSetupSummary hosts are kept in the DOM as
+         hidden legacy-wiring hosts so:
+           (a) app.foxtrot.js wizard constructors still resolve their targets
+           (b) btnLaunchLightSetup's setTimeout retry loop terminates
+           (c) deep-link callers from grow-management can still programmatically
+               trigger the modals without the UI exposing direct card launchers.
+         The modal DOM (farmModal / roomModal / freshLightModal) is preserved
+         below.
+    -->
+
+    <!-- 1. ROOMS, ZONES & LIGHTS → GROW MANAGEMENT -->
     <details class="fs-card" open>
       <summary>
-        <h2>Farm Registration</h2>
-        <span class="fs-card-badge" id="farmStatusBadge">Not started</span>
+        <h2>Rooms, zones &amp; lights</h2>
+        <span class="fs-card-badge">Moved</span>
       </summary>
       <div class="fs-card-body">
-        <section id="farmPanel" class="card card--compact" data-panel="farm-registration">
-          <header class="panel-header">
-            <div class="row row--gap-xs">
-              <button id="btnLaunchFarm" type="button" class="primary">Register Farm</button>
-              <button id="btnEditFarm" type="button" class="primary pulse-button cta-start is-hidden">Start here</button>
+        <section class="card card--compact">
+          <div class="panel-body">
+            <p style="margin:0 0 12px;color:#cbd5e1;">
+              Room setup, zone layout, grow units, light fixtures, equipment
+              sizing, and controller planning now live in the single unified
+              flow on <strong>Grow Management</strong>.
+            </p>
+            <div class="row row--gap-xs" style="flex-wrap:wrap;gap:8px;">
+              <a href="/views/grow-management.html#flow-room" class="primary" style="display:inline-block;padding:8px 16px;border-radius:8px;background:#3b82f6;color:#fff;text-decoration:none;font-weight:600;">Open Grow Management &rsaquo;</a>
+              <a href="/views/grow-management.html#flow-lights" style="display:inline-block;padding:8px 14px;border-radius:8px;background:rgba(148,163,184,0.15);color:#e0f2fe;text-decoration:none;font-weight:600;border:1px solid rgba(148,163,184,0.3);">Light fixtures</a>
+              <a href="/views/grow-management.html#flow-equipment" style="display:inline-block;padding:8px 14px;border-radius:8px;background:rgba(148,163,184,0.15);color:#e0f2fe;text-decoration:none;font-weight:600;border:1px solid rgba(148,163,184,0.3);">Equipment</a>
             </div>
-          </header>
-          <div class="panel-summary">
-            <span class="tiny text-muted">Status</span>
-            <span id="farmSummaryChip" class="summary-chip"></span>
-          </div>
-          <div id="farmPanelBody" class="panel-body">
-            <div id="farmBadge" class="farm-summary is-hidden"></div>
           </div>
         </section>
       </div>
     </details>
 
-    <!-- 2. GROW ROOMS -->
+    <!-- 2. FARM PROFILE → SETTINGS -->
     <details class="fs-card" open>
       <summary>
-        <h2>Grow Rooms</h2>
-        <span class="fs-card-badge" id="roomsStatusBadge">--</span>
+        <h2>Farm profile &amp; business identity</h2>
+        <span class="fs-card-badge">Moved</span>
       </summary>
       <div class="fs-card-body">
-        <section id="roomsPanel" class="card card--compact" data-panel="grow-rooms">
-          <header class="panel-header">
-            <button id="btnLaunchRoom" type="button" class="primary">New Grow Room</button>
-          </header>
-          <div id="roomsPanelBody" class="panel-body">
-            <div id="roomsList"></div>
+        <section class="card card--compact">
+          <div class="panel-body">
+            <p style="margin:0 0 12px;color:#cbd5e1;">
+              Farm name, contact, address, timezone, certifications, hours,
+              fulfillment, and payment processor now live in
+              <strong>Settings</strong>, which is the single canonical record.
+            </p>
+            <div class="row row--gap-xs" style="flex-wrap:wrap;gap:8px;">
+              <a href="/LE-farm-admin.html#settings" class="primary" style="display:inline-block;padding:8px 16px;border-radius:8px;background:#3b82f6;color:#fff;text-decoration:none;font-weight:600;">Edit in Settings &rsaquo;</a>
+              <a href="/LE-farm-admin.html#payments" style="display:inline-block;padding:8px 14px;border-radius:8px;background:rgba(148,163,184,0.15);color:#e0f2fe;text-decoration:none;font-weight:600;border:1px solid rgba(148,163,184,0.3);">Payment methods</a>
+            </div>
           </div>
         </section>
       </div>
     </details>
 
-    <!-- 3. LIGHT FIXTURES -->
-    <details class="fs-card" open>
-      <summary>
-        <h2>Light Fixtures</h2>
-        <span class="fs-card-badge" id="lightsStatusBadge">--</span>
-      </summary>
-      <div class="fs-card-body">
-        <section id="lightsPanel" class="card card--compact" data-panel="light-setup">
-          <header class="panel-header">
-            <button id="btnLaunchLightSetup" type="button" class="primary">New Light Setup</button>
-          </header>
-          <div id="lightsPanelBody" class="panel-body">
-            <div id="lightSetupSummary" class="panel-callout"></div>
-            <div id="lightSetupsList"></div>
-          </div>
-        </section>
-      </div>
-    </details>
+    <!-- Legacy wiring hosts — NOT shown in the UI. Preserved so existing JS
+         selectors (app.foxtrot.js FarmWizard / RoomWizard / setupLightSetupButton)
+         resolve targets without crashing or polling forever. -->
+    <div hidden aria-hidden="true" style="display:none;">
+      <button id="btnLaunchFarm" type="button"></button>
+      <button id="btnEditFarm" type="button" class="is-hidden"></button>
+      <button id="btnLaunchRoom" type="button"></button>
+      <button id="btnLaunchLightSetup" type="button"></button>
+      <span id="farmStatusBadge"></span>
+      <span id="roomsStatusBadge"></span>
+      <span id="lightsStatusBadge"></span>
+      <span id="farmSummaryChip"></span>
+      <div id="farmBadge" class="is-hidden"></div>
+      <div id="roomsList"></div>
+      <div id="lightSetupsList"></div>
+      <div id="lightSetupSummary"></div>
+    </div>
 
     <!-- 4. INTEGRATIONS (discovery + vendor scanning — comes before IoT so
          operators connect upstream sources before reviewing the resulting
@@ -702,30 +728,14 @@
       }
     };
 
-    // Update progress bar based on configured sections
+    // Update progress bar based on configured sections.
+    // Phase 1 consolidation: Farm / Rooms / Lights moved to Grow Management +
+    // Settings, so Farm Setup progress only counts IoT + Integrations.
     function updateSetupProgress() {
-      var total = 5;
+      var total = 2;
       var done = 0;
       var S = window.STATE || {};
 
-      // Farm registered?
-      if (S.farm && S.farm.farmId) {
-        done++;
-        var b = document.getElementById('farmStatusBadge');
-        if (b) { b.textContent = 'Registered'; b.style.color = '#10b981'; b.style.borderColor = 'rgba(16,185,129,0.3)'; }
-      }
-      // Rooms configured?
-      if (Array.isArray(S.rooms) && S.rooms.length > 0) {
-        done++;
-        var b = document.getElementById('roomsStatusBadge');
-        if (b) b.textContent = S.rooms.length + ' room' + (S.rooms.length > 1 ? 's' : '');
-      }
-      // Lights configured?
-      if (Array.isArray(S.lights) && S.lights.length > 0) {
-        done++;
-        var b = document.getElementById('lightsStatusBadge');
-        if (b) b.textContent = S.lights.length + ' fixture' + (S.lights.length > 1 ? 's' : '');
-      }
       // IoT devices?
       if (Array.isArray(S.iotDevices) && S.iotDevices.length > 0) {
         done++;
