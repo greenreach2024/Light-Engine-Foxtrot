@@ -19,7 +19,8 @@ import {
   createRefund,
   listRefundsForOrder,
   listPaymentsForBuyer,
-  deleteAllBuyers
+  deleteAllBuyers,
+  computeWholesaleTotals
 } from '../services/wholesaleMemoryStore.js';
 import {
   transitionOrderStatus,
@@ -251,20 +252,21 @@ router.get('/dashboard', async (req, res) => {
             buyersCount = parseInt(buyersResult.rows[0]?.count || 0);
         }
 
+        // Canonical totals — shared with /api/reports/revenue-summary via
+        // computeWholesaleTotals so this dashboard and the reports page can
+        // never disagree on "total wholesale revenue".
         const orders = await listAllOrders();
-        const totalOrders = orders.length;
-        const totalRevenue = orders.reduce((sum, order) => sum + Number(order.grand_total || 0), 0);
-        const activeFarms = new Set(
-            orders.flatMap((order) => (order.farm_sub_orders || []).map((sub) => sub.farm_id))
-        ).size;
-        
+        const totals = computeWholesaleTotals(orders);
+
         res.json({
             status: 'ok',
             data: {
                 totalBuyers: buyersCount,
-                totalOrders,
-                totalRevenue,
-                activeFarms
+                totalOrders: totals.orderCount,
+                totalRevenue: totals.totalRevenue,
+                brokerFeeTotal: totals.brokerFeeTotal,
+                avgOrderValue: totals.avgOrderValue,
+                activeFarms: totals.activeFarms
             }
         });
     } catch (error) {
