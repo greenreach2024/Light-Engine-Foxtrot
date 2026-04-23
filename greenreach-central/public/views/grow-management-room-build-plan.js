@@ -42,6 +42,16 @@
 
   const W_PER_TON = 3517;
   const KG_TO_LITRES = 1.0;
+  const FT3_PER_M3 = 35.3146667;
+  const FT_TO_M = 0.3048;
+  const ACH_BY_ENVELOPE = {
+    well_insulated: 20,
+    typical: 30,
+    poorly_insulated: 45,
+    outdoor_ambient: 60
+  };
+  const COOLING_KW_PER_TON = 1.2;
+  const DEHUM_KW_PER_LPD = 2 / 300;
 
   let state = {
     template: null,
@@ -63,6 +73,72 @@
   }
 
   function sum(a) { return a.reduce((t, x) => t + (Number.isFinite(x) ? x : 0), 0); }
+
+  function plantSitesPerUnit(template, cropClass) {
+    const overrideSites = Number(template?.plantLocations?.totalByClass?.[cropClass]);
+    if (Number.isFinite(overrideSites) && overrideSites > 0) return overrideSites;
+
+    const perTray = Number(template?.plantsPerTrayByClass?.[cropClass]);
+    const tiers = Number(template?.tierCount);
+    const traysPerTier = Number(template?.traysPerTier);
+    if (Number.isFinite(perTray) && Number.isFinite(tiers) && Number.isFinite(traysPerTier)) {
+      const derived = perTray * tiers * traysPerTier;
+      if (Number.isFinite(derived) && derived > 0) return derived;
+    }
+    return 0;
+  }
+
+  function lightingKWForTemplate(template, quantity) {
+    const q = Math.max(1, Number(quantity) || 1);
+    const fixtureW = Number(template?.defaultFixtureClass?.fixtureWattsNominal);
+    const fixturesPerTier = Number(template?.defaultFixtureClass?.fixturesPerTierUnit);
+    const tiers = Number(template?.tierCount);
+    if (!Number.isFinite(fixtureW) || !Number.isFinite(fixturesPerTier) || !Number.isFinite(tiers)) return 0;
+    return (fixtureW * fixturesPerTier * tiers * q) / 1000;
+  }
+
+  function pumpKWForTemplate(template, cropClass, quantity) {
+    const q = Math.max(1, Number(quantity) || 1);
+    const wattsPer10k = Number(template?.powerClassW?.pumpsPer10kPlants);
+    if (!Number.isFinite(wattsPer10k) || wattsPer10k <= 0) return 0;
+    const sites = plantSitesPerUnit(template, cropClass);
+    const plantsTotal = sites * q;
+    // Electrical draw scales with plant count. Do not floor to a full 10k-plant
+    // baseline; that overstates small-room pumps by 10-20x.
+    const scale = Math.max(0, plantsTotal / 10000);
+    return (wattsPer10k * scale) / 1000;
+  }
+
+  function computeRequiredRoomCFM(room) {
+    const dims = readRoomDims(room);
+    if (!dims) return null;
+
+    const envelopeClass = room?.envelope?.class || room?.envelopeClass || 'typical';
+    const ach = ACH_BY_ENVELOPE[envelopeClass] || ACH_BY_ENVELOPE.typical;
+
+    function cfmFromM(d) {
+      return (d.lengthM * d.widthM * d.heightM * FT3_PER_M3 * ach) / 60;
+    }
+
+    let baseCFM = cfmFromM(dims);
+    if (!Number.isFinite(baseCFM) || baseCFM <= 0) return null;
+
+    // Legacy room snapshots sometimes carry feet values in *_m fields. If the
+    // implied airflow is implausibly high, treat the values as feet and convert.
+    if (baseCFM > 15000) {
+      const ftAsM = {
+        lengthM: dims.lengthM * FT_TO_M,
+        widthM: dims.widthM * FT_TO_M,
+        heightM: dims.heightM * FT_TO_M
+      };
+      const convertedCFM = cfmFromM(ftAsM);
+      if (Number.isFinite(convertedCFM) && convertedCFM > 0 && convertedCFM < baseCFM * 0.5) {
+        baseCFM = convertedCFM;
+      }
+    }
+
+    return baseCFM;
+  }
 
   function fetchRooms() {
     const _f = window.authFetch || fetch;
@@ -261,10 +337,11 @@
     const pumpScaleFactor = totalSites ? Math.max(1, totalSites / 10000) : 1;
     const pumpCount = Math.max(1, Math.round(pumpsPer10k * pumpScaleFactor));
     if (pumpW > 0) {
+      const pumpKW = pumpKWForTemplate(template, cropClass, 1);
       lines.push({
         label: 'Pumps',
         value: `${pumpCount} unit${pumpCount !== 1 ? 's' : ''}`,
-        note: `~${fmt(pumpW * pumpCount, 0)} W total`
+        note: `~${fmt(pumpKW * 1000, 0)} W total`
       });
     }
 
@@ -288,7 +365,8 @@
       });
     }
 
-    const reqCFM = scores?.envBenchmark?.inputs?.airflow?.requiredCFM;
+    const reqCFM = computeRequiredRoomCFM(state.room)
+      ?? scores?.envBenchmark?.inputs?.airflow?.requiredCFM;
     if (Number.isFinite(reqCFM) && reqCFM > 0) {
       lines.push({
         label: 'Supply fan',
@@ -915,20 +993,18 @@
 
       // computedLoad matches buildPlanSchema.computedLoad. Derive
       // from scores where available, from template otherwise.
-      const lightingKW = Number.isFinite(sc.power?.lightingW)
-        ? sc.power.lightingW / 1000
-        : (Number.isFinite(tpl.powerClassW?.lightingPerUnit)
-            ? (tpl.powerClassW.lightingPerUnit * qty) / 1000
-            : 0);
-      const pumpKW = Number.isFinite(tpl.powerClassW?.pumpsPer10kPlants)
-        ? (tpl.powerClassW.pumpsPer10kPlants * Math.max(1, (tpl.plantSitesPerUnit || 0) * qty / 10000)) / 1000
-        : 0;
+      const lightingKW = lightingKWForTemplate(tpl, qty);
+      const pumpKW = pumpKWForTemplate(tpl, state.cropClass || tpl.defaultCropClass || 'leafy_greens', qty);
       const coolingTons = Number.isFinite(sc.heatManagement?.totalHeatW)
         ? sc.heatManagement.totalHeatW / W_PER_TON : 0;
       const dehumLPerDay = Number.isFinite(sc.transpiration?.dailyWaterKg)
         ? sc.transpiration.dailyWaterKg * KG_TO_LITRES : 0;
-      const supplyFanCFM = Number.isFinite(sc.envBenchmark?.inputs?.airflow?.requiredCFM)
-        ? sc.envBenchmark.inputs.airflow.requiredCFM : 0;
+      const supplyFanCFM = computeRequiredRoomCFM(state.room)
+        ?? (Number.isFinite(sc.envBenchmark?.inputs?.airflow?.requiredCFM)
+          ? sc.envBenchmark.inputs.airflow.requiredCFM
+          : 0);
+      const hvacKW = coolingTons * COOLING_KW_PER_TON;
+      const dehumKW = dehumLPerDay * DEHUM_KW_PER_LPD;
 
       const buildPlan = {
         status: 'accepted',
@@ -939,7 +1015,7 @@
           dehumLPerDay: Number(dehumLPerDay.toFixed(2)),
           supplyFanCFM: Math.round(supplyFanCFM),
           pumpKW: Number(pumpKW.toFixed(3)),
-          totalCircuitKW: Number((lightingKW + pumpKW).toFixed(3))
+          totalCircuitKW: Number((lightingKW + pumpKW + hvacKW + dehumKW).toFixed(3))
         },
         acceptedEquipment: [],
         reservedControllerSlots: []

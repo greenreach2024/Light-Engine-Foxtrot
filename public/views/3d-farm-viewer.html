@@ -1083,14 +1083,85 @@
           merged.push(serverGroup);
         }
       });
-      // 2. Append any locally-dirty groups that the server hasn't seen yet (creation race)
-      for (const [id, dirty] of S.dirtyGroups.entries()) {
-        if (seen.has(id)) continue;
-        const local = localById.get(id);
-        if (local) merged.push(local);
-        else if (dirty.snapshot) merged.push(dirty.snapshot);
+      // 2. Treat the server list as authoritative for deletes. If an id is
+      // absent from the server payload, do not resurrect stale local dirty
+      // entries; this prevents deleted racks from reappearing after refresh.
+      for (const id of S.dirtyGroups.keys()) {
+        if (!seen.has(id)) S.dirtyGroups.delete(id);
       }
       return merged;
+    }
+
+    function clamp01(v) {
+      if (!Number.isFinite(v)) return 0;
+      return Math.max(0, Math.min(1, v));
+    }
+
+    function getZoneName(z, idx) {
+      if (typeof z === 'string') return z;
+      return z?.name || z?.zone || z?.id || ('Zone ' + (idx + 1));
+    }
+
+    function roomZonesWithGeometryToGrid(room, roomW, roomD, gridSize) {
+      const zs = Array.isArray(room?.zones) ? room.zones : [];
+      const out = [];
+      zs.forEach(function(z, idx) {
+        if (!z || typeof z === 'string') return;
+        const x = Number(z.x_m ?? z.xM ?? z.origin?.x_m ?? z.origin?.xM);
+        const y = Number(z.y_m ?? z.yM ?? z.origin?.y_m ?? z.origin?.yM);
+        const l = Number(z.length_m ?? z.lengthM ?? z.dimensions?.length_m ?? z.dimensions?.lengthM);
+        const w = Number(z.width_m ?? z.widthM ?? z.dimensions?.width_m ?? z.dimensions?.widthM);
+        if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(l) || !Number.isFinite(w)) return;
+        if (!(l > 0 && w > 0) || !(roomW > 0 && roomD > 0)) return;
+
+        const x1 = Math.round(clamp01(x / roomW) * gridSize);
+        const y1 = Math.round(clamp01(y / roomD) * gridSize);
+        const x2 = Math.round(clamp01((x + l) / roomW) * gridSize);
+        const y2 = Math.round(clamp01((y + w) / roomD) * gridSize);
+        if (x2 <= x1 || y2 <= y1) return;
+
+        const name = getZoneName(z, idx);
+        out.push({
+          id: z.id || ('zone-' + (idx + 1)),
+          zone: name,
+          name: name,
+          x1: x1,
+          y1: y1,
+          x2: x2,
+          y2: y2,
+          length_m: l,
+          width_m: w,
+          x_m: x,
+          y_m: y
+        });
+      });
+      return out;
+    }
+
+    function roomZoneNames(room) {
+      const zs = Array.isArray(room?.zones) ? room.zones : [];
+      return zs.map(function(z, idx) { return getZoneName(z, idx); }).filter(Boolean);
+    }
+
+    function applyAuthoritativeRoomZonesToMaps() {
+      (S.rooms || []).forEach(function(room) {
+        if (!room || !room.id) return;
+        const map = S.roomMaps[room.id] || {
+          roomId: room.id,
+          gridSize: 20,
+          devices: [],
+          zones: []
+        };
+        const gridSize = Number(map.gridSize) || 20;
+        const dims = S.roomDimensions[room.id] || {};
+        const roomW = Number(dims.length) || Number(map.roomLength) || gridSize;
+        const roomD = Number(dims.width) || Number(map.roomWidth) || gridSize;
+        const converted = roomZonesWithGeometryToGrid(room, roomW, roomD, gridSize);
+        if (converted.length) {
+          map.zones = converted;
+        }
+        S.roomMaps[room.id] = map;
+      });
     }
 
     // Merge incoming room-map objects keyed by roomId with dirty-protected copies.
@@ -1552,7 +1623,6 @@
         for (const room of S.rooms) {
           try {
             let res = await authFetch('/data/room-map-' + room.id + '.json?t=' + Date.now());
-            if (!res.ok) res = await authFetch('/data/room-map.json?t=' + Date.now());
             if (res.ok) freshRoomMaps[room.id] = await res.json();
           } catch (e) {}
         }
@@ -1590,6 +1660,7 @@
         const structureChanged = structureSignature !== S.lastStructureSignature;
 
         loadPersistedDimensions();
+  applyAuthoritativeRoomZonesToMaps();
         injectIoTSensorsIntoRoomMaps();
         buildZoneDataMap();
         syncPlaybackPosition(keepPlaybackLive);
@@ -2101,16 +2172,20 @@
 
         // Build zones from env data if room-map doesn't have explicit zone boundaries
         const mapZones = map?.zones || [];
-        const roomZoneNames = room.zones || [];
+        const geoZones = roomZonesWithGeometryToGrid(room, roomW, roomD, gridSize);
+        const zoneNames = roomZoneNames(room);
         let zones = [];
 
-        if (mapZones.length > 0) {
+        // Farm Setup / Grow Management rooms.json zone geometry is authoritative.
+        if (geoZones.length > 0) {
+          zones = geoZones;
+        } else if (mapZones.length > 0) {
           zones = mapZones;
-        } else if (roomZoneNames.length > 0) {
+        } else if (zoneNames.length > 0) {
           // Synthesize zone rectangles from room zone name list
-          const nz = roomZoneNames.length;
+          const nz = zoneNames.length;
           const zoneW = roomW / nz;
-          roomZoneNames.forEach((zName, zi) => {
+          zoneNames.forEach((zName, zi) => {
             zones.push({
               zone: zName, name: zName,
               x1: zi * zoneW, y1: 0,
