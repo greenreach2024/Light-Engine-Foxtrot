@@ -2008,9 +2008,20 @@ router.get('/catalog', async (req, res, next) => {
           .filter(Boolean)
       );
       const totalFarmCount = Array.isArray(catalog.farms) ? catalog.farms.length : 0;
-      const visibleFarms = (catalog.farms || []).filter((farm) => (
-        filteredFarmIds.has(String(farm.farm_id || farm.id || ''))
-      ));
+      const fallbackVisibleFarms = buyerCoordsAvailable
+        ? filterFarmsByBuyerRadius(catalog.farms || [], buyerLocation, serviceRadiusKm)
+          .filter((entry) => entry.inRange)
+          .map((entry) => {
+            if (entry.distanceKm == null) return entry.farm;
+            return { ...entry.farm, distance_km: entry.distanceKm };
+          })
+        : (catalog.farms || []);
+      const visibleFarms = filteredFarmIds.size > 0
+        ? (catalog.farms || []).filter((farm) => (
+          filteredFarmIds.has(String(farm.farm_id || farm.id || ''))
+        ))
+        : fallbackVisibleFarms;
+      const filteredFarmCount = visibleFarms.length;
 
       return res.json({
         status: 'ok',
@@ -2020,7 +2031,7 @@ router.get('/catalog', async (req, res, next) => {
           serviceRadiusKm,
           buyerCoordsAvailable,
           totalFarmCount,
-          filteredFarmCount: filteredFarmIds.size
+          filteredFarmCount
         },
         // Keep legacy fields for any existing callers
         items,
@@ -2047,7 +2058,7 @@ router.get('/catalog', async (req, res, next) => {
           serviceRadiusKm,
           buyerCoordsAvailable,
           totalFarmCount,
-          filteredFarmCount: filteredFarmIds.size
+          filteredFarmCount
         }
       });
     }
