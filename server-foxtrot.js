@@ -25879,16 +25879,32 @@ app.post('/data/groups.json', pinOrApiKeyGuard, async (req, res) => {
   setCors(req, res);
   const body = req.body || {};
   const incoming = Array.isArray(body) ? body : (body.groups || null);
+  const replaceMode = body && (body.replace === true || String(body.mode || '').toLowerCase() === 'replace');
   if (!Array.isArray(incoming)) {
     return res.status(400).json({ ok: false, error: 'Expected { groups: [...] } or array.' });
   }
   try {
     let touchedIds;
     await withGroupsLock((existing) => {
+      const nowIso = new Date().toISOString();
+
+      // Replacement mode is required for true delete semantics.
+      // Merge mode remains available for partial payload callers (for example
+      // optimize-layout style updates that only touch a subset of fields).
+      if (replaceMode) {
+        existing.length = 0;
+        incoming.forEach((inc) => {
+          if (!inc || typeof inc !== 'object') return;
+          existing.push({ ...inc, lastModified: inc.lastModified || nowIso });
+        });
+        touchedIds = existing.map((g) => g && g.id).filter(Boolean);
+        emitDataChange({ kind: 'groups', ids: touchedIds, updatedAt: nowIso, source: 'data-groups-post-replace' });
+        return;
+      }
+
       const incomingMap = new Map();
       for (const g of incoming) { if (g && g.id) incomingMap.set(g.id, g); }
       const existingIds = new Set();
-      const nowIso = new Date().toISOString();
       touchedIds = [];
       for (let i = 0; i < existing.length; i++) {
         const g = existing[i];
@@ -25907,7 +25923,7 @@ app.post('/data/groups.json', pinOrApiKeyGuard, async (req, res) => {
       }
       emitDataChange({ kind: 'groups', ids: touchedIds, updatedAt: nowIso, source: 'data-groups-post' });
     });
-    return res.json({ ok: true, touched: touchedIds.length });
+    return res.json({ ok: true, touched: touchedIds.length, mode: replaceMode ? 'replace' : 'merge' });
   } catch (err) {
     return res.status(500).json({ ok: false, error: 'Failed to save groups.' });
   }

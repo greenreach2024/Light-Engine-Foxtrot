@@ -1220,7 +1220,7 @@
           markGroupDirty(gid, nowIso, g);
         }
       });
-      const payload = { groups: safeGroups };
+      const payload = { groups: safeGroups, replace: true };
 
       // Preferred path: POST /groups runs full validation and parseIncomingGroup.
       try {
@@ -4004,7 +4004,7 @@
           var groupsResp = await authFetch('/data/groups.json', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(S.groups)
+            body: JSON.stringify({ groups: S.groups, replace: true })
           });
           if (!groupsResp.ok) saveFailed = true;
         } catch (err) {

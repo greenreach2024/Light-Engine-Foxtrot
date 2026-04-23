@@ -469,8 +469,8 @@ async function initializeGroupsV2State() {
     let source = '';
 
     try {
-      g2debug('[Groups V2] Loading groups from /data/groups.json...');
-      const response = await (window.authFetch || fetch)('/data/groups.json', { cache: 'no-store' });
+      g2debug('[Groups V2] Loading groups from /api/groups...');
+      const response = await (window.authFetch || fetch)('/api/groups', { cache: 'no-store' });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const payload = await response.json();
       if (Array.isArray(payload)) {
@@ -478,20 +478,21 @@ async function initializeGroupsV2State() {
       } else if (payload && Array.isArray(payload.groups)) {
         groups = payload.groups;
       }
-      source = '/data/groups.json';
+      source = '/api/groups';
     } catch (error) {
-      console.warn('[Groups V2] Failed to load /data/groups.json:', error);
+      console.warn('[Groups V2] Failed to load /api/groups:', error);
     }
 
     if (!groups.length) {
-      g2debug('[Groups V2] Falling back to /api/groups...');
-      const response = await (window.authFetch || fetch)('/api/groups');
+      g2debug('[Groups V2] Falling back to /data/groups.json...');
+      const response = await (window.authFetch || fetch)('/data/groups.json', { cache: 'no-store' });
       if (!response.ok) {
-        console.warn('[Groups V2] Failed to load groups from /api/groups:', response.status);
+        console.warn('[Groups V2] Failed to load groups from /data/groups.json:', response.status);
         return;
       }
-      groups = await response.json();
-      source = '/api/groups';
+      const payload = await response.json();
+      groups = Array.isArray(payload) ? payload : (payload && Array.isArray(payload.groups) ? payload.groups : []);
+      source = '/data/groups.json';
     }
 
     g2debug('[Groups V2] Loaded', groups.length, 'groups from', source);
@@ -2225,7 +2226,7 @@ async function saveGroupsV2Group(status = 'draft') {
     const response = await (window.authFetch || fetch)('/data/groups.json', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ groups: window.STATE.groups })
+      body: JSON.stringify({ groups: window.STATE.groups, replace: true })
     });
     
     g2debug('[groups-v2] Server response status:', response.status, response.statusText);
@@ -2258,6 +2259,7 @@ async function saveGroupsV2Group(status = 'draft') {
   // Crop Recommendations" regression).
   if (window.DataFlowBus) {
     window.DataFlowBus.emit('groups', { source: 'groups-v2-save', groupId: id, status: status });
+    window.DataFlowBus.emit('lights', { source: 'groups-v2-save', groupId: id, status: status });
   }
   updateGroupsV2StatusBadge(groupRecord);
   
@@ -2322,7 +2324,7 @@ async function saveGroupsV2GroupObject(groupObject) {
     const response = await (window.authFetch || fetch)('/data/groups.json', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ groups: window.STATE.groups })
+      body: JSON.stringify({ groups: window.STATE.groups, replace: true })
     });
     
     if (!response.ok) {
@@ -2338,6 +2340,7 @@ async function saveGroupsV2GroupObject(groupObject) {
     document.dispatchEvent(new Event('groups-updated'));
     if (window.DataFlowBus) {
       window.DataFlowBus.emit('groups', { source: 'groups-v2-save-object', groupId: groupObject.id });
+      window.DataFlowBus.emit('lights', { source: 'groups-v2-save-object', groupId: groupObject.id });
     }
     
     return groupObject;
@@ -2620,7 +2623,7 @@ document.addEventListener('DOMContentLoaded', () => {
           const response = await (window.authFetch || fetch)('/data/groups.json', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ groups: window.STATE.groups })
+            body: JSON.stringify({ groups: window.STATE.groups, replace: true })
           });
           console.log('[Groups V2] POST response status:', response.status, response.statusText);
           if (!response.ok) {
@@ -7425,7 +7428,7 @@ async function executeBuildStockGroups() {
     const response = await (window.authFetch || fetch)('/data/groups.json', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ groups: window.STATE.groups })
+      body: JSON.stringify({ groups: window.STATE.groups, replace: true })
     });
     if (!response.ok) {
       const errText = await response.text();
@@ -7750,7 +7753,7 @@ async function executeBulkEditGroups() {
     var response = await (window.authFetch || fetch)('/data/groups.json', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ groups: window.STATE.groups })
+      body: JSON.stringify({ groups: window.STATE.groups, replace: true })
     });
     if (!response.ok) {
       var errorText = await response.text();
@@ -7807,7 +7810,7 @@ async function executeBulkDeleteGroups(prefix) {
     var response = await (window.authFetch || fetch)('/data/groups.json', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ groups: nextGroups })
+      body: JSON.stringify({ groups: nextGroups, replace: true })
     });
     if (!response.ok) {
       var errorText = await response.text();
