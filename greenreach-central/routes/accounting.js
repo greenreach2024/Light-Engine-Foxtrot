@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import { query, isDatabaseAvailable, getDatabase, getAccountingReadiness } from '../config/database.js';
 import { syncAwsCostExplorer } from '../services/awsCostExplorerSync.js';
 import { syncGitHubBilling } from '../services/githubBillingSync.js';
+import { ingestFarmPayout } from '../services/revenue-accounting-connector.js';
 
 const router = express.Router();
 
@@ -2232,6 +2233,167 @@ router.post('/bank-reconciliation/clear', async (req, res) => {
     return res.json({ ok: true, cleared: result.rows.length });
   } catch (error) {
     return res.status(500).json({ ok: false, error: 'reconciliation_clear_failed', message: error.message });
+  }
+});
+
+/**
+ * GET /api/accounting/farm-payouts/outstanding
+ *
+ * Reports outstanding AP-Farms (account 250000) — how much GreenReach
+ * still owes each farm after ingested payables have been netted against
+ * recorded payouts. Operators use this list to decide who to settle and
+ * for how much before calling POST /farm-payouts.
+ *
+ * Scope: the wholesale write path records payables (DR 500000 / CR 250000)
+ * for every wholesale order, and records payouts (DR 250000 / CR 100000)
+ * only when Square paid the farm directly (app_fee_money split). When
+ * GreenReach holds the money and later settles with the farm, nothing
+ * posts a drain entry — so account 250000 grows unbounded. This endpoint
+ * + POST /farm-payouts fix that.
+ */
+router.get('/farm-payouts/outstanding', async (_req, res) => {
+  if (!await isDatabaseAvailable()) {
+    return res.status(503).json({ ok: false, error: 'database_unavailable' });
+  }
+  try {
+    // Sum AP-Farms activity grouped by the farm_id embedded in the
+    // transaction's raw_payload (the wholesale payable connector writes
+    // farm_id into every txn's metadata).
+    // Group on farm_id only — grouping on farm_name too would split a
+    // farm's payables and payouts into separate rows whenever the name
+    // differs across writers (wholesale ingest uses farmSub.farm_name;
+    // POST /farm-payouts uses req.body.farm_name || farm_id), causing a
+    // phantom outstanding balance on one row and a negative balance
+    // silently dropped by the HAVING clause on the other. MAX(farm_name)
+    // is a display-only choice for the UI.
+    const result = await query(
+      `SELECT farm_id,
+              MAX(farm_name) AS farm_name,
+              SUM(credit - debit)::float AS outstanding,
+              COUNT(DISTINCT txn_id)::int AS txn_count,
+              MAX(txn_date) AS last_activity
+       FROM (
+         SELECT COALESCE(t.raw_payload->>'farm_id', t.metadata->>'farm_id') AS farm_id,
+                COALESCE(t.raw_payload->>'farm_name', t.metadata->>'farm_name') AS farm_name,
+                e.credit,
+                e.debit,
+                t.id AS txn_id,
+                t.txn_date
+         FROM accounting_entries e
+         JOIN accounting_transactions t ON t.id = e.transaction_id
+         WHERE e.account_code = '250000'
+       ) sub
+       WHERE farm_id IS NOT NULL
+       GROUP BY farm_id
+       HAVING SUM(credit - debit) > 0.005
+       ORDER BY outstanding DESC`
+    );
+    const rows = (result.rows || []).map(r => ({
+      farm_id: r.farm_id || null,
+      farm_name: r.farm_name || r.farm_id || 'Unknown',
+      outstanding: Math.round(Number(r.outstanding || 0) * 100) / 100,
+      txn_count: Number(r.txn_count || 0),
+      last_activity: r.last_activity,
+    }));
+    const total = rows.reduce((s, r) => s + r.outstanding, 0);
+    return res.json({
+      ok: true,
+      total: Math.round(total * 100) / 100,
+      farms: rows,
+      generatedAt: new Date().toISOString(),
+    });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: 'outstanding_query_failed', message: err.message });
+  }
+});
+
+/**
+ * POST /api/accounting/farm-payouts
+ *
+ * Record a farm payout settlement: DR AP-Farms (250000) / CR Cash
+ * (100000). Use this when GreenReach actually pays a farm after holding
+ * the buyer's money (greenreach_held=true in the wholesale flow), or for
+ * any manual settlement outside the automated Square-split path.
+ *
+ * Body: { farm_id, farm_name?, amount, order_id?, payout_id?, currency?, provider?, memo? }
+ *
+ * Idempotency: the downstream connector hashes on
+ * (order_id, farm_id, amount). To let callers record multiple distinct
+ * settlements for the same logical order (split deliveries, reissue
+ * after cancel, multiple manual adjustments), this route COMPOSES the
+ * downstream order_id from `order_id` + `payout_id` when both are
+ * supplied. When only one of the two is supplied it's used directly;
+ * when neither is supplied a deterministic `manual-<farm_id>-<amount>`
+ * default is used so naive retries and double-clicks still dedupe.
+ *
+ * To settle the same (order_id, farm_id, amount) tuple twice, supply a
+ * stable, unique `payout_id` on each call (e.g. the Square payout id,
+ * an internal settlement UUID, or a `YYYYMMDD-farm_id-N` string).
+ */
+router.post('/farm-payouts', async (req, res) => {
+  if (!await isDatabaseAvailable()) {
+    return res.status(503).json({ ok: false, error: 'database_unavailable' });
+  }
+  const { farm_id, farm_name, amount, order_id, payout_id, currency, provider, memo } = req.body || {};
+  if (!farm_id || typeof farm_id !== 'string') {
+    return res.status(400).json({ ok: false, error: 'farm_id_required' });
+  }
+  const amt = Number(amount);
+  if (!Number.isFinite(amt) || amt <= 0) {
+    return res.status(400).json({ ok: false, error: 'amount_must_be_positive_number' });
+  }
+  try {
+    // Compose a disambiguated effectiveOrderId so the connector's
+    // (order_id, farm_id, amount) idempotency key can distinguish
+    // multiple settlements for the same logical order. The connector
+    // itself preserves backward compat with existing wholesale rows by
+    // keying on order_id alone — so the per-settlement distinction
+    // happens HERE in the route, not in the connector. Defaults are
+    // deterministic (derived from farm_id + amount) so retries and
+    // double-clicks still dedupe when the caller provides no identifiers.
+    const amountKey = amt.toFixed(2);
+    let effectiveOrderId;
+    if (order_id && payout_id) {
+      effectiveOrderId = `${order_id}#${payout_id}`;
+    } else if (order_id) {
+      effectiveOrderId = order_id;
+    } else if (payout_id) {
+      effectiveOrderId = payout_id;
+    } else {
+      effectiveOrderId = `manual-${farm_id}-${amountKey}`;
+    }
+    // payout_id is still passed to the connector for metadata/audit even
+    // though it no longer drives the idempotency key.
+    const effectivePayoutId = payout_id || order_id || effectiveOrderId;
+    const result = await ingestFarmPayout({
+      payout_id: effectivePayoutId,
+      order_id: effectiveOrderId,
+      farm_id,
+      farm_name: farm_name || farm_id,
+      amount: amt,
+      currency: (currency || 'CAD').toUpperCase(),
+      provider: provider || 'manual',
+    });
+    if (!result.ok) {
+      return res.status(500).json({ ok: false, error: 'payout_ingest_failed', reason: result.reason });
+    }
+    if (memo && result.transaction_id) {
+      // Append the caller's memo to the per-line descriptions the
+      // connector already wrote ("Payout to {farm}" on the debit line,
+      // "Farm payout — {provider}" on the credit line) instead of
+      // clobbering them — preserves the double-entry distinction that
+      // matters for audit. COALESCE guards against NULL rows returning
+      // NULL from string concatenation.
+      await query(
+        `UPDATE accounting_entries
+            SET memo = COALESCE(memo || ' | ', '') || $1
+          WHERE transaction_id = $2`,
+        [String(memo).slice(0, 500), result.transaction_id]
+      ).catch(() => null);
+    }
+    return res.json({ ok: true, ...result });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: 'farm_payout_failed', message: err.message });
   }
 });
 
