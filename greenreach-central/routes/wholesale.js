@@ -4865,10 +4865,59 @@ router.get('/network/farms', async (req, res, next) => {
     let buyerCoords = (Number.isFinite(nearLat) && Number.isFinite(nearLng))
       ? { latitude: nearLat, longitude: nearLng }
       : null;
+    let resolvedBuyer = null;
     if (!buyerCoords) {
-      const buyer = await resolveOptionalBuyerFromRequest(req);
-      if (buyer?.location) {
-        buyerCoords = extractCoordinates(buyer.location);
+      resolvedBuyer = await resolveOptionalBuyerFromRequest(req);
+      if (resolvedBuyer?.location) {
+        buyerCoords = extractCoordinates(resolvedBuyer.location);
+
+        // Self-heal legacy buyer records that carry stale coordinates from an
+        // older geocode path. If we can resolve a postal/city based coordinate,
+        // prefer it when missing or clearly drifted, then persist so future
+        // requests are consistent.
+        const locationHint = {
+          address1: trimField(
+            resolvedBuyer.location.address1
+            || resolvedBuyer.location.address
+            || resolvedBuyer.location.street
+          ) || null,
+          city: trimField(resolvedBuyer.location.city) || null,
+          state: trimField(resolvedBuyer.location.state || resolvedBuyer.location.province) || null,
+          postalCode: normalizePostalCode(
+            resolvedBuyer.location.postalCode || resolvedBuyer.location.zip
+          ) || null,
+          country: trimField(resolvedBuyer.location.country) || 'Canada'
+        };
+
+        if (locationHint.address1 || locationHint.city || locationHint.postalCode) {
+          const geocoded = await geocodeBuyerLocation(locationHint);
+          if (geocoded) {
+            const driftKm = buyerCoords
+              ? haversineDistanceKm(
+                  buyerCoords.latitude,
+                  buyerCoords.longitude,
+                  geocoded.latitude,
+                  geocoded.longitude
+                )
+              : null;
+            const shouldHeal = !buyerCoords || (Number.isFinite(driftKm) && driftKm > 5);
+            if (shouldHeal) {
+              buyerCoords = geocoded;
+              try {
+                await updateBuyer(resolvedBuyer.id, {
+                  location: {
+                    ...(resolvedBuyer.location || {}),
+                    ...locationHint,
+                    latitude: geocoded.latitude,
+                    longitude: geocoded.longitude
+                  }
+                });
+              } catch (healErr) {
+                console.warn('[Wholesale Network] buyer location heal failed:', healErr.message);
+              }
+            }
+          }
+        }
       }
     }
 
