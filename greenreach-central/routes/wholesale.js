@@ -4383,7 +4383,17 @@ router.post('/checkout/execute', checkoutLimiter, requireWholesaleDbForCriticalP
       const reservedFarms = []; // track successful reservations for rollback
       let reservationError = null;
 
-      for (const sub of order.farm_sub_orders || []) {
+      // Sample orders are free-of-charge review requests. They carry $0 value,
+      // bypass Square, and the farm reviews/fulfills manually via Activity Hub.
+      // Live inventory reservation on the LE farm endpoint can time out (8s
+      // AbortController) when the farm edge is cold-started or unreachable,
+      // which historically caused sample requests to return 409 to the buyer
+      // even though no money had been captured. Skip reservation entirely for
+      // samples -- the farm decides whether to honor the request when they
+      // see the Sample Request event in their Activity Hub + Evie inbox.
+      if (sampleOrder) {
+        console.log(`[Checkout] Sample order ${order.master_order_id}: skipping inventory reservation (farm will review manually)`);
+      } else for (const sub of order.farm_sub_orders || []) {
         const farm = byId.get(String(sub.farm_id));
         let farmUrl = farm?.api_url || farm?.url;
         // If farm URL is stale (localhost, private IP, or Central), route to the configured LE endpoint.
@@ -4675,6 +4685,73 @@ router.post('/checkout/execute', checkoutLimiter, requireWholesaleDbForCriticalP
             text: `A wholesale buyer submitted a free sample order.\n\nOrder: ${order.master_order_id}\nBuyer: ${normalizedBuyerAccount?.email || 'unknown'} (${normalizedBuyerAccount?.businessName || 'n/a'})\nDelivery date: ${order.delivery_date}\nItems:\n${skuLines}\n\nFarms have been notified via Activity Hub.`
           }).catch(err => console.error('[Email] Sample admin alert failed:', err.message));
         }
+
+        // Per-farm Sample Request email + Evie notification. The generic
+        // sendOrderConfirmation path emails the buyer, not the farm, and uses
+        // a "New Order" title which buries sample requests alongside paid
+        // orders. Samples need direct farm-facing visibility so the operator
+        // can accept, reject, or schedule the free case.
+        (async () => {
+          for (const sub of order.farm_sub_orders || []) {
+            const farmId = sub.farm_id;
+            if (!farmId) continue;
+            const farmMeta = byId.get(String(farmId)) || {};
+            const subItems = (sub.items || [])
+              .map((it) => `  - ${it.product_name || it.sku_id} x${it.quantity}`)
+              .join('\n') || '  (see Activity Hub for details)';
+
+            // Push Evie notification to the farm's inbox with a distinct
+            // category so the Activity Hub bell surfaces it separately from
+            // paid orders.
+            try {
+              await notificationStore.pushNotification(farmId, {
+                category: 'sample_request',
+                title: `Sample Request from ${normalizedBuyerAccount?.businessName || normalizedBuyerAccount?.contactName || normalizedBuyerAccount?.email || 'wholesale buyer'}`,
+                body: `Free sample requested for ${sub.items?.length || 1} item(s). Review in Activity Hub.`,
+                severity: 'info',
+                source: 'wholesale_sample',
+                action: { label: 'Open Activity Hub', url: '/LE-farm-admin.html#activity-hub' }
+              });
+            } catch (notifErr) {
+              console.warn(`[Sample] Evie notification failed for farm ${farmId}:`, notifErr.message);
+            }
+
+            // Email the farm directly. Prefer farms.email (canonical operator
+            // address), fall back to metadata.contact.email.
+            let farmEmail = null;
+            try {
+              const emailRow = await query('SELECT email FROM farms WHERE farm_id = $1 LIMIT 1', [farmId]);
+              farmEmail = emailRow.rows?.[0]?.email || null;
+            } catch (err) {
+              console.warn(`[Sample] Farm email lookup failed for ${farmId}:`, err.message);
+            }
+            if (!farmEmail) farmEmail = farmMeta?.contact?.email || null;
+
+            if (farmEmail) {
+              emailService.sendEmail({
+                to: farmEmail,
+                subject: `[Sample Request] ${normalizedBuyerAccount?.businessName || normalizedBuyerAccount?.email || 'Wholesale buyer'} requested a free sample`,
+                text: [
+                  `A wholesale buyer has requested a free sample.`,
+                  ``,
+                  `Order: ${order.master_order_id}`,
+                  `Buyer: ${normalizedBuyerAccount?.businessName || normalizedBuyerAccount?.contactName || 'Wholesale Buyer'}`,
+                  `Contact: ${normalizedBuyerAccount?.email || 'unknown'}${normalizedBuyerAccount?.phone ? ' | ' + normalizedBuyerAccount.phone : ''}`,
+                  `Delivery date: ${order.delivery_date || 'TBD'}`,
+                  ``,
+                  `Items:`,
+                  subItems,
+                  ``,
+                  `Review and respond to this request in your Activity Hub.`,
+                  ``,
+                  `-- GreenReach Central`
+                ].join('\n')
+              }).catch(err => console.error(`[Email] Sample farm email to ${farmEmail} failed:`, err.message));
+            } else {
+              console.warn(`[Sample] No email on file for farm ${farmId}; Evie notification only`);
+            }
+          }
+        })().catch(err => console.error('[Sample] Per-farm notification loop error:', err.message));
       }
 
       return res.json({ status: 'ok', data: order, meta: { payment_id: payment.payment_id, is_sample: sampleOrder } });

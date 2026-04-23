@@ -3527,6 +3527,16 @@
           .filter(Boolean);
       }
 
+      // Prefer the farms already shown in the catalog. The catalog endpoint
+      // includes fallbackVisibleFarms so farms remain visible even when SKU
+      // inventory is empty; using this.farms keeps the Environmental Impact
+      // panel in sync with what the buyer actually sees on the page.
+      if (farmsInCatalog.length === 0 && Array.isArray(this.farms) && this.farms.length > 0) {
+        farmsInCatalog = this.farms
+          .map(mapFarmRecord)
+          .filter(Boolean);
+      }
+
       if (farmsInCatalog.length === 0 && Array.isArray(this.networkFarms) && this.networkFarms.length > 0) {
         farmsInCatalog = this.networkFarms
           .map(mapFarmRecord)
@@ -3542,18 +3552,20 @@
       const buyerLng = buyerLoc.longitude;
 
       // If no farms loaded yet, fetch buyer-safe wholesale network farms.
-      // Pass the buyer coordinates so the server can apply the service
-      // radius filter; record the returned serviceRadiusKm/meta on the
-      // controller so later renders (score, empty-state) stay consistent.
+      // Do NOT pass the buyer coordinates here: the server-side radius
+      // filter can hide farms that the buyer can actually see in the
+      // catalog (catalog uses fallbackVisibleFarms with a wider visibility
+      // rule), which produced the misleading "no local farms" empty-state
+      // even though farms appeared on the same page. We re-filter below
+      // using serviceRadiusKm returned by the API for the grade/score, but
+      // keep the raw farm list so the UI can always show the nearest farm
+      // with its true distance instead of an empty-state banner.
       if (farmsInCatalog.length === 0) {
         try {
           const headers = {};
           const hasAuthToken = Boolean(this.token);
           if (hasAuthToken) headers['Authorization'] = `Bearer ${this.token}`;
-          const nearParams = (!hasAuthToken && Number.isFinite(buyerLat) && Number.isFinite(buyerLng))
-            ? `?nearLat=${encodeURIComponent(buyerLat)}&nearLng=${encodeURIComponent(buyerLng)}`
-            : '';
-          const response = await fetch(`/api/wholesale/network/farms${nearParams}`, { headers });
+          const response = await fetch(`/api/wholesale/network/farms`, { headers });
           const data = await response.json();
 
           const farms = data?.data?.farms || [];
@@ -3611,6 +3623,47 @@
       const farmDistances = farmDistancesAll.filter(f => f.distance <= serviceRadiusKm);
 
       if (farmDistances.length === 0) {
+        // No farm inside the nominal service radius, but the buyer's catalog
+        // may still show farms further away (the catalog has its own
+        // visibility rules independent of delivery radius). Rather than
+        // telling the buyer "not yet live in your area" -- which contradicts
+        // the farms they can clearly see in the catalog -- surface the
+        // nearest farm with its true distance and a delivery-availability
+        // caveat.
+        if (farmDistancesAll.length > 0) {
+          const sortedByDistance = [...farmDistancesAll].sort((a, b) => a.distance - b.distance);
+          const nearest = sortedByDistance[0];
+          const otherCount = sortedByDistance.length - 1;
+          const nearestDisplay = nearest.distance < 1 ? '< 1' : nearest.distance.toFixed(0);
+          impactContent.innerHTML = `
+            <div class="impact-metric">
+              <span class="impact-label">Nearest GreenReach Farm</span>
+              <span class="impact-value">${nearest.farm_name || 'Farm'}</span>
+            </div>
+            <div class="impact-metric">
+              <span class="impact-label">Distance</span>
+              <span class="impact-value">${nearestDisplay} km</span>
+            </div>
+            <div class="impact-metric">
+              <span class="impact-label">Network Farms Visible</span>
+              <span class="impact-value">${sortedByDistance.length}</span>
+            </div>
+            <div class="impact-comparison">
+              <div class="comparison-text">
+                ${otherCount > 0 ? `${sortedByDistance.length} farms are visible in your catalog.` : 'One farm is visible in your catalog.'}
+                The closest is <strong>${nearestDisplay} km</strong> from your registered address&mdash;outside the
+                standard ${serviceRadiusKm} km delivery radius, so delivery availability and timing will vary by order.
+                Contact the farm directly to confirm fulfillment options.
+              </div>
+            </div>
+          `;
+          if (impactScore) {
+            impactScore.textContent = nearest.distance < 250 ? 'B' : nearest.distance < 500 ? 'C' : 'D';
+            impactScore.className = `impact-score ${nearest.distance < 250 ? 'grade-b' : nearest.distance < 500 ? 'grade-c' : 'grade-d'}`;
+          }
+          return;
+        }
+
         impactContent.innerHTML = `
           <div class="impact-metric">
             <span class="impact-label">Service Radius</span>
