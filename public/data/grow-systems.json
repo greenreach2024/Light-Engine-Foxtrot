@@ -150,8 +150,6 @@
       "name": "NFT/DWC 3-Tier Grow Rack",
       "category": "dwc_pond",
       "description": "Compatibility alias of the merged NFT/DWC rack profile. Retained for legacy references.",
-      "deprecated": true,
-      "mergedTemplateId": "nft-rack-3tier",
       "plantLocations": {
         "totalByClass": {
           "leafy_greens": 384,
