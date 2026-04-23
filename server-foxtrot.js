@@ -7466,10 +7466,57 @@ app.get('/api/hardware/scan', asyncHandler(async (req, res) => {
 // Save rooms endpoint (matches greenreach-central route for cross-mode compatibility)
 app.post('/api/setup/save-rooms', asyncHandler(async (req, res) => {
   try {
-    const rooms = req.body?.rooms;
-    if (!Array.isArray(rooms)) {
+    const incomingRooms = req.body?.rooms;
+    if (!Array.isArray(incomingRooms)) {
       return res.status(400).json({ success: false, message: 'rooms array required' });
     }
+
+    const roomKey = (room) => String(
+      room?.id || room?.room_id || room?.roomId || room?.name || room?.room_name || ''
+    ).trim().toLowerCase();
+    const mergeRoom = (existing, incoming) => {
+      const merged = { ...(existing || {}), ...(incoming || {}) };
+
+      // Preserve canonical geometry when incoming payload is sparse.
+      const existingDims = (existing && (existing.dimensions || existing.dims)) || {};
+      const incomingDims = (incoming && (incoming.dimensions || incoming.dims)) || {};
+      merged.dimensions = { ...existingDims, ...incomingDims };
+
+      if (incoming?.length_m == null && existing?.length_m != null) merged.length_m = existing.length_m;
+      if (incoming?.width_m == null && existing?.width_m != null) merged.width_m = existing.width_m;
+      if (incoming?.ceiling_height_m == null && existing?.ceiling_height_m != null) merged.ceiling_height_m = existing.ceiling_height_m;
+
+      // Preserve richer planner payloads when a caller only updates room shells.
+      if (!incoming || typeof incoming !== 'object') {
+        merged.buildPlan = existing?.buildPlan;
+        merged.installedSystems = existing?.installedSystems;
+        merged.equipment = existing?.equipment;
+      } else {
+        if (incoming.buildPlan == null && existing?.buildPlan != null) merged.buildPlan = existing.buildPlan;
+        if (incoming.installedSystems == null && existing?.installedSystems != null) merged.installedSystems = existing.installedSystems;
+        if (incoming.equipment == null && existing?.equipment != null) merged.equipment = existing.equipment;
+      }
+
+      return merged;
+    };
+
+    const persisted = readJSON('rooms.json', { rooms: [] });
+    const existingRooms = Array.isArray(persisted)
+      ? persisted
+      : (persisted && Array.isArray(persisted.rooms) ? persisted.rooms : []);
+
+    const existingByKey = new Map();
+    existingRooms.forEach((room) => {
+      const key = roomKey(room);
+      if (key) existingByKey.set(key, room);
+    });
+
+    const rooms = incomingRooms.map((room) => {
+      const key = roomKey(room);
+      if (!key) return room;
+      return mergeRoom(existingByKey.get(key), room);
+    });
+
     const fullPath = path.join(DATA_DIR, 'rooms.json');
     const payload = JSON.stringify({ rooms }, null, 2);
     await writeJsonQueued(fullPath, payload);
@@ -25053,7 +25100,21 @@ app.get('/api/groups', asyncHandler(async (req, res) => {
 
 // Get list of rooms for edge mode
 app.get('/api/rooms', asyncHandler(async (req, res) => {
-  // When database is available, read from PostgreSQL; otherwise fallback to rooms.json
+  // Canonical source is persisted rooms.json because Grow Management, EVIE,
+  // Room Mapper, and 3D editor all write rich room payloads there.
+  try {
+    const roomsData = readJSON('rooms.json', { rooms: [] });
+    const rooms = Array.isArray(roomsData)
+      ? roomsData
+      : (roomsData && Array.isArray(roomsData.rooms) ? roomsData.rooms : []);
+    if (Array.isArray(rooms) && rooms.length) {
+      return res.json(rooms);
+    }
+  } catch (error) {
+    console.error('[API /rooms] rooms.json read failed:', error.message);
+  }
+
+  // Fallback to database rows only when no persisted room payload exists.
   const dbPool = req.app.locals?.db;
   if (dbPool) {
     try {
@@ -25065,14 +25126,10 @@ app.get('/api/rooms', asyncHandler(async (req, res) => {
       return res.json(result.rows);
     } catch (error) {
       console.error('[API /rooms] Database query failed:', error.message);
-      // Fallback to JSON on database error
     }
   }
-  
-  // Fallback: read from rooms.json file
-  const roomsData = readJSON('rooms.json', { rooms: [] });
-  const rooms = roomsData?.rooms || [];
-  res.json(rooms);
+
+  res.json([]);
 }));
 
 // Get list of zones for edge mode
@@ -27855,6 +27912,9 @@ app.post("/data/:name", (req, res) => {
           const roomIdMatch = baseName.match(/^room-map-(.+)\.json$/);
           const roomId = roomIdMatch ? roomIdMatch[1] : (req.body?.roomId || null);
           emitDataChange({ kind: 'room-map', roomId, file: baseName, updatedAt: nowIso, source: 'data-post' });
+        } else if (baseName === 'rooms.json') {
+          emitDataChange({ kind: 'rooms', updatedAt: nowIso, source: 'data-post-rooms' });
+          emitDataChange({ kind: 'zones', updatedAt: nowIso, source: 'data-post-rooms' });
         } else if (isIotDevices) {
           emitDataChange({ kind: 'iot-devices', updatedAt: nowIso, source: 'data-post' });
         } else if (baseName === 'groups.json') {
