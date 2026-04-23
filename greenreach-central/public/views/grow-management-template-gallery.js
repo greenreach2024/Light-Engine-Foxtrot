@@ -76,8 +76,8 @@
         if (Array.isArray(body.items)) return body.items;
         return [];
       }
-      let rooms = await fetchOne('/api/rooms');
-      if (!rooms.length) rooms = await fetchOne('/data/rooms.json');
+      let rooms = await fetchOne('/data/rooms.json');
+      if (!rooms.length) rooms = await fetchOne('/api/rooms');
       if (!rooms.length && Array.isArray(window.__ffFlowRooms)) rooms = window.__ffFlowRooms;
       if (!rooms.length && window.STATE && Array.isArray(window.STATE.rooms)) rooms = window.STATE.rooms;
       return Array.isArray(rooms) ? rooms : [];

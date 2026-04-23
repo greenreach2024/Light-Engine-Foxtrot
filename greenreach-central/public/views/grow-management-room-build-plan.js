@@ -80,12 +80,13 @@
       return [];
     }
 
-    // Grow Management itself hydrates from /data/rooms.json while some pages
-    // use /api/rooms; try both so EVIE always sees the same room snapshot.
-    return fetchOne('/api/rooms')
+    // Grow Management writes canonical room payloads to /data/rooms.json.
+    // Read it first so sparse /api/rooms DB rows cannot overwrite richer
+    // room state (zones, installedSystems, buildPlan).
+    return fetchOne('/data/rooms.json')
       .then((rooms) => {
         if (Array.isArray(rooms) && rooms.length) return rooms;
-        return fetchOne('/data/rooms.json');
+        return fetchOne('/api/rooms');
       })
       .then((rooms) => {
         if (Array.isArray(rooms) && rooms.length) return rooms;
