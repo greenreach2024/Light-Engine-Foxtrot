@@ -2068,7 +2068,7 @@
             <td>—</td>
             <td>${created}</td>
             <td style="white-space: nowrap;">
-              <button class="btn btn-secondary" style="font-size: 0.75rem; padding: 0.25rem 0.5rem; margin-right: 0.25rem;" onclick="admin.openResetPassword('${this.esc(b.email || '')}')">Reset PW</button>
+              <button class="btn btn-secondary" style="font-size: 0.75rem; padding: 0.25rem 0.5rem; margin-right: 0.25rem;" onclick="admin.openResetPassword('${this.esc(b.email || '')}', '${this.esc(b.id || '')}')">Reset PW</button>
               ${status === 'active'
                 ? `<button class="btn btn-secondary" style="font-size: 0.75rem; padding: 0.25rem 0.5rem;" onclick="admin.deactivateBuyer('${b.id}')">Deactivate</button>`
                 : `<button class="btn btn-primary" style="font-size: 0.75rem; padding: 0.25rem 0.5rem;" onclick="admin.reactivateBuyer('${b.id}')">Reactivate</button>`
@@ -2291,8 +2291,9 @@
       this.showToast('Buyers exported to CSV', 'success');
     },
 
-    openResetPassword(email) {
+    openResetPassword(email, buyerId) {
       const modal = document.getElementById('resetPasswordModal');
+      if (modal) modal.dataset.buyerId = String(buyerId || '').trim();
       document.getElementById('resetEmail').value = email;
       document.getElementById('resetNewPassword').value = '';
       if (modal) modal.style.display = 'flex';
@@ -2300,11 +2301,13 @@
 
     closeResetModal() {
       const modal = document.getElementById('resetPasswordModal');
+      if (modal) modal.dataset.buyerId = '';
       if (modal) modal.style.display = 'none';
     },
 
     async submitPasswordReset() {
       const email = document.getElementById('resetEmail').value;
+      const buyerId = String(document.getElementById('resetPasswordModal')?.dataset?.buyerId || '').trim();
       const newPassword = document.getElementById('resetNewPassword').value;
       if (!newPassword || newPassword.length < 8) {
         return this.showToast('Password must be at least 8 characters', 'error');
@@ -2313,7 +2316,7 @@
         const headers = this.getAuthHeaders();
         const res = await fetch('/api/admin/wholesale/buyers/reset-password', {
           method: 'POST', headers,
-          body: JSON.stringify({ email, newPassword })
+          body: JSON.stringify({ email, buyerId, newPassword })
         });
         const json = await res.json().catch(() => null);
         if (!res.ok || (json && json.status === 'error')) {
