@@ -57,7 +57,61 @@ function readJSON(filename, fallback) {
 //   { ok: false, reason: 'no_edge_url', ... }       — no LE URL configured
 //   { ok: false, reason: 'http_<status>', status }  — LE replied non-2xx
 //   { ok: false, reason: 'network_error', message } — fetch threw / timed out
+//   { ok: false, reason: 'circuit_open', ... }      — breaker is open
+//
+// P1 audit (2026-04-24): resilience envelope around the single fetch:
+//  - Configurable timeout (WRITE_TO_LE_TIMEOUT_MS, default 3000ms).
+//  - Simple circuit breaker: 5 failures in 60s opens the breaker for 60s;
+//    while open, return immediately without calling LE.
+//  - 409 Conflict retried once (identifier collisions during concurrent edits).
+const WRITE_TO_LE_TIMEOUT_MS = Math.max(500, Number(process.env.WRITE_TO_LE_TIMEOUT_MS || 3000));
+const WRITE_TO_LE_BREAKER_THRESHOLD = Math.max(1, Number(process.env.WRITE_TO_LE_BREAKER_THRESHOLD || 5));
+const WRITE_TO_LE_BREAKER_WINDOW_MS = Math.max(5000, Number(process.env.WRITE_TO_LE_BREAKER_WINDOW_MS || 60000));
+const WRITE_TO_LE_BREAKER_OPEN_MS = Math.max(5000, Number(process.env.WRITE_TO_LE_BREAKER_OPEN_MS || 60000));
+
+const _writeToLEBreaker = { failures: [], openUntil: 0 };
+
+function _recordWriteToLEFailure() {
+  const now = Date.now();
+  _writeToLEBreaker.failures = _writeToLEBreaker.failures.filter(
+    (t) => now - t < WRITE_TO_LE_BREAKER_WINDOW_MS
+  );
+  _writeToLEBreaker.failures.push(now);
+  if (_writeToLEBreaker.failures.length >= WRITE_TO_LE_BREAKER_THRESHOLD) {
+    _writeToLEBreaker.openUntil = now + WRITE_TO_LE_BREAKER_OPEN_MS;
+    _writeToLEBreaker.failures = [];
+    logger.warn(`[GWEN->LE] Circuit breaker OPEN for ${WRITE_TO_LE_BREAKER_OPEN_MS}ms after ${WRITE_TO_LE_BREAKER_THRESHOLD} failures`);
+  }
+}
+
+function _recordWriteToLESuccess() {
+  _writeToLEBreaker.failures = [];
+}
+
+async function _doWriteToLE(url, filename, data) {
+  const headers = { 'Content-Type': 'application/json', 'Accept': 'application/json' };
+  const farmId = process.env.FARM_ID;
+  if (farmId) headers['X-Farm-ID'] = farmId;
+  const apiKey = process.env.GREENREACH_API_KEY;
+  if (apiKey) headers['X-API-Key'] = apiKey;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), WRITE_TO_LE_TIMEOUT_MS);
+  try {
+    return await fetch(`${url}/data/${filename}`, {
+      method: 'POST', headers, body: JSON.stringify(data), signal: controller.signal
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 async function writeToLE(filename, data) {
+  // Circuit breaker: short-circuit if open.
+  if (Date.now() < _writeToLEBreaker.openUntil) {
+    const retryInMs = _writeToLEBreaker.openUntil - Date.now();
+    return { ok: false, reason: 'circuit_open', filename, retry_in_ms: retryInMs };
+  }
+
   try {
     let url = process.env.FARM_EDGE_URL;
     if (!url) {
@@ -68,26 +122,36 @@ async function writeToLE(filename, data) {
       }
       url = farmData.url;
     }
-    const headers = { 'Content-Type': 'application/json', 'Accept': 'application/json' };
-    const farmId = process.env.FARM_ID;
-    if (farmId) headers['X-Farm-ID'] = farmId;
-    const apiKey = process.env.GREENREACH_API_KEY;
-    if (apiKey) headers['X-API-Key'] = apiKey;
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 10000);
-    const res = await fetch(`${url}/data/${filename}`, {
-      method: 'POST', headers, body: JSON.stringify(data), signal: controller.signal
-    });
-    clearTimeout(timeout);
+
+    let res = await _doWriteToLE(url, filename, data);
+
+    // Retry once on 409 Conflict (common with concurrent edits to groups.json /
+    // rooms.json). Room Mapper writes are last-write-wins on LE side, so a
+    // second attempt with the same payload should succeed if the first lost
+    // the race.
+    if (res.status === 409) {
+      logger.warn(`[GWEN->LE] 409 Conflict for ${filename}, retrying once`);
+      res = await _doWriteToLE(url, filename, data);
+    }
+
     if (res.ok) {
+      _recordWriteToLESuccess();
       logger.info(`[GWEN->LE] Wrote ${filename} to Light Engine`);
       return { ok: true, filename };
     }
+    _recordWriteToLEFailure();
     logger.warn(`[GWEN->LE] Failed to write ${filename}: ${res.status}`);
     return { ok: false, reason: `http_${res.status}`, status: res.status, filename };
   } catch (err) {
-    logger.warn(`[GWEN->LE] Error writing ${filename}:`, err.message);
-    return { ok: false, reason: 'network_error', message: err.message, filename };
+    _recordWriteToLEFailure();
+    const isAbort = err?.name === 'AbortError';
+    logger.warn(`[GWEN->LE] ${isAbort ? 'Timeout' : 'Error'} writing ${filename}:`, err.message);
+    return {
+      ok: false,
+      reason: isAbort ? 'timeout' : 'network_error',
+      message: err.message,
+      filename
+    };
   }
 }
 
