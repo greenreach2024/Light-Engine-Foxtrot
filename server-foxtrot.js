@@ -9548,6 +9548,8 @@ app.get('/api/version', (req, res) => {
   res.json({
     version: APP_VERSION,
     buildTime: BUILD_TIME,
+    gitSha: process.env.GIT_SHA || null,
+    gitBranch: process.env.GIT_BRANCH || null,
     timestamp: new Date().toISOString(),
     uptime: process.uptime()
   });
@@ -27014,6 +27016,23 @@ app.get('/greenreach-org', (req, res) => {
 // Legacy admin.html redirect - docs/admin.html not served, redirect to farm-admin.html
 app.get('/admin.html', (req, res) => {
   res.redirect('/farm-admin.html');
+});
+
+// Service worker must NEVER be cached by the browser. Without this, the SW
+// script is served from the static middleware's 1-hour public cache, which
+// means a deploy that bumps CACHE_VERSION is invisible to returning users
+// for up to an hour. Explicit no-store header + registration updateViaCache
+// 'none' together close that window.
+app.get('/service-worker.js', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  res.setHeader('Service-Worker-Allowed', '/');
+  // Prefer the canonical Central copy (runtime precedence), fall back to root.
+  const centralSw = path.join(__dirname, 'greenreach-central', 'public', 'service-worker.js');
+  const rootSw = path.join(PUBLIC_DIR, 'service-worker.js');
+  if (fs.existsSync(centralSw)) return res.sendFile(centralSw);
+  return res.sendFile(rootSw);
 });
 
 // Wholesale portals are standalone and served by GreenReach Central, not Foxtrot.

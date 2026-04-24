@@ -7,18 +7,24 @@
 # Usage:
 #   ./scripts/sync-check-mirrored.sh          # report only
 #   ./scripts/sync-check-mirrored.sh --ci     # exit 1 if diverged
-#   ./scripts/sync-check-mirrored.sh --sync   # copy canonical → Central
+#   ./scripts/sync-check-mirrored.sh --sync   # copy canonical → mirror
 #
-# Canonical source: public/ (Light Engine)
-# Mirror target:   greenreach-central/public/
+# Canonical source: greenreach-central/public/
+# Mirror target:    public/ (Light Engine root)
+#
+# NOTE: Direction matters. server-foxtrot.js serves greenreach-central/public
+# FIRST in its static middleware chain, then falls back to root public/. That
+# means any file present in BOTH folders is served from the Central copy at
+# runtime. This script treats Central as canonical so --sync cannot silently
+# overwrite the served copy with a stale root copy.
 #
 # Files in KNOWN_DIVERGENT are expected to differ (Central-specific features).
 # ═══════════════════════════════════════════════════════════════════════
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-CANONICAL="$REPO_ROOT/public"
-MIRROR="$REPO_ROOT/greenreach-central/public"
+CANONICAL="$REPO_ROOT/greenreach-central/public"
+MIRROR="$REPO_ROOT/public"
 MODE="${1:-}"
 
 # Files expected to diverge (Central has additional features)
@@ -65,8 +71,8 @@ SYNCED=0
 echo ""
 echo "═══════════════════════════════════════════════════════════════"
 echo "  Mirrored Asset Sync Check — $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
-echo "  Canonical: public/"
-echo "  Mirror:    greenreach-central/public/"
+echo "  Canonical: greenreach-central/public/"
+echo "  Mirror:    public/"
 echo "═══════════════════════════════════════════════════════════════"
 echo ""
 

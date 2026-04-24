@@ -872,6 +872,19 @@ app.use('/data', (req, res, next) => {
   next();
 });
 
+// Service worker must NEVER be served from the browser cache. The static
+// middleware below applies long cache headers to .js assets, which would
+// make a bumped CACHE_VERSION invisible to returning users for up to its
+// max-age. Register this route BEFORE express.static so our no-store
+// headers take precedence.
+app.get('/service-worker.js', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  res.setHeader('Service-Worker-Allowed', '/');
+  res.sendFile(path.join(__dirname, 'public', 'service-worker.js'));
+});
+
 app.use(express.static(path.join(__dirname, 'public'), staticCacheOptions));
 // Fallback to root public directory for shared assets
 app.use(express.static(path.join(__dirname, '..', 'public'), staticCacheOptions));
@@ -1980,6 +1993,8 @@ app.get('/api/version', (req, res) => {
   res.json({
     version: APP_VERSION,
     buildTime: BUILD_TIME,
+    gitSha: process.env.GIT_SHA || null,
+    gitBranch: process.env.GIT_BRANCH || null,
     timestamp: new Date().toISOString(),
     uptime: process.uptime()
   });
