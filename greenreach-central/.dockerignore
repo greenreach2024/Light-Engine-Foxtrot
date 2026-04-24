@@ -52,8 +52,9 @@ Dockerfile
 # callers and causes the 78-ZipGrow-Standard overwrite bug (cdefb512, a2cd5454).
 # Catalogs/templates (equipment.catalog.json, spd-library.json, crop-registry.json,
 # farm-api-keys.json, etc.) are deliberately NOT listed here and continue to ship.
-public/data/groups.json
-public/data/rooms.json
+# groups.json and rooms.json ship as empty stubs (harmless with
+# farmStore read-fallback disabled in a2cd5454). Keeps parity with LE
+# and avoids any legacy reader tripping on ENOENT.
 public/data/room-map.json
 public/data/farm.json
 public/data/farm-settings.json

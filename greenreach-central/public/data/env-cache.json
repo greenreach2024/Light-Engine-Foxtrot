@@ -7,9 +7,8 @@
     "vpd": null,
     "zones": {
       "zone-2": {
-        "temperature": 21.6,
+        "temperature": 21.7,
         "humidity": 62,
-        "avg_battery": 60,
         "sensor_count": 2,
         "sensors": [
           "Sen 3",
@@ -19,7 +18,6 @@
       "zone-1": {
         "temperature": 21.9,
         "humidity": 63,
-        "avg_battery": 60,
         "sensor_count": 2,
         "sensors": [
           "Sen 1",
@@ -31,7 +29,7 @@
     "source": "iot-devices.json"
   },
   "meta": {
-    "updatedAt": "2026-04-14T12:54:51.567Z",
+    "updatedAt": "2026-04-24T12:34:55.197Z",
     "source": "syncSensorData"
   }
 }

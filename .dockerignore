@@ -105,8 +105,9 @@ Dockerfile
 # farmStore reads DB → in-memory → DEFAULTS only (flat-file fallback removed in
 # a2cd5454). These files shipped in the image previously leaked 78 demo groups
 # and stale room dims to unauthenticated /data/*.json callers.
-public/data/groups.json
-public/data/rooms.json
+# groups.json and rooms.json intentionally ship (empty stubs) --
+# required by LE framework validator at startup. farmStore read-fallback
+# is disabled (a2cd5454) so empty stubs cannot leak state.
 public/data/room-map.json
 public/data/farm.json
 public/data/farm-settings.json
