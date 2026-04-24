@@ -758,10 +758,10 @@
     const configuredStrip = (function () {
       const list = Array.isArray(state.room && state.room.installedSystems) ? state.room.installedSystems : [];
       if (!list.length) return '';
-      const chips = list.map((s) => {
+      const chips = list.map((s, idx) => {
         const cs = s.customization || {};
         const label = s.templateId + (Number.isFinite(cs.totalLocations) ? ' · ' + cs.totalLocations + ' loc' : '') + ' × ' + (Number(s.quantity || 1));
-        return `<span class="rbp-chip" data-template-id="${s.templateId}" style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;background:#0f172a;border:1px solid #334155;color:#e2e8f0;font-size:0.72rem;">${label}</span>`;
+        return `<span class="rbp-chip" data-template-id="${s.templateId}" data-installed-idx="${idx}" style="display:inline-flex;align-items:center;gap:6px;padding:4px 6px 4px 10px;border-radius:999px;background:#0f172a;border:1px solid #334155;color:#e2e8f0;font-size:0.72rem;">${label}<button type="button" class="rbp-chip-remove" data-installed-idx="${idx}" title="Remove this configured system from the room" aria-label="Remove ${s.templateId}" style="all:unset;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:999px;background:#1e293b;color:#f87171;font-weight:700;line-height:1;border:1px solid #475569;">×</button></span>`;
       }).join('');
       return `<div class="rbp-configured" style="display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px;">
         <span style="color:#94a3b8;font-size:0.72rem;align-self:center;">Configured systems:</span>${chips}
@@ -880,6 +880,67 @@
     perZonePlan.forEach((plan, i) => {
       const canvas = el.querySelector(`canvas[data-zone-canvas="${i}"]`);
       if (canvas) drawZoneCanvas(canvas, plan);
+    });
+
+    // Wire chip remove buttons. Each click pulls the latest rooms.json,
+    // splices the matching installedSystems entry out of state.room
+    // (matched by templateId so stale indexes from another tab don't drop
+    // the wrong row), POSTs /api/setup/save-rooms, and lets the LE
+    // reconciler rebuild groups.json + emit SSE so the breadcrumb, KPIs,
+    // and 3D viewer all refresh.
+    el.querySelectorAll('.rbp-chip-remove').forEach((btn) => {
+      btn.addEventListener('click', async (ev) => {
+        ev.preventDefault(); ev.stopPropagation();
+        const idx = Number(btn.getAttribute('data-installed-idx'));
+        const room = state.room;
+        if (!room || !Array.isArray(room.installedSystems) || !Number.isFinite(idx)) return;
+        const removed = room.installedSystems[idx];
+        if (!removed) return;
+        const ok = window.confirm(`Remove "${removed.templateId}" × ${Number(removed.quantity || 1)} from ${room.name || room.id}? This deletes its groups from the farm.`);
+        if (!ok) return;
+        btn.disabled = true;
+        try {
+          const _f = window.authFetch || fetch;
+          const roomsResp = await _f('/data/rooms.json?_=' + Date.now(), { cache: 'no-store' });
+          if (!roomsResp.ok) throw new Error('rooms.json ' + roomsResp.status);
+          const persistedRaw = await roomsResp.json();
+          const persisted = Array.isArray(persistedRaw) ? persistedRaw : (persistedRaw && Array.isArray(persistedRaw.rooms) ? persistedRaw.rooms : []);
+          const matchKey = String(room.id || room.name || '').toLowerCase();
+          const target = persisted.find((r) => String(r.id || r.name || '').toLowerCase() === matchKey) || room;
+          const installed = Array.isArray(target.installedSystems) ? target.installedSystems.slice() : [];
+          // Remove by templateId match against the chip we clicked, not by
+          // raw index, in case another tab already mutated the array.
+          const dropAt = installed.findIndex((s) => s && s.templateId === removed.templateId && Number(s.quantity) === Number(removed.quantity));
+          const finalDropAt = dropAt === -1 ? installed.findIndex((s) => s && s.templateId === removed.templateId) : dropAt;
+          if (finalDropAt === -1) throw new Error('installedSystems entry not found');
+          installed.splice(finalDropAt, 1);
+          const nextRoom = Object.assign({}, target, { installedSystems: installed });
+          // Drop buildPlan if no systems remain so Equipment step can reset.
+          if (!installed.length) nextRoom.buildPlan = null;
+          const nextRooms = persisted.map((r) => (String(r.id || r.name || '').toLowerCase() === matchKey ? nextRoom : r));
+          const saveResp = await _f('/api/setup/save-rooms', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ rooms: nextRooms })
+          });
+          if (!saveResp.ok) throw new Error('save-rooms ' + saveResp.status);
+          state.room = nextRoom;
+          renderSpatial();
+          if (typeof window.showToast === 'function') {
+            window.showToast({ title: 'System removed', msg: `${removed.templateId} removed from ${room.name || room.id}.`, kind: 'success' }, 3000);
+          }
+          document.dispatchEvent(new CustomEvent('room-build-plan:saved', { detail: { roomId: room.id, removed: removed.templateId } }));
+        } catch (err) {
+          console.error('[rbp] remove configured system failed:', err);
+          if (typeof window.showToast === 'function') {
+            window.showToast({ title: 'Remove failed', msg: String(err && err.message || err), kind: 'error' }, 5000);
+          } else {
+            window.alert('Remove failed: ' + (err && err.message || err));
+          }
+        } finally {
+          btn.disabled = false;
+        }
+      });
     });
 
     const unitsInput = $(UNIT_COUNT_ID);
