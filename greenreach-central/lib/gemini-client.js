@@ -159,21 +159,66 @@ export function anthropicToolsToOpenAI(tools) {
 }
 
 /**
- * Wrapper for chat.completions.create that auto-retries on 401 (expired token).
- * Use this instead of calling client.chat.completions.create() directly.
+ * Wrapper for chat.completions.create that auto-retries on 401 (expired token)
+ * and on transient 429 / 5xx errors with exponential backoff + jitter.
+ *
+ * Retry policy (P0 audit fix 2026-04-24):
+ *   - 401 → refresh ADC token once, retry once
+ *   - 408 / 429 / 500 / 502 / 503 / 504 → up to GEMINI_MAX_TRANSIENT_RETRIES (default 3)
+ *     retries, delay = min(baseMs * 2^attempt, 8000) + jitter
+ *   - Other statuses: bubble up immediately
+ * Non-retryable errors (400 bad request, 403 forbidden, 404) never retry.
  */
+const TRANSIENT_STATUSES = new Set([408, 429, 500, 502, 503, 504]);
+
+function parseStatus(err) {
+  const raw = err?.status ?? err?.response?.status ?? err?.code;
+  if (typeof raw === 'number' && raw >= 100) return raw;
+  const match = (err?.message || '').match(/(\d{3})\s*status/);
+  if (match) return Number(match[1]);
+  return null;
+}
+
 export async function geminiChatCreate(params) {
   const client = await getGeminiClient();
+  const maxRetries = Math.max(0, Number(process.env.GEMINI_MAX_TRANSIENT_RETRIES || 3));
+  const baseDelayMs = Math.max(100, Number(process.env.GEMINI_RETRY_BASE_MS || 400));
+
   try {
     return await client.chat.completions.create(params);
   } catch (err) {
-    const status = err?.status || err?.response?.status || (err?.message && err.message.match(/(\d{3}) status/)?.[1]);
-    if (String(status) === '401' && GCP_PROJECT) {
+    const status = parseStatus(err);
+
+    // 401 → refresh token and retry once
+    if (status === 401 && GCP_PROJECT) {
       console.warn('[Gemini] 401 from Vertex AI — refreshing token and retrying');
       await refreshGeminiToken();
       const retryClient = await getGeminiClient();
       return await retryClient.chat.completions.create(params);
     }
+
+    // 408/429/5xx → exponential backoff retry
+    if (status && TRANSIENT_STATUSES.has(status)) {
+      for (let attempt = 0; attempt < maxRetries; attempt += 1) {
+        const delay = Math.min(baseDelayMs * 2 ** attempt, 8000) + Math.floor(Math.random() * 250);
+        console.warn(`[Gemini] Transient ${status} — retry ${attempt + 1}/${maxRetries} in ${delay}ms`);
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        try {
+          const retryClient = await getGeminiClient();
+          return await retryClient.chat.completions.create(params);
+        } catch (retryErr) {
+          const retryStatus = parseStatus(retryErr);
+          if (!retryStatus || !TRANSIENT_STATUSES.has(retryStatus)) {
+            throw retryErr;
+          }
+          if (attempt === maxRetries - 1) {
+            console.error(`[Gemini] Transient ${retryStatus} persisted after ${maxRetries} retries`);
+            throw retryErr;
+          }
+        }
+      }
+    }
+
     throw err;
   }
 }
