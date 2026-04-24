@@ -63,6 +63,14 @@ async function ensureDeliveryTables() {
     );
 
     CREATE INDEX IF NOT EXISTS idx_farm_delivery_windows_farm ON farm_delivery_windows(farm_id);
+
+    -- Persistence audit (2026-04-24): delivery notes + business hours.
+    -- delivery_notes: free-text per-farm instructions ("leave at side gate",
+    -- "call on arrival", etc.). operating_hours: JSONB per-day open/close
+    -- used by POS, pickup, and delivery UIs. Idempotent ADD COLUMN IF NOT
+    -- EXISTS so existing installs self-migrate on first call.
+    ALTER TABLE farm_delivery_settings ADD COLUMN IF NOT EXISTS delivery_notes TEXT;
+    ALTER TABLE farm_delivery_settings ADD COLUMN IF NOT EXISTS operating_hours JSONB DEFAULT '{}'::jsonb;
   `);
 }
 
@@ -1009,7 +1017,7 @@ router.get('/farm-sales/delivery/config', authMiddleware, async (req, res) => {
       return res.status(400).json({ success: false, error: 'Farm ID not resolved' });
     }
 
-    let settings = { enabled: false, base_fee: 0, min_order: 25, lead_time_hours: 24, max_deliveries_per_window: 20 };
+    let settings = { enabled: false, base_fee: 0, min_order: 25, lead_time_hours: 24, max_deliveries_per_window: 20, delivery_notes: '', operating_hours: {} };
     let windows = [];
 
     if (isDatabaseAvailable()) {
@@ -1024,7 +1032,9 @@ router.get('/farm-sales/delivery/config', authMiddleware, async (req, res) => {
           base_fee: Number(r.base_fee),
           min_order: Number(r.min_order),
           lead_time_hours: Number(r.lead_time_hours || 24),
-          max_deliveries_per_window: Number(r.max_deliveries_per_window || 20)
+          max_deliveries_per_window: Number(r.max_deliveries_per_window || 20),
+          delivery_notes: r.delivery_notes || '',
+          operating_hours: r.operating_hours || {}
         };
       }
 
@@ -1064,19 +1074,34 @@ router.put('/farm-sales/delivery/config', authMiddleware, async (req, res) => {
       return res.status(400).json({ success: false, error: 'Farm ID not resolved' });
     }
 
-    const { enabled, base_fee, min_order, lead_time_hours, max_deliveries_per_window } = req.body;
+    const { enabled, base_fee, min_order, lead_time_hours, max_deliveries_per_window, delivery_notes, operating_hours } = req.body;
+
+    // Validate delivery_notes length to bound storage and rendering cost.
+    if (delivery_notes != null && typeof delivery_notes === 'string' && delivery_notes.length > 2000) {
+      return res.status(400).json({ success: false, error: 'delivery_notes must be 2000 characters or fewer' });
+    }
+    // operating_hours is validated structurally (object of day -> {open, close, closed}).
+    let operatingHoursJson = null;
+    if (operating_hours != null) {
+      if (typeof operating_hours !== 'object' || Array.isArray(operating_hours)) {
+        return res.status(400).json({ success: false, error: 'operating_hours must be an object keyed by day' });
+      }
+      operatingHoursJson = JSON.stringify(operating_hours);
+    }
 
     if (isDatabaseAvailable()) {
       await ensureDeliveryTables();
       await query(
-        `INSERT INTO farm_delivery_settings (farm_id, enabled, base_fee, min_order, lead_time_hours, max_deliveries_per_window, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, NOW())
+        `INSERT INTO farm_delivery_settings (farm_id, enabled, base_fee, min_order, lead_time_hours, max_deliveries_per_window, delivery_notes, operating_hours, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, NOW())
          ON CONFLICT (farm_id) DO UPDATE SET
            enabled = COALESCE($2, farm_delivery_settings.enabled),
            base_fee = COALESCE($3, farm_delivery_settings.base_fee),
            min_order = COALESCE($4, farm_delivery_settings.min_order),
            lead_time_hours = COALESCE($5, farm_delivery_settings.lead_time_hours),
            max_deliveries_per_window = COALESCE($6, farm_delivery_settings.max_deliveries_per_window),
+           delivery_notes = COALESCE($7, farm_delivery_settings.delivery_notes),
+           operating_hours = COALESCE($8::jsonb, farm_delivery_settings.operating_hours),
            updated_at = NOW()`,
         [
           farmId,
@@ -1084,7 +1109,9 @@ router.put('/farm-sales/delivery/config', authMiddleware, async (req, res) => {
           base_fee != null ? parseFloat(base_fee) : null,
           min_order != null ? parseFloat(min_order) : null,
           lead_time_hours != null ? parseInt(lead_time_hours) : null,
-          max_deliveries_per_window != null ? parseInt(max_deliveries_per_window) : null
+          max_deliveries_per_window != null ? parseInt(max_deliveries_per_window) : null,
+          delivery_notes != null ? String(delivery_notes) : null,
+          operatingHoursJson
         ]
       );
 
@@ -1098,7 +1125,9 @@ router.put('/farm-sales/delivery/config', authMiddleware, async (req, res) => {
           base_fee: Number(r.base_fee),
           min_order: Number(r.min_order),
           lead_time_hours: Number(r.lead_time_hours),
-          max_deliveries_per_window: Number(r.max_deliveries_per_window)
+          max_deliveries_per_window: Number(r.max_deliveries_per_window),
+          delivery_notes: r.delivery_notes || '',
+          operating_hours: r.operating_hours || {}
         }
       });
     }
