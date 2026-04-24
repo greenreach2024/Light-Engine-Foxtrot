@@ -793,6 +793,24 @@ const GPT_TOOLS = [
   {
     type: 'function',
     function: {
+      name: 'review_room_fit',
+      description: 'Review a room\'s current dimensions and zones and rank grow-system templates (ZipGrow, NFT, DWC, microgreen, aeroponics, etc.) by how well they fit. Returns per-template unit count, plant capacity by crop class, power estimate, ceiling-clearance check, and an overall recommendation. Use after the farmer updates room or zone info in farm setup, or when they ask how many towers/racks their room will hold.',
+      parameters: {
+        type: 'object',
+        properties: {
+          room_id: { type: 'string', description: 'Room id or name to analyze (required).' },
+          template_ids: { type: 'array', items: { type: 'string' }, description: 'Optional subset of grow-system template ids (e.g. ["nft-rack-3tier","aeroponics-tower"]). Omit to review all templates.' },
+          crop_class: { type: 'string', description: 'Crop class to size for: leafy_greens, microgreens, herbs, fruiting. Default leafy_greens.' },
+          walkway_m: { type: 'number', description: 'Central walkway width to reserve in metres. Default 1.2.' },
+          farm_id: { type: 'string', description: 'Farm ID (optional).' }
+        },
+        required: ['room_id']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
       name: 'get_inventory_summary',
       description: 'Get current crop inventory — quantities, statuses, and zones for all crops in stock.',
       parameters: {

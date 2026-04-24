@@ -4756,6 +4756,195 @@ export const TOOL_CATALOG = {
         return { ok: false, error: err.message };
       }
     }
+  },
+  // -------------------------------------------------------------------------
+  // review_room_fit: given a room and a set of grow-system templates, compute
+  // how many units of each template fit, the plant capacity, required power,
+  // and a ranked recommendation. This is the capability the farm setup page
+  // and the 3D viewer call on EVIE to review updated room/zone info and
+  // propose an optimized group selection. Read-only; does not mutate state.
+  // -------------------------------------------------------------------------
+  'review_room_fit': {
+    description: 'Review a room\'s current dimensions and zones and rank grow-system templates by how well they fit. Returns per-template unit capacity, plant capacity by crop class, power estimate, workspace clearance check, and an overall recommendation. Read-only.',
+    category: 'read',
+    required: ['room_id'],
+    optional: ['template_ids', 'crop_class', 'walkway_m', 'farm_id'],
+    handler: async (params) => {
+      const farm_id = params.farm_id || process.env.FARM_ID || 'default';
+      const { room_id } = params;
+      const cropClass = params.crop_class || 'leafy_greens';
+      const walkwayM = params.walkway_m != null ? Math.max(0, parseFloat(params.walkway_m)) : 1.2;
+
+      const rooms = await farmStore.get(farm_id, 'rooms') || [];
+      const room = resolveRoom(rooms, room_id);
+      if (!room) return { ok: false, error: `Room "${room_id}" not found.` };
+
+      const roomMap = await farmStore.get(farm_id, 'room_map') || {};
+      const dims = inferRoomDimensionsMeters(room, roomMap);
+      const roomLength = dims.length_m;
+      const roomWidth = dims.width_m;
+      const ceilingM = parseFloat(room.ceiling_height_m || room.height_m || 0) || null;
+
+      // Effective usable area after reserving a walkway along the length.
+      // We subtract walkway once (a single central aisle) and a 0.3m wall
+      // clearance on all sides as a conservative default.
+      const wallClearanceM = 0.3;
+      const usableLength = Math.max(0, roomLength - 2 * wallClearanceM);
+      const usableWidth = Math.max(0, roomWidth - 2 * wallClearanceM - walkwayM);
+      const usableArea = usableLength * usableWidth;
+
+      // Load templates. Fall back to the legacy JSON path if GCS not warmed.
+      let growSystemsDoc = await readJSONAsync('grow-systems.json', null);
+      if (!growSystemsDoc) growSystemsDoc = readJSON('grow-systems.json', { templates: [] });
+      const allTemplates = Array.isArray(growSystemsDoc.templates) ? growSystemsDoc.templates : [];
+      const requested = Array.isArray(params.template_ids) && params.template_ids.length
+        ? new Set(params.template_ids.map(String))
+        : null;
+      const templates = requested
+        ? allTemplates.filter(t => requested.has(t.id))
+        : allTemplates;
+
+      // Structural validation (defensive -- skip individual broken templates)
+      let validator = null;
+      try { validator = (await import('../lib/grow-systems-validator.js')).validateGrowSystems; }
+      catch { /* validator optional */ }
+      const structural = validator
+        ? validator({ templates })
+        : { ok: true, errors: [], warnings: [] };
+
+      // Current groups in this room for the "existing fit" baseline.
+      const allGroups = await farmStore.get(farm_id, 'groups') || [];
+      const groupsArr = Array.isArray(allGroups) ? allGroups : (allGroups.groups || []);
+      const existingInRoom = groupsArr.filter(g => {
+        const gr = g.roomId || g.room || '';
+        return gr === room.id || gr === room.name;
+      });
+
+      const results = [];
+      for (const t of templates) {
+        const warnings = [];
+        const footL = t.footprintM?.length;
+        const footW = t.footprintM?.width;
+        const heightM = t.heightM;
+        if (!footL || !footW || !heightM) {
+          results.push({ template_id: t.id, fits: false, reason: 'template missing required dimensions' });
+          continue;
+        }
+
+        // Required clearances (defaults from spatialContract; conservative
+        // when absent).
+        const clearance = t.spatialContract?.workspaceClearanceM || {};
+        const frontClearance = Number(clearance.front ?? 0.9);
+        const backClearance = Number(clearance.back ?? 0.0);
+        const endsClearance = Number(clearance.ends ?? 0.0);
+
+        // Footprint with clearances baked in.
+        const unitL = footL + endsClearance * 2;
+        const unitW = footW + frontClearance + backClearance;
+
+        const colsByLength = Math.max(0, Math.floor(usableLength / unitL));
+        const colsByWidth = Math.max(0, Math.floor(usableWidth / unitW));
+        const unitsLong = colsByLength;
+        const unitsWide = colsByWidth;
+        const unitsThatFit = unitsLong * unitsWide;
+
+        // Ceiling check.
+        const ceilingOK = ceilingM == null
+          ? null
+          : ceilingM >= (heightM + 0.2);
+        if (ceilingM != null && ceilingOK === false) {
+          warnings.push(`Template height ${heightM}m + 0.2m clearance exceeds room ceiling ${ceilingM}m.`);
+        }
+
+        // Plant capacity by requested crop class, with fallback to derived.
+        const authPlants = t.plantLocations?.totalByClass?.[cropClass];
+        const perTray = t.plantsPerTrayByClass?.[cropClass];
+        const derivedPlants = (t.tierCount && t.traysPerTier && perTray)
+          ? t.tierCount * t.traysPerTier * perTray
+          : null;
+        const plantsPerUnit = Number.isFinite(authPlants) ? authPlants
+          : (Number.isFinite(derivedPlants) ? derivedPlants : null);
+        const plantCapacity = plantsPerUnit != null ? plantsPerUnit * unitsThatFit : null;
+
+        // Power estimate. Sum lighting + pumps per template.
+        const lightsPerTier = Number(t.powerClassW?.lightsPerTierUnit) || 0;
+        const tierCount = Number(t.tierCount) || 1;
+        const lightingW = lightsPerTier * tierCount * unitsThatFit;
+        const pumpSupplyW = plantCapacity != null
+          ? (Number(t.irrigation?.supplyPumpWattsPer10kPlants) || 0) * (plantCapacity / 10000)
+          : 0;
+        const pumpReturnW = plantCapacity != null
+          ? (Number(t.irrigation?.returnPumpWattsPer10kPlants) || 0) * (plantCapacity / 10000)
+          : 0;
+        const totalPowerW = Math.round(lightingW + pumpSupplyW + pumpReturnW);
+
+        const cropSupported = Array.isArray(t.suitableCropClasses)
+          ? t.suitableCropClasses.includes(cropClass)
+          : true;
+        if (!cropSupported) {
+          warnings.push(`Template does not list ${cropClass} as a suitable crop class.`);
+        }
+
+        if (unitsThatFit === 0) {
+          warnings.push(`No units fit after ${wallClearanceM}m wall clearance and ${walkwayM}m walkway reservations.`);
+        }
+
+        results.push({
+          template_id: t.id,
+          template_name: t.name,
+          category: t.category,
+          footprint_m: { length: footL, width: footW },
+          height_m: heightM,
+          units_that_fit: unitsThatFit,
+          layout: { units_long: unitsLong, units_wide: unitsWide },
+          plant_capacity: plantCapacity,
+          plants_per_unit: plantsPerUnit,
+          plant_count_source: t.plantLocations?.source || (Number.isFinite(authPlants) ? 'totalByClass' : 'derived'),
+          power_estimate_w: totalPowerW,
+          ceiling_ok: ceilingOK,
+          crop_supported: cropSupported,
+          workspace_clearance_m: { front: frontClearance, back: backClearance, ends: endsClearance },
+          fits: unitsThatFit > 0,
+          warnings
+        });
+      }
+
+      // Rank by plant_capacity desc, then units_that_fit, then lower power.
+      const ranked = results.slice().sort((a, b) => {
+        if ((b.plant_capacity || 0) !== (a.plant_capacity || 0)) return (b.plant_capacity || 0) - (a.plant_capacity || 0);
+        if (b.units_that_fit !== a.units_that_fit) return b.units_that_fit - a.units_that_fit;
+        return (a.power_estimate_w || 0) - (b.power_estimate_w || 0);
+      });
+
+      const topPick = ranked.find(r => r.fits && r.ceiling_ok !== false && r.crop_supported);
+
+      return {
+        ok: true,
+        room: {
+          room_id: room.id || room.room_id,
+          name: room.name,
+          length_m: roomLength,
+          width_m: roomWidth,
+          ceiling_height_m: ceilingM,
+          dimension_source: dims.source,
+          zones: (roomMap.zones || []).length,
+          existing_groups_in_room: existingInRoom.length
+        },
+        usable_area: { length_m: +usableLength.toFixed(2), width_m: +usableWidth.toFixed(2), area_m2: +usableArea.toFixed(2), walkway_m: walkwayM, wall_clearance_m: wallClearanceM },
+        crop_class: cropClass,
+        templates_reviewed: results.length,
+        results: ranked,
+        recommended_template_id: topPick ? topPick.template_id : null,
+        recommendation_reason: topPick
+          ? `${topPick.template_name}: ${topPick.units_that_fit} unit(s) fit, capacity ${topPick.plant_capacity} ${cropClass} plants, est. ${topPick.power_estimate_w} W.`
+          : 'No template fits the room with current clearances -- try a smaller walkway or verify room dimensions.',
+        template_validation: {
+          ok: structural.ok,
+          warnings: structural.warnings || [],
+          errors: structural.errors || []
+        }
+      };
+    }
   }
 
 };

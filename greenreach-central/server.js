@@ -191,6 +191,24 @@ try {
   console.warn('[startup] Crop registry not loaded — falling back to plan-ID parsing:', err?.message);
 }
 
+// Validate grow-systems.json at startup (non-fatal). Surfaces typos,
+// missing fields, and auth-vs-derived plant-count drift before EVIE or
+// the 3D viewer consumes the templates.
+try {
+  const { validateGrowSystems } = await import('./lib/grow-systems-validator.js');
+  const growSystemsDoc = JSON.parse(fs.readFileSync(path.join(__dirname, 'public/data/grow-systems.json'), 'utf8'));
+  const gsResult = validateGrowSystems(growSystemsDoc);
+  if (gsResult.ok) {
+    console.log(`[startup] Grow-systems templates OK: ${gsResult.summary.template_count} template(s), schema=${gsResult.summary.schema_version}`);
+  } else {
+    console.error(`[startup] Grow-systems templates FAILED validation: ${gsResult.errors.length} error(s)`);
+    gsResult.errors.forEach(e => console.error('  [grow-systems] ERROR:', e));
+  }
+  gsResult.warnings.forEach(w => console.warn('  [grow-systems] WARN:', w));
+} catch (err) {
+  console.warn('[startup] Grow-systems validation skipped:', err?.message);
+}
+
 // Version constants
 const BUILD_TIME = Date.now().toString();
 const APP_VERSION = (process.env.APP_VERSION
