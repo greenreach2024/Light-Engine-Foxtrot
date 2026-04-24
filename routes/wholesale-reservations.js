@@ -257,38 +257,63 @@ router.post('/confirm', async (req, res) => {
       });
     }
 
-    // Confirm reservation and decrement inventory
+    // P0 audit fix (2026-04-24): oversell prevention.
+    // Deduction to Central farm_inventory MUST succeed before we mark the
+    // reservation 'confirmed'. Previously the sync was fire-and-forget, so a
+    // Central-side failure left a confirmed LE reservation with no Central
+    // deduction — inventory appeared available, enabling oversell on retry.
     const confirmed_at = new Date().toISOString();
-    
-    // Update in Map
-    reservation.status = 'confirmed';
-    reservation.confirmed_at = confirmed_at;
-    reservation.sub_order_id = sub_order_id;
-    reservations.set(reservation_id, reservation);
-    
-    // DUAL-WRITE: Update in NeDB
-    await reservationStore.confirmReservation(reservation_id);
+    const farmId = reservation.farm_id || process.env.FARM_ID;
 
-    console.log(`[Reservation] Confirmed: ${reservation_id} for sub-order ${sub_order_id}`);
-    console.log(`  Lot: ${reservation.lot_id}, Qty: ${reservation.qty}`);
-
-    // Persist deduction to Central farm_inventory (sold_quantity_lbs)
     try {
       const syncService = req.app.locals?.syncService;
-      if (syncService) {
-        const farmId = reservation.farm_id || process.env.FARM_ID;
-        syncService.syncDeduction(farmId, [{
+      if (syncService && typeof syncService.syncDeduction === 'function') {
+        await syncService.syncDeduction(farmId, [{
           product_id: reservation.sku_id || reservation.lot_id,
           quantity_lbs: reservation.qty,
           reason: 'wholesale_sale',
           order_id: sub_order_id
-        }]).catch(err =>
-          console.warn('[Reservation] Deduction sync deferred:', err.message)
-        );
+        }]);
+      } else {
+        console.warn('[Reservation] syncService unavailable — deduction NOT recorded to Central; refusing to confirm');
+        return res.status(503).json({
+          ok: false,
+          error: 'Inventory sync service unavailable',
+          message: 'Cannot confirm reservation without recording deduction. Retry shortly.'
+        });
       }
     } catch (syncErr) {
-      console.warn('[Reservation] Deduction sync call failed (non-fatal):', syncErr.message);
+      console.error('[Reservation] Deduction sync FAILED — refusing to confirm:', syncErr?.message || syncErr);
+      return res.status(502).json({
+        ok: false,
+        error: 'Failed to record inventory deduction',
+        message: 'Central inventory write failed. Reservation remains active; retry confirm or it will expire at TTL.',
+        reservation_id
+      });
     }
+
+    // Deduction succeeded — now mark the reservation confirmed in both stores.
+    reservation.status = 'confirmed';
+    reservation.confirmed_at = confirmed_at;
+    reservation.sub_order_id = sub_order_id;
+    reservations.set(reservation_id, reservation);
+
+    // DUAL-WRITE: Update in NeDB. confirmReservation() refuses to confirm
+    // rows whose expires_at <= NOW(), so if the TTL elapsed during the
+    // deduction call we will NOT silently confirm an expired hold.
+    const updatedCount = await reservationStore.confirmReservation(reservation_id);
+    if (!updatedCount) {
+      console.warn(`[Reservation] confirmReservation() rejected ${reservation_id} (likely TTL-expired after deduction)`);
+      return res.status(409).json({
+        ok: false,
+        error: 'Reservation expired before confirm',
+        message: 'Deduction was recorded but the hold expired. Contact support with reservation_id.',
+        reservation_id
+      });
+    }
+
+    console.log(`[Reservation] Confirmed: ${reservation_id} for sub-order ${sub_order_id}`);
+    console.log(`  Lot: ${reservation.lot_id}, Qty: ${reservation.qty}`);
 
     res.json({
       ok: true,
