@@ -458,6 +458,7 @@
       <button id="btnRefresh" aria-label="Reload farm data" title="Reload rooms, groups, sensors, and heatmap data">Refresh</button>
       <div class="sep"></div>
       <button id="btnEdit" aria-label="Toggle edit mode" title="Edit mode: drag sensors and equipment to reposition">Edit</button>
+      <button id="btnAddZone" aria-label="Draw a new zone on the floor" title="Draw a new zone rectangle on the floor (edit mode)" hidden>+ Zone</button>
     </div>
   </div>
 
@@ -608,6 +609,7 @@
       wallsVisible: true,
       equipmentVisible: false,
       editMode: false,
+      zoneDraw: { armed: false, active: false, roomId: null, startWorld: null, currentWorld: null, previewMesh: null, floorInfo: null },
       dragTarget: null,
       dragSelection: [],
       dragPlane: new THREE.Plane(new THREE.Vector3(0, 1, 0), 0),
@@ -4076,8 +4078,11 @@
       indicator.classList.toggle('visible', S.editMode);
       var container = document.getElementById('viewer-container');
       container.classList.toggle('edit-mode', S.editMode);
+      var addZoneBtn = document.getElementById('btnAddZone');
+      if (addZoneBtn) addZoneBtn.hidden = !S.editMode;
       if (!S.editMode) {
         clearSelection({ silent: true });
+        cancelZoneDraw();
         if (S.dragTarget) {
           S.dragTarget = null;
           S.dragSelection = [];
@@ -4085,6 +4090,145 @@
           S.controls.enabled = true;
         }
       }
+    }
+
+    // ---- Zone Draw (folded in from legacy room-mapper) -------
+    // Lets operators create new zones by dragging a rectangle on a room
+    // floor in edit mode. Zones persist via the same path as existing
+    // room-map data so downstream dashboards pick them up immediately.
+    function toggleZoneDrawMode() {
+      if (!S.editMode) return;
+      if (S.zoneDraw.armed || S.zoneDraw.active) {
+        cancelZoneDraw();
+        return;
+      }
+      S.zoneDraw.armed = true;
+      var btn = document.getElementById('btnAddZone');
+      if (btn) btn.classList.add('active');
+      var canvas = document.getElementById('farmCanvas');
+      if (canvas) canvas.style.cursor = 'crosshair';
+      setStatusBarMessage('Click and drag on a room floor to draw a new zone. Esc to cancel.', '#6366f1', 6000);
+    }
+
+    function cancelZoneDraw() {
+      S.zoneDraw.armed = false;
+      S.zoneDraw.active = false;
+      S.zoneDraw.roomId = null;
+      S.zoneDraw.startWorld = null;
+      S.zoneDraw.currentWorld = null;
+      S.zoneDraw.floorInfo = null;
+      if (S.zoneDraw.previewMesh) {
+        S.scene.remove(S.zoneDraw.previewMesh);
+        if (S.zoneDraw.previewMesh.geometry) S.zoneDraw.previewMesh.geometry.dispose();
+        if (S.zoneDraw.previewMesh.material) S.zoneDraw.previewMesh.material.dispose();
+        S.zoneDraw.previewMesh = null;
+      }
+      var btn = document.getElementById('btnAddZone');
+      if (btn) btn.classList.remove('active');
+      var canvas = document.getElementById('farmCanvas');
+      if (canvas) canvas.style.cursor = '';
+    }
+
+    function zoneDrawFloorInfoFromHit(hit) {
+      var mesh = hit && hit.object;
+      if (!mesh || !mesh.userData || mesh.userData.type !== 'room') return null;
+      var room = mesh.userData.room;
+      if (!room || !room.id) return null;
+      var roomW = mesh.userData.roomW;
+      var roomD = mesh.userData.roomD;
+      if (!(roomW > 0) || !(roomD > 0)) return null;
+      var map = S.roomMaps[room.id] || {};
+      var gridSize = map.gridSize || 20;
+      var offsetX = mesh.position.x - roomW / 2;
+      return { roomId: room.id, room: room, roomW: roomW, roomD: roomD,
+        offsetX: offsetX, gridSize: gridSize,
+        zScaleX: roomW / gridSize, zScaleZ: roomD / gridSize };
+    }
+
+    function worldToGridXY(world, info) {
+      if (!world || !info) return { x: 0, y: 0 };
+      var gx = (world.x - info.offsetX) / info.zScaleX;
+      var gy = world.z / info.zScaleZ;
+      gx = Math.max(0, Math.min(info.gridSize, gx));
+      gy = Math.max(0, Math.min(info.gridSize, gy));
+      return { x: gx, y: gy };
+    }
+
+    function updateZoneDrawPreview() {
+      if (!S.zoneDraw.active || !S.zoneDraw.startWorld || !S.zoneDraw.currentWorld || !S.zoneDraw.floorInfo) return;
+      var info = S.zoneDraw.floorInfo;
+      var a = S.zoneDraw.startWorld;
+      var b = S.zoneDraw.currentWorld;
+      var minX = Math.min(a.x, b.x), maxX = Math.max(a.x, b.x);
+      var minZ = Math.min(a.z, b.z), maxZ = Math.max(a.z, b.z);
+      var rx0 = info.offsetX, rx1 = info.offsetX + info.roomW;
+      minX = Math.max(rx0, minX); maxX = Math.min(rx1, maxX);
+      minZ = Math.max(0, minZ);   maxZ = Math.min(info.roomD, maxZ);
+      var w = Math.max(0.05, maxX - minX);
+      var d = Math.max(0.05, maxZ - minZ);
+      if (S.zoneDraw.previewMesh) {
+        S.scene.remove(S.zoneDraw.previewMesh);
+        if (S.zoneDraw.previewMesh.geometry) S.zoneDraw.previewMesh.geometry.dispose();
+        if (S.zoneDraw.previewMesh.material) S.zoneDraw.previewMesh.material.dispose();
+      }
+      var geo = new THREE.BoxGeometry(w, 0.05, d);
+      var mat = new THREE.MeshBasicMaterial({ color: 0x6366f1, transparent: true, opacity: 0.3, depthWrite: false });
+      var mesh = new THREE.Mesh(geo, mat);
+      mesh.position.set(minX + w / 2, 0.18, minZ + d / 2);
+      S.scene.add(mesh);
+      S.zoneDraw.previewMesh = mesh;
+    }
+
+    async function commitZoneDraw() {
+      var info = S.zoneDraw.floorInfo;
+      var a = S.zoneDraw.startWorld;
+      var b = S.zoneDraw.currentWorld;
+      if (!info || !a || !b) { cancelZoneDraw(); return; }
+      var p1 = worldToGridXY({ x: Math.min(a.x, b.x), z: Math.min(a.z, b.z) }, info);
+      var p2 = worldToGridXY({ x: Math.max(a.x, b.x), z: Math.max(a.z, b.z) }, info);
+      var gx1 = Math.round(Math.min(p1.x, p2.x) * 10) / 10;
+      var gy1 = Math.round(Math.min(p1.y, p2.y) * 10) / 10;
+      var gx2 = Math.round(Math.max(p1.x, p2.x) * 10) / 10;
+      var gy2 = Math.round(Math.max(p1.y, p2.y) * 10) / 10;
+      if ((gx2 - gx1) < 0.5 || (gy2 - gy1) < 0.5) {
+        setStatusBarMessage('Zone too small -- drag a larger rectangle', '#f59e0b', 3000);
+        cancelZoneDraw();
+        return;
+      }
+      var roomId = info.roomId;
+      var room = info.room;
+      if (!S.roomMaps[roomId]) {
+        S.roomMaps[roomId] = { roomId: roomId, name: room.name || roomId, gridSize: info.gridSize, zones: [], devices: [] };
+      }
+      if (!Array.isArray(S.roomMaps[roomId].zones)) S.roomMaps[roomId].zones = [];
+      var zones = S.roomMaps[roomId].zones;
+      var usedNums = zones
+        .map(function(z) { var n = parseInt(String(z.zone || z.name).replace(/[^0-9]/g, ''), 10); return isNaN(n) ? 0 : n; })
+        .filter(function(n) { return n > 0; });
+      var nextNum = 1;
+      while (usedNums.indexOf(nextNum) >= 0) nextNum += 1;
+      var zoneLabel = 'Zone ' + nextNum;
+      var newZone = {
+        id: 'zone-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6),
+        zone: zoneLabel, name: zoneLabel,
+        x1: gx1, y1: gy1, x2: gx2, y2: gy2,
+        tempSetpoint: null, rhSetpoint: null, rhDelta: null
+      };
+      zones.push(newZone);
+      if (!Array.isArray(room.zones)) room.zones = [];
+      if (!room.zones.some(function(z) { return String(z.id || z.name) === String(newZone.id); })) {
+        room.zones.push({ id: newZone.id, name: newZone.name });
+      }
+      try {
+        await persistRoomMap(roomId);
+        setStatusBarMessage('New zone created in ' + (room.name || roomId), '#4ade80', 2500);
+      } catch (err) {
+        console.error('[3D] Zone create failed:', err);
+        setStatusBarMessage('Zone save failed: ' + (err && err.message || 'unknown'), '#f87171', 4000);
+      }
+      cancelZoneDraw();
+      buildScene();
+      renderFarmStats();
     }
 
     function onPointerDown(e) {
@@ -4095,6 +4239,30 @@
       var rect = container.getBoundingClientRect();
       S.mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
       S.mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      // Zone-draw owns the pointer when armed: landing on a floor starts
+      // the rectangle; missing it cancels the draw.
+      if (S.zoneDraw.armed) {
+        S.raycaster.setFromCamera(S.mouse, S.camera);
+        var floorHits = S.raycaster.intersectObjects(S.meshes.floors);
+        if (floorHits.length > 0) {
+          var info = zoneDrawFloorInfoFromHit(floorHits[0]);
+          if (info) {
+            S.zoneDraw.armed = false;
+            S.zoneDraw.active = true;
+            S.zoneDraw.roomId = info.roomId;
+            S.zoneDraw.floorInfo = info;
+            S.zoneDraw.startWorld = floorHits[0].point.clone();
+            S.zoneDraw.currentWorld = floorHits[0].point.clone();
+            S.controls.enabled = false;
+            e.preventDefault();
+            e.stopPropagation();
+            updateZoneDrawPreview();
+            return;
+          }
+        }
+        cancelZoneDraw();
+        return;
+      }
       S.raycaster.setFromCamera(S.mouse, S.camera);
       var draggable = []
         .concat(S.meshes.zones.filter(function(m) { return m.isMesh && m.userData.type === 'zone'; }))
@@ -4123,6 +4291,19 @@
     }
 
     function onPointerMove(e) {
+      if (S.zoneDraw.active) {
+        var zContainer = document.getElementById('viewer-container');
+        var zRect = zContainer.getBoundingClientRect();
+        S.mouse.x = ((e.clientX - zRect.left) / zRect.width) * 2 - 1;
+        S.mouse.y = -((e.clientY - zRect.top) / zRect.height) * 2 + 1;
+        S.raycaster.setFromCamera(S.mouse, S.camera);
+        var zHits = S.raycaster.intersectObjects(S.meshes.floors);
+        if (zHits.length > 0) {
+          S.zoneDraw.currentWorld = zHits[0].point.clone();
+          updateZoneDrawPreview();
+        }
+        return;
+      }
       if (!S.dragTarget) {
         onMouseMove(e);
         return;
@@ -4201,6 +4382,11 @@
     }
 
     function onPointerUp(e) {
+      if (S.zoneDraw.active) {
+        S.controls.enabled = true;
+        commitZoneDraw();
+        return;
+      }
       if (!S.dragTarget) return;
       S.controls.enabled = true;
       document.getElementById('farmCanvas').classList.remove('dragging');
@@ -4625,6 +4811,16 @@
         html += '<div class="dp-input-row"><label>X2</label><input type="number" step="0.1" min="0" max="' + zRoomL + '" id="zoneX2" value="' + zmX2 + '" style="width:55px"><span class="unit">m</span>';
         html += '<label>Y2</label><input type="number" step="0.1" min="0" max="' + zRoomW + '" id="zoneY2" value="' + zmY2 + '" style="width:55px"><span class="unit">m</span></div>';
         html += '</div>';
+        // Automation setpoints (folded in from legacy room-mapper). Empty
+        // strings clear the value so the zone inherits farm defaults.
+        var tSP = (z.tempSetpoint == null || z.tempSetpoint === '') ? '' : String(z.tempSetpoint);
+        var hSP = (z.rhSetpoint == null || z.rhSetpoint === '') ? '' : String(z.rhSetpoint);
+        var hDelta = (z.rhDelta == null || z.rhDelta === '') ? '' : String(z.rhDelta);
+        html += '<div class="dp-section"><div class="dp-label">Automation Setpoints</div>';
+        html += '<div class="dp-input-row"><label>Temp</label><input type="number" step="0.5" id="zoneTempSP" value="' + tSP + '" style="width:65px"><span class="unit">&deg;C</span>';
+        html += '<label>RH</label><input type="number" step="1" min="0" max="100" id="zoneRHSP" value="' + hSP + '" style="width:65px"><span class="unit">%</span></div>';
+        html += '<div class="dp-input-row"><label>RH &plusmn;</label><input type="number" step="1" min="0" max="50" id="zoneRHDelta" value="' + hDelta + '" style="width:65px"><span class="unit">%</span><span class="unit" style="flex:1;opacity:0.6">AI uses these for recommendations</span></div>';
+        html += '</div>';
         html += '<button class="dp-save-btn" id="saveZone">Save Zone</button>';
 
         content.innerHTML = html;
@@ -4657,6 +4853,21 @@
           if (!isNaN(newY1)) z.y1 = newY1;
           if (!isNaN(newX2)) z.x2 = newX2;
           if (!isNaN(newY2)) z.y2 = newY2;
+          var tSPEl = document.getElementById('zoneTempSP');
+          var hSPEl = document.getElementById('zoneRHSP');
+          var hDeltaEl = document.getElementById('zoneRHDelta');
+          if (tSPEl) {
+            var tVal = tSPEl.value.trim();
+            z.tempSetpoint = tVal === '' ? null : (isNaN(parseFloat(tVal)) ? z.tempSetpoint : parseFloat(tVal));
+          }
+          if (hSPEl) {
+            var hVal = hSPEl.value.trim();
+            z.rhSetpoint = hVal === '' ? null : (isNaN(parseFloat(hVal)) ? z.rhSetpoint : parseFloat(hVal));
+          }
+          if (hDeltaEl) {
+            var dVal = hDeltaEl.value.trim();
+            z.rhDelta = dVal === '' ? null : (isNaN(parseFloat(dVal)) ? z.rhDelta : parseFloat(dVal));
+          }
           if (rId && S.roomMaps[rId]) {
             try {
               await persistRoomMap(rId);
@@ -4683,7 +4894,7 @@
         };
 
         document.getElementById('saveZone').addEventListener('click', function() { saveZoneChanges(false); });
-        bindAutoSaveOnCommit(['zoneName', 'zoneX1', 'zoneY1', 'zoneX2', 'zoneY2'], saveZoneChanges);
+        bindAutoSaveOnCommit(['zoneName', 'zoneX1', 'zoneY1', 'zoneX2', 'zoneY2', 'zoneTempSP', 'zoneRHSP', 'zoneRHDelta'], saveZoneChanges);
 
       } else if (ud.type === 'room') {
         const r = ud.room;
@@ -5254,6 +5465,13 @@
       canvas.addEventListener('touchcancel', function(e) { _touchCount = 0; }, { passive: true });
 
       document.getElementById('btnEdit').addEventListener('click', toggleEditMode);
+      var addZoneBtn = document.getElementById('btnAddZone');
+      if (addZoneBtn) addZoneBtn.addEventListener('click', toggleZoneDrawMode);
+      document.addEventListener('keydown', function(ev) {
+        if (ev.key === 'Escape' && (S.zoneDraw.armed || S.zoneDraw.active)) {
+          cancelZoneDraw();
+        }
+      });
       document.getElementById('detailClose').addEventListener('click', function() {
         closeDetailPanel({ confirm: true, message: 'Discard unsaved detail panel changes?' });
       });
@@ -5429,6 +5647,18 @@
               if (editBtn) editBtn.click();
             }
           }, 600);
+        }
+
+        // ?edit=1 auto-enables edit mode (legacy room-mapper cutover). The
+        // redirect from /views/room-mapper.html appends this flag so users
+        // land directly in the zone/equipment placement workflow.
+        if (qs.get('edit') === '1') {
+          setTimeout(function () {
+            if (!S.editMode) {
+              var editBtn = document.getElementById('btnEdit');
+              if (editBtn) editBtn.click();
+            }
+          }, 800);
         }
       } catch (e) {
         console.warn('[3d-viewer] deep-link params failed:', e);

@@ -22119,11 +22119,11 @@ app.get('/api/demo/intro-cards', (req, res) => {
     'room-mapper': {
       title: 'Map Your Space. Make Dashboards Smart.',
       icon: '',
-      description: `Define zones, place sensors and equipment, and set targets. This simple setup powers every dashboard: when your space changes, your data and controls stay aligned. E.V.I.E. uses your layout to tailor guidance zone by zone.<br><br>One-time effort that improves everything downstream — easier handoffs when spaces or teams change, and clear structure for volunteers and new staff.`,
+      description: `Define zones, place sensors and equipment, and set targets directly inside the 3D Farm Viewer. This setup powers every dashboard: when your space changes, your data and controls stay aligned. E.V.I.E. uses your layout to tailor guidance zone by zone.<br><br>One-time effort that improves everything downstream — easier handoffs when spaces or teams change, and clear structure for volunteers and new staff.`,
       features: [
-        'Visual zone design with boundaries, names, and targets',
+        'Zone drawing folded into the 3D Farm Viewer in edit mode',
         'Drag-and-drop sensor and equipment placement',
-        'Zone-specific environmental targets for diverse crops',
+        'Zone-specific environmental targets (temp, RH, RH delta) for diverse crops',
         'Centralized configuration that updates all dashboards automatically',
         'Simple setup that unlocks smarter, zone-aware E.V.I.E. recommendations'
       ]
@@ -27038,6 +27038,12 @@ app.get('/service-worker.js', (req, res) => {
 // Wholesale portals are standalone and served by GreenReach Central, not Foxtrot.
 // Wholesale pages are now served directly from edge farm
 // (removed redirect to GreenReach Central - edge farms can host their own wholesale portal)
+
+// Legacy Room Mapper was folded into the 3D Farm Viewer. Redirect all old
+// links (sidebar nav, bookmarks, direct URLs) to the viewer's edit mode.
+app.get(['/views/room-mapper.html', '/room-mapper.html', '/public/views/room-mapper.html'], (req, res) => {
+  res.redirect(301, '/views/3d-farm-viewer.html?edit=1');
+});
 
 // Serve consolidated Light Engine UI
 app.use('/light-engine/public', express.static(LIGHT_ENGINE_DIR, {
