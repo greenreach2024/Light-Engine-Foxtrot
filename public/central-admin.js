@@ -14053,31 +14053,52 @@ async function saveSaladMix() {
 
     const rows = document.querySelectorAll('#mix-components-container .mix-comp-row');
     const components = [];
-    for (const row of rows) {
+    const rowErrors = [];
+    rows.forEach((row, idx) => {
         const pName = row.querySelector('.mix-comp-name').value.trim();
-        const pct = parseFloat(row.querySelector('.mix-comp-pct').value);
-        const pId = row.querySelector('.mix-comp-name').dataset.productId || pName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+        const pctRaw = row.querySelector('.mix-comp-pct').value;
+        const pct = parseFloat(pctRaw);
         const traitRole = (row.querySelector('.mix-comp-role')?.value || '').trim();
         const colorProfile = row.querySelector('.mix-comp-color')?.value || '';
         const tasteProfile = row.querySelector('.mix-comp-taste')?.value || '';
         const textureProfile = row.querySelector('.mix-comp-texture')?.value || '';
-        if (pName && pct > 0) {
-            components.push({
-                product_name: pName, product_id: pId, ratio: pct / 100,
-                trait_role: traitRole || null,
-                color_profile: colorProfile || null,
-                taste_profile: tasteProfile || null,
-                texture_profile: textureProfile || null
-            });
+
+        // Treat a row as "intended to be filled" if ANY field was touched.
+        // Silently dropping partially-filled rows made the user see the
+        // generic "components not recognized" error from the server. Now we
+        // call it out explicitly so the operator knows which row is wrong.
+        const touched = Boolean(pName || pctRaw || traitRole || colorProfile || tasteProfile || textureProfile);
+        if (!touched) return;
+
+        if (!pName) {
+            rowErrors.push(`Row ${idx + 1}: "Default crop" is required.`);
+            return;
         }
+        if (!Number.isFinite(pct) || pct <= 0) {
+            rowErrors.push(`Row ${idx + 1} (${pName}): ratio % must be a positive number.`);
+            return;
+        }
+        const pId = row.querySelector('.mix-comp-name').dataset.productId || pName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+        components.push({
+            product_name: pName, product_id: pId, ratio: pct / 100,
+            trait_role: traitRole || null,
+            color_profile: colorProfile || null,
+            taste_profile: tasteProfile || null,
+            texture_profile: textureProfile || null
+        });
+    });
+
+    if (rowErrors.length) {
+        alert('Please fix the following before saving:\n\n' + rowErrors.join('\n'));
+        return;
     }
 
     if (components.length < 2 || components.length > 4) {
-        alert('A mix must have 2-4 components'); return;
+        alert(`A mix must have 2-4 components. You currently have ${components.length}. Click "+ Add Component" and fill in both the crop name and ratio %.`); return;
     }
     const sum = components.reduce((s, c) => s + c.ratio, 0);
     if (Math.abs(sum - 1.0) > 0.01) {
-        alert(`Ratios must sum to 100%. Current: ${(sum * 100).toFixed(1)}%`); return;
+        alert(`Ratios must sum to 100%. Current total: ${(sum * 100).toFixed(1)}%.`); return;
     }
 
     try {
