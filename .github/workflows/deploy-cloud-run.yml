@@ -42,6 +42,17 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
+      - name: Enforce deploys only from main
+        # Production deploys must always come from main. Blocks the
+        # "manual deploy from a feature branch" footgun that produced
+        # the 04-22 non-main production revisions. If you need to test
+        # a branch, do it in a preview/staging flow, not this one.
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::Refusing to deploy from ${GITHUB_REF}. This workflow only accepts refs/heads/main."
+          echo "If you need this ref deployed, open a PR to main first."
+          exit 1
+
       - uses: actions/checkout@v4
 
       - id: auth
