@@ -922,13 +922,31 @@ async function hydrateCriticalDataFromGCS() {
     const mod = await import('./services/gcs-storage.js');
     for (const file of __GCS_MIRRORED_FILES) {
       const rel = `public/data/${file}`;
+      const target = path.join(DATA_DIR, file);
       try {
         const data = await mod.readJSON(rel, null);
-        if (data === null || data === undefined) continue;
-        const target = path.join(DATA_DIR, file);
-        try { fs.mkdirSync(path.dirname(target), { recursive: true }); } catch {}
-        fs.writeFileSync(target, JSON.stringify(data, null, 2));
-        console.log(`[gcs-hydrate] Restored ${file} from GCS`);
+        if (data !== null && data !== undefined) {
+          // GCS has a mirrored copy — restore it (authoritative).
+          try { fs.mkdirSync(path.dirname(target), { recursive: true }); } catch {}
+          fs.writeFileSync(target, JSON.stringify(data, null, 2));
+          console.log(`[gcs-hydrate] Restored ${file} from GCS`);
+          continue;
+        }
+        // GCS has no mirrored copy yet. If a local (baked or seeded) file
+        // exists, push it to GCS as the baseline snapshot so subsequent
+        // cold starts can restore it. Without this, every Cloud Run cold
+        // start resets the ephemeral filesystem to the baked-in image
+        // copy and the mirror-on-write chain never gets a chance to bind.
+        if (fs.existsSync(target)) {
+          try {
+            const raw = fs.readFileSync(target, 'utf8');
+            const parsed = JSON.parse(raw);
+            await mod.writeJSON(rel, parsed);
+            console.log(`[gcs-hydrate] Seeded GCS baseline for ${file} from local image`);
+          } catch (seedErr) {
+            console.warn(`[gcs-hydrate] Failed to seed ${file} baseline:`, seedErr?.message || seedErr);
+          }
+        }
       } catch (fileErr) {
         console.warn(`[gcs-hydrate] Skip ${file}:`, fileErr?.message || fileErr);
       }
