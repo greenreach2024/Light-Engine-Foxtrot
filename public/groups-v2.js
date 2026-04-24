@@ -7659,6 +7659,15 @@ async function executeBuildStockGroups() {
 
   // Update UI
   document.dispatchEvent(new Event('groups-updated'));
+  // Bridge to DataFlowBus so the 3D viewer (and other cross-page consumers)
+  // refetch and rerender after bulk group creation. The DOM event alone is
+  // not enough because the viewer subscribes via window.DataFlowBus.on(...).
+  try {
+    if (window.DataFlowBus && typeof window.DataFlowBus.emit === 'function') {
+      window.DataFlowBus.emit('groups', { source: 'build-stock-groups', created: created, skipped: skipped });
+      window.DataFlowBus.emit('lights', { source: 'build-stock-groups', created: created });
+    }
+  } catch (e) { /* non-fatal */ }
   if (typeof populateGroupsV2LoadGroupDropdown === 'function') {
     populateGroupsV2LoadGroupDropdown();
   }

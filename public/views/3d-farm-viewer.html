@@ -910,11 +910,20 @@
       };
     }
 
+    // Farm-scoped localStorage keys: dimensions are per-tenant, and unscoped
+    // keys leaked prior farm's room/group sizes into the current farm's view
+    // when operators switched tenants in the same browser. Keys now embed the
+    // farmId from localStorage('farmId'); missing farmId falls back to a
+    // neutral '__noFarm' bucket so legacy standalone use still works.
+    function __farm3dFarmId() {
+      try { return (localStorage.getItem('farmId') || '').trim() || '__noFarm'; } catch (e) { return '__noFarm'; }
+    }
+    function __farm3dKey(base) { return base + '::' + __farm3dFarmId(); }
     function loadPersistedDimensions() {
       try {
-        const gd = localStorage.getItem('farm3d_groupDims');
+        const gd = localStorage.getItem(__farm3dKey('farm3d_groupDims'));
         if (gd) S.groupDimensions = JSON.parse(gd);
-        const rd = localStorage.getItem('farm3d_roomDims');
+        const rd = localStorage.getItem(__farm3dKey('farm3d_roomDims'));
         if (rd) S.roomDimensions = JSON.parse(rd);
       } catch (e) {}
       // Hydrate from server room-map data (ceilingHeight, roomLength, roomWidth)
@@ -973,7 +982,7 @@
       });
     }
     function saveGroupDimensions() {
-      try { localStorage.setItem('farm3d_groupDims', JSON.stringify(S.groupDimensions)); } catch (e) {}
+      try { localStorage.setItem(__farm3dKey('farm3d_groupDims'), JSON.stringify(S.groupDimensions)); } catch (e) {}
     }
 
     function setStatusBarMessage(message, color, timeoutMs) {
@@ -1254,7 +1263,7 @@
     }
 
     async function saveRoomDimensions(roomIds) {
-      try { localStorage.setItem('farm3d_roomDims', JSON.stringify(S.roomDimensions)); } catch (e) {}
+      try { localStorage.setItem(__farm3dKey('farm3d_roomDims'), JSON.stringify(S.roomDimensions)); } catch (e) {}
       const ids = Array.isArray(roomIds) && roomIds.length ? roomIds : Object.keys(S.roomDimensions);
       ids.forEach(function(rId) {
         const dims = S.roomDimensions[rId] || {};

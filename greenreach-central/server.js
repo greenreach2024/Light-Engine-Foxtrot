@@ -2131,24 +2131,24 @@ app.get('/env', authMiddleware, async (req, res) => {
     logger.warn(`[Env] DB telemetry read failed: ${dbErr.message}`);
   }
 
-  // 2. Fall back to LE proxy (cloud LE instance)
-  try {
-    const leUrl = resolveEdgeUrlForProxy();
-    if (!leUrl) throw new Error('No Light Engine URL configured');
-    const upstream = `${leUrl}/env?hours=${hours}`;
-    logger.info(`[Env] No DB telemetry, proxying to Light Engine: ${upstream}`);
-    const response = await fetch(upstream, {
-      method: 'GET',
-      headers: leProxyHeaders(),
-      signal: AbortSignal.timeout(8000)
-    });
-    if (!response.ok) throw new Error(`LE returned ${response.status}`);
-    const data = await response.json();
-    return res.json(data);
-  } catch (proxyErr) {
-    logger.warn(`[Env] LE proxy also failed: ${proxyErr.message}`);
-    return res.status(200).json({ zones: [] });
-  }
+  // 2. No DB telemetry for this farm — return empty zones.
+  //    Previously fell back to proxying the shared LE /env endpoint, which
+  //    returned whichever farm's readings were in LE's in-memory store and
+  //    leaked them across tenants. Tenant boundary MUST be preserved: if the
+  //    current farm has no telemetry in the database, the UI sees no readings
+  //    rather than another farm's data. Cross-farm admin access remains
+  //    available via /api/env/network (envProxyRoutes).
+  logger.info(`[Env] No DB telemetry for farm ${farmId}; returning empty zones (cross-farm fallback disabled).`);
+  return res.status(200).json({
+    zones: [],
+    rooms: [],
+    meta: {
+      envSource: 'none',
+      farmId,
+      reason: 'no-db-telemetry',
+      updatedAt: new Date().toISOString()
+    }
+  });
 });
 
 // /api/env is handled by envProxyRoutes (mounted later at L~2696).
