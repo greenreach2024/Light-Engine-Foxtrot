@@ -1968,6 +1968,28 @@ app.use('/api/admin/auth/login', authLimiter);
 app.use('/api/wholesale/auth', authLimiter);
 app.use('/api/producer/auth', authLimiter);
 
+// P1 audit (2026-04-24): AI endpoint rate limiter. Vertex AI token spend is
+// unbounded at the general /api limit (500/15min). Cap AI chat calls lower to
+// contain cost from a compromised admin/farm token or runaway client. Keyed by
+// ip+auth-subject so one hostile actor cannot exhaust a shared-IP quota.
+const aiLimiter = rateLimit({
+  windowMs: parseInt(process.env.AI_RATE_LIMIT_WINDOW_MS, 10) || 60 * 1000, // 1 minute
+  max: parseInt(process.env.AI_RATE_LIMIT_MAX_REQUESTS, 10) || 30,          // 30 AI calls / min / subject
+  message: { success: false, error: 'AI rate limit exceeded. Please slow down.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => {
+    const ip = req.ip || req.connection?.remoteAddress || 'unknown-ip';
+    const subject = req.admin?.id || req.farmId || req.user?.id || 'anon';
+    return `ai:${ip}:${subject}`;
+  },
+  skip: (req) => {
+    // Only rate-limit the chat POST; allow GETs (history, health) through.
+    return req.method !== 'POST';
+  }
+});
+app.locals.aiLimiter = aiLimiter;
+
 // Health check endpoint (no auth required)
 app.get('/health', (req, res) => {
   res.json({
@@ -3868,7 +3890,7 @@ app.use(researchApiMount, researchAuthGuard, researchPublicationsRouter);
 app.use(researchApiMount, researchAuthGuard, researchEquipmentRouter);
 app.use(researchApiMount, researchAuthGuard, researchLineageRouter);
 app.use(researchApiMount, researchAuthGuard, researchIntegrationsRouter); // Research integrations: ORCID, DataCite, OSF, protocols.io, instruments, workflows, Globus, governance, CFD
-app.use('/api/research/gwen', researchAuthGuard, gwenResearchRouter); // G.W.E.N. research intelligence agent
+app.use('/api/research/gwen', researchAuthGuard, aiLimiter, gwenResearchRouter); // G.W.E.N. research intelligence agent (P1 audit: AI rate-limited)
 app.use('/api/orders', authMiddleware, ordersRoutes);
 app.use('/api/alerts', authMiddleware, alertsRoutes);
 app.use('/api/sync', syncRoutes); // Farms authenticate via API key
@@ -3884,7 +3906,7 @@ app.use('/api/admin', adminRoutes); // Admin dashboard API (sub-mounts /wholesal
 app.use('/api/delivery/driver-applications', driverApplicationsRoutes); // Public driver enrollment
 app.use('/api/campaign', campaignRoutes); // Field of Dreams campaign (public)
 app.use('/api/admin/network-devices', adminAuthMiddleware, networkDevicesRoutes); // I-3.11: Network device analytics
-app.use('/api/admin/assistant', adminAuthMiddleware, requireAdminRole('admin', 'editor'), adminAssistantRouter); // F.A.Y.E. admin AI assistant
+app.use('/api/admin/assistant', adminAuthMiddleware, requireAdminRole('admin', 'editor'), aiLimiter, adminAssistantRouter); // F.A.Y.E. admin AI assistant (P1 audit: AI rate-limited)
 app.use('/api/admin/ops', adminAuthMiddleware, requireAdminRole('admin'), adminOpsAgentRouter);
 app.use('/api/admin/calendar', adminAuthMiddleware, adminCalendarRouter); // F.A.Y.E. tool catalog & gateway
 app.use('/api/admin/scott', adminAuthMiddleware, requireAdminRole('admin', 'editor'), scottMarketingRouter); // S.C.O.T.T. marketing agent
@@ -4307,7 +4329,7 @@ app.get('/api/wholesale/demand-analysis', authMiddleware, async (req, res) => {
 
 app.use('/', miscStubsRouter);                               // Misc stubs + path aliases (full /api/* paths)
 app.use('/api/farm-ops', authMiddleware, farmOpsAgentRouter);                 // Farm operations agent (daily to-do, tool gateway, command taxonomy)
-app.use('/api/assistant', authMiddleware, assistantChatRouter);                // AI assistant chat (GPT-4o-mini + function calling)
+app.use('/api/assistant', authMiddleware, aiLimiter, assistantChatRouter);                // E.V.I.E. farm AI chat (P1 audit: AI rate-limited)
 app.use('/api/setup-agent', authMiddleware, setupAgentRouter);              // Setup orchestrator progress + guidance
 app.use('/api/controller-bindings', authMiddleware, controllerBindingsRouter); // Phase B: bind devices to reserved controller slots
 
