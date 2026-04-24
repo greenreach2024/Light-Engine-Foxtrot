@@ -1074,6 +1074,39 @@ async function startOperationalServices(trigger = 'startup') {
     console.warn('[sensor-sync] Failed to start:', error?.message || error);
   }
 
+  // P0 audit fix (2026-04-24): sensor-credential startup guard.
+  // SwitchBot creds can come from env or farm.json. If both are empty in
+  // production, sensor polling silently stops while env-cache.json keeps
+  // serving stale values. Surface this loudly in logs AND push an admin
+  // notification so the outage is visible to on-call.
+  try {
+    const creds = getFarmIntegrations().switchbot || {};
+    const hasCreds = Boolean(creds.token && creds.secret);
+    if (!hasCreds) {
+      const msg = 'SwitchBot credentials missing (no SWITCHBOT_TOKEN/SECRET env or farm.json integration). Live sensor data will NOT update and env-cache.json will be stale.';
+      if (process.env.NODE_ENV === 'production') {
+        console.error(`[SECURITY] [sensor-sync] ${msg}`);
+        // Best-effort admin notification; do not crash if DB or store is unavailable.
+        try {
+          const adminFarmId = process.env.ADMIN_FARM_ID || process.env.DEMO_FARM_ID || 'admin';
+          notificationStore.pushNotification(adminFarmId, {
+            category: 'sensor_alert',
+            severity: 'critical',
+            title: 'Sensor pipeline degraded',
+            body: msg,
+            source: 'startup-guard'
+          }).catch((err) => console.warn('[sensor-sync] Admin notification failed:', err?.message || err));
+        } catch (notifyError) {
+          console.warn('[sensor-sync] Admin notification failed:', notifyError?.message || notifyError);
+        }
+      } else {
+        console.warn(`[sensor-sync] ${msg} (non-production, WARN only)`);
+      }
+    }
+  } catch (credGuardError) {
+    console.warn('[sensor-sync] Credential guard failed:', credGuardError?.message || credGuardError);
+  }
+
   // Start nutrient MQTT subscriber (Atlas dosing system)
   try {
     if (DEFAULT_NUTRIENT_MQTT_URL) {
