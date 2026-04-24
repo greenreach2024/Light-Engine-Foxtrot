@@ -1,5 +1,7 @@
 # Inventory Data Flow Architecture
 
+> Update notice (2026-04-24): Harvest events are now recorded at the **group level** (`POST /api/groups/:groupId/harvest`). Per-tray splits are an opt-in mode inside the group harvest modal. Sync to Central is unchanged. See `docs/features/GROUP_LEVEL_MANAGEMENT_UPDATES.md` section 4.5.
+
 ## Overview
 
 **YES** - All inventory originates from the Light Engine (Farm) and flows through multiple channels:

@@ -1,5 +1,7 @@
 # Quick Start: Tray Tracking Enhancements
 
+> Update notice (2026-04-24): Optional after group-first ops rollout. Use this guide only for farms that need per-tray lot codes, split harvest, or QA photo history. Daily group operations do not require any of the steps below. See `docs/features/GROUP_LEVEL_MANAGEMENT_UPDATES.md`.
+
 ## Installation (5 minutes)
 
 ### 1. Install Dependencies

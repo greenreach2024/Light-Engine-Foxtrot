@@ -25025,6 +25025,15 @@ app.get('/api/config/features', (req, res) => {
   const isEdge = edgeConfig.isEdgeMode();
   const deploymentMode = isEdge ? 'edge' : 'cloud';
 
+  // `groupFirstOps` toggles the group-first management flow described in
+  // docs/features/GROUP_LEVEL_MANAGEMENT_UPDATES.md (April 24, 2026).
+  // When true, the Build Stock Groups modal exposes crop recipe, seed date,
+  // nutrient tank, photoperiod, plants/site, and environment overrides so
+  // operators create fully-configured groups instead of blank drafts.
+  // Default: ON. Disable by setting GROUP_FIRST_OPS=false (operations that
+  // need to roll back to the tray-first flow).
+  const groupFirstOps = String(process.env.GROUP_FIRST_OPS ?? 'true').toLowerCase() !== 'false';
+
   // Always-available features (both edge and cloud)
   const features = {
     monitoring: true,
@@ -25038,6 +25047,7 @@ app.get('/api/config/features', (req, res) => {
     aiAssistant: true,
     recipeModifiers: true,
     alerts: true,
+    groupFirstOps,
     // Edge-only features (require 24/7 on-site hardware)
     deviceControl: isEdge,
     nutrientControl: isEdge,
@@ -25072,6 +25082,9 @@ app.get('/api/groups', asyncHandler(async (req, res) => {
   // Return full records with canonical field normalization
   // Keep: lights[], room, zone, status, schedule, plan, planConfig
   // Drop deprecated: crop, recipe, roomId, zoneId (per DATA_FORMAT_STANDARDS)
+  // Group-first additions (April 24, 2026): templateId, trayFormatId,
+  // plantsPerSite, tankId, overrides. See
+  // docs/features/GROUP_LEVEL_MANAGEMENT_UPDATES.md section 3.1.
   const canonical = groups.map(g => {
     const record = {
       id: g.id || g.name,
@@ -25087,7 +25100,14 @@ app.get('/api/groups', asyncHandler(async (req, res) => {
       active: g.active !== false,
       health: g.health || 'unknown',
       planConfig: g.planConfig || null,
-      lastModified: g.lastModified || null
+      lastModified: g.lastModified || null,
+      // Group-first fields — pass through when present, omit otherwise so
+      // existing consumers see no shape change.
+      templateId: g.templateId || g.template_id || undefined,
+      trayFormatId: g.trayFormatId || g.tray_format_id || undefined,
+      plantsPerSite: g.plantsPerSite || g.plants_per_site || undefined,
+      tankId: g.tankId || g.tank_id || undefined,
+      overrides: g.overrides || undefined
     };
     // Include controller/iotDevice if present (Groups V2)
     if (g.controller) record.controller = g.controller;

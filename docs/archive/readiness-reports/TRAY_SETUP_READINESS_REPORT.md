@@ -1,8 +1,10 @@
 # Tray Setup Page - Readiness Report
 
 **Page**: http://localhost:8091/views/tray-setup.html  
-**Status**: 🟡 **PARTIALLY FUNCTIONAL** - Backend Dependency Issue  
+**Status**: PARTIALLY FUNCTIONAL - archived, deprioritized
 **Date**: 2026-02-04
+
+> Update notice (2026-04-24): Tray Setup is no longer on the primary flow. Trays are created implicitly from Group setup (trayCount x trayFormat). Keep this page for custom tray formats and optional manual registration only. See `docs/features/GROUP_LEVEL_MANAGEMENT_UPDATES.md`.
 
 ---
 

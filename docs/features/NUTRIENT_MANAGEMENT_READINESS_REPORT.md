@@ -3,7 +3,9 @@
 **Page**: http://localhost:8091/views/nutrient-management.html  
 **Reviewed**: 2026-02-04  
 **Server**: Foxtrot (FARM-TEST-WIZARD-001)  
-**Status**: ✅ **PRODUCTION READY** (with minor notes)
+**Status**: PRODUCTION READY (stage-aware logic updated 2026-04-24)
+
+> Update notice (2026-04-24): Stage is now derived from the **group anchor** (group.anchor.seedDate + recipe schedule), not from tray age. Tank is a required field on every group; EC/pH targets for a shared tank are the plant-count weighted average of the groups it serves, with per-group overrides supported. See `docs/features/GROUP_LEVEL_MANAGEMENT_UPDATES.md` section 4.3.
 
 ---
 

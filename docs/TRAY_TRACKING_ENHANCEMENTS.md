@@ -1,5 +1,7 @@
 # Tray Tracking System - Enhancement Documentation
 
+> Update notice (2026-04-24): Tray scanning is no longer required for daily ops. The group is the primary unit of management; trays are derived implicitly from group configuration. The features in this doc remain supported for traceability, split harvest, and QA photos. See `docs/features/GROUP_LEVEL_MANAGEMENT_UPDATES.md`.
+
 ## Overview
 Complete tray tracking system with QR code generation, thermal printing, and advanced analytics.
 

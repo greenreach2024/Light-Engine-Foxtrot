@@ -2,7 +2,9 @@
 **Farm:** FARM-MKLOMAT3-A9D8 (Big Green Farm)  
 **Environment:** greenreach-central-prod-v4  
 **Date:** February 3, 2026  
-**Status:** 🔄 IN PROGRESS
+**Status:** SUPERSEDED in parts by group-level management updates (see `docs/features/GROUP_LEVEL_MANAGEMENT_UPDATES.md`, April 24, 2026). Per-tray data flow in this doc is retained for traceability; primary ops are now group-first.
+
+> Update notice (2026-04-24): Farms reported tray-by-tray scanning was too tasking at scale. Recipe, environment, nutrient, schedule, and inventory management have moved to the group level. Group setup now starts from a template with tailorable user inputs. See `GROUP_LEVEL_MANAGEMENT_UPDATES.md` for the authoritative flow.
 
 ---
 
