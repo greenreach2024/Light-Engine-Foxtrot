@@ -2044,16 +2044,31 @@
         });
       }
       function load() {
-        var endpoints = ['/data/rooms.json', '/data/groups.json', '/data/grow-systems.json', '/data/iot-devices.json'];
+        // Cache-bust to defeat any intermediate proxy caches; force a fresh
+        // pull from LE so we never read a stale /data/groups.json after save.
+        var bust = '?_=' + Date.now();
+        var endpoints = ['/data/rooms.json' + bust, '/data/groups.json' + bust, '/data/grow-systems.json' + bust, '/data/iot-devices.json' + bust];
         var _fetchLoad = window.authFetch || fetch;
         return Promise.all(endpoints.map(function (url) {
-          return _fetchLoad(url).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; });
+          return _fetchLoad(url, { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; });
         })).then(function (results) {
           state.rooms = Array.isArray(results[0]) ? results[0] : (results[0] && results[0].rooms) || [];
           state.groups = Array.isArray(results[1]) ? results[1] : (results[1] && results[1].groups) || [];
           var gs = results[2];
           state.templates = gs && Array.isArray(gs.templates) ? gs.templates : (Array.isArray(gs) ? gs : []);
           state.devices = Array.isArray(results[3]) ? results[3] : (results[3] && results[3].devices) || [];
+          // SINGLE SOURCE OF TRUTH: mirror authoritative groups into
+          // window.STATE.groups so all in-page summaries (KPI counters,
+          // Build Stock Groups summary, breadcrumb) reflect the freshly
+          // saved data. Without this, those readers stay stuck on a stale
+          // groups list populated by groups-v2.js at first paint, which is
+          // the "shows 0, refresh shows 96" bug.
+          if (!window.STATE) window.STATE = {};
+          window.STATE.groups = state.groups;
+          if (typeof window.normalizeGroupsInState === 'function') {
+            try { window.normalizeGroupsInState(); } catch (_) {}
+          }
+          document.dispatchEvent(new Event('groups-updated'));
         });
       }
       function refresh() {
@@ -2065,6 +2080,25 @@
           updateBreadcrumb();
         });
       }
+      // Live updates: subscribe to LE's SSE stream so any backend change to
+      // rooms/groups/zones (including the post-save reconciler that rebuilds
+      // groups.json from installedSystems) reaches this page within ~1s,
+      // not on the next 5-minute Central syncFarmData() pull.
+      (function wireLiveUpdates() {
+        try {
+          var es = new EventSource('/events');
+          var debounceTimer = null;
+          function scheduleRefresh() {
+            if (debounceTimer) clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(function () { refresh(); }, 250);
+          }
+          ['data-changed', 'rooms-updated', 'groups-updated', 'zones-updated', 'message'].forEach(function (evt) {
+            es.addEventListener(evt, scheduleRefresh);
+          });
+          es.onerror = function () { /* browser auto-reconnects */ };
+          window.addEventListener('beforeunload', function () { try { es.close(); } catch (_) {} });
+        } catch (_) { /* SSE optional */ }
+      })();
       // Re-render equipment + breadcrumb when a template is selected.
       document.addEventListener('grow-template:selected', function () {
         setTimeout(function () { renderEquipment(); updateBreadcrumb(); }, 50);
