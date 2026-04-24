@@ -734,6 +734,9 @@ async function writeJsonQueued(fullPath, jsonString) {
   const next = prev.then(async () => {
     await fs.promises.mkdir(path.dirname(fullPath), { recursive: true }).catch(() => {});
     await fs.promises.writeFile(fullPath, jsonString, 'utf8');
+    // Mirror operator-authored state to GCS so Cloud Run container recycles
+    // do not wipe edits. See docs/operations/GROUPS_PERSISTENCE_FIX_2026-04-24.md.
+    try { await __mirrorJsonToGCS(fullPath, jsonString); } catch {}
   }).catch((err) => {
     console.warn('[writeJsonQueued] Failed write:', fullPath, err?.message || err);
   });
@@ -863,6 +866,77 @@ const CLOUD_ENDPOINT_URL = process.env.CLOUD_ENDPOINT_URL || process.env.AWS_END
 const ENV_SOURCE = process.env.ENV_SOURCE || (CLOUD_ENDPOINT_URL ? "cloud" : "local");
 const ENV_PATH = path.resolve("./public/data/env.json");
 const DATA_DIR = path.resolve("./public/data");
+
+// ---------------------------------------------------------------------------
+// GCS persistence mirror (Cloud Run durability fix, April 24, 2026).
+//
+// DATA_DIR resolves to /app/public/data which is an EPHEMERAL container
+// filesystem on Cloud Run. Every operator edit (group create/delete, room
+// dimensions, zone geometry, grow-unit assignments) was silently lost when
+// Cloud Run recycled the container — edits appeared to save, then reverted
+// after the next refresh that hit a cold instance. See
+// docs/operations/GROUPS_PERSISTENCE_FIX_2026-04-24.md.
+//
+// Fix: mirror the small set of operator-authored JSON files to the shared
+// GCS bucket (greenreach-storage, le/ prefix) on every write, and hydrate
+// them on boot. Locally (no K_SERVICE) this is a no-op and the filesystem
+// remains authoritative.
+// ---------------------------------------------------------------------------
+const __GCS_MIRRORED_FILES = new Set([
+  'groups.json',
+  'rooms.json',
+  'room-map.json',
+  'plans.json',
+  'recipes.json',
+  'schedules.json',
+  'farm.json',
+  'iot-devices.json',
+]);
+const __PROJECT_ROOT_DIR = path.resolve('.');
+function __gcsRelForPath(fullPath) {
+  if (!fullPath || typeof fullPath !== 'string') return null;
+  const base = path.basename(fullPath);
+  if (!__GCS_MIRRORED_FILES.has(base)) return null;
+  let rel;
+  try { rel = path.relative(__PROJECT_ROOT_DIR, fullPath); } catch { return null; }
+  if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) return null;
+  return rel.split(path.sep).join('/');
+}
+async function __mirrorJsonToGCS(fullPath, jsonStringOrObject) {
+  if (!process.env.K_SERVICE) return;
+  const rel = __gcsRelForPath(fullPath);
+  if (!rel) return;
+  try {
+    const mod = await import('./services/gcs-storage.js');
+    const data = typeof jsonStringOrObject === 'string'
+      ? JSON.parse(jsonStringOrObject)
+      : jsonStringOrObject;
+    await mod.writeJSON(rel, data);
+  } catch (err) {
+    console.warn('[gcs-mirror] Failed to mirror', rel, err?.message || err);
+  }
+}
+async function hydrateCriticalDataFromGCS() {
+  if (!process.env.K_SERVICE) return;
+  try {
+    const mod = await import('./services/gcs-storage.js');
+    for (const file of __GCS_MIRRORED_FILES) {
+      const rel = `public/data/${file}`;
+      try {
+        const data = await mod.readJSON(rel, null);
+        if (data === null || data === undefined) continue;
+        const target = path.join(DATA_DIR, file);
+        try { fs.mkdirSync(path.dirname(target), { recursive: true }); } catch {}
+        fs.writeFileSync(target, JSON.stringify(data, null, 2));
+        console.log(`[gcs-hydrate] Restored ${file} from GCS`);
+      } catch (fileErr) {
+        console.warn(`[gcs-hydrate] Skip ${file}:`, fileErr?.message || fileErr);
+      }
+    }
+  } catch (err) {
+    console.warn('[gcs-hydrate] Failed:', err?.message || err);
+  }
+}
 
 // Recipe metadata: display names + descriptions from Central admin
 // Shared GCS mount at /app/data on both LE and Central Cloud Run services
@@ -1007,6 +1081,12 @@ function isOperationalStartupExemptPath(requestPath = '') {
 
 async function startOperationalServices(trigger = 'startup') {
   console.log(`[startup] Starting operational services (trigger: ${trigger})`);
+
+  // Restore operator-authored state (groups, rooms, schedules, etc.) from GCS
+  // BEFORE seeding defaults. On Cloud Run, DATA_DIR is ephemeral; without this
+  // hydrate step, container recycles silently wipe every delete/edit.
+  // See docs/operations/GROUPS_PERSISTENCE_FIX_2026-04-24.md.
+  await hydrateCriticalDataFromGCS();
 
   // Seed runtime data files that may not exist after a fresh deploy
   seedRuntimeDataFiles();
@@ -1439,6 +1519,9 @@ function saveGroupsFile(groups) {
   try {
     const payload = JSON.stringify({ groups }, null, 2);
     fs.writeFileSync(GROUPS_PATH, payload);
+    // Fire-and-forget GCS mirror so deletions/creates persist across Cloud
+    // Run container recycles. Callers are mostly sync so we cannot await here.
+    __mirrorJsonToGCS(GROUPS_PATH, payload).catch(() => {});
     return true;
   } catch (err) {
     console.error('[groups] Failed to write groups.json:', err.message);
@@ -2822,7 +2905,10 @@ function writeJSON(fileName, value) {
   const target = path.isAbsolute(fileName) ? fileName : path.join(DATA_DIR, fileName);
   ensureDataDir();
   try {
-    fs.writeFileSync(target, JSON.stringify(value ?? {}, null, 2));
+    const payload = JSON.stringify(value ?? {}, null, 2);
+    fs.writeFileSync(target, payload);
+    // GCS mirror for mirrored files (Cloud Run durability).
+    __mirrorJsonToGCS(target, payload).catch(() => {});
     return true;
   } catch (error) {
     console.warn('[env] Failed to persist JSON:', error?.message || error);
