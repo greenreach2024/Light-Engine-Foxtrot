@@ -52,7 +52,8 @@
     autoFit: true,
     zoneRects: [],
     spatialPlan: null,
-    zoneRecommendation: null
+    zoneRecommendation: null,
+    customization: null
   };
 
   function $(id) { return document.getElementById(id); }
@@ -63,6 +64,102 @@
   }
 
   function sum(a) { return a.reduce((t, x) => t + (Number.isFinite(x) ? x : 0), 0); }
+
+  function metersToInches(m) {
+    return Number(m || 0) * 39.37007874;
+  }
+
+  function computeLocationsFromSpacing(lengthIn, widthIn, borderInPerSide, spacingIn) {
+    const usableL = Math.max(0, Number(lengthIn || 0) - (2 * Number(borderInPerSide || 0)));
+    const usableW = Math.max(0, Number(widthIn || 0) - (2 * Number(borderInPerSide || 0)));
+    const spacing = Math.max(0.1, Number(spacingIn || 0));
+    const nx = Math.max(1, Math.floor(usableL / spacing) + 1);
+    const ny = Math.max(1, Math.floor(usableW / spacing) + 1);
+    return {
+      usableLengthIn: usableL,
+      usableWidthIn: usableW,
+      locationsX: nx,
+      locationsY: ny,
+      locationsPerLevel: nx * ny
+    };
+  }
+
+  function computeSpacingFromLocations(lengthIn, widthIn, borderInPerSide, locationsX, locationsY) {
+    const usableL = Math.max(0, Number(lengthIn || 0) - (2 * Number(borderInPerSide || 0)));
+    const usableW = Math.max(0, Number(widthIn || 0) - (2 * Number(borderInPerSide || 0)));
+    const nx = Math.max(1, Number(locationsX || 1));
+    const ny = Math.max(1, Number(locationsY || 1));
+    const sx = nx > 1 ? usableL / (nx - 1) : usableL;
+    const sy = ny > 1 ? usableW / (ny - 1) : usableW;
+    return {
+      spacingInX: Number(sx.toFixed(3)),
+      spacingInY: Number(sy.toFixed(3)),
+      spacingIn: Number(((sx + sy) / 2).toFixed(3))
+    };
+  }
+
+  function getTemplateCustomizationDefaults(template, cropClass) {
+    const t = template || {};
+    const c = cropClass || t.defaultCropClass || 'leafy_greens';
+    const footprint = t.footprintM || { length: 0, width: 0 };
+    const lengthIn = metersToInches(footprint.length);
+    const widthIn = metersToInches(footprint.width);
+    const levels = Math.max(1, Number(t.tierCount || 1));
+    const borderInPerSide = 1;
+    const totalByClass = t.plantLocations?.totalByClass?.[c];
+    const perLevelTarget = Number.isFinite(totalByClass)
+      ? Math.max(1, Math.round(Number(totalByClass) / levels))
+      : Math.max(1, Number(t.plantsPerTrayByClass?.[c] || 12));
+    const side = Math.max(1, Math.round(Math.sqrt(perLevelTarget)));
+    const spacingHint = side > 1 ? Math.max(0.1, (Math.max(0, lengthIn - 2) / (side - 1))) : Math.max(4, Math.min(lengthIn, widthIn) / 2);
+    const loc = computeLocationsFromSpacing(lengthIn, widthIn, borderInPerSide, spacingHint);
+    return {
+      levels,
+      borderInPerSide,
+      spacingIn: Number(spacingHint.toFixed(3)),
+      spacingLinked: true,
+      locationsX: loc.locationsX,
+      locationsY: loc.locationsY,
+      locationsPerLevel: loc.locationsPerLevel,
+      totalLocations: loc.locationsPerLevel * levels,
+      footprintLengthIn: Number(lengthIn.toFixed(3)),
+      footprintWidthIn: Number(widthIn.toFixed(3))
+    };
+  }
+
+  function recalcCustomization(customization) {
+    const c = Object.assign({}, customization || {});
+    const levels = Math.max(1, Number(c.levels || 1));
+    const border = Math.max(0, Number(c.borderInPerSide || 1));
+    const lengthIn = Math.max(0, Number(c.footprintLengthIn || 0));
+    const widthIn = Math.max(0, Number(c.footprintWidthIn || 0));
+    c.levels = levels;
+    c.borderInPerSide = border;
+    c.footprintLengthIn = lengthIn;
+    c.footprintWidthIn = widthIn;
+
+    if (c.spacingLinked) {
+      const bySpacing = computeLocationsFromSpacing(lengthIn, widthIn, border, c.spacingIn);
+      c.locationsX = bySpacing.locationsX;
+      c.locationsY = bySpacing.locationsY;
+      c.locationsPerLevel = bySpacing.locationsPerLevel;
+      c.usableLengthIn = bySpacing.usableLengthIn;
+      c.usableWidthIn = bySpacing.usableWidthIn;
+    } else {
+      c.locationsX = Math.max(1, Number(c.locationsX || 1));
+      c.locationsY = Math.max(1, Number(c.locationsY || 1));
+      c.locationsPerLevel = c.locationsX * c.locationsY;
+      const byLoc = computeSpacingFromLocations(lengthIn, widthIn, border, c.locationsX, c.locationsY);
+      c.spacingIn = byLoc.spacingIn;
+      c.spacingInX = byLoc.spacingInX;
+      c.spacingInY = byLoc.spacingInY;
+      c.usableLengthIn = Math.max(0, lengthIn - (2 * border));
+      c.usableWidthIn = Math.max(0, widthIn - (2 * border));
+    }
+
+    c.totalLocations = Math.max(1, c.locationsPerLevel) * levels;
+    return c;
+  }
 
   function fetchRooms() {
     const _f = window.authFetch || fetch;
@@ -252,19 +349,21 @@
     return body.scores;
   }
 
-  function equipmentLines(template, scores, cropClass) {
+  function equipmentLines(template, scores, cropClass, customization) {
     const lines = [];
 
     const fixtureClass = template.defaultFixtureClass || {};
     const plantsPerTray = template.plantsPerTrayByClass?.[cropClass];
-    const tiers = template.tierCount || 1;
+    const tiers = Number(customization?.levels || template.tierCount || 1);
     const traysPerTier = template.traysPerTier || 1;
     const derivedSites = plantsPerTray ? plantsPerTray * traysPerTier * tiers : null;
     // plantLocations.totalByClass is the authoritative, user-facing count
     // (manual_override on templates like NFT/DWC where the raw tier x tray x
     // plants math over-counts). Fall back to the derived figure otherwise.
     const overrideSites = template.plantLocations?.totalByClass?.[cropClass];
-    const totalSites = Number.isFinite(overrideSites) ? overrideSites : derivedSites;
+    const totalSites = Number.isFinite(customization?.totalLocations)
+      ? Number(customization.totalLocations)
+      : (Number.isFinite(overrideSites) ? overrideSites : derivedSites);
     const sitesNote = (() => {
       if (!Number.isFinite(totalSites)) return null;
       if (Number.isFinite(overrideSites)) {
@@ -289,7 +388,15 @@
     const fixturesPerTier = fixtureClass.fixturesPerTierUnit || 1;
     const totalFixtures = fixturesPerTier * (tiers || 1);
     const totalLightingW = sum([fixtureW * totalFixtures]);
-    const lightingKW = scores?.heatManagement?.lightingKW ?? (totalLightingW / 1000);
+    const baseLightingKW = scores?.heatManagement?.lightingKW ?? (totalLightingW / 1000);
+    const baseTier = Math.max(1, Number(template.tierCount || 1));
+    const tierFactor = Math.max(0.1, tiers / baseTier);
+    const baseSites = Number.isFinite(template.plantLocations?.totalByClass?.[cropClass])
+      ? Number(template.plantLocations.totalByClass[cropClass])
+      : Math.max(1, Number(derivedSites || 1));
+    const siteFactor = Math.max(0.1, Number(totalSites || 1) / baseSites);
+    const loadFactor = Number(((tierFactor + siteFactor) / 2).toFixed(4));
+    const lightingKW = baseLightingKW * loadFactor;
 
     lines.push({
       label: 'Lighting',
@@ -311,7 +418,9 @@
       });
     }
 
-    const kgDay = scores?.transpiration?.dailyWaterKg;
+    const kgDay = Number.isFinite(scores?.transpiration?.dailyWaterKg)
+      ? scores.transpiration.dailyWaterKg * loadFactor
+      : null;
     if (Number.isFinite(kgDay)) {
       const litresDay = kgDay * KG_TO_LITRES;
       lines.push({
@@ -321,7 +430,9 @@
       });
     }
 
-    const totalHeatW = scores?.heatManagement?.totalHeatW;
+    const totalHeatW = Number.isFinite(scores?.heatManagement?.totalHeatW)
+      ? scores.heatManagement.totalHeatW * loadFactor
+      : null;
     if (Number.isFinite(totalHeatW) && totalHeatW > 0) {
       const tons = totalHeatW / W_PER_TON;
       lines.push({
@@ -331,7 +442,9 @@
       });
     }
 
-    const reqCFM = scores?.envBenchmark?.inputs?.airflow?.requiredCFM;
+    const reqCFM = Number.isFinite(scores?.envBenchmark?.inputs?.airflow?.requiredCFM)
+      ? scores.envBenchmark.inputs.airflow.requiredCFM * loadFactor
+      : null;
     if (Number.isFinite(reqCFM) && reqCFM > 0) {
       lines.push({
         label: 'Supply fan',
@@ -506,7 +619,7 @@
     const body = $(BODY_ID);
     if (!body) return;
     if (!state.template) { body.innerHTML = ''; return; }
-    const lines = equipmentLines(state.template, state.scores, state.cropClass);
+    const lines = equipmentLines(state.template, state.scores, state.cropClass, state.customization);
     body.innerHTML = lines.map(l => `
       <div class="rbp-cell">
         <span class="rbp-cell__label">${l.label}</span>
@@ -612,12 +725,39 @@
         ? 'Free-standing tile'
         : 'Butt end-to-end against plumbing wall';
 
+    const c = state.customization || getTemplateCustomizationDefaults(state.template, state.cropClass);
     const controlsHtml = `
       <div class="rbp-controls">
         <div class="rbp-ctl">
+          <label for="rbpLevels">Levels</label>
+          <input id="rbpLevels" type="number" min="1" max="20" step="1" value="${c.levels}"/>
+          <span class="rbp-ctl__hint">Adjust stacked growing levels</span>
+        </div>
+        <div class="rbp-ctl">
+          <label for="rbpSpacingIn">Hole spacing (in, center-to-center)</label>
+          <input id="rbpSpacingIn" type="number" min="0.1" max="36" step="0.1" value="${c.spacingIn}"/>
+          <span class="rbp-ctl__hint">2 in total border deducted from footprint</span>
+        </div>
+        <div class="rbp-ctl">
+          <label for="rbpLocationsX">Locations X</label>
+          <input id="rbpLocationsX" type="number" min="1" max="500" step="1" value="${c.locationsX}" ${c.spacingLinked ? 'disabled' : ''}/>
+        </div>
+        <div class="rbp-ctl">
+          <label for="rbpLocationsY">Locations Y</label>
+          <input id="rbpLocationsY" type="number" min="1" max="500" step="1" value="${c.locationsY}" ${c.spacingLinked ? 'disabled' : ''}/>
+        </div>
+        <div class="rbp-ctl rbp-ctl--toggle">
+          <input id="rbpSpacingLinked" type="checkbox" ${c.spacingLinked ? 'checked' : ''}/>
+          <label for="rbpSpacingLinked">Link spacing and locations</label>
+        </div>
+        <div class="rbp-ctl">
+          <label>Total locations</label>
+          <span style="color:#e2e8f0;font-size:0.88rem;padding-bottom:6px;">${c.totalLocations} (${c.locationsPerLevel}/level)</span>
+        </div>
+        <div class="rbp-ctl">
           <label for="${UNIT_COUNT_ID}">Grow units</label>
           <input id="${UNIT_COUNT_ID}" type="number" min="0" max="${totalCapacity}" step="1" value="${desired}"/>
-          <span class="rbp-ctl__hint">${state.autoFit ? 'auto-fit: ' + totalCapacity : 'manual'} \u00b7 max ${totalCapacity} across all zones</span>
+          <span class="rbp-ctl__hint">${state.autoFit ? 'auto-fit: ' + totalCapacity : 'manual'} · max ${totalCapacity} across all zones</span>
         </div>
         <div class="rbp-ctl rbp-ctl--toggle">
           <input id="${AUTOFIT_ID}" type="checkbox" ${state.autoFit ? 'checked' : ''}/>
@@ -630,6 +770,13 @@
         <div class="rbp-ctl">
           <label>Plumbing</label>
           <span style="color:#e2e8f0;font-size:0.88rem;padding-bottom:6px;">${contract.plumbingSide === 'wall' ? 'Along long wall' : 'Flexible'}</span>
+        </div>
+        <div class="rbp-ctl" style="min-width:260px;">
+          <label>Next</label>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button id="rbpDoneSystems" type="button" class="rbp-evie__btn">Done with grow systems</button>
+            <button id="rbpAnotherSystem" type="button" class="rbp-evie__btn">Configure another system</button>
+          </div>
         </div>
       </div>
     `;
@@ -707,6 +854,55 @@
         if (state.autoFit) state.desiredUnits = totalCapacity;
         renderSpatial();
         renderEvie();
+      });
+    }
+
+    const levelsEl = document.getElementById('rbpLevels');
+    const spacingEl = document.getElementById('rbpSpacingIn');
+    const locXEl = document.getElementById('rbpLocationsX');
+    const locYEl = document.getElementById('rbpLocationsY');
+    const linkedEl = document.getElementById('rbpSpacingLinked');
+    function syncCustomizationFromInputs(source) {
+      if (!state.customization) return;
+      const next = Object.assign({}, state.customization, {
+        levels: levelsEl ? Number(levelsEl.value) : state.customization.levels,
+        spacingIn: spacingEl ? Number(spacingEl.value) : state.customization.spacingIn,
+        locationsX: locXEl ? Number(locXEl.value) : state.customization.locationsX,
+        locationsY: locYEl ? Number(locYEl.value) : state.customization.locationsY,
+        spacingLinked: linkedEl ? !!linkedEl.checked : state.customization.spacingLinked
+      });
+      if (source === 'locations') next.spacingLinked = false;
+      state.customization = recalcCustomization(next);
+      renderBody();
+      renderSpatial();
+      renderEvie();
+      document.dispatchEvent(new CustomEvent('grow-system-config:changed', {
+        detail: {
+          templateId: state.template && state.template.id,
+          roomId: state.room && state.room.id,
+          customization: state.customization
+        }
+      }));
+    }
+    if (levelsEl) levelsEl.addEventListener('input', function () { syncCustomizationFromInputs('levels'); });
+    if (spacingEl) spacingEl.addEventListener('input', function () { syncCustomizationFromInputs('spacing'); });
+    if (locXEl) locXEl.addEventListener('input', function () { syncCustomizationFromInputs('locations'); });
+    if (locYEl) locYEl.addEventListener('input', function () { syncCustomizationFromInputs('locations'); });
+    if (linkedEl) linkedEl.addEventListener('change', function () { syncCustomizationFromInputs('linked'); });
+
+    const doneBtn = document.getElementById('rbpDoneSystems');
+    const anotherBtn = document.getElementById('rbpAnotherSystem');
+    if (doneBtn) {
+      doneBtn.addEventListener('click', function () {
+        updateBreadcrumbActive(4);
+        const equip = document.getElementById('flow-equipment');
+        if (equip) equip.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    }
+    if (anotherBtn) {
+      anotherBtn.addEventListener('click', function () {
+        const gallery = document.getElementById('growTemplateGallery');
+        if (gallery) gallery.scrollIntoView({ behavior: 'smooth', block: 'start' });
       });
     }
   }
@@ -833,6 +1029,9 @@
       if (!isSameTemplate) {
         state.autoFit = true;
         state.desiredUnits = 0;
+        state.customization = recalcCustomization(getTemplateCustomizationDefaults(template, state.cropClass));
+      } else if (!state.customization) {
+        state.customization = recalcCustomization(getTemplateCustomizationDefaults(template, state.cropClass));
       }
       state.scores = await scoreFor(templateId, state.cropClass, roomPayload(state.room));
     } catch (err) {
@@ -860,8 +1059,30 @@
       desiredUnits: state.desiredUnits,
       zoneRects: state.zoneRects,
       spatialPlan: state.spatialPlan,
-      zoneRecommendation: state.zoneRecommendation
+      zoneRecommendation: state.zoneRecommendation,
+      customization: state.customization
     };
+    try {
+      if (window.localStorage) {
+        window.localStorage.setItem('growWorkspaceDraft', JSON.stringify({
+          ts: Date.now(),
+          source: 'grow-management',
+          roomId: state.room && state.room.id,
+          templateId: state.template && state.template.id,
+          desiredUnits: state.desiredUnits,
+          customization: state.customization || null
+        }));
+      }
+    } catch (_) { /* ignore */ }
+    if (window.DataFlowBus && typeof window.DataFlowBus.emit === 'function') {
+      window.DataFlowBus.emit('grow-workspace', {
+        kind: 'grow-workspace',
+        roomId: state.room && state.room.id,
+        templateId: state.template && state.template.id,
+        desiredUnits: state.desiredUnits,
+        customization: state.customization || null
+      });
+    }
     const panel = document.getElementById('groupsV2Panel');
     if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
     updateBreadcrumbActive(3); // Lights next
@@ -885,7 +1106,7 @@
     state = {
       template: null, scores: null, room: null, cropClass: null,
       desiredUnits: 0, autoFit: true, zoneRects: [],
-      spatialPlan: null, zoneRecommendation: null
+      spatialPlan: null, zoneRecommendation: null, customization: null
     };
     hide();
     renderHeader();
@@ -924,23 +1145,32 @@
       const tpl  = state.template;
       const sc   = state.scores || {};
       const qty  = Math.max(1, state.desiredUnits || 1);
+      const customization = recalcCustomization(state.customization || getTemplateCustomizationDefaults(tpl, state.cropClass));
 
       // computedLoad matches buildPlanSchema.computedLoad. Derive
       // from scores where available, from template otherwise.
-      const lightingKW = Number.isFinite(sc.power?.lightingW)
+      const baseLightingKW = Number.isFinite(sc.power?.lightingW)
         ? sc.power.lightingW / 1000
         : (Number.isFinite(tpl.powerClassW?.lightingPerUnit)
             ? (tpl.powerClassW.lightingPerUnit * qty) / 1000
             : 0);
+      const baseSites = Number.isFinite(tpl.plantLocations?.totalByClass?.[state.cropClass])
+        ? Number(tpl.plantLocations.totalByClass[state.cropClass])
+        : Math.max(1, Number(tpl.plantsPerTrayByClass?.[state.cropClass] || 1) * Math.max(1, Number(tpl.tierCount || 1)));
+      const siteFactor = Math.max(0.1, Number(customization.totalLocations || baseSites) / baseSites);
+      const tierFactor = Math.max(0.1, Number(customization.levels || tpl.tierCount || 1) / Math.max(1, Number(tpl.tierCount || 1)));
+      const loadFactor = Number(((siteFactor + tierFactor) / 2).toFixed(4));
+
       const pumpKW = Number.isFinite(tpl.powerClassW?.pumpsPer10kPlants)
         ? (tpl.powerClassW.pumpsPer10kPlants * Math.max(1, (tpl.plantSitesPerUnit || 0) * qty / 10000)) / 1000
         : 0;
+      const lightingKW = baseLightingKW * loadFactor;
       const coolingTons = Number.isFinite(sc.heatManagement?.totalHeatW)
-        ? sc.heatManagement.totalHeatW / W_PER_TON : 0;
+        ? (sc.heatManagement.totalHeatW * loadFactor) / W_PER_TON : 0;
       const dehumLPerDay = Number.isFinite(sc.transpiration?.dailyWaterKg)
-        ? sc.transpiration.dailyWaterKg * KG_TO_LITRES : 0;
+        ? (sc.transpiration.dailyWaterKg * loadFactor) * KG_TO_LITRES : 0;
       const supplyFanCFM = Number.isFinite(sc.envBenchmark?.inputs?.airflow?.requiredCFM)
-        ? sc.envBenchmark.inputs.airflow.requiredCFM : 0;
+        ? sc.envBenchmark.inputs.airflow.requiredCFM * loadFactor : 0;
 
       const buildPlan = {
         status: 'accepted',
@@ -968,7 +1198,7 @@
       // the template is already installed.
       const installed = Array.isArray(room.installedSystems) ? room.installedSystems.slice() : [];
       const existing = installed.findIndex(s => s && s.templateId === tpl.id);
-      const entry = { templateId: tpl.id, quantity: qty };
+      const entry = { templateId: tpl.id, quantity: qty, customization };
       if (existing === -1) installed.push(entry);
       else installed[existing] = Object.assign({}, installed[existing], entry);
 
@@ -995,8 +1225,29 @@
         }, 3500);
       }
       document.dispatchEvent(new CustomEvent('room-build-plan:saved', {
-        detail: { roomId: room.id, templateId: tpl.id, quantity: qty, buildPlan }
+        detail: { roomId: room.id, templateId: tpl.id, quantity: qty, buildPlan, customization }
       }));
+      try {
+        if (window.localStorage) {
+          window.localStorage.setItem('growWorkspaceDraft', JSON.stringify({
+            ts: Date.now(),
+            source: 'grow-management',
+            roomId: room.id,
+            templateId: tpl.id,
+            desiredUnits: qty,
+            customization
+          }));
+        }
+      } catch (_) { /* ignore */ }
+      if (window.DataFlowBus && typeof window.DataFlowBus.emit === 'function') {
+        window.DataFlowBus.emit('grow-workspace', {
+          kind: 'grow-workspace',
+          roomId: room.id,
+          templateId: tpl.id,
+          desiredUnits: qty,
+          customization
+        });
+      }
     } catch (err) {
       console.error('[rbp] saveBuildPlan failed:', err);
       if (typeof window.showToast === 'function') {

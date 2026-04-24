@@ -164,6 +164,15 @@
       : totalSites;
     const authoritativeSites = Number.isFinite(siteSource) ? siteSource : totalSites;
 
+    const variantSelect = Array.isArray(template._variantTemplates) && template._variantTemplates.length > 1
+      ? `<div style="margin-top:8px;display:flex;align-items:center;gap:8px;">
+           <label style="font-size:0.72rem;color:#94a3b8;">Variant</label>
+           <select class="tg-variant-select" data-template-base="${template.id}" style="background:#0f172a;color:#e2e8f0;border:1px solid #334155;border-radius:6px;padding:4px 8px;font-size:0.78rem;">
+             ${template._variantTemplates.map(v => `<option value="${v.id}" ${v.id === template.id ? 'selected' : ''}>${v.name}</option>`).join('')}
+           </select>
+         </div>`
+      : '';
+
     return `
       <article class="tg-card" data-template-id="${template.id}" tabindex="0" role="button" aria-label="Select ${template.name}">
         <div class="tg-card__art">
@@ -175,6 +184,7 @@
             <h3>${template.name}${template.deprecated ? ' <span style="color:#f87171">(Legacy)</span>' : ''}</h3>
             ${template.tagline ? `<p class="tg-card__tagline">${template.tagline}</p>` : ''}
             ${template.deprecated && template.mergedTemplateId ? `<p class="tg-card__tagline" style="color:#fca5a5;">Merged into <strong>${templateNameById[template.mergedTemplateId] || template.mergedTemplateId}</strong></p>` : ''}
+            ${variantSelect}
           </header>
           <dl class="tg-card__specs">
             <div><dt>Dimensions</dt><dd>${footprintStr}</dd></div>
@@ -306,8 +316,25 @@
     const grid = mount.querySelector('[data-tg-grid]');
     try {
       const [allTemplates, rooms] = await Promise.all([fetchRegistry(), fetchRooms()]);
+      const templatesById = Object.fromEntries((allTemplates || []).map((t) => [t.id, t]));
       // Include deprecated templates but mark them visually; users should be able to edit legacy rooms
-      const templates = allTemplates; // All templates, including deprecated
+      const templates = (allTemplates || []).reduce((acc, template) => {
+        // Merge NFT + DWC into one card while preserving the underlying IDs.
+        if (template.id === 'dwc-pond-4x8') return acc;
+        if (template.id === 'nft-rack-3tier') {
+          const dwc = templatesById['dwc-pond-4x8'];
+          const merged = Object.assign({}, template, {
+            name: 'Hydroponic Channel/Raft (NFT/DWC)',
+            tagline: 'Choose NFT rack or DWC pond configuration for this room.',
+            _variantTemplates: dwc ? [template, dwc] : [template],
+            _mergedCard: true
+          });
+          acc.push(merged);
+          return acc;
+        }
+        acc.push(template);
+        return acc;
+      }, []);
       const room = roomScoringPayload(selectedRoom(rooms));
       const templateNameById = Object.fromEntries(templates.map((template) => [template.id, template.name]));
       const cards = await Promise.all(templates.map(async t => {
@@ -322,21 +349,38 @@
       }));
       grid.innerHTML = cards.join('');
 
+      function resolveTemplateFromCard(card) {
+        const variantSel = card.querySelector('.tg-variant-select');
+        const chosenId = variantSel && variantSel.value ? variantSel.value : card.dataset.templateId;
+        const chosen = templatesById[chosenId] || templates.find((t) => t.id === chosenId);
+        return chosen || null;
+      }
+
+      grid.addEventListener('change', (ev) => {
+        const sel = ev.target.closest('.tg-variant-select');
+        if (!sel) return;
+        const card = sel.closest('.tg-card');
+        if (!card) return;
+        card.dataset.templateId = sel.value;
+      });
+
       grid.addEventListener('click', (ev) => {
         const card = ev.target.closest('.tg-card');
         if (!card) return;
-        const id = card.dataset.templateId;
+        const chosen = resolveTemplateFromCard(card);
+        if (!chosen) return;
+        const id = chosen.id;
         grid.querySelectorAll('.tg-card').forEach(c => c.setAttribute('aria-pressed', 'false'));
         card.setAttribute('aria-pressed', 'true');
         document.dispatchEvent(new CustomEvent('grow-template:selected', {
-          detail: { templateId: id, template: templates.find(t => t.id === id) }
+          detail: { templateId: id, template: chosen }
         }));
         // Group-first (April 24, 2026): cache selection on window so the
         // Build Stock Groups modal can stamp `templateId` onto new groups
         // without plumbing state through the template-gallery -> BSG boundary.
         // See docs/features/GROUP_LEVEL_MANAGEMENT_UPDATES.md section 4.1.
         try {
-          window.__selectedGrowTemplate = { id, ...(templates.find(t => t.id === id) || {}) };
+          window.__selectedGrowTemplate = { id, ...(chosen || {}) };
         } catch (e) { /* ignore */ }
       });
     } catch (err) {

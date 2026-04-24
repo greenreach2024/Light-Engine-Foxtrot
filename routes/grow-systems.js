@@ -30,6 +30,31 @@ const router = Router();
 // -- Cache the registry in memory (reload on first request + expose reload) --
 let registryCache = null;
 
+function withCustomizationDefaults(template) {
+  if (!template || typeof template !== 'object') return template;
+  if (template.customizationDefaults) return template;
+  const tierCount = Math.max(1, Number(template.tierCount || 1));
+  const plantLocations = template.plantLocations?.totalByClass || {};
+  const firstClass = Object.keys(plantLocations)[0];
+  const firstTotal = Number(plantLocations[firstClass] || 0);
+  return Object.assign({}, template, {
+    customizationDefaults: {
+      levels: tierCount,
+      borderInPerSide: 1,
+      spacingLinked: true,
+      spacingIn: 6,
+      totalLocations: firstTotal > 0 ? firstTotal : null
+    }
+  });
+}
+
+function normalizeRegistry(registry) {
+  if (!registry || !Array.isArray(registry.templates)) return registry;
+  return Object.assign({}, registry, {
+    templates: registry.templates.map(withCustomizationDefaults)
+  });
+}
+
 async function loadRegistry() {
   const raw = await readFile(REGISTRY_PATH, 'utf-8');
   registryCache = JSON.parse(raw);
@@ -38,7 +63,7 @@ async function loadRegistry() {
 
 async function getRegistry() {
   if (!registryCache) await loadRegistry();
-  return registryCache;
+  return normalizeRegistry(registryCache);
 }
 
 // ---- GET /api/grow-systems -------------------------------------------------
@@ -57,7 +82,7 @@ router.get('/', async (_req, res) => {
       schema_version: registry.schemaVersion,
       data_version: registry.version,
       crop_classes: registry.cropClasses,
-      templates: registry.templates
+      templates: (registry.templates || []).map(withCustomizationDefaults)
     });
   } catch (err) {
     console.error('[GrowSystems] Failed to load registry:', err.message);
@@ -70,7 +95,7 @@ router.get('/', async (_req, res) => {
 router.get('/:templateId', async (req, res) => {
   try {
     const registry = await getRegistry();
-    const template = (registry.templates || []).find(t => t.id === req.params.templateId);
+    const template = (registry.templates || []).map(withCustomizationDefaults).find(t => t.id === req.params.templateId);
     if (!template) {
       return res.status(404).json({ ok: false, error: `Template not found: ${req.params.templateId}` });
     }

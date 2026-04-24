@@ -5676,13 +5676,44 @@
         loadAllData({ reason: 'data-bus:' + kind, silent: true, skipRebuildIfUnchanged: false });
       } catch (e) { /* non-fatal */ }
     }
+
+    function applyGrowWorkspaceSeed(payload) {
+      var data = payload || null;
+      if (!data) {
+        try {
+          var raw = localStorage.getItem('growWorkspaceDraft');
+          if (raw) data = JSON.parse(raw);
+        } catch (_) { /* ignore */ }
+      }
+      if (!data || !data.roomId) return;
+      var sel = document.getElementById('roomSelect');
+      if (!sel) return;
+      var roomId = String(data.roomId);
+      setTimeout(function () {
+        var hasOption = Array.prototype.some.call(sel.options || [], function (o) { return o.value === roomId; });
+        if (!hasOption) return;
+        if (sel.value !== roomId) {
+          sel.value = roomId;
+          sel.dispatchEvent(new Event('change'));
+        }
+      }, 150);
+    }
+
     if (window.DataFlowBus && typeof window.DataFlowBus.on === 'function') {
       window.DataFlowBus.on('rooms',     function (d) { busRefresh((d && d.kind) || 'rooms'); });
       window.DataFlowBus.on('zones',     function (d) { busRefresh((d && d.kind) || 'zones'); });
       window.DataFlowBus.on('groups',    function (d) { busRefresh((d && d.kind) || 'groups'); });
       window.DataFlowBus.on('templates', function (d) { busRefresh((d && d.kind) || 'templates'); });
       window.DataFlowBus.on('lights',    function (d) { busRefresh((d && d.kind) || 'lights'); });
+      window.DataFlowBus.on('grow-workspace', function (d) {
+        applyGrowWorkspaceSeed(d || null);
+        busRefresh((d && d.kind) || 'grow-workspace');
+      });
     }
+    window.addEventListener('storage', function (ev) {
+      if (!ev || ev.key !== 'growWorkspaceDraft') return;
+      applyGrowWorkspaceSeed(null);
+    });
 
     // ---- Zone Editor (Room Mapper tool, lives inside this viewer) -----
     // Floating panel that exposes add / rename / delete / save for the

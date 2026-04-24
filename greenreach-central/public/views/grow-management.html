@@ -865,7 +865,7 @@
         <span class="ff-step__badge">3</span>
         <div>
           <h2 class="ff-step__title" id="ffGrowUnitsTitle">Grow units &amp; groups</h2>
-          <p class="ff-step__subtitle">Pick a growing system template, stage a Room Build Plan, and batch-create stock groups. Light and controller assignment happen in the Build Stock Groups card below so you can stay on this step.</p>
+          <p class="ff-step__subtitle">Pick one or more growing system templates, customize each system footprint and plant-site math, then stage everything into room groups. Use the 3D viewer for final spatial placement and shared light/controller assignment.</p>
         </div>
       </div>
 
@@ -878,7 +878,7 @@
            Room Build Plan follows underneath so the electrical/transpiration
            breakdown reads top-to-bottom in the same step.
       -->
-      <section id="buildStockGroupsCard" class="gm-card" style="margin:0 0 18px;">
+      <section id="buildStockGroupsCard" class="gm-card" style="display:none;margin:0 0 18px;">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">
         <div>
           <h3 style="margin:0 0 4px;border:none;padding:0;">Build Growing Unit</h3>
@@ -1125,7 +1125,7 @@
         <!-- ===== GROUP LIST ===== -->
         <div class="gm-card" id="groupsV2GroupListSection" style="margin-top:0;">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-            <h3 style="margin:0;border:none;padding:0;">Standard Groups</h3>
+            <h3 style="margin:0;border:none;padding:0;">Configured Growing Units</h3>
             <div style="display:flex;align-items:center;gap:8px;">
               <span id="groupsV2GroupCount" class="tiny text-muted"></span>
               <button id="bulkEditGroupsBtn" type="button" class="ghost tiny" style="padding:4px 10px;font-size:11px;" title="Edit all groups that share a common prefix">Bulk Edit</button>
