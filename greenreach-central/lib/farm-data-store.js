@@ -106,9 +106,9 @@ export function initFarmStore(memoryStore) {
 /**
  * Get farm-scoped data by type.
  *
- * Resolution: DB → in-memory → flat file (no-DB) → default
+ * Resolution: DB → in-memory → default (never flat-file on read)
  *
- * @param {string|null} farmId - Farm identifier (null = file fallback only)
+ * @param {string|null} farmId - Farm identifier (null = returns defaults)
  * @param {string} dataType - Logical data type (e.g., 'groups', 'rooms')
  * @returns {Promise<any>} Data payload
  */
@@ -139,15 +139,20 @@ async function get(farmId, dataType) {
   }
 
   // 3. Multi-tenant (DB available): return defaults to prevent cross-farm leakage.
-  //    Single-tenant (no DB): fall through to flat files — they ARE this farm's data
-  //    and are the only persistence layer that survives restarts.
   if (farmId && dbUp) {
     logger.debug(`[FarmStore] No DB data for ${farmId}/${dataType}, returning default`);
     return DEFAULTS[dataType] ?? null;
   }
 
-  // 4. Flat file fallback (edge/dev mode OR single-tenant no-DB cloud)
-  return readFile(dataType);
+  // 4. No farmId OR DB unavailable: return defaults. Never serve bundled
+  //    flat-file demo data — it would leak image-baked state to unauthenticated
+  //    callers and mask real persistence failures.
+  if (!farmId) {
+    logger.debug(`[FarmStore] No farmId for ${dataType}, returning default`);
+  } else {
+    logger.warn(`[FarmStore] DB unavailable for ${farmId}/${dataType}, returning default`);
+  }
+  return DEFAULTS[dataType] ?? null;
 }
 
 /**
