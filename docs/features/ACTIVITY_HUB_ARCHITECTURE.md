@@ -1,6 +1,8 @@
 # Activity Hub Architecture (Edge-Only)
 **Date**: February 3, 2026
 
+> Update notice (2026-04-24): Default landing view changes from a tray grid to **group cards**. Tray grid becomes a drill-down from the group detail. Edge-only rule still holds: Activity Hub is served from LE (now LE Cloud Run), not Central. See `docs/features/GROUP_LEVEL_MANAGEMENT_UPDATES.md` section 4.6.
+
 ## Decision
 Activity Hub is **edge-only**. The Activity Hub UI and its APIs are served from the farm’s edge device (server-foxtrot.js), not GreenReach Central (cloud).
 

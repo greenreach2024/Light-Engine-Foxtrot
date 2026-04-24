@@ -3,6 +3,8 @@
 **System**: Light Engine Foxtrot - Edge Deployment  
 **Location**: GreenReach Farm with Grow3 Lights + Code3 Controller
 
+> Update notice (2026-04-24): Groups v2 becomes the single source of truth for crop recipe, seed date, tank, fixtures, schedule, and environmental overrides. Template-driven creation with tailorable inputs is added. See `docs/features/GROUP_LEVEL_MANAGEMENT_UPDATES.md`.
+
 ---
 
 ## Executive Summary

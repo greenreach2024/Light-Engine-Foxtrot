@@ -4,6 +4,8 @@ Date: 2026-03-28
 Owner: GreenReach Platform Team
 Scope: Improve E.V.I.E. device scanning and onboarding across wired and wireless protocols, with first-class Light Engine bus mapping workflow integration.
 
+> Update notice (2026-04-24): Scanning remains the onboarding flow for **devices and bus channels**. For **crop operations** (create planting, override targets, record harvest, repeat planting) E.V.I.E. now uses **group-first verbs** and must not require tray scans. See `docs/features/GROUP_LEVEL_MANAGEMENT_UPDATES.md` section 4.7.
+
 ## 1) Document Review Baseline
 
 This plan is based on the current canonical and feature-level documentation and route contracts:

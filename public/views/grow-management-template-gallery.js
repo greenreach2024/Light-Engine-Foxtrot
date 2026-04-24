@@ -331,6 +331,13 @@
         document.dispatchEvent(new CustomEvent('grow-template:selected', {
           detail: { templateId: id, template: templates.find(t => t.id === id) }
         }));
+        // Group-first (April 24, 2026): cache selection on window so the
+        // Build Stock Groups modal can stamp `templateId` onto new groups
+        // without plumbing state through the template-gallery -> BSG boundary.
+        // See docs/features/GROUP_LEVEL_MANAGEMENT_UPDATES.md section 4.1.
+        try {
+          window.__selectedGrowTemplate = { id, ...(templates.find(t => t.id === id) || {}) };
+        } catch (e) { /* ignore */ }
       });
     } catch (err) {
       console.error('[template-gallery] render failed', err);

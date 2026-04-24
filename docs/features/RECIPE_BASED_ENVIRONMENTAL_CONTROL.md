@@ -1,5 +1,7 @@
 # Recipe-Based Environmental Control System
 
+> Update notice (2026-04-24): Per-tray aggregation described below is being replaced by **per-group aggregation**. Zone targets are a plant-count weighted average across **active groups** in the zone, not across trays. Max-RH is still the most restrictive across contributors. See `docs/features/GROUP_LEVEL_MANAGEMENT_UPDATES.md` section 4.2.
+
 ## Overview
 
 Light Engine Foxtrot now uses **recipe-based environmental targeting** where VPD, temperature, and humidity targets are dynamically calculated from grow recipe schedules based on:

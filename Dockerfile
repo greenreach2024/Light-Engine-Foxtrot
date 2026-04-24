@@ -29,6 +29,15 @@ ENV NODE_ENV=production
 ENV PORT=8080
 ENV DEPLOYMENT_MODE=cloud
 
+# Commit identification baked at build time so /api/version can prove
+# which source SHA / branch is live. Pass with
+# --build-arg GIT_SHA=$(git rev-parse HEAD)
+# --build-arg GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+ARG GIT_SHA=""
+ARG GIT_BRANCH=""
+ENV GIT_SHA=${GIT_SHA}
+ENV GIT_BRANCH=${GIT_BRANCH}
+
 EXPOSE 8080
 
 CMD ["node", "server-foxtrot.js"]

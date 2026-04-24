@@ -25,12 +25,23 @@ export default class RecipeEnvironmentalTargets {
     const {
       dbQuery = null, // Database query function
       dataDir = path.join(__dirname, '../data'),
-      logger = console
+      logger = console,
+      // Group-first additions (April 24, 2026).
+      // When `groupsLoader` returns a non-empty groups array AND the
+      // GROUP_FIRST_OPS feature flag is on, zone/room target calculations
+      // aggregate from groups (group.planConfig.anchor.seedDate +
+      // group.plan/planId + group.plants + group.overrides) instead of
+      // tray_runs. Tray-based SQL is retained as fallback so farms that
+      // have not migrated still work. See
+      // docs/features/GROUP_LEVEL_MANAGEMENT_UPDATES.md section 4.2.
+      groupsLoader = null,
     } = options;
-    
+
     this.dbQuery = dbQuery;
     this.dataDir = dataDir;
     this.logger = logger;
+    this.groupsLoader = typeof groupsLoader === 'function' ? groupsLoader : null;
+    this.groupFirstEnabled = String(process.env.GROUP_FIRST_OPS ?? 'true').toLowerCase() !== 'false';
     
     // Cache for recipe data (refreshed daily)
     this.recipeCache = new Map(); // recipe_id -> recipe data
@@ -53,7 +64,15 @@ export default class RecipeEnvironmentalTargets {
     try {
       // Refresh caches if needed
       await this._refreshCachesIfNeeded();
-      
+
+      // Group-first path: aggregate from groups.json when available and the
+      // feature flag is on. Falls through to the tray path if no groups
+      // match the zone so farms mid-migration still work.
+      if (this.groupFirstEnabled && this.groupsLoader) {
+        const groupTargets = await this._tryGroupTargets({ zoneId, roomId });
+        if (groupTargets) return groupTargets;
+      }
+
       // Get active trays in this zone
       const trays = await this._getActiveTraysInZone(zoneId);
       
@@ -86,7 +105,12 @@ export default class RecipeEnvironmentalTargets {
   async _getRoomTargets(roomId) {
     try {
       await this._refreshCachesIfNeeded();
-      
+
+      if (this.groupFirstEnabled && this.groupsLoader) {
+        const groupTargets = await this._tryGroupTargets({ roomId });
+        if (groupTargets) return groupTargets;
+      }
+
       const trays = await this._getActiveTraysInRoom(roomId);
       
       if (!trays || trays.length === 0) {
@@ -103,6 +127,125 @@ export default class RecipeEnvironmentalTargets {
     }
   }
   
+  /**
+   * Group-first aggregation entry point (April 24, 2026). Loads groups via
+   * the injected `groupsLoader`, filters to active groups matching the
+   * supplied zone and/or room, and forwards to the group-weighted target
+   * calculator. Returns null when no groups match so the caller falls
+   * back to the tray path.
+   *
+   * See docs/features/GROUP_LEVEL_MANAGEMENT_UPDATES.md section 4.2.
+   */
+  async _tryGroupTargets({ zoneId = null, roomId = null } = {}) {
+    try {
+      const loaded = await this.groupsLoader();
+      const groups = Array.isArray(loaded) ? loaded : (loaded && Array.isArray(loaded.groups) ? loaded.groups : []);
+      if (!groups.length) return null;
+
+      const matches = groups.filter(g => {
+        if (!g) return false;
+        if (g.active === false) return false;
+        if (g.status && g.status !== 'active') return false;
+        // Must have a plan and a seed date; otherwise fall back.
+        const planId = g.plan || g.planId || g.recipe;
+        const seedDate = g.planConfig && g.planConfig.anchor && g.planConfig.anchor.seedDate;
+        if (!planId || !seedDate) return false;
+        if (zoneId && String(g.zone || g.zoneId || '') !== String(zoneId)) return false;
+        if (roomId && !zoneId && String(g.room || g.roomId || '') !== String(roomId)) return false;
+        return true;
+      });
+
+      if (!matches.length) return null;
+      const level = zoneId ? 'zone' : 'room';
+      const levelId = zoneId || roomId || '';
+      return await this._calculateGroupWeightedTargets(matches, level, levelId);
+    } catch (err) {
+      this.logger.warn(`[recipe-targets] group-first aggregation failed, falling back to trays: ${err.message}`);
+      return null;
+    }
+  }
+
+  /**
+   * Calculate weighted environmental targets from a list of active groups.
+   * Weight is group.plants (plant count) so larger groups dominate. Each
+   * group's `overrides.environment` (vpd_target, temp_target, max_humidity)
+   * supersedes the recipe schedule value for that day. Max RH uses the
+   * minimum across groups (most restrictive) as in the tray path.
+   */
+  async _calculateGroupWeightedTargets(groups, level, levelId) {
+    let totalWeight = 0;
+    let weightedVpd = 0;
+    let weightedTemp = 0;
+    const maxRhValues = [];
+    const droppedGroups = [];
+
+    for (const group of groups) {
+      const planId = group.plan || group.planId || group.recipe;
+      const recipe = await this._getRecipeData(planId);
+      if (!recipe || !recipe.data || !recipe.data.schedule) {
+        droppedGroups.push({ group_id: group.id, plan_id: planId, reason: 'recipe_not_found' });
+        continue;
+      }
+
+      const seedDate = group.planConfig.anchor.seedDate;
+      const currentDay = this._calculateCurrentDay(seedDate);
+      const scheduleDay = this._findScheduleDay(recipe.data.schedule, currentDay);
+      if (!scheduleDay) {
+        droppedGroups.push({ group_id: group.id, plan_id: planId, reason: 'no_schedule_day', grow_day: currentDay });
+        continue;
+      }
+
+      const envOverrides = (group.overrides && group.overrides.environment) || {};
+      const vpdTarget = Number.isFinite(Number(envOverrides.vpd_target))
+        ? Number(envOverrides.vpd_target)
+        : (parseFloat(scheduleDay.vpd_target) || null);
+      const tempTarget = Number.isFinite(Number(envOverrides.temp_target))
+        ? Number(envOverrides.temp_target)
+        : (parseFloat(scheduleDay.temp_target) || null);
+      const maxRh = Number.isFinite(Number(envOverrides.max_humidity))
+        ? Number(envOverrides.max_humidity)
+        : (parseFloat(scheduleDay.max_humidity) || null);
+
+      const weight = Number(group.plants) || Number(group.plant_count) || 1;
+      if (vpdTarget !== null) {
+        weightedVpd += vpdTarget * weight;
+        totalWeight += weight;
+      }
+      if (tempTarget !== null) weightedTemp += tempTarget * weight;
+      if (maxRh !== null) maxRhValues.push(maxRh);
+
+      this.logger.debug(
+        `[recipe-targets] Group ${group.id}: Day ${currentDay}, VPD ${vpdTarget}, Temp ${tempTarget}, MaxRH ${maxRh}, Weight ${weight}`
+      );
+    }
+
+    if (totalWeight === 0) {
+      const defaults = this._getDefaultTargets('no-valid-group-recipes');
+      defaults.degraded = true;
+      defaults.dropped_groups = droppedGroups;
+      defaults.source = 'groups';
+      return defaults;
+    }
+
+    const avgVpd = weightedVpd / totalWeight;
+    const avgTemp = weightedTemp / totalWeight;
+    const maxRhOverride = maxRhValues.length > 0 ? Math.min(...maxRhValues) : null;
+
+    return {
+      vpd: { min: avgVpd - 0.15, max: avgVpd + 0.15, target: avgVpd, unit: 'kPa' },
+      temperature: { min: avgTemp - 1.5, max: avgTemp + 1.5, target: avgTemp, unit: '\u00b0C' },
+      maxRh: maxRhOverride,
+      level,
+      levelId,
+      groupCount: groups.length,
+      totalPlants: totalWeight,
+      source: 'groups',
+      degraded: droppedGroups.length > 0,
+      dropped_groups: droppedGroups.length > 0 ? droppedGroups : undefined,
+      calculatedAt: new Date().toISOString()
+    };
+  }
+
   /**
    * Calculate weighted environmental targets from multiple trays
    * @param {Array} trays - Array of tray objects with recipe and day info

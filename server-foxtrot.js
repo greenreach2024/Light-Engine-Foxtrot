@@ -734,6 +734,9 @@ async function writeJsonQueued(fullPath, jsonString) {
   const next = prev.then(async () => {
     await fs.promises.mkdir(path.dirname(fullPath), { recursive: true }).catch(() => {});
     await fs.promises.writeFile(fullPath, jsonString, 'utf8');
+    // Mirror operator-authored state to GCS so Cloud Run container recycles
+    // do not wipe edits. See docs/operations/GROUPS_PERSISTENCE_FIX_2026-04-24.md.
+    try { await __mirrorJsonToGCS(fullPath, jsonString); } catch {}
   }).catch((err) => {
     console.warn('[writeJsonQueued] Failed write:', fullPath, err?.message || err);
   });
@@ -863,6 +866,95 @@ const CLOUD_ENDPOINT_URL = process.env.CLOUD_ENDPOINT_URL || process.env.AWS_END
 const ENV_SOURCE = process.env.ENV_SOURCE || (CLOUD_ENDPOINT_URL ? "cloud" : "local");
 const ENV_PATH = path.resolve("./public/data/env.json");
 const DATA_DIR = path.resolve("./public/data");
+
+// ---------------------------------------------------------------------------
+// GCS persistence mirror (Cloud Run durability fix, April 24, 2026).
+//
+// DATA_DIR resolves to /app/public/data which is an EPHEMERAL container
+// filesystem on Cloud Run. Every operator edit (group create/delete, room
+// dimensions, zone geometry, grow-unit assignments) was silently lost when
+// Cloud Run recycled the container — edits appeared to save, then reverted
+// after the next refresh that hit a cold instance. See
+// docs/operations/GROUPS_PERSISTENCE_FIX_2026-04-24.md.
+//
+// Fix: mirror the small set of operator-authored JSON files to the shared
+// GCS bucket (greenreach-storage, le/ prefix) on every write, and hydrate
+// them on boot. Locally (no K_SERVICE) this is a no-op and the filesystem
+// remains authoritative.
+// ---------------------------------------------------------------------------
+const __GCS_MIRRORED_FILES = new Set([
+  'groups.json',
+  'rooms.json',
+  'room-map.json',
+  'plans.json',
+  'recipes.json',
+  'schedules.json',
+  'farm.json',
+  'iot-devices.json',
+]);
+const __PROJECT_ROOT_DIR = path.resolve('.');
+function __gcsRelForPath(fullPath) {
+  if (!fullPath || typeof fullPath !== 'string') return null;
+  const base = path.basename(fullPath);
+  if (!__GCS_MIRRORED_FILES.has(base)) return null;
+  let rel;
+  try { rel = path.relative(__PROJECT_ROOT_DIR, fullPath); } catch { return null; }
+  if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) return null;
+  return rel.split(path.sep).join('/');
+}
+async function __mirrorJsonToGCS(fullPath, jsonStringOrObject) {
+  if (!process.env.K_SERVICE) return;
+  const rel = __gcsRelForPath(fullPath);
+  if (!rel) return;
+  try {
+    const mod = await import('./services/gcs-storage.js');
+    const data = typeof jsonStringOrObject === 'string'
+      ? JSON.parse(jsonStringOrObject)
+      : jsonStringOrObject;
+    await mod.writeJSON(rel, data);
+  } catch (err) {
+    console.warn('[gcs-mirror] Failed to mirror', rel, err?.message || err);
+  }
+}
+async function hydrateCriticalDataFromGCS() {
+  if (!process.env.K_SERVICE) return;
+  try {
+    const mod = await import('./services/gcs-storage.js');
+    for (const file of __GCS_MIRRORED_FILES) {
+      const rel = `public/data/${file}`;
+      const target = path.join(DATA_DIR, file);
+      try {
+        const data = await mod.readJSON(rel, null);
+        if (data !== null && data !== undefined) {
+          // GCS has a mirrored copy — restore it (authoritative).
+          try { fs.mkdirSync(path.dirname(target), { recursive: true }); } catch {}
+          fs.writeFileSync(target, JSON.stringify(data, null, 2));
+          console.log(`[gcs-hydrate] Restored ${file} from GCS`);
+          continue;
+        }
+        // GCS has no mirrored copy yet. If a local (baked or seeded) file
+        // exists, push it to GCS as the baseline snapshot so subsequent
+        // cold starts can restore it. Without this, every Cloud Run cold
+        // start resets the ephemeral filesystem to the baked-in image
+        // copy and the mirror-on-write chain never gets a chance to bind.
+        if (fs.existsSync(target)) {
+          try {
+            const raw = fs.readFileSync(target, 'utf8');
+            const parsed = JSON.parse(raw);
+            await mod.writeJSON(rel, parsed);
+            console.log(`[gcs-hydrate] Seeded GCS baseline for ${file} from local image`);
+          } catch (seedErr) {
+            console.warn(`[gcs-hydrate] Failed to seed ${file} baseline:`, seedErr?.message || seedErr);
+          }
+        }
+      } catch (fileErr) {
+        console.warn(`[gcs-hydrate] Skip ${file}:`, fileErr?.message || fileErr);
+      }
+    }
+  } catch (err) {
+    console.warn('[gcs-hydrate] Failed:', err?.message || err);
+  }
+}
 
 // Recipe metadata: display names + descriptions from Central admin
 // Shared GCS mount at /app/data on both LE and Central Cloud Run services
@@ -1007,6 +1099,12 @@ function isOperationalStartupExemptPath(requestPath = '') {
 
 async function startOperationalServices(trigger = 'startup') {
   console.log(`[startup] Starting operational services (trigger: ${trigger})`);
+
+  // Restore operator-authored state (groups, rooms, schedules, etc.) from GCS
+  // BEFORE seeding defaults. On Cloud Run, DATA_DIR is ephemeral; without this
+  // hydrate step, container recycles silently wipe every delete/edit.
+  // See docs/operations/GROUPS_PERSISTENCE_FIX_2026-04-24.md.
+  await hydrateCriticalDataFromGCS();
 
   // Seed runtime data files that may not exist after a fresh deploy
   seedRuntimeDataFiles();
@@ -1439,11 +1537,102 @@ function saveGroupsFile(groups) {
   try {
     const payload = JSON.stringify({ groups }, null, 2);
     fs.writeFileSync(GROUPS_PATH, payload);
+    // Fire-and-forget GCS mirror so deletions/creates persist across Cloud
+    // Run container recycles. Callers are mostly sync so we cannot await here.
+    __mirrorJsonToGCS(GROUPS_PATH, payload).catch(() => {});
     return true;
   } catch (err) {
     console.error('[groups] Failed to write groups.json:', err.message);
     return false;
   }
+}
+
+// Validate group-first fields introduced by Phase 1/2 (April 24, 2026).
+// See docs/features/GROUP_LEVEL_MANAGEMENT_UPDATES.md section 3.1.
+// Returns an array of error strings; empty array means valid.
+// Only runs checks on fields that are actually present — this preserves the
+// non-destructive merge contract of POST /data/groups.json.
+function validateGroupFirstFields(g) {
+  const errs = [];
+  if (!g || typeof g !== 'object') return ['group must be an object'];
+  const id = g.id || g.group_id || g.name || '(unknown)';
+  const inRange = (v, lo, hi) => Number.isFinite(v) && v >= lo && v <= hi;
+
+  if (g.templateId !== undefined && g.templateId !== null) {
+    if (typeof g.templateId !== 'string' || !g.templateId.trim()) {
+      errs.push(`${id}: templateId must be a non-empty string`);
+    }
+  }
+  if (g.tankId !== undefined && g.tankId !== null && g.tankId !== '') {
+    if (typeof g.tankId !== 'string' || !/^tank-[0-9a-zA-Z_-]+$/.test(g.tankId)) {
+      errs.push(`${id}: tankId must match pattern tank-<id>`);
+    }
+  }
+  if (g.plantsPerSite !== undefined && g.plantsPerSite !== null) {
+    const n = Number(g.plantsPerSite);
+    if (!Number.isInteger(n) || n < 1 || n > 10) {
+      errs.push(`${id}: plantsPerSite must be an integer 1..10`);
+    }
+  }
+  if (g.trayFormatId !== undefined && g.trayFormatId !== null && g.trayFormatId !== '') {
+    if (typeof g.trayFormatId !== 'string') {
+      errs.push(`${id}: trayFormatId must be a string`);
+    }
+  }
+  if (g.overrides !== undefined && g.overrides !== null) {
+    if (typeof g.overrides !== 'object') {
+      errs.push(`${id}: overrides must be an object`);
+    } else {
+      const env = g.overrides.environment;
+      if (env && typeof env === 'object') {
+        if (env.vpd_target != null && !inRange(Number(env.vpd_target), 0.2, 2.5)) {
+          errs.push(`${id}: overrides.environment.vpd_target out of range (0.2..2.5 kPa)`);
+        }
+        if (env.temp_target != null && !inRange(Number(env.temp_target), 5, 40)) {
+          errs.push(`${id}: overrides.environment.temp_target out of range (5..40 C)`);
+        }
+        if (env.max_humidity != null && !inRange(Number(env.max_humidity), 30, 95)) {
+          errs.push(`${id}: overrides.environment.max_humidity out of range (30..95 %)`);
+        }
+      } else if (env !== undefined) {
+        errs.push(`${id}: overrides.environment must be an object`);
+      }
+      const nut = g.overrides.nutrient;
+      if (nut && typeof nut === 'object') {
+        if (nut.ec_target != null && !inRange(Number(nut.ec_target), 0.2, 5)) {
+          errs.push(`${id}: overrides.nutrient.ec_target out of range (0.2..5 mS/cm)`);
+        }
+        if (nut.ph_target != null && !inRange(Number(nut.ph_target), 4, 8)) {
+          errs.push(`${id}: overrides.nutrient.ph_target out of range (4..8)`);
+        }
+      } else if (nut !== undefined) {
+        errs.push(`${id}: overrides.nutrient must be an object`);
+      }
+    }
+  }
+  if (g.planConfig && typeof g.planConfig === 'object') {
+    const anchor = g.planConfig.anchor;
+    if (anchor && typeof anchor === 'object') {
+      if (anchor.mode && anchor.mode !== 'seedDate' && anchor.mode !== 'transplant') {
+        errs.push(`${id}: planConfig.anchor.mode must be 'seedDate' or 'transplant'`);
+      }
+      if (anchor.seedDate != null) {
+        const d = new Date(anchor.seedDate);
+        if (Number.isNaN(d.getTime())) {
+          errs.push(`${id}: planConfig.anchor.seedDate is not a valid date`);
+        } else if (d.getTime() > Date.now() + 24 * 60 * 60 * 1000) {
+          errs.push(`${id}: planConfig.anchor.seedDate cannot be more than 1 day in the future`);
+        }
+      }
+    }
+    if (g.planConfig.schedule && typeof g.planConfig.schedule === 'object') {
+      const ph = Number(g.planConfig.schedule.photoperiodHours);
+      if (g.planConfig.schedule.photoperiodHours != null && !inRange(ph, 0, 24)) {
+        errs.push(`${id}: planConfig.schedule.photoperiodHours out of range (0..24)`);
+      }
+    }
+  }
+  return errs;
 }
 
 // ── groups.json mutex: serializes all read-modify-write operations ──────────
@@ -2734,7 +2923,10 @@ function writeJSON(fileName, value) {
   const target = path.isAbsolute(fileName) ? fileName : path.join(DATA_DIR, fileName);
   ensureDataDir();
   try {
-    fs.writeFileSync(target, JSON.stringify(value ?? {}, null, 2));
+    const payload = JSON.stringify(value ?? {}, null, 2);
+    fs.writeFileSync(target, payload);
+    // GCS mirror for mirrored files (Cloud Run durability).
+    __mirrorJsonToGCS(target, payload).catch(() => {});
     return true;
   } catch (error) {
     console.warn('[env] Failed to persist JSON:', error?.message || error);
@@ -9356,6 +9548,8 @@ app.get('/api/version', (req, res) => {
   res.json({
     version: APP_VERSION,
     buildTime: BUILD_TIME,
+    gitSha: process.env.GIT_SHA || null,
+    gitBranch: process.env.GIT_BRANCH || null,
     timestamp: new Date().toISOString(),
     uptime: process.uptime()
   });
@@ -11827,6 +12021,215 @@ app.post('/api/harvest', async (req, res) => {
     });
   }
 });
+
+// ── Group-first starter templates (April 24, 2026) ───────────────────
+// GET /api/group-templates
+// Returns the catalog of group starter templates bundled with the farm.
+// Templates define defaults (recipe, photoperiod, tray format,
+// plants-per-site, env + nutrient targets) that BSG and EVIE's
+// apply_group_template verb can stamp onto a new group. File is seeded
+// at data/group-templates.json. See docs/features/GROUP_LEVEL_MANAGEMENT_UPDATES.md
+// section 5.
+app.get('/api/group-templates', (req, res) => {
+  try {
+    const p = path.join(DATA_DIR, 'group-templates.json');
+    if (!fs.existsSync(p)) return res.json({ ok: true, templates: [] });
+    const raw = fs.readFileSync(p, 'utf-8');
+    const doc = JSON.parse(raw);
+    const templates = Array.isArray(doc.templates) ? doc.templates : [];
+    return res.json({ ok: true, version: doc.version || null, templates });
+  } catch (err) {
+    console.warn('[group-templates] read failed:', err.message);
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// ── Group-first harvest rollup (April 24, 2026) ───────────────────────
+// POST /api/groups/:groupId/harvest
+// Records a whole-group harvest in one request. Looks up the group in
+// groups.json to pull crop, plan, planConfig.anchor.seedDate, plants,
+// zone, room, then delegates to the existing /api/harvest pipeline via
+// the same log write + experiment-record generator.
+// Body:
+//   {
+//     totalWeight: number (required),
+//     unit: 'kg' | 'oz' | 'lb' (default 'kg'),
+//     splitMode: 'even' | 'per-tray' (default 'even'),
+//     perTray: [{ trayId, weight }] (required if splitMode='per-tray'),
+//     partial: boolean (default false) — when true group stays active
+//              and plants/trays reduce by delta; when false the group
+//              is closed with status:'harvested',
+//     reducePlants: number (optional, partial mode only),
+//     reduceTrays: number (optional, partial mode only),
+//     lotCode: string (optional, server generates if omitted),
+//     notes: string (optional)
+//   }
+// See docs/features/GROUP_LEVEL_MANAGEMENT_UPDATES.md section 4.5.
+app.post('/api/groups/:groupId/harvest', asyncHandler(async (req, res) => {
+  const groupId = String(req.params.groupId || '').trim();
+  if (!groupId) return res.status(400).json({ ok: false, error: 'groupId required' });
+  const body = req.body || {};
+  const totalWeight = Number(body.totalWeight);
+  if (!Number.isFinite(totalWeight) || totalWeight <= 0) {
+    return res.status(400).json({ ok: false, error: 'totalWeight must be a positive number' });
+  }
+  const unit = String(body.unit || 'kg').toLowerCase();
+  if (!['kg', 'oz', 'lb', 'g'].includes(unit)) {
+    return res.status(400).json({ ok: false, error: "unit must be one of 'kg','oz','lb','g'" });
+  }
+  const splitMode = body.splitMode === 'per-tray' ? 'per-tray' : 'even';
+  const partial = body.partial === true;
+
+  const groupsData = await readJSON('groups.json', { groups: [] });
+  const groups = groupsData?.groups || [];
+  const group = groups.find(g => g && (g.id === groupId || g.group_id === groupId || g.name === groupId));
+  if (!group) return res.status(404).json({ ok: false, error: `group ${groupId} not found` });
+
+  const now = new Date();
+  const nowIso = now.toISOString();
+  const lotCode = String(body.lotCode || '').trim() || `LOT-${groupId}-${now.getTime()}`;
+
+  // Compute grow days from planConfig.anchor.seedDate if present.
+  let growDays = null;
+  const seedDate = group.planConfig && group.planConfig.anchor && group.planConfig.anchor.seedDate;
+  if (seedDate) {
+    const seed = new Date(seedDate);
+    if (!Number.isNaN(seed.getTime())) {
+      growDays = Math.max(0, Math.floor((now.getTime() - seed.getTime()) / 86400000));
+    }
+  }
+
+  // Weight-per-plant derived from group plants count (weighted avg).
+  const plantsCurrent = Number(group.plants) || Number(group.plant_count) || 0;
+  const weightPerPlant = plantsCurrent > 0 ? totalWeight / plantsCurrent : null;
+
+  // Build per-lot entries. 'even' yields 1 lot; 'per-tray' yields N lots.
+  const entries = [];
+  if (splitMode === 'per-tray') {
+    const perTray = Array.isArray(body.perTray) ? body.perTray : [];
+    if (!perTray.length) {
+      return res.status(400).json({ ok: false, error: "splitMode='per-tray' requires perTray[]" });
+    }
+    const sum = perTray.reduce((s, t) => s + (Number(t.weight) || 0), 0);
+    const tolerance = 0.01;
+    if (Math.abs(sum - totalWeight) > tolerance) {
+      return res.status(400).json({
+        ok: false,
+        error: `perTray[] weights sum to ${sum}${unit} but totalWeight is ${totalWeight}${unit}`
+      });
+    }
+    perTray.forEach((t, idx) => {
+      const trayId = String(t.trayId || '').trim();
+      if (!trayId) return;
+      const wt = Number(t.weight) || 0;
+      entries.push({
+        groupId,
+        trayId,
+        lotCode: `${lotCode}-T${String(idx + 1).padStart(2, '0')}`,
+        totalWeight: wt,
+        unit,
+        weightPerPlant: weightPerPlant,
+        planId: group.plan || group.planId || group.recipe || null,
+        crop: group.crop || group.cropName || null,
+        growDays,
+        plannedGrowDays: group.planConfig && group.planConfig.schedule && group.planConfig.schedule.totalDays || null,
+        room: group.room || null,
+        zone: group.zone || null,
+        harvestedAt: nowIso,
+        partial,
+        notes: body.notes || null,
+      });
+    });
+  } else {
+    entries.push({
+      groupId,
+      lotCode,
+      totalWeight,
+      unit,
+      weightPerPlant,
+      plantsHarvested: partial ? (Number(body.reducePlants) || 0) : plantsCurrent,
+      planId: group.plan || group.planId || group.recipe || null,
+      crop: group.crop || group.cropName || null,
+      growDays,
+      plannedGrowDays: group.planConfig && group.planConfig.schedule && group.planConfig.schedule.totalDays || null,
+      room: group.room || null,
+      zone: group.zone || null,
+      harvestedAt: nowIso,
+      partial,
+      notes: body.notes || null,
+    });
+  }
+
+  // Append to harvest-log.json (same format as POST /api/harvest).
+  const harvestLogPath = path.join(DATA_DIR, 'harvest-log.json');
+  let harvestLog = { harvests: [], metadata: {} };
+  try {
+    if (fs.existsSync(harvestLogPath)) {
+      const data = fs.readFileSync(harvestLogPath, 'utf-8');
+      harvestLog = JSON.parse(data);
+      if (!Array.isArray(harvestLog.harvests)) harvestLog.harvests = [];
+    }
+  } catch (e) {
+    console.warn('[Group Harvest] Failed to read harvest log, creating new:', e.message);
+    harvestLog = { harvests: [], metadata: { created: nowIso } };
+  }
+  entries.forEach(e => harvestLog.harvests.push(e));
+  harvestLog.metadata = harvestLog.metadata || {};
+  harvestLog.metadata.lastUpdated = nowIso;
+  harvestLog.metadata.totalHarvests = harvestLog.harvests.length;
+  try {
+    fs.writeFileSync(harvestLogPath, JSON.stringify(harvestLog, null, 2), 'utf-8');
+  } catch (e) {
+    console.error('[Group Harvest] Failed to write harvest log:', e.message);
+    return res.status(500).json({ ok: false, error: 'Failed to persist harvest log' });
+  }
+
+  // Update groups.json: close or reduce the group.
+  try {
+    await withGroupsLock((existing) => {
+      const idx = existing.findIndex(g => g && (g.id === group.id || g.group_id === group.group_id));
+      if (idx < 0) return;
+      if (!partial) {
+        existing[idx] = {
+          ...existing[idx],
+          status: 'harvested',
+          active: false,
+          harvestedAt: nowIso,
+          harvestLot: lotCode,
+          lastModified: nowIso,
+        };
+      } else {
+        const reducePlants = Number(body.reducePlants) || 0;
+        const reduceTrays = Number(body.reduceTrays) || 0;
+        const curPlants = Number(existing[idx].plants) || Number(existing[idx].plant_count) || 0;
+        const curTrays = Number(existing[idx].trays) || 0;
+        existing[idx] = {
+          ...existing[idx],
+          plants: Math.max(0, curPlants - reducePlants),
+          plant_count: Math.max(0, curPlants - reducePlants),
+          trays: Math.max(0, curTrays - reduceTrays),
+          lastPartialHarvestAt: nowIso,
+          lastModified: nowIso,
+        };
+      }
+    });
+  } catch (err) {
+    console.warn('[Group Harvest] Failed to update groups.json:', err.message);
+  }
+
+  return res.json({
+    ok: true,
+    groupId,
+    lotCode,
+    entries: entries.length,
+    totalWeight,
+    unit,
+    splitMode,
+    partial,
+    closedGroup: !partial,
+    harvestedAt: nowIso,
+  });
+}));
 
 /**
  * Get Harvest Log
@@ -25025,6 +25428,15 @@ app.get('/api/config/features', (req, res) => {
   const isEdge = edgeConfig.isEdgeMode();
   const deploymentMode = isEdge ? 'edge' : 'cloud';
 
+  // `groupFirstOps` toggles the group-first management flow described in
+  // docs/features/GROUP_LEVEL_MANAGEMENT_UPDATES.md (April 24, 2026).
+  // When true, the Build Stock Groups modal exposes crop recipe, seed date,
+  // nutrient tank, photoperiod, plants/site, and environment overrides so
+  // operators create fully-configured groups instead of blank drafts.
+  // Default: ON. Disable by setting GROUP_FIRST_OPS=false (operations that
+  // need to roll back to the tray-first flow).
+  const groupFirstOps = String(process.env.GROUP_FIRST_OPS ?? 'true').toLowerCase() !== 'false';
+
   // Always-available features (both edge and cloud)
   const features = {
     monitoring: true,
@@ -25038,6 +25450,7 @@ app.get('/api/config/features', (req, res) => {
     aiAssistant: true,
     recipeModifiers: true,
     alerts: true,
+    groupFirstOps,
     // Edge-only features (require 24/7 on-site hardware)
     deviceControl: isEdge,
     nutrientControl: isEdge,
@@ -25072,6 +25485,9 @@ app.get('/api/groups', asyncHandler(async (req, res) => {
   // Return full records with canonical field normalization
   // Keep: lights[], room, zone, status, schedule, plan, planConfig
   // Drop deprecated: crop, recipe, roomId, zoneId (per DATA_FORMAT_STANDARDS)
+  // Group-first additions (April 24, 2026): templateId, trayFormatId,
+  // plantsPerSite, tankId, overrides. See
+  // docs/features/GROUP_LEVEL_MANAGEMENT_UPDATES.md section 3.1.
   const canonical = groups.map(g => {
     const record = {
       id: g.id || g.name,
@@ -25087,7 +25503,14 @@ app.get('/api/groups', asyncHandler(async (req, res) => {
       active: g.active !== false,
       health: g.health || 'unknown',
       planConfig: g.planConfig || null,
-      lastModified: g.lastModified || null
+      lastModified: g.lastModified || null,
+      // Group-first fields — pass through when present, omit otherwise so
+      // existing consumers see no shape change.
+      templateId: g.templateId || g.template_id || undefined,
+      trayFormatId: g.trayFormatId || g.tray_format_id || undefined,
+      plantsPerSite: g.plantsPerSite || g.plants_per_site || undefined,
+      tankId: g.tankId || g.tank_id || undefined,
+      overrides: g.overrides || undefined
     };
     // Include controller/iotDevice if present (Groups V2)
     if (g.controller) record.controller = g.controller;
@@ -26002,6 +26425,17 @@ app.post('/data/groups.json', pinOrApiKeyGuard, async (req, res) => {
   if (!Array.isArray(incoming)) {
     return res.status(400).json({ ok: false, error: 'Expected { groups: [...] } or array.' });
   }
+  // Phase 2 validation: reject payloads containing malformed group-first
+  // fields before we touch the merge lock. Legacy payloads (no new fields)
+  // pass through unchanged.
+  const validationErrors = [];
+  for (const inc of incoming) {
+    const errs = validateGroupFirstFields(inc);
+    if (errs.length) validationErrors.push(...errs);
+  }
+  if (validationErrors.length) {
+    return res.status(400).json({ ok: false, error: 'Group validation failed', details: validationErrors });
+  }
   try {
     let touchedIds;
     await withGroupsLock((existing) => {
@@ -26582,6 +27016,23 @@ app.get('/greenreach-org', (req, res) => {
 // Legacy admin.html redirect - docs/admin.html not served, redirect to farm-admin.html
 app.get('/admin.html', (req, res) => {
   res.redirect('/farm-admin.html');
+});
+
+// Service worker must NEVER be cached by the browser. Without this, the SW
+// script is served from the static middleware's 1-hour public cache, which
+// means a deploy that bumps CACHE_VERSION is invisible to returning users
+// for up to an hour. Explicit no-store header + registration updateViaCache
+// 'none' together close that window.
+app.get('/service-worker.js', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  res.setHeader('Service-Worker-Allowed', '/');
+  // Prefer the canonical Central copy (runtime precedence), fall back to root.
+  const centralSw = path.join(__dirname, 'greenreach-central', 'public', 'service-worker.js');
+  const rootSw = path.join(PUBLIC_DIR, 'service-worker.js');
+  if (fs.existsSync(centralSw)) return res.sendFile(centralSw);
+  return res.sendFile(rootSw);
 });
 
 // Wholesale portals are standalone and served by GreenReach Central, not Foxtrot.

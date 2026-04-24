@@ -32,7 +32,12 @@ class PWAInstaller {
         }
 
         this.serviceWorkerRegistration = await navigator.serviceWorker.register('/service-worker.js', {
-          scope: '/'
+          scope: '/',
+          // Do NOT allow the browser HTTP cache to serve service-worker.js.
+          // Without this, the SW script itself can be served from the 1-hour
+          // browser cache, so a freshly deployed SW (with a bumped
+          // CACHE_VERSION) is not picked up until that window expires.
+          updateViaCache: 'none'
         });
         
         console.log('[PWA] Service Worker registered:', this.serviceWorkerRegistration.scope);

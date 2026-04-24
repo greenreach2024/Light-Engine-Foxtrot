@@ -6929,6 +6929,99 @@ function populateBsgModal() {
     try { farmId = (localStorage && localStorage.getItem('farmId')) || ''; } catch (e) {}
     if (farmId) gidInput.placeholder = 'GID-' + String(farmId).slice(-8).toUpperCase() + '-';
   }
+
+  // Group-first operations panel (April 24, 2026). Feature-flagged via
+  // GET /api/config/features.groupFirstOps. When on, expose recipe, seed
+  // date, tank, photoperiod, plants-per-site, and per-group overrides so
+  // the operator creates fully-configured groups in one step instead of
+  // blank drafts. See docs/features/GROUP_LEVEL_MANAGEMENT_UPDATES.md.
+  populateBsgGroupFirstPanel();
+}
+
+/**
+ * Check the groupFirstOps feature flag (cached on window.LE_FEATURES) and,
+ * if enabled, reveal the group-first panel inside the Build Stock Groups
+ * modal and populate the Crop recipe dropdown from /api/recipes (fallback
+ * /plans). Leaves Seed date blank (operator choice). Non-fatal on error.
+ */
+async function populateBsgGroupFirstPanel() {
+  const panel = document.getElementById('bsgGroupFirstPanel');
+  if (!panel) return;
+  try {
+    const f = window.authFetch || fetch;
+    // Cache feature flags for the page lifetime.
+    if (!window.LE_FEATURES) {
+      try {
+        const featRes = await f('/api/config/features', { cache: 'no-store' });
+        if (featRes.ok) {
+          const body = await featRes.json();
+          window.LE_FEATURES = body && body.features ? body.features : {};
+        } else {
+          window.LE_FEATURES = {};
+        }
+      } catch (_) {
+        window.LE_FEATURES = {};
+      }
+    }
+    if (!window.LE_FEATURES.groupFirstOps) {
+      panel.style.display = 'none';
+      return;
+    }
+    panel.style.display = 'block';
+
+    // Populate recipe dropdown once per modal open. Prefer /api/recipes
+    // (recipes v2, returns {ok, recipes:[{id,name,...}]}) then /plans.
+    const planSelect = document.getElementById('bsgPlanId');
+    if (planSelect && !planSelect.dataset.populated) {
+      let recipes = [];
+      try {
+        const r = await f('/api/recipes', { cache: 'no-store' });
+        if (r.ok) {
+          const body = await r.json();
+          if (Array.isArray(body)) recipes = body;
+          else if (Array.isArray(body.recipes)) recipes = body.recipes;
+          else if (Array.isArray(body.plans)) recipes = body.plans;
+        }
+      } catch (_) { /* fall through */ }
+      if (!recipes.length) {
+        try {
+          const r2 = await f('/plans', { cache: 'no-store' });
+          if (r2.ok) {
+            const body = await r2.json();
+            if (Array.isArray(body)) recipes = body;
+            else if (Array.isArray(body.plans)) recipes = body.plans;
+          }
+        } catch (_) { /* ignore */ }
+      }
+      // Keep the first empty option, then append.
+      recipes
+        .slice()
+        .sort((a, b) => String(a.name || a.id || '').localeCompare(String(b.name || b.id || '')))
+        .forEach(rec => {
+          const id = rec.id || rec.planId || rec.name;
+          const name = rec.name || rec.id || id;
+          if (!id) return;
+          const opt = document.createElement('option');
+          opt.value = String(id);
+          opt.textContent = String(name);
+          planSelect.appendChild(opt);
+        });
+      planSelect.dataset.populated = '1';
+    }
+
+    // Default seed date to today when empty.
+    const seedInput = document.getElementById('bsgSeedDate');
+    if (seedInput && !seedInput.value) {
+      const today = new Date();
+      const y = today.getFullYear();
+      const m = String(today.getMonth() + 1).padStart(2, '0');
+      const d = String(today.getDate()).padStart(2, '0');
+      seedInput.value = `${y}-${m}-${d}`;
+    }
+  } catch (err) {
+    // Never block the modal on feature-flag errors.
+    console.warn('[Build Stock] group-first panel init failed:', err && err.message);
+  }
 }
 
 /**
@@ -7253,6 +7346,31 @@ async function executeBuildStockGroups() {
   const standardControllerId = (document.getElementById('bsgStandardController')?.value || '').trim();
   const groupIdPrefix = (document.getElementById('bsgGroupIdPrefix')?.value || '').trim();
 
+  // Group-first fields (April 24, 2026). Read only when the flag is on so
+  // the flag acts as both UI and data guard. When off these all resolve to
+  // empty and the group is saved in the legacy draft shape.
+  const groupFirstOn = !!(window.LE_FEATURES && window.LE_FEATURES.groupFirstOps);
+  const gfPlanId = groupFirstOn ? (document.getElementById('bsgPlanId')?.value || '').trim() : '';
+  const gfSeedDateRaw = groupFirstOn ? (document.getElementById('bsgSeedDate')?.value || '').trim() : '';
+  const gfTankId = groupFirstOn ? (document.getElementById('bsgTankId')?.value || '').trim() : '';
+  const gfPhotoperiod = groupFirstOn ? Number(document.getElementById('bsgPhotoperiod')?.value) : NaN;
+  const gfPlantsPerSiteRaw = groupFirstOn ? parseInt(document.getElementById('bsgPlantsPerSite')?.value) : NaN;
+  const gfPlantsPerSite = Number.isFinite(gfPlantsPerSiteRaw) && gfPlantsPerSiteRaw > 0 ? gfPlantsPerSiteRaw : 1;
+  const ovrVpd = groupFirstOn ? Number(document.getElementById('bsgOvrVpd')?.value) : NaN;
+  const ovrTemp = groupFirstOn ? Number(document.getElementById('bsgOvrTemp')?.value) : NaN;
+  const ovrMaxRh = groupFirstOn ? Number(document.getElementById('bsgOvrMaxRh')?.value) : NaN;
+  const ovrEc = groupFirstOn ? Number(document.getElementById('bsgOvrEc')?.value) : NaN;
+  const ovrPh = groupFirstOn ? Number(document.getElementById('bsgOvrPh')?.value) : NaN;
+  // templateId is exposed by the template-gallery card via a CustomEvent
+  // (see public/views/grow-management-template-gallery.js). If the operator
+  // picked a template, it is cached on window.__selectedGrowTemplate.
+  const gfTemplateId = groupFirstOn
+    ? String(
+        (window.__selectedGrowTemplate && (window.__selectedGrowTemplate.id || window.__selectedGrowTemplate.templateId))
+        || ''
+      )
+    : '';
+
   // Validation
   const missing = [];
   if (!room) missing.push('Room');
@@ -7379,7 +7497,55 @@ async function executeBuildStockGroups() {
     // to the previous behaviour of 0 (consumers will enrich from the template
     // at planting time). Both snake_case and camelCase keys are written so
     // admin.js / recipe assignment / wholesale rollups can read either shape.
-    const plantsPerGroup = plantsPerTray > 0 ? plantsPerTray * trays : 0;
+    // Group-first multiplies by plantsPerSite (seedlings per site) when the
+    // flag is on; legacy path keeps the sites-only count.
+    const sitesPerGroup = plantsPerTray > 0 ? plantsPerTray * trays : 0;
+    const plantsPerGroup = groupFirstOn && sitesPerGroup > 0
+      ? sitesPerGroup * gfPlantsPerSite
+      : sitesPerGroup;
+
+    // Group-first: build planConfig + overrides when the flag is on and an
+    // operator supplied enough information. Anchor.seedDate locks the
+    // automation loop's "current day" calculation (see
+    // automation/recipe-nutrient-targets.js::calculateCurrentDay).
+    let planConfig = null;
+    let overrides;
+    let schedule;
+    let status = 'draft';
+    let planField = '';
+    if (groupFirstOn && gfPlanId && gfSeedDateRaw) {
+      planField = gfPlanId;
+      const seedIso = new Date(gfSeedDateRaw + 'T00:00:00Z').toISOString();
+      planConfig = {
+        anchor: { mode: 'seedDate', seedDate: seedIso },
+        schedule: Number.isFinite(gfPhotoperiod) && gfPhotoperiod > 0
+          ? { photoperiodHours: gfPhotoperiod, totalOnHours: gfPhotoperiod }
+          : undefined
+      };
+      if (Number.isFinite(gfPhotoperiod) && gfPhotoperiod > 0) {
+        schedule = {
+          photoperiodHours: gfPhotoperiod,
+          rampUpMin: 10,
+          rampDownMin: 10
+        };
+      }
+      status = 'active';
+    }
+    if (groupFirstOn) {
+      const envOvr = {};
+      if (Number.isFinite(ovrVpd)) envOvr.vpd_target = ovrVpd;
+      if (Number.isFinite(ovrTemp)) envOvr.temp_target = ovrTemp;
+      if (Number.isFinite(ovrMaxRh)) envOvr.max_humidity = ovrMaxRh;
+      const nutOvr = {};
+      if (Number.isFinite(ovrEc)) nutOvr.ec_target = ovrEc;
+      if (Number.isFinite(ovrPh)) nutOvr.ph_target = ovrPh;
+      if (Object.keys(envOvr).length || Object.keys(nutOvr).length) {
+        overrides = {};
+        if (Object.keys(envOvr).length) overrides.environment = envOvr;
+        if (Object.keys(nutOvr).length) overrides.nutrient = nutOvr;
+      }
+    }
+
     const group = {
       id,
       group_id: groupId,
@@ -7395,6 +7561,8 @@ async function executeBuildStockGroups() {
       tray_format_name: trayFormatName || null,
       plants_per_tray: plantsPerTray > 0 ? plantsPerTray : undefined,
       plantsPerTray: plantsPerTray > 0 ? plantsPerTray : undefined,
+      plantsPerSite: groupFirstOn ? gfPlantsPerSite : undefined,
+      plants_per_site: groupFirstOn ? gfPlantsPerSite : undefined,
       plants: plantsPerGroup,
       plant_count: plantsPerGroup,
       lights: groupLights,
@@ -7402,12 +7570,18 @@ async function executeBuildStockGroups() {
       deviceCount: groupLights.length,
       active: true,
       health: 'healthy',
-      status: 'draft',
-      plan: '',
+      status,
+      plan: planField,
       crop: '',
       recipe: '',
-      schedule: '',
-      planConfig: null,
+      schedule: schedule || '',
+      planConfig,
+      // Group-first fields (April 24, 2026)
+      templateId: gfTemplateId || undefined,
+      template_id: gfTemplateId || undefined,
+      tankId: groupFirstOn && gfTankId ? gfTankId : undefined,
+      tank_id: groupFirstOn && gfTankId ? gfTankId : undefined,
+      overrides,
       lastModified: now
     };
 
@@ -7485,6 +7659,15 @@ async function executeBuildStockGroups() {
 
   // Update UI
   document.dispatchEvent(new Event('groups-updated'));
+  // Bridge to DataFlowBus so the 3D viewer (and other cross-page consumers)
+  // refetch and rerender after bulk group creation. The DOM event alone is
+  // not enough because the viewer subscribes via window.DataFlowBus.on(...).
+  try {
+    if (window.DataFlowBus && typeof window.DataFlowBus.emit === 'function') {
+      window.DataFlowBus.emit('groups', { source: 'build-stock-groups', created: created, skipped: skipped });
+      window.DataFlowBus.emit('lights', { source: 'build-stock-groups', created: created });
+    }
+  } catch (e) { /* non-fatal */ }
   if (typeof populateGroupsV2LoadGroupDropdown === 'function') {
     populateGroupsV2LoadGroupDropdown();
   }
