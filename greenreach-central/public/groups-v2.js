@@ -818,7 +818,10 @@ function populateDefaultZones(zoneSelect) {
   const roomZones = matchedRoom && Array.isArray(matchedRoom.zones) ? matchedRoom.zones : [];
 
   if (roomZones.length > 0) {
-    roomZones.forEach(zoneName => {
+    roomZones.forEach(z => {
+      // rooms.json may hold either raw strings or {id,name} objects.
+      const zoneName = (typeof z === 'string') ? z : (z && z.name) ? z.name : '';
+      if (!zoneName) return;
       const opt = document.createElement('option');
       opt.value = zoneName;
       opt.textContent = zoneName;
