@@ -658,9 +658,17 @@
     el = document.createElement('div');
     el.id = SPATIAL_ID;
     el.style.marginTop = '16px';
-    // Insert after the body grid
-    const body = $(BODY_ID);
-    (body && body.parentNode === panel) ? panel.appendChild(el) : panel.appendChild(el);
+    // Insert AFTER the Evie recommendation container so the assistant card
+    // reads above the per-zone capacity grid (the assistant's narrative is
+    // what tells the operator how many zones to plan for, so it must appear
+    // before the zone-count math).
+    const evie = ensureEvieContainer();
+    if (evie && evie.parentNode === panel) {
+      panel.insertBefore(el, evie.nextSibling);
+    } else {
+      const body = $(BODY_ID);
+      (body && body.parentNode === panel) ? panel.appendChild(el) : panel.appendChild(el);
+    }
     return el;
   }
 
@@ -809,12 +817,12 @@
           <label>Plumbing</label>
           <span style="color:#e2e8f0;font-size:0.88rem;padding-bottom:6px;">${contract.plumbingSide === 'wall' ? 'Along long wall' : 'Flexible'}</span>
         </div>
-        <div class="rbp-ctl" style="min-width:260px;">
-          <label>Next</label>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <button id="rbpDoneSystems" type="button" class="rbp-evie__btn">Done with grow systems</button>
-            <button id="rbpAnotherSystem" type="button" class="rbp-evie__btn">Configure another system</button>
-          </div>
+        <div class="rbp-ctl" style="min-width:260px;display:none;" data-rbp-legacy-actions>
+          <!-- Legacy inline action buttons retained for backward compatibility
+               with anything that still queries them by id. The visible flow
+               nav lives below the zone grid via .gm-flow-nav. -->
+          <button id="rbpDoneSystems" type="button" class="rbp-evie__btn">Done with grow systems</button>
+          <button id="rbpAnotherSystem" type="button" class="rbp-evie__btn">Configure another system</button>
         </div>
       </div>
     `;
@@ -856,6 +864,14 @@
       <div class="rbp-section-title">Zone capacity \u00b7 Evie spatial plan</div>
       ${controlsHtml}
       <div class="rbp-spatial">${zonesHtml}</div>
+      <div class="gm-flow-nav" role="group" aria-label="Grow system workflow actions">
+        <button id="rbpAnotherSystemNav" type="button" class="gm-flow-nav__btn gm-flow-nav__btn--ghost" title="Add a second growing system to this room (e.g. NFT plus DWC)">
+          + Add another grow system
+        </button>
+        <button id="rbpDoneSystemsNav" type="button" class="gm-flow-nav__btn gwen-action" title="All grow systems for this room are configured. Move on to Equipment.">
+          Done with grow systems &rarr;
+        </button>
+      </div>
     `;
 
     // Paint canvases with solver placements (capped at take per zone but we
@@ -930,36 +946,38 @@
 
     const doneBtn = document.getElementById('rbpDoneSystems');
     const anotherBtn = document.getElementById('rbpAnotherSystem');
-    if (doneBtn) {
-      doneBtn.addEventListener('click', function () {
-        updateBreadcrumbActive(4);
-        const equip = document.getElementById('flow-equipment');
-        if (equip) equip.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      });
+    const doneNavBtn = document.getElementById('rbpDoneSystemsNav');
+    const anotherNavBtn = document.getElementById('rbpAnotherSystemNav');
+    function handleDone() {
+      updateBreadcrumbActive(4);
+      const equip = document.getElementById('flow-equipment');
+      if (equip) equip.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
-    if (anotherBtn) {
-      anotherBtn.addEventListener('click', function () {
-        // Clear template-scoped state so the gallery selection triggers a
-        // fresh configure flow, but preserve state.room (and its
-        // installedSystems list) so the Configured Systems strip keeps
-        // showing prior saves. Dispatch a hint event for setup-agent.
-        state.template = null;
-        state.scores = null;
-        state.cropClass = null;
-        state.desiredUnits = 0;
-        state.autoFit = true;
-        state.zoneRects = [];
-        state.spatialPlan = null;
-        state.zoneRecommendation = null;
-        state.customization = null;
-        hide();
-        document.dispatchEvent(new CustomEvent('grow-system-config:another', {
-          detail: { roomId: state.room && state.room.id }
-        }));
-        const gallery = document.getElementById('growTemplateGallery');
-        if (gallery) gallery.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      });
+    function handleAnother() {
+      // Clear template-scoped state so the gallery selection triggers a
+      // fresh configure flow, but preserve state.room (and its
+      // installedSystems list) so the Configured Systems strip keeps
+      // showing prior saves. Dispatch a hint event for setup-agent.
+      state.template = null;
+      state.scores = null;
+      state.cropClass = null;
+      state.desiredUnits = 0;
+      state.autoFit = true;
+      state.zoneRects = [];
+      state.spatialPlan = null;
+      state.zoneRecommendation = null;
+      state.customization = null;
+      hide();
+      document.dispatchEvent(new CustomEvent('grow-system-config:another', {
+        detail: { roomId: state.room && state.room.id }
+      }));
+      const gallery = document.getElementById('growTemplateGallery');
+      if (gallery) gallery.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
+    if (doneBtn) doneBtn.addEventListener('click', handleDone);
+    if (anotherBtn) anotherBtn.addEventListener('click', handleAnother);
+    if (doneNavBtn) doneNavBtn.addEventListener('click', handleDone);
+    if (anotherNavBtn) anotherNavBtn.addEventListener('click', handleAnother);
   }
 
   function ensureEvieContainer() {

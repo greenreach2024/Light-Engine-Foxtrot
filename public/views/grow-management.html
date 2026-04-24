@@ -693,6 +693,54 @@
       font-size: 0.8125rem;
     }
     .ff-link-row a:hover { text-decoration: underline; }
+
+    /* ---- Unified primary action button (matches Ask Evie / GWEN FAB) ---
+       Apply via class="primary gwen-action" or class="gwen-action".
+       Replaces ad-hoc green (#10b981 / #22c55e) inline styles so every
+       commit-style button reads the same across the grow-management flow.
+    */
+    .gwen-action,
+    button.gwen-action,
+    .primary.gwen-action {
+      background: linear-gradient(135deg, #6366f1, #8b5cf6) !important;
+      border: 1px solid rgba(255,255,255,0.18) !important;
+      color: #fff !important;
+      box-shadow: 0 4px 14px rgba(99,102,241,0.28);
+      transition: filter 0.15s ease, transform 0.1s ease;
+    }
+    .gwen-action:hover { filter: brightness(1.08); }
+    .gwen-action:active { transform: translateY(1px); }
+    .gwen-action:disabled { filter: grayscale(0.4) brightness(0.7); cursor: not-allowed; }
+
+    /* ---- Workflow nav buttons (Next / Done / Configure another) -----
+       Make the workflow-completion buttons large, high-contrast and pinned
+       so they are findable. Used on Step 3 grow-units controls.
+    */
+    .gm-flow-nav {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      align-items: center;
+      margin-top: 16px;
+      padding-top: 14px;
+      border-top: 1px solid rgba(148,163,184,0.18);
+    }
+    .gm-flow-nav__btn {
+      min-height: 42px;
+      padding: 10px 22px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      letter-spacing: 0.01em;
+      border-radius: 10px;
+      cursor: pointer;
+    }
+    .gm-flow-nav__btn--ghost {
+      background: rgba(30,41,59,0.6);
+      border: 1px solid rgba(148,163,184,0.28);
+      color: #e2e8f0;
+    }
+    .gm-flow-nav__btn--ghost:hover { background: rgba(30,41,59,0.9); }
   </style>
   <script src="/js/console-wrapper.js"></script>
   <script src="/js/auth-fetch.js?v=20260421-authfetch-v1"></script>
@@ -845,7 +893,7 @@
             <div id="ffZoneDrawerList" style="display:flex;flex-direction:column;gap:6px;max-height:300px;overflow:auto;"></div>
             <div style="margin-top:12px;display:flex;flex-direction:column;gap:6px;">
               <button id="ffZoneDrawerUndo" type="button" class="ghost" style="min-height:32px;padding:6px 12px;">Undo last</button>
-              <button id="ffZoneDrawerSave" type="button" class="primary" style="min-height:32px;padding:6px 12px;background:#10b981;border-color:#10b981;">Save zones</button>
+              <button id="ffZoneDrawerSave" type="button" class="primary gwen-action" style="min-height:32px;padding:6px 12px;">Save zones</button>
               <span id="ffZoneDrawerStatus" class="tiny" style="color:#94a3b8;min-height:16px;"></span>
             </div>
           </div>
@@ -908,7 +956,7 @@
           <div style="display:flex;gap:8px;flex-wrap:wrap;">
             <button id="rbpPrefillBtn" type="button" class="primary" style="min-height:32px;padding:6px 14px;">Stage group from template</button>
             <button id="rbpAssignLightsBtn" type="button" class="ghost" style="min-height:32px;padding:6px 14px;">Assign lights</button>
-            <button id="rbpSavePlanBtn" type="button" class="primary" style="min-height:32px;padding:6px 14px;background:#10b981;border-color:#10b981;" title="Persist this build plan to rooms.json (installedSystems + buildPlan). Makes Equipment step durable across reloads.">Save plan to room</button>
+            <button id="rbpSavePlanBtn" type="button" class="primary gwen-action" style="min-height:32px;padding:6px 14px;" title="Persist this build plan to rooms.json (installedSystems + buildPlan). Makes Equipment step durable across reloads.">Save plan to room</button>
             <button id="rbpClearBtn" type="button" class="ghost" style="min-height:32px;padding:6px 14px;">Clear</button>
           </div>
         </div>
@@ -924,14 +972,15 @@
     <section id="groupsV2Panel" data-card-prefix="GR" data-card-code="GV2">
       <div class="panel-body" style="display:flex;flex-direction:column;gap:18px;">
 
-        <!-- ===== IDENTITY + ACTIONS (advanced / inline editor) ===== -->
-        <details class="gm-card" id="groupsV2PlanFormWrap" style="padding:12px 14px;">
-          <summary style="cursor:pointer;color:#e2e8f0;font-weight:600;font-size:0.95rem;">
-             Advanced: edit & deploy groups
-            <span class="tiny text-muted" style="font-weight:400;margin-left:6px;">
-               (load/edit/deploy existing groups created via Build Growing Units)
-            </span>
-          </summary>
+        <!-- ===== IDENTITY + ACTIONS (advanced / inline editor) =====
+             Removed from operator UI 2026-04-24: this duplicated the Build
+             Growing Units / Groups V2 flow and confused first-run users.
+             The DOM remains hidden so groups-v2.js element lookups (e.g.
+             #groupsV2RoomSelect, #groupsV2ZoneSelect, #groupsV2NewGroup)
+             still resolve and the spectrum/solver pipeline is unaffected.
+        -->
+        <details class="gm-card" id="groupsV2PlanFormWrap" style="display:none;" aria-hidden="true">
+          <summary style="display:none;"></summary>
         <div id="groupsV2PlanForm" style="display:flex;flex-direction:column;gap:16px;margin-top:12px;">
           <div class="row row--wrap" style="gap:12px;align-items:flex-end;" id="groupsV2PlanControls">
             <label class="tiny" style="display:flex;flex-direction:column;min-width:180px;">

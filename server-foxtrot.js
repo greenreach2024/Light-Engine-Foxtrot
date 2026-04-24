@@ -33101,11 +33101,6 @@ async function syncRoomMapsFromRooms(rooms) {
     const existingZones = Array.isArray(roomMap.zones) ? roomMap.zones : [];
     const existingNames = existingZones.map(z => (z && z.name) ? String(z.name) : null).filter(Boolean);
 
-    // Short-circuit when the name list is already identical in order.
-    const sameCount = existingNames.length === desiredNames.length;
-    const sameOrder = sameCount && existingNames.every((n, i) => n === desiredNames[i]);
-    if (sameOrder) continue;
-
     const byName = new Map();
     existingZones.forEach(z => { if (z && z.name) byName.set(String(z.name), z); });
 
@@ -33113,18 +33108,66 @@ async function syncRoomMapsFromRooms(rooms) {
     const gridH = Number(roomMap.gridSize) || 30;
     const n = desiredNames.length;
 
-    const newZones = desiredNames.map((name, i) => {
+    const roomLengthM = Number(room.length_m || room.lengthM || room.length || room.dimensions?.lengthM || room.dimensions?.length_m || 0);
+    const roomWidthM = Number(room.width_m || room.widthM || room.width || room.dimensions?.widthM || room.dimensions?.width_m || 0);
+
+    // When names are unchanged, geometry may still have changed (zone drawer
+    // saves x_m/y_m/length_m/width_m). Only short-circuit if no incoming zone
+    // carries geometry fields.
+    const sameCount = existingNames.length === desiredNames.length;
+    const sameOrder = sameCount && existingNames.every((nm, i2) => nm === desiredNames[i2]);
+    const incomingHasGeometry = incoming.some((z) => z && typeof z === 'object' && (
+      Number.isFinite(Number(z.x_m)) || Number.isFinite(Number(z.y_m)) ||
+      Number.isFinite(Number(z.length_m)) || Number.isFinite(Number(z.width_m))
+    ));
+    if (sameOrder && !incomingHasGeometry) continue;
+
+    const incomingByName = new Map();
+    incoming.forEach((z, i2) => {
+      if (!z || typeof z !== 'object') return;
+      const nm = (z.name && String(z.name).trim()) || (z.id && String(z.id)) || `Zone ${i2 + 1}`;
+      incomingByName.set(nm, z);
+    });
+
+    const newZones = desiredNames.map((name, i2) => {
       const prior = byName.get(name);
-      if (prior && Number.isFinite(prior.x1) && Number.isFinite(prior.x2)) {
-        return { ...prior, zone: i + 1, name };
+      const incomingZone = incomingByName.get(name);
+
+      // Prefer explicit metre geometry from rooms.json (zone drawer output).
+      if (incomingZone && Number.isFinite(roomLengthM) && roomLengthM > 0 && Number.isFinite(roomWidthM) && roomWidthM > 0) {
+        const xM = Number(incomingZone.x_m);
+        const yM = Number(incomingZone.y_m);
+        const lM = Number(incomingZone.length_m);
+        const wM = Number(incomingZone.width_m);
+        if (Number.isFinite(xM) && Number.isFinite(yM) && Number.isFinite(lM) && Number.isFinite(wM) && lM > 0 && wM > 0) {
+          const x1 = Math.max(0, Math.min(gridW - 1, Math.floor((xM / roomLengthM) * gridW)));
+          const y1 = Math.max(0, Math.min(gridH - 1, Math.floor((yM / roomWidthM) * gridH)));
+          const x2 = Math.max(x1, Math.min(gridW - 1, Math.ceil(((xM + lM) / roomLengthM) * gridW) - 1));
+          const y2 = Math.max(y1, Math.min(gridH - 1, Math.ceil(((yM + wM) / roomWidthM) * gridH) - 1));
+          return {
+            ...(prior || {}),
+            zone: i2 + 1,
+            name,
+            color: (prior && prior.color) || DEFAULT_COLORS[i2 % DEFAULT_COLORS.length],
+            x1, y1, x2, y2,
+            tempSetpoint: (prior && prior.tempSetpoint) || { min: 20, max: 24 },
+            rhSetpoint: (prior && prior.rhSetpoint) || { min: 58, max: 65 },
+            rhDelta: (prior && Number.isFinite(prior.rhDelta)) ? prior.rhDelta : 5
+          };
+        }
       }
+
+      if (prior && Number.isFinite(prior.x1) && Number.isFinite(prior.x2)) {
+        return { ...prior, zone: i2 + 1, name };
+      }
+
       const slabW = Math.max(1, Math.floor(gridW / n));
-      const x1 = i * slabW;
-      const x2 = (i === n - 1) ? Math.max(x1, gridW - 1) : (x1 + slabW - 1);
+      const x1 = i2 * slabW;
+      const x2 = (i2 === n - 1) ? Math.max(x1, gridW - 1) : (x1 + slabW - 1);
       return {
-        zone: i + 1,
+        zone: i2 + 1,
         name,
-        color: DEFAULT_COLORS[i % DEFAULT_COLORS.length],
+        color: DEFAULT_COLORS[i2 % DEFAULT_COLORS.length],
         x1, y1: 0, x2, y2: Math.max(0, gridH - 1),
         tempSetpoint: { min: 20, max: 24 },
         rhSetpoint: { min: 58, max: 65 },
