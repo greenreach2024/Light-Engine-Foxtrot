@@ -7724,19 +7724,139 @@ app.post('/api/setup/save-rooms', asyncHandler(async (req, res) => {
       console.warn('[setup/save-rooms] room-map cascade failed:', cascadeErr?.message || cascadeErr);
     }
 
+    // Reconcile groups.json against each room's installedSystems. Without
+    // this the build-plan write path leaves groups.json frozen at whatever
+    // was seeded months ago — Central syncs the stale list every 5 min and
+    // the 3D viewer renders ghost grow systems. Single source of truth: LE.
+    let reconciledGroupsCount = 0;
+    try {
+      reconciledGroupsCount = await reconcileGroupsFromRooms(rooms);
+    } catch (reconErr) {
+      console.warn('[setup/save-rooms] group reconcile failed:', reconErr?.message || reconErr);
+    }
+
     // Notify SSE subscribers (3D viewer, dashboards) so room/zone edits from
     // setup, EVIE, and admin flows appear immediately instead of waiting for
     // the low-frequency poll refresh window.
     const nowIso = new Date().toISOString();
     emitDataChange({ kind: 'rooms', updatedAt: nowIso, source: 'setup-save-rooms' });
     emitDataChange({ kind: 'zones', updatedAt: nowIso, source: 'setup-save-rooms' });
+    emitDataChange({ kind: 'groups', updatedAt: nowIso, source: 'setup-save-rooms-reconcile' });
 
-    res.json({ success: true, saved: rooms.length });
+    res.json({ success: true, saved: rooms.length, groupsReconciled: reconciledGroupsCount });
   } catch (err) {
     console.error('[setup/save-rooms] Error:', err);
     res.status(500).json({ success: false, message: err.message });
   }
 }));
+
+// Cache the grow-systems catalog (template id → label) for the reconciler.
+let __growSystemsCatalogLE = null;
+function getGrowSystemsCatalogLE() {
+  if (__growSystemsCatalogLE) return __growSystemsCatalogLE;
+  try {
+    const p = path.join(PUBLIC_DIR, 'data', 'grow-systems.json');
+    __growSystemsCatalogLE = JSON.parse(fs.readFileSync(p, 'utf8'));
+  } catch (err) {
+    console.warn('[reconcile-groups] grow-systems catalog unavailable:', err?.message || err);
+    __growSystemsCatalogLE = { templates: [] };
+  }
+  return __growSystemsCatalogLE;
+}
+
+/**
+ * Rebuild groups.json from each room's installedSystems. For each
+ * installedSystems[i], emit `quantity` groups round-robined across the
+ * room's zones. Group id format: "<roomName>:<zoneName>:<templateLabel> <n>".
+ * Existing groups for the same id keep their crop / plan / schedule /
+ * status / lights / lastModified / gridX / gridY. Groups for rooms NOT in
+ * the payload pass through unchanged.
+ */
+async function reconcileGroupsFromRooms(rooms) {
+  if (!Array.isArray(rooms) || !rooms.length) return 0;
+
+  const catalog = getGrowSystemsCatalogLE();
+  const templatesById = new Map();
+  for (const t of (catalog?.templates || [])) {
+    if (t && t.id) templatesById.set(t.id, t);
+  }
+
+  const roomKeys = new Set();
+  for (const r of rooms) {
+    const name = r?.name || r?.id;
+    if (name) roomKeys.add(String(name));
+  }
+
+  const nowIso = new Date().toISOString();
+  let total = 0;
+
+  await withGroupsLock((existing) => {
+    const existingById = new Map();
+    for (const g of existing) {
+      if (g && g.id) existingById.set(String(g.id), g);
+    }
+
+    const carriedOver = [];
+    for (const g of existing) {
+      const gRoom = g?.room || g?.roomName || '';
+      if (!roomKeys.has(String(gRoom))) carriedOver.push(g);
+    }
+
+    const next = [];
+    for (const room of rooms) {
+      const roomName = room?.name || room?.id;
+      if (!roomName) continue;
+
+      const zonesRaw = Array.isArray(room.zones) ? room.zones : [];
+      const zones = zonesRaw
+        .map((z) => (typeof z === 'string' ? z : (z && z.name) ? z.name : null))
+        .filter(Boolean);
+      if (!zones.length) zones.push('Zone 1');
+
+      const installed = Array.isArray(room.installedSystems) ? room.installedSystems : [];
+      for (const sys of installed) {
+        const templateId = sys?.templateId;
+        if (!templateId) continue;
+        const quantity = Math.max(0, Math.floor(Number(sys.quantity) || 0));
+        if (!quantity) continue;
+        const tpl = templatesById.get(templateId);
+        const label = tpl?.label || tpl?.name || templateId;
+
+        for (let i = 1; i <= quantity; i++) {
+          const zoneName = zones[(i - 1) % zones.length];
+          const name = `${label} ${i}`;
+          const id = `${roomName}:${zoneName}:${name}`;
+          const prior = existingById.get(id);
+          next.push({
+            id,
+            name,
+            room: roomName,
+            zone: zoneName,
+            templateId,
+            customization: sys.customization || prior?.customization || {},
+            crop: prior?.crop ?? null,
+            plan: prior?.plan ?? null,
+            planId: prior?.planId ?? null,
+            schedule: prior?.schedule ?? null,
+            status: prior?.status || 'active',
+            lights: Array.isArray(prior?.lights) ? prior.lights : [],
+            gridX: prior?.gridX ?? null,
+            gridY: prior?.gridY ?? null,
+            lastModified: prior?.lastModified || nowIso
+          });
+        }
+      }
+    }
+
+    // Replace the in-memory groups array (withGroupsLock writes it back).
+    existing.length = 0;
+    existing.push(...next, ...carriedOver);
+    total = next.length;
+    console.log(`[reconcile-groups] Rebuilt ${next.length} group(s) for ${rooms.length} room(s); preserved ${carriedOver.length} from other rooms`);
+  });
+
+  return total;
+}
 
 // Setup completion endpoint
 app.post('/api/setup/complete', asyncHandler(async (req, res) => {
