@@ -100,3 +100,33 @@ Thumbs.db
 
 # Dockerfile itself
 Dockerfile
+
+# Per-farm demo/state JSONs -- MUST NOT ship in LE image.
+# farmStore reads DB → in-memory → DEFAULTS only (flat-file fallback removed in
+# a2cd5454). These files shipped in the image previously leaked 78 demo groups
+# and stale room dims to unauthenticated /data/*.json callers.
+public/data/groups.json
+public/data/rooms.json
+public/data/room-map.json
+public/data/farm.json
+public/data/farm-settings.json
+public/data/iot-devices.json
+public/data/env.json
+public/data/env-cache.json
+public/data/plans.json
+public/data/inventory.json
+public/data/schedules.json
+public/data/configuration.json
+public/data/dedicated-crops.json
+public/data/procurement-orders.json
+public/data/nutrient-dashboard.json
+public/data/demo-farm-data.json
+public/data/planting-schedule.json
+public/data/harvest-log.json
+public/data/system-alerts.json
+public/data/ai-recommendations.json
+public/data/devices.cache.json
+public/data/wholesale-orders-status.json
+public/data/wholesale-order-events.json
+public/data/wholesale-reservations.json
+public/data/demand-succession-suggestions.json
