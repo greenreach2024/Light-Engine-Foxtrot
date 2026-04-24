@@ -1,0 +1,61 @@
+{
+  "schemaVersion": "1.0.0",
+  "version": "2026-04-24-v1",
+  "description": "Group-first starter templates (Phase 6). See docs/features/GROUP_LEVEL_MANAGEMENT_UPDATES.md section 5. A group template bundles a default recipe, photoperiod, tray format, plants-per-site, and environmental + nutrient defaults so a farmer can stand up a new group in a single click. Values here are starting points — operators can override per-group via BSG or EVIE.",
+  "templates": [
+    {
+      "id": "tmpl-leafy-greens-v1",
+      "name": "Leafy Greens",
+      "cropClass": "leafy_greens",
+      "defaultRecipeId": "recipe-bibb-butterhead",
+      "defaultPhotoperiodHours": 16,
+      "defaultTrayFormatId": "nft-channel-128",
+      "defaultPlantsPerSite": 1,
+      "envDefaults": {
+        "vpd_target": 0.9,
+        "temp_target": 21,
+        "max_humidity": 75
+      },
+      "nutrientDefaults": {
+        "ec_target": 1.6,
+        "ph_target": 5.9
+      }
+    },
+    {
+      "id": "tmpl-herbs-v1",
+      "name": "Herbs",
+      "cropClass": "herbs",
+      "defaultRecipeId": "recipe-basil-genovese",
+      "defaultPhotoperiodHours": 16,
+      "defaultTrayFormatId": "nft-channel-128",
+      "defaultPlantsPerSite": 1,
+      "envDefaults": {
+        "vpd_target": 1.0,
+        "temp_target": 23,
+        "max_humidity": 70
+      },
+      "nutrientDefaults": {
+        "ec_target": 1.8,
+        "ph_target": 6.0
+      }
+    },
+    {
+      "id": "tmpl-fruiting-v1",
+      "name": "Fruiting Crops",
+      "cropClass": "fruiting",
+      "defaultRecipeId": "recipe-tomato-cherry",
+      "defaultPhotoperiodHours": 14,
+      "defaultTrayFormatId": "dutch-bucket-4gal",
+      "defaultPlantsPerSite": 1,
+      "envDefaults": {
+        "vpd_target": 1.1,
+        "temp_target": 24,
+        "max_humidity": 70
+      },
+      "nutrientDefaults": {
+        "ec_target": 2.4,
+        "ph_target": 6.0
+      }
+    }
+  ]
+}

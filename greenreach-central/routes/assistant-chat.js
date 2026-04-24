@@ -1792,6 +1792,63 @@ const GPT_TOOLS = [
   {
     type: 'function',
     function: {
+      name: 'configure_group_recipe',
+      description: 'Group-first configuration in one call (April 24, 2026). Assign a crop recipe, seed date, nutrient tank, photoperiod, and optional environmental/nutrient overrides to an existing group. Use when the farmer says "assign recipe X to group Y seeded on Z", "set up group for X", or "configure group X with recipe Y". Promotes the group from draft to active when recipe+seed_date are supplied. See docs/features/GROUP_LEVEL_MANAGEMENT_UPDATES.md.',
+      parameters: {
+        type: 'object',
+        properties: {
+          group_id: { type: 'string', description: 'Group id or group name.' },
+          plan_id: { type: 'string', description: 'Recipe/plan id (e.g. "recipe-bibb-butterhead").' },
+          seed_date: { type: 'string', description: 'Seed date YYYY-MM-DD (defaults to today if omitted).' },
+          tank_id: { type: 'string', description: 'Nutrient tank id, e.g. "tank-1" or "tank-2".' },
+          photoperiod_hours: { type: 'number', description: 'Photoperiod in hours (0-24). Defaults to recipe value.' },
+          plants_per_site: { type: 'number', description: 'Seedlings sown per plant site (1-10, default 1).' },
+          vpd_target: { type: 'number', description: 'Optional VPD override in kPa (0.2-2.5).' },
+          temp_target: { type: 'number', description: 'Optional temperature override in C (5-40).' },
+          max_humidity: { type: 'number', description: 'Optional RH ceiling in percent (30-95).' },
+          ec_target: { type: 'number', description: 'Optional EC override in mS/cm (0.2-5).' },
+          ph_target: { type: 'number', description: 'Optional pH override (4-8).' }
+        },
+        required: ['group_id', 'plan_id']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'harvest_group_rollup',
+      description: 'Record a whole-group harvest in a single rollup (April 24, 2026). Use when the farmer says "harvest group X", "group X is done", or "finish group X" and wants to close the group without per-tray scanning. Pass splitMode="per-tray" with perTray[] to generate per-tray lots inside the rollup, or splitMode="even" for one lot. Use partial=true with reduce_plants/reduce_trays for a partial harvest that keeps the group active. See docs/features/GROUP_LEVEL_MANAGEMENT_UPDATES.md section 4.5.',
+      parameters: {
+        type: 'object',
+        properties: {
+          group_id: { type: 'string', description: 'Group id or group name.' },
+          total_weight: { type: 'number', description: 'Total harvest weight.' },
+          unit: { type: 'string', description: "Weight unit: 'kg' (default), 'oz', 'lb', 'g'." },
+          split_mode: { type: 'string', description: "'even' (default, one lot) or 'per-tray' (one lot per tray)." },
+          per_tray: {
+            type: 'array',
+            description: 'Required when split_mode="per-tray". Array of { tray_id, weight }.',
+            items: {
+              type: 'object',
+              properties: {
+                tray_id: { type: 'string' },
+                weight: { type: 'number' }
+              }
+            }
+          },
+          partial: { type: 'boolean', description: 'When true keep group active and reduce plants/trays. Default false (close group).' },
+          reduce_plants: { type: 'number', description: 'Partial mode only: plants harvested.' },
+          reduce_trays: { type: 'number', description: 'Partial mode only: trays emptied.' },
+          lot_code: { type: 'string', description: 'Optional lot code. Server generates LOT-<group>-<ts> when omitted.' },
+          notes: { type: 'string', description: 'Optional harvest notes.' }
+        },
+        required: ['group_id', 'total_weight']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
       name: 'record_harvest',
       description: 'Record a harvest event and automatically generate a lot number with traceability. Use when the farmer says "we harvested", "harvest complete", "just picked", or asks to log a harvest. Creates harvest event, lot record, updates inventory, and calculates best-by date.',
       parameters: {
@@ -5438,6 +5495,142 @@ async function executeExtendedTool(toolName, params, farmId) {
           generated_at: new Date().toISOString()
         };
       } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+
+    // ── Group-first verbs (April 24, 2026) ─────────────────────────────
+    // See docs/features/GROUP_LEVEL_MANAGEMENT_UPDATES.md section 4.7.
+    case 'configure_group_recipe': {
+      try {
+        const groupId = String(params.group_id || '').trim();
+        const planId = String(params.plan_id || '').trim();
+        if (!groupId || !planId) return { ok: false, error: 'group_id and plan_id are required' };
+        const seedDate = String(params.seed_date || new Date().toISOString().slice(0, 10));
+        const seedIso = new Date(seedDate + 'T00:00:00Z').toISOString();
+
+        const groupsData = await farmStore.get(farmId, 'groups') || [];
+        const groups = Array.isArray(groupsData) ? groupsData : (groupsData.groups || []);
+        const group = groups.find(g =>
+          g.id === groupId || g.group_id === groupId || g.name === groupId ||
+          (g.name || '').toLowerCase() === groupId.toLowerCase()
+        );
+        if (!group) {
+          return { ok: false, error: `Group "${groupId}" not found. Available: ${groups.map(g => g.name || g.id).join(', ') || 'none'}` };
+        }
+
+        const envOvr = {};
+        if (Number.isFinite(Number(params.vpd_target))) envOvr.vpd_target = Number(params.vpd_target);
+        if (Number.isFinite(Number(params.temp_target))) envOvr.temp_target = Number(params.temp_target);
+        if (Number.isFinite(Number(params.max_humidity))) envOvr.max_humidity = Number(params.max_humidity);
+        const nutOvr = {};
+        if (Number.isFinite(Number(params.ec_target))) nutOvr.ec_target = Number(params.ec_target);
+        if (Number.isFinite(Number(params.ph_target))) nutOvr.ph_target = Number(params.ph_target);
+        const overrides = (Object.keys(envOvr).length || Object.keys(nutOvr).length)
+          ? { ...(Object.keys(envOvr).length ? { environment: envOvr } : {}), ...(Object.keys(nutOvr).length ? { nutrient: nutOvr } : {}) }
+          : undefined;
+
+        const photoperiodHours = Number(params.photoperiod_hours);
+        const plantsPerSite = Number.isFinite(Number(params.plants_per_site))
+          ? Math.max(1, Math.min(10, Math.round(Number(params.plants_per_site))))
+          : 1;
+        const tankId = String(params.tank_id || '').trim() || undefined;
+
+        const updated = {
+          ...group,
+          plan: planId,
+          planId,
+          status: 'active',
+          planConfig: {
+            ...(group.planConfig || {}),
+            anchor: { mode: 'seedDate', seedDate: seedIso },
+            ...(Number.isFinite(photoperiodHours) && photoperiodHours > 0
+              ? { schedule: { ...(group.planConfig?.schedule || {}), photoperiodHours, totalOnHours: photoperiodHours } }
+              : {})
+          },
+          tankId,
+          tank_id: tankId,
+          plantsPerSite,
+          plants_per_site: plantsPerSite,
+          ...(overrides ? { overrides } : {}),
+          lastModified: new Date().toISOString(),
+        };
+
+        // Persist via LE's POST /data/groups.json (non-destructive merge).
+        const leResult = await writeToLE('groups.json', { groups: [updated] });
+        if (!leResult.ok) {
+          return { ok: false, error: `Failed to sync to Light Engine: ${leResult.reason}` };
+        }
+        return {
+          ok: true,
+          group_id: updated.id || updated.group_id,
+          plan_id: planId,
+          seed_date: seedDate,
+          tank_id: tankId,
+          photoperiod_hours: Number.isFinite(photoperiodHours) ? photoperiodHours : null,
+          plants_per_site: plantsPerSite,
+          overrides: overrides || null,
+          status: 'active'
+        };
+      } catch (err) {
+        logger.warn('[configure_group_recipe] error:', err.message);
+        return { ok: false, error: err.message };
+      }
+    }
+
+    case 'harvest_group_rollup': {
+      try {
+        const groupId = String(params.group_id || '').trim();
+        if (!groupId) return { ok: false, error: 'group_id is required' };
+        const totalWeight = Number(params.total_weight);
+        if (!Number.isFinite(totalWeight) || totalWeight <= 0) {
+          return { ok: false, error: 'total_weight must be a positive number' };
+        }
+
+        const body = {
+          totalWeight,
+          unit: params.unit || 'kg',
+          splitMode: params.split_mode === 'per-tray' ? 'per-tray' : 'even',
+          partial: params.partial === true,
+          reducePlants: Number(params.reduce_plants) || undefined,
+          reduceTrays: Number(params.reduce_trays) || undefined,
+          lotCode: params.lot_code || undefined,
+          notes: params.notes || undefined,
+        };
+        if (body.splitMode === 'per-tray' && Array.isArray(params.per_tray)) {
+          body.perTray = params.per_tray.map(t => ({
+            trayId: String(t.tray_id || '').trim(),
+            weight: Number(t.weight) || 0
+          }));
+        }
+
+        // Resolve LE URL (same logic as writeToLE).
+        let url = process.env.FARM_EDGE_URL;
+        if (!url) {
+          const farmData = readJSON('farm.json', {});
+          url = farmData.url;
+        }
+        if (!url) return { ok: false, error: 'Light Engine URL not configured' };
+
+        const headers = { 'Content-Type': 'application/json', 'Accept': 'application/json' };
+        if (process.env.FARM_ID) headers['X-Farm-ID'] = process.env.FARM_ID;
+        if (process.env.GREENREACH_API_KEY) headers['X-API-Key'] = process.env.GREENREACH_API_KEY;
+
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 10000);
+        try {
+          const res = await fetch(`${url}/api/groups/${encodeURIComponent(groupId)}/harvest`, {
+            method: 'POST', headers, body: JSON.stringify(body), signal: controller.signal
+          });
+          clearTimeout(timeout);
+          const out = await res.json().catch(() => ({}));
+          if (!res.ok) return { ok: false, error: out.error || `LE replied ${res.status}` };
+          return { ok: true, ...out };
+        } finally {
+          clearTimeout(timeout);
+        }
+      } catch (err) {
+        logger.warn('[harvest_group_rollup] error:', err.message);
         return { ok: false, error: err.message };
       }
     }

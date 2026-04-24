@@ -30,6 +30,12 @@ export default class ControllerOrchestrator {
       dataDir,
       publicDataDir,
       dbQuery = null, // Database query function for recipe targeting
+      // Group-first (April 24, 2026): injected loader returning the
+      // current groups.json contents so recipe-env aggregation can use
+      // group.planConfig.anchor.seedDate + group.plants + group.overrides
+      // instead of tray_runs. Caller is expected to be the LE server
+      // which keeps groups.json in its writable data dir.
+      groupsLoader = null,
       logger = console
     } = options;
     
@@ -66,7 +72,7 @@ export default class ControllerOrchestrator {
     
     // Core systems
     this.hardwareCaps = new HardwareCapabilities({ dataDir, publicDataDir });
-    this.recipeTargets = new RecipeEnvironmentalTargets({ dbQuery, dataDir, logger: this.logger });
+    this.recipeTargets = new RecipeEnvironmentalTargets({ dbQuery, dataDir, groupsLoader, logger: this.logger });
     this.stageManager = new GrowthStageManager({ dataDir });
     
     // Controllers (instantiated only when needed)
