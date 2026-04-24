@@ -7714,6 +7714,16 @@ app.post('/api/setup/save-rooms', asyncHandler(async (req, res) => {
     await writeJsonQueued(fullPath, payload);
     console.log(`[setup/save-rooms] Saved ${rooms.length} room(s) to rooms.json`);
 
+    // Cascade zone-list changes from rooms.json down to each room-map-<id>.json
+    // so the 3D viewer and Groups V2 zone dropdown reflect the new zone count
+    // immediately. Without this cascade the Grow Management stepper and the
+    // 3D/room-map zone list drift apart (documented split-brain bug).
+    try {
+      await syncRoomMapsFromRooms(rooms);
+    } catch (cascadeErr) {
+      console.warn('[setup/save-rooms] room-map cascade failed:', cascadeErr?.message || cascadeErr);
+    }
+
     // Notify SSE subscribers (3D viewer, dashboards) so room/zone edits from
     // setup, EVIE, and admin flows appear immediately instead of waiting for
     // the low-frequency poll refresh window.
@@ -32857,6 +32867,116 @@ function initializeZoneSetpointsFromRoomMap() {
   }
 }
 
+// Cascade zone-list changes from rooms.json down to room-map-<roomId>.json.
+// Preserves existing zone geometry (x1/y1/x2/y2/setpoints) when matched by
+// name; auto-layouts newly-added zones as equal horizontal slabs; trims tail
+// zones and reassigns any devices whose zone was removed.
+// Also mirrors to legacy room-map.json so the Groups V2 zone dropdown (which
+// still reads the legacy file) sees the same zone count.
+async function syncRoomMapsFromRooms(rooms) {
+  if (!Array.isArray(rooms) || rooms.length === 0) return;
+  const DEFAULT_COLORS = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899','#06b6d4','#84cc16','#f97316','#14b8a6','#a855f7','#6366f1'];
+  const nowIso = new Date().toISOString();
+
+  for (let rIdx = 0; rIdx < rooms.length; rIdx++) {
+    const room = rooms[rIdx];
+    const roomId = room && (room.id || room.room_id || room.roomId);
+    if (!roomId) continue;
+
+    const incoming = Array.isArray(room.zones) ? room.zones : [];
+    const desiredNames = incoming
+      .map((z, i) => {
+        if (z == null) return null;
+        if (typeof z === 'string') return z.trim() || `Zone ${i + 1}`;
+        return (z.name && String(z.name).trim()) || (z.id && String(z.id)) || `Zone ${i + 1}`;
+      })
+      .filter(Boolean);
+    if (desiredNames.length === 0) continue;
+
+    const mapPath = path.join(DATA_DIR, `room-map-${roomId}.json`);
+    let roomMap = null;
+    try {
+      if (fs.existsSync(mapPath)) {
+        roomMap = JSON.parse(fs.readFileSync(mapPath, 'utf8'));
+      }
+    } catch (readErr) {
+      console.warn(`[room-map-sync] Failed to read ${mapPath}:`, readErr.message);
+    }
+    if (!roomMap || typeof roomMap !== 'object') {
+      roomMap = { roomId, name: room.name || roomId, gridSize: 30, cellSize: 40, version: 2, devices: [], zones: [] };
+    }
+
+    const existingZones = Array.isArray(roomMap.zones) ? roomMap.zones : [];
+    const existingNames = existingZones.map(z => (z && z.name) ? String(z.name) : null).filter(Boolean);
+
+    // Short-circuit when the name list is already identical in order.
+    const sameCount = existingNames.length === desiredNames.length;
+    const sameOrder = sameCount && existingNames.every((n, i) => n === desiredNames[i]);
+    if (sameOrder) continue;
+
+    const byName = new Map();
+    existingZones.forEach(z => { if (z && z.name) byName.set(String(z.name), z); });
+
+    const gridW = Number(roomMap.gridSize) || 30;
+    const gridH = Number(roomMap.gridSize) || 30;
+    const n = desiredNames.length;
+
+    const newZones = desiredNames.map((name, i) => {
+      const prior = byName.get(name);
+      if (prior && Number.isFinite(prior.x1) && Number.isFinite(prior.x2)) {
+        return { ...prior, zone: i + 1, name };
+      }
+      const slabW = Math.max(1, Math.floor(gridW / n));
+      const x1 = i * slabW;
+      const x2 = (i === n - 1) ? Math.max(x1, gridW - 1) : (x1 + slabW - 1);
+      return {
+        zone: i + 1,
+        name,
+        color: DEFAULT_COLORS[i % DEFAULT_COLORS.length],
+        x1, y1: 0, x2, y2: Math.max(0, gridH - 1),
+        tempSetpoint: { min: 20, max: 24 },
+        rhSetpoint: { min: 58, max: 65 },
+        rhDelta: 5
+      };
+    });
+
+    // Reassign devices whose old zone was removed.
+    const removedNames = existingNames.filter(nm => !desiredNames.includes(nm));
+    if (removedNames.length && Array.isArray(roomMap.devices)) {
+      const fallbackZone = 1;
+      for (const dev of roomMap.devices) {
+        const snap = dev && dev.snapshot;
+        if (!snap) continue;
+        const ref = snap.zone;
+        if (ref == null) continue;
+        const prior = existingZones.find(z => z && (z.zone === ref || z.name === ref || `Zone ${z.zone}` === ref));
+        if (prior && removedNames.includes(prior.name)) {
+          snap.zone = fallbackZone;
+        }
+      }
+    }
+
+    roomMap.zones = newZones;
+    roomMap.roomId = roomId;
+    if (!roomMap.name && room.name) roomMap.name = room.name;
+
+    const payload = JSON.stringify(roomMap, null, 2);
+    try {
+      await writeJsonQueued(mapPath, payload);
+      console.log(`[room-map-sync] ${mapPath.split('/').pop()}: ${newZones.length} zone(s) [${desiredNames.join(', ')}]`);
+      // Mirror to legacy room-map.json for the primary (first) room so the
+      // Groups V2 dropdown — which still reads the legacy file — stays in sync.
+      if (rIdx === 0) {
+        const legacyPath = path.join(DATA_DIR, 'room-map.json');
+        try { await writeJsonQueued(legacyPath, payload); } catch (_) {}
+      }
+      emitDataChange({ kind: 'room-map', roomId, file: `room-map-${roomId}.json`, updatedAt: nowIso, source: 'rooms-cascade' });
+    } catch (writeErr) {
+      console.warn(`[room-map-sync] Failed to write ${mapPath}:`, writeErr.message);
+    }
+  }
+}
+
 // Sync zone names from a room-map save back to rooms.json so the Grow Room Setup page stays current
 async function syncZonesToRoomsJson(roomMapBody, baseName) {
   try {
@@ -32885,20 +33005,37 @@ async function syncZonesToRoomsJson(roomMapBody, baseName) {
       console.log(`[zone-rooms-sync] Room ${targetRoomId} not in rooms.json — creating entry`);
     }
 
-    const existingZones = Array.isArray(room.zones) ? room.zones : [];
+    // Normalize existing zones to names for comparison (rooms.json may hold
+    // either {id,name} objects written by the Grow Management stepper or raw
+    // strings from older sync passes).
+    const existingZonesRaw = Array.isArray(room.zones) ? room.zones : [];
+    const existingNames = existingZonesRaw
+      .map((z, i) => (typeof z === 'string' ? z : (z && z.name) ? z.name : null))
+      .filter(Boolean);
     const sortedNew = [...zoneNames].sort();
-    const sortedOld = [...existingZones].sort();
+    const sortedOld = [...existingNames].sort();
     if (JSON.stringify(sortedNew) === JSON.stringify(sortedOld)) {
       return; // No change needed
     }
 
-    room.zones = zoneNames;
+    // Write zones as {id,name} objects so the stepper, renderZones(), and the
+    // Groups V2 dropdown all see a consistent shape. String-zones broke
+    // z.name rendering downstream.
+    const existingByName = new Map();
+    existingZonesRaw.forEach((z) => {
+      if (z && typeof z === 'object' && z.name) existingByName.set(String(z.name), z);
+    });
+    room.zones = zoneNames.map((nm, i) => {
+      const prior = existingByName.get(nm);
+      if (prior) return { ...prior, name: nm };
+      return { id: `zone-${i + 1}`, name: nm };
+    });
     const roomsPath = path.join(DATA_DIR, 'rooms.json');
     fs.writeFileSync(roomsPath, JSON.stringify(roomsData, null, 2));
     console.log(`[zone-rooms-sync] Updated rooms.json: room ${targetRoomId} now has ${zoneNames.length} zone(s): ${zoneNames.join(', ')}`);
 
     // Cascade zone removals to groups.json and iot-devices.json
-    const removedZones = existingZones.filter(z => !zoneNames.includes(z));
+    const removedZones = existingNames.filter(z => !zoneNames.includes(z));
     if (removedZones.length > 0) {
       const fallbackZone = zoneNames[0] || 'Unassigned';
       console.log(`[zone-cascade] ${removedZones.length} zone(s) removed: ${removedZones.join(', ')}. Fallback zone: "${fallbackZone}"`);
