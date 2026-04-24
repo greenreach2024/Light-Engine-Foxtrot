@@ -41,6 +41,9 @@ const state = {
   editMode: false,
   heatmapOn: false,
   heatMetric: 'tempC',
+  showWalls: true,
+  showCeiling: true,
+  collapsedZoneSystems: new Set(),
 };
 
 let toastTimer = null;
@@ -143,7 +146,7 @@ function readRoomDims(room) {
   if (!room) return null;
   const L = Number(room.length_m ?? room.lengthM ?? room.dimensions?.length_m ?? room.dimensions?.lengthM);
   const W = Number(room.width_m ?? room.widthM ?? room.dimensions?.width_m ?? room.dimensions?.widthM);
-  const H = Number(room.height_m ?? room.heightM ?? room.dimensions?.height_m ?? room.dimensions?.heightM ?? 3.2);
+  const H = Number(room.ceiling_height_m ?? room.ceilingHeightM ?? room.height_m ?? room.heightM ?? room.dimensions?.height_m ?? room.dimensions?.heightM ?? 3.2);
   if (!Number.isFinite(L) || !Number.isFinite(W) || L <= 0 || W <= 0) return null;
   return { L, W, H };
 }
@@ -485,27 +488,31 @@ function buildScene() {
     state.roomFloorIndex.set(room.id, floor);
 
     const wallT = 0.06;
-    [
-      [dims.L/2, dims.H/2, 0, dims.L, dims.H, wallT],
-      [dims.L/2, dims.H/2, dims.W, dims.L, dims.H, wallT],
-      [dims.L, dims.H/2, dims.W/2, wallT, dims.H, dims.W],
-      [0, dims.H/2, dims.W/2, wallT, dims.H, dims.W],
-    ].forEach(([x,y,z,sx,sy,sz]) => {
-      const m = new THREE.Mesh(new THREE.BoxGeometry(sx, sy, sz), matWall);
-      m.position.set(x, y, z); roomGroup.add(m);
-    });
+    if (state.showWalls) {
+      [
+        [dims.L/2, dims.H/2, 0, dims.L, dims.H, wallT],
+        [dims.L/2, dims.H/2, dims.W, dims.L, dims.H, wallT],
+        [dims.L, dims.H/2, dims.W/2, wallT, dims.H, dims.W],
+        [0, dims.H/2, dims.W/2, wallT, dims.H, dims.W],
+      ].forEach(([x,y,z,sx,sy,sz]) => {
+        const m = new THREE.Mesh(new THREE.BoxGeometry(sx, sy, sz), matWall);
+        m.position.set(x, y, z); roomGroup.add(m);
+      });
+    }
 
-    [[dims.L/2, 0], [dims.L/2, dims.W]].forEach(([cx, cz]) => {
-      const m = new THREE.Mesh(new THREE.BoxGeometry(dims.L, 0.10, wallT * 1.4), matWallTrim);
-      m.position.set(cx, dims.H, cz); roomGroup.add(m);
-    });
+    if (state.showCeiling) {
+      [[dims.L/2, 0], [dims.L/2, dims.W]].forEach(([cx, cz]) => {
+        const m = new THREE.Mesh(new THREE.BoxGeometry(dims.L, 0.10, wallT * 1.4), matWallTrim);
+        m.position.set(cx, dims.H, cz); roomGroup.add(m);
+      });
 
-    const beamGeom = new THREE.BoxGeometry(dims.L, 0.10, 0.12);
-    const beams = Math.max(2, Math.floor(dims.W / 2.5));
-    for (let b = 0; b < beams; b++) {
-      const beam = new THREE.Mesh(beamGeom, matCeilingFrame);
-      beam.position.set(dims.L/2, dims.H - 0.05, (b + 0.5) * (dims.W / beams));
-      roomGroup.add(beam);
+      const beamGeom = new THREE.BoxGeometry(dims.L, 0.10, 0.12);
+      const beams = Math.max(2, Math.floor(dims.W / 2.5));
+      for (let b = 0; b < beams; b++) {
+        const beam = new THREE.Mesh(beamGeom, matCeilingFrame);
+        beam.position.set(dims.L/2, dims.H - 0.05, (b + 0.5) * (dims.W / beams));
+        roomGroup.add(beam);
+      }
     }
 
     const label = makeLabelSprite(room.name || room.id);
@@ -1030,6 +1037,8 @@ function renderZonePanel(sel) {
   $('v3dSideTitle').textContent = sel.zoneName || sel.zoneId;
   $('v3dSideCount').textContent = `Zone in ${room?.name || sel.roomId}`;
   $('v3dSideActions').hidden = true;
+  const zoneKey = `${sel.roomId}|${sel.zoneId}|${sel.zoneName}`;
+  const isCollapsed = state.collapsedZoneSystems.has(zoneKey);
   const dimRow = zr ? `<div class="v3d-kv"><span>Footprint</span><span>${fmt(zr.length_m,2)} x ${fmt(zr.width_m,2)} m  (${fmt(zr.length_m*M_TO_FT,1)} x ${fmt(zr.width_m*M_TO_FT,1)} ft)</span></div>
        <div class="v3d-kv"><span>Area</span><span>${fmt(zr.length_m*zr.width_m,1)} m^2</span></div>` : '';
   const groupsRow = groupsHere.map(g => `<div class="v3d-kv"><span>${escapeHtml(g.name||g.id)}</span><span>${escapeHtml(templateById(g.templateId)?.category || g.templateId || '-')}</span></div>`).join('');
@@ -1040,10 +1049,22 @@ function renderZonePanel(sel) {
     ${env ? `<div class="v3d-side__row">${envBlockHtml(env)}</div>` : `<div class="v3d-empty" style="padding:8px;">No environmental data for this zone yet.</div>`}
     ${srcList ? `<div class="v3d-side__row"><div class="v3d-side__section-title">Sensors</div>${srcList}</div>` : ''}
     <div class="v3d-side__row">
-      <div class="v3d-side__section-title">Systems in this zone</div>
-      ${groupsRow || '<div class="v3d-empty" style="padding:6px;">None</div>'}
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+        <div class="v3d-side__section-title">Systems in this zone (${groupsHere.length})</div>
+        <button class="v3d-collapse-btn" data-zone-key="${escapeHtml(zoneKey)}" style="background:none;border:none;color:var(--v3d-accent-2);cursor:pointer;font-size:14px;padding:0 4px;">${isCollapsed ? '▶' : '▼'}</button>
+      </div>
+      ${isCollapsed ? `<div class="v3d-empty" style="padding:6px;">Collapsed (${groupsHere.length} system${groupsHere.length!==1?'s':''})</div>` : (groupsRow || '<div class="v3d-empty" style="padding:6px;">None</div>')}
     </div>
   `;
+  $('v3dSideBody').querySelectorAll('.v3d-collapse-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const zk = btn.dataset.zoneKey;
+      if (state.collapsedZoneSystems.has(zk)) state.collapsedZoneSystems.delete(zk);
+      else state.collapsedZoneSystems.add(zk);
+      renderZonePanel(sel);
+    });
+  });
 }
 
 function renderGroupPanel(ids) {
@@ -1186,6 +1207,18 @@ $('v3dEditBtn').addEventListener('click', () => {
   canvas.classList.toggle('editing', state.editMode);
   toast(state.editMode ? 'Edit mode: drag systems to reposition' : 'Edit mode off');
 });
+$('v3dWallsBtn').addEventListener('click', () => {
+  state.showWalls = !state.showWalls;
+  $('v3dWallsBtn').classList.toggle('active', state.showWalls);
+  buildScene();
+  toast(state.showWalls ? 'Walls: visible' : 'Walls: hidden');
+});
+$('v3dCeilingBtn').addEventListener('click', () => {
+  state.showCeiling = !state.showCeiling;
+  $('v3dCeilingBtn').classList.toggle('active', state.showCeiling);
+  buildScene();
+  toast(state.showCeiling ? 'Ceiling: visible' : 'Ceiling: hidden');
+});
 $('v3dHeatBtn').addEventListener('click', () => {
   state.heatmapOn = !state.heatmapOn;
   applyHeatmap();
@@ -1210,6 +1243,8 @@ window.addEventListener('keydown', (e) => {
     applySelectionVisuals(); renderSidePanel();
   }
   if (e.key === 'e' || e.key === 'E') $('v3dEditBtn').click();
+  if (e.key === 'w' || e.key === 'W') $('v3dWallsBtn').click();
+  if (e.key === 'c' || e.key === 'C') $('v3dCeilingBtn').click();
   if (e.key === 'h' || e.key === 'H') $('v3dHeatBtn').click();
 });
 
