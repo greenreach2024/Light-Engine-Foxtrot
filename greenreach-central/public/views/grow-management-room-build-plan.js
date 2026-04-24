@@ -145,6 +145,8 @@
       c.locationsPerLevel = bySpacing.locationsPerLevel;
       c.usableLengthIn = bySpacing.usableLengthIn;
       c.usableWidthIn = bySpacing.usableWidthIn;
+      c.spacingInX = Number(c.spacingIn || 0);
+      c.spacingInY = Number(c.spacingIn || 0);
     } else {
       c.locationsX = Math.max(1, Number(c.locationsX || 1));
       c.locationsY = Math.max(1, Number(c.locationsY || 1));
@@ -155,6 +157,25 @@
       c.spacingInY = byLoc.spacingInY;
       c.usableLengthIn = Math.max(0, lengthIn - (2 * border));
       c.usableWidthIn = Math.max(0, widthIn - (2 * border));
+    }
+
+    // Explicit layoutMode field (proposal item 1) -- mirrors spacingLinked
+    // for consumers that prefer the enum form.
+    c.layoutMode = c.spacingLinked ? 'auto_by_spacing' : 'manual_locations';
+
+    // Anisotropic-spacing warning: triggered when Sx and Sy diverge by more
+    // than 10% in manual_locations mode (spacing hints differ across axes).
+    c.anisotropic = false;
+    c.anisotropicWarning = null;
+    if (!c.spacingLinked && Number.isFinite(c.spacingInX) && Number.isFinite(c.spacingInY)) {
+      const sx = Number(c.spacingInX);
+      const sy = Number(c.spacingInY);
+      const maxS = Math.max(sx, sy);
+      const minS = Math.max(0.0001, Math.min(sx, sy));
+      if (maxS / minS > 1.1) {
+        c.anisotropic = true;
+        c.anisotropicWarning = `Spacing differs between axes (X: ${sx.toFixed(2)} in, Y: ${sy.toFixed(2)} in).`;
+      }
     }
 
     c.totalLocations = Math.max(1, c.locationsPerLevel) * levels;
@@ -726,7 +747,24 @@
         : 'Butt end-to-end against plumbing wall';
 
     const c = state.customization || getTemplateCustomizationDefaults(state.template, state.cropClass);
+    const configuredStrip = (function () {
+      const list = Array.isArray(state.room && state.room.installedSystems) ? state.room.installedSystems : [];
+      if (!list.length) return '';
+      const chips = list.map((s) => {
+        const cs = s.customization || {};
+        const label = s.templateId + (Number.isFinite(cs.totalLocations) ? ' · ' + cs.totalLocations + ' loc' : '') + ' × ' + (Number(s.quantity || 1));
+        return `<span class="rbp-chip" data-template-id="${s.templateId}" style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;background:#0f172a;border:1px solid #334155;color:#e2e8f0;font-size:0.72rem;">${label}</span>`;
+      }).join('');
+      return `<div class="rbp-configured" style="display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px;">
+        <span style="color:#94a3b8;font-size:0.72rem;align-self:center;">Configured systems:</span>${chips}
+      </div>`;
+    })();
+    const anisoBanner = c.anisotropicWarning
+      ? `<div class="rbp-warn" style="margin:6px 0 10px;padding:8px 12px;border-radius:8px;background:#422006;border:1px solid #a16207;color:#fde68a;font-size:0.78rem;">${c.anisotropicWarning} Consider relinking spacing for even plant placement.</div>`
+      : '';
     const controlsHtml = `
+      ${configuredStrip}
+      ${anisoBanner}
       <div class="rbp-controls">
         <div class="rbp-ctl">
           <label for="rbpLevels">Levels</label>
@@ -901,6 +939,23 @@
     }
     if (anotherBtn) {
       anotherBtn.addEventListener('click', function () {
+        // Clear template-scoped state so the gallery selection triggers a
+        // fresh configure flow, but preserve state.room (and its
+        // installedSystems list) so the Configured Systems strip keeps
+        // showing prior saves. Dispatch a hint event for setup-agent.
+        state.template = null;
+        state.scores = null;
+        state.cropClass = null;
+        state.desiredUnits = 0;
+        state.autoFit = true;
+        state.zoneRects = [];
+        state.spatialPlan = null;
+        state.zoneRecommendation = null;
+        state.customization = null;
+        hide();
+        document.dispatchEvent(new CustomEvent('grow-system-config:another', {
+          detail: { roomId: state.room && state.room.id }
+        }));
         const gallery = document.getElementById('growTemplateGallery');
         if (gallery) gallery.scrollIntoView({ behavior: 'smooth', block: 'start' });
       });
@@ -1227,6 +1282,15 @@
       document.dispatchEvent(new CustomEvent('room-build-plan:saved', {
         detail: { roomId: room.id, templateId: tpl.id, quantity: qty, buildPlan, customization }
       }));
+      // Refresh local state.room so the Configured Systems strip reflects
+      // the newly saved installedSystems entry without requiring a reload.
+      try {
+        state.room = Object.assign({}, state.room, {
+          installedSystems: installed,
+          buildPlan: buildPlan
+        });
+        renderSpatial();
+      } catch (_) { /* non-fatal */ }
       try {
         if (window.localStorage) {
           window.localStorage.setItem('growWorkspaceDraft', JSON.stringify({

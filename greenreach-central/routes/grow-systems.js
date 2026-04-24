@@ -47,6 +47,27 @@ const router = Router();
 let registryCache = null;
 let lastLoadError = null;
 
+// Non-destructive enrichment: add a customizationDefaults block to every
+// template if one is not already present. Keeps API parity with
+// routes/grow-systems.js in the LE service (commit 12eb0e41).
+function withCustomizationDefaults(template) {
+  if (!template || typeof template !== 'object') return template;
+  if (template.customizationDefaults) return template;
+  const tierCount = Math.max(1, Number(template.tierCount || 1));
+  const plantLocations = template.plantLocations?.totalByClass || {};
+  const firstClass = Object.keys(plantLocations)[0];
+  const firstTotal = Number(plantLocations[firstClass] || 0);
+  return Object.assign({}, template, {
+    customizationDefaults: {
+      levels: tierCount,
+      borderInPerSide: 1,
+      spacingLinked: true,
+      spacingIn: 6,
+      totalLocations: firstTotal > 0 ? firstTotal : null
+    }
+  });
+}
+
 async function loadRegistry() {
   const attempts = [];
   for (const p of REGISTRY_PATHS) {
@@ -97,7 +118,7 @@ router.get('/', async (_req, res) => {
       schema_version: registry.schemaVersion,
       data_version: registry.version,
       crop_classes: registry.cropClasses,
-      templates: registry.templates
+      templates: (registry.templates || []).map(withCustomizationDefaults)
     });
   } catch (err) {
     // Full err.message contains absolute filesystem paths — log it server-side
@@ -116,7 +137,7 @@ router.get('/:templateId', async (req, res) => {
     if (!template) {
       return res.status(404).json({ ok: false, error: `Template not found: ${req.params.templateId}` });
     }
-    res.json({ ok: true, template });
+    res.json({ ok: true, template: withCustomizationDefaults(template) });
   } catch (err) {
     console.error('[GrowSystems] Template lookup failed:', err.message);
     res.status(500).json({ ok: false, error: 'Failed to load template' });

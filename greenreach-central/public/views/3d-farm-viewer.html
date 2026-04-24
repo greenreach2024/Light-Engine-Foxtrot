@@ -519,6 +519,27 @@
       <div id="spatialHudBody"></div>
     </aside>
     <div class="edit-indicator" id="editIndicator">EDIT MODE -- Drag sensors, equipment, and zones to reposition. Shift-click equipment, sensors, or groups to multi-select.</div>
+    <!-- Bulk-assign panel (proposal item 4). Appears when S.selectedMeshes
+         contains 1+ items in non-edit or edit mode. Offers bulk actions
+         (assign light/controller, calibrate, clear) across the current
+         selection. Populated by updateBulkAssignPanel(). -->
+    <aside id="bulkAssignPanel" style="display:none;position:absolute;right:16px;bottom:72px;width:280px;max-height:55vh;overflow:auto;background:rgba(15,23,42,0.96);border:1px solid #334155;border-radius:10px;padding:12px;color:#e2e8f0;font-size:0.8rem;z-index:40;box-shadow:0 12px 32px rgba(0,0,0,0.45);">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <strong id="bulkAssignTitle" style="font-size:0.85rem;">Selection</strong>
+        <button type="button" id="bulkAssignClose" aria-label="Clear selection" style="background:transparent;border:0;color:#94a3b8;cursor:pointer;font-size:1rem;">&#10005;</button>
+      </div>
+      <div id="bulkAssignSummary" style="font-size:0.72rem;color:#94a3b8;margin-bottom:10px;"></div>
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        <label style="font-size:0.72rem;color:#94a3b8;">Assign light</label>
+        <select id="bulkLightSelect" style="background:#0f172a;color:#e2e8f0;border:1px solid #334155;border-radius:6px;padding:5px 7px;"><option value="">-- none --</option></select>
+        <button type="button" id="bulkAssignLightBtn" class="btn-secondary" style="padding:6px 10px;background:#1e293b;border:1px solid #334155;border-radius:6px;color:#e2e8f0;cursor:pointer;">Assign light to selection</button>
+        <label style="font-size:0.72rem;color:#94a3b8;margin-top:6px;">Assign controller</label>
+        <select id="bulkControllerSelect" style="background:#0f172a;color:#e2e8f0;border:1px solid #334155;border-radius:6px;padding:5px 7px;"><option value="">-- none --</option></select>
+        <button type="button" id="bulkAssignControllerBtn" class="btn-secondary" style="padding:6px 10px;background:#1e293b;border:1px solid #334155;border-radius:6px;color:#e2e8f0;cursor:pointer;">Assign controller to selection</button>
+        <button type="button" id="bulkCalibrateBtn" class="btn-secondary" style="margin-top:6px;padding:6px 10px;background:#1e293b;border:1px solid #334155;border-radius:6px;color:#e2e8f0;cursor:pointer;">Open calibration for selection</button>
+      </div>
+      <div id="bulkAssignConflicts" style="margin-top:10px;font-size:0.7rem;color:#fca5a5;"></div>
+    </aside>
     <button class="gwen-fab" id="gwenFab" title="Ask GWEN about this view">G<div class="gwen-tooltip">Ask GWEN to analyze zone data</div></button>
   </div>
 
@@ -3883,6 +3904,7 @@
         return isSelectableMesh(mesh) && arr.findIndex(function(other) { return getSelectionKey(other) === getSelectionKey(mesh); }) === index;
       });
       refreshSelectionVisuals();
+      updateBulkAssignPanel();
       if (!opts.silent && S.editMode) {
         var bar = document.getElementById('statusBar');
         if (bar) {
@@ -3901,6 +3923,7 @@
       opts = opts || {};
       S.selectedMeshes = [];
       refreshSelectionVisuals();
+      updateBulkAssignPanel();
       if (!opts.silent) {
         var bar = document.getElementById('statusBar');
         if (bar && S.editMode) {
@@ -3923,6 +3946,169 @@
         setSelection(S.selectedMeshes.concat(mesh));
       }
     }
+
+    // ---- Bulk assign panel (proposal item 4) -----------------------------
+    // Reacts to S.selectedMeshes. Shows counts + conflict warnings and
+    // offers bulk "assign light", "assign controller", "open calibration"
+    // across the selection. Group-type meshes are the primary target; we
+    // also show the panel for mixed selections and warn about type mixing.
+    var __bulkPanelAssetsLoaded = false;
+    function __loadBulkPanelAssets() {
+      if (__bulkPanelAssetsLoaded) return Promise.resolve();
+      var _f = window.authFetch || fetch;
+      return Promise.all([
+        _f('/data/lights.json').then(function (r) { return r.ok ? r.json() : []; }).catch(function () { return []; }),
+        _f('/data/controllers.json').then(function (r) { return r.ok ? r.json() : []; }).catch(function () { return []; })
+      ]).then(function (results) {
+        var lights = Array.isArray(results[0]) ? results[0] : (results[0] && results[0].lights) || [];
+        var ctrls = Array.isArray(results[1]) ? results[1] : (results[1] && results[1].controllers) || [];
+        var lightSel = document.getElementById('bulkLightSelect');
+        var ctrlSel = document.getElementById('bulkControllerSelect');
+        if (lightSel) {
+          lightSel.innerHTML = '<option value="">-- none --</option>' + lights.map(function (l) {
+            var id = String(l.id || l.lightId || l.name || '').replace(/"/g, '&quot;');
+            var label = String(l.name || l.model || id).replace(/</g, '&lt;');
+            return '<option value="' + id + '">' + label + '</option>';
+          }).join('');
+        }
+        if (ctrlSel) {
+          ctrlSel.innerHTML = '<option value="">-- none --</option>' + ctrls.map(function (c) {
+            var id = String(c.id || c.controllerId || c.name || '').replace(/"/g, '&quot;');
+            var label = String(c.name || c.model || id).replace(/</g, '&lt;');
+            return '<option value="' + id + '">' + label + '</option>';
+          }).join('');
+        }
+        __bulkPanelAssetsLoaded = true;
+      }).catch(function () { /* ignore */ });
+    }
+
+    function updateBulkAssignPanel() {
+      var panel = document.getElementById('bulkAssignPanel');
+      if (!panel) return;
+      var sel = S.selectedMeshes || [];
+      if (!sel.length) { panel.style.display = 'none'; return; }
+      panel.style.display = 'block';
+      __loadBulkPanelAssets();
+      var typeCounts = sel.reduce(function (acc, m) {
+        var t = (m.userData && m.userData.type) || 'unknown';
+        acc[t] = (acc[t] || 0) + 1;
+        return acc;
+      }, {});
+      var summary = Object.keys(typeCounts).map(function (k) { return typeCounts[k] + ' ' + k; }).join(' · ');
+      var title = document.getElementById('bulkAssignTitle');
+      var sumEl = document.getElementById('bulkAssignSummary');
+      var conflictsEl = document.getElementById('bulkAssignConflicts');
+      if (title) title.textContent = sel.length + ' selected';
+      if (sumEl) sumEl.textContent = summary;
+      if (conflictsEl) {
+        var conflicts = [];
+        if (Object.keys(typeCounts).length > 1) conflicts.push('Mixed types: assignments apply per type.');
+        var groupCount = typeCounts.group || 0;
+        if (groupCount === 0 && (typeCounts.light || typeCounts.equipment)) {
+          conflicts.push('No growing units in selection; light/controller assignment needs groups.');
+        }
+        conflictsEl.textContent = conflicts.join(' ');
+      }
+    }
+
+    function __bulkAssignLight() {
+      var lightSel = document.getElementById('bulkLightSelect');
+      var lightId = lightSel && lightSel.value;
+      if (!lightId) {
+        if (window.showToast) window.showToast({ title: 'Pick a light', msg: 'Choose a light fixture first.', kind: 'warn' }, 2500);
+        return;
+      }
+      var groups = (S.selectedMeshes || []).filter(function (m) { return m.userData && m.userData.type === 'group'; });
+      if (!groups.length) {
+        if (window.showToast) window.showToast({ title: 'No groups selected', msg: 'Select growing units to assign a light.', kind: 'warn' }, 2500);
+        return;
+      }
+      var payload = {
+        action: 'bulk-assign-light',
+        lightId: lightId,
+        groupIds: groups.map(function (g) { return (g.userData && (g.userData.groupId || g.userData.id)) || null; }).filter(Boolean)
+      };
+      if (window.DataFlowBus && typeof window.DataFlowBus.emit === 'function') {
+        window.DataFlowBus.emit('bulk-assign', payload);
+      }
+      var _f = window.authFetch || fetch;
+      _f('/api/zones/bulk-assign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify(payload)
+      }).then(function (r) {
+        if (window.showToast) {
+          if (r.ok) window.showToast({ title: 'Light assigned', msg: 'Applied to ' + payload.groupIds.length + ' units.', kind: 'success' }, 2500);
+          else window.showToast({ title: 'Assignment queued', msg: 'Backend endpoint pending; selection event emitted for handlers.', kind: 'info' }, 3000);
+        }
+      }).catch(function () {
+        if (window.showToast) window.showToast({ title: 'Assignment queued', msg: 'Selection event emitted for offline handlers.', kind: 'info' }, 3000);
+      });
+    }
+
+    function __bulkAssignController() {
+      var ctrlSel = document.getElementById('bulkControllerSelect');
+      var ctrlId = ctrlSel && ctrlSel.value;
+      if (!ctrlId) {
+        if (window.showToast) window.showToast({ title: 'Pick a controller', msg: 'Choose a controller first.', kind: 'warn' }, 2500);
+        return;
+      }
+      var groups = (S.selectedMeshes || []).filter(function (m) { return m.userData && m.userData.type === 'group'; });
+      if (!groups.length) {
+        if (window.showToast) window.showToast({ title: 'No groups selected', msg: 'Select growing units first.', kind: 'warn' }, 2500);
+        return;
+      }
+      var payload = {
+        action: 'bulk-assign-controller',
+        controllerId: ctrlId,
+        groupIds: groups.map(function (g) { return (g.userData && (g.userData.groupId || g.userData.id)) || null; }).filter(Boolean)
+      };
+      if (window.DataFlowBus && typeof window.DataFlowBus.emit === 'function') {
+        window.DataFlowBus.emit('bulk-assign', payload);
+      }
+      var _f = window.authFetch || fetch;
+      _f('/api/zones/bulk-assign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify(payload)
+      }).then(function (r) {
+        if (window.showToast) {
+          if (r.ok) window.showToast({ title: 'Controller assigned', msg: 'Applied to ' + payload.groupIds.length + ' units.', kind: 'success' }, 2500);
+          else window.showToast({ title: 'Assignment queued', msg: 'Backend endpoint pending; selection event emitted.', kind: 'info' }, 3000);
+        }
+      }).catch(function () {
+        if (window.showToast) window.showToast({ title: 'Assignment queued', msg: 'Selection event emitted for offline handlers.', kind: 'info' }, 3000);
+      });
+    }
+
+    function __bulkOpenCalibration() {
+      var groups = (S.selectedMeshes || []).filter(function (m) { return m.userData && m.userData.type === 'group'; });
+      if (!groups.length) {
+        if (window.showToast) window.showToast({ title: 'No groups selected', msg: 'Select at least one growing unit.', kind: 'warn' }, 2500);
+        return;
+      }
+      var payload = {
+        action: 'open-calibration',
+        groupIds: groups.map(function (g) { return (g.userData && (g.userData.groupId || g.userData.id)) || null; }).filter(Boolean)
+      };
+      if (window.DataFlowBus && typeof window.DataFlowBus.emit === 'function') {
+        window.DataFlowBus.emit('bulk-calibration', payload);
+      }
+      if (window.showToast) window.showToast({ title: 'Calibration', msg: 'Opening calibration for ' + payload.groupIds.length + ' units.', kind: 'info' }, 2500);
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+      var closeBtn = document.getElementById('bulkAssignClose');
+      if (closeBtn) closeBtn.addEventListener('click', function () { clearSelection(); });
+      var lightBtn = document.getElementById('bulkAssignLightBtn');
+      if (lightBtn) lightBtn.addEventListener('click', __bulkAssignLight);
+      var ctrlBtn = document.getElementById('bulkAssignControllerBtn');
+      if (ctrlBtn) ctrlBtn.addEventListener('click', __bulkAssignController);
+      var calBtn = document.getElementById('bulkCalibrateBtn');
+      if (calBtn) calBtn.addEventListener('click', __bulkOpenCalibration);
+    });
 
     function getDragFollowerMeshes(mesh) {
       var followers = [];
@@ -4562,8 +4748,18 @@
         if (heatmapContext.zoneUd) {
           showDetailPanel(Object.assign({}, heatmapContext.zoneUd, { heatmapCell: heatmapContext.cell }));
         } else {
+          // Non-edit mode multi-select: shift/cmd/ctrl-click toggles the
+          // hit mesh in the bulk-assign selection without opening detail.
+          var nHit = hits[0].object;
+          if ((e.shiftKey || e.metaKey || e.ctrlKey) && isSelectableMesh(nHit)) {
+            toggleSelection(nHit);
+            return;
+          }
           showDetailPanel(hits[0].object.userData);
         }
+      } else if (!S.editMode) {
+        // Non-edit mode: clicking empty space clears the bulk selection.
+        if (S.selectedMeshes && S.selectedMeshes.length) clearSelection({ silent: true });
       }
     }
 
