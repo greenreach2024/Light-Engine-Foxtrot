@@ -26714,6 +26714,25 @@ app.get('/data/equipment-metadata.json', (req, res, next) => {
 
 // Room map for farm summary view
 app.get('/data/room-map.json', (req, res, next) => {
+  // Prefer the persisted legacy room-map.json (mirrored from the primary
+  // room-map-<id>.json on every save). This lets Grow Management zone edits
+  // and 3D viewer zone draws flow through to anything that still reads the
+  // legacy file (Groups V2 zone dropdown, older dashboards).
+  try {
+    const persistedPath = path.join(DATA_DIR, 'room-map.json');
+    if (fs.existsSync(persistedPath)) {
+      const raw = fs.readFileSync(persistedPath, 'utf8');
+      const parsed = JSON.parse(raw);
+      if (parsed && (Array.isArray(parsed.zones) || Array.isArray(parsed.devices))) {
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Cache-Control', 'no-cache');
+        return res.json(parsed);
+      }
+    }
+  } catch (e) {
+    console.warn('[room-map] persisted read failed, falling back:', e?.message || e);
+  }
+
   const farm = loadDemoFarmSnapshot();
   if (!farm) return next();
   
