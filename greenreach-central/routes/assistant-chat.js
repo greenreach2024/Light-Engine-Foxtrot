@@ -2258,6 +2258,24 @@ async function persistFeedbackToDB(farmId, conversationId, rating, snippet) {
 async function buildSystemPrompt(farmId) {
   let farmContext = '';
 
+  // P1 audit (2026-04-24): prompt-safe user inputs.
+  // Farm names, contact fields, zone/room/group/device names, and crop names
+  // are user-editable in admin UIs. Injecting them raw into the system prompt
+  // lets an attacker break the envelope with newlines / backticks / injected
+  // instructions. Normalize every user-controlled value before interpolation.
+  const sanitizePromptValue = (raw, maxLen = 120) => {
+    if (raw == null) return '';
+    let value = String(raw);
+    // Collapse all whitespace (incl. newlines and tabs) to single spaces
+    value = value.replace(/[\r\n\t\f\v]+/g, ' ').replace(/\s{2,}/g, ' ').trim();
+    // Strip backticks and common instruction-framing characters that would
+    // otherwise let the value escape a prompt block.
+    value = value.replace(/[`\u0000-\u001F]/g, '');
+    // Cap length so a pathologically long name cannot dominate the context.
+    if (value.length > maxLen) value = `${value.slice(0, maxLen - 1)}…`;
+    return value;
+  };
+
   try {
     // Get basic farm info
     if (isDatabaseAvailable()) {
@@ -2267,13 +2285,19 @@ async function buildSystemPrompt(farmId) {
       );
       if (farmResult.rows.length > 0) {
         const farm = farmResult.rows[0];
-        farmContext += `Farm: ${farm.name} (${farm.farm_id}), Type: ${farm.farm_type || 'Indoor CEA'}\n`;
-        if (farm.contact_name) farmContext += `Contact: ${farm.contact_name}`;
-        if (farm.contact_phone) farmContext += `, Phone: ${farm.contact_phone}`;
-        if (farm.email) farmContext += `, Email: ${farm.email}`;
-        if (farm.contact_name || farm.contact_phone || farm.email) farmContext += '\n';
+        const farmName = sanitizePromptValue(farm.name);
+        const farmType = sanitizePromptValue(farm.farm_type || 'Indoor CEA', 40);
+        const contactName = sanitizePromptValue(farm.contact_name);
+        const contactPhone = sanitizePromptValue(farm.contact_phone, 40);
+        const contactEmail = sanitizePromptValue(farm.email, 80);
+        const useMode = sanitizePromptValue(farm.use_mode || 'not set (ask the farmer)', 60);
+        farmContext += `Farm: ${farmName} (${farm.farm_id}), Type: ${farmType}\n`;
+        if (contactName) farmContext += `Contact: ${contactName}`;
+        if (contactPhone) farmContext += `, Phone: ${contactPhone}`;
+        if (contactEmail) farmContext += `, Email: ${contactEmail}`;
+        if (contactName || contactPhone || contactEmail) farmContext += '\n';
         farmContext += `Setup completed: ${farm.setup_completed ? 'Yes' : 'No'}\n`;
-        farmContext += `Use mode: ${farm.use_mode || 'not set (ask the farmer)'}\n`;
+        farmContext += `Use mode: ${useMode}\n`;
       }
     }
   } catch { /* non-fatal */ }
@@ -2288,9 +2312,9 @@ async function buildSystemPrompt(farmId) {
     const groups = await farmStore.get(farmId, 'groups') || [];
     const roomMap = await farmStore.get(farmId, 'room_map') || {};
     const rooms = await farmStore.get(farmId, 'rooms') || [];
-    const zones = [...new Set(groups.map(g => g.zone).filter(Boolean))];
-    const roomNames = [...new Set(groups.map(g => g.room).filter(Boolean))];
-    const activeRoomName = roomNames[0] || roomMap.name || 'Main Grow Room';
+    const zones = [...new Set(groups.map(g => g.zone).filter(Boolean))].map((z) => sanitizePromptValue(z, 40));
+    const roomNames = [...new Set(groups.map(g => g.room).filter(Boolean))].map((r) => sanitizePromptValue(r, 60));
+    const activeRoomName = roomNames[0] || sanitizePromptValue(roomMap.name, 60) || 'Main Grow Room';
     const activeRoom = rooms.find(r => (r.id || r.room_id) === roomMap.roomId || r.name === activeRoomName) || rooms[0] || {};
     const inferredRoom = inferRoomDimensionsMeters(activeRoom, roomMap);
     if (inferredRoom.length_m && inferredRoom.width_m) {
@@ -2300,8 +2324,9 @@ async function buildSystemPrompt(farmId) {
       farmContext += `Valid zones: ${zones.join(', ')} (in ${roomNames.join(', ') || 'Main Grow Room'})\n`;
       farmContext += `Total grow positions: ${groups.length} groups across ${zones.length} zone(s)\n`;
       for (const zone of zones) {
-        const zoneGroups = groups.filter(g => g.zone === zone);
-        farmContext += `  ${zone}: ${zoneGroups.length} groups (e.g. "${zoneGroups[0]?.id || zoneGroups[0]?.group_id}")\n`;
+        const zoneGroups = groups.filter(g => sanitizePromptValue(g.zone, 40) === zone);
+        const exampleId = sanitizePromptValue(zoneGroups[0]?.id || zoneGroups[0]?.group_id, 60);
+        farmContext += `  ${zone}: ${zoneGroups.length} groups (e.g. "${exampleId}")\n`;
       }
     }
     farmContext += `IMPORTANT: Only use zones listed above. Do NOT invent Zone 3, Zone 4, etc. if they don't exist.\n`;
@@ -2316,16 +2341,18 @@ async function buildSystemPrompt(farmId) {
       if (deviceResult.assigned_devices?.length > 0) {
         const byZone = {};
         for (const d of deviceResult.assigned_devices) {
-          const z = d.zone || 'unzoned';
+          const z = sanitizePromptValue(d.zone || 'unzoned', 40);
           if (!byZone[z]) byZone[z] = [];
-          byZone[z].push(`${d.name || d.id} (${d.type})`);
+          const label = sanitizePromptValue(d.name || d.id, 60);
+          const type = sanitizePromptValue(d.type, 40);
+          byZone[z].push(`${label} (${type})`);
         }
         for (const [zone, devs] of Object.entries(byZone)) {
           farmContext += `  ${zone}: ${devs.join(', ')}\n`;
         }
       }
       if (deviceResult.unassigned_devices?.length > 0) {
-        farmContext += `  Unassigned: ${deviceResult.unassigned_devices.map(d => d.name || d.id).join(', ')}\n`;
+        farmContext += `  Unassigned: ${deviceResult.unassigned_devices.map(d => sanitizePromptValue(d.name || d.id, 60)).join(', ')}\n`;
       }
       farmContext += `Use update_device to move devices between zones. Use get_device_status for full details.\n`;
       farmContext += `Use update_equipment to rename/recategorize equipment in the room map (fans, ZipGrow towers, etc.). Use bulk=true with match_name/match_category to update all matching devices at once. Name matching is partial (contains).\n`;
