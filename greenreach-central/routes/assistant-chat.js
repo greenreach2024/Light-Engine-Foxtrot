@@ -2957,7 +2957,7 @@ SKILL REFERENCE LIBRARY:
 
 PLATFORM PAGES & NAVIGATION:
 When a user asks about a specific tool, page, or feature by name, tell them where to find it in the admin dashboard. Here are the key pages available:
-- Room Mapping Tool: Settings tab > Device Manager, or navigate to /views/room-mapper.html. Visual room layout with zone creation and device placement.
+- Room Mapping Tool: Folded into the 3D Farm Viewer. Open /views/3d-farm-viewer.html?edit=1 (or click "Room Mapper" in the sidebar) and use edit mode to draw zones, place sensors/equipment, and set zone setpoints (temp, RH, RH delta). The standalone room-mapper page has been retired.
 - Device Manager: Settings tab > Device Manager, or /views/iot-manager.html. Scan, register, and manage IoT devices (SwitchBot, Kasa, Shelly).
 - Environment Dashboard: Operations tab > Environment, or /views/environment.html. Live sensor readings, zone targets, alerts.
 - Heat Map: /views/room-heatmap.html. Temperature and humidity distribution visualization.

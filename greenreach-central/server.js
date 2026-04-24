@@ -898,6 +898,13 @@ app.get('/service-worker.js', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'service-worker.js'));
 });
 
+// Legacy Room Mapper was folded into the 3D Farm Viewer. Redirect all old
+// links to the viewer's edit mode. Must come BEFORE express.static so the
+// old file (if still present in any deploy slice) does not win.
+app.get(['/views/room-mapper.html', '/room-mapper.html', '/public/views/room-mapper.html'], (req, res) => {
+  res.redirect(301, '/views/3d-farm-viewer.html?edit=1');
+});
+
 app.use(express.static(path.join(__dirname, 'public'), staticCacheOptions));
 // Fallback to root public directory for shared assets
 app.use(express.static(path.join(__dirname, '..', 'public'), staticCacheOptions));
