@@ -23,6 +23,7 @@ import { rateLimit } from 'express-rate-limit';
 import dotenv from 'dotenv';
 import { WebSocketServer } from 'ws';
 import http from 'http';
+import https from 'https';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { pathToFileURL } from 'url';
@@ -453,6 +454,18 @@ app.use((req, _res, next) => {
 
 // ── Room-map routes MUST be before express.static to avoid flat-file fallback ──
 // These handle farm-scoped room-map data via PostgreSQL farm_data table.
+
+// ── Split-brain fix: rooms/groups/events are PROXIED to Light Engine ────────
+// LE is the authoritative store for rooms.json and groups.json (persisted to
+// GCS via FUSE) and owns the /events SSE stream the 3D viewer subscribes to.
+// Central used to serve rooms.json as a static file and had no SSE at all,
+// which is why edits from grow-management never reached the 3D viewer and
+// appeared to revert on refresh. These proxies must come BEFORE express.static
+// so the static fallback does not shadow them with stale on-disk JSON.
+app.get('/data/rooms.json', (req, res) => proxyToLE(req, res, '/data/rooms.json'));
+app.get('/data/groups.json', (req, res) => proxyToLE(req, res, '/data/groups.json'));
+app.post('/data/groups.json', authMiddleware, (req, res) => proxyToLE(req, res, '/data/groups.json'));
+app.get('/events', (req, res) => proxyToLE(req, res, '/events'));
 app.get('/data/room-map.json', async (req, res) => {
   const fid = farmStore.farmIdFromReq(req);
   const payload = await farmStore.get(fid, 'room_map') || { zones: [], devices: [] };
@@ -1172,6 +1185,87 @@ function leProxyHeaders(extra = {}) {
   const apiKey = process.env.GREENREACH_API_KEY;
   if (apiKey) headers['X-API-Key'] = apiKey;
   return headers;
+}
+
+// ── Streaming proxy to Light Engine ────────────────────────────────────────
+// Forwards request (headers + body) to LE at `targetPath` and pipes LE's
+// response back to the client. Works for JSON endpoints and SSE (`/events`)
+// because the upstream response body is piped as-is without buffering.
+// Used to eliminate the Central/LE split-brain for rooms, groups, and events
+// where LE is the authoritative store (rooms.json, groups.json on GCS FUSE).
+function proxyToLE(req, res, targetPath) {
+  const edgeUrl = (process.env.FARM_EDGE_URL || '').replace(/\/$/, '');
+  if (!edgeUrl) {
+    return res.status(503).json({
+      error: 'No Light Engine URL configured',
+      message: 'Set FARM_EDGE_URL'
+    });
+  }
+  let upstreamUrl;
+  try {
+    upstreamUrl = new URL(targetPath, edgeUrl);
+  } catch (err) {
+    return res.status(500).json({ error: 'Invalid upstream URL', message: err.message });
+  }
+  const isHttps = upstreamUrl.protocol === 'https:';
+  const requester = isHttps ? https.request : http.request;
+
+  const outgoingHeaders = leProxyHeaders({
+    'Content-Type': req.headers['content-type'] || 'application/json'
+  });
+  // Preserve the client's Accept header so SSE requests negotiate text/event-stream
+  if (req.headers['accept']) outgoingHeaders['Accept'] = req.headers['accept'];
+  if (req.headers['x-farm-id'] && !outgoingHeaders['X-Farm-ID']) {
+    outgoingHeaders['X-Farm-ID'] = req.headers['x-farm-id'];
+  }
+  // Do not forward authorization to LE — Central has already auth-gated the
+  // request and LE trusts the X-API-Key + X-Farm-ID pair.
+
+  const options = {
+    method: req.method,
+    hostname: upstreamUrl.hostname,
+    port: upstreamUrl.port || (isHttps ? 443 : 80),
+    path: upstreamUrl.pathname + upstreamUrl.search,
+    headers: outgoingHeaders
+  };
+
+  const upstream = requester(options, (upstreamRes) => {
+    const hopByHop = new Set([
+      'connection', 'keep-alive', 'proxy-authenticate', 'proxy-authorization',
+      'te', 'trailers', 'transfer-encoding', 'upgrade'
+    ]);
+    Object.entries(upstreamRes.headers || {}).forEach(([k, v]) => {
+      if (!hopByHop.has(k.toLowerCase())) {
+        try { res.setHeader(k, v); } catch (_) { /* ignore setHeader race */ }
+      }
+    });
+    res.status(upstreamRes.statusCode || 502);
+    upstreamRes.pipe(res);
+    upstreamRes.on('error', () => { try { res.end(); } catch (_) {} });
+  });
+
+  upstream.on('error', (err) => {
+    logger.warn(`[LE Proxy] ${req.method} ${targetPath} upstream error: ${err.message}`);
+    if (!res.headersSent) {
+      res.status(502).json({ error: 'Upstream fetch failed', message: err.message });
+    } else {
+      try { res.end(); } catch (_) {}
+    }
+  });
+
+  // Close upstream if the client disconnects (critical for SSE longevity).
+  const abort = () => { try { upstream.destroy(); } catch (_) {} };
+  req.on('close', abort);
+  req.on('aborted', abort);
+
+  if (req.method === 'GET' || req.method === 'HEAD') {
+    upstream.end();
+  } else if (req.body && typeof req.body === 'object' && Object.keys(req.body).length) {
+    // express.json() has already parsed the body; re-serialize for upstream.
+    upstream.end(JSON.stringify(req.body));
+  } else {
+    upstream.end();
+  }
 }
 
 function resolveEdgeUrl() {
@@ -2651,17 +2745,14 @@ app.get('/api/setup/data', authMiddleware, async (req, res) => {
   }
 });
 
-app.post('/api/setup/save-rooms', authMiddleware, async (req, res) => {
-  try {
-    const fid = farmStore.farmIdFromReq(req);
-    const payload = req.body || {};
-    const rooms = Array.isArray(payload.rooms) ? payload.rooms : [];
-    await farmStore.set(fid, 'rooms', rooms);
-    return res.json({ success: true, rooms, source: 'farm-store' });
-  } catch (error) {
-    logger.warn('[Compat] /api/setup/save-rooms failed:', error.message);
-    return res.status(500).json({ success: false, message: 'Failed to save rooms' });
-  }
+// ── /api/setup/save-rooms — PROXY to Light Engine ──────────────────────────
+// Previously wrote to farmStore (AlloyDB) while LE wrote to rooms.json, so
+// the 3D viewer (which reads /data/rooms.json + listens on /events) never
+// saw Central's writes. Now all room saves are forwarded to LE's authoritative
+// handler which merges, persists to GCS, and broadcasts SSE data-change.
+// Auth stays on Central: authMiddleware gates the request before we proxy.
+app.post('/api/setup/save-rooms', authMiddleware, (req, res) => {
+  return proxyToLE(req, res, '/api/setup/save-rooms');
 });
 
 app.get('/api/reverse-geocode', authMiddleware, (req, res) => {
