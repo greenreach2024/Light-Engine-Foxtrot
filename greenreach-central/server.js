@@ -558,6 +558,70 @@ app.post('/data/room-map-:roomId.json', async (req, res) => {
   }
 });
 
+// ── Rooms + Groups: farm-scoped, MUST be before express.static ──────────────
+// Without these handlers, GET /data/rooms.json and GET /data/groups.json
+// fell through to express.static, which served the stale bundled demo file
+// baked into the Docker image. That caused every save to overwrite farmStore
+// with stale-derived data (the UI read stale → edited → POSTed full array),
+// so deletes and dimension updates reverted on every refresh.
+//
+// Accepted payload shapes on POST (for frontend compatibility):
+//   rooms:  { rooms: [...] } or [...]   (rooms are primarily saved via
+//                                        /api/setup/save-rooms; this POST
+//                                        handler is defensive and mirrors it)
+//   groups: { groups: [...], replace } or [...]
+app.get('/data/rooms.json', async (req, res) => {
+  const fid = farmStore.farmIdFromReq(req);
+  try {
+    const rooms = await farmStore.get(fid, 'rooms');
+    const list = Array.isArray(rooms) ? rooms : [];
+    return res.json({ rooms: list });
+  } catch (err) {
+    logger.error('[Rooms] Load failed:', err.message);
+    return res.status(500).json({ rooms: [], error: err.message });
+  }
+});
+
+app.post('/data/rooms.json', async (req, res) => {
+  const fid = farmStore.farmIdFromReq(req);
+  if (!fid) return res.status(401).json({ success: false, error: 'Not authenticated' });
+  try {
+    const body = req.body || {};
+    const rooms = Array.isArray(body) ? body : (Array.isArray(body.rooms) ? body.rooms : []);
+    await farmStore.set(fid, 'rooms', rooms);
+    return res.json({ success: true, dataType: 'rooms', farmId: fid, count: rooms.length });
+  } catch (err) {
+    logger.error('[Rooms] Save failed:', err.message);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.get('/data/groups.json', async (req, res) => {
+  const fid = farmStore.farmIdFromReq(req);
+  try {
+    const groups = await farmStore.get(fid, 'groups');
+    const list = Array.isArray(groups) ? groups : [];
+    return res.json({ groups: list });
+  } catch (err) {
+    logger.error('[Groups] Load failed:', err.message);
+    return res.status(500).json({ groups: [], error: err.message });
+  }
+});
+
+app.post('/data/groups.json', async (req, res) => {
+  const fid = farmStore.farmIdFromReq(req);
+  if (!fid) return res.status(401).json({ success: false, error: 'Not authenticated' });
+  try {
+    const body = req.body || {};
+    const groups = Array.isArray(body) ? body : (Array.isArray(body.groups) ? body.groups : []);
+    await farmStore.set(fid, 'groups', groups);
+    return res.json({ success: true, dataType: 'groups', farmId: fid, count: groups.length });
+  } catch (err) {
+    logger.error('[Groups] Save failed:', err.message);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // ── Farm Profile: merge DB data on top of static farm.json ─────────────────
 mountFarmJsonRoute(app, { farmStore, logger });
 
