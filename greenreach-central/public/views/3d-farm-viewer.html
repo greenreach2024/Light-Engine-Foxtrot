@@ -519,6 +519,10 @@
       <div id="spatialHudBody"></div>
     </aside>
     <div class="edit-indicator" id="editIndicator">EDIT MODE -- Drag sensors, equipment, and zones to reposition. Shift-click equipment, sensors, or groups to multi-select.</div>
+    <!-- Marquee (box/lasso) selection overlay. Activates on Shift+drag in
+         any mode; selects all visible group meshes whose screen-projected
+         center lands inside the rectangle. Press Escape to cancel. -->
+    <div id="marqueeBox" style="display:none;position:absolute;border:1px dashed #38bdf8;background:rgba(56,189,248,0.08);pointer-events:none;z-index:45;"></div>
     <!-- Bulk-assign panel (proposal item 4). Appears when S.selectedMeshes
          contains 1+ items in non-edit or edit mode. Offers bulk actions
          (assign light/controller, calibrate, clear) across the current
@@ -631,6 +635,7 @@
       equipmentVisible: false,
       editMode: false,
       zoneDraw: { armed: false, active: false, roomId: null, startWorld: null, currentWorld: null, previewMesh: null, floorInfo: null },
+      marquee: { active: false, startX: 0, startY: 0, endX: 0, endY: 0, additive: false },
       dragTarget: null,
       dragSelection: [],
       dragPlane: new THREE.Plane(new THREE.Vector3(0, 1, 0), 0),
@@ -4419,6 +4424,34 @@
 
     function onPointerDown(e) {
       if (_touchCount > 1) return; // multi-touch = orbit, not drag
+      // Marquee (box) select: Shift+drag in any mode. Works whether or not
+      // we are in edit mode, because the bulk-assign panel is useful for
+      // both viewing and editing. The marquee projects group-type meshes to
+      // screen space on pointerup and adds any whose center lands inside.
+      if (e.shiftKey && !S.zoneDraw.active && !S.zoneDraw.armed) {
+        var mContainer = document.getElementById('viewer-container');
+        var mRect = mContainer.getBoundingClientRect();
+        S.marquee = {
+          active: true,
+          startX: e.clientX - mRect.left,
+          startY: e.clientY - mRect.top,
+          endX: e.clientX - mRect.left,
+          endY: e.clientY - mRect.top,
+          additive: !!(e.metaKey || e.ctrlKey)
+        };
+        var box = document.getElementById('marqueeBox');
+        if (box) {
+          box.style.display = 'block';
+          box.style.left = S.marquee.startX + 'px';
+          box.style.top = S.marquee.startY + 'px';
+          box.style.width = '0px';
+          box.style.height = '0px';
+        }
+        S.controls.enabled = false;
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
       if (!S.editMode) return;
       if (e.shiftKey || e.metaKey || e.ctrlKey) return;
       var container = document.getElementById('viewer-container');
@@ -4477,6 +4510,24 @@
     }
 
     function onPointerMove(e) {
+      if (S.marquee && S.marquee.active) {
+        var mContainer = document.getElementById('viewer-container');
+        var mRect = mContainer.getBoundingClientRect();
+        S.marquee.endX = e.clientX - mRect.left;
+        S.marquee.endY = e.clientY - mRect.top;
+        var box = document.getElementById('marqueeBox');
+        if (box) {
+          var x = Math.min(S.marquee.startX, S.marquee.endX);
+          var y = Math.min(S.marquee.startY, S.marquee.endY);
+          var w = Math.abs(S.marquee.endX - S.marquee.startX);
+          var h = Math.abs(S.marquee.endY - S.marquee.startY);
+          box.style.left = x + 'px';
+          box.style.top = y + 'px';
+          box.style.width = w + 'px';
+          box.style.height = h + 'px';
+        }
+        return;
+      }
       if (S.zoneDraw.active) {
         var zContainer = document.getElementById('viewer-container');
         var zRect = zContainer.getBoundingClientRect();
@@ -4568,6 +4619,68 @@
     }
 
     function onPointerUp(e) {
+      if (S.marquee && S.marquee.active) {
+        var container = document.getElementById('viewer-container');
+        var rect = container.getBoundingClientRect();
+        var minX = Math.min(S.marquee.startX, S.marquee.endX);
+        var maxX = Math.max(S.marquee.startX, S.marquee.endX);
+        var minY = Math.min(S.marquee.startY, S.marquee.endY);
+        var maxY = Math.max(S.marquee.startY, S.marquee.endY);
+        var additive = !!S.marquee.additive;
+        var box = document.getElementById('marqueeBox');
+        if (box) box.style.display = 'none';
+        S.marquee.active = false;
+        S.controls.enabled = true;
+        var tinyClick = (maxX - minX) < 3 && (maxY - minY) < 3;
+        if (tinyClick) {
+          // Tiny shift-click: fall through to the click handler's toggle.
+          return;
+        }
+        // Project every selectable group/sensor/equipment mesh to NDC then
+        // to screen-pixel space and include those whose center lies inside
+        // the rectangle. Respects the current roomSelect filter by only
+        // considering meshes already in the scene.
+        var candidates = []
+          .concat(S.meshes.trays.filter(isSelectableMesh))
+          .concat(S.meshes.sensors.filter(isSelectableMesh))
+          .concat(S.meshes.equipment.filter(isSelectableMesh));
+        var hits = [];
+        var vec = new THREE.Vector3();
+        for (var i = 0; i < candidates.length; i += 1) {
+          var m = candidates[i];
+          if (!m.visible) continue;
+          vec.setFromMatrixPosition(m.matrixWorld);
+          vec.project(S.camera);
+          var px = (vec.x + 1) / 2 * rect.width;
+          var py = (-vec.y + 1) / 2 * rect.height;
+          if (vec.z >= -1 && vec.z <= 1 && px >= minX && px <= maxX && py >= minY && py <= maxY) {
+            hits.push(m);
+          }
+        }
+        if (hits.length === 0 && !additive) {
+          clearSelection({ silent: true });
+          return;
+        }
+        // Normalize to one type at a time (bulk panel needs a single
+        // selection family). Prefer 'group' -> 'equipment' -> 'sensor'.
+        var families = { group: [], equipment: [], sensor: [] };
+        hits.forEach(function (m) {
+          var t = (m.userData && m.userData.type) || '';
+          if (families[t]) families[t].push(m);
+        });
+        var preferred = families.group.length ? families.group : families.equipment.length ? families.equipment : families.sensor;
+        if (additive && Array.isArray(S.selectedMeshes) && S.selectedMeshes.length) {
+          setSelection(S.selectedMeshes.concat(preferred));
+        } else {
+          setSelection(preferred);
+        }
+        var bar = document.getElementById('statusBar');
+        if (bar) {
+          bar.textContent = 'Marquee selected ' + preferred.length + ' items';
+          bar.style.color = '';
+        }
+        return;
+      }
       if (S.zoneDraw.active) {
         S.controls.enabled = true;
         commitZoneDraw();
@@ -5576,6 +5689,12 @@
 
       document.addEventListener('keydown', function(e) {
         if (e.key === 'Escape') {
+          if (S.marquee && S.marquee.active) {
+            S.marquee.active = false;
+            var box = document.getElementById('marqueeBox');
+            if (box) box.style.display = 'none';
+            S.controls.enabled = true;
+          }
           clearSelection({ silent: true });
           closeDetailPanel({ confirm: true, message: 'Discard unsaved detail panel changes?' });
         }

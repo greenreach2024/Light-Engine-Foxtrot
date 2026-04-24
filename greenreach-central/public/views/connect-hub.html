@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Connect Hub - Devices and Integrations</title>
+  <link rel="stylesheet" href="/css/infotainment.css" />
+  <link rel="stylesheet" href="/css/le-nav.css" />
+  <style>
+    body {
+      margin: 0;
+      background: #0f172a;
+      color: #e2e8f0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+    .ch-wrap { max-width: 1200px; margin: 0 auto; padding: 24px 20px 80px; }
+    .ch-header { margin-bottom: 24px; }
+    .ch-header h1 { margin: 0 0 6px; font-size: 1.6rem; color: #f8fafc; }
+    .ch-header p { margin: 0; color: #94a3b8; font-size: 0.92rem; }
+    .ch-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 16px;
+    }
+    .ch-card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      transition: transform 120ms ease, border-color 120ms ease;
+    }
+    .ch-card:hover { transform: translateY(-2px); border-color: #38bdf8; }
+    .ch-card h3 { margin: 0; font-size: 1.05rem; color: #f1f5f9; }
+    .ch-card p { margin: 0; color: #94a3b8; font-size: 0.85rem; line-height: 1.45; }
+    .ch-tag {
+      align-self: flex-start;
+      font-size: 0.68rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: #38bdf8;
+      background: rgba(56, 189, 248, 0.1);
+      border: 1px solid rgba(56, 189, 248, 0.25);
+      border-radius: 6px;
+      padding: 3px 8px;
+    }
+    .ch-actions { margin-top: auto; display: flex; gap: 8px; flex-wrap: wrap; }
+    .ch-btn {
+      display: inline-block;
+      padding: 7px 14px;
+      border-radius: 8px;
+      background: #0f172a;
+      color: #e2e8f0;
+      text-decoration: none;
+      border: 1px solid #334155;
+      font-size: 0.82rem;
+      cursor: pointer;
+    }
+    .ch-btn:hover { border-color: #38bdf8; color: #38bdf8; }
+    .ch-btn--primary { background: #38bdf8; color: #0f172a; border-color: #38bdf8; }
+    .ch-btn--primary:hover { background: #0ea5e9; border-color: #0ea5e9; color: #0f172a; }
+    .ch-section-title {
+      margin: 32px 0 12px;
+      font-size: 0.8rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #64748b;
+    }
+    .ch-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.72rem;
+      color: #94a3b8;
+    }
+    .ch-dot { width: 8px; height: 8px; border-radius: 50%; background: #64748b; }
+    .ch-dot--ok { background: #10b981; }
+    .ch-dot--warn { background: #f59e0b; }
+    .ch-dot--off { background: #64748b; }
+  </style>
+</head>
+<body>
+  <div class="ch-wrap">
+    <header class="ch-header">
+      <h1>Connect Hub</h1>
+      <p>One place to manage devices, sensors, and third-party integrations. Replaces the separate IoT Manager, SwitchBot, and Integrations pages.</p>
+    </header>
+
+    <h2 class="ch-section-title">Devices &amp; Sensors</h2>
+    <section class="ch-grid">
+      <article class="ch-card">
+        <span class="ch-tag">Local network</span>
+        <h3>Device Manager</h3>
+        <p>Scan the farm network for SwitchBot, Kasa, Shelly, and MQTT devices. Assign to rooms and zones.</p>
+        <span class="ch-status"><span class="ch-dot" id="ch-status-iot"></span><span id="ch-status-iot-text">Checking...</span></span>
+        <div class="ch-actions">
+          <a class="ch-btn ch-btn--primary" href="/views/iot-manager.html">Open device manager</a>
+          <a class="ch-btn" href="/views/network-dashboard.html">Network health</a>
+        </div>
+      </article>
+
+      <article class="ch-card">
+        <span class="ch-tag">SwitchBot</span>
+        <h3>SwitchBot OAuth &amp; tokens</h3>
+        <p>Connect a SwitchBot account for environmental sensors (temperature, humidity, VPD) and plug control.</p>
+        <span class="ch-status"><span class="ch-dot" id="ch-status-switchbot"></span><span id="ch-status-switchbot-text">Checking...</span></span>
+        <div class="ch-actions">
+          <a class="ch-btn ch-btn--primary" href="/LE-switchbot.html">Manage SwitchBot</a>
+        </div>
+      </article>
+
+      <article class="ch-card">
+        <span class="ch-tag">3D placement</span>
+        <h3>Place devices in 3D</h3>
+        <p>Drag devices into zones, multi-select with Shift or Shift+drag lasso, and bulk-assign lights or controllers.</p>
+        <div class="ch-actions">
+          <a class="ch-btn ch-btn--primary" href="/views/3d-farm-viewer.html">Open 3D viewer</a>
+        </div>
+      </article>
+    </section>
+
+    <h2 class="ch-section-title">Integrations</h2>
+    <section class="ch-grid">
+      <article class="ch-card">
+        <span class="ch-tag">Payments</span>
+        <h3>Square</h3>
+        <p>Connect a Square location for buyer checkout and tax reporting. Central audits the connection; farms complete the OAuth handshake locally.</p>
+        <span class="ch-status"><span class="ch-dot" id="ch-status-square"></span><span id="ch-status-square-text">Checking...</span></span>
+        <div class="ch-actions">
+          <a class="ch-btn ch-btn--primary" href="/GR-wholesale-integrations.html#square">Configure Square</a>
+        </div>
+      </article>
+
+      <article class="ch-card">
+        <span class="ch-tag">Payments</span>
+        <h3>Stripe Connect</h3>
+        <p>Payouts and marketplace settlement. Stripe Connect accounts are created per farm; Central tracks onboarding.</p>
+        <span class="ch-status"><span class="ch-dot" id="ch-status-stripe"></span><span id="ch-status-stripe-text">Checking...</span></span>
+        <div class="ch-actions">
+          <a class="ch-btn ch-btn--primary" href="/GR-wholesale-integrations.html#stripe">Configure Stripe</a>
+        </div>
+      </article>
+
+      <article class="ch-card">
+        <span class="ch-tag">Wholesale</span>
+        <h3>Buyer network</h3>
+        <p>Connect to buyer channels, wholesale marketplaces, and shared inventory feeds.</p>
+        <div class="ch-actions">
+          <a class="ch-btn ch-btn--primary" href="/GR-wholesale-integrations.html">Open integrations page</a>
+        </div>
+      </article>
+
+      <article class="ch-card">
+        <span class="ch-tag">Research</span>
+        <h3>Research integrations</h3>
+        <p>ORCID, DataCite, OSF, protocols.io, Globus and workflow connectors for research-track farms.</p>
+        <div class="ch-actions">
+          <a class="ch-btn" href="/research-workspace.html">Open Research Workspace</a>
+        </div>
+      </article>
+    </section>
+  </div>
+
+  <script>
+    // Surface high-level status for each tile. Best-effort only; fall back
+    // to neutral state when an endpoint is unavailable (keeps the page
+    // usable on offline or LE-only deployments).
+    (function () {
+      var F = window.authFetch || fetch;
+      function setStatus(elDotId, elTextId, state, text) {
+        var dot = document.getElementById(elDotId);
+        var t = document.getElementById(elTextId);
+        if (dot) {
+          dot.classList.remove('ch-dot--ok', 'ch-dot--warn', 'ch-dot--off');
+          if (state === 'ok') dot.classList.add('ch-dot--ok');
+          else if (state === 'warn') dot.classList.add('ch-dot--warn');
+          else dot.classList.add('ch-dot--off');
+        }
+        if (t) t.textContent = text;
+      }
+      F('/api/network/dashboard', { credentials: 'same-origin' }).then(function (r) {
+        if (!r.ok) throw new Error('status');
+        return r.json();
+      }).then(function (d) {
+        var on = (d && (d.onlineDevices || d.online || 0)) | 0;
+        var tot = (d && (d.totalDevices || d.total || 0)) | 0;
+        setStatus('ch-status-iot', 'ch-status-iot-text', on > 0 ? 'ok' : 'warn', on + ' of ' + tot + ' devices online');
+      }).catch(function () {
+        setStatus('ch-status-iot', 'ch-status-iot-text', 'off', 'Device network unreachable');
+      });
+      F('/api/integrations/switchbot/status', { credentials: 'same-origin' }).then(function (r) {
+        return r.ok ? r.json() : { connected: false };
+      }).then(function (d) {
+        setStatus('ch-status-switchbot', 'ch-status-switchbot-text', d && d.connected ? 'ok' : 'off', d && d.connected ? 'Connected' : 'Not connected');
+      }).catch(function () {
+        setStatus('ch-status-switchbot', 'ch-status-switchbot-text', 'off', 'Status unknown');
+      });
+      F('/api/farm-square/status', { credentials: 'same-origin' }).then(function (r) {
+        return r.ok ? r.json() : { connected: false };
+      }).then(function (d) {
+        setStatus('ch-status-square', 'ch-status-square-text', d && d.connected ? 'ok' : 'off', d && d.connected ? 'Connected' : 'Not connected');
+      }).catch(function () {
+        setStatus('ch-status-square', 'ch-status-square-text', 'off', 'Status unknown');
+      });
+      F('/api/farm-stripe/status', { credentials: 'same-origin' }).then(function (r) {
+        return r.ok ? r.json() : { connected: false };
+      }).then(function (d) {
+        setStatus('ch-status-stripe', 'ch-status-stripe-text', d && d.connected ? 'ok' : 'off', d && d.connected ? 'Connected' : 'Not connected');
+      }).catch(function () {
+        setStatus('ch-status-stripe', 'ch-status-stripe-text', 'off', 'Status unknown');
+      });
+    })();
+  </script>
+</body>
+</html>

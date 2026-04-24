@@ -15,10 +15,10 @@
  *     1. farm_profile    Business identity (name, contact, location, timezone)
  *     2. room_design     Room shell + dimensions (length x width x height)
  *     3. zones           Climate zones within rooms
- *     4. groups          Grow units (racks/benches/trays) -- installedSystems[]
+ *     4. groups          Grow units (racks/benches/trays) -- installedSystems[] with customization
  *     5. lights          Light fixtures registered and assigned
  *     6. build_plan      Equipment plan: lighting kW, HVAC, pumps, controllers
- *     7. devices         Controllers: IoT sensors + actuators paired
+ *     7. devices         Connect Hub -- pair sensors/controllers + integrations
  *
  *   category: 'operations' -- post-setup, owned by Crop Scheduler + Evie
  *     8.  crop_assignment Crops assigned to groups with matching recipes
@@ -88,11 +88,11 @@ const PHASES = [
   {
     id: 'groups',
     label: 'Grow Units',
-    description: 'Select grow-system templates and the number of units per zone',
+    description: 'Configure one or more grow-system templates per room, customize levels, plant spacing, and locations, then stage units into zones',
     weight: 12,
     order: 4,
     category: 'setup',
-    evie_prompt: 'Help me pick the right grow-system template and how many units fit in each zone.',
+    evie_prompt: 'Help me pick grow-system templates for this room, customize plant spacing and levels, and confirm how many units fit per zone.',
     sidebar_target: 'groups-v2',
     flow_anchor: 'flow-grow-units'
   },
@@ -120,14 +120,15 @@ const PHASES = [
   },
   {
     id: 'devices',
-    label: 'Controllers',
-    description: 'Pair controllers and sensors that drive the accepted equipment plan',
+    label: 'Connect Hub',
+    description: 'Pair controllers and sensors, connect SwitchBot, and configure payment integrations from the consolidated Connect Hub',
     weight: 8,
     order: 7,
     category: 'setup',
-    evie_prompt: 'Walk me through pairing my controllers and sensors for this farm.',
-    sidebar_target: 'groups-v2',
-    flow_anchor: 'flow-controllers'
+    evie_prompt: 'Walk me through the Connect Hub -- pair sensors and controllers, link SwitchBot, and connect Square or Stripe for this farm.',
+    sidebar_target: 'connect-hub',
+    flow_anchor: 'flow-controllers',
+    connect_url: '/views/connect-hub.html'
   },
   // ---- Operations: owned by Crop Scheduler + Evie after setup completes
   {

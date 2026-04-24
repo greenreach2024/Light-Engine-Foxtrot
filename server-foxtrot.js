@@ -25589,6 +25589,59 @@ app.get('/api/zones', asyncHandler(async (req, res) => {
   res.json(zones);
 }));
 
+// POST /api/zones/bulk-assign
+// Backend for the 3D viewer bulk-assign panel (Phase C, April 2026).
+// Applies a single light/controller assignment to a set of groups in one
+// atomic write. The 3D panel fires this after the operator clicks
+// "Assign light" / "Assign controller" / "Open calibration" on a selection.
+// Body: { action: 'bulk-assign-light' | 'bulk-assign-controller' | 'open-calibration',
+//         lightId?, controllerId?, groupIds: string[] }
+app.post('/api/zones/bulk-assign', asyncHandler(async (req, res) => {
+  const body = req.body || {};
+  const action = String(body.action || '');
+  const groupIds = Array.isArray(body.groupIds) ? body.groupIds.filter(Boolean).map(String) : [];
+  if (!groupIds.length) {
+    return res.status(400).json({ ok: false, error: 'groupIds required' });
+  }
+  if (action === 'open-calibration') {
+    // Calibration is a UI-only event for now; the 3D viewer opens the
+    // calibration overlay locally. Echo the request so audit tooling can
+    // observe it without needing to write state here.
+    return res.json({ ok: true, action, groupIds, note: 'calibration UI event' });
+  }
+  if (action !== 'bulk-assign-light' && action !== 'bulk-assign-controller') {
+    return res.status(400).json({ ok: false, error: `unknown action: ${action}` });
+  }
+  const groups = loadGroupsFile();
+  let touched = 0;
+  const now = new Date().toISOString();
+  const next = groups.map((g) => {
+    const gid = String(g?.id || g?.groupId || '');
+    if (!groupIds.includes(gid)) return g;
+    touched += 1;
+    const patch = { updatedAt: now };
+    if (action === 'bulk-assign-light' && body.lightId) {
+      patch.lightId = String(body.lightId);
+      patch.lights = Array.isArray(g.lights) ? Array.from(new Set(g.lights.concat(String(body.lightId)))) : [String(body.lightId)];
+    }
+    if (action === 'bulk-assign-controller' && body.controllerId) {
+      patch.controllerId = String(body.controllerId);
+    }
+    return Object.assign({}, g, patch);
+  });
+  if (touched === 0) {
+    return res.status(404).json({ ok: false, error: 'no matching groups', groupIds });
+  }
+  const saved = saveGroupsFile(next);
+  if (!saved) {
+    return res.status(500).json({ ok: false, error: 'failed to persist groups.json' });
+  }
+  try {
+    emitDataChange({ kind: 'groups', updatedAt: now, source: 'zones-bulk-assign' });
+  } catch (_) { /* non-fatal */ }
+  res.json({ ok: true, action, touched, groupIds });
+}));
+
 // Get all bus mappings
 app.get('/api/bus-mappings', asyncHandler(async (req, res) => {
   const mappings = await readJSON('bus-mappings.json', []);

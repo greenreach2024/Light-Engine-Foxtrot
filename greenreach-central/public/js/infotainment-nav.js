@@ -36,6 +36,7 @@
         { id: 'farm-summary',  label: 'Farm Summary',  icon: 'icon-farm-summary',  section: 'iframe-view', url: '/views/farm-summary.html' },
         { id: 'activity-hub',  label: 'Activity Hub',  icon: 'icon-activity-hub',  section: 'iframe-view', url: '/views/tray-inventory.html' },
         { id: 'farm-setup',    label: 'Farm Setup',     icon: 'icon-setup',        section: 'iframe-view', url: '/views/farm-setup.html' },
+        { id: 'connect-hub',   label: 'Connect Hub',    icon: 'icon-devices',      section: 'iframe-view', url: '/views/connect-hub.html' },
         { id: 'devices',       label: 'Devices',        icon: 'icon-devices',      section: 'devices' },
         { id: 'supplies',      label: 'Supplies',       icon: 'icon-supplies',     section: 'inventory-mgmt' },
         { id: 'calendar',      label: 'Calendar',       icon: 'icon-calendar',     section: 'iframe-view', url: '/views/calendar.html' },
