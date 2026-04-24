@@ -247,6 +247,21 @@ async function buildSystemPrompt(adminId, adminName, adminRole, adminEmail) {
   const identity = RULES.identity;
   const rulesText = RULES.rules.map(r => `• [${r.id}] ${r.rule}`).join('\n');
 
+  // P1 audit (2026-04-24): prompt-safe user inputs. adminName/adminRole/adminEmail
+  // are user-editable and get interpolated into the system prompt. Sanitize to
+  // prevent prompt-envelope escape via newlines, backticks, or control chars.
+  const sanitizePromptValue = (raw, maxLen = 120) => {
+    if (raw == null) return '';
+    let value = String(raw);
+    value = value.replace(/[\r\n\t\f\v]+/g, ' ').replace(/\s{2,}/g, ' ').trim();
+    value = value.replace(/[`\u0000-\u001F]/g, '');
+    if (value.length > maxLen) value = `${value.slice(0, maxLen - 1)}…`;
+    return value;
+  };
+  const safeAdminName = sanitizePromptValue(adminName, 80);
+  const safeAdminEmail = sanitizePromptValue(adminEmail, 80);
+  const safeAdminRole = sanitizePromptValue(adminRole, 40);
+
   // Gather live context (non-blocking, best-effort)
   let farmCount = 0, orderCount = 0, buyerCount = 0, alertCount = 0;
   let recentSummaries = [];
@@ -328,7 +343,7 @@ Your responses should read like a senior operator briefing a CEO -- concise, dec
 
 ## Current Context
 - Date: ${dateStr}, ${timeStr}
-- Admin: ${adminName || 'Unknown'} (${adminEmail ? adminEmail + ', ' : ''}role: ${adminRole || 'admin'})
+- Admin: ${safeAdminName || 'Unknown'} (${safeAdminEmail ? safeAdminEmail + ', ' : ''}role: ${safeAdminRole || 'admin'})
 - Network: ${farmCount} farms, ${buyerCount} wholesale buyers
 - Open alerts: ${alertCount}
 - Total orders tracked: ${orderCount}
@@ -458,7 +473,7 @@ You operate under supervised autonomy, progressing through earned trust:
 ${policyContext}
 
 ## Admin Identity
-You are speaking with **${adminName || 'the admin'}**${adminEmail ? ` (${adminEmail})` : ''}, whose role is **${adminRole || 'admin'}**. Address them by first name when appropriate. Tailor your responses to their role:
+You are speaking with **${safeAdminName || 'the admin'}**${safeAdminEmail ? ` (${safeAdminEmail})` : ''}, whose role is **${safeAdminRole || 'admin'}**. Address them by first name when appropriate. Tailor your responses to their role:
 - **admin**: Full operational authority. You can propose any action.
 - **editor**: Can view and modify operational data but cannot execute financial transactions or change system configuration.
 - **viewer**: Read-only access. Do not propose write actions — offer analysis and insights instead.
@@ -1044,6 +1059,11 @@ router.get('/briefing', async (req, res) => {
     return res.status(401).json({ ok: false, error: 'Admin authentication required.' });
   }
   const adminName = req.admin?.name || 'Admin';
+  // P1 audit: sanitize before prompt interpolation (see buildSystemPrompt).
+  const safeAdminName = String(adminName)
+    .replace(/[\r\n\t\f\v]+/g, ' ').replace(/\s{2,}/g, ' ').trim()
+    .replace(/[`\u0000-\u001F]/g, '')
+    .slice(0, 80);
 
   try {
     // Gather key operational data in parallel
@@ -1085,7 +1105,7 @@ router.get('/briefing', async (req, res) => {
       const resp = await client.chat.completions.create({
         model: MODEL,
         messages: [
-          { role: 'system', content: `You are F.A.Y.E. (Farm Autonomy & Yield Engine). Generate a concise operations briefing for ${adminName}. Use the data below. Structure: 1) Status Summary (1-2 sentences), 2) Action Items (numbered, prioritized), 3) Key Metrics. Flag any anomalies. Be direct and professional.` },
+          { role: 'system', content: `You are F.A.Y.E. (Farm Autonomy & Yield Engine). Generate a concise operations briefing for ${safeAdminName}. Use the data below. Structure: 1) Status Summary (1-2 sentences), 2) Action Items (numbered, prioritized), 3) Key Metrics. Flag any anomalies. Be direct and professional.` },
           { role: 'user', content: `Today's operational data:\n${JSON.stringify(briefingData, null, 2)}` }
         ],
         temperature: 0.5,
