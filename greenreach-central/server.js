@@ -223,6 +223,23 @@ if (process.env.NODE_ENV === 'production' || process.env.DEPLOYMENT_MODE === 'cl
     console.error('[STARTUP] Server cannot start safely in production without these.');
     process.exit(1);
   }
+
+  // Warn-level checks for integrations that fail silently if misconfigured.
+  // These are not fatal (server boots) but surface clearly in Cloud Run logs
+  // so an on-call engineer can spot them during an outage.
+  const recommended = [
+    { keys: ['FARM_EDGE_URL', 'LIGHT_ENGINE_URL', 'LE_URL'], label: 'FARM_EDGE_URL (Central → LE proxy target)' },
+    { keys: ['ADMIN_ALERT_EMAIL'], label: 'ADMIN_ALERT_EMAIL (critical-alert recipient)' },
+    { keys: ['SQUARE_ACCESS_TOKEN'], label: 'SQUARE_ACCESS_TOKEN (wholesale payments)' },
+    { keys: ['SQUARE_LOCATION_ID'], label: 'SQUARE_LOCATION_ID (wholesale payments)' },
+    { keys: ['SMTP_HOST', 'GMAIL_SMTP_USER', 'EMAIL_USER'], label: 'SMTP host/user (email notifications)' }
+  ];
+  const missingRecommended = recommended
+    .filter(r => !r.keys.some(k => process.env[k]))
+    .map(r => r.label);
+  if (missingRecommended.length > 0) {
+    console.warn(`[STARTUP] Missing recommended environment variables (degraded functionality): ${missingRecommended.join(', ')}`);
+  }
 }
 
 // Trust proxy for AWS ALB/ELB (required for rate limiting and client IP detection)

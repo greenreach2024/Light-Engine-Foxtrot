@@ -11,6 +11,43 @@
 
 import { query, isDatabaseAvailable } from '../config/database.js';
 
+// ── Category and severity contracts ─────────────────────────────────
+// Central enum of supported notification categories. Unknown categories are
+// logged and coerced to 'general' to keep per-category routing/unsubscribe
+// behaviour well-defined.
+export const NOTIFICATION_CATEGORIES = Object.freeze([
+  'general',
+  'system',
+  'admin',
+  'sensor_alert',
+  'harvest',
+  'wholesale_order',
+  'wholesale_sample',
+  'sample_request',
+  'payment',
+  'delivery',
+  'grant',
+  'assistant'
+]);
+
+export const NOTIFICATION_SEVERITIES = Object.freeze(['info', 'warning', 'critical']);
+
+function normalizeCategory(raw) {
+  const value = (raw == null ? '' : String(raw)).trim().toLowerCase();
+  if (!value) return 'general';
+  if (NOTIFICATION_CATEGORIES.includes(value)) return value;
+  console.warn(`[NotificationStore] Unknown notification category "${raw}" — coercing to "general". Allowed: ${NOTIFICATION_CATEGORIES.join(', ')}`);
+  return 'general';
+}
+
+function normalizeSeverity(raw) {
+  const value = (raw == null ? '' : String(raw)).trim().toLowerCase();
+  if (!value) return 'info';
+  if (NOTIFICATION_SEVERITIES.includes(value)) return value;
+  console.warn(`[NotificationStore] Unknown notification severity "${raw}" — coercing to "info". Allowed: ${NOTIFICATION_SEVERITIES.join(', ')}`);
+  return 'info';
+}
+
 // ── Schema bootstrap ────────────────────────────────────────────────
 let tableReady = false;
 
@@ -53,10 +90,20 @@ async function ensureTable() {
  * @param {{ category?: string, title: string, body?: string, severity?: string, source?: string }} notification
  */
 async function pushNotification(farmId, notification) {
+  if (!notification || typeof notification !== 'object') {
+    console.warn('[NotificationStore] Invalid notification payload — dropped');
+    return null;
+  }
+  if (!notification.title || typeof notification.title !== 'string') {
+    console.warn('[NotificationStore] Notification missing required title — dropped');
+    return null;
+  }
   if (!await ensureTable()) {
     console.warn('[NotificationStore] DB unavailable — notification dropped:', notification.title);
     return null;
   }
+  const category = normalizeCategory(notification.category);
+  const severity = normalizeSeverity(notification.severity);
   try {
     const result = await query(
       `INSERT INTO farm_notifications (farm_id, category, title, body, severity, source, action_url, action_label)
@@ -64,16 +111,16 @@ async function pushNotification(farmId, notification) {
        RETURNING id, created_at`,
       [
         farmId,
-        notification.category || 'general',
+        category,
         notification.title,
         notification.body || null,
-        notification.severity || 'info',
+        severity,
         notification.source || null,
         notification.action_url || null,
         notification.action_label || null
       ]
     );
-    console.log(`[NotificationStore] Pushed notification for farm ${farmId}: ${notification.title}`);
+    console.log(`[NotificationStore] Pushed notification for farm ${farmId} [${category}/${severity}]: ${notification.title}`);
     return result.rows[0];
   } catch (err) {
     console.error('[NotificationStore] Push failed:', err.message);
