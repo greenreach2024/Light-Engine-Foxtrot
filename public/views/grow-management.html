@@ -132,11 +132,9 @@
     }
 
     .ff-selection-sidebar {
-      position: fixed;
-      right: 16px;
-      top: 108px;
-      width: min(320px, calc(100vw - 32px));
-      z-index: 89;
+      position: relative;
+      width: auto;
+      margin: 0 16px 12px;
       border: 1px solid rgba(56, 189, 248, 0.25);
       border-radius: 12px;
       background: rgba(15, 23, 42, 0.92);
@@ -589,7 +587,7 @@
       .ff-selection-sidebar {
         position: static;
         width: 100%;
-        margin: 0 0 12px;
+        margin: 0 12px 12px;
       }
     }
 
@@ -870,6 +868,12 @@
       <span class="gm-kpi-label">Avg DLI</span>
     </div>
   </div>
+
+  <aside id="ffSelectionSummarySidebar" class="ff-selection-sidebar" aria-live="polite">
+    <h4>Selection Summary</h4>
+    <div id="ffSelectionSummaryList" class="ff-selection-list"></div>
+    <div id="ffSelectionSummaryStatus" class="ff-selection-status">Selections not implemented</div>
+  </aside>
 
   <!-- ===== DEGRADED COMPROMISE BANNER (E1) ===== -->
   <div id="degradedBanner" style="display:none;margin:0 16px 12px;padding:12px 16px;background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;color:#92400e;">
@@ -1710,7 +1714,6 @@
         if (statusEl) { statusEl.textContent = 'Saving…'; statusEl.style.color = '#fbbf24'; }
         _saveRoomsTimer = setTimeout(persistRooms, 500);
       }
-      function persistRooms() {
       function buildRoomsPayload() {
         // Deep-copy rooms so applyPendingRoomDimEdits doesn't mutate state.rooms,
         // and so pending dim edits are included even if a background refresh()
@@ -3488,12 +3491,6 @@
   </dialog>
 
     <div id="toasts" class="toast-container" aria-live="polite" aria-atomic="true"></div>
-
-  <aside id="ffSelectionSummarySidebar" class="ff-selection-sidebar" aria-live="polite">
-    <h4>Selection Summary</h4>
-    <div id="ffSelectionSummaryList" class="ff-selection-list"></div>
-    <div id="ffSelectionSummaryStatus" class="ff-selection-status">Selections not implemented</div>
-  </aside>
 
   <!-- E.V.I.E. presence: ambient orb + slide-out intelligence panel.
        Loaded last so DOM and STATE are ready when the orb hydrates.
