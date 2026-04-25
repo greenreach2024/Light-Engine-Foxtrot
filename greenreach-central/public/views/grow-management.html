@@ -1692,6 +1692,12 @@
         _pendingRoomDimEdits[id].dims[key] = value;
       }
 
+      function parsePendingRoomDimValue(raw) {
+        if (raw === '' || raw == null) return null;
+        var n = Number(raw);
+        return Number.isFinite(n) ? n : undefined;
+      }
+
       function applyPendingRoomDimEdits(rooms) {
         if (!Array.isArray(rooms) || !rooms.length) return rooms;
         rooms.forEach(function (r) {
@@ -1728,7 +1734,12 @@
       function persistRooms() {
         _saveRoomsTimer = null;
         var statusEl = _saveRoomsStatus;
-        var payload = { rooms: buildRoomsPayload() };
+        // Capture the payload snapshot synchronously — includes all pending dim
+        // edits — so we can immediately commit it to state.rooms after the POST
+        // succeeds without waiting for a network re-fetch (which races against
+        // the server's async GCS mirror write and can return stale data).
+        var savedRooms = buildRoomsPayload();
+        var payload = { rooms: savedRooms };
         var _fetch = window.authFetch || fetch;
         return _fetch('/api/setup/save-rooms', {
           method: 'POST',
@@ -1739,12 +1750,23 @@
           return resp.json();
         }).then(function () {
           clearPendingRoomDimEdits();
+          // Immediately sync local state with the payload we just persisted.
+          // This prevents any concurrent load() calls (triggered by DataFlowBus
+          // or SSE) from overwriting state.rooms with a stale server response
+          // before the file-write has fully propagated.
+          state.rooms = savedRooms;
+          window.__ffFlowRooms = savedRooms;
           if (statusEl) { statusEl.textContent = 'Saved'; statusEl.style.color = '#4ade80'; }
+          // Re-render synchronously from the already-correct state — no network
+          // fetch needed. The SSE data-change emitted by the server will trigger
+          // a confirmatory refresh() via scheduleRefresh() ~250ms later.
+          try { renderRoom(); renderZones(); renderEquipment(); renderSelectionSummarySidebar(); updateBreadcrumb(); } catch (_) {}
           document.dispatchEvent(new CustomEvent('rooms-updated'));
-          if (window.DataFlowBus) {
-            window.DataFlowBus.emit('rooms', { source: 'grow-management-room-dimensions' });
-            window.DataFlowBus.emit('zones', { source: 'grow-management-room-dimensions' });
-          }
+          // Intentionally NOT emitting DataFlowBus 'rooms'/'zones' here.
+          // Those emissions were causing ffFlow.refresh() → load() → stale
+          // server read that overwrote the just-saved dims (the root cause of
+          // the "width reverts to 20" bug observed in the HAR). The server-side
+          // SSE data-change is sufficient to notify other components.
           return true;
         }).catch(function (err) {
           console.error('[grow-management] rooms save failed:', err);
@@ -1903,11 +1925,26 @@
             input.type = 'number';
             input.step = spec.step;
             input.min = spec.min;
+            input.setAttribute('data-room-dim', '1');
             input.value = getRoomDim(r, spec.key);
             input.style.cssText = 'min-height:32px;padding:4px 8px;background:rgba(15,23,42,0.6);border:1px solid rgba(148,163,184,0.3);border-radius:6px;color:#f1f5f9;width:96px;';
+            input.addEventListener('input', function () {
+              var pending = parsePendingRoomDimValue(input.value);
+              if (pending === undefined) return;
+              setRoomDim(r, spec.key, pending);
+              markPendingRoomDimEdit(r, spec.key, pending);
+              try {
+                if (card && card._dimsChip) {
+                  card._dimsChip.textContent = fmtDims(r);
+                }
+              } catch (_) { /* non-fatal cosmetic update */ }
+            });
             input.addEventListener('change', function () {
-              setRoomDim(r, spec.key, input.value);
-              markPendingRoomDimEdit(r, spec.key, input.value === '' ? null : Number(input.value));
+              var pending = parsePendingRoomDimValue(input.value);
+              if (pending !== undefined) {
+                setRoomDim(r, spec.key, pending);
+                markPendingRoomDimEdit(r, spec.key, pending);
+              }
               scheduleSaveRooms(statusEl);
               // Surgical update: refresh only the dimensions chip in this card
               // so we never tear down the sibling Length / Width / Height
@@ -2507,7 +2544,7 @@
         // Cache-bust to defeat any intermediate proxy caches; force a fresh
         // pull from LE so we never read a stale /data/groups.json after save.
         var bust = '?_=' + Date.now();
-        var endpoints = ['/data/rooms.json' + bust, '/data/groups.json' + bust, '/data/grow-systems.json' + bust, '/data/iot-devices.json' + bust];
+        var endpoints = ['/api/rooms' + bust, '/data/groups.json' + bust, '/data/grow-systems.json' + bust, '/data/iot-devices.json' + bust];
         var _fetchLoad = window.authFetch || fetch;
         return Promise.all(endpoints.map(function (url) {
           return _fetchLoad(url, { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; });
@@ -2537,7 +2574,17 @@
       }
       function refresh() {
         load().then(function () {
-          renderRoom();
+          // Skip renderRoom() if a dim input has focus — destroying the active
+          // element mid-type disrupts the user and (on some browsers) fires a
+          // ghost change event that can queue a stale save.
+          // Also skip if there are unsaved pending dim edits: an SSE data-change
+          // can fire within ~1s of a Tab-blur, before the 500ms save debounce
+          // fires. Without this guard the stale server value overwrites the input.
+          var dimFocused = document.activeElement &&
+            typeof document.activeElement.getAttribute === 'function' &&
+            document.activeElement.getAttribute('data-room-dim');
+          var hasPendingDimEdits = Object.keys(_pendingRoomDimEdits).length > 0;
+          if (!dimFocused && !hasPendingDimEdits) renderRoom();
           renderZones();
           renderEquipment();
           renderControllers();
@@ -2598,7 +2645,7 @@
             if (debounceTimer) clearTimeout(debounceTimer);
             debounceTimer = setTimeout(function () { refresh(); }, 250);
           }
-          ['data-changed', 'rooms-updated', 'groups-updated', 'zones-updated', 'message'].forEach(function (evt) {
+          ['data-change', 'rooms-updated', 'groups-updated', 'zones-updated'].forEach(function (evt) {
             es.addEventListener(evt, scheduleRefresh);
           });
           es.onerror = function () { /* browser auto-reconnects */ };
@@ -2708,13 +2755,20 @@
             if (!resp.ok) throw new Error('HTTP ' + resp.status);
             return resp.json();
           }).then(function () {
-            if (status) { status.textContent = 'Saved - verifying persisted zone count...'; status.style.color = '#60a5fa'; }
+            // Immediately sync state.rooms with the persisted payload so zone
+            // count changes don't race with stale load() fetches (same fix as
+            // persistRooms). The server's SSE data-change will trigger a
+            // confirmatory refresh() at ~250ms when the write is guaranteed fresh.
+            state.rooms = zonePayload;
+            window.__ffFlowRooms = zonePayload;
+            if (status) { status.textContent = 'Saved'; status.style.color = '#4ade80'; }
             document.dispatchEvent(new CustomEvent('rooms-updated'));
-            if (window.DataFlowBus) {
-              window.DataFlowBus.emit('rooms', { source: 'zone-count-stepper', zoneCount: target });
-              window.DataFlowBus.emit('zones', { source: 'zone-count-stepper', zoneCount: target });
-            }
-            refresh();
+            // Render synchronously from the already-correct state.
+            try { renderZones(); renderEquipment(); renderSelectionSummarySidebar(); updateBreadcrumb(); } catch (_) {}
+            // Intentionally NOT emitting DataFlowBus 'rooms'/'zones' or calling
+            // refresh() here — both would trigger load() fetches before the
+            // server write has propagated, causing the zone count to revert.
+            // The server-side SSE data-change is sufficient.
           }).catch(function (err) {
             console.error('[ffFlow] zones count save failed:', err);
             zoneSaveStatus.pendingTarget = null;
