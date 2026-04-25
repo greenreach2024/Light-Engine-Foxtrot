@@ -21,7 +21,15 @@
 
   function readToken() {
     try {
-      return localStorage.getItem('token') || sessionStorage.getItem('token') || '';
+      return (
+        sessionStorage.getItem('token') ||
+        localStorage.getItem('token') ||
+        localStorage.getItem('admin_token') ||
+        localStorage.getItem('adminToken') ||
+        localStorage.getItem('auth_token') ||
+        localStorage.getItem('jwt_token') ||
+        ''
+      );
     } catch (_) { return ''; }
   }
   function readFarmPin() {
