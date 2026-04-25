@@ -1199,7 +1199,7 @@ function wireSSE() {
   };
   try {
     es = new EventSource('/events');
-    ['data-changed','rooms-updated','groups-updated','zones-updated','env-updated','sensors-updated','message'].forEach(evt => {
+    ['data-change','rooms-updated','groups-updated','zones-updated','env-updated','sensors-updated'].forEach(evt => {
       es.addEventListener(evt, queueRefresh);
     });
     es.onerror = () => {};

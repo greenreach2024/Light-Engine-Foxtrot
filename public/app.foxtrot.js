@@ -12906,7 +12906,7 @@ async function loadAllData() {
     ]);
 
     console.log('[loadAllData] Raw groups response:', groups);
-    STATE.groups = groups?.groups || [];
+    STATE.groups = Array.isArray(groups) ? groups : (groups?.groups || []);
     console.log(`[loadAllData] Loaded STATE.groups: ${STATE.groups.length} groups`);
     if (STATE.groups.length > 0) {
       console.log('[loadAllData] First group:', STATE.groups[0]);

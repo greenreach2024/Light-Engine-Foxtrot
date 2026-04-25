@@ -1692,6 +1692,12 @@
         _pendingRoomDimEdits[id].dims[key] = value;
       }
 
+      function parsePendingRoomDimValue(raw) {
+        if (raw === '' || raw == null) return null;
+        var n = Number(raw);
+        return Number.isFinite(n) ? n : undefined;
+      }
+
       function applyPendingRoomDimEdits(rooms) {
         if (!Array.isArray(rooms) || !rooms.length) return rooms;
         rooms.forEach(function (r) {
@@ -1903,11 +1909,26 @@
             input.type = 'number';
             input.step = spec.step;
             input.min = spec.min;
+            input.setAttribute('data-room-dim', '1');
             input.value = getRoomDim(r, spec.key);
             input.style.cssText = 'min-height:32px;padding:4px 8px;background:rgba(15,23,42,0.6);border:1px solid rgba(148,163,184,0.3);border-radius:6px;color:#f1f5f9;width:96px;';
+            input.addEventListener('input', function () {
+              var pending = parsePendingRoomDimValue(input.value);
+              if (pending === undefined) return;
+              setRoomDim(r, spec.key, pending);
+              markPendingRoomDimEdit(r, spec.key, pending);
+              try {
+                if (card && card._dimsChip) {
+                  card._dimsChip.textContent = fmtDims(r);
+                }
+              } catch (_) { /* non-fatal cosmetic update */ }
+            });
             input.addEventListener('change', function () {
-              setRoomDim(r, spec.key, input.value);
-              markPendingRoomDimEdit(r, spec.key, input.value === '' ? null : Number(input.value));
+              var pending = parsePendingRoomDimValue(input.value);
+              if (pending !== undefined) {
+                setRoomDim(r, spec.key, pending);
+                markPendingRoomDimEdit(r, spec.key, pending);
+              }
               scheduleSaveRooms(statusEl);
               // Surgical update: refresh only the dimensions chip in this card
               // so we never tear down the sibling Length / Width / Height
@@ -2507,7 +2528,7 @@
         // Cache-bust to defeat any intermediate proxy caches; force a fresh
         // pull from LE so we never read a stale /data/groups.json after save.
         var bust = '?_=' + Date.now();
-        var endpoints = ['/data/rooms.json' + bust, '/data/groups.json' + bust, '/data/grow-systems.json' + bust, '/data/iot-devices.json' + bust];
+        var endpoints = ['/api/rooms' + bust, '/data/groups.json' + bust, '/data/grow-systems.json' + bust, '/data/iot-devices.json' + bust];
         var _fetchLoad = window.authFetch || fetch;
         return Promise.all(endpoints.map(function (url) {
           return _fetchLoad(url, { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; });
@@ -2598,7 +2619,7 @@
             if (debounceTimer) clearTimeout(debounceTimer);
             debounceTimer = setTimeout(function () { refresh(); }, 250);
           }
-          ['data-changed', 'rooms-updated', 'groups-updated', 'zones-updated', 'message'].forEach(function (evt) {
+          ['data-change', 'rooms-updated', 'groups-updated', 'zones-updated'].forEach(function (evt) {
             es.addEventListener(evt, scheduleRefresh);
           });
           es.onerror = function () { /* browser auto-reconnects */ };
