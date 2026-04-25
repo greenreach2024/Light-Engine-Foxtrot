@@ -159,6 +159,7 @@ deploy_by_digest() {
     --project="${PROJECT_ID}" \
     --region="${REGION}" \
     --image="${image_ref}" \
+    --update-traffic=LATEST=100 \
     ${flags}
 
   # URL lookup is best-effort; don't fail the whole deploy if it returns
