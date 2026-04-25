@@ -3587,5 +3587,340 @@
   </script>
   <script src="/js/evie-presence.js"></script>
 
+  <!-- ═══════════════════════════════════════════════════════════════════
+       GROW-MANAGEMENT DEBUG TRACER  —  window.GM_DEBUG
+       Activate:  GM_DEBUG.enable()   (persists in sessionStorage)
+       Disable:   GM_DEBUG.disable()
+       Dump state: GM_DEBUG.dump()
+       All trace lines are prefixed [GM] so they're easy to filter in DevTools.
+       ═══════════════════════════════════════════════════════════════════ -->
+  <script>
+  (function () {
+    'use strict';
+
+    // ── Storage key ────────────────────────────────────────────────────
+    var SS_KEY = 'gm_debug_enabled';
+    var _on = false;
+
+    function log() {
+      if (!_on) return;
+      var args = Array.prototype.slice.call(arguments);
+      args.unshift('[GM]');
+      console.log.apply(console, args);
+    }
+    function warn() {
+      if (!_on) return;
+      var args = Array.prototype.slice.call(arguments);
+      args.unshift('[GM⚠]');
+      console.warn.apply(console, args);
+    }
+    function group(label) { if (_on) console.group('[GM] ' + label); }
+    function groupEnd() { if (_on) console.groupEnd(); }
+
+    // ── Timestamp helper ───────────────────────────────────────────────
+    function ts() { return '+' + (performance.now() | 0) + 'ms'; }
+
+    // ── Patch a function on an object and trace calls ──────────────────
+    function patch(obj, name, tag) {
+      var orig = obj[name];
+      if (typeof orig !== 'function' || orig.__gm_patched) return;
+      obj[name] = function () {
+        var args = Array.prototype.slice.call(arguments);
+        log(ts(), '→ ' + tag + '(' + args.map(function (a) {
+          if (a === undefined) return 'undefined';
+          try { var s = JSON.stringify(a); return s && s.length > 120 ? s.slice(0, 120) + '…' : s; }
+          catch (_) { return String(a); }
+        }).join(', ') + ')');
+        var ret = orig.apply(this, args);
+        if (ret && typeof ret.then === 'function') {
+          ret.then(function (v) { log(ts(), '✓ ' + tag + ' resolved', v === undefined ? '' : v); })
+             .catch(function (e) { warn(ts(), '✗ ' + tag + ' rejected', e); });
+        } else {
+          log(ts(), '← ' + tag + ' returned', ret === undefined ? '' : ret);
+        }
+        return ret;
+      };
+      obj[name].__gm_patched = true;
+    }
+
+    // ── Wire up all instrumentation once ffFlow + state exist ──────────
+    function installPatches() {
+      var scope = null;
+      // ffFlow lives inside a closure; we reach it via window.ffFlow if
+      // the IIFE exports it, otherwise we intercept via the script scope.
+      // The grow-management IIFE assigns: window.ffFlow = (function(){...})()
+      // So we wait for that.
+      var deadline = Date.now() + 5000;
+      var poll = setInterval(function () {
+        if (!window.ffFlow && Date.now() < deadline) return;
+        clearInterval(poll);
+        if (!window.ffFlow) { warn('ffFlow not found on window — limited tracing only'); }
+        else {
+          patch(window.ffFlow, 'refresh', 'ffFlow.refresh');
+        }
+        activateEventTracing();
+      }, 100);
+    }
+
+    // ── Intercept document / window custom events ──────────────────────
+    var TRACED_EVENTS = [
+      'data-change', 'rooms-updated', 'groups-updated', 'zones-updated',
+      'room-build-plan:saved', 'rooms-sync:applied', 'grow-template:selected',
+      'grow-management-selection-state'
+    ];
+    var _origAdd = EventTarget.prototype.addEventListener;
+    var _origDispatch = EventTarget.prototype.dispatchEvent;
+
+    function activateEventTracing() {
+      // Patch dispatchEvent so every custom event is logged
+      EventTarget.prototype.dispatchEvent = function (evt) {
+        if (_on && TRACED_EVENTS.indexOf(evt.type) !== -1) {
+          log(ts(), '📣 dispatchEvent:', evt.type, 'target:', this === document ? 'document' : (this.id || this.nodeName || String(this)));
+        }
+        return _origDispatch.call(this, evt);
+      };
+
+      // Trace SSE stream events
+      var origES = window.EventSource;
+      if (origES && !origES.__gm_patched) {
+        window.EventSource = function (url, cfg) {
+          var es = new origES(url, cfg);
+          log(ts(), '📡 SSE stream opened:', url);
+          var origAddEvt = es.addEventListener.bind(es);
+          es.addEventListener = function (type, handler, opts) {
+            if (TRACED_EVENTS.indexOf(type) !== -1) {
+              var wrapped = function (e) {
+                log(ts(), '📡 SSE event:', type, e.data ? e.data.slice(0, 80) : '');
+                return handler.apply(this, arguments);
+              };
+              wrapped.__gm_patched = true;
+              return origAddEvt(type, wrapped, opts);
+            }
+            return origAddEvt(type, handler, opts);
+          };
+          es.onerror = (function (origErr) {
+            return function (e) {
+              warn(ts(), '📡 SSE error', e);
+              if (typeof origErr === 'function') origErr.call(es, e);
+            };
+          })(es.onerror);
+          return es;
+        };
+        window.EventSource.__gm_patched = true;
+        // Copy static props
+        window.EventSource.CONNECTING = origES.CONNECTING;
+        window.EventSource.OPEN       = origES.OPEN;
+        window.EventSource.CLOSED     = origES.CLOSED;
+        window.EventSource.prototype  = origES.prototype;
+      }
+
+      // Trace __ffFlowRooms writes
+      var _ffRooms = window.__ffFlowRooms;
+      Object.defineProperty(window, '__ffFlowRooms', {
+        configurable: true,
+        get: function () { return _ffRooms; },
+        set: function (v) {
+          log(ts(), '📦 __ffFlowRooms written —', Array.isArray(v) ? v.length + ' rooms' : String(v),
+            '| stack:', new Error().stack.split('\n').slice(1, 4).join(' ← ').replace(/\s+/g, ' '));
+          if (Array.isArray(v) && v[0]) {
+            var r = v[0];
+            log(ts(), '  room[0]:', r.name || r.id, '| dims:', JSON.stringify(r.dimensions || {}),
+              '| zones:', (r.zones && r.zones.length) || 0);
+          }
+          _ffRooms = v;
+        }
+      });
+
+      log(ts(), '✅ GM debug patches active — tracing: ffFlow.refresh, SSE events, dispatchEvent, __ffFlowRooms writes');
+    }
+
+    // ── Trace XHR/fetch to /api/setup/save-rooms and /api/rooms ────────
+    function patchFetch() {
+      var origFetch = window.fetch;
+      if (!origFetch || origFetch.__gm_patched) return;
+      window.fetch = function (resource, init) {
+        var url = typeof resource === 'string' ? resource : (resource && resource.url) || String(resource);
+        var method = (init && init.method) || 'GET';
+        var isTracked = /save-rooms|\/api\/rooms/.test(url);
+        if (_on && isTracked) {
+          group(method + ' ' + url);
+          if (init && init.body) {
+            try {
+              var body = JSON.parse(init.body);
+              var rooms = body.rooms || body;
+              if (Array.isArray(rooms) && rooms[0]) {
+                var r0 = rooms[0];
+                log(ts(), '  payload room[0]:', r0.name || r0.id,
+                  '| dims:', JSON.stringify(r0.dimensions || {}),
+                  '| zones:', (r0.zones && r0.zones.length) || 0);
+              }
+              log(ts(), '  full payload:', JSON.stringify(body).slice(0, 400));
+            } catch (_) {}
+          }
+        }
+        var p = origFetch.apply(this, arguments);
+        if (_on && isTracked) {
+          p.then(function (resp) {
+            log(ts(), '  ← response:', resp.status, resp.url);
+            groupEnd();
+          }).catch(function (err) {
+            warn(ts(), '  ✗ fetch error:', err);
+            groupEnd();
+          });
+        }
+        return p;
+      };
+      window.fetch.__gm_patched = true;
+    }
+
+    // ── Trace renderRoom / renderZones / load / persistRooms ──────────
+    // These live inside the ffFlow closure so we can't patch them directly.
+    // Instead we wrap the DOM mutations they produce.
+    function patchRenderObserver() {
+      var roomBody = document.getElementById('ffRoomBody');
+      var zonesBody = document.getElementById('ffZonesBody');
+      if (roomBody && !roomBody.__gm_observed) {
+        var obs = new MutationObserver(function (muts) {
+          if (!_on) return;
+          var inputs = roomBody.querySelectorAll('input[data-room-dim]');
+          log(ts(), '🖼 renderRoom fired — DOM updated |', inputs.length, 'dim inputs now in DOM');
+          inputs.forEach(function (inp) {
+            log(ts(), '  dim input:', inp.getAttribute('data-room-dim'), '=', inp.value, '| focused:', inp === document.activeElement);
+          });
+        });
+        obs.observe(roomBody, { childList: true, subtree: false });
+        roomBody.__gm_observed = true;
+      }
+      if (zonesBody && !zonesBody.__gm_observed) {
+        var obsZ = new MutationObserver(function (muts) {
+          if (!_on) return;
+          var zoneCnt = zonesBody.querySelectorAll('[data-zone-id]').length;
+          log(ts(), '🖼 renderZones fired — DOM updated |', zoneCnt, 'zone cards now in DOM');
+        });
+        obsZ.observe(zonesBody, { childList: true, subtree: false });
+        zonesBody.__gm_observed = true;
+      }
+    }
+
+    // ── Trace dim input changes and pending edit tracking ──────────────
+    function patchDimInputs() {
+      document.addEventListener('change', function (e) {
+        if (!_on) return;
+        var el = e.target;
+        if (!el || !el.getAttribute) return;
+        var dimKey = el.getAttribute('data-room-dim');
+        if (!dimKey) return;
+        log(ts(), '✏️  dim input change:', dimKey, '=', el.value,
+          '| pendingEdits:', JSON.stringify(window.__gm_pendingSnapshot ? window.__gm_pendingSnapshot() : '?'));
+      }, true);
+      document.addEventListener('input', function (e) {
+        if (!_on) return;
+        var el = e.target;
+        if (!el || !el.getAttribute) return;
+        var dimKey = el.getAttribute('data-room-dim');
+        if (!dimKey) return;
+        log(ts(), '⌨️  dim input (input):', dimKey, '=', el.value);
+      }, true);
+      document.addEventListener('focus', function (e) {
+        if (!_on) return;
+        var el = e.target;
+        if (!el || !el.getAttribute) return;
+        if (el.getAttribute('data-room-dim')) {
+          log(ts(), '🔍 dim input focused:', el.getAttribute('data-room-dim'), '=', el.value);
+        }
+      }, true);
+      document.addEventListener('blur', function (e) {
+        if (!_on) return;
+        var el = e.target;
+        if (!el || !el.getAttribute) return;
+        if (el.getAttribute('data-room-dim')) {
+          log(ts(), '👁 dim input blurred:', el.getAttribute('data-room-dim'), '=', el.value);
+        }
+      }, true);
+    }
+
+    // ── 3D viewer: trace __ffFlowRooms reads + postMessage ─────────────
+    function trace3DViewer() {
+      // spatial-viewer-popup.js opens the viewer in an iframe;
+      // log any postMessage calls to/from it.
+      var origPostMsg = window.postMessage;
+      if (origPostMsg && !origPostMsg.__gm_patched) {
+        window.postMessage = function (msg, target) {
+          if (_on) log(ts(), '📨 window.postMessage →', JSON.stringify(msg).slice(0, 200), '| target:', target);
+          return origPostMsg.apply(this, arguments);
+        };
+        window.postMessage.__gm_patched = true;
+      }
+      window.addEventListener('message', function (e) {
+        if (!_on) return;
+        log(ts(), '📨 window.message ←', JSON.stringify(e.data).slice(0, 200), '| origin:', e.origin);
+      });
+    }
+
+    // ── Public API ─────────────────────────────────────────────────────
+    window.GM_DEBUG = {
+      enable: function () {
+        _on = true;
+        try { sessionStorage.setItem(SS_KEY, '1'); } catch (_) {}
+        console.log('%c[GM] Grow-Management debug ENABLED — use GM_DEBUG.disable() to turn off', 'color:#4ade80;font-weight:bold');
+        console.log('%c[GM] Tip: filter DevTools console by "[GM]" to see only trace lines', 'color:#94a3b8');
+        patchFetch();
+        patchRenderObserver();
+        patchDimInputs();
+        trace3DViewer();
+        if (window.ffFlow) patch(window.ffFlow, 'refresh', 'ffFlow.refresh');
+        log(ts(), 'dump: state.rooms[0]:', (function () {
+          try {
+            var r = (window.__ffFlowRooms || [window.STATE && window.STATE.rooms && window.STATE.rooms[0]] || [])[0];
+            return r ? JSON.stringify({ id: r.id||r.name, dims: r.dimensions, zones: (r.zones||[]).length }) : 'none';
+          } catch (_) { return 'error'; }
+        })());
+      },
+      disable: function () {
+        _on = false;
+        try { sessionStorage.removeItem(SS_KEY); } catch (_) {}
+        console.log('%c[GM] debug DISABLED', 'color:#f87171;font-weight:bold');
+      },
+      dump: function () {
+        console.group('[GM] State dump');
+        try {
+          var rooms = window.__ffFlowRooms || [];
+          console.log('__ffFlowRooms rooms:', rooms.length);
+          if (rooms[0]) {
+            var r = rooms[0];
+            console.log('  room[0]:', r.name || r.id, '| dims:', JSON.stringify(r.dimensions), '| zones:', (r.zones||[]).length);
+          }
+          var inputs = document.querySelectorAll('input[data-room-dim]');
+          console.log('DOM dim inputs (' + inputs.length + '):');
+          inputs.forEach(function (inp) {
+            console.log('  ', inp.getAttribute('data-room-dim'), '=', inp.value, inp === document.activeElement ? '(focused)' : '');
+          });
+          var zoneInputs = document.querySelectorAll('[data-zone-id]');
+          console.log('Zone cards in DOM:', zoneInputs.length);
+          console.log('SSE active:', !!(window.__gmSSE));
+          console.log('pendingDimEdits: run GM_DEBUG.dumpPending() after enabling');
+        } catch (e) {
+          console.warn('dump error', e);
+        }
+        console.groupEnd();
+      },
+      isEnabled: function () { return _on; }
+    };
+
+    // ── Auto-enable if flag was set in previous page load ──────────────
+    try {
+      if (sessionStorage.getItem(SS_KEY) === '1') {
+        // Defer slightly so the page scripts have time to initialise
+        setTimeout(function () { window.GM_DEBUG.enable(); }, 800);
+      }
+    } catch (_) {}
+
+    // ── Wait for ffFlow to exist then install remaining patches ─────────
+    installPatches();
+
+    console.log('%c[GM] Grow-Management debug tracer loaded — type GM_DEBUG.enable() to activate', 'color:#60a5fa');
+  })();
+  </script>
+
 </body>
 </html>
