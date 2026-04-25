@@ -2751,18 +2751,16 @@
             if (!resp.ok) throw new Error('HTTP ' + resp.status);
             return resp.json();
           }).then(function () {
-            if (status) { status.textContent = 'Saved - verifying persisted zone count...'; status.style.color = '#60a5fa'; }
+            // Immediately sync state.rooms with the persisted payload so zone
+            // count changes don't race with stale load() fetches (same fix as
+            // persistRooms). The server's SSE data-change will trigger a
+            // confirmatory refresh() at ~250ms when the write is guaranteed fresh.
+            state.rooms = zonePayload;
+            window.__ffFlowRooms = zonePayload;
+            if (status) { status.textContent = 'Saved'; status.style.color = '#4ade80'; }
             document.dispatchEvent(new CustomEvent('rooms-updated'));
-            if (window.DataFlowBus) {
-              window.DataFlowBus.emit('rooms', { source: 'zone-count-stepper', zoneCount: target });
-              window.DataFlowBus.emit('zones', { source: 'zone-count-stepper', zoneCount: target });
-            }
-            refresh();
-          }).catch(function (err) {
-            console.error('[ffFlow] zones count save failed:', err);
-            zoneSaveStatus.pendingTarget = null;
-            if (status) { status.textContent = 'Save failed'; status.style.color = '#f87171'; }
-          });
+            // Render synchronously from the already-correct state.
+            try { renderZones(); renderEquipment(); renderSelectionSummarySidebar(); updateBreadcrumb(); } catch (_) {}\n            // Intentionally NOT emitting DataFlowBus 'rooms'/'zones' or calling\n            // refresh() here — both would trigger load() fetches before the\n            // server write has propagated, causing the zone count to revert.\n            // The server-side SSE data-change is sufficient.\n          }).catch(function (err) {\n            console.error('[ffFlow] zones count save failed:', err);\n            zoneSaveStatus.pendingTarget = null;\n            if (status) { status.textContent = 'Save failed'; status.style.color = '#f87171'; }\n          });
         });
       })();
 
