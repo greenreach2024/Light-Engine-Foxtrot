@@ -480,6 +480,7 @@ app.get('/data/iot-devices.json', (req, res) => {
 // status overlay and zone-recommendations API need a fresh, single-source view.
 app.get('/data/target-ranges.json', (req, res) => proxyToLE(req, res, '/data/target-ranges.json'));
 app.get('/events', (req, res) => proxyToLE(req, res, '/events'));
+app.get('/api/zone-recommendations', (req, res) => proxyToLE(req, res, '/api/zone-recommendations'));
 app.get('/data/room-map.json', async (req, res) => {
   const fid = farmStore.farmIdFromReq(req);
   const payload = await farmStore.get(fid, 'room_map') || { zones: [], devices: [] };
