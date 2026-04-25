@@ -431,6 +431,14 @@ app.use(express.json({
   }
 }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+// ── Split-brain fix: rooms/groups are PROXIED to Light Engine ───────────────
+// These must come BEFORE farmDataMiddleware so the DB-backed middleware cannot
+// shadow them. LE is the single authoritative store for rooms.json and
+// groups.json (GCS-persisted). farmDataMiddleware reads from PostgreSQL which
+// never receives LE writes, causing stale data to be served indefinitely.
+app.get('/data/rooms.json', (req, res) => proxyToLE(req, res, '/data/rooms.json'));
+app.get('/data/groups.json', (req, res) => proxyToLE(req, res, '/data/groups.json'));
+
 app.use(farmDataWriteMiddleware(_inMemoryStore)); // PUT /data/*.json → DB
 app.use(farmDataMiddleware(_inMemoryStore));       // GET /data/*.json → DB
 
@@ -454,16 +462,6 @@ app.use((req, _res, next) => {
 
 // ── Room-map routes MUST be before express.static to avoid flat-file fallback ──
 // These handle farm-scoped room-map data via PostgreSQL farm_data table.
-
-// ── Split-brain fix: rooms/groups/events are PROXIED to Light Engine ────────
-// LE is the authoritative store for rooms.json and groups.json (persisted to
-// GCS via FUSE) and owns the /events SSE stream the 3D viewer subscribes to.
-// Central used to serve rooms.json as a static file and had no SSE at all,
-// which is why edits from grow-management never reached the 3D viewer and
-// appeared to revert on refresh. These proxies must come BEFORE express.static
-// so the static fallback does not shadow them with stale on-disk JSON.
-app.get('/data/rooms.json', (req, res) => proxyToLE(req, res, '/data/rooms.json'));
-app.get('/data/groups.json', (req, res) => proxyToLE(req, res, '/data/groups.json'));
 app.post('/data/groups.json', authMiddleware, (req, res) => proxyToLE(req, res, '/data/groups.json'));
 // Single source of truth for IoT device registry: LE owns SwitchBot polling
 // and writes iot-devices.json under /app/data (GCS FUSE). Central used to
