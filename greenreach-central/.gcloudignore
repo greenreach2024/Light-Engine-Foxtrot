@@ -35,8 +35,9 @@ __pycache__/
 *.avi
 *.har
 backups/
-data/*
-!data/recipes-v2/
+/data/*
+!/data/recipes-v2/
+!public/data/grow-systems.json
 docs/
 scripts/
 *.bak
