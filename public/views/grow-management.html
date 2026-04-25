@@ -1894,8 +1894,17 @@
               setRoomDim(r, spec.key, input.value);
               markPendingRoomDimEdit(r, spec.key, input.value === '' ? null : Number(input.value));
               scheduleSaveRooms(statusEl);
-              // Re-render to refresh area chip + build-plan inputs
-              renderRoom();
+              // Surgical update: refresh only the dimensions chip in this card
+              // so we never tear down the sibling Length / Width / Height
+              // inputs while the operator is mid-tab. Calling renderRoom()
+              // here destroyed inputs the user hadn't yet blurred, dropping
+              // their typed values silently. (See Grow Mgmt dim persistence
+              // bug 2026-04-25.)
+              try {
+                if (card && card._dimsChip) {
+                  card._dimsChip.textContent = fmtDims(r);
+                }
+              } catch (_) { /* non-fatal cosmetic update */ }
             });
             wrap.appendChild(input);
             dimsRow.appendChild(wrap);
@@ -1906,7 +1915,9 @@
           var chips = document.createElement('div');
           chips.className = 'ff-chip-row';
           chips.style.margin = '0';
-          chips.appendChild(chip(fmtDims(r), 'accent'));
+          var dimsChip = chip(fmtDims(r), 'accent');
+          card._dimsChip = dimsChip;
+          chips.appendChild(dimsChip);
           chips.appendChild(chip(fmtEnvelope(r), (r.envelope || r.envelope_class || r.env) ? 'ok' : 'warn'));
           var zoneCount = Array.isArray(r.zones) ? r.zones.length : 0;
           chips.appendChild(chip(zoneCount + ' zone' + (zoneCount === 1 ? '' : 's'), zoneCount ? 'ok' : 'warn'));
