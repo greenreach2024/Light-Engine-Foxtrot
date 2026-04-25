@@ -128,6 +128,60 @@
       max-width: 1600px;
       margin: 0 auto;
       padding: 1rem 2rem 3rem;
+      position: relative;
+    }
+
+    .ff-selection-sidebar {
+      position: fixed;
+      right: 16px;
+      top: 108px;
+      width: min(320px, calc(100vw - 32px));
+      z-index: 89;
+      border: 1px solid rgba(56, 189, 248, 0.25);
+      border-radius: 12px;
+      background: rgba(15, 23, 42, 0.92);
+      box-shadow: 0 14px 36px rgba(0, 0, 0, 0.35);
+      backdrop-filter: blur(8px);
+      padding: 12px;
+      display: grid;
+      gap: 8px;
+    }
+    .ff-selection-sidebar h4 {
+      margin: 0;
+      color: #e2e8f0;
+      font-size: 0.86rem;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+    .ff-selection-list {
+      display: grid;
+      gap: 6px;
+    }
+    .ff-selection-item {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      font-size: 0.78rem;
+      color: #cbd5e1;
+      border-bottom: 1px dashed rgba(148, 163, 184, 0.18);
+      padding-bottom: 4px;
+    }
+    .ff-selection-item span:first-child {
+      color: #94a3b8;
+    }
+    .ff-selection-status {
+      border-radius: 8px;
+      border: 1px solid rgba(248, 113, 113, 0.35);
+      background: rgba(127, 29, 29, 0.35);
+      color: #fecaca;
+      font-size: 0.76rem;
+      padding: 8px 10px;
+      font-weight: 600;
+    }
+    .ff-selection-status.is-ok {
+      border-color: rgba(74, 222, 128, 0.35);
+      background: rgba(20, 83, 45, 0.35);
+      color: #bbf7d0;
     }
 
     /* ---- Glass Card (reusable) ---- */
@@ -532,6 +586,11 @@
       .gm-kpi-row { grid-template-columns: repeat(2, 1fr); padding: 1rem; }
       .gm-container { padding: 0.75rem; }
       .gm-card { padding: 1rem; }
+      .ff-selection-sidebar {
+        position: static;
+        width: 100%;
+        margin: 0 0 12px;
+      }
     }
 
     /* ---- Danger button class ---- */
@@ -865,7 +924,7 @@
           <span id="ffZonesCountStatus" class="tiny" style="color:#94a3b8;"></span>
         </div>
         <div style="display:flex;justify-content:flex-end;margin-bottom:8px;">
-          <button id="ffZoneDrawerOpen" type="button" class="primary" style="min-height:32px;padding:6px 14px;">Draw zones on floor plan</button>
+          <a href="#" data-spatial-viewer="draw-zones" data-spatial-viewer-title="Change Zones (3D Viewer)" class="primary" style="display:inline-flex;align-items:center;min-height:32px;padding:6px 14px;border-radius:8px;text-decoration:none;">Change zones in 3D viewer</a>
         </div>
         <div id="ffZonesBody" class="ff-empty">Loading zones&hellip;</div>
         <div id="ffZonesEvieAdvice" class="ff-chip-row" style="display:none;"></div>
@@ -964,9 +1023,8 @@
             <p id="rbpSubtitle" class="tiny text-muted" style="margin:0;">Select a template above to stage a build plan.</p>
           </div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <button id="rbpPrefillBtn" type="button" class="primary" style="min-height:32px;padding:6px 14px;">Stage group from template</button>
-            <button id="rbpAssignLightsBtn" type="button" class="ghost" style="min-height:32px;padding:6px 14px;">Assign lights</button>
-            <button id="rbpSavePlanBtn" type="button" class="primary gwen-action" style="min-height:32px;padding:6px 14px;" title="Persist this build plan to rooms.json (installedSystems + buildPlan). Makes Equipment step durable across reloads.">Save plan to room</button>
+            <button id="rbpPrefillBtn" type="button" class="primary" style="min-height:32px;padding:6px 14px;">Stage draft from template</button>
+            <button id="rbpSavePlanBtn" type="button" class="primary gwen-action" style="min-height:32px;padding:6px 14px;" title="Implement this staged draft by persisting it to rooms.json (installedSystems + buildPlan).">Save plan to room (implement)</button>
             <button id="rbpClearBtn" type="button" class="ghost" style="min-height:32px;padding:6px 14px;">Clear</button>
           </div>
         </div>
@@ -1612,6 +1670,40 @@
       }
       var _saveRoomsTimer = null;
       var _saveRoomsStatus = null;
+      var _pendingRoomDimEdits = {};
+      var _loadSeq = 0;
+      var _appliedLoadSeq = 0;
+
+      function roomIdentity(r) {
+        return String((r && (r.id || r.room_id || r.roomId || r.name || r.room_name)) || '');
+      }
+
+      function markPendingRoomDimEdit(r, key, value) {
+        var id = roomIdentity(r);
+        if (!id) return;
+        if (!_pendingRoomDimEdits[id]) {
+          _pendingRoomDimEdits[id] = { updatedAt: Date.now(), dims: {} };
+        }
+        _pendingRoomDimEdits[id].updatedAt = Date.now();
+        _pendingRoomDimEdits[id].dims[key] = value;
+      }
+
+      function applyPendingRoomDimEdits(rooms) {
+        if (!Array.isArray(rooms) || !rooms.length) return rooms;
+        rooms.forEach(function (r) {
+          var pending = _pendingRoomDimEdits[roomIdentity(r)];
+          if (!pending || !pending.dims) return;
+          Object.keys(pending.dims).forEach(function (key) {
+            setRoomDim(r, key, pending.dims[key]);
+          });
+        });
+        return rooms;
+      }
+
+      function clearPendingRoomDimEdits() {
+        _pendingRoomDimEdits = {};
+      }
+
       function scheduleSaveRooms(statusEl) {
         _saveRoomsStatus = statusEl;
         if (_saveRoomsTimer) clearTimeout(_saveRoomsTimer);
@@ -1631,6 +1723,7 @@
           if (!resp.ok) throw new Error('HTTP ' + resp.status);
           return resp.json();
         }).then(function () {
+          clearPendingRoomDimEdits();
           if (statusEl) { statusEl.textContent = 'Saved'; statusEl.style.color = '#4ade80'; }
           document.dispatchEvent(new CustomEvent('rooms-updated'));
           if (window.DataFlowBus) {
@@ -1799,6 +1892,7 @@
             input.style.cssText = 'min-height:32px;padding:4px 8px;background:rgba(15,23,42,0.6);border:1px solid rgba(148,163,184,0.3);border-radius:6px;color:#f1f5f9;width:96px;';
             input.addEventListener('change', function () {
               setRoomDim(r, spec.key, input.value);
+              markPendingRoomDimEdit(r, spec.key, input.value === '' ? null : Number(input.value));
               scheduleSaveRooms(statusEl);
               // Re-render to refresh area chip + build-plan inputs
               renderRoom();
@@ -2383,6 +2477,7 @@
         });
       }
       function load() {
+        var seq = ++_loadSeq;
         // Cache-bust to defeat any intermediate proxy caches; force a fresh
         // pull from LE so we never read a stale /data/groups.json after save.
         var bust = '?_=' + Date.now();
@@ -2391,7 +2486,10 @@
         return Promise.all(endpoints.map(function (url) {
           return _fetchLoad(url, { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; });
         })).then(function (results) {
-          state.rooms = Array.isArray(results[0]) ? results[0] : (results[0] && results[0].rooms) || [];
+          if (seq < _appliedLoadSeq || seq !== _loadSeq) return;
+          _appliedLoadSeq = seq;
+          var loadedRooms = Array.isArray(results[0]) ? results[0] : (results[0] && results[0].rooms) || [];
+          state.rooms = applyPendingRoomDimEdits(loadedRooms);
           state.groups = Array.isArray(results[1]) ? results[1] : (results[1] && results[1].groups) || [];
           var gs = results[2];
           state.templates = gs && Array.isArray(gs.templates) ? gs.templates : (Array.isArray(gs) ? gs : []);
@@ -2417,8 +2515,50 @@
           renderZones();
           renderEquipment();
           renderControllers();
+          renderSelectionSummarySidebar();
           updateBreadcrumb();
         });
+      }
+
+      function renderSelectionSummarySidebar() {
+        var list = document.getElementById('ffSelectionSummaryList');
+        var status = document.getElementById('ffSelectionSummaryStatus');
+        if (!list || !status) return;
+
+        var room = (state.rooms && state.rooms[0]) || null;
+        var roomName = room ? (room.name || room.room_name || room.id || 'Room') : 'None';
+        var roomDims = room ? fmtDims(room) : 'Not set';
+        var zoneCount = room && Array.isArray(room.zones) ? room.zones.length : 0;
+        var draft = window.__roomBuildPlan || null;
+        var draftTemplate = draft && draft.template ? (draft.template.name || draft.template.id || 'Selected') : 'None';
+        var draftUnits = draft && Number.isFinite(Number(draft.desiredUnits)) ? Number(draft.desiredUnits) : 0;
+        var persisted = persistedBuildPlan();
+        var implemented = !!persisted;
+        var implementedRoom = implemented ? (persisted.room && (persisted.room.name || persisted.room.id)) : '';
+
+        var lines = [
+          ['Room', roomName],
+          ['Dimensions', roomDims],
+          ['Zones', String(zoneCount)],
+          ['Draft template', draftTemplate],
+          ['Draft units', draftUnits > 0 ? String(draftUnits) : 'None'],
+          ['Implemented in', implemented ? (implementedRoom || 'Saved room') : 'Not saved']
+        ];
+
+        list.innerHTML = lines.map(function (pair) {
+          return '<div class="ff-selection-item"><span>' + pair[0] + '</span><span>' + pair[1] + '</span></div>';
+        }).join('');
+
+        if (draft && !implemented) {
+          status.className = 'ff-selection-status';
+          status.textContent = 'Selections not implemented';
+        } else if (implemented) {
+          status.className = 'ff-selection-status is-ok';
+          status.textContent = 'Selections implemented';
+        } else {
+          status.className = 'ff-selection-status';
+          status.textContent = 'Selections not implemented';
+        }
       }
       // Live updates: subscribe to LE's SSE stream so any backend change to
       // rooms/groups/zones (including the post-save reconciler that rebuilds
@@ -2441,20 +2581,25 @@
       })();
       // Re-render equipment + breadcrumb when a template is selected.
       document.addEventListener('grow-template:selected', function () {
-        setTimeout(function () { renderEquipment(); updateBreadcrumb(); }, 50);
+        setTimeout(function () { renderEquipment(); renderSelectionSummarySidebar(); updateBreadcrumb(); }, 50);
       });
       // Group creation/edit/delete happens in groups-v2.js and updates
       // window.STATE.groups in-place. Re-render the summary card from that
       // live collection so the Groups metric reflects saved changes
       // immediately rather than waiting for a full ffFlow refresh.
       document.addEventListener('groups-updated', function () {
-        setTimeout(function () { renderEquipment(); updateBreadcrumb(); }, 50);
+        setTimeout(function () { renderEquipment(); renderSelectionSummarySidebar(); updateBreadcrumb(); }, 50);
       });
       document.addEventListener('groups-updated', updateBreadcrumb);
       // Accepting a build plan writes rooms.json (installedSystems + buildPlan).
       // Reload rooms so renderEquipment sees the persisted plan and the
       // breadcrumb marks grow-units + equipment complete.
-      document.addEventListener('room-build-plan:saved', function () { refresh(); });
+      document.addEventListener('room-build-plan:saved', function () {
+        renderSelectionSummarySidebar();
+        refresh();
+      });
+      document.addEventListener('rooms-updated', renderSelectionSummarySidebar);
+      document.addEventListener('grow-management-selection-state', renderSelectionSummarySidebar);
       // Scroll-based active state: highlight whichever step is nearest the viewport top.
       window.addEventListener('scroll', function () {
         var steps = ['flow-room', 'flow-zones', 'flow-grow-units', 'flow-equipment', 'flow-controllers'];
@@ -3314,6 +3459,12 @@
   </dialog>
 
     <div id="toasts" class="toast-container" aria-live="polite" aria-atomic="true"></div>
+
+  <aside id="ffSelectionSummarySidebar" class="ff-selection-sidebar" aria-live="polite">
+    <h4>Selection Summary</h4>
+    <div id="ffSelectionSummaryList" class="ff-selection-list"></div>
+    <div id="ffSelectionSummaryStatus" class="ff-selection-status">Selections not implemented</div>
+  </aside>
 
   <!-- E.V.I.E. presence: ambient orb + slide-out intelligence panel.
        Loaded last so DOM and STATE are ready when the orb hydrates.

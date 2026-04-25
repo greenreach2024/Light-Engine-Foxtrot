@@ -1230,13 +1230,23 @@
         customization: state.customization || null
       });
     }
+    window.__gmPlanState = {
+      roomId: state.room && state.room.id,
+      templateId: state.template && state.template.id,
+      desiredUnits: state.desiredUnits,
+      draftStagedAt: Date.now(),
+      implemented: false
+    };
+    document.dispatchEvent(new CustomEvent('grow-management-selection-state', {
+      detail: Object.assign({}, window.__gmPlanState)
+    }));
     const panel = document.getElementById('groupsV2Panel');
     if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
     updateBreadcrumbActive(3); // Lights next
     if (typeof window.showToast === 'function') {
       window.showToast({
-        title: 'Template staged',
-        msg: `Group form prefilled for ${state.template.name}. Assign lights, review, then Save Group.`,
+        title: 'Draft staged',
+        msg: `Draft created for ${state.template.name}. Review your selections, then use Save plan to room (implement).`,
         kind: 'success'
       }, 3000);
     }
@@ -1260,6 +1270,16 @@
     const spatial = $(SPATIAL_ID); if (spatial) spatial.innerHTML = '';
     const evie = $(EVIE_ID); if (evie) evie.innerHTML = '';
     if (window.__roomBuildPlan) delete window.__roomBuildPlan;
+    window.__gmPlanState = {
+      roomId: null,
+      templateId: null,
+      desiredUnits: 0,
+      implemented: false,
+      clearedAt: Date.now()
+    };
+    document.dispatchEvent(new CustomEvent('grow-management-selection-state', {
+      detail: Object.assign({}, window.__gmPlanState)
+    }));
     document.querySelectorAll('.tg-card[aria-pressed="true"]')
       .forEach(c => c.setAttribute('aria-pressed', 'false'));
   }
@@ -1404,6 +1424,16 @@
           customization
         });
       }
+      window.__gmPlanState = {
+        roomId: room.id,
+        templateId: tpl.id,
+        desiredUnits: qty,
+        implemented: true,
+        implementedAt: Date.now()
+      };
+      document.dispatchEvent(new CustomEvent('grow-management-selection-state', {
+        detail: Object.assign({}, window.__gmPlanState)
+      }));
     } catch (err) {
       console.error('[rbp] saveBuildPlan failed:', err);
       if (typeof window.showToast === 'function') {
