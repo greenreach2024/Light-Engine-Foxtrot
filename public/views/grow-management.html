@@ -1711,9 +1711,21 @@
         _saveRoomsTimer = setTimeout(persistRooms, 500);
       }
       function persistRooms() {
+      function buildRoomsPayload() {
+        // Deep-copy rooms so applyPendingRoomDimEdits doesn't mutate state.rooms,
+        // and so pending dim edits are included even if a background refresh()
+        // replaced the r-objects between the user's change event and the 500ms
+        // debounce firing (the root cause of silent width/height wipe-outs).
+        var snap = state.rooms.map(function (r) {
+          return Object.assign({}, r, { dimensions: Object.assign({}, r.dimensions || {}) });
+        });
+        applyPendingRoomDimEdits(snap);
+        return snap;
+      }
+      function persistRooms() {
         _saveRoomsTimer = null;
         var statusEl = _saveRoomsStatus;
-        var payload = { rooms: state.rooms.map(function (r) { return r; }) };
+        var payload = { rooms: buildRoomsPayload() };
         var _fetch = window.authFetch || fetch;
         return _fetch('/api/setup/save-rooms', {
           method: 'POST',
@@ -2679,10 +2691,16 @@
           zoneSaveStatus.pendingTarget = target;
           if (status) { status.textContent = 'Saving\u2026'; status.style.color = '#fbbf24'; }
           var _f = window.authFetch || fetch;
+          // Apply pending dim edits onto a payload snapshot so changing zone
+          // count never erases in-flight dimension edits.
+          var zonePayload = buildRoomsPayload();
+          // Replace zones on the primary room in the payload with the new count.
+          var pidx = zonePayload.findIndex(function(r) { return r.id === primary.id || r.name === primary.name; });
+          if (pidx !== -1) zonePayload[pidx].zones = primary.zones;
           _f('/api/setup/save-rooms', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ rooms: state.rooms })
+            body: JSON.stringify({ rooms: zonePayload })
           }).then(function (resp) {
             if (!resp.ok) throw new Error('HTTP ' + resp.status);
             return resp.json();

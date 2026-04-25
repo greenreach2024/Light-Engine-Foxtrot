@@ -7887,6 +7887,8 @@ async function reconcileGroupsFromRooms(rooms) {
   for (const r of rooms) {
     const name = r?.name || r?.id;
     if (name) roomKeys.add(String(name));
+    // Also index by id so groups keyed by roomId are recognised.
+    if (r?.id) roomKeys.add(String(r.id));
   }
 
   const nowIso = new Date().toISOString();
@@ -7896,12 +7898,6 @@ async function reconcileGroupsFromRooms(rooms) {
     const existingById = new Map();
     for (const g of existing) {
       if (g && g.id) existingById.set(String(g.id), g);
-    }
-
-    const carriedOver = [];
-    for (const g of existing) {
-      const gRoom = g?.room || g?.roomName || '';
-      if (!roomKeys.has(String(gRoom))) carriedOver.push(g);
     }
 
     const next = [];
@@ -7969,9 +7965,14 @@ async function reconcileGroupsFromRooms(rooms) {
 
     // Replace the in-memory groups array (withGroupsLock writes it back).
     existing.length = 0;
-    existing.push(...next, ...carriedOver);
+    // Groups from rooms NOT present in this save payload are orphaned (the
+    // room was renamed or deleted). Drop them rather than carrying them over;
+    // save-rooms is always called with the full rooms list so no live room's
+    // groups will be silently lost. This fixes the "30 groups = room length"
+    // mis-wiring caused by stale 'Room 1' entries surviving a rename.
+    existing.push(...next);
     total = next.length;
-    console.log(`[reconcile-groups] Rebuilt ${next.length} group(s) for ${rooms.length} room(s); preserved ${carriedOver.length} from other rooms`);
+    console.log(`[reconcile-groups] Rebuilt ${next.length} group(s) for ${rooms.length} room(s)`);
   });
 
   return total;
