@@ -1471,12 +1471,24 @@
 
     getSkuThumbnailUrl(sku) {
       if (sku?.thumbnail_url) return sku.thumbnail_url;
-      const raw = String(sku?.product_name || '').trim().toLowerCase();
-      const slug = raw.replace(/\s+/g, '-');
+        const raw = String(sku?.product_name || '').trim().toLowerCase();
+        const slug = raw
+          .replace(/&/g, ' and ')
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-+|-+$/g, '');
       const aliases = {
         'baby-pak-choi': 'little-gem',
         'pak-choi': 'little-gem',
-        'bok-choy': 'little-gem'
+          'bok-choy': 'little-gem',
+          'organic-mixed-greens': 'mixed-greens',
+          'mixed-greens-organic': 'mixed-greens',
+          'spicy-mixed-greens-organic': 'spicy-mixed-greens',
+          'eazyleaf-blend-organic': 'eazyleaf-blend-organic',
+          'brentwood-eazyleaf-organic': 'eazyleaf-blend-organic',
+          'burgandy-eazyleaf-organic': 'eazyleaf-blend-organic',
+          'hampton-eazyleaf-organic': 'eazyleaf-blend-organic',
+          'sprout-bean-salad-mix-organic': 'mixed-greens',
+          'sprout-salad-mix-organic': 'mixed-greens'
       };
       const resolved = aliases[slug] || slug;
       return '/product-images/crops/' + encodeURIComponent(resolved) + '.webp';
