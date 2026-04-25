@@ -764,6 +764,16 @@
     </div>
   </header>
 
+  <!-- Phase 3 visibility banner: operators were not noticing that the
+       consolidated flow is now this page. Keep this prominent and actionable. -->
+  <div id="ffUnifiedFlowNotice" style="margin:12px 16px 10px;padding:12px 14px;border:1px solid rgba(16,185,129,0.45);border-radius:10px;background:linear-gradient(135deg, rgba(16,185,129,0.14), rgba(59,130,246,0.08));display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+    <div>
+      <div style="font-weight:700;color:#ecfdf5;">New unified setup flow is active on this page.</div>
+      <div class="tiny" style="color:#cbd5e1;">Use steps 1-5 below. Group creation and bulk edit are now under <strong>Group actions</strong> in step 3.</div>
+    </div>
+    <a href="#flow-grow-units" style="display:inline-block;padding:8px 12px;border-radius:8px;background:#10b981;color:#052e16;text-decoration:none;font-weight:700;">Jump to step 3</a>
+  </div>
+
   <!-- ===== UNIFIED FARM FLOW BREADCRUMB =====
        Single ordered workflow replacing the three parallel farm-setup
        surfaces (farm-setup.html dashboard, setup-wizard.html, legacy
@@ -1171,13 +1181,15 @@
           <button type="button" id="groupsV2ClearEditing" style="margin-left:auto;background:none;border:none;cursor:pointer;font-size:18px;line-height:1;" title="Clear editing">&times;</button>
         </div>
 
-        <!-- ===== GROUP LIST ===== -->
-        <div class="gm-card" id="groupsV2GroupListSection" style="margin-top:0;">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-            <h3 style="margin:0;border:none;padding:0;">Configured Growing Units</h3>
-            <div style="display:flex;align-items:center;gap:8px;">
+        <!-- Keep the legacy group-list DOM mounted for groups-v2.js, but hide
+             the obsolete card from operators. -->
+        <div id="groupsV2GroupListSection" style="display:none;" hidden aria-hidden="true">
+          <div>
+            <h3>Configured Growing Units</h3>
+            <div>
               <span id="groupsV2GroupCount" class="tiny text-muted"></span>
-              <button id="bulkEditGroupsBtn" type="button" class="ghost tiny" style="padding:4px 10px;font-size:11px;" title="Edit all groups that share a common prefix">Bulk Edit</button>
+              <button id="groupsV2ActionsBtn" type="button">Group actions</button>
+              <button id="bulkEditGroupsBtn" type="button">Bulk Edit</button>
             </div>
           </div>
           <div id="groupsV2GroupListBody"></div>
@@ -1275,8 +1287,8 @@
         <button id="groupsV2SaveDraft" type="button" style="display:none;"></button>
         <span id="groupsV2HoldDay" style="display:none;"></span>
 
-        <!-- ===== CALIBRATION ===== -->
-        <div class="gm-calibration-card">
+        <!-- ===== CALIBRATION (moved to 3D view) ===== -->
+        <div class="gm-calibration-card" style="display:none;" aria-hidden="true">
           <button id="btnOpenCalWizardFromGroups" type="button" class="primary" style="width:100%;">Open Calibration Wizard</button>
           <p>Calibrate light output to match target spectrum</p>
         </div>
@@ -1297,8 +1309,8 @@
       <div class="ff-step__head">
         <span class="ff-step__badge">4</span>
         <div>
-          <h2 class="ff-step__title" id="ffEquipmentTitle">Equipment</h2>
-          <p class="ff-step__subtitle">Cooling tons, dehumidification capacity, fan CFM, and pump count. Derived from the template multiplied by unit quantity and the room envelope.</p>
+          <h2 class="ff-step__title" id="ffEquipmentTitle">Grow Room Summary</h2>
+          <p class="ff-step__subtitle">Unified summary from saved room data: zones, groups, configured growing system types, planting locations, and equipment loads (cooling, dehumidification, fan CFM, pumps).</p>
         </div>
       </div>
       <div class="ff-step-card">
@@ -1414,6 +1426,11 @@
     // wiring (groups-v2.js) keeps owning the data-contract side of the flow.
     document.addEventListener('DOMContentLoaded', function () {
       var cardPrint = document.getElementById('buildStockGroupsCardPrintBtn');
+      var actionsBtn = document.getElementById('groupsV2ActionsBtn');
+      var actionsModal = document.getElementById('groupsV2ActionModal');
+      var actionsClose = document.getElementById('groupsV2ActionModalClose');
+      var actionsOpenBuild = document.getElementById('openBuildStockFromActions');
+      var actionsOpenBulk = document.getElementById('openBulkEditFromActions');
       // #buildStockGroupsCardOpenBtn is now bound directly inside
       // groups-v2.js (see the Build Stock Groups modal wiring block), so
       // we no longer need a mirror-click that targeted the removed
@@ -1423,6 +1440,31 @@
         cardPrint.addEventListener('click', function () {
           var btn = document.getElementById('groupsV2PrintLabels');
           if (btn) btn.click();
+        });
+      }
+      if (actionsBtn && actionsModal) {
+        actionsBtn.addEventListener('click', function () { actionsModal.showModal(); });
+      }
+      if (actionsClose && actionsModal) {
+        actionsClose.addEventListener('click', function () { actionsModal.close(); });
+      }
+      if (actionsModal) {
+        actionsModal.addEventListener('click', function (e) {
+          if (e.target === actionsModal) actionsModal.close();
+        });
+      }
+      if (actionsOpenBuild) {
+        actionsOpenBuild.addEventListener('click', function () {
+          var btn = document.getElementById('buildStockGroupsCardOpenBtn');
+          if (btn) btn.click();
+          if (actionsModal) actionsModal.close();
+        });
+      }
+      if (actionsOpenBulk) {
+        actionsOpenBulk.addEventListener('click', function () {
+          var btn = document.getElementById('bulkEditGroupsBtn');
+          if (btn) btn.click();
+          if (actionsModal) actionsModal.close();
         });
       }
       // Keep a small summary line on the card in sync with group count so
@@ -1454,15 +1496,57 @@
         templates: [],
         devices: []
       };
+      var zoneSaveStatus = {
+        pendingTarget: null,
+        clearTimer: null,
+        ttlMs: 4500
+      };
+      function zoneWord(n) { return n === 1 ? 'zone' : 'zones'; }
+      function scheduleZoneStatusClear() {
+        var status = document.getElementById('ffZonesCountStatus');
+        if (!status) return;
+        if (zoneSaveStatus.clearTimer) clearTimeout(zoneSaveStatus.clearTimer);
+        zoneSaveStatus.clearTimer = setTimeout(function () {
+          status.textContent = '';
+          status.style.color = '#94a3b8';
+          zoneSaveStatus.pendingTarget = null;
+        }, zoneSaveStatus.ttlMs);
+      }
+      function syncZoneStatusFromHydrated(savedCount) {
+        var status = document.getElementById('ffZonesCountStatus');
+        if (!status || zoneSaveStatus.pendingTarget == null) return;
+        if (savedCount !== zoneSaveStatus.pendingTarget) {
+          status.textContent = 'Saved - ' + savedCount + ' ' + zoneWord(savedCount) + ' (auto-corrected to persisted value)';
+        } else {
+          status.textContent = 'Saved - ' + savedCount + ' ' + zoneWord(savedCount);
+        }
+        status.style.color = '#4ade80';
+        zoneSaveStatus.pendingTarget = savedCount;
+        scheduleZoneStatusClear();
+      }
       function fmtEnvelope(r) {
         var env = r.envelope || r.envelope_class || r.env || '';
         if (!env) return 'envelope class unset';
         return String(env).replace(/_/g, ' ');
       }
+      function readDimM(r, key) {
+        var d = (r && r.dimensions) || {};
+        if (!r) return null;
+        if (key === 'length') {
+          return Number(r.length_m ?? r.lengthM ?? r.length ?? d.length_m ?? d.lengthM ?? d.length ?? 0) || null;
+        }
+        if (key === 'width') {
+          return Number(r.width_m ?? r.widthM ?? r.width ?? d.width_m ?? d.widthM ?? d.width ?? 0) || null;
+        }
+        return Number(
+          r.ceiling_height_m ?? r.ceilingHeightM ?? r.height_m ?? r.heightM ?? r.height
+          ?? d.ceiling_height_m ?? d.ceilingHeightM ?? d.height_m ?? d.heightM ?? d.height ?? 0
+        ) || null;
+      }
       function fmtDims(r) {
-        var l = r.length_m || (r.dimensions && r.dimensions.length_m) || null;
-        var w = r.width_m || (r.dimensions && r.dimensions.width_m) || null;
-        var h = r.ceiling_height_m || (r.dimensions && r.dimensions.height_m) || null;
+        var l = readDimM(r, 'length');
+        var w = readDimM(r, 'width');
+        var h = readDimM(r, 'height');
         if (l && w && h) return l + 'm × ' + w + 'm × ' + h + 'm';
         if (l && w) return l + 'm × ' + w + 'm';
         return 'dimensions unset';
@@ -1476,27 +1560,41 @@
       }
       function getRoomDim(r, key) {
         // key: 'length_m' | 'width_m' | 'height_m'
-        if (key === 'height_m') {
-          return r.ceiling_height_m
-            || (r.dimensions && r.dimensions.height_m)
-            || '';
-        }
-        return r[key]
-          || (r.dimensions && r.dimensions[key])
-          || '';
+        if (key === 'length_m') return readDimM(r, 'length') || '';
+        if (key === 'width_m') return readDimM(r, 'width') || '';
+        return readDimM(r, 'height') || '';
       }
       function setRoomDim(r, key, value) {
         var n = (value === '' || value == null) ? null : Number(value);
         if (n != null && !Number.isFinite(n)) return;
         if (key === 'height_m') {
           r.ceiling_height_m = n;
+          r.ceilingHeightM = n;
+          r.height_m = n;
+          r.heightM = n;
         } else {
           r[key] = n;
+          if (key === 'length_m') {
+            r.lengthM = n;
+            r.length = n;
+          }
+          if (key === 'width_m') {
+            r.widthM = n;
+            r.width = n;
+          }
         }
         if (!r.dimensions || typeof r.dimensions !== 'object') r.dimensions = {};
         r.dimensions[key] = n;
-        if (r.length_m && r.width_m) {
-          r.area_m2 = Number((r.length_m * r.width_m).toFixed(2));
+        if (key === 'height_m') {
+          r.dimensions.heightM = n;
+          r.dimensions.ceilingHeightM = n;
+        }
+        if (key === 'length_m') r.dimensions.lengthM = n;
+        if (key === 'width_m') r.dimensions.widthM = n;
+        var l = readDimM(r, 'length');
+        var w = readDimM(r, 'width');
+        if (l && w) {
+          r.area_m2 = Number((l * w).toFixed(2));
         }
       }
       var _saveRoomsTimer = null;
@@ -1512,7 +1610,7 @@
         var statusEl = _saveRoomsStatus;
         var payload = { rooms: state.rooms.map(function (r) { return r; }) };
         var _fetch = window.authFetch || fetch;
-        _fetch('/api/setup/save-rooms', {
+        return _fetch('/api/setup/save-rooms', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
@@ -1526,9 +1624,11 @@
             window.DataFlowBus.emit('rooms', { source: 'grow-management-room-dimensions' });
             window.DataFlowBus.emit('zones', { source: 'grow-management-room-dimensions' });
           }
+          return true;
         }).catch(function (err) {
           console.error('[grow-management] rooms save failed:', err);
           if (statusEl) { statusEl.textContent = 'Save failed'; statusEl.style.color = '#f87171'; }
+          return false;
         });
       }
       function renderRoom() {
@@ -1536,8 +1636,117 @@
         if (!host) return;
         host.innerHTML = '';
         if (!state.rooms.length) {
-          host.className = 'ff-empty';
-          host.textContent = 'No rooms defined yet. Use Farm Setup to create one.';
+          host.className = '';
+          var wrap = document.createElement('div');
+          wrap.style.cssText = 'display:grid;gap:10px;';
+
+          var intro = document.createElement('div');
+          intro.className = 'ff-empty';
+          intro.style.marginBottom = '0';
+          intro.textContent = 'No grow room defined yet. Step 1 creates your first room here. Enter room details below to begin.';
+          wrap.appendChild(intro);
+
+          var form = document.createElement('div');
+          form.style.cssText = 'display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;padding:10px;border:1px solid rgba(59,130,246,0.2);border-radius:10px;background:rgba(30,41,59,0.4);';
+
+          function mkField(label, opts) {
+            var cfg = opts || {};
+            var field = document.createElement('label');
+            field.className = 'tiny';
+            field.style.cssText = 'display:flex;flex-direction:column;gap:4px;color:#cbd5e1;';
+            var lbl = document.createElement('span');
+            lbl.textContent = label;
+            field.appendChild(lbl);
+            var input = document.createElement('input');
+            input.type = cfg.type || 'text';
+            if (cfg.step) input.step = cfg.step;
+            if (cfg.min) input.min = cfg.min;
+            if (cfg.placeholder) input.placeholder = cfg.placeholder;
+            input.style.cssText = 'min-height:34px;padding:6px 8px;background:rgba(15,23,42,0.65);border:1px solid rgba(148,163,184,0.3);border-radius:6px;color:#f1f5f9;width:' + (cfg.width || '120px') + ';';
+            field.appendChild(input);
+            return { field: field, input: input };
+          }
+
+          var roomName = mkField('Room name', { placeholder: 'Main grow room', width: '180px' });
+          var lengthM = mkField('Length (m)', { type: 'number', step: '0.1', min: '0.5', width: '110px' });
+          var widthM = mkField('Width (m)', { type: 'number', step: '0.1', min: '0.5', width: '110px' });
+          var heightM = mkField('Height (m)', { type: 'number', step: '0.1', min: '1.5', width: '110px' });
+          lengthM.input.value = '12';
+          widthM.input.value = '6';
+          heightM.input.value = '3';
+
+          [roomName.field, lengthM.field, widthM.field, heightM.field].forEach(function (f) {
+            form.appendChild(f);
+          });
+
+          var saveBtn = document.createElement('button');
+          saveBtn.type = 'button';
+          saveBtn.className = 'btn btn-primary';
+          saveBtn.style.minHeight = '34px';
+          saveBtn.textContent = 'Save room';
+          form.appendChild(saveBtn);
+
+          var statusEl = document.createElement('span');
+          statusEl.className = 'tiny';
+          statusEl.style.cssText = 'color:#94a3b8;min-width:72px;';
+          form.appendChild(statusEl);
+
+          function createFirstRoom() {
+            var l = Number(lengthM.input.value);
+            var w = Number(widthM.input.value);
+            var h = Number(heightM.input.value);
+            if (!Number.isFinite(l) || l <= 0 || !Number.isFinite(w) || w <= 0 || !Number.isFinite(h) || h <= 0) {
+              statusEl.textContent = 'Enter valid dimensions';
+              statusEl.style.color = '#f87171';
+              return;
+            }
+
+            var roomNum = 1;
+            var existing = {};
+            state.rooms.forEach(function (r) {
+              if (r && r.id) existing[String(r.id)] = true;
+            });
+            while (existing['room-' + roomNum]) roomNum++;
+            var roomId = 'room-' + roomNum;
+
+            var room = {
+              id: roomId,
+              name: (roomName.input.value || '').trim() || 'Room ' + roomNum,
+              room_name: (roomName.input.value || '').trim() || 'Room ' + roomNum,
+              length_m: l,
+              width_m: w,
+              ceiling_height_m: h,
+              area_m2: Number((l * w).toFixed(2)),
+              dimensions: {
+                length_m: l,
+                width_m: w,
+                height_m: h
+              },
+              zones: [],
+              installedSystems: []
+            };
+
+            state.rooms = [room];
+            statusEl.textContent = 'Saving…';
+            statusEl.style.color = '#fbbf24';
+            _saveRoomsStatus = statusEl;
+            persistRooms().then(function (ok) {
+              if (ok) refresh();
+            });
+          }
+
+          saveBtn.addEventListener('click', createFirstRoom);
+          [roomName.input, lengthM.input, widthM.input, heightM.input].forEach(function (el) {
+            el.addEventListener('keydown', function (e) {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                createFirstRoom();
+              }
+            });
+          });
+
+          wrap.appendChild(form);
+          host.appendChild(wrap);
           return;
         }
         host.className = '';
@@ -1602,8 +1811,8 @@
       function evieRecommendZoneCount(room) {
         // Evie's heuristic: ~1 zone per ~30m2 of room floor, minimum 1, maximum 4.
         // Explicit so operators see what's advisory vs. their own choice.
-        var l = Number(room && room.length_m) || 0;
-        var w = Number(room && room.width_m) || 0;
+        var l = readDimM(room, 'length') || 0;
+        var w = readDimM(room, 'width') || 0;
         var area = l * w;
         if (!area) return 2;
         var n = Math.max(1, Math.min(4, Math.round(area / 30)));
@@ -1631,18 +1840,23 @@
           if (savedCount > 0) {
             sourceEl.textContent = savedCount + ' zone' + (savedCount === 1 ? '' : 's') + ' loaded from your saved room data. Adjust the count below to add or remove zones.';
           } else {
-            sourceEl.textContent = 'No zones saved yet. Evie recommends ' + recommended + ' to start — adjust and apply below.';
+            sourceEl.textContent = 'No zones saved yet. Choose a zone count below and click Apply to create them.';
           }
         }
         if (recEl) {
-          recEl.textContent = 'Evie recommends ' + recommended + ' based on room area (' + (primaryRoom ? ((primaryRoom.length_m || '?') + 'm \u00d7 ' + (primaryRoom.width_m || '?') + 'm') : 'no room yet') + ').';
+          if (savedCount > 0) {
+            recEl.textContent = 'Current saved zone count: ' + savedCount + '. Planning hint based on area: ' + recommended + '.';
+          } else {
+            recEl.textContent = 'Planning hint based on room area: ' + recommended + ' zones (' + (primaryRoom ? ((readDimM(primaryRoom, 'length') || '?') + 'm \u00d7 ' + (readDimM(primaryRoom, 'width') || '?') + 'm') : 'no room yet') + ').';
+          }
         }
         if (countInput && document.activeElement !== countInput) {
           countInput.value = String(savedCount || recommended);
         }
+        syncZoneStatusFromHydrated(savedCount);
         if (!allZones.length) {
           host.className = 'ff-empty';
-          host.textContent = 'No zones defined yet. Use the picker above to create zones; Evie recommends ' + recommended + ' for this room.';
+          host.textContent = 'No zones defined yet. Use the zone count control above, then click Apply.';
           if (advice) advice.style.display = 'none';
           return;
         }
@@ -1673,7 +1887,7 @@
         host.appendChild(table);
         if (advice) {
           advice.innerHTML = '';
-          advice.appendChild(chip('Evie: zones separate photoperiod + cleaning cycles', 'accent'));
+          advice.appendChild(chip('Zones separate photoperiod + cleaning cycles', 'accent'));
           advice.appendChild(chip('Zones can run independent crop recipes', 'ok'));
           advice.style.display = '';
         }
@@ -1699,8 +1913,132 @@
         //   3. empty-state copy
         var rbp = window.__roomBuildPlan;
         var persisted = persistedBuildPlan();
+        var groups = (window.STATE && Array.isArray(window.STATE.groups)) ? window.STATE.groups : (state.groups || []);
+
+        function templateById(id) {
+          var list = Array.isArray(state.templates) ? state.templates : [];
+          for (var i = 0; i < list.length; i++) {
+            if (String(list[i].id || '') === String(id || '')) return list[i];
+          }
+          return null;
+        }
+
+        function estimateTemplateSites(tpl) {
+          if (!tpl) return 0;
+          var byClass = tpl.plantLocations && tpl.plantLocations.totalByClass;
+          if (byClass && typeof byClass === 'object') {
+            var keys = Object.keys(byClass);
+            if (keys.length && Number.isFinite(Number(byClass[keys[0]]))) {
+              return Number(byClass[keys[0]]);
+            }
+          }
+          var tiers = Math.max(1, Number(tpl.tierCount || 1));
+          var trays = Math.max(1, Number(tpl.traysPerTier || 1));
+          var plants = tpl.plantsPerTrayByClass && typeof tpl.plantsPerTrayByClass === 'object'
+            ? Number(tpl.plantsPerTrayByClass[Object.keys(tpl.plantsPerTrayByClass)[0]] || 0)
+            : 0;
+          return Math.max(0, tiers * trays * plants);
+        }
+
+        function summarizeFarm() {
+          var rooms = Array.isArray(state.rooms) ? state.rooms : [];
+          var zoneCount = 0;
+          var installed = [];
+          rooms.forEach(function (r) {
+            zoneCount += Array.isArray(r.zones) ? r.zones.length : 0;
+            (Array.isArray(r.installedSystems) ? r.installedSystems : []).forEach(function (s) {
+              installed.push(s);
+            });
+          });
+          var systemTypeMap = {};
+          var totalPlantSites = 0;
+          installed.forEach(function (s) {
+            if (!s) return;
+            var tpl = templateById(s.templateId);
+            var typeLabel = (tpl && (tpl.name || tpl.id)) || s.templateId || 'unknown';
+            systemTypeMap[typeLabel] = true;
+            var qty = Math.max(1, Number(s.quantity || 1));
+            var perSystem = Number(s.customization && s.customization.totalLocations);
+            if (!Number.isFinite(perSystem) || perSystem <= 0) {
+              perSystem = estimateTemplateSites(tpl);
+            }
+            totalPlantSites += Math.max(0, qty * Math.max(0, Number(perSystem || 0)));
+          });
+          return {
+            roomCount: rooms.length,
+            zoneCount: zoneCount,
+            groupCount: groups.length,
+            systemTypes: Object.keys(systemTypeMap),
+            totalPlantSites: totalPlantSites
+          };
+        }
+
+        function liveComputedLoad(plan) {
+          if (!plan || !plan.template || !plan.scores) return null;
+          var tpl = plan.template;
+          var sc = plan.scores || {};
+          var cropClass = plan.cropClass || tpl.defaultCropClass || 'leafy_greens';
+          var qty = Math.max(1, Number(plan.desiredUnits || 1));
+          var customization = plan.customization || {};
+          var baseSites = Number.isFinite(tpl.plantLocations && tpl.plantLocations.totalByClass && tpl.plantLocations.totalByClass[cropClass])
+            ? Number(tpl.plantLocations.totalByClass[cropClass])
+            : Math.max(1, Number(tpl.plantsPerTrayByClass && tpl.plantsPerTrayByClass[cropClass] || 1) * Math.max(1, Number(tpl.tierCount || 1)));
+          var totalLocations = Number(customization.totalLocations || baseSites);
+          var siteFactor = Math.max(0.1, totalLocations / Math.max(1, baseSites));
+          var tierFactor = Math.max(0.1, Number(customization.levels || tpl.tierCount || 1) / Math.max(1, Number(tpl.tierCount || 1)));
+          var loadFactor = Number(((siteFactor + tierFactor) / 2).toFixed(4));
+
+          var baseLightingKW = Number.isFinite(sc.power && sc.power.lightingW)
+            ? sc.power.lightingW / 1000
+            : (Number.isFinite(sc.heatManagement && sc.heatManagement.lightingKW) ? Number(sc.heatManagement.lightingKW) : 0);
+          var pumpKW = Number.isFinite(tpl.powerClassW && tpl.powerClassW.pumpsPer10kPlants)
+            ? (tpl.powerClassW.pumpsPer10kPlants * Math.max(1, (tpl.plantSitesPerUnit || 0) * qty / 10000)) / 1000
+            : 0;
+          var coolingTons = Number.isFinite(sc.heatManagement && sc.heatManagement.totalHeatW)
+            ? (sc.heatManagement.totalHeatW * loadFactor) / 3517 : 0;
+          var dehumLPerDay = Number.isFinite(sc.transpiration && sc.transpiration.dailyWaterKg)
+            ? (sc.transpiration.dailyWaterKg * loadFactor) : 0;
+          var supplyFanCFM = Number.isFinite(sc.envBenchmark && sc.envBenchmark.inputs && sc.envBenchmark.inputs.airflow && sc.envBenchmark.inputs.airflow.requiredCFM)
+            ? sc.envBenchmark.inputs.airflow.requiredCFM * loadFactor : 0;
+          var lightingKW = baseLightingKW * loadFactor;
+          return {
+            lightingKW: Number(lightingKW.toFixed(3)),
+            coolingTons: Number(coolingTons.toFixed(3)),
+            dehumLPerDay: Number(dehumLPerDay.toFixed(2)),
+            supplyFanCFM: Math.round(supplyFanCFM),
+            pumpKW: Number(pumpKW.toFixed(3)),
+            totalCircuitKW: Number((lightingKW + pumpKW).toFixed(3))
+          };
+        }
+
+        var summary = summarizeFarm();
+        var activeLoad = (rbp && rbp.template) ? liveComputedLoad(rbp) : null;
+        var persistedLoad = persisted && persisted.plan ? (persisted.plan.computedLoad || null) : null;
+        var load = activeLoad || persistedLoad;
+        var loadSourceLabel = activeLoad ? 'Live preview' : (persistedLoad ? 'Saved snapshot' : '');
+        var loadSourceNote = activeLoad
+          ? 'Using unsaved in-page Room Build Plan values.'
+          : (persistedLoad ? 'Using persisted rooms.buildPlan values from the last accepted save.' : '');
+
         host.className = '';
         host.innerHTML = '';
+        if (loadSourceLabel) {
+          var sourceBadge = document.createElement('div');
+          sourceBadge.style.cssText = 'display:inline-flex;align-items:center;gap:8px;margin:0 0 10px;padding:8px 10px;border:1px solid rgba(148,163,184,0.35);border-radius:8px;background:rgba(15,23,42,0.55);';
+          var sourceTag = document.createElement('span');
+          sourceTag.className = 'tiny';
+          sourceTag.style.cssText = 'font-weight:700;letter-spacing:0.05em;text-transform:uppercase;color:#e2e8f0;';
+          sourceTag.textContent = 'Source: ' + loadSourceLabel;
+          var sourceText = document.createElement('span');
+          sourceText.className = 'tiny';
+          sourceText.style.cssText = 'color:#94a3b8;';
+          sourceText.textContent = loadSourceNote;
+          sourceBadge.appendChild(sourceTag);
+          sourceBadge.appendChild(sourceText);
+          host.appendChild(sourceBadge);
+        }
+        var summaryGrid = document.createElement('div');
+        summaryGrid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-bottom:10px;';
         var grid = document.createElement('div');
         grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;';
         function metric(label, value, unit, note) {
@@ -1723,65 +2061,48 @@
           }
           return box;
         }
-        if (rbp && rbp.scores) {
-          var s = rbp.scores || {};
-          var kgDay = s.transpiration && s.transpiration.dailyWaterKg;
-          if (Number.isFinite(kgDay)) {
-            grid.appendChild(metric('Transpiration', kgDay.toFixed(1), 'kg/day', '≈ ' + Math.round(kgDay) + ' L/day latent — dehum target'));
+        summaryGrid.appendChild(metric('Rooms', summary.roomCount, '', 'saved rooms'));
+        summaryGrid.appendChild(metric('Zones', summary.zoneCount, '', 'saved zones'));
+        summaryGrid.appendChild(metric('Groups', summary.groupCount, '', 'configured growing units'));
+        summaryGrid.appendChild(metric('System types', summary.systemTypes.length, '', summary.systemTypes.length ? summary.systemTypes.join(', ') : 'none staged yet'));
+        summaryGrid.appendChild(metric('Planting locations', summary.totalPlantSites, '', 'total plant sites across configured systems'));
+
+        if (load) {
+          if (Number.isFinite(load.dehumLPerDay) && load.dehumLPerDay > 0) {
+            grid.appendChild(metric('Dehumidification', Number(load.dehumLPerDay).toFixed(1), 'L/day', loadSourceLabel));
           }
-          var totalHeatW = s.heatManagement && s.heatManagement.totalHeatW;
-          if (Number.isFinite(totalHeatW) && totalHeatW > 0) {
-            grid.appendChild(metric('Cooling load', (totalHeatW / 3517).toFixed(2), 'tons', Math.round(totalHeatW) + ' W total'));
+          if (Number.isFinite(load.coolingTons) && load.coolingTons > 0) {
+            grid.appendChild(metric('Cooling load', Number(load.coolingTons).toFixed(2), 'tons', loadSourceLabel));
           }
-          var reqCFM = s.envBenchmark && s.envBenchmark.inputs && s.envBenchmark.inputs.airflow && s.envBenchmark.inputs.airflow.requiredCFM;
-          if (Number.isFinite(reqCFM) && reqCFM > 0) {
-            grid.appendChild(metric('Supply fan', Math.round(reqCFM), 'CFM', 'per envelope ACH'));
+          if (Number.isFinite(load.supplyFanCFM) && load.supplyFanCFM > 0) {
+            grid.appendChild(metric('Supply fan', Math.round(load.supplyFanCFM), 'CFM', loadSourceLabel));
           }
-          var envScore = s.envBenchmark && s.envBenchmark.score;
-          if (Number.isFinite(envScore)) {
-            grid.appendChild(metric('Env benchmark', Math.round(envScore), s.tier || '', 'higher = easier to operate'));
+          if (Number.isFinite(load.lightingKW) && load.lightingKW > 0) {
+            grid.appendChild(metric('Lighting', Number(load.lightingKW).toFixed(2), 'kW', loadSourceLabel));
           }
-          var pumps = rbp.template && rbp.template.requiredChannels && rbp.template.requiredChannels.pumpsPer10kPlants;
-          if (Number.isFinite(pumps) && pumps > 0) {
-            grid.appendChild(metric('Pumps', pumps + ' per 10k plants', '', 'scaled with plant count'));
+          if (Number.isFinite(load.pumpKW) && load.pumpKW > 0) {
+            grid.appendChild(metric('Pumps', (Number(load.pumpKW) * 1000).toFixed(0), 'W', loadSourceLabel));
           }
-        } else if (persisted) {
-          var cl = persisted.plan.computedLoad || {};
-          if (Number.isFinite(cl.dehumLPerDay) && cl.dehumLPerDay > 0) {
-            grid.appendChild(metric('Dehumidification', cl.dehumLPerDay.toFixed(1), 'L/day', 'from saved plan'));
-          }
-          if (Number.isFinite(cl.coolingTons) && cl.coolingTons > 0) {
-            grid.appendChild(metric('Cooling load', cl.coolingTons.toFixed(2), 'tons', 'from saved plan'));
-          }
-          if (Number.isFinite(cl.supplyFanCFM) && cl.supplyFanCFM > 0) {
-            grid.appendChild(metric('Supply fan', Math.round(cl.supplyFanCFM), 'CFM', 'from saved plan'));
-          }
-          if (Number.isFinite(cl.lightingKW) && cl.lightingKW > 0) {
-            grid.appendChild(metric('Lighting', cl.lightingKW.toFixed(2), 'kW', 'from saved plan'));
-          }
-          if (Number.isFinite(cl.pumpKW) && cl.pumpKW > 0) {
-            grid.appendChild(metric('Pumps', (cl.pumpKW * 1000).toFixed(0), 'W', 'from saved plan'));
-          }
-          if (Number.isFinite(cl.totalCircuitKW) && cl.totalCircuitKW > 0) {
-            grid.appendChild(metric('Total circuit', cl.totalCircuitKW.toFixed(2), 'kW', 'for panel sizing'));
+          if (Number.isFinite(load.totalCircuitKW) && load.totalCircuitKW > 0) {
+            grid.appendChild(metric('Total circuit', Number(load.totalCircuitKW).toFixed(2), 'kW', 'for panel sizing'));
           }
         }
-        if (!grid.children.length) {
+
+        if (!summaryGrid.children.length && !grid.children.length) {
           host.className = 'ff-empty';
           host.textContent = rbp
             ? 'Room Build Plan scores not yet computed for the selected template.'
-            : 'Pick a template in step 3 to compute equipment sizing, or open grow-management.html to stage and save a build plan. Cooling tons, dehumidification L/day, and fan CFM populate automatically.';
+            : 'Pick a template in step 3 to compute the room summary and equipment sizing, or save a build plan to room.';
           return;
         }
+        host.appendChild(summaryGrid);
+        if (grid.children.length) host.appendChild(grid);
         if (persisted && !rbp) {
           var badge = document.createElement('div');
           badge.className = 'tiny';
           badge.style.cssText = 'margin-top:10px;color:#10b981;font-size:0.7rem;letter-spacing:0.05em;text-transform:uppercase;';
           badge.textContent = 'Accepted plan · ' + (persisted.room.name || persisted.room.id) + ' · ' + (persisted.plan.generatedAt ? persisted.plan.generatedAt.slice(0,10) : '');
-          host.appendChild(grid);
           host.appendChild(badge);
-        } else {
-          host.appendChild(grid);
         }
       }
       // Phase B — Controllers step hydration.
@@ -2029,6 +2350,7 @@
         // on first paint.
         var hasCtrl = (state.bindings && state.bindings.length > 0)
           || (state.devices || []).length > 0;
+        var allComplete = !!(hasRoom && hasZones && hasUnits && hasEquip && hasCtrl);
         var map = {
           'room': hasRoom,
           'zones': hasZones,
@@ -2038,6 +2360,10 @@
         };
         var bc = document.getElementById('ffBreadcrumb');
         if (!bc) return;
+        var notice = document.getElementById('ffUnifiedFlowNotice');
+        if (notice) {
+          notice.style.display = allComplete ? 'none' : 'flex';
+        }
         bc.querySelectorAll('.ff-breadcrumb__step').forEach(function (a) {
           var step = a.getAttribute('data-step');
           a.classList.toggle('is-complete', !!map[step]);
@@ -2065,6 +2391,7 @@
           // the "shows 0, refresh shows 96" bug.
           if (!window.STATE) window.STATE = {};
           window.STATE.groups = state.groups;
+          window.__ffFlowRooms = state.rooms;
           if (typeof window.normalizeGroupsInState === 'function') {
             try { window.normalizeGroupsInState(); } catch (_) {}
           }
@@ -2101,6 +2428,13 @@
       })();
       // Re-render equipment + breadcrumb when a template is selected.
       document.addEventListener('grow-template:selected', function () {
+        setTimeout(function () { renderEquipment(); updateBreadcrumb(); }, 50);
+      });
+      // Group creation/edit/delete happens in groups-v2.js and updates
+      // window.STATE.groups in-place. Re-render the summary card from that
+      // live collection so the Groups metric reflects saved changes
+      // immediately rather than waiting for a full ffFlow refresh.
+      document.addEventListener('groups-updated', function () {
         setTimeout(function () { renderEquipment(); updateBreadcrumb(); }, 50);
       });
       document.addEventListener('groups-updated', updateBreadcrumb);
@@ -2173,6 +2507,7 @@
           // `window.__ffFlowRooms` sees the new zone count immediately — not
           // the stale value from the last hydrate.
           try { window.__ffFlowRooms = state.rooms; } catch (_) {}
+          zoneSaveStatus.pendingTarget = target;
           if (status) { status.textContent = 'Saving\u2026'; status.style.color = '#fbbf24'; }
           var _f = window.authFetch || fetch;
           _f('/api/setup/save-rooms', {
@@ -2183,7 +2518,7 @@
             if (!resp.ok) throw new Error('HTTP ' + resp.status);
             return resp.json();
           }).then(function () {
-            if (status) { status.textContent = 'Saved \u2022 ' + target + ' zones'; status.style.color = '#4ade80'; }
+            if (status) { status.textContent = 'Saved - verifying persisted zone count...'; status.style.color = '#60a5fa'; }
             document.dispatchEvent(new CustomEvent('rooms-updated'));
             if (window.DataFlowBus) {
               window.DataFlowBus.emit('rooms', { source: 'zone-count-stepper', zoneCount: target });
@@ -2192,6 +2527,7 @@
             refresh();
           }).catch(function (err) {
             console.error('[ffFlow] zones count save failed:', err);
+            zoneSaveStatus.pendingTarget = null;
             if (status) { status.textContent = 'Save failed'; status.style.color = '#f87171'; }
           });
         });
@@ -2697,6 +3033,18 @@
       </form>
     </div>
   </div>
+
+  <dialog id="groupsV2ActionModal" style="max-width:460px;width:92vw;border:none;border-radius:16px;box-shadow:0 8px 32px rgba(0,0,0,0.18);padding:0;">
+    <form method="dialog" style="padding:24px;display:flex;flex-direction:column;gap:14px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <h3 style="margin:0;font-size:1.05rem;">Growing Unit Actions</h3>
+        <button id="groupsV2ActionModalClose" type="button" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:#64748b;">&times;</button>
+      </div>
+      <p class="tiny" style="margin:0;color:#64748b;">Use one entry point for group creation and bulk updates while legacy modal internals remain intact.</p>
+      <button id="openBuildStockFromActions" type="button" class="primary" style="text-align:left;padding:10px 12px;">Build growing units</button>
+      <button id="openBulkEditFromActions" type="button" class="ghost" style="text-align:left;padding:10px 12px;">Bulk edit existing groups</button>
+    </form>
+  </dialog>
 
   <dialog id="bulkEditGroupModal" style="max-width:580px;width:92vw;border:none;border-radius:16px;box-shadow:0 8px 32px rgba(0,0,0,0.18);padding:0;">
   <form method="dialog" style="padding:24px;display:flex;flex-direction:column;gap:16px;">

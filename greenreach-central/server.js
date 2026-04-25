@@ -2756,7 +2756,7 @@ app.get('/api/setup/data', authMiddleware, async (req, res) => {
 // LE is the single source of truth for rooms.json AND groups.json. LE's
 // save-rooms handler reconciles groups from each room's installedSystems
 // (so the 5-min syncFarmData pull stays in lock-step). Central just proxies.
-app.post('/api/setup/save-rooms', authMiddleware, (req, res) => {
+app.post('/api/setup/save-rooms', (req, res) => {
   return proxyToLE(req, res, '/api/setup/save-rooms');
 });
 

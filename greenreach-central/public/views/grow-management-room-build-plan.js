@@ -280,6 +280,17 @@
    */
   function readRoomDims(room) {
     if (!room) return null;
+    // Canonical saved room payload is the source of truth. Read this first
+    // so stale localStorage edits cannot override persisted dimensions.
+    const payload = roomPayload(room);
+    if (payload?.dimensions) {
+      return {
+        lengthM: payload.dimensions.lengthM,
+        widthM: payload.dimensions.widthM,
+        heightM: payload.dimensions.ceilingHeightM
+      };
+    }
+
     try {
       const raw = localStorage.getItem('farm3d_roomDims');
       if (raw) {
@@ -295,14 +306,6 @@
       }
     } catch (_) { /* ignore localStorage parse errors */ }
 
-    const payload = roomPayload(room);
-    if (payload?.dimensions) {
-      return {
-        lengthM: payload.dimensions.lengthM,
-        widthM: payload.dimensions.widthM,
-        heightM: payload.dimensions.ceilingHeightM
-      };
-    }
     // Last-chance direct read from room — handles rooms saved with only
     // length/width (no ceiling) so the solver still uses real dims.
     const dims = room.dimensions || room.dims || {};
@@ -785,11 +788,11 @@
           <span class="rbp-ctl__hint">2 in total border deducted from footprint</span>
         </div>
         <div class="rbp-ctl">
-          <label for="rbpLocationsX">Locations X</label>
+          <label for="rbpLocationsX">Plant sites along length (X)</label>
           <input id="rbpLocationsX" type="number" min="1" max="500" step="1" value="${c.locationsX}" ${c.spacingLinked ? 'disabled' : ''}/>
         </div>
         <div class="rbp-ctl">
-          <label for="rbpLocationsY">Locations Y</label>
+          <label for="rbpLocationsY">Plant sites along width (Y)</label>
           <input id="rbpLocationsY" type="number" min="1" max="500" step="1" value="${c.locationsY}" ${c.spacingLinked ? 'disabled' : ''}/>
         </div>
         <div class="rbp-ctl rbp-ctl--toggle">
@@ -1060,10 +1063,20 @@
     if (!rec) { el.innerHTML = ''; return; }
     const plan = state.spatialPlan || {};
     const shortfall = rec.shortfall || 0;
+    const usedZones = Array.isArray(rec.usedZones) ? rec.usedZones : [];
+    const selectedZoneCount = Array.isArray(state.zoneRects) ? state.zoneRects.length : 0;
 
-    const promptHtml = (shortfall > 0 || (rec.recommendedZones > 1 && plan.desired > (rec.perZone[0]?.maxUnits || 0)))
+    let rationale = rec.rationale || '';
+    if (shortfall === 0 && usedZones.length > 1) {
+      rationale = `${plan.desired} units are distributed across your selected zones: ${usedZones.map((u) => `${u.units} in ${u.zoneName}`).join(', ')}.`;
+    }
+    if (shortfall === 0 && usedZones.length <= 1 && selectedZoneCount > 1 && plan.desired > 0) {
+      rationale = `${plan.desired} units fit in ${usedZones.length || 1} zone. Additional selected zones remain available for schedule or climate separation.`;
+    }
+
+    const promptHtml = (shortfall > 0)
       ? `<div class="rbp-evie__prompt">
-           <strong>Prompt:</strong> ${plan.desired} units exceed Zone 1's capacity (${rec.perZone[0]?.maxUnits || 0}). Should both zones be used for the selected number of growing units?
+           <strong>Capacity alert:</strong> ${plan.desired} units exceed current zone capacity by ${shortfall}. Reduce unit count, enlarge a zone, or add another zone.
          </div>`
       : '';
 
@@ -1083,9 +1096,9 @@
           </div>
         </div>
         <div class="rbp-evie__body">
-          ${rec.rationale}
+          ${rationale}
           <br/><br/>
-          Zones are an effective way to manage planting schedules, room maintenance, and unique growing environments within the same room (depending on the equipment available).
+          Zones are user-defined partitions for schedule separation, cleaning rotation, and optional climate isolation within the same room.
         </div>
         ${promptHtml}
         ${actionsHtml}

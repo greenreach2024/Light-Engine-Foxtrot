@@ -176,6 +176,17 @@ function getZoneRects(room) {
 
 function templateById(id) { return state.templates.find(t => t.id === id) || null; }
 
+function groupInRoom(group, room) {
+  if (!group || !room) return false;
+  const roomId = String(room.id || '').trim();
+  const roomName = String(room.name || '').trim();
+  const gRoom = String(group.room || group.roomName || '').trim();
+  const gRoomId = String(group.roomId || '').trim();
+  if (roomId && (gRoomId === roomId || gRoom === roomId)) return true;
+  if (roomName && gRoom === roomName) return true;
+  return false;
+}
+
 function groupFootprintM(group) {
   const c = group.customization || {};
   const lenIn = Number(c.footprintLengthIn);
@@ -537,7 +548,7 @@ function buildScene() {
       zl.scale.multiplyScalar(0.6); roomGroup.add(zl);
     });
 
-    const roomGroups = state.groups.filter(g => g.room === room.name || g.room === room.id);
+    const roomGroups = state.groups.filter(g => groupInRoom(g, room));
     const buckets = new Map();
     roomGroups.forEach(gr => {
       const key = gr.zone || (zoneRects[0]?.name || 'default');
@@ -956,7 +967,7 @@ function renderFarmSummary() {
   const cards = state.rooms.map(room => {
     const dims = readRoomDims(room);
     const zoneRects = getZoneRects(room);
-    const groupsInRoom = state.groups.filter(g => g.room === room.name || g.room === room.id);
+    const groupsInRoom = state.groups.filter(g => groupInRoom(g, room));
     const env = envForRoom(room);
     const dimStr = dims ? `${fmt(dims.L,1)} x ${fmt(dims.W,1)} x ${fmt(dims.H,1)} m  (${fmt(dims.L*M_TO_FT,0)} x ${fmt(dims.W*M_TO_FT,0)} ft)` : 'no dims';
     const area = dims ? `${fmt(dims.L * dims.W, 1)} m^2` : '--';
@@ -988,7 +999,7 @@ function renderRoomPanel(roomId) {
   if (!room) { renderFarmSummary(); return; }
   const dims = readRoomDims(room);
   const zoneRects = getZoneRects(room);
-  const groupsInRoom = state.groups.filter(g => g.room === room.name || g.room === room.id);
+  const groupsInRoom = state.groups.filter(g => groupInRoom(g, room));
   const totalLocs = groupsInRoom.reduce((s,g)=>s + (Number(g.customization?.totalLocations)||0), 0);
   const env = envForRoom(room);
   $('v3dSideTitle').textContent = room.name || room.id;
@@ -1033,7 +1044,7 @@ function renderZonePanel(sel) {
   const zoneRects = room ? getZoneRects(room) : [];
   const zr = zoneRects.find(z => z.id === sel.zoneId || z.name === sel.zoneName);
   const env = envForZone(sel.roomId, sel.zoneName) || envForZone(sel.roomId, sel.zoneId);
-  const groupsHere = state.groups.filter(g => (g.room === room?.name || g.room === room?.id) && (g.zone === sel.zoneName || g.zone === sel.zoneId));
+  const groupsHere = state.groups.filter(g => groupInRoom(g, room) && (g.zone === sel.zoneName || g.zone === sel.zoneId));
   $('v3dSideTitle').textContent = sel.zoneName || sel.zoneId;
   $('v3dSideCount').textContent = `Zone in ${room?.name || sel.roomId}`;
   $('v3dSideActions').hidden = true;
