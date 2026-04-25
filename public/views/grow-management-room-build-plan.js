@@ -332,6 +332,8 @@
   /**
    * Split a room rectangle into N zone rectangles along the long axis.
    * Returns an array of {id, name, lengthM, widthM} in walk-through order.
+   * Uses saved zone geometry (length_m/width_m) when available; falls back
+   * to equal-split computation for zones without persisted dimensions.
    */
   function zoneRectsFromRoom(room, zoneNames) {
     const dims = readRoomDims(room);
@@ -340,13 +342,19 @@
     const short = Math.min(dims.lengthM, dims.widthM);
     const names = Array.isArray(zoneNames) && zoneNames.length ? zoneNames : ['Zone 1'];
     const segment = long / names.length;
-    return names.map((name, i) => ({
-      id: `${room?.id || 'room'}-z${i + 1}`,
-      name: typeof name === 'string' ? name : (name?.name || `Zone ${i + 1}`),
-      lengthM: Number(segment.toFixed(2)),
-      widthM: Number(short.toFixed(2)),
-      heightM: dims.heightM
-    }));
+    const savedZones = Array.isArray(room?.zones) ? room.zones : [];
+    return names.map((name, i) => {
+      const saved = savedZones[i] && typeof savedZones[i] === 'object' ? savedZones[i] : null;
+      const savedL = Number(saved?.length_m ?? saved?.dimensions?.length_m ?? NaN);
+      const savedW = Number(saved?.width_m ?? saved?.dimensions?.width_m ?? NaN);
+      return {
+        id: `${room?.id || 'room'}-z${i + 1}`,
+        name: typeof name === 'string' ? name : (name?.name || `Zone ${i + 1}`),
+        lengthM: Number.isFinite(savedL) && savedL > 0 ? savedL : Number(segment.toFixed(2)),
+        widthM: Number.isFinite(savedW) && savedW > 0 ? savedW : Number(short.toFixed(2)),
+        heightM: dims.heightM
+      };
+    });
   }
 
   function zoneNamesForRoom(room) {
