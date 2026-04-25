@@ -1468,14 +1468,14 @@
 
     document.addEventListener('groups-updated', updateGrowKPIs);
     if (window.DataFlowBus && typeof window.DataFlowBus.on === 'function') {
+      // Note: DataFlowBus listeners for 'rooms'/'zones' are NOT calling ffFlow.refresh()
+      // anymore. Calling refresh() directly triggered concurrent load() fetches that raced
+      // with the server write, causing stale data overwrites. The SSE data-change stream
+      // (subscribed in wireLiveUpdates()) is the authoritative source and schedules refreshes
+      // safely at ~250ms after the file write completes. DataFlowBus is now only used for
+      // cross-tab communication (localStorage) when the browser is online.
       window.DataFlowBus.on('groups', function () { updateGrowKPIs(); });
-      window.DataFlowBus.on('rooms', function () {
-        updateGrowKPIs();
-        try { ffFlow.refresh(); } catch (_) {}
-      });
-      window.DataFlowBus.on('zones', function () {
-        try { ffFlow.refresh(); } catch (_) {}
-      });
+      // Intentionally not listening to 'rooms' or 'zones' events to avoid the refresh() race.
     }
     // Also run after initial load
     window.addEventListener('load', function() {
