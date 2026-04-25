@@ -1734,7 +1734,12 @@
       function persistRooms() {
         _saveRoomsTimer = null;
         var statusEl = _saveRoomsStatus;
-        var payload = { rooms: buildRoomsPayload() };
+        // Capture the payload snapshot synchronously — includes all pending dim
+        // edits — so we can immediately commit it to state.rooms after the POST
+        // succeeds without waiting for a network re-fetch (which races against
+        // the server's async GCS mirror write and can return stale data).
+        var savedRooms = buildRoomsPayload();
+        var payload = { rooms: savedRooms };
         var _fetch = window.authFetch || fetch;
         return _fetch('/api/setup/save-rooms', {
           method: 'POST',
@@ -1745,12 +1750,23 @@
           return resp.json();
         }).then(function () {
           clearPendingRoomDimEdits();
+          // Immediately sync local state with the payload we just persisted.
+          // This prevents any concurrent load() calls (triggered by DataFlowBus
+          // or SSE) from overwriting state.rooms with a stale server response
+          // before the file-write has fully propagated.
+          state.rooms = savedRooms;
+          window.__ffFlowRooms = savedRooms;
           if (statusEl) { statusEl.textContent = 'Saved'; statusEl.style.color = '#4ade80'; }
+          // Re-render synchronously from the already-correct state — no network
+          // fetch needed. The SSE data-change emitted by the server will trigger
+          // a confirmatory refresh() via scheduleRefresh() ~250ms later.
+          try { renderRoom(); renderZones(); renderEquipment(); renderSelectionSummarySidebar(); updateBreadcrumb(); } catch (_) {}
           document.dispatchEvent(new CustomEvent('rooms-updated'));
-          if (window.DataFlowBus) {
-            window.DataFlowBus.emit('rooms', { source: 'grow-management-room-dimensions' });
-            window.DataFlowBus.emit('zones', { source: 'grow-management-room-dimensions' });
-          }
+          // Intentionally NOT emitting DataFlowBus 'rooms'/'zones' here.
+          // Those emissions were causing ffFlow.refresh() → load() → stale
+          // server read that overwrote the just-saved dims (the root cause of
+          // the "width reverts to 20" bug observed in the HAR). The server-side
+          // SSE data-change is sufficient to notify other components.
           return true;
         }).catch(function (err) {
           console.error('[grow-management] rooms save failed:', err);
@@ -2558,7 +2574,13 @@
       }
       function refresh() {
         load().then(function () {
-          renderRoom();
+          // Skip renderRoom() if a dim input has focus — destroying the active
+          // element mid-type disrupts the user and (on some browsers) fires a
+          // ghost change event that can queue a stale save.
+          var dimFocused = document.activeElement &&
+            typeof document.activeElement.getAttribute === 'function' &&
+            document.activeElement.getAttribute('data-room-dim');
+          if (!dimFocused) renderRoom();
           renderZones();
           renderEquipment();
           renderControllers();

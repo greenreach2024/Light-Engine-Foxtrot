@@ -12912,7 +12912,7 @@ async function loadAllData() {
       console.log('[loadAllData] First group:', STATE.groups[0]);
       console.log('[loadAllData] All group IDs:', STATE.groups.map(g => g.id));
     } else {
-      console.error('[loadAllData] [WARN] NO GROUPS LOADED! Raw response:', groups);
+      console.warn('[loadAllData] groups empty or not yet created. Raw response:', groups);
     }
     const iotDevicesData = Array.isArray(storedIotDevices) ? storedIotDevices : [];
     
