@@ -2577,10 +2577,14 @@
           // Skip renderRoom() if a dim input has focus — destroying the active
           // element mid-type disrupts the user and (on some browsers) fires a
           // ghost change event that can queue a stale save.
+          // Also skip if there are unsaved pending dim edits: an SSE data-change
+          // can fire within ~1s of a Tab-blur, before the 500ms save debounce
+          // fires. Without this guard the stale server value overwrites the input.
           var dimFocused = document.activeElement &&
             typeof document.activeElement.getAttribute === 'function' &&
             document.activeElement.getAttribute('data-room-dim');
-          if (!dimFocused) renderRoom();
+          var hasPendingDimEdits = Object.keys(_pendingRoomDimEdits).length > 0;
+          if (!dimFocused && !hasPendingDimEdits) renderRoom();
           renderZones();
           renderEquipment();
           renderControllers();
