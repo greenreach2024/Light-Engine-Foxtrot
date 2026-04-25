@@ -14012,14 +14012,22 @@ function applyAutoCropRecommendation(row) {
 
 function getSaladMixAdminToken() {
     // Backward-compatible token lookup: the app stores admin auth in
-    // `admin_token`, but older salad-mix code used `adminToken`.
-    return localStorage.getItem('admin_token') || localStorage.getItem('adminToken') || '';
+    // `admin_token`, but older flows used `adminToken` or generic token keys.
+    return (
+        localStorage.getItem('admin_token') ||
+        localStorage.getItem('adminToken') ||
+        sessionStorage.getItem('token') ||
+        localStorage.getItem('token') ||
+        localStorage.getItem('auth_token') ||
+        localStorage.getItem('jwt_token') ||
+        ''
+    );
 }
 
 function handleSaladMixUnauthorized() {
     alert('Your admin session expired. Please sign in again.');
-    localStorage.removeItem('admin_token');
-    localStorage.removeItem('adminToken');
+    // Do not clear tokens here. A transient backend 401 should not destroy
+    // an otherwise valid session and strand operators in a logout loop.
     try { window.location.href = '/GR-central-admin-login.html'; } catch (_) {}
 }
 
