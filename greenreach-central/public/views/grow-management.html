@@ -1677,6 +1677,12 @@
       var _pendingRoomDimEdits = {};
       var _loadSeq = 0;
       var _appliedLoadSeq = 0;
+      // ms timestamp; SSE events received before this are ignored as our
+      // own save's echo. Server fans out rooms+zones+groups+target-ranges
+      // within ~1s of every /api/setup/save-rooms POST and we don't want
+      // any of those to retrigger refresh() and wipe in-flight user input.
+      // See docs/audits/GROW_MGMT_INPUT_OVERWRITE_FIX_2026-04-25.md §3.2.
+      var _selfEchoSuppressUntil = 0;
 
       function roomIdentity(r) {
         return String((r && (r.id || r.room_id || r.roomId || r.name || r.room_name)) || '');
@@ -1740,6 +1746,10 @@
         // the server's async GCS mirror write and can return stale data).
         var savedRooms = buildRoomsPayload();
         var payload = { rooms: savedRooms };
+        // Suppress our own SSE echo for ~2s so the server-side fan-out
+        // (rooms/zones/groups/target-ranges) doesn't retrigger refresh()
+        // and wipe whatever input the user moved focus to next.
+        _selfEchoSuppressUntil = Date.now() + 2000;
         var _fetch = window.authFetch || fetch;
         return _fetch('/api/setup/save-rooms', {
           method: 'POST',
@@ -2574,22 +2584,57 @@
       }
       function refresh() {
         load().then(function () {
-          // Skip renderRoom() if a dim input has focus — destroying the active
-          // element mid-type disrupts the user and (on some browsers) fires a
-          // ghost change event that can queue a stale save.
-          // Also skip if there are unsaved pending dim edits: an SSE data-change
-          // can fire within ~1s of a Tab-blur, before the 500ms save debounce
-          // fires. Without this guard the stale server value overwrites the input.
-          var dimFocused = document.activeElement &&
-            typeof document.activeElement.getAttribute === 'function' &&
-            document.activeElement.getAttribute('data-room-dim');
+          // GENERAL input-focus guard: if the user is mid-edit on ANY input,
+          // textarea, select, or contenteditable inside the Grow Mgmt page,
+          // skip every re-render that destroys DOM nodes. The user's input
+          // element must survive until they blur or submit. Previously this
+          // guard only covered [data-room-dim] inputs, leaving zone names,
+          // build-plan fields, group inputs etc. vulnerable to wipe-on-SSE.
+          // See docs/audits/GROW_MGMT_INPUT_OVERWRITE_FIX_2026-04-25.md §3.1.
+          var ae = document.activeElement;
+          var page = document.getElementById('flow-room')
+            || document.querySelector('[data-page="grow-management"]')
+            || document.body;
+          var userTyping = !!(ae
+            && page && page.contains && page.contains(ae)
+            && (ae.tagName === 'INPUT'
+             || ae.tagName === 'TEXTAREA'
+             || ae.tagName === 'SELECT'
+             || ae.isContentEditable === true));
           var hasPendingDimEdits = Object.keys(_pendingRoomDimEdits).length > 0;
-          if (!dimFocused && !hasPendingDimEdits) renderRoom();
+
+          // Sidebar / breadcrumb readers are safe to update while the user
+          // is typing — they don't tear down inputs.
+          renderSelectionSummarySidebar();
+          updateBreadcrumb();
+
+          if (userTyping || hasPendingDimEdits) {
+            // Defer destructive renders until the user yields focus.
+            // Re-attempt once on focusout via a one-shot listener.
+            var deferred = function () {
+              document.removeEventListener('focusout', deferred, true);
+              setTimeout(function () {
+                var ae2 = document.activeElement;
+                var stillTyping = !!(ae2 && page && page.contains && page.contains(ae2)
+                  && (ae2.tagName === 'INPUT' || ae2.tagName === 'TEXTAREA'
+                   || ae2.tagName === 'SELECT' || ae2.isContentEditable === true));
+                var stillPendingDim = Object.keys(_pendingRoomDimEdits).length > 0;
+                if (!stillTyping && !stillPendingDim) {
+                  try { renderRoom(); } catch (_) {}
+                  try { renderZones(); } catch (_) {}
+                  try { renderEquipment(); } catch (_) {}
+                  try { renderControllers(); } catch (_) {}
+                }
+              }, 50);
+            };
+            document.addEventListener('focusout', deferred, true);
+            return;
+          }
+
+          renderRoom();
           renderZones();
           renderEquipment();
           renderControllers();
-          renderSelectionSummarySidebar();
-          updateBreadcrumb();
         });
       }
 
@@ -2642,6 +2687,12 @@
           var es = new EventSource('/events');
           var debounceTimer = null;
           function scheduleRefresh() {
+            // Ignore SSE events that arrive while we're still inside our own
+            // save's fan-out window. Server emits rooms+zones+groups+
+            // target-ranges within ~1s of every /api/setup/save-rooms POST;
+            // those echoes used to retrigger refresh() and wipe in-flight
+            // user input. See GROW_MGMT_INPUT_OVERWRITE_FIX_2026-04-25.md §3.2.
+            if (Date.now() < _selfEchoSuppressUntil) return;
             if (debounceTimer) clearTimeout(debounceTimer);
             debounceTimer = setTimeout(function () { refresh(); }, 250);
           }
@@ -2747,6 +2798,8 @@
           // Replace zones on the primary room in the payload with the new count.
           var pidx = zonePayload.findIndex(function(r) { return r.id === primary.id || r.name === primary.name; });
           if (pidx !== -1) zonePayload[pidx].zones = primary.zones;
+          // Suppress our own SSE echo for ~2s — same rationale as persistRooms().
+          _selfEchoSuppressUntil = Date.now() + 2000;
           _f('/api/setup/save-rooms', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },

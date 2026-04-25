@@ -7880,20 +7880,24 @@ app.post('/api/setup/save-rooms', asyncHandler(async (req, res) => {
     let seededZoneRangesCount = 0;
     try {
       seededZoneRangesCount = await seedTargetRangesForRooms(rooms);
-      if (seededZoneRangesCount > 0) {
-        emitDataChange({ kind: 'target-ranges', updatedAt: new Date().toISOString(), source: 'setup-save-rooms-seed' });
-      }
     } catch (seedErr) {
       console.warn('[setup/save-rooms] target-ranges seed failed:', seedErr?.message || seedErr);
     }
 
-    // Notify SSE subscribers (3D viewer, dashboards) so room/zone edits from
-    // setup, EVIE, and admin flows appear immediately instead of waiting for
-    // the low-frequency poll refresh window.
+    // Single composite SSE event. Subscribers (grow-management page, 3D
+    // viewer) listen to multiple kinds but always debounce into the same
+    // refresh — collapsing to one event removes the 3-4× refresh pile-up
+    // that was wiping in-flight user input on the Grow Mgmt page.
+    // See docs/audits/GROW_MGMT_INPUT_OVERWRITE_FIX_2026-04-25.md §3.3.
     const nowIso = new Date().toISOString();
-    emitDataChange({ kind: 'rooms', updatedAt: nowIso, source: 'setup-save-rooms' });
-    emitDataChange({ kind: 'zones', updatedAt: nowIso, source: 'setup-save-rooms' });
-    emitDataChange({ kind: 'groups', updatedAt: nowIso, source: 'setup-save-rooms-reconcile' });
+    const affected = ['rooms', 'zones', 'groups'];
+    if (seededZoneRangesCount > 0) affected.push('target-ranges');
+    emitDataChange({
+      kind: 'data-change',
+      updatedAt: nowIso,
+      source: 'setup-save-rooms',
+      affected
+    });
 
     res.json({ success: true, saved: rooms.length, groupsReconciled: reconciledGroupsCount });
   } catch (err) {
