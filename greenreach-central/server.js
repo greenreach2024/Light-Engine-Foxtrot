@@ -465,6 +465,20 @@ app.use((req, _res, next) => {
 app.get('/data/rooms.json', (req, res) => proxyToLE(req, res, '/data/rooms.json'));
 app.get('/data/groups.json', (req, res) => proxyToLE(req, res, '/data/groups.json'));
 app.post('/data/groups.json', authMiddleware, (req, res) => proxyToLE(req, res, '/data/groups.json'));
+// Single source of truth for IoT device registry: LE owns SwitchBot polling
+// and writes iot-devices.json under /app/data (GCS FUSE). Central used to
+// serve a stale local copy from greenreach-central/public/data/ which drifted
+// over time — different device counts on LE vs Central caused dangling
+// controller_id references in groups. Preserve the auth gate that
+// SENSITIVE_DATA_FILES enforced for the static fallback.
+app.get('/data/iot-devices.json', (req, res) => {
+  const hasAuth = req.headers.authorization || req.session?.farmId;
+  if (!hasAuth) return res.status(403).json({ error: 'Authentication required for this resource' });
+  return proxyToLE(req, res, '/data/iot-devices.json');
+});
+// Target ranges (zone temp/RH/VPD/CO2 thresholds) live on LE; the 3D viewer
+// status overlay and zone-recommendations API need a fresh, single-source view.
+app.get('/data/target-ranges.json', (req, res) => proxyToLE(req, res, '/data/target-ranges.json'));
 app.get('/events', (req, res) => proxyToLE(req, res, '/events'));
 app.get('/data/room-map.json', async (req, res) => {
   const fid = farmStore.farmIdFromReq(req);

@@ -6867,7 +6867,7 @@ router.post('/chat', async (req, res) => {
     });
   }
 
-  const { message, conversation_id, farm_id, page_context } = req.body;
+  const { message, conversation_id, farm_id, page_context, page_state } = req.body;
   if (!message || typeof message !== 'string' || message.trim().length === 0) {
     return res.status(400).json({ ok: false, error: 'Message is required' });
   }
@@ -6977,8 +6977,27 @@ router.post('/chat', async (req, res) => {
     // Inject page context for setup-wizard awareness
     if (page_context === 'setup-wizard') {
       systemPrompt += '\n\nCURRENT PAGE CONTEXT: The farmer is on the Setup Wizard page right now. They are going through first-time farm setup. Be especially helpful and proactive about guiding them through each step. Use get_onboarding_status and get_setup_progress to check what is done and what remains. Offer to walk them through setup conversationally.';
+    } else if (page_context === 'grow-management') {
+      systemPrompt += '\n\nCURRENT PAGE CONTEXT: The farmer is on the Grow Management page (5-step unified setup: Room -> Zones -> Units/Groups -> Equipment summary -> Controllers). The page reads/writes rooms.json, groups.json, target-ranges.json, iot-devices.json. When the farmer asks about "this room", "the zone", "these groups", or "the plan", default to the page_state below. Prefer tools that act on the selected scope (apply_light_recipe, update_zone_targets_bulk, optimize_layout, get_environment_snapshot). If groups have crop:null, suggest assigning a crop via Crop Scheduler or create_planting_plan.';
     } else if (page_context) {
       systemPrompt += '\nCurrent page: ' + page_context;
+    }
+
+    // Page-state hook: pages can ship the operator's current selection
+    // (selected room/group/zone, dirty flag) so EVIE can pre-fill tool args
+    // and reference the right scope without re-asking. Keep payload small —
+    // we only inject IDs and counts, never full record bodies.
+    if (page_state && typeof page_state === 'object') {
+      const safe = {};
+      ['farm_id', 'room_id', 'room_name', 'group_id', 'group_name', 'zone_id', 'zone_name', 'unsaved'].forEach((k) => {
+        if (page_state[k] != null) safe[k] = String(page_state[k]).slice(0, 120);
+      });
+      if (Array.isArray(page_state.zones)) {
+        safe.zones = page_state.zones.slice(0, 24).map((z) => String(z).slice(0, 60));
+      }
+      if (Object.keys(safe).length) {
+        systemPrompt += '\nPAGE STATE (operator selection on the current page):\n' + JSON.stringify(safe);
+      }
     }
 
     const farmHandMode = shouldEnterFarmHandMode(sanitizedMessage);

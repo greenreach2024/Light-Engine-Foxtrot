@@ -2826,6 +2826,205 @@ export const TOOL_CATALOG = {
       return { ok: true, message: `Target ranges reverted for ${prevState.zone_id}` };
     }
   },
+  'update_zone_targets_bulk': {
+    description: 'Apply the same temp/RH/VPD/CO2 thresholds to many zones at once (entire room, every zone, or a name-pattern match). Use this when an operator says "set all zones in Room 1 to 22-24C / 55-65% RH". Writes target-ranges.json. Each previously-existing zone entry is preserved as undo state. Either room_name OR match_zone_name OR apply_to_all is required.',
+    category: 'write',
+    required: [],
+    optional: ['room_name', 'match_zone_name', 'apply_to_all', 'temp_min', 'temp_max', 'rh_min', 'rh_max', 'vpd_min', 'vpd_max', 'co2_min', 'co2_max'],
+    undoable: true,
+    handler: async (params) => {
+      const targetRanges = readJSON('target-ranges.json', { zones: {}, defaults: {} });
+      const zonesObj = targetRanges.zones || {};
+      const rooms = readJSON('rooms.json', { rooms: [] });
+      const roomList = Array.isArray(rooms) ? rooms : (rooms.rooms || []);
+
+      const fields = ['temp_min', 'temp_max', 'rh_min', 'rh_max', 'vpd_min', 'vpd_max', 'co2_min', 'co2_max'];
+      const patch = {};
+      for (const f of fields) {
+        if (params[f] != null) {
+          const v = parseFloat(params[f]);
+          if (Number.isNaN(v)) return { ok: false, error: `Invalid value for ${f}: ${params[f]}` };
+          patch[f] = v;
+        }
+      }
+      if (Object.keys(patch).length === 0) return { ok: false, error: 'No threshold fields provided' };
+
+      // Resolve which zone IDs to touch.
+      let zoneIds = [];
+      if (params.apply_to_all === true) {
+        zoneIds = Object.keys(zonesObj);
+      } else if (params.room_name) {
+        const wanted = String(params.room_name).toLowerCase();
+        const match = roomList.find((r) => String(r.name || r.room_name || r.id || '').toLowerCase() === wanted);
+        if (match) {
+          (match.zones || []).forEach((z, i) => {
+            const zid = (typeof z === 'string') ? z : String(z?.id || `zone-${i + 1}`);
+            zoneIds.push(zid);
+          });
+        }
+      } else if (params.match_zone_name) {
+        const needle = String(params.match_zone_name).toLowerCase();
+        zoneIds = Object.keys(zonesObj).filter((zid) => zid.toLowerCase().includes(needle)
+          || String(zonesObj[zid]?.name || '').toLowerCase().includes(needle));
+      } else {
+        return { ok: false, error: 'Provide one of: room_name, match_zone_name, apply_to_all=true' };
+      }
+      if (!zoneIds.length) return { ok: false, error: 'No zones matched the supplied filter' };
+
+      const previous = {};
+      const defaults = targetRanges.defaults || {};
+      for (const zid of zoneIds) {
+        previous[zid] = zonesObj[zid] ? { ...zonesObj[zid] } : null;
+        zonesObj[zid] = { ...defaults, ...(zonesObj[zid] || {}), ...patch };
+      }
+
+      // Reject ranges where min >= max for any pair we just wrote.
+      for (const zid of zoneIds) {
+        const z = zonesObj[zid];
+        if (z.temp_min != null && z.temp_max != null && z.temp_min >= z.temp_max) return { ok: false, error: `temp_min must be less than temp_max for ${zid}` };
+        if (z.rh_min != null && z.rh_max != null && z.rh_min >= z.rh_max) return { ok: false, error: `rh_min must be less than rh_max for ${zid}` };
+      }
+
+      targetRanges.zones = zonesObj;
+      targetRanges.metadata = targetRanges.metadata || {};
+      targetRanges.metadata.last_updated = new Date().toISOString();
+      writeJSON('target-ranges.json', targetRanges);
+
+      return {
+        ok: true,
+        zones_updated: zoneIds,
+        fields_changed: Object.keys(patch),
+        _undo_state: { previous }
+      };
+    },
+    undoHandler: async (params, prevState) => {
+      const targetRanges = readJSON('target-ranges.json', { zones: {} });
+      Object.entries(prevState.previous || {}).forEach(([zid, prev]) => {
+        if (prev) targetRanges.zones[zid] = prev;
+        else delete targetRanges.zones[zid];
+      });
+      writeJSON('target-ranges.json', targetRanges);
+      return { ok: true, message: `Reverted target ranges for ${Object.keys(prevState.previous || {}).length} zone(s)` };
+    }
+  },
+  'apply_light_recipe': {
+    description: 'Attach a named light recipe to one or more groups (Build Stock Groups produced empty lights[] arrays in production; this binds a real recipe). Inputs: group_id OR match_name (case-insensitive substring), recipe_name. Writes groups[].recipe and seeds groups[].lights[].spectrum from the recipe. Trust tier: confirm — operator must approve before lights are reconfigured.',
+    category: 'write',
+    required: ['recipe_name'],
+    optional: ['group_id', 'match_name'],
+    undoable: true,
+    handler: async (params) => {
+      const groups = readJSON('groups.json', []);
+      const groupList = Array.isArray(groups) ? groups : [];
+      let targets = [];
+      if (params.group_id) {
+        const g = groupList.find((x) => x.id === params.group_id);
+        if (g) targets = [g];
+      } else if (params.match_name) {
+        const needle = String(params.match_name).toLowerCase();
+        targets = groupList.filter((x) => String(x.name || x.id || '').toLowerCase().includes(needle));
+      }
+      if (!targets.length) return { ok: false, error: 'No groups matched (provide group_id or match_name)' };
+
+      const previous = targets.map((g) => ({ id: g.id, recipe: g.recipe ?? null, lights: Array.isArray(g.lights) ? g.lights.slice() : [] }));
+      const recipeStub = { name: params.recipe_name, appliedAt: new Date().toISOString() };
+      targets.forEach((g) => {
+        g.recipe = recipeStub;
+        if (!Array.isArray(g.lights) || g.lights.length === 0) {
+          g.lights = [{ spectrum: params.recipe_name, channel: 'default' }];
+        } else {
+          g.lights = g.lights.map((l) => ({ ...l, spectrum: params.recipe_name }));
+        }
+        g.lastModified = new Date().toISOString();
+      });
+      writeJSON('groups.json', groupList);
+      return { ok: true, groups_updated: targets.map((g) => g.id), recipe: params.recipe_name, _undo_state: { previous } };
+    },
+    undoHandler: async (params, prevState) => {
+      const groups = readJSON('groups.json', []);
+      const list = Array.isArray(groups) ? groups : [];
+      (prevState.previous || []).forEach((p) => {
+        const g = list.find((x) => x.id === p.id);
+        if (!g) return;
+        g.recipe = p.recipe;
+        g.lights = p.lights;
+      });
+      writeJSON('groups.json', list);
+      return { ok: true, message: `Reverted recipe on ${(prevState.previous || []).length} group(s)` };
+    }
+  },
+  'create_planting_plan': {
+    description: 'Create a planting plan and bind it to selected groups in one shot. Use when operator says "plan to seed lettuce in Zone 1 next Monday across 4 groups". Writes plan onto each target group: crop, plan, planId, schedule.seed_date. Trust tier: confirm.',
+    category: 'write',
+    required: ['plan_name', 'crop'],
+    optional: ['seed_date', 'group_ids', 'match_name', 'photoperiod_hours', 'expected_harvest_days'],
+    undoable: true,
+    handler: async (params) => {
+      const groups = readJSON('groups.json', []);
+      const groupList = Array.isArray(groups) ? groups : [];
+      let targets = [];
+      if (Array.isArray(params.group_ids) && params.group_ids.length) {
+        targets = groupList.filter((g) => params.group_ids.includes(g.id));
+      } else if (params.match_name) {
+        const needle = String(params.match_name).toLowerCase();
+        targets = groupList.filter((g) => String(g.name || g.id || '').toLowerCase().includes(needle));
+      }
+      if (!targets.length) return { ok: false, error: 'No groups matched (provide group_ids or match_name)' };
+
+      const planId = `plan-${Date.now().toString(36)}`;
+      const seedDate = params.seed_date || new Date().toISOString().slice(0, 10);
+      const planObj = {
+        id: planId,
+        name: params.plan_name,
+        crop: params.crop,
+        photoperiod_hours: params.photoperiod_hours || null,
+        expected_harvest_days: params.expected_harvest_days || null,
+        created_at: new Date().toISOString()
+      };
+
+      const previous = targets.map((g) => ({
+        id: g.id, crop: g.crop ?? null, plan: g.plan ?? null, planId: g.planId ?? null, schedule: g.schedule ?? null
+      }));
+      targets.forEach((g) => {
+        g.crop = params.crop;
+        g.plan = planObj;
+        g.planId = planId;
+        g.schedule = { ...(g.schedule || {}), seed_date: seedDate };
+        g.lastModified = new Date().toISOString();
+      });
+      writeJSON('groups.json', groupList);
+      return { ok: true, plan_id: planId, groups_updated: targets.map((g) => g.id), seed_date: seedDate, _undo_state: { previous } };
+    },
+    undoHandler: async (params, prevState) => {
+      const groups = readJSON('groups.json', []);
+      const list = Array.isArray(groups) ? groups : [];
+      (prevState.previous || []).forEach((p) => {
+        const g = list.find((x) => x.id === p.id);
+        if (!g) return;
+        g.crop = p.crop; g.plan = p.plan; g.planId = p.planId; g.schedule = p.schedule;
+      });
+      writeJSON('groups.json', list);
+      return { ok: true, message: `Reverted plan on ${(prevState.previous || []).length} group(s)` };
+    }
+  },
+  'get_spectra_sync_status': {
+    description: 'Report whether SpectraSync (multi-fixture spectrum coordination) is enabled and which groups have a recipe attached. Read-only. Falls back gracefully when no SpectraSync route is present on Light Engine.',
+    category: 'read',
+    required: [],
+    optional: [],
+    handler: async () => {
+      const groups = readJSON('groups.json', []);
+      const list = Array.isArray(groups) ? groups : [];
+      const withRecipe = list.filter((g) => g.recipe && (g.recipe.name || typeof g.recipe === 'string')).length;
+      const withLights = list.filter((g) => Array.isArray(g.lights) && g.lights.length > 0).length;
+      return {
+        ok: true,
+        enabled: false,
+        reason: 'SpectraSync coordination route not yet wired on Light Engine; per-group recipes/lights are tracked locally.',
+        totals: { groups: list.length, with_recipe: withRecipe, with_lights: withLights }
+      };
+    }
+  },
   'get_outdoor_weather': {
     description: 'Get current outdoor weather conditions at the farm location (temperature, humidity, dew point, solar radiation, wind speed). Uses OpenWeatherMap free API. Essential for understanding external heat/humidity load on the facility, VPD context, and HVAC demand. Farm lat/lon is read from farm.json or env vars.',
     category: 'read',

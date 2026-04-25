@@ -7820,6 +7820,23 @@ app.post('/api/setup/save-rooms', asyncHandler(async (req, res) => {
       console.warn('[setup/save-rooms] group reconcile failed:', reconErr?.message || reconErr);
     }
 
+    // Seed target-ranges.json for any zone that doesn't yet have one. The 3D
+    // viewer status overlay, /api/zone-recommendations, and EVIE
+    // get_environment_snapshot all fall through their empty-range branches
+    // without this — leaving environment intelligence dark until an operator
+    // hand-edits Environment Setup. Defaults are pulled from the existing
+    // target-ranges.defaults block when present, else conservative leafy-greens
+    // values. Existing zone entries are NEVER overwritten.
+    let seededZoneRangesCount = 0;
+    try {
+      seededZoneRangesCount = await seedTargetRangesForRooms(rooms);
+      if (seededZoneRangesCount > 0) {
+        emitDataChange({ kind: 'target-ranges', updatedAt: new Date().toISOString(), source: 'setup-save-rooms-seed' });
+      }
+    } catch (seedErr) {
+      console.warn('[setup/save-rooms] target-ranges seed failed:', seedErr?.message || seedErr);
+    }
+
     // Notify SSE subscribers (3D viewer, dashboards) so room/zone edits from
     // setup, EVIE, and admin flows appear immediately instead of waiting for
     // the low-frequency poll refresh window.
@@ -7958,6 +7975,56 @@ async function reconcileGroupsFromRooms(rooms) {
   });
 
   return total;
+}
+
+/**
+ * Seed `target-ranges.json` with default thresholds for any zone that
+ * doesn't already have an entry. Returns the number of zone entries newly
+ * created. Existing entries are NEVER modified — Environment Setup is the
+ * authoritative editor for thresholds. Defaults pulled from
+ * target-ranges.defaults when present, else conservative leafy-greens values.
+ */
+async function seedTargetRangesForRooms(rooms) {
+  if (!Array.isArray(rooms) || !rooms.length) return 0;
+  const FALLBACK_DEFAULTS = {
+    temp_min: 20, temp_max: 24,
+    rh_min: 50,   rh_max: 65,
+    vpd_min: 0.8, vpd_max: 1.2,
+    co2_min: 400, co2_max: 1200
+  };
+  const targetRanges = readJSON('target-ranges.json', { zones: {}, defaults: {} }) || {};
+  if (!targetRanges.zones || typeof targetRanges.zones !== 'object') targetRanges.zones = {};
+  const defaults = (targetRanges.defaults && typeof targetRanges.defaults === 'object')
+    ? { ...FALLBACK_DEFAULTS, ...targetRanges.defaults }
+    : FALLBACK_DEFAULTS;
+
+  let added = 0;
+  for (const room of rooms) {
+    const roomLabel = room.name || room.room_name || room.id || 'Room';
+    const zones = Array.isArray(room.zones) ? room.zones : [];
+    zones.forEach((z, i) => {
+      const zoneId = (typeof z === 'string')
+        ? z
+        : String(z?.id || `zone-${i + 1}`);
+      const zoneName = (typeof z === 'string')
+        ? z
+        : (z?.name || `Zone ${i + 1}`);
+      if (targetRanges.zones[zoneId]) return; // never overwrite operator edits
+      targetRanges.zones[zoneId] = {
+        name: `${roomLabel}, ${zoneName}`,
+        ...defaults,
+        seeded: true,
+        seededAt: new Date().toISOString()
+      };
+      added += 1;
+    });
+  }
+
+  if (added > 0) {
+    writeJSON('target-ranges.json', targetRanges);
+    console.log(`[seed-target-ranges] Added defaults for ${added} new zone(s)`);
+  }
+  return added;
 }
 
 // Setup completion endpoint

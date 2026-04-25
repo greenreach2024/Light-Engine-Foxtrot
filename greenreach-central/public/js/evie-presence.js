@@ -29,6 +29,7 @@
   var pageContext = (function () {
     var path = window.location.pathname.toLowerCase();
     if (path.indexOf('setup-wizard') >= 0) return 'setup-wizard';
+    if (path.indexOf('grow-management') >= 0) return 'grow-management';
     if (path.indexOf('farm-inventory') >= 0) return 'inventory';
     if (path.indexOf('planting-scheduler') >= 0) return 'planting';
     if (path.indexOf('nutrient') >= 0) return 'nutrients';
@@ -576,6 +577,15 @@
     try {
       var body = { message: text, page_context: pageContext };
       if (conversationId) body.conversation_id = conversationId;
+      // Pages can attach extra context (selected room/group/zone, unsaved
+      // edits) via window.__eviePageState. The server pre-fills tool args
+      // from this so the operator never has to re-state the obvious.
+      try {
+        var ps = (typeof window.__eviePageState === 'function')
+          ? window.__eviePageState()
+          : window.__eviePageState;
+        if (ps && typeof ps === 'object') body.page_state = ps;
+      } catch (_) { /* page-state hooks must never break chat */ }
 
       var resp = await fetch(API_BASE + '/chat', {
         method: 'POST',

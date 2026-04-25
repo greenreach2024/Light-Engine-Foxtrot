@@ -1319,6 +1319,19 @@
           <a href="/views/farm-setup.html#iot">Provision equipment in Farm Setup</a>
           <a href="/views/supplies.html">Supplies &amp; consumables</a>
         </div>
+        <!-- Cross-page navigation: every consumer of this page's data lives on a
+             different view. Surface direct links so operators don't have to
+             hunt through the admin menu. Hrefs are static; ?room= is filled in
+             by the summary renderer when a room is selected. -->
+        <div class="ff-link-row" id="ffGrowMgmtCrossLinks" style="margin-top:8px;flex-wrap:wrap;gap:8px;">
+          <a href="/views/3d-farm-viewer.html" data-link="3d">3D Farm Viewer</a>
+          <a href="/views/farm-summary.html" data-link="farm-summary">Farm Summary</a>
+          <a href="/views/tray-inventory.html" data-link="tray-inventory">Activity Hub</a>
+          <a href="/views/environment-setup.html" data-link="env">Environment Setup</a>
+          <a href="/views/light-setup.html" data-link="light">Light Setup</a>
+          <a href="/views/controllers.html" data-link="controllers">Controllers</a>
+          <a href="/LE-farm-admin.html#growing/crop-scheduler" data-link="crop-scheduler">Crop Scheduler</a>
+        </div>
       </div>
     </section>
 
@@ -3301,6 +3314,47 @@
   </dialog>
 
     <div id="toasts" class="toast-container" aria-live="polite" aria-atomic="true"></div>
+
+  <!-- E.V.I.E. presence: ambient orb + slide-out intelligence panel.
+       Loaded last so DOM and STATE are ready when the orb hydrates.
+       window.__eviePageState() ships the operator's current page selection
+       (room/group/zone IDs, unsaved flag) into every chat call so EVIE can
+       pre-fill tool args without re-asking. Server consumes this in
+       greenreach-central/routes/assistant-chat.js (page_state branch). -->
+  <link rel="stylesheet" href="/styles/evie-core.css">
+  <script>
+    (function () {
+      function pickRoomId() {
+        try {
+          var rooms = (window.__ffFlowRooms || (window.STATE && window.STATE.rooms) || []);
+          if (Array.isArray(rooms) && rooms.length) return rooms[0].id || rooms[0].name || null;
+        } catch (_) {}
+        return null;
+      }
+      function pickZoneIds() {
+        try {
+          var rooms = (window.__ffFlowRooms || (window.STATE && window.STATE.rooms) || []);
+          if (!Array.isArray(rooms) || !rooms.length) return [];
+          var zs = rooms[0].zones || [];
+          return zs.map(function (z) { return (typeof z === 'string') ? z : (z && (z.id || z.name)); }).filter(Boolean);
+        } catch (_) { return []; }
+      }
+      window.__eviePageState = function () {
+        var st = {
+          page: 'grow-management',
+          room_id: pickRoomId(),
+          zones: pickZoneIds(),
+          unsaved: !!(window.STATE && window.STATE.__dirty)
+        };
+        try {
+          var fid = localStorage.getItem('farm_id') || localStorage.getItem('farmId') || sessionStorage.getItem('farm_id');
+          if (fid) st.farm_id = fid;
+        } catch (_) {}
+        return st;
+      };
+    })();
+  </script>
+  <script src="/js/evie-presence.js"></script>
 
 </body>
 </html>
