@@ -917,9 +917,15 @@ async function __mirrorJsonToGCS(fullPath, jsonStringOrObject) {
   if (!rel) return;
   try {
     const mod = await import('./services/gcs-storage.js');
-    const data = typeof jsonStringOrObject === 'string'
+    let data = typeof jsonStringOrObject === 'string'
       ? JSON.parse(jsonStringOrObject)
       : jsonStringOrObject;
+    // Attach the current timestamp so hydration can detect stale copies
+    // during cold-start. This prevents GCS-hydrate from overwriting fresh
+    // local edits with stale cached copies.
+    if (data && typeof data === 'object') {
+      data.__gcs_mtime_ms = Date.now();
+    }
     await mod.writeJSON(rel, data);
   } catch (err) {
     console.warn('[gcs-mirror] Failed to mirror', rel, err?.message || err);
@@ -935,10 +941,30 @@ async function hydrateCriticalDataFromGCS() {
       try {
         const data = await mod.readJSON(rel, null);
         if (data !== null && data !== undefined) {
-          // GCS has a mirrored copy — restore it (authoritative).
-          try { fs.mkdirSync(path.dirname(target), { recursive: true }); } catch {}
-          fs.writeFileSync(target, JSON.stringify(data, null, 2));
-          console.log(`[gcs-hydrate] Restored ${file} from GCS`);
+          // GCS has a mirrored copy, but check if local file is NEWER.
+          // Cloud Run cold-start hydration must not overwrite fresh edits
+          // with stale GCS copies. If local exists and is newer, keep it.
+          let shouldRestore = true;
+          if (fs.existsSync(target)) {
+            try {
+              const localStat = fs.statSync(target);
+              const gcsMtime = data.__gcs_mtime_ms || data.mtime || 0; // fallback if metadata present
+              // If we have GCS metadata and local is newer, skip restore
+              if (gcsMtime > 0 && localStat.mtimeMs > gcsMtime + 5000) {
+                // Local is >5 seconds newer than GCS copy — likely a save in flight
+                console.log(`[gcs-hydrate] SKIP ${file} — local is newer (local: ${localStat.mtimeMs} vs gcs: ${gcsMtime})`);
+                shouldRestore = false;
+              }
+            } catch (e) {
+              // If we can't stat local, fall back to restore from GCS
+            }
+          }
+          if (shouldRestore) {
+            // GCS has a mirrored copy — restore it (authoritative).
+            try { fs.mkdirSync(path.dirname(target), { recursive: true }); } catch {}
+            fs.writeFileSync(target, JSON.stringify(data, null, 2));
+            console.log(`[gcs-hydrate] Restored ${file} from GCS`);
+          }
           continue;
         }
         // GCS has no mirrored copy yet. If a local (baked or seeded) file
@@ -26684,7 +26710,12 @@ app.get('/data/rooms.json', (req, res, next) => {
     if (Array.isArray(rooms)) {
       res.setHeader('Access-Control-Allow-Origin', '*');
       res.setHeader('Cache-Control', 'no-cache');
-      return res.json({ rooms });
+      // Strip internal __gcs_mtime_ms metadata before sending to client
+      return res.json({ rooms: rooms.filter(r => r && typeof r === 'object').map(r => {
+        const copy = { ...r };
+        delete copy.__gcs_mtime_ms;
+        return copy;
+      }) });
     }
   } catch (e) {
     console.warn('[rooms] Failed to load persisted rooms for /data/rooms.json:', e?.message || e);
@@ -26772,7 +26803,16 @@ app.get('/data/groups.json', (req, res, next) => {
     if (Array.isArray(persisted)) {
       res.setHeader('Access-Control-Allow-Origin', '*');
       res.setHeader('Cache-Control', 'no-cache');
-      return res.json({ groups: persisted });
+      // Strip internal __gcs_mtime_ms metadata before sending to client
+      const cleaned = persisted.map(g => {
+        if (g && typeof g === 'object') {
+          const copy = { ...g };
+          delete copy.__gcs_mtime_ms;
+          return copy;
+        }
+        return g;
+      });
+      return res.json({ groups: cleaned });
     }
   } catch (e) {
     console.warn('[groups] Failed to load persisted groups for /data/groups.json:', e?.message || e);
