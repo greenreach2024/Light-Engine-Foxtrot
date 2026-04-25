@@ -127,15 +127,30 @@ gcloud run services update greenreach-central --region=us-east1
 
 ### SMS (Email-to-SMS Gateway)
 
-SMS is used for critical/high alert notifications only. Delivered via carrier email-to-SMS gateways through the same Google Workspace SMTP. Recipient allowlist with carrier mapping is hardcoded in `greenreach-central/services/sms-service.js` (requires code change + deploy to modify).
+SMS is used for critical/high alert notifications only. Delivered via carrier email-to-SMS gateways through the same Google Workspace SMTP. Recipient allowlist is controlled by the `SMS_RECIPIENTS` Cloud Run env var — **no code change or redeploy required** to add/remove numbers.
 
 | Variable | Value | Notes |
 |----------|-------|-------|
 | `ADMIN_ALERT_PHONE` | (not set) | Admin phone for alert SMS |
+| `SMS_RECIPIENTS` | (Cloud Run env var) | JSON or CSV allowlist — see format below |
 
-**Current approved SMS recipients:** `+16138881031` -> `6138881031@txt.bell.ca`
+**SMS_RECIPIENTS format (set as Cloud Run env var on `greenreach-central`):**
+```
+# JSON array of {phone: gateway} objects:
+'[{"+16138881031":"6138881031@txt.bell.ca"}]'
 
-**To add a new SMS recipient:** Edit the `APPROVED_RECIPIENTS` Map in `sms-service.js` with the phone number and carrier gateway address, then deploy.
+# Or CSV "phone:gateway" pairs:
+"+16138881031:6138881031@txt.bell.ca,+14165551234:5551234@mms.rogers.com"
+```
+
+**Default fallback** (when `SMS_RECIPIENTS` is not set): `+16138881031` → `6138881031@txt.bell.ca`
+
+**To add a new SMS recipient:** Update the `SMS_RECIPIENTS` env var on the `greenreach-central` Cloud Run service — no deploy needed.
+
+```bash
+gcloud run services update greenreach-central --region=us-east1 \
+  --update-env-vars='SMS_RECIPIENTS=[{"+16138881031":"6138881031@txt.bell.ca"}]'
+```
 
 ### Alert Notifier
 

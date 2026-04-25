@@ -55,6 +55,32 @@ function resolveLeUrl() {
   return process.env.LIGHT_ENGINE_URL || null;
 }
 
+// POST data to Light Engine canonical store.
+// LE is the single authoritative store for groups/rooms (GCS-FUSE backed).
+// farmStore writes go to Central's PostgreSQL which the GET path no longer
+// serves — this is the write-path equivalent of the proxyToLE GET fix.
+// Returns { ok, reason?, status? } so callers can log failures without crashing.
+async function postToLE(filename, data, farm_id) {
+  const url = resolveLeUrl();
+  if (!url) return { ok: false, reason: 'no_edge_url', filename };
+  try {
+    const headers = { 'Content-Type': 'application/json' };
+    if (farm_id) headers['X-Farm-ID'] = farm_id;
+    const apiKey = process.env.GREENREACH_API_KEY;
+    if (apiKey) headers['X-API-Key'] = apiKey;
+    const res = await fetch(`${url}/data/${filename}`, {
+      method: 'POST', headers, body: JSON.stringify(data),
+      signal: AbortSignal.timeout(10000)
+    });
+    if (res.ok) return { ok: true, filename };
+    console.warn(`[farm-ops-agent] LE write ${filename} failed: ${res.status}`);
+    return { ok: false, reason: `http_${res.status}`, status: res.status, filename };
+  } catch (err) {
+    console.warn(`[farm-ops-agent] LE write ${filename} error:`, err.message);
+    return { ok: false, reason: 'network_error', message: err.message, filename };
+  }
+}
+
 // Load crop-utils (UMD module) for name/alias/planId resolution
 const require_ = createRequire(import.meta.url);
 const cropUtils = require_(path.join(__dirname, '..', 'public', 'js', 'crop-utils.js'));
@@ -1937,7 +1963,9 @@ export const TOOL_CATALOG = {
       }
 
       await farmStore.set(farm_id, 'groups', groups);
-      writeJSON('groups.json', groups);
+      // Write to LE canonical store (not farmStore/DB — LE owns groups.json on GCS)
+      const leSync = await postToLE('groups.json', { groups }, farm_id);
+      if (!leSync.ok) console.warn('[update_groups] LE write failed:', leSync.reason);
 
       const label = targets.length === 1 ? `group "${targets[0].name}"` : `${targets.length} groups`;
       return {
@@ -1958,7 +1986,8 @@ export const TOOL_CATALOG = {
         if (idx >= 0) { groups[idx] = bs.state; restored++; }
       }
       await farmStore.set(state.farm_id, 'groups', groups);
-      writeJSON('groups.json', groups);
+      const leSync = await postToLE('groups.json', { groups }, state.farm_id);
+      if (!leSync.ok) console.warn('[update_groups undo] LE write failed:', leSync.reason);
       return { ok: true, undone: true, message: `Reverted ${restored} group(s)` };
     }
   },
@@ -2223,21 +2252,9 @@ export const TOOL_CATALOG = {
       writeJSON('room-map.json', roomMap);
 
       await farmStore.set(farm_id, 'groups', groups);
-      writeJSON('groups.json', groups);
-
-      // Write updated groups back to LE so the LE->Central sync picks up
-      // spatial positions (gridX, gridY) instead of overwriting with stale data.
-      const leUrl = process.env.FARM_EDGE_URL || process.env.LE_API_URL || '';
-      if (leUrl) {
-        const apiKey = process.env.GREENREACH_API_KEY || '';
-        const headers = { 'Content-Type': 'application/json' };
-        if (farm_id) headers['X-Farm-ID'] = farm_id;
-        if (apiKey) headers['X-API-Key'] = apiKey;
-        fetch(leUrl + '/data/groups.json', {
-          method: 'POST', headers, body: JSON.stringify({ groups }),
-          signal: AbortSignal.timeout(8000)
-        }).catch(e => console.warn('[optimize_layout] LE write-back failed:', e.message));
-      }
+      // Write groups to LE canonical store (awaited — not fire-and-forget)
+      const leSync = await postToLE('groups.json', { groups }, farm_id);
+      if (!leSync.ok) console.warn('[optimize_layout] LE write failed:', leSync.reason);
 
       const totalPlaced = items.length;
       const actualSpacingX = (spacingGridX / m2gX).toFixed(1);
@@ -2281,7 +2298,8 @@ export const TOOL_CATALOG = {
       writeJSON('room-map-' + state.roomMapId + '.json', roomMap);
       writeJSON('room-map.json', roomMap);
       await farmStore.set(farm_id, 'groups', state.beforeGroups);
-      writeJSON('groups.json', state.beforeGroups);
+      const leSync = await postToLE('groups.json', { groups: state.beforeGroups }, farm_id);
+      if (!leSync.ok) console.warn('[optimize_layout undo] LE write failed:', leSync.reason);
       return { ok: true, undone: true, message: 'Layout changes reverted.' };
     }
   },

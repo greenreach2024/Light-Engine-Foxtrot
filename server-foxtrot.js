@@ -1202,6 +1202,18 @@ async function startOperationalServices(trigger = 'startup') {
     console.warn('[zone-sync] Failed:', error?.message || error);
   }
 
+  // Boot-time idempotent target-ranges seed: existing farms whose rooms.json
+  // was saved before the seeder shipped (Apr 2026) never had zones seeded.
+  // Runs after GCS hydration so rooms.json reflects persisted state.
+  // Existing zone entries are NEVER modified (operator edits are safe).
+  try {
+    const bootRooms = (readJSON('rooms.json', { rooms: [] }) || {}).rooms || [];
+    const seeded = await seedTargetRangesForRooms(bootRooms);
+    if (seeded > 0) console.log(`[target-ranges] Boot-time seeded ${seeded} zone(s)`);
+  } catch (e) {
+    console.warn('[target-ranges] Boot-time seed failed:', e?.message || e);
+  }
+
   // Start syncing live sensor data from iot-devices.json to env.json zones
   try { setupLiveSensorSync(); } catch (error) {
     console.warn('[sensor-sync] Failed to start:', error?.message || error);

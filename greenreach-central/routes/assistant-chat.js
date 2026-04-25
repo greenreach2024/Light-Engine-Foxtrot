@@ -4596,6 +4596,9 @@ async function executeExtendedTool(toolName, params, farmId) {
         if (hvac_type) { room.hvac_type = hvac_type; changes.hvac_type = hvac_type; }
         if (Object.keys(changes).length === 0) return { ok: false, error: 'At least one spec field is required' };
         await farmStore.set(farmId, 'rooms', rooms);
+        // Write to LE canonical store — rooms.json lives on LE's GCS mount, not Central DB
+        const leSync = await writeToLE('rooms.json', { rooms });
+        if (!leSync.ok) console.warn('[EVIE] update_room_specs LE sync failed:', leSync.reason);
         return { ok: true, room_id, room_name: room.name, changes, message: `Room specs updated for "${room.name}"` };
       } catch (err) {
         return { ok: false, error: err.message };
@@ -5059,6 +5062,9 @@ async function executeExtendedTool(toolName, params, farmId) {
         });
 
         await farmStore.set(farmId, 'groups', Array.isArray(groupsData) ? groups : { ...groupsData, groups });
+        // Write to LE canonical store — groups.json lives on LE's GCS mount
+        const leSync = await writeToLE('groups.json', { groups });
+        if (!leSync.ok) console.warn('[EVIE] update_group_crop LE sync failed:', leSync.reason);
 
         return {
           ok: true,

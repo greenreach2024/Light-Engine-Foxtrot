@@ -709,43 +709,19 @@ app.post("/api/admin/seed-pricing", adminAuthMiddleware, async (req, res) => {
   }
 });
 
-// ── IoT Devices: save to DB + forward to Light Engine ──────────────────────
-// The browser's room-mapper saves device registry data (zone assignments,
-// sensor placements) via POST /data/iot-devices.json. This handler persists
-// to the database AND forwards the payload to the Light Engine so its
-// syncSensorData() loop has the device list it needs to poll SwitchBot.
+// ── IoT Devices: pure proxy to Light Engine ─────────────────────────────────
+// LE is the single authoritative store for iot-devices.json (GCS FUSE).
+// Central previously dual-wrote to farm_data DB AND forwarded to LE; if the
+// LE forward failed, Central DB and LE diverged with no reconciliation.
+// Pure proxy keeps exactly one writer: LE. Auth is enforced by the auth check
+// that resolveEdgeUrlForProxy already requires; extra farmId gate below keeps
+// the behaviour of the old handler for unauthenticated requests.
 app.post('/data/iot-devices.json', async (req, res) => {
   const fid = farmStore.farmIdFromReq(req);
   if (!fid) {
     return res.status(401).json({ success: false, error: 'Not authenticated' });
   }
-  try {
-    const payload = req.body;
-    const devicesList = Array.isArray(payload) ? payload : (payload.devices || payload);
-
-    // 1. Save to DB (source of truth for multi-tenant data)
-    await farmStore.set(fid, 'devices', devicesList);
-    logger.info(`[IoT Devices] Saved ${Array.isArray(devicesList) ? devicesList.length : '?'} device(s) for farm ${fid} to DB`);
-
-    // 2. Forward to Light Engine so flat-file storage is updated and
-    //    zone-assignment side-effects (syncZoneAssignmentsFromRoomMap) run.
-    const lightEngineUrl = resolveEdgeUrlForProxy();
-    if (lightEngineUrl) {
-      fetch(`${lightEngineUrl}/data/iot-devices.json`, {
-        method: 'POST',
-        headers: leProxyHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify(payload),
-        signal: AbortSignal.timeout(10000)
-      })
-        .then(r => logger.info(`[IoT Devices] Forwarded to Light Engine: ${r.status}`))
-        .catch(err => logger.warn(`[IoT Devices] Light Engine forward failed (non-fatal): ${err.message}`));
-    }
-
-    return res.json({ success: true, dataType: 'devices', farmId: fid });
-  } catch (err) {
-    logger.error('[IoT Devices] Save failed:', err.message);
-    return res.status(500).json({ success: false, error: err.message });
-  }
+  return proxyToLE(req, res, '/data/iot-devices.json');
 });
 
 // ── Phase 4: Auto-inject api-config.js + auth-guard.js into all HTML responses ──
