@@ -72,33 +72,19 @@ Claude operator requirements:
 
 Recent commits on `main`:
 
+- `a28c5549` Fix: apply production readiness corrections from 2026-04-25 audit
+- `0d9bc4bb` docs: add Claude project access and operations briefing
 - `e38d1b5b` fix(sync): preserve installed systems on sparse save-rooms payloads
 - `115b1016` fix(ui): restore zone-recommendations API route and remove stale 3D CSS links
-- `a5adde3a` fix(deploy): remove unsupported traffic flag from deploy command
-- `6c08d0ce` debug(grow-mgmt): add GM_DEBUG tracer
 
 Operational context:
 
-- Zone recommendations route and stale CSS 404s were fixed and deployed.
-- A save-revert issue was investigated; save requests return 200 but current persisted room payload can still lack unit-defining fields.
+- Production readiness audit completed 2026-04-25. rooms.json/groups.json restored,
+  zone geometry serializer fixed, migration 062 deployed, EB artifacts archived.
+- farm-api-keys.json removed from git — active farm API key must be rotated via DB.
+- SMS_RECIPIENTS is now controlled by env var (not hardcoded in sms-service.js).
 
 ## 5) Known Active Issues (High Priority)
-
-### Grow Management unit reversion symptom
-
-Observed behavior:
-- User enters unit data, reload shows no units in room fields.
-
-Current confirmed state:
-- `/data/rooms.json` sample has room/zones but `installedSystems` and `buildPlan` are null.
-- `/data/groups.json` shows zero groups.
-- LE logs show save success and reconcile result like:
-  - `[setup/save-rooms] Saved 1 room(s) to rooms.json`
-  - `[reconcile-groups] Rebuilt 0 group(s) for 1 room(s)`
-
-Interpretation:
-- Saves are succeeding, but payload/state being saved is effectively empty for unit generation.
-- UI appears to "revert" because persisted source-of-truth has no unit definitions.
 
 ### Data drift risk
 
@@ -106,6 +92,21 @@ Interpretation:
 - Always verify persisted LE endpoints after edits:
   - `/data/rooms.json`
   - `/data/groups.json`
+
+### Resolved — 2026-04-25 (commit a28c5549)
+
+The following issues were resolved in the production readiness audit:
+
+- **Grow Management unit reversion**: rooms.json restored (1 room, 2 zones) and groups.json
+  restored (78 ZipGrow Standard groups). Root cause was accidental wipe in commit `e9a2be89`.
+- **Zone geometry not persisted**: `zoneRectsFromRoom()` now reads saved `length_m`/`width_m`
+  per zone instead of always computing equal splits.
+- **Missing DB tables**: Migration 062 adds `loss_events` + `accounting_ledger_entries`.
+  Both auto-create on next deploy via `runMigrations()`.
+- **farm-api-keys.json**: Removed from git tracking. **Rotate the active farm API key** via
+  the `farms` table — the key was in git history and should be treated as compromised.
+- **SMS allowlist**: Moved from hardcoded `Map` to `SMS_RECIPIENTS` env var. See Section 6.
+- **AWS EB artifacts**: Archived to `archive/eb-deprecated/`.
 
 ## 6) Notification Status (As Implemented)
 
@@ -116,8 +117,10 @@ From code and docs:
 - Requires SMTP env vars (`SMTP_HOST`, `SMTP_USER`, `SMTP_PASS`).
 
 2. SMS notifications
-- Optional path via `services/sms-service.js` integration.
-- Requires Twilio env vars and phone data.
+- Implemented in `greenreach-central/services/sms-service.js` via email-to-SMS gateway.
+- Recipients controlled by `SMS_RECIPIENTS` env var (no redeploy needed to add numbers).
+- Format: JSON `[{"+16138881031":"6138881031@txt.bell.ca"}]` or CSV `+1xxx:gateway@carrier.com`.
+- Falls back to the seeded Bell number if `SMS_RECIPIENTS` is not set.
 
 3. Push notifications
 - Implemented in `services/push-notification-service.js` using Firebase Admin.

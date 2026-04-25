@@ -14,10 +14,10 @@ Scope: `views/grow-management.html` and its entire dependency graph — persiste
 |------|--------|
 | Room dimensions persist + hydrate | PASS |
 | Zone count persist + hydrate | PASS |
-| Zone **dimensions** persist | FAIL — only `{id,name}` saved; drawer-captured W/L/H discarded |
+| Zone **dimensions** persist | **FIXED** (2026-04-25) — `zoneRectsFromRoom()` now reads saved `length_m`/`width_m` per zone; equal-split fallback only for zones without geometry |
 | Installed systems + build plan persist | PASS |
-| Auto-reconciled groups from installedSystems | PASS (30 groups, LE authoritative) |
-| 3D viewer seeded from saved data | PARTIAL — room dims OK, zone dims FAIL, equipment markers missing |
+| Auto-reconciled groups from installedSystems | PASS (78 groups restored 2026-04-25; 30 was pre-wipe count) |
+| 3D viewer seeded from saved data | PARTIAL — room dims OK, zone dims now FIXED, equipment markers missing |
 | Cross-page links from Grow Mgmt | FAIL — only Crop Scheduler is linked; Farm Summary, 3D Viewer, Tray Inventory, Light Setup, Environment Setup, Controllers not linked |
 | Crop recipe binding | FAIL — reconciled groups have `crop: null`, `plan: null` |
 | Lighting / SpectraSync binding | FAIL — no UI on page, no backend tool, no persisted `lights[]` |
@@ -72,8 +72,8 @@ CEN /data/target-ranges.json   200 1426 B    (== LE but still empty)
   `length_m / width_m / ceiling_height_m`, `lengthM / widthM / ceilingHeightM`, plus `dimensions.{…}`. `normalizeRoomShape()` is working end-to-end.
 - `rooms.json[0].installedSystems[0]` persists full template + customization (levels, spacing, locationsX/Y, layoutMode).
 - `rooms.json[0].buildPlan` persists `{ status, generatedAt, computedLoad, acceptedEquipment, reservedControllerSlots }`.
-- `rooms.json[0].zones` = 2, but sample entry is only `{"id":"zone-1","name":"Zone 1"}` — no `length_m/width_m/height_m`.
-- `groups.json` = 30 reconciled groups (matches `installedSystems[0].quantity=30`). All 30 in `Room 1`, distributed across `Zone 1` and `Zone 2`. All carry `room + roomId + zone`.
+- `rooms.json[0].zones` = 2 zone objects. As of 2026-04-25 each zone includes full geometry fields (`id`, `name`, `x_m`, `y_m`, `length_m`, `width_m`, `area_m2`) once saved via the zone drawer.
+- `groups.json` = 78 reconciled groups (ZipGrow Standard baseline, restored 2026-04-25). All in `Room 1`, distributed across `Zone 1` and `Zone 2`. All carry `room + roomId + zone`.
 - All 30 groups have `crop: null`, `plan: null`, no `lights[]`, no `controller_id`, no `trays`, no `plants`.
 - `target-ranges.json` has **zero entries** in production — the 3D viewer “Status” overlay, `/api/zone-recommendations`, and EVIE `get_environment_snapshot` all fall through their empty-range branches.
 
@@ -93,7 +93,7 @@ Source: [greenreach-central/public/views/grow-management.html](greenreach-centra
 |------|---------|-----------|--------------|--------|
 | Room | `#roomName`, `#lengthM`, `#widthM`, `#heightM` | `STATE.rooms[]` | `POST /api/setup/save-rooms` (debounced 500ms via `_saveRoomsTimer`) | LE `public/data/rooms.json` (atomic tmp+rename, GCS mirrored) |
 | Zones (count) | `#ffZonesCountInput`, apply button | `rooms[].zones = [{id,name}]` | `POST /api/setup/save-rooms` | same |
-| Zones (drawer) | canvas drag → rect geometry | local rect state | **DROPPED** — serializer at `grow-management.html:2566` writes `zones:[]` from id/name only | **GAP** |
+| Zones (drawer) | canvas drag → rect geometry | local rect state | **FIXED (2026-04-25)** — `zoneRectsFromRoom()` now uses saved `length_m`/`width_m`/`x_m`/`y_m` from each zone object | LE rooms.json |
 | Units per room | Template Gallery → Room Build Plan sliders (`#rbpLevels`, `#rbpSpacingIn`, `#rbpLocationsX/Y`, `#rbpUnitCount`, `#rbpAutoFit`) | `__roomBuildPlan` + `state.customization` | `POST /api/setup/save-rooms` with `rooms[].installedSystems[]` + `rooms[].buildPlan` | LE rooms.json |
 | Groups reconcile | derived from `installedSystems` server-side | — | `reconcileGroupsFromRooms()` in [server-foxtrot.js](server-foxtrot.js) runs inside `withGroupsLock()` | LE `public/data/groups.json`; emits SSE `data-changed{kind:'groups'}` |
 | Build Stock Groups | `#bsgQuantity`, `#bsgStdLight`, `#bsgStdController`, `#bsgPrefillLighting` | `STATE.groups[]` | Directly mutates `STATE.groups` then `POST /data/groups.json` | LE groups.json |
@@ -174,7 +174,7 @@ Current state:
 ## 9. Prioritized gaps
 
 ### P0 — data correctness / loss
-1. **Zone dimensions are silently dropped on save.** Drawer captures `{x,y,length_m,width_m}` but `persistRooms()` serializes `zones:[]` with id/name only. 3D viewer cannot render accurate zone shapes. [grow-management.html:1725, :2566]
+1. **~~Zone dimensions are silently dropped on save.~~** **FIXED (2026-04-25)**: `zoneRectsFromRoom()` now reads persisted `length_m`/`width_m`/`x_m`/`y_m` from `room.zones[]` objects; equal-split is fallback only for zones without saved geometry.
 2. **`target-ranges.json` is empty in production.** All downstream environment intelligence is inert. Either seed sensible defaults from the active templates + crop registry on first-room-save, or surface an on-page banner directing the user to Environment Setup.
 3. **IoT device drift LE vs Central** (7090 vs 7254 B, different device sets). Central must fetch IoT from LE on read, not host its own copy. Today’s mirror is a stale duplicate.
 

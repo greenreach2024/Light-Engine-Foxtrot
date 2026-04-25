@@ -244,9 +244,13 @@ The following EB environments are DEPRECATED and will be terminated:
 
 ### Known Non-Critical Issues (post-migration)
 
-- Missing tables: `accounting_ledger_entries`, `loss_events` -- need additional migrations for FAYE Intelligence and SupplyDemand features
 - Column mismatches in AI Pusher (`timestamp`) and SupplyDemand (`crop`) -- schema drift from EB-era code
 - These do not affect core platform functionality (health endpoints, sensor data, admin UI, auth)
+
+### Resolved (Migration 062 — 2026-04-25)
+
+- `loss_events` table: added in Migration 062 for supply-demand intelligence and experiment records
+- `accounting_ledger_entries` table: added in Migration 062 for FAYE nightly accounting checks
 
 ---
 
@@ -299,8 +303,8 @@ SMS is used for critical/high severity alert notifications to the admin. Deliver
 | Property | Value |
 |----------|-------|
 | **Provider** | Email-to-SMS via Google Workspace SMTP (carrier gateways) |
-| **Recipient Allowlist** | Hardcoded in `sms-service.js` with carrier gateway mapping (safety gate -- requires code change + deploy) |
-| **Current Approved** | `+16138881031` -> `6138881031@txt.bell.ca` |
+| **Recipient Allowlist** | `SMS_RECIPIENTS` env var with carrier gateway mapping (update env var to add/remove numbers, no redeploy needed) |
+| **Current Default** | `+16138881031` -> `6138881031@txt.bell.ca` (fallback if env var not set) |
 | **Fallback** | Console log stub (SMS not sent if SMTP unavailable) |
 
 **Required env vars for SMS:** Same as email (SMTP_HOST, SMTP_USER, SMTP_PASS). Plus:
@@ -482,7 +486,7 @@ The monorepo contains two independently deployed applications:
   2. `admin-assistant.js` (F.A.Y.E.) -- mounted at `/api/admin/assistant` with `adminAuthMiddleware + role guard`
   3. `admin-ops-agent.js` -- mounted at `/api/admin/ops` with `adminAuthMiddleware + role guard`
 - These are the ONLY cross-boundary imports. They work because Central route files' dependencies (pg, OpenAI, Anthropic) are installed on LE via the shared repo root `node_modules/`.
-- **KNOWN GAP (Apr 2, 2026)**: `admin-calendar.js` is NOT imported or proxied on LE. The Activity Hub's EVIE task panel calls `/api/admin/calendar/tasks` which will 404 on LE. Fix: import adminCalendarRouter following the same pattern as the 3 AI routes.
+- **KNOWN GAP (Apr 2, 2026) — RESOLVED**: `admin-calendar.js` is proxied on LE at line 26398 of `server-foxtrot.js`. Activity Hub EVIE task panel calls to `/api/admin/calendar/tasks` resolve correctly.
 - DO NOT add more cross-boundary imports without verifying all transitive dependencies exist in the LE `node_modules/`.
 
 ### Central Devices Status Contract
@@ -507,7 +511,7 @@ There are TWO separate authentication systems:
 ### 1. Farm-to-Central Sync Authentication
 - **Mechanism**: API key in `X-API-Key` header + `X-Farm-ID` header
 - **Key source (farm side)**: `config/edge-config.json` apiKey field
-- **Key validation (Central side)**: PostgreSQL `farms` table, then `config/farm-api-keys.json` fallback
+- **Key validation (Central side)**: PostgreSQL `farms` table only (`config/farm-api-keys.json` fallback **removed** from git as of 2026-04-25 — rotate the active key via the farms table)
 - **Used by**: sync-service.js, any LE -> Central communication
 
 ### 2. Central Dashboard/API Authentication
