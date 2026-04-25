@@ -7790,10 +7790,22 @@ app.post('/api/setup/save-rooms', asyncHandler(async (req, res) => {
       if (!incoming || typeof incoming !== 'object') {
         merged.buildPlan = existing?.buildPlan;
         merged.installedSystems = existing?.installedSystems;
+        merged.installed_systems = existing?.installed_systems || existing?.installedSystems;
         merged.equipment = existing?.equipment;
       } else {
         if (incoming.buildPlan == null && existing?.buildPlan != null) merged.buildPlan = existing.buildPlan;
-        if (incoming.installedSystems == null && existing?.installedSystems != null) merged.installedSystems = existing.installedSystems;
+        const incomingInstalled = Array.isArray(incoming?.installedSystems)
+          ? incoming.installedSystems
+          : (Array.isArray(incoming?.installed_systems) ? incoming.installed_systems : null);
+        const existingInstalled = Array.isArray(existing?.installedSystems)
+          ? existing.installedSystems
+          : (Array.isArray(existing?.installed_systems) ? existing.installed_systems : []);
+        // Guard against stale duplicate save calls that post an empty array and
+        // accidentally wipe already-configured growing units.
+        if (incomingInstalled == null || (incomingInstalled.length === 0 && existingInstalled.length > 0)) {
+          merged.installedSystems = existingInstalled;
+          merged.installed_systems = existingInstalled;
+        }
         if (incoming.equipment == null && existing?.equipment != null) merged.equipment = existing.equipment;
       }
 
