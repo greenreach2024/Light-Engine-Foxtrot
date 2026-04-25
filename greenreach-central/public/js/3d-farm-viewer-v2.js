@@ -154,7 +154,21 @@ function readRoomDims(room) {
 function getZoneRects(room) {
   const dims = readRoomDims(room);
   if (!dims) return [];
-  const zones = Array.isArray(room.zones) ? room.zones : [];
+  const rawZones = Array.isArray(room.zones) ? room.zones : [];
+  // rooms.json stores `zones` as an array of strings ("Zone 1", "Zone 2").
+  // Normalize each entry to an object so downstream code can read .name/.id
+  // safely; otherwise z.name is undefined for strings, causing every zone
+  // rect to register under the same `undefined` key in zoneFloors and all
+  // groups to fall through to zoneRects[0] -- visually piling every group
+  // into the first zone.
+  const zones = rawZones.map((z, i) => {
+    if (typeof z === 'string') return { id: z, name: z };
+    if (z && typeof z === 'object') {
+      const name = z.name || z.id || `Zone ${i + 1}`;
+      return Object.assign({}, z, { id: z.id || name, name });
+    }
+    return { id: `Zone ${i + 1}`, name: `Zone ${i + 1}` };
+  });
   if (!zones.length) return [{ id: 'default', name: 'Zone', x_m: 0, y_m: 0, length_m: dims.L, width_m: dims.W }];
   const haveGeom = zones.every(z => Number.isFinite(Number(z.x_m ?? z.x)) && Number.isFinite(Number(z.length_m ?? z.lengthM)));
   if (haveGeom) {
