@@ -280,6 +280,17 @@
    */
   function readRoomDims(room) {
     if (!room) return null;
+    // Canonical saved room payload is the source of truth. Read this first
+    // so stale localStorage edits cannot override persisted dimensions.
+    const payload = roomPayload(room);
+    if (payload?.dimensions) {
+      return {
+        lengthM: payload.dimensions.lengthM,
+        widthM: payload.dimensions.widthM,
+        heightM: payload.dimensions.ceilingHeightM
+      };
+    }
+
     try {
       const raw = localStorage.getItem('farm3d_roomDims');
       if (raw) {
@@ -295,14 +306,6 @@
       }
     } catch (_) { /* ignore localStorage parse errors */ }
 
-    const payload = roomPayload(room);
-    if (payload?.dimensions) {
-      return {
-        lengthM: payload.dimensions.lengthM,
-        widthM: payload.dimensions.widthM,
-        heightM: payload.dimensions.ceilingHeightM
-      };
-    }
     // Last-chance direct read from room — handles rooms saved with only
     // length/width (no ceiling) so the solver still uses real dims.
     const dims = room.dimensions || room.dims || {};
@@ -658,9 +661,17 @@
     el = document.createElement('div');
     el.id = SPATIAL_ID;
     el.style.marginTop = '16px';
-    // Insert after the body grid
-    const body = $(BODY_ID);
-    (body && body.parentNode === panel) ? panel.appendChild(el) : panel.appendChild(el);
+    // Insert AFTER the Evie recommendation container so the assistant card
+    // reads above the per-zone capacity grid (the assistant's narrative is
+    // what tells the operator how many zones to plan for, so it must appear
+    // before the zone-count math).
+    const evie = ensureEvieContainer();
+    if (evie && evie.parentNode === panel) {
+      panel.insertBefore(el, evie.nextSibling);
+    } else {
+      const body = $(BODY_ID);
+      (body && body.parentNode === panel) ? panel.appendChild(el) : panel.appendChild(el);
+    }
     return el;
   }
 
@@ -750,10 +761,10 @@
     const configuredStrip = (function () {
       const list = Array.isArray(state.room && state.room.installedSystems) ? state.room.installedSystems : [];
       if (!list.length) return '';
-      const chips = list.map((s) => {
+      const chips = list.map((s, idx) => {
         const cs = s.customization || {};
         const label = s.templateId + (Number.isFinite(cs.totalLocations) ? ' · ' + cs.totalLocations + ' loc' : '') + ' × ' + (Number(s.quantity || 1));
-        return `<span class="rbp-chip" data-template-id="${s.templateId}" style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;background:#0f172a;border:1px solid #334155;color:#e2e8f0;font-size:0.72rem;">${label}</span>`;
+        return `<span class="rbp-chip" data-template-id="${s.templateId}" data-installed-idx="${idx}" style="display:inline-flex;align-items:center;gap:6px;padding:4px 6px 4px 10px;border-radius:999px;background:#0f172a;border:1px solid #334155;color:#e2e8f0;font-size:0.72rem;">${label}<button type="button" class="rbp-chip-remove" data-installed-idx="${idx}" title="Remove this configured system from the room" aria-label="Remove ${s.templateId}" style="all:unset;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:999px;background:#1e293b;color:#f87171;font-weight:700;line-height:1;border:1px solid #475569;">×</button></span>`;
       }).join('');
       return `<div class="rbp-configured" style="display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px;">
         <span style="color:#94a3b8;font-size:0.72rem;align-self:center;">Configured systems:</span>${chips}
@@ -777,11 +788,11 @@
           <span class="rbp-ctl__hint">2 in total border deducted from footprint</span>
         </div>
         <div class="rbp-ctl">
-          <label for="rbpLocationsX">Locations X</label>
+          <label for="rbpLocationsX">Plant sites along length (X)</label>
           <input id="rbpLocationsX" type="number" min="1" max="500" step="1" value="${c.locationsX}" ${c.spacingLinked ? 'disabled' : ''}/>
         </div>
         <div class="rbp-ctl">
-          <label for="rbpLocationsY">Locations Y</label>
+          <label for="rbpLocationsY">Plant sites along width (Y)</label>
           <input id="rbpLocationsY" type="number" min="1" max="500" step="1" value="${c.locationsY}" ${c.spacingLinked ? 'disabled' : ''}/>
         </div>
         <div class="rbp-ctl rbp-ctl--toggle">
@@ -809,12 +820,12 @@
           <label>Plumbing</label>
           <span style="color:#e2e8f0;font-size:0.88rem;padding-bottom:6px;">${contract.plumbingSide === 'wall' ? 'Along long wall' : 'Flexible'}</span>
         </div>
-        <div class="rbp-ctl" style="min-width:260px;">
-          <label>Next</label>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <button id="rbpDoneSystems" type="button" class="rbp-evie__btn">Done with grow systems</button>
-            <button id="rbpAnotherSystem" type="button" class="rbp-evie__btn">Configure another system</button>
-          </div>
+        <div class="rbp-ctl" style="min-width:260px;display:none;" data-rbp-legacy-actions>
+          <!-- Legacy inline action buttons retained for backward compatibility
+               with anything that still queries them by id. The visible flow
+               nav lives below the zone grid via .gm-flow-nav. -->
+          <button id="rbpDoneSystems" type="button" class="rbp-evie__btn">Done with grow systems</button>
+          <button id="rbpAnotherSystem" type="button" class="rbp-evie__btn">Configure another system</button>
         </div>
       </div>
     `;
@@ -856,6 +867,14 @@
       <div class="rbp-section-title">Zone capacity \u00b7 Evie spatial plan</div>
       ${controlsHtml}
       <div class="rbp-spatial">${zonesHtml}</div>
+      <div class="gm-flow-nav" role="group" aria-label="Grow system workflow actions">
+        <button id="rbpAnotherSystemNav" type="button" class="gm-flow-nav__btn gm-flow-nav__btn--ghost" title="Add a second growing system to this room (e.g. NFT plus DWC)">
+          + Add another grow system
+        </button>
+        <button id="rbpDoneSystemsNav" type="button" class="gm-flow-nav__btn gwen-action" title="All grow systems for this room are configured. Move on to Equipment.">
+          Done with grow systems &rarr;
+        </button>
+      </div>
     `;
 
     // Paint canvases with solver placements (capped at take per zone but we
@@ -864,6 +883,67 @@
     perZonePlan.forEach((plan, i) => {
       const canvas = el.querySelector(`canvas[data-zone-canvas="${i}"]`);
       if (canvas) drawZoneCanvas(canvas, plan);
+    });
+
+    // Wire chip remove buttons. Each click pulls the latest rooms.json,
+    // splices the matching installedSystems entry out of state.room
+    // (matched by templateId so stale indexes from another tab don't drop
+    // the wrong row), POSTs /api/setup/save-rooms, and lets the LE
+    // reconciler rebuild groups.json + emit SSE so the breadcrumb, KPIs,
+    // and 3D viewer all refresh.
+    el.querySelectorAll('.rbp-chip-remove').forEach((btn) => {
+      btn.addEventListener('click', async (ev) => {
+        ev.preventDefault(); ev.stopPropagation();
+        const idx = Number(btn.getAttribute('data-installed-idx'));
+        const room = state.room;
+        if (!room || !Array.isArray(room.installedSystems) || !Number.isFinite(idx)) return;
+        const removed = room.installedSystems[idx];
+        if (!removed) return;
+        const ok = window.confirm(`Remove "${removed.templateId}" × ${Number(removed.quantity || 1)} from ${room.name || room.id}? This deletes its groups from the farm.`);
+        if (!ok) return;
+        btn.disabled = true;
+        try {
+          const _f = window.authFetch || fetch;
+          const roomsResp = await _f('/data/rooms.json?_=' + Date.now(), { cache: 'no-store' });
+          if (!roomsResp.ok) throw new Error('rooms.json ' + roomsResp.status);
+          const persistedRaw = await roomsResp.json();
+          const persisted = Array.isArray(persistedRaw) ? persistedRaw : (persistedRaw && Array.isArray(persistedRaw.rooms) ? persistedRaw.rooms : []);
+          const matchKey = String(room.id || room.name || '').toLowerCase();
+          const target = persisted.find((r) => String(r.id || r.name || '').toLowerCase() === matchKey) || room;
+          const installed = Array.isArray(target.installedSystems) ? target.installedSystems.slice() : [];
+          // Remove by templateId match against the chip we clicked, not by
+          // raw index, in case another tab already mutated the array.
+          const dropAt = installed.findIndex((s) => s && s.templateId === removed.templateId && Number(s.quantity) === Number(removed.quantity));
+          const finalDropAt = dropAt === -1 ? installed.findIndex((s) => s && s.templateId === removed.templateId) : dropAt;
+          if (finalDropAt === -1) throw new Error('installedSystems entry not found');
+          installed.splice(finalDropAt, 1);
+          const nextRoom = Object.assign({}, target, { installedSystems: installed });
+          // Drop buildPlan if no systems remain so Equipment step can reset.
+          if (!installed.length) nextRoom.buildPlan = null;
+          const nextRooms = persisted.map((r) => (String(r.id || r.name || '').toLowerCase() === matchKey ? nextRoom : r));
+          const saveResp = await _f('/api/setup/save-rooms', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ rooms: nextRooms })
+          });
+          if (!saveResp.ok) throw new Error('save-rooms ' + saveResp.status);
+          state.room = nextRoom;
+          renderSpatial();
+          if (typeof window.showToast === 'function') {
+            window.showToast({ title: 'System removed', msg: `${removed.templateId} removed from ${room.name || room.id}.`, kind: 'success' }, 3000);
+          }
+          document.dispatchEvent(new CustomEvent('room-build-plan:saved', { detail: { roomId: room.id, removed: removed.templateId } }));
+        } catch (err) {
+          console.error('[rbp] remove configured system failed:', err);
+          if (typeof window.showToast === 'function') {
+            window.showToast({ title: 'Remove failed', msg: String(err && err.message || err), kind: 'error' }, 5000);
+          } else {
+            window.alert('Remove failed: ' + (err && err.message || err));
+          }
+        } finally {
+          btn.disabled = false;
+        }
+      });
     });
 
     const unitsInput = $(UNIT_COUNT_ID);
@@ -930,36 +1010,38 @@
 
     const doneBtn = document.getElementById('rbpDoneSystems');
     const anotherBtn = document.getElementById('rbpAnotherSystem');
-    if (doneBtn) {
-      doneBtn.addEventListener('click', function () {
-        updateBreadcrumbActive(4);
-        const equip = document.getElementById('flow-equipment');
-        if (equip) equip.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      });
+    const doneNavBtn = document.getElementById('rbpDoneSystemsNav');
+    const anotherNavBtn = document.getElementById('rbpAnotherSystemNav');
+    function handleDone() {
+      updateBreadcrumbActive(4);
+      const equip = document.getElementById('flow-equipment');
+      if (equip) equip.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
-    if (anotherBtn) {
-      anotherBtn.addEventListener('click', function () {
-        // Clear template-scoped state so the gallery selection triggers a
-        // fresh configure flow, but preserve state.room (and its
-        // installedSystems list) so the Configured Systems strip keeps
-        // showing prior saves. Dispatch a hint event for setup-agent.
-        state.template = null;
-        state.scores = null;
-        state.cropClass = null;
-        state.desiredUnits = 0;
-        state.autoFit = true;
-        state.zoneRects = [];
-        state.spatialPlan = null;
-        state.zoneRecommendation = null;
-        state.customization = null;
-        hide();
-        document.dispatchEvent(new CustomEvent('grow-system-config:another', {
-          detail: { roomId: state.room && state.room.id }
-        }));
-        const gallery = document.getElementById('growTemplateGallery');
-        if (gallery) gallery.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      });
+    function handleAnother() {
+      // Clear template-scoped state so the gallery selection triggers a
+      // fresh configure flow, but preserve state.room (and its
+      // installedSystems list) so the Configured Systems strip keeps
+      // showing prior saves. Dispatch a hint event for setup-agent.
+      state.template = null;
+      state.scores = null;
+      state.cropClass = null;
+      state.desiredUnits = 0;
+      state.autoFit = true;
+      state.zoneRects = [];
+      state.spatialPlan = null;
+      state.zoneRecommendation = null;
+      state.customization = null;
+      hide();
+      document.dispatchEvent(new CustomEvent('grow-system-config:another', {
+        detail: { roomId: state.room && state.room.id }
+      }));
+      const gallery = document.getElementById('growTemplateGallery');
+      if (gallery) gallery.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
+    if (doneBtn) doneBtn.addEventListener('click', handleDone);
+    if (anotherBtn) anotherBtn.addEventListener('click', handleAnother);
+    if (doneNavBtn) doneNavBtn.addEventListener('click', handleDone);
+    if (anotherNavBtn) anotherNavBtn.addEventListener('click', handleAnother);
   }
 
   function ensureEvieContainer() {
@@ -981,10 +1063,20 @@
     if (!rec) { el.innerHTML = ''; return; }
     const plan = state.spatialPlan || {};
     const shortfall = rec.shortfall || 0;
+    const usedZones = Array.isArray(rec.usedZones) ? rec.usedZones : [];
+    const selectedZoneCount = Array.isArray(state.zoneRects) ? state.zoneRects.length : 0;
 
-    const promptHtml = (shortfall > 0 || (rec.recommendedZones > 1 && plan.desired > (rec.perZone[0]?.maxUnits || 0)))
+    let rationale = rec.rationale || '';
+    if (shortfall === 0 && usedZones.length > 1) {
+      rationale = `${plan.desired} units are distributed across your selected zones: ${usedZones.map((u) => `${u.units} in ${u.zoneName}`).join(', ')}.`;
+    }
+    if (shortfall === 0 && usedZones.length <= 1 && selectedZoneCount > 1 && plan.desired > 0) {
+      rationale = `${plan.desired} units fit in ${usedZones.length || 1} zone. Additional selected zones remain available for schedule or climate separation.`;
+    }
+
+    const promptHtml = (shortfall > 0)
       ? `<div class="rbp-evie__prompt">
-           <strong>Prompt:</strong> ${plan.desired} units exceed Zone 1's capacity (${rec.perZone[0]?.maxUnits || 0}). Should both zones be used for the selected number of growing units?
+           <strong>Capacity alert:</strong> ${plan.desired} units exceed current zone capacity by ${shortfall}. Reduce unit count, enlarge a zone, or add another zone.
          </div>`
       : '';
 
@@ -1004,9 +1096,9 @@
           </div>
         </div>
         <div class="rbp-evie__body">
-          ${rec.rationale}
+          ${rationale}
           <br/><br/>
-          Zones are an effective way to manage planting schedules, room maintenance, and unique growing environments within the same room (depending on the equipment available).
+          Zones are user-defined partitions for schedule separation, cleaning rotation, and optional climate isolation within the same room.
         </div>
         ${promptHtml}
         ${actionsHtml}
@@ -1138,13 +1230,23 @@
         customization: state.customization || null
       });
     }
+    window.__gmPlanState = {
+      roomId: state.room && state.room.id,
+      templateId: state.template && state.template.id,
+      desiredUnits: state.desiredUnits,
+      draftStagedAt: Date.now(),
+      implemented: false
+    };
+    document.dispatchEvent(new CustomEvent('grow-management-selection-state', {
+      detail: Object.assign({}, window.__gmPlanState)
+    }));
     const panel = document.getElementById('groupsV2Panel');
     if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
     updateBreadcrumbActive(3); // Lights next
     if (typeof window.showToast === 'function') {
       window.showToast({
-        title: 'Template staged',
-        msg: `Group form prefilled for ${state.template.name}. Assign lights, review, then Save Group.`,
+        title: 'Draft staged',
+        msg: `Draft created for ${state.template.name}. Review your selections, then use Save plan to room (implement).`,
         kind: 'success'
       }, 3000);
     }
@@ -1168,6 +1270,16 @@
     const spatial = $(SPATIAL_ID); if (spatial) spatial.innerHTML = '';
     const evie = $(EVIE_ID); if (evie) evie.innerHTML = '';
     if (window.__roomBuildPlan) delete window.__roomBuildPlan;
+    window.__gmPlanState = {
+      roomId: null,
+      templateId: null,
+      desiredUnits: 0,
+      implemented: false,
+      clearedAt: Date.now()
+    };
+    document.dispatchEvent(new CustomEvent('grow-management-selection-state', {
+      detail: Object.assign({}, window.__gmPlanState)
+    }));
     document.querySelectorAll('.tg-card[aria-pressed="true"]')
       .forEach(c => c.setAttribute('aria-pressed', 'false'));
   }
@@ -1312,6 +1424,16 @@
           customization
         });
       }
+      window.__gmPlanState = {
+        roomId: room.id,
+        templateId: tpl.id,
+        desiredUnits: qty,
+        implemented: true,
+        implementedAt: Date.now()
+      };
+      document.dispatchEvent(new CustomEvent('grow-management-selection-state', {
+        detail: Object.assign({}, window.__gmPlanState)
+      }));
     } catch (err) {
       console.error('[rbp] saveBuildPlan failed:', err);
       if (typeof window.showToast === 'function') {

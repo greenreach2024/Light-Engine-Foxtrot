@@ -13926,12 +13926,113 @@ function exportFleetReport() {
 
 let saladMixesData = [];
 
+const SALAD_MIX_TRAIT_CROP_MAP = [
+    { color: 'green', taste: 'sweet',   textures: ['crunchy', 'crisp'], crops: 'Mini cos romaine, green crisp lettuce' },
+    { color: 'green', taste: 'mild',    textures: ['tender', 'silky'],  crops: 'Green butter lettuce, soft leaf lettuce' },
+    { color: 'green', taste: 'mild',    textures: ['crunchy'],           crops: 'Mini cos romaine, baby bok choy leaves' },
+    { color: 'green', taste: 'peppery', textures: ['tender'],            crops: 'Baby arugula, mild mustard greens' },
+    { color: 'green', taste: 'earthy',  textures: ['tender'],            crops: 'Baby kale, baby spinach-style greens' },
+    { color: 'green', taste: 'bitter',  textures: ['tender', 'crisp'],   crops: 'Endive-style greens, young chicory-type greens' },
+    { color: 'red',   taste: 'sweet',   textures: ['tender'],            crops: 'Red butter lettuce, red oakleaf lettuce' },
+    { color: 'red',   taste: 'mild',    textures: ['tender', 'silky'],   crops: 'Red leaf lettuce, red oakleaf lettuce' },
+    { color: 'red',   taste: 'earthy',  textures: ['tender', 'crisp'],   crops: 'Baby red kale, red-veined leafy greens' },
+    { color: 'red',   taste: 'bitter',  textures: ['crisp', 'tender'],   crops: 'Red chicory-style greens, young radicchio-type leaves' },
+    { color: 'mixed', taste: 'sweet',   textures: ['crunchy', 'crisp'],  crops: 'Mini cos romaine, green crisp, red crisp' },
+    { color: 'mixed', taste: 'mild',    textures: ['tender', 'silky'],   crops: 'Butter lettuce, oakleaf lettuce, soft red and green leaf greens' },
+    { color: 'mixed', taste: 'peppery', textures: ['tender', 'crisp'],   crops: 'Arugula, mustard greens, baby kale, crisp lettuce base' },
+    { color: 'mixed', taste: 'tangy',   textures: ['tender', 'crisp'],   crops: 'Sorrel-style greens, red-veined greens, tender leaf lettuces' },
+    { color: 'mixed', taste: 'earthy',  textures: ['tender', 'crunchy'], crops: 'Baby kale, spinach-style greens, mini cos romaine' },
+    { color: 'mixed', taste: 'bitter',  textures: ['tender', 'crisp'],   crops: 'Chicory-style greens blended with mild lettuces' }
+];
+
+function normalizeTraitValue(v) {
+    return String(v || '').trim().toLowerCase();
+}
+
+function normalizeTextureValue(v) {
+    const t = normalizeTraitValue(v);
+    if (t === 'crispy') return 'crisp';
+    return t;
+}
+
+function slugifyAutoCropName(name) {
+    return String(name || '')
+        .toLowerCase()
+        .replace(/\(.*?\)/g, '')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+}
+
+function resolveAutoCropRecommendation(color, taste, texture) {
+    const c = normalizeTraitValue(color);
+    const t = normalizeTraitValue(taste);
+    const x = normalizeTextureValue(texture);
+    if (!c || !t || !x) return null;
+    const exact = SALAD_MIX_TRAIT_CROP_MAP.find(r => r.color === c && r.taste === t && r.textures.includes(x));
+    if (exact) return exact;
+    if (c !== 'mixed') {
+        const mixedExact = SALAD_MIX_TRAIT_CROP_MAP.find(r => r.color === 'mixed' && r.taste === t && r.textures.includes(x));
+        if (mixedExact) return Object.assign({}, mixedExact, { forceColorMixed: true });
+    }
+    const mixedTaste = SALAD_MIX_TRAIT_CROP_MAP.find(r => r.color === 'mixed' && r.taste === t);
+    if (mixedTaste) return Object.assign({}, mixedTaste, { forceColorMixed: true });
+    return { color: 'mixed', taste: t || 'mild', textures: [x || 'tender'], crops: 'Mixed greens blend', forceColorMixed: true };
+}
+
+function applyAutoCropRecommendation(row) {
+    if (!row) return;
+    const colorEl = row.querySelector('.mix-comp-color');
+    const tasteEl = row.querySelector('.mix-comp-taste');
+    const textureEl = row.querySelector('.mix-comp-texture');
+    const nameEl = row.querySelector('.mix-comp-name');
+    if (!colorEl || !tasteEl || !textureEl || !nameEl) return;
+
+    const color = normalizeTraitValue(colorEl.value);
+    const taste = normalizeTraitValue(tasteEl.value);
+    const texture = normalizeTextureValue(textureEl.value);
+    if (!color || !taste || !texture) {
+        nameEl.value = '';
+        delete nameEl.dataset.productId;
+        return;
+    }
+
+    const rec = resolveAutoCropRecommendation(color, taste, texture);
+    if (!rec) {
+        nameEl.value = '';
+        delete nameEl.dataset.productId;
+        return;
+    }
+    if (rec.forceColorMixed && colorEl.value !== 'mixed') {
+        colorEl.value = 'mixed';
+    }
+    nameEl.value = rec.crops;
+    const primary = String(rec.crops || '').split(',')[0].trim();
+    nameEl.dataset.productId = slugifyAutoCropName(primary || rec.crops || 'mixed-greens-blend');
+}
+
+function getSaladMixAdminToken() {
+    // Backward-compatible token lookup: the app stores admin auth in
+    // `admin_token`, but older salad-mix code used `adminToken`.
+    return localStorage.getItem('admin_token') || localStorage.getItem('adminToken') || '';
+}
+
+function handleSaladMixUnauthorized() {
+    alert('Your admin session expired. Please sign in again.');
+    localStorage.removeItem('admin_token');
+    localStorage.removeItem('adminToken');
+    try { window.location.href = '/GR-central-admin-login.html'; } catch (_) {}
+}
+
 async function loadSaladMixes() {
     try {
-        const token = localStorage.getItem('adminToken');
+        const token = getSaladMixAdminToken();
         const resp = await fetch('/api/admin/salad-mixes', {
             headers: { 'Authorization': `Bearer ${token}` }
         });
+        if (resp.status === 401) {
+            handleSaladMixUnauthorized();
+            return;
+        }
         const data = await resp.json();
         if (data.success) {
             saladMixesData = data.mixes || [];
@@ -13956,10 +14057,9 @@ function renderSaladMixesTable() {
 
     tbody.innerHTML = saladMixesData.map(mix => {
         const compList = (mix.components || []).map(c => {
-            const role = c.trait_role ? `<strong>${c.trait_role}</strong>: ` : '';
             const traits = [c.color_profile, c.taste_profile, c.texture_profile].filter(Boolean).join('/');
             const traitTag = traits ? ` <span style="color:var(--text-secondary);font-size:0.8em;">[${traits}]</span>` : '';
-            return `${role}${c.product_name} (${(parseFloat(c.ratio) * 100).toFixed(0)}%)${traitTag}`;
+            return `${c.product_name} (${(parseFloat(c.ratio) * 100).toFixed(0)}%)${traitTag}`;
         }).join('<br>');
         return `<tr>
             <td><strong>${mix.name}</strong></td>
@@ -13999,7 +14099,7 @@ function openEditMixModal(mixId) {
     container.innerHTML = '';
     for (const c of mix.components) {
         addMixComponentRow(c.product_name, (parseFloat(c.ratio) * 100).toFixed(0), c.product_id,
-                           c.trait_role || '', c.color_profile || '', c.taste_profile || '', c.texture_profile || '');
+                   c.color_profile || '', c.taste_profile || '', c.texture_profile || '');
     }
     document.getElementById('mix-modal').style.display = 'flex';
 }
@@ -14008,7 +14108,7 @@ function closeMixModal() {
     document.getElementById('mix-modal').style.display = 'none';
 }
 
-function addMixComponentRow(name, pct, productId, traitRole, color, taste, texture) {
+function addMixComponentRow(name, pct, productId, color, taste, texture) {
     const container = document.getElementById('mix-components-container');
     const rows = container.querySelectorAll('.mix-comp-row');
     if (rows.length >= 4) return; // max 4 components
@@ -14025,8 +14125,7 @@ function addMixComponentRow(name, pct, productId, traitRole, color, taste, textu
 
     row.innerHTML = `
         <div>
-            <input type="text" class="mix-comp-role" placeholder="Role (e.g. Base Green)" value="${traitRole || ''}" style="padding:6px 8px;border:1px solid var(--border-color);border-radius:6px;background:var(--bg-secondary);color:var(--text-primary);width:100%;margin-bottom:4px;font-size:0.85em;">
-            <input type="text" class="mix-comp-name" placeholder="Default crop (e.g. Romaine)" value="${name || ''}" style="padding:8px;border:1px solid var(--border-color);border-radius:6px;background:var(--bg-secondary);color:var(--text-primary);width:100%;">
+            <input type="text" class="mix-comp-name" placeholder="Auto recommendation from traits" value="${name || ''}" readonly style="padding:8px;border:1px solid var(--border-color);border-radius:6px;background:rgba(15,23,42,0.45);color:var(--text-primary);width:100%;">
         </div>
         <div style="display:flex;flex-direction:column;gap:3px;">
             <select class="mix-comp-color" style="padding:4px;border:1px solid var(--border-color);border-radius:4px;background:var(--bg-secondary);color:var(--text-primary);font-size:0.8em;">${colorOpts}</select>
@@ -14040,6 +14139,14 @@ function addMixComponentRow(name, pct, productId, traitRole, color, taste, textu
         const nameInput = row.querySelector('.mix-comp-name');
         nameInput.dataset.productId = productId;
     }
+    ['.mix-comp-color', '.mix-comp-taste', '.mix-comp-texture'].forEach(function (sel) {
+        const el = row.querySelector(sel);
+        if (!el) return;
+        el.addEventListener('change', function () {
+            applyAutoCropRecommendation(row);
+        });
+    });
+    applyAutoCropRecommendation(row);
     container.appendChild(row);
 }
 
@@ -14055,10 +14162,10 @@ async function saveSaladMix() {
     const components = [];
     const rowErrors = [];
     rows.forEach((row, idx) => {
+        applyAutoCropRecommendation(row);
         const pName = row.querySelector('.mix-comp-name').value.trim();
         const pctRaw = row.querySelector('.mix-comp-pct').value;
         const pct = parseFloat(pctRaw);
-        const traitRole = (row.querySelector('.mix-comp-role')?.value || '').trim();
         const colorProfile = row.querySelector('.mix-comp-color')?.value || '';
         const tasteProfile = row.querySelector('.mix-comp-taste')?.value || '';
         const textureProfile = row.querySelector('.mix-comp-texture')?.value || '';
@@ -14067,11 +14174,16 @@ async function saveSaladMix() {
         // Silently dropping partially-filled rows made the user see the
         // generic "components not recognized" error from the server. Now we
         // call it out explicitly so the operator knows which row is wrong.
-        const touched = Boolean(pName || pctRaw || traitRole || colorProfile || tasteProfile || textureProfile);
+        const touched = Boolean(pctRaw || colorProfile || tasteProfile || textureProfile);
         if (!touched) return;
 
+        if (!colorProfile || !tasteProfile || !textureProfile) {
+            rowErrors.push(`Row ${idx + 1}: select Color, Flavour, and Texture.`);
+            return;
+        }
+
         if (!pName) {
-            rowErrors.push(`Row ${idx + 1}: "Default crop" is required.`);
+            rowErrors.push(`Row ${idx + 1}: auto recommendation could not be generated.`);
             return;
         }
         if (!Number.isFinite(pct) || pct <= 0) {
@@ -14081,7 +14193,7 @@ async function saveSaladMix() {
         const pId = row.querySelector('.mix-comp-name').dataset.productId || pName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
         components.push({
             product_name: pName, product_id: pId, ratio: pct / 100,
-            trait_role: traitRole || null,
+            trait_role: null,
             color_profile: colorProfile || null,
             taste_profile: tasteProfile || null,
             texture_profile: textureProfile || null
@@ -14102,7 +14214,7 @@ async function saveSaladMix() {
     }
 
     try {
-        const token = localStorage.getItem('adminToken');
+        const token = getSaladMixAdminToken();
         const method = id ? 'PUT' : 'POST';
         const url = id ? `/api/admin/salad-mixes/${id}` : '/api/admin/salad-mixes';
         const resp = await fetch(url, {
@@ -14110,6 +14222,10 @@ async function saveSaladMix() {
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: JSON.stringify({ name, description, status, components })
         });
+        if (resp.status === 401) {
+            handleSaladMixUnauthorized();
+            return;
+        }
         const data = await resp.json();
         if (data.success) {
             closeMixModal();
@@ -14126,11 +14242,15 @@ async function saveSaladMix() {
 async function deleteSaladMix(mixId) {
     if (!confirm('Delete this salad mix template?')) return;
     try {
-        const token = localStorage.getItem('adminToken');
+        const token = getSaladMixAdminToken();
         const resp = await fetch(`/api/admin/salad-mixes/${mixId}`, {
             method: 'DELETE',
             headers: { 'Authorization': `Bearer ${token}` }
         });
+        if (resp.status === 401) {
+            handleSaladMixUnauthorized();
+            return;
+        }
         const data = await resp.json();
         if (data.success) {
             await loadSaladMixes();

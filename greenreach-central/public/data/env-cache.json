@@ -1,5 +1,5 @@
 {
-  "room-3xxjln": {
+  "room-default": {
     "temperature": 21.8,
     "humidity": 62.5,
     "co2": null,
@@ -29,7 +29,7 @@
     "source": "iot-devices.json"
   },
   "meta": {
-    "updatedAt": "2026-04-24T14:39:54.654Z",
+    "updatedAt": "2026-04-25T02:22:22.250Z",
     "source": "syncSensorData"
   }
 }

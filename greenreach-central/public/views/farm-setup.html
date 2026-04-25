@@ -475,6 +475,25 @@
     </div>
   </aside>
 
+  <!-- ===== EMPTY-STATE HERO (Phase 2 #11) =====
+       Shown only when the farm has zero rooms OR setup is not complete.
+       Hidden once /api/setup-wizard/status reports rooms exist. The CTA
+       sends operators to grow-management.html where the linear flow lives.
+       Hidden by default; the inline script below toggles `data-empty="true"`
+       which CSS uses to display the card. -->
+  <aside id="fsEmptyStateHero" data-empty="false" style="margin:12px 24px 0;padding:18px 22px;border:1px solid rgba(16,185,129,0.45);border-radius:14px;background:linear-gradient(135deg, rgba(16,185,129,0.18), rgba(59,130,246,0.10));display:none;flex-direction:column;gap:10px;">
+    <div style="font-size:1.05rem;font-weight:700;color:#ecfdf5;">Your farm is empty.</div>
+    <div class="tiny" style="color:#cbd5e1;line-height:1.55;">
+      Begin in <strong>Grow Management</strong> to define your first room, draw zones,
+      add grow units, and select equipment. Once a room exists, return here to pair
+      IoT devices and configure integrations.
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <a href="/views/grow-management.html#flow-room" style="display:inline-block;padding:10px 18px;border-radius:8px;background:#10b981;color:#022c22;text-decoration:none;font-weight:700;">Begin setup &rsaquo;</a>
+      <a href="/setup-wizard.html" style="display:inline-block;padding:10px 16px;border-radius:8px;background:rgba(148,163,184,0.18);color:#e0f2fe;text-decoration:none;font-weight:600;border:1px solid rgba(148,163,184,0.3);">Open setup wizard</a>
+    </div>
+  </aside>
+
   <!-- ===== PROGRESS ===== -->
   <div class="fs-progress">
     <div class="fs-progress-bar">
@@ -763,6 +782,39 @@
       setTimeout(updateSetupProgress, 2000);
       setTimeout(updateSetupProgress, 5000);
     });
+
+    // ===== Empty-state hero toggle (Phase 2 #11) =====
+    // Show the "Your farm is empty" hero only when no rooms are configured.
+    // Uses /api/setup-wizard/status (auth-optional) and /data/rooms.json as
+    // a fallback so the hero still works on fresh farms before the wizard
+    // has been touched. Idempotent and best-effort: any error simply leaves
+    // the hero hidden so the page never blocks on this check.
+    async function refreshEmptyStateHero() {
+      var hero = document.getElementById('fsEmptyStateHero');
+      if (!hero) return;
+      var roomCount = null;
+      try {
+        var statusRes = await fetch('/api/setup-wizard/status', { credentials: 'same-origin' });
+        if (statusRes.ok) {
+          var status = await statusRes.json();
+          if (typeof status.roomCount === 'number') roomCount = status.roomCount;
+        }
+      } catch (_) { /* fall through to rooms.json */ }
+      if (roomCount === null) {
+        try {
+          var roomsRes = await fetch('/data/rooms.json', { cache: 'no-store' });
+          if (roomsRes.ok) {
+            var data = await roomsRes.json();
+            roomCount = Array.isArray(data && data.rooms) ? data.rooms.length : 0;
+          }
+        } catch (_) { /* swallow */ }
+      }
+      var isEmpty = roomCount === 0;
+      hero.dataset.empty = isEmpty ? 'true' : 'false';
+      hero.style.display = isEmpty ? 'flex' : 'none';
+    }
+    document.addEventListener('rooms-updated', refreshEmptyStateHero);
+    window.addEventListener('load', refreshEmptyStateHero);
   </script>
 
   <!-- ===== WIZARD MODALS (extracted from LE-dashboard.html) ===== -->

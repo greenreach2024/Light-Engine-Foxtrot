@@ -733,7 +733,16 @@ async function writeJsonQueued(fullPath, jsonString) {
   const prev = __jsonWriteQueues.get(fullPath) || Promise.resolve();
   const next = prev.then(async () => {
     await fs.promises.mkdir(path.dirname(fullPath), { recursive: true }).catch(() => {});
-    await fs.promises.writeFile(fullPath, jsonString, 'utf8');
+    // Atomic write: temp file + rename. Crash-safe — readers never observe a
+    // partial JSON file, even on SIGKILL during a long write. Phase 1 hardening.
+    const tmpPath = `${fullPath}.tmp.${process.pid}.${Date.now()}`;
+    try {
+      await fs.promises.writeFile(tmpPath, jsonString, 'utf8');
+      await fs.promises.rename(tmpPath, fullPath);
+    } catch (err) {
+      try { await fs.promises.unlink(tmpPath); } catch {}
+      throw err;
+    }
     // Mirror operator-authored state to GCS so Cloud Run container recycles
     // do not wipe edits. See docs/operations/GROUPS_PERSISTENCE_FIX_2026-04-24.md.
     try { await __mirrorJsonToGCS(fullPath, jsonString); } catch {}
@@ -7655,6 +7664,79 @@ app.get('/api/hardware/scan', asyncHandler(async (req, res) => {
   }
 }));
 
+// ─── Phase 1: Room schema normalization ─────────────────────────────────────
+// Three years of accreted code left rooms.json with multiple aliases for the
+// same field (length_m vs lengthM, ceilingHeightM vs ceiling_height_m vs
+// dimensions.heightM, envelope vs envelope_class). Read paths must accept
+// any alias; write paths must produce a single canonical shape so downstream
+// consumers (3D viewer, Grow Management, EVIE tool calls) stop drifting.
+//
+// `normalizeRoomShape(room)` returns a copy with both snake_case and camelCase
+// keys populated when any alias is present. Idempotent and tolerant of nulls.
+function normalizeRoomShape(room) {
+  if (!room || typeof room !== 'object') return room;
+  const out = { ...room };
+  const dims = (room.dimensions && typeof room.dimensions === 'object') ? { ...room.dimensions } : {};
+
+  const numOrUndef = (v) => {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : undefined;
+  };
+
+  // Length: length_m | lengthM | dimensions.length_m | dimensions.lengthM
+  const length = numOrUndef(room.length_m)
+    ?? numOrUndef(room.lengthM)
+    ?? numOrUndef(dims.length_m)
+    ?? numOrUndef(dims.lengthM);
+  // Width
+  const width = numOrUndef(room.width_m)
+    ?? numOrUndef(room.widthM)
+    ?? numOrUndef(dims.width_m)
+    ?? numOrUndef(dims.widthM);
+  // Ceiling height: ceiling_height_m | ceilingHeightM | dimensions.height_m | dimensions.heightM
+  const height = numOrUndef(room.ceiling_height_m)
+    ?? numOrUndef(room.ceilingHeightM)
+    ?? numOrUndef(dims.height_m)
+    ?? numOrUndef(dims.heightM)
+    ?? numOrUndef(dims.ceiling_height_m)
+    ?? numOrUndef(dims.ceilingHeightM);
+
+  if (length !== undefined) {
+    out.length_m = length; out.lengthM = length;
+    dims.length_m = length; dims.lengthM = length;
+  }
+  if (width !== undefined) {
+    out.width_m = width; out.widthM = width;
+    dims.width_m = width; dims.widthM = width;
+  }
+  if (height !== undefined) {
+    out.ceiling_height_m = height; out.ceilingHeightM = height;
+    dims.height_m = height; dims.heightM = height;
+  }
+  if (length !== undefined && width !== undefined) {
+    const area = Math.round(length * width * 100) / 100;
+    if (out.area_m2 == null) out.area_m2 = area;
+    if (out.areaM2 == null) out.areaM2 = area;
+  }
+
+  // Envelope class alias unification.
+  const envelope = room.envelope_class ?? room.envelopeClass ?? room.envelope;
+  if (envelope != null && envelope !== '') {
+    out.envelope_class = envelope;
+    out.envelopeClass = envelope;
+  }
+
+  // Hardware categories alias unification (hardware_cats vs hardwareCats).
+  const hwCats = room.hardware_cats ?? room.hardwareCats;
+  if (Array.isArray(hwCats)) {
+    out.hardware_cats = hwCats.slice();
+    out.hardwareCats = hwCats.slice();
+  }
+
+  if (Object.keys(dims).length) out.dimensions = dims;
+  return out;
+}
+
 // Save rooms endpoint (matches greenreach-central route for cross-mode compatibility)
 app.post('/api/setup/save-rooms', asyncHandler(async (req, res) => {
   try {
@@ -7705,8 +7787,11 @@ app.post('/api/setup/save-rooms', asyncHandler(async (req, res) => {
 
     const rooms = incomingRooms.map((room) => {
       const key = roomKey(room);
-      if (!key) return room;
-      return mergeRoom(existingByKey.get(key), room);
+      const merged = key ? mergeRoom(existingByKey.get(key), room) : room;
+      // Phase 1 schema normalization: emit canonical snake_case + camelCase
+      // aliases so every consumer can read the same field set without per-page
+      // alias fallbacks. Idempotent.
+      return normalizeRoomShape(merged);
     });
 
     const fullPath = path.join(DATA_DIR, 'rooms.json');
@@ -7724,19 +7809,224 @@ app.post('/api/setup/save-rooms', asyncHandler(async (req, res) => {
       console.warn('[setup/save-rooms] room-map cascade failed:', cascadeErr?.message || cascadeErr);
     }
 
+    // Reconcile groups.json against each room's installedSystems. Without
+    // this the build-plan write path leaves groups.json frozen at whatever
+    // was seeded months ago — Central syncs the stale list every 5 min and
+    // the 3D viewer renders ghost grow systems. Single source of truth: LE.
+    let reconciledGroupsCount = 0;
+    try {
+      reconciledGroupsCount = await reconcileGroupsFromRooms(rooms);
+    } catch (reconErr) {
+      console.warn('[setup/save-rooms] group reconcile failed:', reconErr?.message || reconErr);
+    }
+
+    // Seed target-ranges.json for any zone that doesn't yet have one. The 3D
+    // viewer status overlay, /api/zone-recommendations, and EVIE
+    // get_environment_snapshot all fall through their empty-range branches
+    // without this — leaving environment intelligence dark until an operator
+    // hand-edits Environment Setup. Defaults are pulled from the existing
+    // target-ranges.defaults block when present, else conservative leafy-greens
+    // values. Existing zone entries are NEVER overwritten.
+    let seededZoneRangesCount = 0;
+    try {
+      seededZoneRangesCount = await seedTargetRangesForRooms(rooms);
+      if (seededZoneRangesCount > 0) {
+        emitDataChange({ kind: 'target-ranges', updatedAt: new Date().toISOString(), source: 'setup-save-rooms-seed' });
+      }
+    } catch (seedErr) {
+      console.warn('[setup/save-rooms] target-ranges seed failed:', seedErr?.message || seedErr);
+    }
+
     // Notify SSE subscribers (3D viewer, dashboards) so room/zone edits from
     // setup, EVIE, and admin flows appear immediately instead of waiting for
     // the low-frequency poll refresh window.
     const nowIso = new Date().toISOString();
     emitDataChange({ kind: 'rooms', updatedAt: nowIso, source: 'setup-save-rooms' });
     emitDataChange({ kind: 'zones', updatedAt: nowIso, source: 'setup-save-rooms' });
+    emitDataChange({ kind: 'groups', updatedAt: nowIso, source: 'setup-save-rooms-reconcile' });
 
-    res.json({ success: true, saved: rooms.length });
+    res.json({ success: true, saved: rooms.length, groupsReconciled: reconciledGroupsCount });
   } catch (err) {
     console.error('[setup/save-rooms] Error:', err);
     res.status(500).json({ success: false, message: err.message });
   }
 }));
+
+// Cache the grow-systems catalog (template id → label) for the reconciler.
+let __growSystemsCatalogLE = null;
+function getGrowSystemsCatalogLE() {
+  if (__growSystemsCatalogLE) return __growSystemsCatalogLE;
+  try {
+    const p = path.join(PUBLIC_DIR, 'data', 'grow-systems.json');
+    __growSystemsCatalogLE = JSON.parse(fs.readFileSync(p, 'utf8'));
+  } catch (err) {
+    console.warn('[reconcile-groups] grow-systems catalog unavailable:', err?.message || err);
+    __growSystemsCatalogLE = { templates: [] };
+  }
+  return __growSystemsCatalogLE;
+}
+
+/**
+ * Rebuild groups.json from each room's installedSystems. For each
+ * installedSystems[i], emit `quantity` groups round-robined across the
+ * room's zones. Group id format: "<roomName>:<zoneName>:<templateLabel> <n>".
+ * Existing groups for the same id keep their crop / plan / schedule /
+ * status / lights / lastModified / gridX / gridY. Groups for rooms NOT in
+ * the payload pass through unchanged.
+ */
+async function reconcileGroupsFromRooms(rooms) {
+  if (!Array.isArray(rooms) || !rooms.length) return 0;
+
+  const catalog = getGrowSystemsCatalogLE();
+  const templatesById = new Map();
+  for (const t of (catalog?.templates || [])) {
+    if (t && t.id) templatesById.set(t.id, t);
+  }
+
+  const roomKeys = new Set();
+  for (const r of rooms) {
+    const name = r?.name || r?.id;
+    if (name) roomKeys.add(String(name));
+    // Also index by id so groups keyed by roomId are recognised.
+    if (r?.id) roomKeys.add(String(r.id));
+  }
+
+  const nowIso = new Date().toISOString();
+  let total = 0;
+
+  await withGroupsLock((existing) => {
+    const existingById = new Map();
+    for (const g of existing) {
+      if (g && g.id) existingById.set(String(g.id), g);
+    }
+
+    const next = [];
+    for (const room of rooms) {
+      const roomName = room?.name || room?.id;
+      const roomId = room?.id || null;
+      if (!roomName) continue;
+
+      const zonesRaw = Array.isArray(room.zones) ? room.zones : [];
+      const zones = zonesRaw
+        .map((z) => (typeof z === 'string' ? z : (z && z.name) ? z.name : null))
+        .filter(Boolean);
+      if (!zones.length) zones.push('Zone 1');
+
+      const installed = Array.isArray(room.installedSystems) ? room.installedSystems : [];
+      // Important: do not erase existing room groups when a save-rooms payload
+      // (e.g. dimension/zone edits) doesn't carry installedSystems. Grow
+      // Management can author groups via Build Growing Units without touching
+      // installedSystems; preserving these avoids sudden 3D/system wipeouts.
+      if (!installed.length) {
+        for (const g of existing) {
+          const gRoom = g?.room || g?.roomName || '';
+          const gRoomId = g?.roomId || null;
+          if (String(gRoom) === String(roomName) || (roomId && String(gRoomId) === String(roomId))) {
+            next.push(g);
+          }
+        }
+        continue;
+      }
+
+      for (const sys of installed) {
+        const templateId = sys?.templateId;
+        if (!templateId) continue;
+        const quantity = Math.max(0, Math.floor(Number(sys.quantity) || 0));
+        if (!quantity) continue;
+        const tpl = templatesById.get(templateId);
+        const label = tpl?.label || tpl?.name || templateId;
+
+        for (let i = 1; i <= quantity; i++) {
+          const zoneName = zones[(i - 1) % zones.length];
+          const name = `${label} ${i}`;
+          const id = `${roomName}:${zoneName}:${name}`;
+          const prior = existingById.get(id);
+          next.push({
+            id,
+            name,
+            room: roomName,
+            roomId: roomId,
+            zone: zoneName,
+            templateId,
+            customization: sys.customization || prior?.customization || {},
+            crop: prior?.crop ?? null,
+            plan: prior?.plan ?? null,
+            planId: prior?.planId ?? null,
+            schedule: prior?.schedule ?? null,
+            status: prior?.status || 'active',
+            lights: Array.isArray(prior?.lights) ? prior.lights : [],
+            gridX: prior?.gridX ?? null,
+            gridY: prior?.gridY ?? null,
+            lastModified: prior?.lastModified || nowIso
+          });
+        }
+      }
+    }
+
+    // Replace the in-memory groups array (withGroupsLock writes it back).
+    existing.length = 0;
+    // Groups from rooms NOT present in this save payload are orphaned (the
+    // room was renamed or deleted). Drop them rather than carrying them over;
+    // save-rooms is always called with the full rooms list so no live room's
+    // groups will be silently lost. This fixes the "30 groups = room length"
+    // mis-wiring caused by stale 'Room 1' entries surviving a rename.
+    existing.push(...next);
+    total = next.length;
+    console.log(`[reconcile-groups] Rebuilt ${next.length} group(s) for ${rooms.length} room(s)`);
+  });
+
+  return total;
+}
+
+/**
+ * Seed `target-ranges.json` with default thresholds for any zone that
+ * doesn't already have an entry. Returns the number of zone entries newly
+ * created. Existing entries are NEVER modified — Environment Setup is the
+ * authoritative editor for thresholds. Defaults pulled from
+ * target-ranges.defaults when present, else conservative leafy-greens values.
+ */
+async function seedTargetRangesForRooms(rooms) {
+  if (!Array.isArray(rooms) || !rooms.length) return 0;
+  const FALLBACK_DEFAULTS = {
+    temp_min: 20, temp_max: 24,
+    rh_min: 50,   rh_max: 65,
+    vpd_min: 0.8, vpd_max: 1.2,
+    co2_min: 400, co2_max: 1200
+  };
+  const targetRanges = readJSON('target-ranges.json', { zones: {}, defaults: {} }) || {};
+  if (!targetRanges.zones || typeof targetRanges.zones !== 'object') targetRanges.zones = {};
+  const defaults = (targetRanges.defaults && typeof targetRanges.defaults === 'object')
+    ? { ...FALLBACK_DEFAULTS, ...targetRanges.defaults }
+    : FALLBACK_DEFAULTS;
+
+  let added = 0;
+  for (const room of rooms) {
+    const roomLabel = room.name || room.room_name || room.id || 'Room';
+    const zones = Array.isArray(room.zones) ? room.zones : [];
+    zones.forEach((z, i) => {
+      const zoneId = (typeof z === 'string')
+        ? z
+        : String(z?.id || `zone-${i + 1}`);
+      const zoneName = (typeof z === 'string')
+        ? z
+        : (z?.name || `Zone ${i + 1}`);
+      if (targetRanges.zones[zoneId]) return; // never overwrite operator edits
+      targetRanges.zones[zoneId] = {
+        name: `${roomLabel}, ${zoneName}`,
+        ...defaults,
+        seeded: true,
+        seededAt: new Date().toISOString()
+      };
+      added += 1;
+    });
+  }
+
+  if (added > 0) {
+    writeJSON('target-ranges.json', targetRanges);
+    console.log(`[seed-target-ranges] Added defaults for ${added} new zone(s)`);
+  }
+  return added;
+}
 
 // Setup completion endpoint
 app.post('/api/setup/complete', asyncHandler(async (req, res) => {
@@ -11963,8 +12253,9 @@ app.post('/api/harvest', async (req, res) => {
     harvestLog.metadata.lastUpdated = new Date().toISOString();
     harvestLog.metadata.totalHarvests = harvestLog.harvests.length;
     
-    // Save updated log
-    fs.writeFileSync(harvestLogPath, JSON.stringify(harvestLog, null, 2), 'utf-8');
+    // Save updated log (atomic + serialized via writeJsonQueued so concurrent
+    // harvests on different groups cannot corrupt the file). Phase 1 hardening.
+    await writeJsonQueued(harvestLogPath, JSON.stringify(harvestLog, null, 2));
     
     console.log(`[Harvest API] Recorded harvest for group ${harvestEntry.groupId}, variance: ${harvestEntry.variance} days`);
     
@@ -12188,7 +12479,9 @@ app.post('/api/groups/:groupId/harvest', asyncHandler(async (req, res) => {
   harvestLog.metadata.lastUpdated = nowIso;
   harvestLog.metadata.totalHarvests = harvestLog.harvests.length;
   try {
-    fs.writeFileSync(harvestLogPath, JSON.stringify(harvestLog, null, 2), 'utf-8');
+    // Atomic + serialized write so concurrent /api/groups/:id/harvest calls
+    // (multiple zones harvested in parallel) cannot corrupt the log file.
+    await writeJsonQueued(harvestLogPath, JSON.stringify(harvestLog, null, 2));
   } catch (e) {
     console.error('[Group Harvest] Failed to write harvest log:', e.message);
     return res.status(500).json({ ok: false, error: 'Failed to persist harvest log' });
@@ -21512,12 +21805,15 @@ app.get('/api/farm/profile', asyncHandler(async (req, res) => {
         });
       }
       
-      // Return existing farm data — include rooms from rooms.json if available
+      // Return existing farm data — always read canonical persisted rooms.
+      // Using /public/data/rooms.json here causes stale/missing room lists on
+      // pages that hydrate from /api/farm/profile after Grow Management saves.
       let edgeRooms = [];
       try {
-        const roomsPath = path.join(__dirname, 'public', 'data', 'rooms.json');
-        const roomsData = JSON.parse(fs.readFileSync(roomsPath, 'utf8'));
-        edgeRooms = Array.isArray(roomsData?.rooms) ? roomsData.rooms : [];
+        const roomsData = readJSON('rooms.json', { rooms: [] });
+        edgeRooms = Array.isArray(roomsData)
+          ? roomsData
+          : (Array.isArray(roomsData?.rooms) ? roomsData.rooms : []);
       } catch (_) { /* rooms.json not available */ }
 
       return res.json({
@@ -21559,9 +21855,10 @@ app.get('/api/farm/profile', asyncHandler(async (req, res) => {
     console.log('[/api/farm/profile] Local access token recognized - returning mock data');
     let localRooms = [];
     try {
-      const roomsPath = path.join(__dirname, 'public', 'data', 'rooms.json');
-      const roomsData = JSON.parse(fs.readFileSync(roomsPath, 'utf8'));
-      localRooms = Array.isArray(roomsData?.rooms) ? roomsData.rooms : [];
+      const roomsData = readJSON('rooms.json', { rooms: [] });
+      localRooms = Array.isArray(roomsData)
+        ? roomsData
+        : (Array.isArray(roomsData?.rooms) ? roomsData.rooms : []);
     } catch (_) { /* no rooms.json */ }
     return res.json({
       status: 'success',
@@ -24660,6 +24957,83 @@ app.post('/api/trays/register', (req, res) => {
   
   // TODO: Implement production tray registration
   res.json({ success: true, trayId });
+});
+
+/**
+ * Phase 3 compatibility endpoints.
+ * Formal tray lifecycle API contracts expected by grow-management:
+ *   POST /api/trays/seed
+ *   POST /api/trays/transplant
+ *   POST /api/trays/harvest
+ *
+ * Canonical handlers remain:
+ *   POST /api/trays/:trayId/seed
+ *   POST /api/tray-runs/:id/move
+ *   POST /api/tray-runs/:id/harvest
+ *
+ * These wrappers normalize payload aliases and then delegate to canonical
+ * handlers to keep one source of behavior.
+ */
+function __delegateToCanonicalTrayRoute(req, res, targetPath, body) {
+  const originalUrl = req.url;
+  req.url = targetPath;
+  req.body = body;
+  app.handle(req, res, (err) => {
+    req.url = originalUrl;
+    if (err && !res.headersSent) {
+      console.error('[tray-lifecycle] Delegate failed:', err.message);
+      return res.status(500).json({ error: 'Tray lifecycle delegation failed' });
+    }
+  });
+}
+
+app.post('/api/trays/seed', async (req, res) => {
+  const trayId = String(req.body?.trayId || req.body?.tray_id || '').trim();
+  if (!trayId) {
+    return res.status(400).json({ error: 'trayId is required' });
+  }
+  const body = { ...req.body };
+  delete body.trayId;
+  delete body.tray_id;
+  return __delegateToCanonicalTrayRoute(req, res, `/api/trays/${encodeURIComponent(trayId)}/seed`, body);
+});
+
+app.post('/api/trays/transplant', async (req, res) => {
+  const trayRunId = String(req.body?.trayRunId || req.body?.tray_run_id || req.body?.trayId || req.body?.tray_id || '').trim();
+  const newPosition = String(
+    req.body?.newPosition
+    || req.body?.targetPosition
+    || req.body?.destination
+    || (req.body?.groupId ? `GRP:${req.body.groupId}` : '')
+  ).trim();
+
+  if (!trayRunId) {
+    return res.status(400).json({ error: 'trayRunId (or trayId) is required' });
+  }
+  if (!newPosition) {
+    return res.status(400).json({ error: 'newPosition (or targetPosition/groupId) is required' });
+  }
+
+  const body = {
+    ...req.body,
+    newPosition,
+    timestamp: req.body?.timestamp || req.body?.transplantedAt || req.body?.transplantDate || undefined
+  };
+  return __delegateToCanonicalTrayRoute(req, res, `/api/tray-runs/${encodeURIComponent(trayRunId)}/move`, body);
+});
+
+app.post('/api/trays/harvest', async (req, res) => {
+  const trayRunId = String(req.body?.trayRunId || req.body?.tray_run_id || req.body?.id || '').trim();
+  if (!trayRunId) {
+    return res.status(400).json({ error: 'trayRunId is required' });
+  }
+
+  const body = {
+    ...req.body,
+    actualWeight: req.body?.actualWeight ?? req.body?.weight ?? req.body?.weight_oz ?? null,
+    harvestedAt: req.body?.harvestedAt || req.body?.timestamp || req.body?.harvestDate || undefined
+  };
+  return __delegateToCanonicalTrayRoute(req, res, `/api/tray-runs/${encodeURIComponent(trayRunId)}/harvest`, body);
 });
 
 /**
@@ -32981,11 +33355,6 @@ async function syncRoomMapsFromRooms(rooms) {
     const existingZones = Array.isArray(roomMap.zones) ? roomMap.zones : [];
     const existingNames = existingZones.map(z => (z && z.name) ? String(z.name) : null).filter(Boolean);
 
-    // Short-circuit when the name list is already identical in order.
-    const sameCount = existingNames.length === desiredNames.length;
-    const sameOrder = sameCount && existingNames.every((n, i) => n === desiredNames[i]);
-    if (sameOrder) continue;
-
     const byName = new Map();
     existingZones.forEach(z => { if (z && z.name) byName.set(String(z.name), z); });
 
@@ -32993,18 +33362,66 @@ async function syncRoomMapsFromRooms(rooms) {
     const gridH = Number(roomMap.gridSize) || 30;
     const n = desiredNames.length;
 
-    const newZones = desiredNames.map((name, i) => {
+    const roomLengthM = Number(room.length_m || room.lengthM || room.length || room.dimensions?.lengthM || room.dimensions?.length_m || 0);
+    const roomWidthM = Number(room.width_m || room.widthM || room.width || room.dimensions?.widthM || room.dimensions?.width_m || 0);
+
+    // When names are unchanged, geometry may still have changed (zone drawer
+    // saves x_m/y_m/length_m/width_m). Only short-circuit if no incoming zone
+    // carries geometry fields.
+    const sameCount = existingNames.length === desiredNames.length;
+    const sameOrder = sameCount && existingNames.every((nm, i2) => nm === desiredNames[i2]);
+    const incomingHasGeometry = incoming.some((z) => z && typeof z === 'object' && (
+      Number.isFinite(Number(z.x_m)) || Number.isFinite(Number(z.y_m)) ||
+      Number.isFinite(Number(z.length_m)) || Number.isFinite(Number(z.width_m))
+    ));
+    if (sameOrder && !incomingHasGeometry) continue;
+
+    const incomingByName = new Map();
+    incoming.forEach((z, i2) => {
+      if (!z || typeof z !== 'object') return;
+      const nm = (z.name && String(z.name).trim()) || (z.id && String(z.id)) || `Zone ${i2 + 1}`;
+      incomingByName.set(nm, z);
+    });
+
+    const newZones = desiredNames.map((name, i2) => {
       const prior = byName.get(name);
-      if (prior && Number.isFinite(prior.x1) && Number.isFinite(prior.x2)) {
-        return { ...prior, zone: i + 1, name };
+      const incomingZone = incomingByName.get(name);
+
+      // Prefer explicit metre geometry from rooms.json (zone drawer output).
+      if (incomingZone && Number.isFinite(roomLengthM) && roomLengthM > 0 && Number.isFinite(roomWidthM) && roomWidthM > 0) {
+        const xM = Number(incomingZone.x_m);
+        const yM = Number(incomingZone.y_m);
+        const lM = Number(incomingZone.length_m);
+        const wM = Number(incomingZone.width_m);
+        if (Number.isFinite(xM) && Number.isFinite(yM) && Number.isFinite(lM) && Number.isFinite(wM) && lM > 0 && wM > 0) {
+          const x1 = Math.max(0, Math.min(gridW - 1, Math.floor((xM / roomLengthM) * gridW)));
+          const y1 = Math.max(0, Math.min(gridH - 1, Math.floor((yM / roomWidthM) * gridH)));
+          const x2 = Math.max(x1, Math.min(gridW - 1, Math.ceil(((xM + lM) / roomLengthM) * gridW) - 1));
+          const y2 = Math.max(y1, Math.min(gridH - 1, Math.ceil(((yM + wM) / roomWidthM) * gridH) - 1));
+          return {
+            ...(prior || {}),
+            zone: i2 + 1,
+            name,
+            color: (prior && prior.color) || DEFAULT_COLORS[i2 % DEFAULT_COLORS.length],
+            x1, y1, x2, y2,
+            tempSetpoint: (prior && prior.tempSetpoint) || { min: 20, max: 24 },
+            rhSetpoint: (prior && prior.rhSetpoint) || { min: 58, max: 65 },
+            rhDelta: (prior && Number.isFinite(prior.rhDelta)) ? prior.rhDelta : 5
+          };
+        }
       }
+
+      if (prior && Number.isFinite(prior.x1) && Number.isFinite(prior.x2)) {
+        return { ...prior, zone: i2 + 1, name };
+      }
+
       const slabW = Math.max(1, Math.floor(gridW / n));
-      const x1 = i * slabW;
-      const x2 = (i === n - 1) ? Math.max(x1, gridW - 1) : (x1 + slabW - 1);
+      const x1 = i2 * slabW;
+      const x2 = (i2 === n - 1) ? Math.max(x1, gridW - 1) : (x1 + slabW - 1);
       return {
-        zone: i + 1,
+        zone: i2 + 1,
         name,
-        color: DEFAULT_COLORS[i % DEFAULT_COLORS.length],
+        color: DEFAULT_COLORS[i2 % DEFAULT_COLORS.length],
         x1, y1: 0, x2, y2: Math.max(0, gridH - 1),
         tempSetpoint: { min: 20, max: 24 },
         rhSetpoint: { min: 58, max: 65 },
@@ -33086,6 +33503,24 @@ async function syncZonesToRoomsJson(roomMapBody, baseName) {
       .filter(Boolean);
     const sortedNew = [...zoneNames].sort();
     const sortedOld = [...existingNames].sort();
+
+    // Canonical direction is rooms.json -> room-map-<id>.json via
+    // syncRoomMapsFromRooms(). If a stale room-map payload posts back after a
+    // rooms save, it can otherwise overwrite the newly saved zone count and
+    // make zones appear to "revert" moments later. Only allow room-map to
+    // seed zones when the room has none yet, or when explicitly marked as an
+    // authoritative zone edit.
+    const roomMapAuthoritative = !!(
+      roomMapBody &&
+      (roomMapBody.authoritativeZones === true || roomMapBody.syncZonesToRooms === true)
+    );
+    if (existingNames.length > 0 && !roomMapAuthoritative) {
+      if (JSON.stringify(sortedNew) !== JSON.stringify(sortedOld)) {
+        console.log(`[zone-rooms-sync] Skipped room-map->rooms overwrite for ${targetRoomId}; rooms.json remains authoritative (${existingNames.length} existing vs ${zoneNames.length} incoming).`);
+      }
+      return;
+    }
+
     if (JSON.stringify(sortedNew) === JSON.stringify(sortedOld)) {
       return; // No change needed
     }
@@ -33103,7 +33538,9 @@ async function syncZonesToRoomsJson(roomMapBody, baseName) {
       return { id: `zone-${i + 1}`, name: nm };
     });
     const roomsPath = path.join(DATA_DIR, 'rooms.json');
-    fs.writeFileSync(roomsPath, JSON.stringify(roomsData, null, 2));
+    // Atomic + serialized write so concurrent zone edits and /api/setup/save-rooms
+    // do not race; matches the queue used by the canonical save path. Phase 1 hardening.
+    await writeJsonQueued(roomsPath, JSON.stringify(roomsData, null, 2));
     console.log(`[zone-rooms-sync] Updated rooms.json: room ${targetRoomId} now has ${zoneNames.length} zone(s): ${zoneNames.join(', ')}`);
 
     // Cascade zone removals to groups.json and iot-devices.json
@@ -33148,7 +33585,9 @@ async function syncZonesToRoomsJson(roomMapBody, baseName) {
           }
           if (devicesChanged > 0) {
             const iotPayload = Array.isArray(iotRaw) ? devices : { ...iotRaw, devices };
-            fs.writeFileSync(iotPath, JSON.stringify(iotPayload, null, 2));
+            // Phase 1 hardening: serialize via writeJsonQueued; iot-devices.json
+            // is written from multiple paths (sensor sync, room mapper, zone cascade).
+            await writeJsonQueued(iotPath, JSON.stringify(iotPayload, null, 2));
             console.log(`[zone-cascade] Reassigned ${devicesChanged} device(s) from removed zones to "${fallbackZone}"`);
           }
         }
@@ -33200,7 +33639,9 @@ function reconcileRoomMaps() {
 
     if (added > 0) {
       const roomsPath = path.join(DATA_DIR, 'rooms.json');
-      fs.writeFileSync(roomsPath, JSON.stringify(roomsData, null, 2));
+      // Boot-time reconciler; queue write so a concurrent save-rooms request
+      // landing during startup serializes correctly. Phase 1 hardening.
+      writeJsonQueued(roomsPath, JSON.stringify(roomsData, null, 2)).catch(() => {});
       console.log(`[room-reconcile] Added ${added} orphaned room(s) to rooms.json`);
     }
   } catch (error) {

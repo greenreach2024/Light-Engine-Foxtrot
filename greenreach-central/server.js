@@ -465,6 +465,20 @@ app.use((req, _res, next) => {
 app.get('/data/rooms.json', (req, res) => proxyToLE(req, res, '/data/rooms.json'));
 app.get('/data/groups.json', (req, res) => proxyToLE(req, res, '/data/groups.json'));
 app.post('/data/groups.json', authMiddleware, (req, res) => proxyToLE(req, res, '/data/groups.json'));
+// Single source of truth for IoT device registry: LE owns SwitchBot polling
+// and writes iot-devices.json under /app/data (GCS FUSE). Central used to
+// serve a stale local copy from greenreach-central/public/data/ which drifted
+// over time — different device counts on LE vs Central caused dangling
+// controller_id references in groups. Preserve the auth gate that
+// SENSITIVE_DATA_FILES enforced for the static fallback.
+app.get('/data/iot-devices.json', (req, res) => {
+  const hasAuth = req.headers.authorization || req.session?.farmId;
+  if (!hasAuth) return res.status(403).json({ error: 'Authentication required for this resource' });
+  return proxyToLE(req, res, '/data/iot-devices.json');
+});
+// Target ranges (zone temp/RH/VPD/CO2 thresholds) live on LE; the 3D viewer
+// status overlay and zone-recommendations API need a fresh, single-source view.
+app.get('/data/target-ranges.json', (req, res) => proxyToLE(req, res, '/data/target-ranges.json'));
 app.get('/events', (req, res) => proxyToLE(req, res, '/events'));
 app.get('/data/room-map.json', async (req, res) => {
   const fid = farmStore.farmIdFromReq(req);
@@ -2753,12 +2767,10 @@ app.get('/api/setup/data', authMiddleware, async (req, res) => {
 });
 
 // ── /api/setup/save-rooms — PROXY to Light Engine ──────────────────────────
-// Previously wrote to farmStore (AlloyDB) while LE wrote to rooms.json, so
-// the 3D viewer (which reads /data/rooms.json + listens on /events) never
-// saw Central's writes. Now all room saves are forwarded to LE's authoritative
-// handler which merges, persists to GCS, and broadcasts SSE data-change.
-// Auth stays on Central: authMiddleware gates the request before we proxy.
-app.post('/api/setup/save-rooms', authMiddleware, (req, res) => {
+// LE is the single source of truth for rooms.json AND groups.json. LE's
+// save-rooms handler reconciles groups from each room's installedSystems
+// (so the 5-min syncFarmData pull stays in lock-step). Central just proxies.
+app.post('/api/setup/save-rooms', (req, res) => {
   return proxyToLE(req, res, '/api/setup/save-rooms');
 });
 
