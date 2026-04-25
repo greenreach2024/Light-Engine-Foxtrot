@@ -153,34 +153,6 @@ class SmsService {
 
 export default new SmsService();
 
-
-// SMTP config (reuses same Google Workspace credentials as email service)
-const SMTP_HOST = process.env.SMTP_HOST || '';
-const SMTP_PORT = parseInt(process.env.SMTP_PORT || '587');
-const SMTP_USER = process.env.SMTP_USER || '';
-const SMTP_PASS = process.env.SMTP_PASS || '';
-const SMTP_ENABLED = !!(SMTP_HOST && SMTP_USER && SMTP_PASS);
-
-let _smtpTransport = null;
-
-function getSmtpTransport() {
-  if (_smtpTransport) return _smtpTransport;
-  if (!SMTP_ENABLED) return null;
-  try {
-    _smtpTransport = nodemailer.createTransport({
-      host: SMTP_HOST,
-      port: SMTP_PORT,
-      secure: SMTP_PORT === 465,
-      auth: { user: SMTP_USER, pass: SMTP_PASS }
-    });
-    console.log('[sms] SMTP transport ready for email-to-SMS');
-    return _smtpTransport;
-  } catch (err) {
-    console.error('[sms] Failed to create SMTP transport:', err.message);
-    return null;
-  }
-}
-
 // Normalise phone to E.164 format
 function normalisePhone(phone) {
   const digits = phone.replace(/[^0-9]/g, '');
