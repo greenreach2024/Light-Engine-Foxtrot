@@ -13926,12 +13926,29 @@ function exportFleetReport() {
 
 let saladMixesData = [];
 
+function getSaladMixAdminToken() {
+    // Backward-compatible token lookup: the app stores admin auth in
+    // `admin_token`, but older salad-mix code used `adminToken`.
+    return localStorage.getItem('admin_token') || localStorage.getItem('adminToken') || '';
+}
+
+function handleSaladMixUnauthorized() {
+    alert('Your admin session expired. Please sign in again.');
+    localStorage.removeItem('admin_token');
+    localStorage.removeItem('adminToken');
+    try { window.location.href = '/GR-central-admin-login.html'; } catch (_) {}
+}
+
 async function loadSaladMixes() {
     try {
-        const token = localStorage.getItem('adminToken');
+        const token = getSaladMixAdminToken();
         const resp = await fetch('/api/admin/salad-mixes', {
             headers: { 'Authorization': `Bearer ${token}` }
         });
+        if (resp.status === 401) {
+            handleSaladMixUnauthorized();
+            return;
+        }
         const data = await resp.json();
         if (data.success) {
             saladMixesData = data.mixes || [];
@@ -14102,7 +14119,7 @@ async function saveSaladMix() {
     }
 
     try {
-        const token = localStorage.getItem('adminToken');
+        const token = getSaladMixAdminToken();
         const method = id ? 'PUT' : 'POST';
         const url = id ? `/api/admin/salad-mixes/${id}` : '/api/admin/salad-mixes';
         const resp = await fetch(url, {
@@ -14110,6 +14127,10 @@ async function saveSaladMix() {
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: JSON.stringify({ name, description, status, components })
         });
+        if (resp.status === 401) {
+            handleSaladMixUnauthorized();
+            return;
+        }
         const data = await resp.json();
         if (data.success) {
             closeMixModal();
@@ -14126,11 +14147,15 @@ async function saveSaladMix() {
 async function deleteSaladMix(mixId) {
     if (!confirm('Delete this salad mix template?')) return;
     try {
-        const token = localStorage.getItem('adminToken');
+        const token = getSaladMixAdminToken();
         const resp = await fetch(`/api/admin/salad-mixes/${mixId}`, {
             method: 'DELETE',
             headers: { 'Authorization': `Bearer ${token}` }
         });
+        if (resp.status === 401) {
+            handleSaladMixUnauthorized();
+            return;
+        }
         const data = await resp.json();
         if (data.success) {
             await loadSaladMixes();
