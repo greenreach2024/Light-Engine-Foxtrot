@@ -1379,6 +1379,7 @@ const defaultPricing = {
 
     // Mixed Greens: $5.49 USD/5oz = $21.35/lb
     'Organic Mixed Greens': { retail: 21.35, ws1: 15, ws2: 25, ws3: 35 },
+    'Spring Mix': { retail: 21.35, ws1: 15, ws2: 25, ws3: 35 },
     'Salad Mix': { retail: 21.99, ws1: 15, ws2: 25, ws3: 35 },
     'Escarole Batavian': { retail: 21.35, ws1: 15, ws2: 25, ws3: 35 },
     'Sorrel': { retail: 21.35, ws1: 15, ws2: 25, ws3: 35 },
@@ -1525,6 +1526,7 @@ async function loadCropsFromDatabase() {
                 });
             }
         };
+        ensurePricingRow('Spring Mix', defaultPricing['Spring Mix'] || { retail: 21.35, ws1: 15, ws2: 25, ws3: 35 });
         ensurePricingRow('Salad Mix', defaultPricing['Salad Mix'] || { retail: 21.99, ws1: 15, ws2: 25, ws3: 35 });
 
         pricingData.sort((a, b) => String(a?.crop || '').localeCompare(String(b?.crop || '')));
