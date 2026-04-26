@@ -257,7 +257,7 @@ router.get('/status', authenticateToken, async (req, res) => {
 
     // Get farm details including setup_completed flag
     const farmResult = await pool.query(
-      'SELECT name, plan_type, timezone, business_hours, setup_completed FROM farms WHERE farm_id = $1',
+      'SELECT name, plan_type, timezone, business_hours, setup_completed, status FROM farms WHERE farm_id = $1',
       [farmId]
     );
 
@@ -281,8 +281,8 @@ router.get('/status', authenticateToken, async (req, res) => {
       }
     }
 
-    // Determine setup completion: Primary = setup_completed flag, Fallback = has rooms
-    const setupCompleted = farm?.setup_completed === true || roomCount > 0;
+    // Determine setup completion: Primary = setup_completed flag, Fallback = active farm OR has rooms
+    const setupCompleted = farm?.setup_completed === true || farm?.status === 'active' || roomCount > 0;
 
     res.json({
       success: true,
