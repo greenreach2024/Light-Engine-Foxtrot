@@ -17,6 +17,15 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutlinePass } from 'three/addons/postprocessing/OutlinePass.js';
+import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+
+RectAreaLightUniformsLib.init();
 
 const IN_TO_M = 0.0254;
 const M_TO_FT = 3.28084;
@@ -86,17 +95,52 @@ scene.add(new THREE.HemisphereLight(0xbfd8ff, 0x202830, 0.45));
 const sun = new THREE.DirectionalLight(0xffffff, 1.6);
 sun.position.set(40, 60, 30);
 sun.castShadow = true;
-sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.mapSize.set(4096, 4096);
 sun.shadow.camera.near = 1;
 sun.shadow.camera.far = 200;
-sun.shadow.camera.left = -60; sun.shadow.camera.right = 60;
-sun.shadow.camera.top = 60; sun.shadow.camera.bottom = -60;
-sun.shadow.bias = -0.0005;
+sun.shadow.camera.left = -40; sun.shadow.camera.right = 40;
+sun.shadow.camera.top = 40; sun.shadow.camera.bottom = -40;
+sun.shadow.bias = -0.0003;
+sun.shadow.normalBias = 0.02;
+sun.shadow.radius = 4;
 scene.add(sun);
 
 const fill = new THREE.DirectionalLight(0x6ab1ff, 0.35);
 fill.position.set(-30, 25, -20);
 scene.add(fill);
+
+const composer = new EffectComposer(renderer);
+composer.setPixelRatio(renderer.getPixelRatio());
+composer.setSize(window.innerWidth, window.innerHeight);
+composer.addPass(new RenderPass(scene, camera));
+
+const bloomPass = new UnrealBloomPass(
+  new THREE.Vector2(window.innerWidth, window.innerHeight),
+  0.7, 0.85, 0.92
+);
+composer.addPass(bloomPass);
+
+const outlinePass = new OutlinePass(
+  new THREE.Vector2(window.innerWidth, window.innerHeight),
+  scene, camera
+);
+outlinePass.edgeStrength = 4.0;
+outlinePass.edgeGlow = 0.6;
+outlinePass.edgeThickness = 1.6;
+outlinePass.pulsePeriod = 0;
+outlinePass.visibleEdgeColor.set('#6ab1ff');
+outlinePass.hiddenEdgeColor.set('#1a3a5a');
+composer.addPass(outlinePass);
+
+const smaaPass = new SMAAPass(
+  window.innerWidth * renderer.getPixelRatio(),
+  window.innerHeight * renderer.getPixelRatio()
+);
+composer.addPass(smaaPass);
+
+composer.addPass(new OutputPass());
+
+const MAX_RAL_PER_ZONE = 6;
 
 const ground = new THREE.Mesh(
   new THREE.CircleGeometry(160, 48),
@@ -370,16 +414,30 @@ function buildEquipmentForGroup(group) {
   return fac(group);
 }
 
-function makeFixtureAbove(footprint, mountHeight, count=1) {
+function makeFixtureAbove(footprint, mountHeight, count=1, opts={}) {
   const g = new THREE.Group();
   const cols = Math.max(1, Math.min(4, count));
   const span = footprint.length_m * 0.85;
+  const lensW = span / cols * 0.86;
+  const lensD = footprint.width_m * 0.66;
+  const litRemaining = { n: opts.maxLights == null ? cols : Math.max(0, Math.min(cols, opts.maxLights)) };
   for (let i = 0; i < cols; i++) {
     const fixture = new THREE.Group();
     const body = new THREE.Mesh(new THREE.BoxGeometry(span / cols * 0.9, 0.08, footprint.width_m * 0.7), matFixtureBody);
     body.position.y = mountHeight + 0.45; body.castShadow = true; fixture.add(body);
-    const lens = new THREE.Mesh(new THREE.BoxGeometry(span / cols * 0.86, 0.02, footprint.width_m * 0.66), matFixtureLens);
+    const lens = new THREE.Mesh(new THREE.BoxGeometry(lensW, 0.02, lensD), matFixtureLens);
     lens.position.y = mountHeight + 0.41; fixture.add(lens);
+    if (litRemaining.n > 0) {
+      // RectAreaLight only affects MeshStandard/Physical materials, which is
+      // what every surface in this scene uses. Cap the count via opts.maxLights
+      // so a 78-group farm doesn't try to evaluate hundreds of lights per pixel.
+      const ral = new THREE.RectAreaLight(0xff66cc, 2.4, lensW, lensD);
+      ral.position.y = mountHeight + 0.40;
+      ral.lookAt(ral.position.x, 0, ral.position.z);
+      ral.userData = { kind: 'growLight' };
+      fixture.add(ral);
+      litRemaining.n--;
+    }
     fixture.position.x = -span/2 + (i + 0.5) * (span / cols);
     g.add(fixture);
   }
@@ -460,6 +518,8 @@ function metricInfo(metric) {
   if (metric === 'tempC') return { label: 'Temp (C)', unit: 'C', lo: 16, hi: 28 };
   if (metric === 'rh') return { label: 'RH (%)', unit: '%', lo: 50, hi: 80 };
   if (metric === 'vpd') return { label: 'VPD (kPa)', unit: 'kPa', lo: 0.4, hi: 1.4 };
+  if (metric === 'ppfd') return { label: 'PPFD (μmol/m²/s)', unit: 'μmol/m²/s', lo: 0, hi: 1000 };
+  if (metric === 'dli') return { label: 'DLI (mol/m²/d)', unit: 'mol/m²/d', lo: 0, hi: 40 };
   return { label: metric, unit: '', lo: 0, hi: 1 };
 }
 function heatColor(v, lo, hi) {
@@ -603,6 +663,9 @@ function placeGroupsInZone(roomGroup, zr, groupsArr, room) {
   let rowMaxW = 0;
   const maxX = zr.x_m + zr.length_m - padding;
   const maxY = zr.y_m + zr.width_m - padding;
+  // RectAreaLight budget per zone — top-down view drops fixture lighting
+  // entirely (no benefit when looking straight down).
+  let ralBudget = state.viewMode === 'top' ? 0 : MAX_RAL_PER_ZONE;
 
   items.forEach(({ group, fp }) => {
     let L = fp.length_m, W = fp.width_m, rotate = false;
@@ -639,7 +702,10 @@ function placeGroupsInZone(roomGroup, zr, groupsArr, room) {
 
     const lightsCount = Array.isArray(group.lights) ? group.lights.length : 0;
     if (lightsCount > 0) {
-      const fix = makeFixtureAbove(built.footprint, built.height || 1.5, Math.min(lightsCount, 4));
+      const cols = Math.min(lightsCount, 4);
+      const litCount = Math.min(cols, ralBudget);
+      ralBudget -= litCount;
+      const fix = makeFixtureAbove(built.footprint, built.height || 1.5, cols, { maxLights: litCount });
       fix.position.copy(mesh.position);
       fix.rotation.y = mesh.rotation.y;
       fix.userData = { kind: 'fixtureFor', groupId: group.id };
@@ -691,6 +757,9 @@ function applySelectionVisuals() {
       mesh.add(ring);
     }
   });
+  const selected = Array.from(state.selection)
+    .map(id => state.meshIndex.get(id)).filter(Boolean);
+  outlinePass.selectedObjects = selected;
 }
 
 let camAnim = null;
@@ -876,7 +945,8 @@ canvas.addEventListener('pointerdown', (e) => {
     canvas.setPointerCapture(e.pointerId); drag.pointerId = e.pointerId;
     startDrag(groupHit.node, groupHit.point); return;
   }
-  if (!groupHit) {
+  // Marquee selection only on shift+click (empty space)
+  if (!groupHit && e.shiftKey) {
     canvas.setPointerCapture(e.pointerId); drag.pointerId = e.pointerId;
     marqueeBegin(e.clientX, e.clientY);
   }
@@ -903,6 +973,20 @@ canvas.addEventListener('pointercancel', () => {
   if (drag.active) { drag.active = false; controls.enabled = true; canvas.classList.remove('dragging'); }
   if (marquee.active) { marquee.active = false; if (marquee.el) marquee.el.style.display='none'; controls.enabled = true; }
 });
+
+let _hoverMesh = null;
+canvas.addEventListener('pointermove', (e) => {
+  if (drag.active || marquee.active) return;
+  const hit = pickFirstByKind(e.clientX, e.clientY, ['group']);
+  const next = hit ? hit.node : null;
+  if (next === _hoverMesh) return;
+  _hoverMesh = next;
+  const selected = Array.from(state.selection)
+    .map(id => state.meshIndex.get(id)).filter(Boolean);
+  outlinePass.selectedObjects = next && !state.selection.has(next.userData.id)
+    ? [...selected, next]
+    : selected;
+}, { passive: true });
 
 function handleClick(e) {
   const groupHit = pickFirstByKind(e.clientX, e.clientY, ['group']);
@@ -1223,6 +1307,16 @@ function wireSSE() {
 
 $('v3dFitBtn').addEventListener('click', fitView);
 $('v3dGrowBtn').addEventListener('click', () => window.open('/views/grow-management.html', '_blank', 'noopener'));
+const _shotBtn = $('v3dShotBtn');
+if (_shotBtn) _shotBtn.addEventListener('click', () => {
+  composer.render();
+  const url = renderer.domElement.toDataURL('image/png');
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `greenreach-farm-${Date.now()}.png`;
+  a.click();
+  toast('Screenshot saved');
+});
 document.querySelectorAll('.v3d-viewmode button').forEach(b => {
   b.addEventListener('click', () => setViewMode(b.dataset.view));
 });
@@ -1258,6 +1352,9 @@ window.addEventListener('resize', () => {
   const w = window.innerWidth, h = window.innerHeight;
   camera.aspect = w / h; camera.updateProjectionMatrix();
   renderer.setSize(w, h, false);
+  composer.setSize(w, h);
+  bloomPass.setSize(w, h);
+  outlinePass.setSize(w, h);
 }, { passive: true });
 
 window.addEventListener('keydown', (e) => {
@@ -1276,7 +1373,7 @@ window.addEventListener('keydown', (e) => {
 function tick(now) {
   if (camAnim && !camAnim(now)) {}
   controls.update();
-  renderer.render(scene, camera);
+  composer.render();
   requestAnimationFrame(tick);
 }
 
