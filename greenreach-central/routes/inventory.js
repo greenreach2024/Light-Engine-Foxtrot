@@ -852,6 +852,11 @@ router.post('/mix', async (req, res) => {
       }
     }
 
+    // Prefer catalog (market-researched) pricing when available
+    const catalogPricing = await resolveCropPricing(farmId, template.name);
+    if (catalogPricing.retailPrice > 0) weightedRetail = catalogPricing.retailPrice;
+    if (catalogPricing.wholesalePrice > 0) weightedPrice = catalogPricing.wholesalePrice;
+
     const manualQty = Math.max(0, Number(quantity_lbs));
     const productId = `mix-${template.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
     const sourceData = JSON.stringify({
