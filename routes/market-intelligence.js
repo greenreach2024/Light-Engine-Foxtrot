@@ -148,7 +148,7 @@ import { getGeminiClient, isGeminiConfigured, GEMINI_LITE } from '../lib/gemini-
  */
 const DEFAULT_CROPS = [
   'Arugula', 'Butterhead Lettuce', 'Buttercrunch Lettuce', 'Oakleaf Lettuce',
-  'Romaine Lettuce', 'Iceberg Lettuce', 'Spinach', 'Kale',
+  'Romaine Lettuce', 'Iceberg Lettuce', 'Spinach', 'Kale', 'Salad Mix',
   'Basil', 'Cilantro', 'Microgreens', 'Tomatoes (Cherry)', 'Tomatoes (Beefsteak)'
 ];
 

@@ -133,6 +133,18 @@ const MARKET_DATA_SOURCES = {
       }
     ]
   },
+  'Salad Mix': {
+    retailers: ['Whole Foods', 'Farm Boy', 'Sobeys', 'Loblaws', 'Metro'],
+    avgPriceCAD: 6.99,
+    avgWeightOz: 5,
+    priceRange: [5.99, 8.49],
+    trend: 'stable',
+    trendPercent: 3,
+    previousPrice: 6.79,
+    country: 'North America',
+    lastUpdated: '2026-04-26',
+    articles: []
+  },
   'Arugula': {
     retailers: ['Whole Foods', 'Farm Boy', 'Sobeys', 'Metro'],
     avgPriceCAD: 6.79,
@@ -206,6 +218,9 @@ const PRODUCT_WEIGHT_HINTS_OZ = {
   kale: 8,
   spinach: 10,
   arugula: 5,
+  'salad mix': 5,
+  'spring mix': 5,
+  'mixed greens': 5,
   lettuce: 16,
   'butterhead lettuce': 6,
   'bibb butterhead': 6,
