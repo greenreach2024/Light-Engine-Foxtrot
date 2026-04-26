@@ -21006,6 +21006,33 @@ app.post('/api/farm/auth/login', authRateLimiter, asyncHandler(async (req, res) 
       renewsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
     };
 
+    let setupCompleted = false;
+    try {
+      const setupResult = await pool.query(
+        'SELECT setup_completed FROM farms WHERE farm_id = $1 LIMIT 1',
+        [farm.farm_id]
+      );
+      const setupFlag = setupResult.rows[0]?.setup_completed === true;
+
+      let roomCount = 0;
+      try {
+        const roomResult = await pool.query(
+          'SELECT COUNT(*)::int AS count FROM rooms WHERE farm_id = $1',
+          [farm.farm_id]
+        );
+        roomCount = Number(roomResult.rows[0]?.count || 0);
+      } catch (roomErr) {
+        if (!(roomErr?.message?.includes('relation') && roomErr?.message?.includes('does not exist'))) {
+          throw roomErr;
+        }
+      }
+
+      setupCompleted = setupFlag || roomCount > 0;
+    } catch (setupErr) {
+      console.warn('[farm-auth] setupCompleted fallback failed:', setupErr?.message || setupErr);
+      setupCompleted = true;
+    }
+
     const firstLogin = !user.last_login;
     const mustChangePassword = user.must_change_password === true;
 
@@ -21022,6 +21049,7 @@ app.post('/api/farm/auth/login', authRateLimiter, asyncHandler(async (req, res) 
       role: user.role || 'admin',
       planType: farm.plan_type || 'cloud',
       subscription,
+      setupCompleted,
       expiresAt: sessionExpiry.toISOString(),
       firstLogin: Boolean(firstLogin),
       mustChangePassword
