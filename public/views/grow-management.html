@@ -171,7 +171,6 @@
       align-items: center;
       justify-content: center;
       color: #38bdf8;
-      font-size: 0.9rem;
       writing-mode: vertical-rl;
       user-select: none;
       letter-spacing: 0.06em;
@@ -942,8 +941,8 @@
     </div>
   </div>
 
-  <aside id="ffSelectionSummarySidebar" class="ff-selection-sidebar" aria-live="polite">
-    <button id="ffSidebarToggleBtn" class="ff-selection-sidebar__toggle" title="Toggle Selection Summary" aria-label="Toggle Selection Summary">&#9654;</button>
+  <aside id="ffSelectionSummarySidebar" class="ff-selection-sidebar" aria-live="polite" aria-label="Selection Summary">
+    <button id="ffSidebarToggleBtn" class="ff-selection-sidebar__toggle" title="Toggle Selection Summary" aria-label="Toggle Selection Summary" aria-controls="ffSelectionSummarySidebar" aria-expanded="true">&#9654;</button>
     <h4>Selection Summary</h4>
     <div id="ffSelectionSummaryList" class="ff-selection-list"></div>
     <div id="ffSelectionSummaryStatus" class="ff-selection-status">No template selected</div>
@@ -2828,6 +2827,10 @@
           toggleBtn.addEventListener('click', function () {
             var collapsed = sidebar.classList.toggle('is-collapsed');
             toggleBtn.innerHTML = collapsed ? '&#9664;' : '&#9654;';
+            // Keep a11y state in sync with the visual collapse so screen
+            // readers don't announce hidden content.
+            toggleBtn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+            sidebar.setAttribute('aria-hidden', collapsed ? 'true' : 'false');
           });
         }
 

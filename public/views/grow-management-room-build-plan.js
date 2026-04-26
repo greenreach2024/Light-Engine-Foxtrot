@@ -1002,8 +1002,12 @@
       renderBody();
       renderSpatial();
       renderEvie();
+      // Auto-stage after a 400 ms idle window. Use the silent path so the
+      // page does not scroll or advance the breadcrumb on every keystroke.
       clearTimeout(syncCustomizationFromInputs._stageTimer);
-      syncCustomizationFromInputs._stageTimer = setTimeout(stagePrefill, 400);
+      syncCustomizationFromInputs._stageTimer = setTimeout(function () {
+        stagePrefill({ silent: true });
+      }, 400);
       document.dispatchEvent(new CustomEvent('grow-system-config:changed', {
         detail: {
           templateId: state.template && state.template.id,
@@ -1202,8 +1206,20 @@
     stagePrefill();
   }
 
-  function stagePrefill() {
+  // stagePrefill(opts):
+  //   { silent: true } \u2014 used by the auto-stage debounce after every input
+  //     change. Updates state, localStorage, DataFlowBus, and dispatches the
+  //     `room-build-plan:staged` event so dependent UI (sidebar Implement
+  //     button, breadcrumb listeners) stays in sync \u2014 but does NOT scroll the
+  //     page or advance the breadcrumb. Auto-staging on each keystroke must be
+  //     invisible to the user; otherwise typing in levels/spacing yanks the
+  //     viewport every 400 ms.
+  //   { silent: false } (default) \u2014 explicit user action (template selection,
+  //     "Stage draft" button). Includes scroll-to-panel, breadcrumb advance,
+  //     and the success toast.
+  function stagePrefill(opts) {
     if (!state.template) return;
+    const silent = !!(opts && opts.silent);
     const nameInput = $(GROUP_NAME_ID);
     if (nameInput && !nameInput.value) {
       nameInput.value = `${state.template.name} \u2014 Group 1`;
@@ -1254,6 +1270,7 @@
     document.dispatchEvent(new CustomEvent('room-build-plan:staged', {
       detail: Object.assign({}, window.__gmPlanState)
     }));
+    if (silent) return;
     const panel = document.getElementById('groupsV2Panel');
     if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
     updateBreadcrumbActive(3); // Lights next

@@ -6653,7 +6653,7 @@ export function buildDirectLayoutPlan(message = '', roomId = '', contextText = '
   }
 
   if (!plan.walkway_m && (/left\s+and\s+right/i.test(combined) || /wider\s+(?:walkway|aisle)/i.test(msg) || /more\s+access|ease\s+of\s+access|easier\s+access/i.test(msg))) {
-    plan.walkway_m = 1.2;
+    plan.walkway_m = 1.8288; // 6 ft central service walkway (matches room-layout-solver default)
   }
 
   if (!plan.spacing_m && (/more\s+airflow|better\s+airflow|increase\s+airflow|more\s+space\s+between|spread\s+them\s+out|further\s+apart/i.test(msg))) {

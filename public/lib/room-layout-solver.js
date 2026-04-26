@@ -75,17 +75,16 @@
     var onAxisStride = c.orientation === 'butt_end_to_end'
       ? c.unitL
       : c.unitL + 2 * c.ends;
+    // 6 ft central service walkway is reserved between row 0 (front bank) and
+    // rows 1+ (back bank) when 2+ rows fit. Applied uniformly across
+    // orientations so rendered placements match solveLayout's capacity
+    // deduction; otherwise rows would pack contiguously and the reserved
+    // walkway would appear as empty space at the far edge.
+    var walkwayReserved = rowsMax >= 2 && mainWalkwayM > 0;
 
     var placed = 0;
     for (var r = 0; r < rowsMax && placed < n; r++) {
-      var y;
-      if (c.orientation === 'butt_end_to_end' && rowsMax >= 2) {
-        y = r === 0
-          ? c.back
-          : c.back + rowDepth + mainWalkwayM + (r - 1) * rowDepth;
-      } else {
-        y = r * rowDepth + c.back;
-      }
+      var y = c.back + r * rowDepth + (walkwayReserved && r >= 1 ? mainWalkwayM : 0);
       for (var u = 0; u < unitsPerRow && placed < n; u++) {
         var x = c.orientation === 'butt_end_to_end'
           ? u * onAxisStride
@@ -142,42 +141,26 @@
     var shortM = rect.shortM;
     var rowDepth, rowUnitLength, unitsPerRow, rowsMax, effectiveTileAreaM2;
 
-    if (c.orientation === 'single_sided') {
+    if (c.orientation === 'single_sided' || c.orientation === 'double_sided') {
       rowDepth = c.unitW + c.front + c.back;
       rowUnitLength = c.unitL + 2 * c.ends;
-      unitsPerRow = Math.floor(longM / rowUnitLength);
-      rowsMax = Math.floor(shortM / rowDepth);
-      // Reserve a 6 ft central walkway between rows; never drop below 1 row.
-      if (rowsMax >= 2 && (rowsMax * rowDepth + mainWalkwayM) > shortM) {
-        rowsMax = Math.max(1, Math.floor((shortM - mainWalkwayM) / rowDepth));
-      }
-      effectiveTileAreaM2 = rowDepth * rowUnitLength;
-    } else if (c.orientation === 'double_sided') {
-      rowDepth = c.unitW + c.front + c.back;
-      rowUnitLength = c.unitL + 2 * c.ends;
-      unitsPerRow = Math.floor(longM / rowUnitLength);
-      rowsMax = Math.floor(shortM / rowDepth);
-      // Reserve a 6 ft central service walkway between facing rows.
-      if (rowsMax >= 2 && (rowsMax * rowDepth + mainWalkwayM) > shortM) {
-        rowsMax = Math.max(1, Math.floor((shortM - mainWalkwayM) / rowDepth));
-      }
-      effectiveTileAreaM2 = rowDepth * rowUnitLength;
     } else {
       rowDepth = c.unitW + c.front + c.back;
       rowUnitLength = c.unitL;
-      unitsPerRow = Math.floor(longM / rowUnitLength);
-      rowsMax = Math.floor(shortM / rowDepth);
-      if (rowsMax >= 2 && (rowsMax * rowDepth + mainWalkwayM) > shortM) {
-        // Reserve a main serving walkway between facing rows, but never go
-        // below 1 row when a single row obviously fits (rowDepth may be
-        // smaller than the default walkway for compact templates).
-        rowsMax = Math.max(1, Math.floor((shortM - mainWalkwayM) / rowDepth));
-      }
-      effectiveTileAreaM2 = rowDepth * rowUnitLength;
     }
+    unitsPerRow = Math.floor(longM / rowUnitLength);
+    rowsMax = Math.floor(shortM / rowDepth);
+    // Reserve a 6 ft central service walkway between rows; never drop below 1
+    // row when a single row obviously fits (rowDepth may be smaller than the
+    // default walkway for compact templates).
+    if (rowsMax >= 2 && (rowsMax * rowDepth + mainWalkwayM) > shortM) {
+      rowsMax = Math.max(1, Math.floor((shortM - mainWalkwayM) / rowDepth));
+    }
+    effectiveTileAreaM2 = rowDepth * rowUnitLength;
 
     if (unitsPerRow < 0) unitsPerRow = 0;
     if (rowsMax < 0) rowsMax = 0;
+    var walkwayReserved = rowsMax >= 2 && mainWalkwayM > 0;
     var maxUnits = Math.max(0, unitsPerRow * rowsMax);
 
     return {
@@ -202,7 +185,8 @@
       effectiveTileAreaM2: round3(effectiveTileAreaM2),
       occupiedAreaM2: round2(effectiveTileAreaM2 * maxUnits),
       mainWalkwayM: mainWalkwayM,
-      walkwayAreaM2: round2(mainWalkwayM * rect.longM),
+      walkwayReserved: walkwayReserved,
+      walkwayAreaM2: walkwayReserved ? round2(mainWalkwayM * rect.longM) : 0,
       fits: function (n) { return n <= maxUnits; },
       placements: function (n) { return placementsFor(rect, c, unitsPerRow, rowsMax, n, mainWalkwayM); }
     };
