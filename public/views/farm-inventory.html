@@ -2517,7 +2517,7 @@
         if (data.error) throw new Error(data.error);
         document.getElementById('mixQuantityLbs').value = '';
         await loadMixInventory();
-        await loadInventoryData(); // refresh summary cards
+        await loadInventory(); // refresh summary cards
       } catch (err) {
         console.error('[MixInventory] Submit error:', err.message);
         alert('Failed to add mix: ' + err.message);
@@ -2535,7 +2535,7 @@
         const data = await resp.json();
         if (data.error) throw new Error(data.error);
         await loadMixInventory();
-        await loadInventoryData();
+        await loadInventory();
       } catch (err) {
         console.error('[MixInventory] Remove error:', err.message);
         alert('Failed to remove mix: ' + err.message);
