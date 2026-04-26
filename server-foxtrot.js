@@ -55,6 +55,12 @@ console.log('  DEMO_REALTIME:', process.env.DEMO_REALTIME);
 console.log('  NODE_ENV:', process.env.NODE_ENV);
 console.log('  PORT:', process.env.PORT);
 
+const SERVICE_NAME = process.env.K_SERVICE || '';
+if (SERVICE_NAME === 'greenreach-central') {
+  console.error('[STARTUP] FATAL: server-foxtrot.js was started as greenreach-central. This service must run greenreach-central/server.js.');
+  process.exit(1);
+}
+
 // --- Feature flag: ALLOW_MOCKS (default OFF) ---
 const ALLOW_MOCKS = String(process.env.ALLOW_MOCKS || 'false').toLowerCase() === 'true';
 
