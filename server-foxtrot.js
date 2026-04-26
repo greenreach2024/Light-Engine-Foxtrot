@@ -22782,6 +22782,13 @@ app.use('/api/inventory/mix', proxyCorsMiddleware, createProxyMiddleware({
     if (farmId && !proxyReq.getHeader('x-farm-id')) {
       proxyReq.setHeader('x-farm-id', farmId);
     }
+    // Re-stream JSON body consumed by express.json() so Central receives it
+    if (req.body && Object.keys(req.body).length > 0 && /PUT|POST|PATCH/.test(req.method)) {
+      const bodyData = JSON.stringify(req.body);
+      proxyReq.setHeader('Content-Type', 'application/json');
+      proxyReq.setHeader('Content-Length', Buffer.byteLength(bodyData));
+      proxyReq.write(bodyData);
+    }
   },
   onProxyRes(proxyRes, req) {
     const origin = req.headers?.origin;
