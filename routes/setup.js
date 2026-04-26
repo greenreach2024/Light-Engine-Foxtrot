@@ -697,6 +697,47 @@ router.get('/status', async (req, res) => {
 });
 
 /**
+ * GET /api/setup/onboarding-status
+ * Forward onboarding checklist lookup to Central so LE admin UI can use the
+ * hosted setup checklist endpoint consistently.
+ */
+router.get('/onboarding-status', async (req, res) => {
+  try {
+    const centralBase = process.env.GREENREACH_CENTRAL_URL || process.env.CENTRAL_URL;
+    if (!centralBase) {
+      return res.status(503).json({ success: false, error: 'Central URL not configured' });
+    }
+
+    const targetUrl = new URL('/api/setup/onboarding-status', centralBase).toString();
+    const headers = {
+      Accept: 'application/json'
+    };
+
+    if (req.headers.authorization) {
+      headers.Authorization = req.headers.authorization;
+    }
+    if (req.headers['x-farm-id']) {
+      headers['X-Farm-Id'] = req.headers['x-farm-id'];
+    }
+
+    const upstream = await fetch(targetUrl, {
+      method: 'GET',
+      headers,
+      signal: AbortSignal.timeout(10000)
+    });
+
+    const bodyText = await upstream.text();
+    res.status(upstream.status);
+    const contentType = upstream.headers.get('content-type') || 'application/json';
+    res.set('content-type', contentType);
+    return res.send(bodyText);
+  } catch (error) {
+    console.error('[api/setup/onboarding-status] Proxy error:', error?.message || error);
+    return res.status(502).json({ success: false, error: 'Failed to reach Central onboarding status endpoint' });
+  }
+});
+
+/**
  * GET /api/setup/data
  * Get real user setup data (replaces demo data)
  * Returns the user's actual configuration saved during setup wizard
