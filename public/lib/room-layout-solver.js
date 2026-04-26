@@ -11,7 +11,10 @@
 (function (root) {
   'use strict';
 
-  var DEFAULT_MAIN_WALKWAY_M = 1.2;
+  // 6 ft central service walkway (6 × 0.3048 = 1.8288 m). Applied to ALL
+  // orientations. The walkway runs along the long axis; its width reduces the
+  // available short axis before row-count is calculated.
+  var DEFAULT_MAIN_WALKWAY_M = 1.8288;
   var MIN_SPLIT_UNITS = 12;
 
   function round2(n) { return Number(Number(n).toFixed(2)); }
@@ -144,12 +147,20 @@
       rowUnitLength = c.unitL + 2 * c.ends;
       unitsPerRow = Math.floor(longM / rowUnitLength);
       rowsMax = Math.floor(shortM / rowDepth);
+      // Reserve a 6 ft central walkway between rows; never drop below 1 row.
+      if (rowsMax >= 2 && (rowsMax * rowDepth + mainWalkwayM) > shortM) {
+        rowsMax = Math.max(1, Math.floor((shortM - mainWalkwayM) / rowDepth));
+      }
       effectiveTileAreaM2 = rowDepth * rowUnitLength;
     } else if (c.orientation === 'double_sided') {
       rowDepth = c.unitW + c.front + c.back;
       rowUnitLength = c.unitL + 2 * c.ends;
       unitsPerRow = Math.floor(longM / rowUnitLength);
       rowsMax = Math.floor(shortM / rowDepth);
+      // Reserve a 6 ft central service walkway between facing rows.
+      if (rowsMax >= 2 && (rowsMax * rowDepth + mainWalkwayM) > shortM) {
+        rowsMax = Math.max(1, Math.floor((shortM - mainWalkwayM) / rowDepth));
+      }
       effectiveTileAreaM2 = rowDepth * rowUnitLength;
     } else {
       rowDepth = c.unitW + c.front + c.back;
@@ -191,6 +202,7 @@
       effectiveTileAreaM2: round3(effectiveTileAreaM2),
       occupiedAreaM2: round2(effectiveTileAreaM2 * maxUnits),
       mainWalkwayM: mainWalkwayM,
+      walkwayAreaM2: round2(mainWalkwayM * rect.longM),
       fits: function (n) { return n <= maxUnits; },
       placements: function (n) { return placementsFor(rect, c, unitsPerRow, rowsMax, n, mainWalkwayM); }
     };

@@ -188,11 +188,14 @@ function clearGroupChildren(g) {
 
 function readRoomDims(room) {
   if (!room) return null;
-  const L = Number(room.length_m ?? room.lengthM ?? room.dimensions?.length_m ?? room.dimensions?.lengthM);
-  const W = Number(room.width_m ?? room.widthM ?? room.dimensions?.width_m ?? room.dimensions?.widthM);
-  const H = Number(room.ceiling_height_m ?? room.ceilingHeightM ?? room.height_m ?? room.heightM ?? room.dimensions?.height_m ?? room.dimensions?.heightM ?? 3.2);
-  if (!Number.isFinite(L) || !Number.isFinite(W) || L <= 0 || W <= 0) return null;
-  return { L, W, H };
+  const rawL = Number(room.length_m ?? room.lengthM ?? room.dimensions?.length_m ?? room.dimensions?.lengthM);
+  const rawW = Number(room.width_m ?? room.widthM ?? room.dimensions?.width_m ?? room.dimensions?.widthM);
+  const H = Number(room.ceiling_height_m ?? room.ceilingHeightM ?? room.height_m ?? room.heightM ?? room.dimensions?.ceiling_height_m ?? room.dimensions?.ceilingHeightM ?? room.dimensions?.height_m ?? room.dimensions?.heightM ?? 3.2);
+  if (!Number.isFinite(rawL) || !Number.isFinite(rawW) || rawL <= 0 || rawW <= 0) return null;
+  // L → X axis (side-to-side, "width" of the room view)
+  // W → Z axis (depth into the scene, "length" of the room view)
+  // width_m is the short dimension (side-to-side); length_m is the long dimension (depth).
+  return { L: rawW, W: rawL, H };
 }
 
 function getZoneRects(room) {
@@ -224,11 +227,13 @@ function getZoneRects(room) {
       width_m: Number(z.width_m ?? z.widthM ?? dims.W),
     }));
   }
-  const sliceLen = dims.L / zones.length;
+  // Slice zones along the Z axis (depth = length_m direction) so zones appear
+  // as front-to-back segments, matching the operator's mental model of the room.
+  const sliceLen = dims.W / zones.length;
   return zones.map((z, i) => ({
     id: z.id, name: z.name || z.id,
-    x_m: i * sliceLen, y_m: 0,
-    length_m: sliceLen, width_m: dims.W,
+    x_m: 0, y_m: i * sliceLen,
+    length_m: dims.L, width_m: sliceLen,
   }));
 }
 

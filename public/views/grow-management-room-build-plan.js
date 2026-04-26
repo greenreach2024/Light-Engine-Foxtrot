@@ -1002,6 +1002,8 @@
       renderBody();
       renderSpatial();
       renderEvie();
+      clearTimeout(syncCustomizationFromInputs._stageTimer);
+      syncCustomizationFromInputs._stageTimer = setTimeout(stagePrefill, 400);
       document.dispatchEvent(new CustomEvent('grow-system-config:changed', {
         detail: {
           templateId: state.template && state.template.id,
@@ -1197,6 +1199,7 @@
     renderBody();
     renderSpatial();
     renderEvie();
+    stagePrefill();
   }
 
   function stagePrefill() {
@@ -1246,6 +1249,9 @@
       implemented: false
     };
     document.dispatchEvent(new CustomEvent('grow-management-selection-state', {
+      detail: Object.assign({}, window.__gmPlanState)
+    }));
+    document.dispatchEvent(new CustomEvent('room-build-plan:staged', {
       detail: Object.assign({}, window.__gmPlanState)
     }));
     const panel = document.getElementById('groupsV2Panel');
