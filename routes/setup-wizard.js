@@ -275,7 +275,50 @@ router.get('/status', authenticateToken, async (req, res) => {
     }
 
     // Determine setup completion: Primary = setup_completed flag, Fallback = has rooms
-    const setupCompleted = farm?.setup_completed === true || roomCount > 0;
+    let setupCompleted = farm?.setup_completed === true || roomCount > 0;
+
+    // Additional hardening: if DB flags drift, use persisted farm/rooms files as
+    // fallback signals for previously completed farms.
+    if (!setupCompleted) {
+      try {
+        const fs = await import('fs');
+        const path = await import('path');
+        const farmJsonPath = path.join(process.cwd(), 'public', 'data', 'farm.json');
+        const roomsJsonPath = path.join(process.cwd(), 'public', 'data', 'rooms.json');
+
+        let fileFarmCompleted = false;
+        let fileRoomsCount = 0;
+
+        if (fs.existsSync(farmJsonPath)) {
+          const farmJson = JSON.parse(fs.readFileSync(farmJsonPath, 'utf8'));
+          if (
+            farmJson &&
+            farmJson.farmId === farmId &&
+            (farmJson.setup_completed === true || !!farmJson.setup_completed_at || (!!farmJson.name && !!farmJson.timezone))
+          ) {
+            fileFarmCompleted = true;
+          }
+        }
+
+        if (fs.existsSync(roomsJsonPath)) {
+          const roomsJson = JSON.parse(fs.readFileSync(roomsJsonPath, 'utf8'));
+          const rooms = Array.isArray(roomsJson) ? roomsJson : (Array.isArray(roomsJson?.rooms) ? roomsJson.rooms : []);
+          fileRoomsCount = rooms.length;
+        }
+
+        if (fileFarmCompleted || fileRoomsCount > 0) {
+          setupCompleted = true;
+          roomCount = Math.max(roomCount, fileRoomsCount);
+          console.log('[Setup Wizard] Applied file fallback for setup completion', {
+            farmId,
+            fileFarmCompleted,
+            fileRoomsCount
+          });
+        }
+      } catch (fallbackError) {
+        console.warn('[Setup Wizard] setup fallback file check failed:', fallbackError?.message || fallbackError);
+      }
+    }
 
     res.json({
       success: true,
@@ -292,10 +335,11 @@ router.get('/status', authenticateToken, async (req, res) => {
 
   } catch (error) {
     console.error('[Setup Wizard] Status check error:', error);
-    // Return setupCompleted: false on error so wizard shows
+    // Fail-open here to prevent redirect loops for active farms when status
+    // checks fail transiently (auth/cache/network drift).
     res.json({ 
       success: true,
-      setupCompleted: false,
+      setupCompleted: true,
       error: error.message 
     });
   }

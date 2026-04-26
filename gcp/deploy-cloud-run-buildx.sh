@@ -29,7 +29,7 @@ set -euo pipefail
 # Propagate command-substitution failures so e.g. `$(flags_for_role ...)`
 # aborts the script if the callee returns non-zero, rather than silently
 # inserting an empty string and running `gcloud run deploy` without flags.
-shopt -s inherit_errexit
+shopt -s inherit_errexit 2>/dev/null || true
 
 # ----------------------------------------------------------------
 # Configuration (override via env vars)

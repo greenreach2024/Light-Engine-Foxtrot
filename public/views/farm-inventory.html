@@ -801,11 +801,31 @@
       }
 
       function resolveFarmId() {
+        const token =
+          sessionStorage.getItem('token') ||
+          sessionStorage.getItem('auth_token') ||
+          localStorage.getItem('token') ||
+          localStorage.getItem('auth_token') ||
+          localStorage.getItem('admin_token');
+
+        let tokenFarmId = null;
+        if (token) {
+          try {
+            const payload = JSON.parse(atob(token.split('.')[1] || ''));
+            tokenFarmId = payload.farmId || payload.farm_id || null;
+          } catch (_) {
+            tokenFarmId = null;
+          }
+        }
+
         return (
           sessionStorage.getItem('farm_id') ||
           sessionStorage.getItem('farmId') ||
+          sessionStorage.getItem('adminFarmId') ||
           localStorage.getItem('farm_id') ||
           localStorage.getItem('farmId') ||
+          localStorage.getItem('adminFarmId') ||
+          tokenFarmId ||
           getParentFarmId()
         );
       }
