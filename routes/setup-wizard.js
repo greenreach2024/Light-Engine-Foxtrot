@@ -55,7 +55,14 @@ function authenticateToken(req, res, next) {
 
   // SECOND: Try JWT verification (cloud mode)
   try {
-    const jwtSecret = process.env.JWT_SECRET || 'fallback-secret-change-in-production';
+    const jwtSecret = req.app?.locals?.jwtSecret || process.env.JWT_SECRET;
+    if (!jwtSecret) {
+      console.error('[Setup Wizard] JWT secret unavailable for token verification');
+      return res.status(500).json({
+        success: false,
+        error: 'Authentication is temporarily unavailable'
+      });
+    }
     const decoded = jwt.verify(token, jwtSecret);
     
     req.farmId = decoded.farmId;

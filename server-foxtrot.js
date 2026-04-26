@@ -15974,6 +15974,9 @@ if (process.env.DATABASE_URL) {
 // Store database pool in app.locals for routes (null in edge mode)
 app.locals.db = dbPool;
 app.locals.syncService = getSyncService();
+// Share the exact runtime JWT secret with routers so token verification
+// uses the same key path as login/signing.
+app.locals.jwtSecret = JWT_SECRET_KEY;
 
 /**
  * GreenReach Central - Farm Registration & Provisioning

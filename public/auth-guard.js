@@ -199,6 +199,22 @@
     } catch (_) {}
   }
 
+  function decodeJwtPayload(token) {
+    try {
+      const parts = String(token || '').split('.');
+      if (parts.length !== 3 || !parts[1]) return null;
+
+      // JWT payload is base64url, not plain base64.
+      let base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+      const pad = base64.length % 4;
+      if (pad) base64 += '='.repeat(4 - pad);
+
+      return JSON.parse(atob(base64));
+    } catch (_) {
+      return null;
+    }
+  }
+
   // Check if user has valid token
   function hasValidToken() {
     let token = sessionStorage.getItem('token') || localStorage.getItem('token');
@@ -218,24 +234,22 @@
     // Server will fully validate on API calls
     // Just check it exists and looks like a JWT (has two dots)
     if (token && token.split('.').length === 3) {
-      // Decode JWT payload to check expiry
-      try {
-        const payload = JSON.parse(atob(token.split('.')[1]));
-        if (payload.exp) {
-          const expiryTime = payload.exp * 1000; // Convert to milliseconds
-          const now = Date.now();
-          if (now >= expiryTime) {
-            // Token expired, clear all farm data
-            console.log('[auth-guard] Token expired, clearing...');
-            clearFarmStorage();
-            return false;
-          }
+      const payload = decodeJwtPayload(token);
+      if (!payload) {
+        // Decode-only issues should not wipe farm state on the client.
+        console.warn('[auth-guard] Token payload decode failed; deferring full validation to server');
+        return true;
+      }
+
+      if (payload.exp) {
+        const expiryTime = payload.exp * 1000; // Convert to milliseconds
+        const now = Date.now();
+        if (now >= expiryTime) {
+          // Token expired, clear all farm data
+          console.log('[auth-guard] Token expired, clearing...');
+          clearFarmStorage();
+          return false;
         }
-      } catch (e) {
-        // Invalid JWT format, clear all farm data
-        console.log('[auth-guard] Invalid token format, clearing...');
-        clearFarmStorage();
-        return false;
       }
       return true;
     }
@@ -253,14 +267,12 @@
         }
         return true;
       } catch (e) {
-        console.log('[auth-guard] Invalid session format, clearing...');
-        clearFarmStorage();
+        console.warn('[auth-guard] Invalid session format');
         return false;
       }
     }
     
-    // If token format is invalid, clear all farm data
-    clearFarmStorage();
+    // Token exists but format is unknown; don't clear storage on client-only checks.
     return false;
   }
 
