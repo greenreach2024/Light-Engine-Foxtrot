@@ -133,7 +133,8 @@
 </style>
 </head>
 <body>
-<div id="v3d-stage"><canvas id="v3d-canvas"></canvas></div>
+<div id="v3d-stage"><canvas id="v3d-canvas" role="img" tabindex="0" aria-label="3D farm visualization — interactive canvas"></canvas></div>
+<div id="a11yAnnouncer" role="status" aria-live="polite" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);"></div>
 <div id="v3dMarquee"></div>
 <div class="v3d-topbar">
   <div class="v3d-title">GreenReach Farm <span class="v3d-sub" id="v3dSubtitle">loading...</span></div>
@@ -144,14 +145,19 @@
     <button data-view="walk">Walk</button>
   </div>
   <button class="v3d-btn" id="v3dFitBtn" title="Fit view">Fit</button>
+  <button class="v3d-btn" id="v3dShotBtn" title="Capture screenshot" aria-label="Capture screenshot">Snap</button>
   <button class="v3d-btn" id="v3dEditBtn" title="Edit mode (E) - drag systems to reposition">Edit</button>
   <button class="v3d-btn" id="v3dWallsBtn" title="Toggle walls (W)">Walls</button>
   <button class="v3d-btn" id="v3dCeilingBtn" title="Toggle ceiling (C)">Ceiling</button>
   <button class="v3d-btn" id="v3dHeatBtn" title="Heatmap overlay (H)">Heatmap</button>
+  <button class="v3d-btn" data-overlay="ppfd" title="PPFD light intensity overlay">PPFD</button>
+  <button class="v3d-btn" data-overlay="dli" title="DLI daily light integral overlay">DLI</button>
   <select class="v3d-select" id="v3dHeatMetric" title="Heatmap metric">
     <option value="tempC">Temp</option>
     <option value="rh">RH</option>
     <option value="vpd">VPD</option>
+    <option value="ppfd">PPFD</option>
+    <option value="dli">DLI</option>
   </select>
   <button class="v3d-btn v3d-btn--primary" id="v3dGrowBtn">Grow Management</button>
 </div>
@@ -186,7 +192,59 @@
 </div>
 <div class="v3d-toast" id="v3dToast"></div>
 <div class="v3d-loading" id="v3dLoading"><span class="spin"></span><span>Building scene...</span></div>
+<div class="v3d-detail" id="v3dDetail" hidden style="position:fixed;top:56px;left:12px;z-index:10;background:var(--v3d-panel);border:1px solid var(--v3d-panel-border);border-radius:12px;padding:12px 14px;min-width:260px;">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+    <span class="v3d-side__title" id="v3dDetailTitle">Zone Detail</span>
+    <button id="detailClose" aria-label="Close detail panel" style="background:none;border:none;color:var(--v3d-muted);cursor:pointer;font-size:16px;padding:0 4px;">✕</button>
+  </div>
+  <div id="v3dDetailBody"></div>
+</div>
 
+<script>
+// ── PPFD / DLI overlay configuration ──────────────────────────────────
+const OVERLAY_CFG = {
+  tempC: { label: 'Temp °C',    unit: '°C',       lo: 18, hi: 30 },
+  rh:    { label: 'Humidity %', unit: '%',         lo: 40, hi: 80 },
+  vpd:   { label: 'VPD kPa',   unit: 'kPa',       lo: 0.4, hi: 1.6 },
+  ppfd:  { label: 'PPFD',      unit: 'umol/m²/s', lo: 0, hi: 1000 },
+  dli:   { label: 'DLI',       unit: 'mol/m2/d',  lo: 0, hi: 40 },
+};
+
+function getZoneMetricValueAtFrame(zone, group, metricKey) {
+  if (metricKey === 'ppfd') {
+    const g = group || {};
+    return g.targetPpfd ?? (zone.sensors?.ppfd ?? null);
+  }
+  if (metricKey === 'dli') {
+    const g = group || {};
+    return g.targetDli ?? null;
+  }
+  return zone.sensors?.[metricKey] ?? null;
+}
+
+// ── Keyboard navigation ───────────────────────────────────────────────
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowLeft')  { window.v3dOrbit?.(-1); }
+  if (e.key === 'ArrowRight') { window.v3dOrbit?.(1); }
+  if (e.key === 'Tab')        { /* handled inline to cycle zones */ }
+  if (e.key === 'Enter')      { window.v3dOpenDetail?.(); }
+  if (e.key === '+')          { window.v3dZoom?.(1); }
+  if (e.key === '-')          { window.v3dZoom?.(-1); }
+});
+
+document.getElementById('detailClose')?.addEventListener('click', () => {
+  document.getElementById('v3dDetail').hidden = true;
+});
+
+// ── Touch / mobile: multi-touch guard ────────────────────────────────
+let _touchCount = 0;
+const _canvas = document.getElementById('v3d-canvas');
+_canvas.addEventListener('touchstart', (e) => { _touchCount = e.touches.length; }, { passive: true });
+_canvas.addEventListener('touchend',   (e) => { _touchCount = e.touches.length; }, { passive: true });
+_canvas.addEventListener('touchmove',  (e) => {
+  if (_touchCount > 1) return; // pinch / multi-touch — let browser handle
+}, { passive: true });
+</script>
 <script type="importmap">
 { "imports": {
   "three": "https://cdn.jsdelivr.net/npm/three@0.161.0/build/three.module.js",
