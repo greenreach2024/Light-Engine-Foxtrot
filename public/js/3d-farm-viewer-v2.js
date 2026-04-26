@@ -188,11 +188,18 @@ function clearGroupChildren(g) {
 
 function readRoomDims(room) {
   if (!room) return null;
-  const L = Number(room.length_m ?? room.lengthM ?? room.dimensions?.length_m ?? room.dimensions?.lengthM);
-  const W = Number(room.width_m ?? room.widthM ?? room.dimensions?.width_m ?? room.dimensions?.widthM);
-  const H = Number(room.ceiling_height_m ?? room.ceilingHeightM ?? room.height_m ?? room.heightM ?? room.dimensions?.height_m ?? room.dimensions?.heightM ?? 3.2);
-  if (!Number.isFinite(L) || !Number.isFinite(W) || L <= 0 || W <= 0) return null;
-  return { L, W, H };
+  const rawL = Number(room.length_m ?? room.lengthM ?? room.dimensions?.length_m ?? room.dimensions?.lengthM);
+  const rawW = Number(room.width_m ?? room.widthM ?? room.dimensions?.width_m ?? room.dimensions?.widthM);
+  const H = Number(room.ceiling_height_m ?? room.ceilingHeightM ?? room.height_m ?? room.heightM ?? room.dimensions?.ceiling_height_m ?? room.dimensions?.ceilingHeightM ?? room.dimensions?.height_m ?? room.dimensions?.heightM ?? 3.2);
+  if (!Number.isFinite(rawL) || !Number.isFinite(rawW) || rawL <= 0 || rawW <= 0) return null;
+  // Two views of the same dimensions:
+  //   L / W  — the THREE.js axis mapping. L = X (side-to-side); W = Z (depth
+  //            into scene). width_m maps to X, length_m maps to Z so the
+  //            longer dimension runs into the screen.
+  //   lengthM / widthM — the operator-facing labels (always = source data).
+  //                       Use these in display strings so the UI keeps reading
+  //                       "length × width × height" regardless of axis swap.
+  return { L: rawW, W: rawL, H, lengthM: rawL, widthM: rawW };
 }
 
 function getZoneRects(room) {
@@ -224,11 +231,13 @@ function getZoneRects(room) {
       width_m: Number(z.width_m ?? z.widthM ?? dims.W),
     }));
   }
-  const sliceLen = dims.L / zones.length;
+  // Slice zones along the Z axis (depth = length_m direction) so zones appear
+  // as front-to-back segments, matching the operator's mental model of the room.
+  const sliceLen = dims.W / zones.length;
   return zones.map((z, i) => ({
     id: z.id, name: z.name || z.id,
-    x_m: i * sliceLen, y_m: 0,
-    length_m: sliceLen, width_m: dims.W,
+    x_m: 0, y_m: i * sliceLen,
+    length_m: dims.L, width_m: sliceLen,
   }));
 }
 
@@ -1067,8 +1076,8 @@ function renderFarmSummary() {
     const zoneRects = getZoneRects(room);
     const groupsInRoom = state.groups.filter(g => groupInRoom(g, room));
     const env = envForRoom(room);
-    const dimStr = dims ? `${fmt(dims.L,1)} x ${fmt(dims.W,1)} x ${fmt(dims.H,1)} m  (${fmt(dims.L*M_TO_FT,0)} x ${fmt(dims.W*M_TO_FT,0)} ft)` : 'no dims';
-    const area = dims ? `${fmt(dims.L * dims.W, 1)} m^2` : '--';
+    const dimStr = dims ? `${fmt(dims.lengthM,1)} x ${fmt(dims.widthM,1)} x ${fmt(dims.H,1)} m  (${fmt(dims.lengthM*M_TO_FT,0)} x ${fmt(dims.widthM*M_TO_FT,0)} ft)` : 'no dims';
+    const area = dims ? `${fmt(dims.lengthM * dims.widthM, 1)} m^2` : '--';
     return `
       <div class="v3d-room-card">
         <h4>${escapeHtml(room.name || room.id)}</h4>
@@ -1103,8 +1112,8 @@ function renderRoomPanel(roomId) {
   $('v3dSideTitle').textContent = room.name || room.id;
   $('v3dSideCount').textContent = 'Room';
   $('v3dSideActions').hidden = true;
-  const dimStr = dims ? `${fmt(dims.L,2)} x ${fmt(dims.W,2)} x ${fmt(dims.H,2)} m` : '--';
-  const ftStr = dims ? `${fmt(dims.L*M_TO_FT,1)} x ${fmt(dims.W*M_TO_FT,1)} x ${fmt(dims.H*M_TO_FT,1)} ft` : '--';
+  const dimStr = dims ? `${fmt(dims.lengthM,2)} x ${fmt(dims.widthM,2)} x ${fmt(dims.H,2)} m` : '--';
+  const ftStr = dims ? `${fmt(dims.lengthM*M_TO_FT,1)} x ${fmt(dims.widthM*M_TO_FT,1)} x ${fmt(dims.H*M_TO_FT,1)} ft` : '--';
   const zoneList = zoneRects.map(zr => {
     const ze = envForZone(room.id, zr.name) || envForZone(room.id, zr.id);
     const t = ze?.sensors?.tempC?.current; const h = ze?.sensors?.rh?.current;
@@ -1115,8 +1124,8 @@ function renderRoomPanel(roomId) {
       <div class="v3d-side__section-title">Dimensions</div>
       <div class="v3d-kv"><span>L x W x H</span><span>${dimStr}</span></div>
       <div class="v3d-kv"><span>Imperial</span><span>${ftStr}</span></div>
-      <div class="v3d-kv"><span>Floor area</span><span>${dims ? fmt(dims.L*dims.W,1) + ' m^2' : '--'}</span></div>
-      <div class="v3d-kv"><span>Volume</span><span>${dims ? fmt(dims.L*dims.W*dims.H,1) + ' m^3' : '--'}</span></div>
+      <div class="v3d-kv"><span>Floor area</span><span>${dims ? fmt(dims.lengthM*dims.widthM,1) + ' m^2' : '--'}</span></div>
+      <div class="v3d-kv"><span>Volume</span><span>${dims ? fmt(dims.lengthM*dims.widthM*dims.H,1) + ' m^3' : '--'}</span></div>
     </div>
     <div class="v3d-side__row">
       <div class="v3d-side__section-title">Inventory</div>
@@ -1192,7 +1201,7 @@ function renderGroupPanel(ids) {
     const fp = groupFootprintM(g);
     bodyEl.innerHTML = `
       <div class="v3d-side__row">
-        <div class="v3d-kv"><span>Room</span><span>${escapeHtml(g.room || '-')}${dims?` (${fmt(dims.L,1)}x${fmt(dims.W,1)}m)`:''}</span></div>
+        <div class="v3d-kv"><span>Room</span><span>${escapeHtml(g.room || '-')}${dims?` (${fmt(dims.lengthM,1)}x${fmt(dims.widthM,1)}m)`:''}</span></div>
         <div class="v3d-kv"><span>Zone</span><span>${escapeHtml(g.zone || '-')}</span></div>
         <div class="v3d-kv"><span>Template</span><span>${escapeHtml(g.templateId || '-')}</span></div>
         <div class="v3d-kv"><span>Status</span><span><span class="v3d-tag ${g.status === 'active' ? 'v3d-tag--ok' : ''}">${escapeHtml(g.status || 'pending')}</span></span></div>

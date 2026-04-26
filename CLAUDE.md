@@ -1,6 +1,23 @@
 # Claude Project Briefing: Light-Engine-Foxtrot
 
-Last updated: 2026-04-25
+Last updated: 2026-04-26
+
+## 0) HARD RULE — Always Use Production Data
+
+**Never reference local data files (`/public/data/rooms.json`, `/public/data/groups.json`,
+`/public/data/grow-systems.json`, etc.) to determine current state. Local files are stale.**
+
+Always `curl` from production first:
+```bash
+curl -s "https://greenreachgreens.com/data/rooms.json"
+curl -s "https://greenreachgreens.com/data/groups.json"
+curl -s "https://light-engine-1029387937866.us-east1.run.app/api/rooms"
+```
+
+This applies to: room dimensions, group counts, grow system templates, sensor data,
+inventory, any runtime state. Use local `.js`/`.html`/`.css` source files for
+code reading and editing — never local JSON data files for current state.
+
 
 ## 1) Project Scope (Current Reality)
 
