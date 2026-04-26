@@ -22752,45 +22752,48 @@ app.use('/api/farm/salad-mixes', proxyCorsMiddleware, createProxyMiddleware({
   }
 }));
 
-app.use('/api/inventory/manual', proxyCorsMiddleware, createProxyMiddleware({
-  target: _centralUrl(),
-  router: () => _centralUrl(),
-  changeOrigin: true,
-  xfwd: true,
-  logLevel: 'debug',
-  timeout: 8000,
-  proxyTimeout: 8000,
-  agent: keepAliveHttpsAgent,
-  pathRewrite: (p) => (p.startsWith('/api/inventory/manual') ? p : `/api/inventory/manual${p}`),
-  onProxyReq(proxyReq, req) {
-    const outgoingPath = req.originalUrl;
-    console.log(`[-> inventory/manual] ${req.method} ${outgoingPath} -> ${_centralUrl()}${outgoingPath}`);
-    // Service-to-service API key auth fallback (user JWT may be expired)
-    const apiKey = process.env.GREENREACH_API_KEY;
-    if (apiKey && !proxyReq.getHeader('x-api-key')) {
-      proxyReq.setHeader('x-api-key', apiKey);
+const shouldProxyInventoryManual = String(process.env.PROXY_INVENTORY_MANUAL || 'false').toLowerCase() === 'true';
+if (shouldProxyInventoryManual) {
+  app.use('/api/inventory/manual', proxyCorsMiddleware, createProxyMiddleware({
+    target: _centralUrl(),
+    router: () => _centralUrl(),
+    changeOrigin: true,
+    xfwd: true,
+    logLevel: 'debug',
+    timeout: 8000,
+    proxyTimeout: 8000,
+    agent: keepAliveHttpsAgent,
+    pathRewrite: (p) => (p.startsWith('/api/inventory/manual') ? p : `/api/inventory/manual${p}`),
+    onProxyReq(proxyReq, req) {
+      const outgoingPath = req.originalUrl;
+      console.log(`[-> inventory/manual] ${req.method} ${outgoingPath} -> ${_centralUrl()}${outgoingPath}`);
+      // Service-to-service API key auth fallback (user JWT may be expired)
+      const apiKey = process.env.GREENREACH_API_KEY;
+      if (apiKey && !proxyReq.getHeader('x-api-key')) {
+        proxyReq.setHeader('x-api-key', apiKey);
+      }
+      const farmId = req.headers['x-farm-id'] || process.env.FARM_ID;
+      if (farmId && !proxyReq.getHeader('x-farm-id')) {
+        proxyReq.setHeader('x-farm-id', farmId);
+      }
+    },
+    onProxyRes(proxyRes, req) {
+      const origin = req.headers?.origin;
+      if (origin) {
+        proxyRes.headers['access-control-allow-origin'] = origin;
+      } else {
+        proxyRes.headers['access-control-allow-origin'] = '*';
+      }
+      proxyRes.headers['access-control-allow-methods'] = 'GET,POST,PUT,PATCH,DELETE,OPTIONS';
+      proxyRes.headers['access-control-allow-headers'] = 'Content-Type, Authorization, X-Requested-With, x-farm-id';
+    },
+    onError(err, req, res) {
+      console.warn('[proxy:/api/inventory/manual] error:', err?.message || err);
+      res.statusCode = 502;
+      res.end(JSON.stringify({ error: 'proxy_error', target: 'central-inventory', detail: String(err) }));
     }
-    const farmId = req.headers['x-farm-id'] || process.env.FARM_ID;
-    if (farmId && !proxyReq.getHeader('x-farm-id')) {
-      proxyReq.setHeader('x-farm-id', farmId);
-    }
-  },
-  onProxyRes(proxyRes, req) {
-    const origin = req.headers?.origin;
-    if (origin) {
-      proxyRes.headers['access-control-allow-origin'] = origin;
-    } else {
-      proxyRes.headers['access-control-allow-origin'] = '*';
-    }
-    proxyRes.headers['access-control-allow-methods'] = 'GET,POST,PUT,PATCH,DELETE,OPTIONS';
-    proxyRes.headers['access-control-allow-headers'] = 'Content-Type, Authorization, X-Requested-With, x-farm-id';
-  },
-  onError(err, req, res) {
-    console.warn('[proxy:/api/inventory/manual] error:', err?.message || err);
-    res.statusCode = 502;
-    res.end(JSON.stringify({ error: 'proxy_error', target: 'central-inventory', detail: String(err) }));
-  }
-}));
+  }));
+}
 
 // Farm-specific inventory list proxy (GET /api/inventory/FARM-xxxxx)
 app.get('/api/inventory/:farmId', (req, res, next) => {
@@ -26517,6 +26520,11 @@ app.use('/api/setup-agent', proxyCorsMiddleware, createProxyMiddleware({
 // Circuit-breaker short-circuit when controller is unhealthy  
 app.use('/api', (req, res, next) => {
   console.log(`[API Middleware] path=${req.path}, originalUrl=${req.originalUrl}`);
+
+  const controllerDisabled = process.env.CTRL === 'DISABLED' || process.env.CTRL === 'disabled' || process.env.CTRL === 'false';
+  if (controllerDisabled) {
+    return next();
+  }
   
   // For controller-bound paths, check circuit breaker
   if (controllerCircuit.isOpen()) {
