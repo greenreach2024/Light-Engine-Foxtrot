@@ -1379,6 +1379,7 @@ const defaultPricing = {
 
     // Mixed Greens: $5.49 USD/5oz = $21.35/lb
     'Organic Mixed Greens': { retail: 21.35, ws1: 15, ws2: 25, ws3: 35 },
+    'Salad Mix': { retail: 21.99, ws1: 15, ws2: 25, ws3: 35 },
     'Escarole Batavian': { retail: 21.35, ws1: 15, ws2: 25, ws3: 35 },
     'Sorrel': { retail: 21.35, ws1: 15, ws2: 25, ws3: 35 },
 
@@ -1507,6 +1508,26 @@ async function loadCropsFromDatabase() {
 
         // Enforce global SKU policy: always 0.75 for every crop row.
         pricingData = pricingData.map(item => ({ ...item, sku_factor: DEFAULT_SKU_FACTOR }));
+
+        // Guarantee core mixed-greens products are visible even if upstream API payloads are partial.
+        const ensurePricingRow = (crop, defaults) => {
+            const exists = pricingData.some((row) => String(row?.crop || '').trim().toLowerCase() === crop.toLowerCase());
+            if (!exists) {
+                pricingData.push({
+                    crop,
+                    retail: defaults.retail,
+                    ws1Discount: defaults.ws1,
+                    ws2Discount: defaults.ws2,
+                    ws3Discount: defaults.ws3,
+                    isTaxable: false,
+                    floor_price: 0,
+                    sku_factor: DEFAULT_SKU_FACTOR
+                });
+            }
+        };
+        ensurePricingRow('Salad Mix', defaultPricing['Salad Mix'] || { retail: 21.99, ws1: 15, ws2: 25, ws3: 35 });
+
+        pricingData.sort((a, b) => String(a?.crop || '').localeCompare(String(b?.crop || '')));
 
         renderPricingTable();
         loadBenchmarks();
