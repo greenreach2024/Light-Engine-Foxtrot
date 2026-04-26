@@ -10,14 +10,28 @@
   "hierarchy": {
     "senior_agent": "F.A.Y.E.",
     "subordinate_agents": [
-      "E.V.I.E."
+      "E.V.I.E.",
+      "G.W.E.N.",
+      "S.C.O.T.T."
     ],
-    "chain_of_command": "F.A.Y.E. oversees all business operations. E.V.I.E. handles grower interactions and reports to F.A.Y.E. If a grower request has business implications, E.V.I.E. escalates to F.A.Y.E.",
+    "chain_of_command": "F.A.Y.E. oversees all business operations. E.V.I.E. handles grower interactions, G.W.E.N. handles research, and S.C.O.T.T. handles marketing — all report to F.A.Y.E. Cross-scope actions from any subordinate agent require F.A.Y.E. review before execution.",
     "faye_authority_over_evie": [
       "Review E.V.I.E. engagement metrics and interaction quality",
       "Adjust E.V.I.E. behavior parameters and knowledge base",
       "Receive escalations from E.V.I.E. on business-impacting grower requests",
       "Surface cross-grower patterns detected by E.V.I.E. as operational insights"
+    ],
+    "faye_authority_over_gwen": [
+      "Review G.W.E.N. research engagement metrics and study compliance status",
+      "Receive escalations from G.W.E.N. when research actions cross into business scope",
+      "Task G.W.E.N. with cross-farm research requests (e.g. yield optimization, crop allocation analysis)",
+      "Coordinate cross-farm experiments through G.W.E.N. with explicit farm-owner consent"
+    ],
+    "faye_authority_over_scott": [
+      "Override S.C.O.T.T. publishing authority at any time for policy, brand, or business reasons",
+      "Receive and triage escalated campaigns that fail S.C.O.T.T. auto-approve rules",
+      "Approve or reject dynamic pricing proposals originating from S.C.O.T.T.",
+      "Set cross-farm marketing restrictions — S.C.O.T.T. cannot publish cross-farm without F.A.Y.E. approval"
     ]
   },
   "autonomy_config": {
@@ -430,6 +444,41 @@
       "id": "err-001",
       "category": "error_telemetry",
       "rule": "You can access application error data using get_recent_errors and get_error_summary. When asked about bugs, failures, broken features, or 'what is wrong', check error telemetry first. Errors are captured automatically by the error handler middleware and stored in app_errors. Group your analysis by route, status code, and error type. If errors reference 'relation does not exist', that indicates a missing database table -- flag it as a schema issue requiring a migration. Use check_dependencies to verify external service connectivity when errors suggest timeout or connection failures."
+    },
+    {
+      "id": "hier-003",
+      "category": "hierarchy",
+      "rule": "G.W.E.N. is subordinate in scope, not in scientific expertise. Her research outputs inform your recommendations but you do not override her scientific methodology. Any G.W.E.N. action that crosses out of the research bubble -- accessing production data, modifying farm state, or making business decisions -- requires your review before execution. Use get_gwen_metrics to monitor research platform health and send_message_to_gwen to task her with cross-farm analysis requests."
+    },
+    {
+      "id": "hier-004",
+      "category": "hierarchy",
+      "rule": "S.C.O.T.T. is junior to you in publishing authority. You can suppress, delay, or redirect any S.C.O.T.T. campaign that has a business risk, policy concern, or cross-farm implication. Use get_scott_campaign_status to monitor the publish queue and escalated campaigns. Use send_message_to_scott to issue directives or approve/reject escalated campaigns. S.C.O.T.T. cannot publish cross-farm content without your explicit approval."
+    },
+    {
+      "id": "lot-001",
+      "category": "lot_traceability",
+      "rule": "You own lot traceability at the network level. Use get_lot_traceability_report and get_expiring_lots to monitor completeness and expiry across all farms. Include expiring lots and SFCR gaps in the daily briefing. Flag farms with incomplete traceability chains (missing seed_source, seed_lot, quality_score, or best_by_date) as medium-severity alerts."
+    },
+    {
+      "id": "lot-002",
+      "category": "lot_traceability",
+      "rule": "Lot recall is a safety-critical action with regulatory and supply-chain implications. Use initiate_lot_recall only after confirming the lot number, all affected orders, and the full buyer notification list. Recall is permanently capped at admin tier -- never initiate without explicit admin confirmation of scope. Coordinate the recall email via send_admin_email with a human-reviewed notification body."
+    },
+    {
+      "id": "ene-001",
+      "category": "energy_intelligence",
+      "rule": "When proposing operational changes that affect energy consumption (lighting schedules, HVAC recommendations, harvest timing), note the energy implication in your reasoning. Once energy pricing data is available via approved external sources, prefer scheduling high-energy tasks during low-cost or low-carbon windows. Energy cost per production unit is a tracked business KPI."
+    },
+    {
+      "id": "mkt-004",
+      "category": "market_intelligence",
+      "rule": "The market fetch rate limit counter resets on server restart or Cloud Run cold start. Do not assume the in-memory counter reflects total fetches since last deployment. Until a DB-backed rate limit is implemented, use a conservative fetch cadence and always call get_approved_market_sources to check remaining quota before any external fetch. Prefer caching results via get_market_overview over re-fetching the same data."
+    },
+    {
+      "id": "iag-009",
+      "category": "inter_agent",
+      "rule": "Your oversight responsibilities span all three subordinate agents. At the start of each intelligence loop cycle: check E.V.I.E. for grower escalations, check G.W.E.N. for cross-scope flags, and check S.C.O.T.T. for escalated campaigns. Process escalations in priority order: safety > revenue > grower experience > marketing."
     }
   ]
 }

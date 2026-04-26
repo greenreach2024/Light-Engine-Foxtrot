@@ -5352,6 +5352,359 @@ export const ADMIN_TOOL_CATALOG = {
         return { ok: true, message: `Salad mix template id=${templateId} updated.` };
       } catch (err) { return { ok: false, error: err.message }; }
     }
+  },
+
+  // ── G.W.E.N. Oversight ──
+
+  'get_gwen_metrics': {
+    description: 'Get G.W.E.N. research platform usage metrics — session counts, token usage, cost, and pending inter-agent messages from G.W.E.N. Use to monitor research platform health and F.A.Y.E.→G.W.E.N. communication.',
+    category: 'read',
+    required: [],
+    optional: ['days'],
+    handler: async (params) => {
+      try {
+        if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+        const days = parseInt(params.days, 10) || 7;
+        const usage = await dbQuery(`
+          SELECT COUNT(*) AS ai_calls,
+                 SUM(COALESCE(total_tokens, 0)) AS total_tokens,
+                 SUM(COALESCE(estimated_cost, 0)) AS total_cost,
+                 COUNT(DISTINCT user_id) AS unique_users
+          FROM ai_usage
+          WHERE endpoint = 'gwen_chat'
+            AND created_at >= NOW() - make_interval(days => $1::int)
+        `, [days]).catch(() => ({ rows: [{}] }));
+
+        const messages = await dbQuery(`
+          SELECT COUNT(*) FILTER (WHERE status = 'pending') AS pending,
+                 COUNT(*) FILTER (WHERE to_agent = 'faye') AS escalations_to_faye,
+                 COUNT(*) FILTER (WHERE from_agent = 'faye' AND to_agent = 'gwen') AS directives_from_faye
+          FROM inter_agent_messages
+          WHERE (from_agent = 'gwen' OR to_agent = 'gwen')
+            AND created_at >= NOW() - make_interval(days => $1::int)
+        `, [days]).catch(() => ({ rows: [{}] }));
+
+        const u = usage.rows[0] || {};
+        const m = messages.rows[0] || {};
+        return {
+          ok: true,
+          period_days: days,
+          usage: {
+            ai_calls: Number(u.ai_calls || 0),
+            total_tokens: Number(u.total_tokens || 0),
+            estimated_cost: Number(u.total_cost || 0).toFixed(4),
+            unique_users: Number(u.unique_users || 0)
+          },
+          inter_agent: {
+            pending_messages: Number(m.pending || 0),
+            escalations_to_faye: Number(m.escalations_to_faye || 0),
+            directives_from_faye: Number(m.directives_from_faye || 0)
+          }
+        };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  'send_message_to_gwen': {
+    description: 'Send a message to G.W.E.N. — the research agent. Use to task her with cross-farm analysis, yield optimization research, or research bubble status requests. message_type MUST be one of: "directive", "observation", "response", "status_update". priority MUST be one of: "low", "normal", "high".',
+    category: 'write',
+    required: ['message_type', 'subject', 'body'],
+    optional: ['priority', 'context'],
+    handler: async (params) => {
+      try {
+        const VALID_TYPES = ['directive', 'observation', 'response', 'status_update'];
+        const msgType = VALID_TYPES.includes(params.message_type) ? params.message_type : 'directive';
+        const { sendAgentMessage } = await import('../services/faye-learning.js');
+        const context = params.context ? (() => { try { return JSON.parse(params.context); } catch { return {}; } })() : {};
+        const result = await sendAgentMessage(
+          'faye', 'gwen',
+          msgType,
+          String(params.subject).slice(0, 200),
+          String(params.body).slice(0, 2000),
+          context,
+          params.priority || 'normal',
+          null
+        );
+        return result
+          ? { ok: true, message: `Message sent to G.W.E.N.: "${params.subject}"`, message_id: result.id }
+          : { ok: false, error: 'Failed to send message to G.W.E.N. Database may be unavailable.' };
+      } catch (err) { return { ok: false, error: `send_message_to_gwen failed: ${err.message}` }; }
+    }
+  },
+
+  // ── S.C.O.T.T. Oversight ──
+
+  'get_scott_campaign_status': {
+    description: 'Get S.C.O.T.T. marketing platform status — post counts by status, recent drafts awaiting approval, and publish queue summary. Use to monitor the marketing pipeline and pending escalations from S.C.O.T.T.',
+    category: 'read',
+    required: [],
+    optional: ['days'],
+    handler: async (params) => {
+      try {
+        if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+        const days = parseInt(params.days, 10) || 7;
+
+        const statusCounts = await dbQuery(`
+          SELECT status, COUNT(*) AS count
+          FROM marketing_posts
+          WHERE created_at >= NOW() - make_interval(days => $1::int)
+          GROUP BY status ORDER BY count DESC
+        `, [days]).catch(() => ({ rows: [] }));
+
+        const pendingDrafts = await dbQuery(`
+          SELECT id, platform, content, hashtags, created_at, generation_cost_usd
+          FROM marketing_posts
+          WHERE status = 'draft'
+          ORDER BY created_at DESC LIMIT 5
+        `).catch(() => ({ rows: [] }));
+
+        const escalations = await dbQuery(`
+          SELECT COUNT(*) AS count
+          FROM inter_agent_messages
+          WHERE from_agent = 'scott' AND to_agent = 'faye'
+            AND status = 'pending'
+            AND created_at >= NOW() - make_interval(days => $1::int)
+        `, [days]).catch(() => ({ rows: [{ count: 0 }] }));
+
+        const usage = await dbQuery(`
+          SELECT COUNT(*) AS ai_calls,
+                 SUM(COALESCE(estimated_cost, 0)) AS total_cost
+          FROM ai_usage
+          WHERE endpoint = 'scott-marketing-agent'
+            AND created_at >= NOW() - make_interval(days => $1::int)
+        `, [days]).catch(() => ({ rows: [{}] }));
+
+        const u = usage.rows[0] || {};
+        return {
+          ok: true,
+          period_days: days,
+          post_pipeline: Object.fromEntries(statusCounts.rows.map(r => [r.status, Number(r.count)])),
+          pending_drafts: pendingDrafts.rows,
+          escalations_pending: Number(escalations.rows[0]?.count || 0),
+          usage: {
+            ai_calls: Number(u.ai_calls || 0),
+            estimated_cost: Number(u.total_cost || 0).toFixed(4)
+          }
+        };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  'send_message_to_scott': {
+    description: 'Send a directive or override message to S.C.O.T.T. the marketing agent. Use to approve/reject escalated campaigns, issue content directives, or apply a publishing pause. message_type MUST be one of: "directive", "response", "status_update". priority MUST be one of: "low", "normal", "high", "critical".',
+    category: 'write',
+    required: ['message_type', 'subject', 'body'],
+    optional: ['priority', 'context'],
+    handler: async (params) => {
+      try {
+        const VALID_TYPES = ['directive', 'response', 'status_update'];
+        const msgType = VALID_TYPES.includes(params.message_type) ? params.message_type : 'directive';
+        const { sendAgentMessage } = await import('../services/faye-learning.js');
+        const context = params.context ? (() => { try { return JSON.parse(params.context); } catch { return {}; } })() : {};
+        const result = await sendAgentMessage(
+          'faye', 'scott',
+          msgType,
+          String(params.subject).slice(0, 200),
+          String(params.body).slice(0, 2000),
+          context,
+          params.priority || 'normal',
+          null
+        );
+        return result
+          ? { ok: true, message: `Message sent to S.C.O.T.T.: "${params.subject}"`, message_id: result.id }
+          : { ok: false, error: 'Failed to send message to S.C.O.T.T. Database may be unavailable.' };
+      } catch (err) { return { ok: false, error: `send_message_to_scott failed: ${err.message}` }; }
+    }
+  },
+
+  // ── Lot Traceability ──
+
+  'get_lot_traceability_report': {
+    description: 'Get a cross-farm lot traceability health report — completeness (seed_source, quality_score, best_by_date), active vs. expired counts, and SFCR readiness flags. Returns gracefully if lot_records table is not yet migrated.',
+    category: 'read',
+    required: [],
+    optional: ['farm_id'],
+    handler: async (params) => {
+      try {
+        if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+        const farmFilter = params.farm_id ? 'AND farm_id = $1' : '';
+        const values = params.farm_id ? [params.farm_id] : [];
+
+        const summary = await dbQuery(`
+          SELECT
+            farm_id,
+            COUNT(*) AS total_lots,
+            COUNT(*) FILTER (WHERE status = 'active') AS active,
+            COUNT(*) FILTER (WHERE status = 'expired') AS expired,
+            COUNT(*) FILTER (WHERE seed_source IS NULL OR seed_source = '') AS missing_seed_source,
+            COUNT(*) FILTER (WHERE quality_score IS NULL) AS missing_quality_score,
+            COUNT(*) FILTER (WHERE best_by_date IS NULL) AS missing_best_by_date
+          FROM lot_records
+          WHERE 1=1 ${farmFilter}
+          GROUP BY farm_id
+          ORDER BY farm_id
+        `, values).catch(() => ({ rows: [] }));
+
+        if (summary.rows.length === 0) {
+          return { ok: true, note: 'No lot records found. The lot_records table may not be migrated yet (migration 036).', farms: [] };
+        }
+
+        const completenessWarnings = summary.rows
+          .filter(r => Number(r.missing_seed_source) > 0 || Number(r.missing_quality_score) > 0 || Number(r.missing_best_by_date) > 0)
+          .map(r => ({
+            farm_id: r.farm_id,
+            gaps: [
+              r.missing_seed_source > 0 ? `${r.missing_seed_source} missing seed_source` : null,
+              r.missing_quality_score > 0 ? `${r.missing_quality_score} missing quality_score` : null,
+              r.missing_best_by_date > 0 ? `${r.missing_best_by_date} missing best_by_date` : null
+            ].filter(Boolean).join(', ')
+          }));
+
+        return {
+          ok: true,
+          farm_count: summary.rows.length,
+          farms: summary.rows,
+          sfcr_readiness_warnings: completenessWarnings,
+          sfcr_warning_count: completenessWarnings.length
+        };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  'get_expiring_lots': {
+    description: 'Get lots approaching their best_by_date across all farms. Defaults to lots expiring within 5 days. Use to prioritize fulfillment or flag disposal. Returns gracefully if lot_records table is not yet migrated.',
+    category: 'read',
+    required: [],
+    optional: ['days_ahead', 'farm_id'],
+    handler: async (params) => {
+      try {
+        if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+        const daysAhead = Math.max(1, Math.min(30, parseInt(params.days_ahead, 10) || 5));
+        const farmFilter = params.farm_id ? 'AND lr.farm_id = $2' : '';
+        const values = params.farm_id ? [daysAhead, params.farm_id] : [daysAhead];
+
+        const lots = await dbQuery(`
+          SELECT lr.lot_number, lr.farm_id, lr.crop_name, lr.status,
+                 lr.best_by_date,
+                 ROUND(EXTRACT(EPOCH FROM (lr.best_by_date - NOW())) / 86400) AS days_remaining,
+                 fi.quantity AS inventory_qty
+          FROM lot_records lr
+          LEFT JOIN farm_inventory fi ON fi.lot_number = lr.lot_number
+          WHERE lr.status = 'active'
+            AND lr.best_by_date IS NOT NULL
+            AND lr.best_by_date <= NOW() + ($1 || ' days')::interval
+          ${farmFilter}
+          ORDER BY lr.best_by_date ASC
+          LIMIT 50
+        `, values).catch(() => ({ rows: [] }));
+
+        if (lots.rows.length === 0 && !params.farm_id) {
+          return { ok: true, days_ahead: daysAhead, count: 0, lots: [], note: 'No active lots expiring in this window. lot_records table may not be migrated yet (migration 036).' };
+        }
+
+        return {
+          ok: true,
+          days_ahead: daysAhead,
+          count: lots.rows.length,
+          lots: lots.rows
+        };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  // ── AI Budget & Platform Intelligence ──
+
+  'get_ai_budget_status': {
+    description: 'Get AI spend per agent vs. configurable budget thresholds. Compares 7-day costs for E.V.I.E., G.W.E.N., S.C.O.T.T., and F.A.Y.E. against FAYE_AI_BUDGET_WEEKLY_USD env var (default $10). Use to catch runaway AI spend before it becomes a problem.',
+    category: 'read',
+    required: [],
+    optional: ['days'],
+    handler: async (params) => {
+      try {
+        if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+        const days = parseInt(params.days, 10) || 7;
+        const weeklyBudget = parseFloat(process.env.FAYE_AI_BUDGET_WEEKLY_USD || '10');
+
+        const agentEndpoints = {
+          'evie': 'assistant-chat',
+          'gwen': 'gwen_chat',
+          'scott': 'scott-marketing-agent',
+          'faye': 'admin-assistant'
+        };
+
+        const costs = await dbQuery(`
+          SELECT endpoint,
+                 COUNT(*) AS calls,
+                 SUM(COALESCE(total_tokens, 0)) AS tokens,
+                 SUM(COALESCE(estimated_cost, 0)) AS cost
+          FROM ai_usage
+          WHERE created_at >= NOW() - make_interval(days => $1::int)
+          GROUP BY endpoint
+        `, [days]).catch(() => ({ rows: [] }));
+
+        const byAgent = {};
+        for (const [agent, ep] of Object.entries(agentEndpoints)) {
+          const row = costs.rows.find(r => r.endpoint === ep);
+          const agentCost = Number(row?.cost || 0);
+          byAgent[agent] = {
+            endpoint: ep,
+            calls: Number(row?.calls || 0),
+            tokens: Number(row?.tokens || 0),
+            cost_usd: agentCost.toFixed(4),
+            pct_of_budget: weeklyBudget > 0 ? ((agentCost / weeklyBudget) * 100).toFixed(1) : 'N/A'
+          };
+        }
+
+        const totalCost = Object.values(byAgent).reduce((s, a) => s + parseFloat(a.cost_usd), 0);
+        const budgetUsedPct = weeklyBudget > 0 ? ((totalCost / weeklyBudget) * 100).toFixed(1) : 'N/A';
+        const overBudget = weeklyBudget > 0 && totalCost > weeklyBudget;
+
+        return {
+          ok: true,
+          period_days: days,
+          weekly_budget_usd: weeklyBudget,
+          total_cost_usd: totalCost.toFixed(4),
+          budget_used_pct: budgetUsedPct,
+          over_budget: overBudget,
+          by_agent: byAgent,
+          note: overBudget ? 'ALERT: Total AI spend exceeds weekly budget. Review agent usage and consider throttling non-critical calls.' : null
+        };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  'get_farm_ops_audit_log': {
+    description: 'Get recent Farm-Ops agent audit log entries — tool calls, actions, and outcomes recorded by the Farm-Ops tool gateway. Use for cross-domain correlation: e.g. correlating farm operational activity with business anomalies detected by F.A.Y.E.',
+    category: 'read',
+    required: [],
+    optional: ['farm_id', 'limit', 'tool_name'],
+    handler: async (params) => {
+      try {
+        if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+        const limit = Math.min(100, parseInt(params.limit, 10) || 25);
+        const conditions = ['1=1'];
+        const values = [];
+        let idx = 1;
+
+        if (params.farm_id) { conditions.push(`farm_id = $${idx++}`); values.push(params.farm_id); }
+        if (params.tool_name) { conditions.push(`tool_name = $${idx++}`); values.push(params.tool_name); }
+        values.push(limit);
+
+        const rows = await dbQuery(`
+          SELECT id, farm_id, tool_name, params, result_summary, duration_ms, created_at
+          FROM farm_ops_audit_log
+          WHERE ${conditions.join(' AND ')}
+          ORDER BY created_at DESC
+          LIMIT $${idx}
+        `, values).catch(() => ({ rows: [] }));
+
+        if (rows.rows.length === 0) {
+          return { ok: true, count: 0, entries: [], note: 'No audit log entries found. farm_ops_audit_log table may not be populated yet.' };
+        }
+
+        return { ok: true, count: rows.rows.length, entries: rows.rows };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
   }
 
 };
@@ -5384,7 +5737,7 @@ function _leHeaders(extra = {}) {
 // ADMIN: Critical action — require admin to type the action name
 
 export const TRUST_TIERS = {
-  auto: new Set(['create_alert', 'acknowledge_alert', 'acknowledge_farm_alert', 'acknowledge_all_alerts', 'save_admin_memory', 'update_farm_notes', 'store_insight', 'record_outcome', 'rate_alert', 'log_shadow_decision', 'send_message_to_evie', 'record_recommendation_feedback', 'review_producer_applications', 'create_salad_mix_template', 'update_salad_mix_template']),
+  auto: new Set(['create_alert', 'acknowledge_alert', 'acknowledge_farm_alert', 'acknowledge_all_alerts', 'save_admin_memory', 'update_farm_notes', 'store_insight', 'record_outcome', 'rate_alert', 'log_shadow_decision', 'send_message_to_evie', 'send_message_to_gwen', 'send_message_to_scott', 'record_recommendation_feedback', 'review_producer_applications', 'create_salad_mix_template', 'update_salad_mix_template']),
   quick_confirm: new Set(['resolve_alert', 'resolve_farm_alert', 'resolve_all_alerts', 'classify_transaction', 'archive_insight', 'set_domain_ownership', 'update_farm_crop_price', 'update_farm_crop_description', 'add_farm_manual_inventory']),
   confirm: new Set(['send_admin_email', 'send_sms', 'approve_producer_application', 'reject_producer_application', 'create_farm_custom_product']),
   admin: new Set(['process_refund'])

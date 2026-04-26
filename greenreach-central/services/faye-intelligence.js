@@ -321,6 +321,184 @@ async function checkAutoResolvePatterns() {
 }
 
 // ══════════════════════════════════════════════════════════════════
+// Lot Traceability Checks
+// ══════════════════════════════════════════════════════════════════
+
+async function checkExpiringLots() {
+  if (!isDatabaseAvailable()) return;
+  try {
+    // Lots expiring within 3 days that are still active and have remaining stock
+    const expiring = await query(`
+      SELECT lr.lot_number, lr.farm_id, lr.crop_name,
+             lr.best_by_date,
+             EXTRACT(EPOCH FROM (lr.best_by_date - NOW())) / 86400 AS days_until_expiry,
+             fi.quantity AS remaining_qty
+      FROM lot_records lr
+      LEFT JOIN farm_inventory fi ON fi.lot_number = lr.lot_number
+      WHERE lr.status = 'active'
+        AND lr.best_by_date IS NOT NULL
+        AND lr.best_by_date BETWEEN NOW() AND NOW() + INTERVAL '3 days'
+        AND COALESCE(fi.quantity, 1) > 0
+      ORDER BY lr.best_by_date ASC
+      LIMIT 20
+    `).catch(() => ({ rows: [] })); // graceful if lot_records table not yet migrated
+
+    if (expiring.rows.length === 0) return;
+
+    const lotSummary = expiring.rows
+      .map(r => `${r.lot_number} (${r.crop_name || 'unknown'}, ${Number(r.days_until_expiry).toFixed(1)}d)`)
+      .join('; ');
+
+    if (!(await hasRecentAlert('lot_traceability', 'expiring'))) {
+      await createAlert('lot_traceability', 'medium',
+        `${expiring.rows.length} lot(s) expiring within 3 days`,
+        `Lots approaching best_by_date with remaining stock: ${lotSummary}. Review fulfillment priority or mark for disposal.`);
+      await trackPattern('lot_expiry_alert', 'lot_traceability',
+        `${expiring.rows.length} lots expiring within 3 days`,
+        { count: expiring.rows.length, lots: expiring.rows.map(r => r.lot_number) });
+    }
+  } catch (err) { logger.warn(`${TAG} Lot expiry check error:`, err.message); }
+}
+
+async function autoExpireLots() {
+  if (!isDatabaseAvailable()) return;
+  try {
+    const result = await query(`
+      UPDATE lot_records
+      SET status = 'expired', updated_at = NOW()
+      WHERE status = 'active'
+        AND best_by_date IS NOT NULL
+        AND best_by_date < NOW()
+    `).catch(() => null);
+
+    const count = result?.rowCount || 0;
+    if (count > 0) {
+      logger.info(`${TAG} Auto-expired ${count} lot(s) past best_by_date`);
+      await storeInsight('lot_traceability', 'auto_expire',
+        `Auto-expired ${count} lot(s) past best_by_date`,
+        'intelligence_loop', 0.95);
+    }
+  } catch (err) { logger.warn(`${TAG} Lot auto-expire error:`, err.message); }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// Weekly Self-Assessment
+// ══════════════════════════════════════════════════════════════════
+
+let lastSelfAssessmentKey = null;
+
+async function sendWeeklySelfAssessment() {
+  const now = new Date();
+  // Run on the same day and hour as the weekly digest (Monday 8 AM by default)
+  if (now.getDay() !== WEEKLY_DIGEST_DAY || now.getHours() !== WEEKLY_DIGEST_HOUR) return;
+
+  const key = `self-assessment-${getWeeklyDigestKey(now)}`;
+  if (lastSelfAssessmentKey === key) return;
+
+  if (!isDatabaseAvailable()) return;
+
+  try {
+    const briefingTo = process.env.ADMIN_BRIEFING_EMAIL || process.env.ADMIN_EMAIL;
+    if (!briefingTo) return;
+
+    // Domain ownership levels from knowledge base
+    const domainInsights = await query(`
+      SELECT topic, content, confidence, updated_at
+      FROM faye_knowledge
+      WHERE domain = 'autonomy'
+        AND topic LIKE 'domain_ownership:%'
+      ORDER BY topic
+    `).catch(() => ({ rows: [] }));
+
+    // Shadow accuracy stats
+    const shadowStats = await query(`
+      SELECT
+        COUNT(*) AS total_logged,
+        COUNT(*) FILTER (WHERE outcome = 'shadow') AS shadow_count,
+        AVG(CASE WHEN outcome = 'shadow' THEN (metadata->>'match')::int ELSE NULL END) AS match_rate
+      FROM faye_outcomes
+      WHERE created_at > NOW() - INTERVAL '7 days'
+    `).catch(() => ({ rows: [{}] }));
+
+    // Promotion opportunities
+    const promotionCandidates = await query(`
+      SELECT action_class, current_tier, success_rate, use_count
+      FROM faye_trust_tiers
+      WHERE success_rate >= 0.92 AND use_count >= 40
+      ORDER BY success_rate DESC
+    `).catch(() => ({ rows: [] }));
+
+    // Pattern count for the week
+    const patternStats = await query(`
+      SELECT COUNT(*) AS new_patterns
+      FROM faye_patterns
+      WHERE last_seen > NOW() - INTERVAL '7 days'
+        AND occurrence_count = 1
+    `).catch(() => ({ rows: [{ new_patterns: 0 }] }));
+
+    const domainSummary = domainInsights.rows.length
+      ? domainInsights.rows.map(r => {
+          const domain = r.topic.replace('domain_ownership:', '');
+          const level = r.content?.match(/L\d/)?.[0] || 'L?';
+          return `  ${domain}: ${level} (confidence ${Number(r.confidence || 0).toFixed(2)})`;
+        }).join('\n')
+      : '  No domain ownership records yet.';
+
+    const promotionSummary = promotionCandidates.rows.length
+      ? promotionCandidates.rows.map(r =>
+          `  ${r.action_class} (${r.current_tier}): ${(Number(r.success_rate) * 100).toFixed(1)}% over ${r.use_count} uses — eligible for review`
+        ).join('\n')
+      : '  No actions currently eligible for promotion review.';
+
+    const shadow = shadowStats.rows[0] || {};
+    const newPatterns = Number(patternStats.rows[0]?.new_patterns || 0);
+
+    const text = [
+      `F.A.Y.E. Weekly Self-Assessment — ${getWeeklyDigestKey(now)}`,
+      `══════════════════════════════════════════════════════`,
+      ``,
+      `Domain Ownership (Current Levels)`,
+      domainSummary,
+      ``,
+      `Shadow Mode (7-day)`,
+      `  Decisions logged: ${shadow.shadow_count || 0}`,
+      `  Match rate: ${shadow.match_rate != null ? `${(Number(shadow.match_rate) * 100).toFixed(1)}%` : 'Insufficient data'}`,
+      ``,
+      `Trust Promotion Candidates`,
+      promotionSummary,
+      ``,
+      `Learning`,
+      `  New patterns detected this week: ${newPatterns}`,
+      ``,
+      `— F.A.Y.E. (Farm Autonomy & Yield Engine)`
+    ].join('\n');
+
+    await emailService.sendEmail({
+      to: briefingTo,
+      subject: `F.A.Y.E. Self-Assessment — ${getWeeklyDigestKey(now)}`,
+      text,
+      html: `<div style="font-family:sans-serif;max-width:680px">
+        <h2 style="color:#f59e0b">F.A.Y.E. Weekly Self-Assessment — ${getWeeklyDigestKey(now)}</h2>
+        <h3>Domain Ownership</h3><pre style="font-size:13px">${domainSummary}</pre>
+        <h3>Shadow Mode (7-day)</h3>
+        <p>Decisions logged: ${shadow.shadow_count || 0} &nbsp;|&nbsp;
+           Match rate: ${shadow.match_rate != null ? `${(Number(shadow.match_rate) * 100).toFixed(1)}%` : 'Insufficient data'}</p>
+        <h3>Trust Promotion Candidates</h3><pre style="font-size:13px">${promotionSummary}</pre>
+        <h3>Learning</h3>
+        <p>New patterns detected this week: ${newPatterns}</p>
+        <hr style="border:none;border-top:1px solid #ddd;margin:20px 0">
+        <p style="font-size:12px;color:#888">Automated by F.A.Y.E. self-assessment scheduler</p>
+      </div>`
+    });
+
+    lastSelfAssessmentKey = key;
+    logger.info(`${TAG} Weekly self-assessment sent to ${briefingTo}`);
+  } catch (err) {
+    logger.error(`${TAG} Self-assessment email error:`, err.message);
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════
 // Main Anomaly Check Runner
 // ══════════════════════════════════════════════════════════════════
 
@@ -338,7 +516,9 @@ export async function runAnomalyCheck() {
     checkOrderVolumeAnomaly(),
     checkAccountingBalance(),
     checkUnclassifiedTransactions(),
-    checkAutoResolvePatterns()
+    checkAutoResolvePatterns(),
+    checkExpiringLots(),
+    autoExpireLots()
   ]);
 
   logger.info(`${TAG} Anomaly cycle complete in ${Date.now() - start}ms`);
@@ -583,6 +763,9 @@ export function startFayeIntelligence() {
 
     // Check if it's weekly digest time
     sendWeeklyDigest().catch(e => logger.error(`${TAG} Weekly digest error:`, e));
+
+    // Check if it's weekly self-assessment time
+    sendWeeklySelfAssessment().catch(e => logger.error(`${TAG} Self-assessment error:`, e));
   }, CHECK_INTERVAL_MS);
 
   // Schedule first briefing
@@ -595,9 +778,10 @@ export function startFayeIntelligence() {
     sendDailyBriefing().catch(e => logger.error(`${TAG} Briefing error:`, e));
   }, msUntilBriefing);
 
-  // Warm-start weekly digest check shortly after boot.
+  // Warm-start weekly digest and self-assessment check shortly after boot.
   setTimeout(() => {
     sendWeeklyDigest().catch(e => logger.error(`${TAG} Weekly digest error:`, e));
+    sendWeeklySelfAssessment().catch(e => logger.error(`${TAG} Self-assessment error:`, e));
   }, 90_000);
 
   logger.info(`${TAG} Next briefing at ${nextBriefing.toISOString()}`);
