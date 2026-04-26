@@ -258,6 +258,122 @@ class EmailService {
       text: `Refund Processed\n\nA refund of $${Number(amount || 0).toFixed(2)} CAD has been processed for order #${String(order_id || '').substring(0, 8)}.\nThe refund should appear in your account within 5-10 business days.\n${refund_id ? `Refund Reference: ${refund_id}\n` : ''}\n-- GreenReach Farms\n${BUSINESS_ADDRESS}`
     });
   }
+
+  /**
+   * Send a lot recall notification to admin and affected buyers.
+   * Safety-critical — always require explicit admin confirmation before calling.
+   *
+   * @param {Object}   recallData
+   * @param {string}   recallData.lot_number     - Lot identifier (e.g. GREE-20260319-001)
+   * @param {string}   recallData.crop            - Crop name
+   * @param {string}   recallData.reason          - Reason for recall (required)
+   * @param {string}   recallData.farm_name       - Originating farm name
+   * @param {string[]} recallData.affected_orders - Order IDs linked to this lot
+   * @param {Array}    recallData.buyer_contacts  - Array of { name, email } for affected buyers
+   * @param {string}   recallData.admin_email     - Admin address for confirmation copy
+   * @param {string}   [recallData.instructions]  - Optional return/disposal instructions
+   */
+  async sendRecallNotification(recallData) {
+    const {
+      lot_number,
+      crop,
+      reason,
+      farm_name,
+      affected_orders = [],
+      buyer_contacts = [],
+      admin_email,
+      instructions
+    } = recallData;
+
+    if (!lot_number || !reason) {
+      return { success: false, error: 'lot_number and reason are required for recall notifications' };
+    }
+
+    const recallDate = new Date().toLocaleDateString('en-CA');
+    const orderList = affected_orders.length
+      ? affected_orders.map(id => `  • ${id}`).join('\n')
+      : '  • None on record';
+
+    // Admin confirmation copy
+    if (admin_email) {
+      const adminHtml = `
+        <div style="font-family:sans-serif;max-width:680px;border:2px solid #dc2626;border-radius:6px;padding:24px;">
+          <h2 style="color:#dc2626;margin-top:0;">Lot Recall Initiated — ${lot_number}</h2>
+          <table style="border-collapse:collapse;width:100%;margin-bottom:16px;">
+            <tr><td style="padding:8px;border-bottom:1px solid #eee;font-weight:600;">Lot Number</td><td style="padding:8px;border-bottom:1px solid #eee;">${lot_number}</td></tr>
+            <tr><td style="padding:8px;border-bottom:1px solid #eee;font-weight:600;">Crop</td><td style="padding:8px;border-bottom:1px solid #eee;">${crop || 'Unknown'}</td></tr>
+            <tr><td style="padding:8px;border-bottom:1px solid #eee;font-weight:600;">Farm</td><td style="padding:8px;border-bottom:1px solid #eee;">${farm_name || 'Unknown'}</td></tr>
+            <tr><td style="padding:8px;border-bottom:1px solid #eee;font-weight:600;">Recall Date</td><td style="padding:8px;border-bottom:1px solid #eee;">${recallDate}</td></tr>
+            <tr><td style="padding:8px;border-bottom:1px solid #eee;font-weight:600;">Reason</td><td style="padding:8px;border-bottom:1px solid #eee;">${reason}</td></tr>
+            <tr><td style="padding:8px;border-bottom:1px solid #eee;font-weight:600;">Affected Orders</td><td style="padding:8px;border-bottom:1px solid #eee;">${affected_orders.join(', ') || 'None'}</td></tr>
+            <tr><td style="padding:8px;font-weight:600;">Buyers Notified</td><td style="padding:8px;">${buyer_contacts.length}</td></tr>
+          </table>
+          ${instructions ? `<p><strong>Instructions:</strong> ${instructions}</p>` : ''}
+          <p style="font-size:12px;color:#666;">Initiated by F.A.Y.E. (Farm Autonomy &amp; Yield Engine) — admin confirmed</p>
+        </div>`;
+      const adminText = [
+        `LOT RECALL INITIATED — ${lot_number}`,
+        `Lot: ${lot_number}  Crop: ${crop || 'Unknown'}  Farm: ${farm_name || 'Unknown'}`,
+        `Date: ${recallDate}  Reason: ${reason}`,
+        `Affected Orders:\n${orderList}`,
+        `Buyers to notify: ${buyer_contacts.length}`,
+        instructions ? `Instructions: ${instructions}` : '',
+        `— F.A.Y.E. (Farm Autonomy & Yield Engine)`
+      ].filter(Boolean).join('\n');
+      await this.sendEmail({
+        to: admin_email,
+        subject: `[RECALL] Lot ${lot_number} — ${crop || 'Produce'} — Action Required`,
+        html: adminHtml,
+        text: adminText
+      });
+    }
+
+    // One email per affected buyer
+    const buyerResults = [];
+    for (const buyer of buyer_contacts) {
+      if (!buyer.email) continue;
+      const buyerHtml = `
+        <div style="font-family:sans-serif;max-width:640px;">
+          <h2 style="color:#dc2626;">Important: Product Recall Notice</h2>
+          <p>Dear ${buyer.name || 'Valued Customer'},</p>
+          <p>One or more orders you received from <strong>GreenReach Farms</strong> may include produce from a recalled lot.</p>
+          <table style="border-collapse:collapse;width:100%;margin:16px 0;">
+            <tr><td style="padding:8px;border-bottom:1px solid #eee;font-weight:600;">Lot Number</td><td style="padding:8px;border-bottom:1px solid #eee;">${lot_number}</td></tr>
+            <tr><td style="padding:8px;border-bottom:1px solid #eee;font-weight:600;">Product</td><td style="padding:8px;border-bottom:1px solid #eee;">${crop || 'Produce'}</td></tr>
+            <tr><td style="padding:8px;font-weight:600;">Recall Reason</td><td style="padding:8px;">${reason}</td></tr>
+          </table>
+          <p><strong>Please do not consume or distribute this product.</strong> ${instructions || 'Dispose of the product safely or contact us for return instructions.'}</p>
+          <p>We sincerely apologize for the inconvenience. Contact us at <a href="mailto:info@greenreachgreens.com">info@greenreachgreens.com</a>.</p>
+          <p>-- GreenReach Farms</p>
+        </div>`;
+      const buyerText = [
+        `IMPORTANT: Product Recall Notice`,
+        `Dear ${buyer.name || 'Valued Customer'},`,
+        `One or more orders you received from GreenReach Farms may include produce from a recalled lot.`,
+        `Lot: ${lot_number}  Product: ${crop || 'Produce'}  Reason: ${reason}`,
+        `Please do not consume or distribute this product.`,
+        instructions || 'Dispose safely or contact us for return instructions.',
+        `Contact: info@greenreachgreens.com`,
+        `-- GreenReach Farms  ${BUSINESS_ADDRESS}`
+      ].join('\n');
+      const r = await this.sendEmail({
+        to: buyer.email,
+        subject: `[RECALL NOTICE] ${crop || 'Produce'} — Lot ${lot_number}`,
+        html: buyerHtml,
+        text: buyerText
+      });
+      buyerResults.push({ email: buyer.email, ...r });
+    }
+
+    return {
+      success: true,
+      lot_number,
+      admin_notified: !!admin_email,
+      buyers_notified: buyerResults.filter(r => r.success).length,
+      buyers_failed: buyerResults.filter(r => !r.success).length,
+      buyer_results: buyerResults
+    };
+  }
 }
 
 /**
