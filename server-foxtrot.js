@@ -22752,6 +22752,54 @@ app.use('/api/farm/salad-mixes', proxyCorsMiddleware, createProxyMiddleware({
   }
 }));
 
+app.use('/api/inventory/mix', proxyCorsMiddleware, createProxyMiddleware({
+  target: _centralUrl(),
+  router: () => _centralUrl(),
+  changeOrigin: true,
+  xfwd: true,
+  logLevel: 'debug',
+  timeout: 10000,
+  proxyTimeout: 10000,
+  agent: keepAliveHttpsAgent,
+  pathRewrite: (p) => (p.startsWith('/api/inventory/mix') ? p : `/api/inventory/mix${p}`),
+  onProxyReq(proxyReq, req) {
+    const outgoingPath = req.originalUrl;
+    console.log(`[-> inventory/mix] ${req.method} ${outgoingPath} -> ${_centralUrl()}${outgoingPath}`);
+    if (req.headers['authorization']) {
+      proxyReq.setHeader('Authorization', req.headers['authorization']);
+    }
+    const apiKey = process.env.GREENREACH_API_KEY;
+    if (apiKey && !proxyReq.getHeader('x-api-key')) {
+      proxyReq.setHeader('x-api-key', apiKey);
+    }
+    let farmId = req.headers['x-farm-id'];
+    if (!farmId && req.headers['authorization']?.startsWith('Bearer ')) {
+      try {
+        const payload = JSON.parse(Buffer.from(req.headers['authorization'].substring(7).split('.')[1], 'base64').toString());
+        farmId = payload.farmId || payload.farm_id;
+      } catch {}
+    }
+    if (farmId && !proxyReq.getHeader('x-farm-id')) {
+      proxyReq.setHeader('x-farm-id', farmId);
+    }
+  },
+  onProxyRes(proxyRes, req) {
+    const origin = req.headers?.origin;
+    if (origin) {
+      proxyRes.headers['access-control-allow-origin'] = origin;
+    } else {
+      proxyRes.headers['access-control-allow-origin'] = '*';
+    }
+    proxyRes.headers['access-control-allow-methods'] = 'GET,POST,PUT,PATCH,DELETE,OPTIONS';
+    proxyRes.headers['access-control-allow-headers'] = 'Content-Type, Authorization, X-Requested-With, x-farm-id';
+  },
+  onError(err, req, res) {
+    console.warn('[proxy:/api/inventory/mix] error:', err?.message || err);
+    res.statusCode = 502;
+    res.end(JSON.stringify({ error: 'proxy_error', target: 'central-inventory-mix', detail: String(err) }));
+  }
+}));
+
 const shouldProxyInventoryManual = String(process.env.PROXY_INVENTORY_MANUAL || 'false').toLowerCase() === 'true';
 if (shouldProxyInventoryManual) {
   app.use('/api/inventory/manual', proxyCorsMiddleware, createProxyMiddleware({
