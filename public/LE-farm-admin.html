@@ -3110,6 +3110,13 @@ Download QuickBooks CSV
                     <p style="color: var(--text-secondary); margin-bottom: 20px;">
                         Set retail pricing and wholesale discount tiers. Weight-based crops auto-convert between lb and 100g, while pint and each pricing stays fixed.
                     </p>
+
+                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap;">
+                        <input type="search" id="crop-pricing-search" class="pricing-input"
+                            placeholder="Search crops and salad mixes..." oninput="updatePricingSearch(this.value)"
+                            style="width: 320px; max-width: 100%;">
+                        <button class="btn" type="button" onclick="document.getElementById('crop-pricing-search').value=''; updatePricingSearch('');">Clear</button>
+                    </div>
                     
                     <div class="table-container">
                         <table id="pricing-table">

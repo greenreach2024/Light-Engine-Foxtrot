@@ -1278,6 +1278,7 @@ function formatTime(timestamp) {
 // Pricing data structure
 let pricingData = [];
 let isPerGram = false; // false = per lb (default), true = per 100g
+let pricingSearchQuery = '';
 const LB_TO_100G = 0.22046; // 1 lb = 453.592g, so 100g/453.592g = 0.22046
 const DEFAULT_SKU_FACTOR = 0.65;
 
@@ -1631,12 +1632,22 @@ function togglePricingUnit() {
     renderPricingTable();
 }
 
+function updatePricingSearch(value) {
+    pricingSearchQuery = String(value || '').trim().toLowerCase();
+    renderPricingTable();
+}
+
 /**
  * Render pricing table
  */
 function renderPricingTable() {
     const tbody = document.querySelector('#pricing-table tbody');
     if (!tbody) return;
+
+    const searchInput = document.getElementById('crop-pricing-search');
+    if (searchInput) {
+        pricingSearchQuery = String(searchInput.value || '').trim().toLowerCase();
+    }
 
     const weightUnitLabel = isPerGram ? '/100g' : '/lb';
 
@@ -1697,16 +1708,34 @@ function renderPricingTable() {
         </tr>
     `;
 
-    const saladRows = pricingData.filter(item => saladMixNames.has(item.crop));
-    const regularRows = pricingData.filter(item => !saladMixNames.has(item.crop));
+    const matchesSearch = (item) => {
+        if (!pricingSearchQuery) return true;
+        return String(item?.crop || '').toLowerCase().includes(pricingSearchQuery);
+    };
+
+    const saladRows = pricingData.filter(item => saladMixNames.has(item.crop) && matchesSearch(item));
+    const regularRows = pricingData.filter(item => !saladMixNames.has(item.crop) && matchesSearch(item));
 
     let html = '';
     if (saladRows.length > 0) {
         html += sectionHeaderRow('Salad Mixes', '🥗');
         html += saladRows.map(item => buildRow(item, pricingData.indexOf(item))).join('');
+    }
+    if (regularRows.length > 0 && saladRows.length > 0) {
         html += sectionHeaderRow('Crops', '🌱');
     }
-    html += regularRows.map(item => buildRow(item, pricingData.indexOf(item))).join('');
+    if (regularRows.length > 0) {
+        html += regularRows.map(item => buildRow(item, pricingData.indexOf(item))).join('');
+    }
+    if (!saladRows.length && !regularRows.length) {
+        html = `
+            <tr>
+                <td colspan="7" style="padding: 16px; text-align: center; color: var(--text-muted, #94a3b8);">
+                    No crops match the current search.
+                </td>
+            </tr>
+        `;
+    }
 
     tbody.innerHTML = html;
 }
