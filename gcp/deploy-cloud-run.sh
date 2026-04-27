@@ -133,7 +133,6 @@ gcloud run deploy "${CENTRAL_SERVICE}" \
   --project="${PROJECT_ID}" \
   --region="${REGION}" \
   --image="${REGISTRY}/${CENTRAL_SERVICE}:latest" \
-  --update-traffic=LATEST=100 \
   --service-account="${SA_CENTRAL}" \
   --vpc-connector="${CONNECTOR_NAME}" \
   --vpc-egress=private-ranges-only \
@@ -208,7 +207,6 @@ gcloud run deploy "${LE_SERVICE}" \
   --project="${PROJECT_ID}" \
   --region="${REGION}" \
   --image="${REGISTRY}/${LE_SERVICE}:latest" \
-  --update-traffic=LATEST=100 \
   --service-account="${SA_LE}" \
   --vpc-connector="${CONNECTOR_NAME}" \
   --vpc-egress=private-ranges-only \
