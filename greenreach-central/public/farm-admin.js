@@ -7001,6 +7001,11 @@ async function checkFirstTimeSetup() {
                 'Authorization': `Bearer ${token}`
             }
         });
+
+        if (!response.ok) {
+            console.warn('[setup-wizard] Status endpoint returned non-OK response, skipping redirect:', response.status);
+            return;
+        }
         
         const data = await response.json();
         console.log('[setup-wizard] API status:', data);
@@ -7011,7 +7016,7 @@ async function checkFirstTimeSetup() {
             window.location.href = '/setup-wizard.html';
             return;
         }
-        if (!data.setupCompleted) {
+        if (data.setupCompleted === false) {
             // Double-check: if localStorage has setup_completed=true, don't redirect
             // This prevents redirect loops for farms that completed setup but DB flag is stale
             const localSetupDone = localStorage.getItem('setup_completed') === 'true' || sessionStorage.getItem('setup_completed') === 'true';
@@ -7026,6 +7031,11 @@ async function checkFirstTimeSetup() {
             console.log('[setup-wizard] Setup not complete, redirecting to wizard');
             window.location.href = getSetupWizardRedirectPath();
             return;
+        }
+
+        if (data.setupCompleted === true) {
+            localStorage.setItem('setup_completed', 'true');
+            sessionStorage.setItem('setup_completed', 'true');
         }
         
         console.log('[setup-wizard] Setup already completed');
@@ -10027,6 +10037,10 @@ async function loadDashboardFarmValue() {
             var SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
             var barRecognition = null;
             var barListening = false;
+            var talkIdleBg = 'rgba(139,92,246,0.12)';
+            var talkIdleColor = '#c4b5fd';
+            var talkListenBg = 'rgba(239,68,68,0.2)';
+            var talkListenColor = '#f87171';
             if (SpeechRec) {
                 barRecognition = new SpeechRec();
                 barRecognition.continuous = false;
@@ -10044,25 +10058,30 @@ async function loadDashboardFarmValue() {
                 };
                 barRecognition.onend = function() {
                     barListening = false;
-                    micBtn.style.background = 'rgba(59,130,246,0.12)';
-                    micBtn.style.color = '#60a5fa';
+                    micBtn.style.background = talkIdleBg;
+                    micBtn.style.color = talkIdleColor;
                 };
                 barRecognition.onerror = function() {
                     barListening = false;
-                    micBtn.style.background = 'rgba(59,130,246,0.12)';
-                    micBtn.style.color = '#60a5fa';
+                    micBtn.style.background = talkIdleBg;
+                    micBtn.style.color = talkIdleColor;
                 };
             }
             micBtn.addEventListener('click', function() {
-                if (!barRecognition) return;
+                if (!barRecognition) {
+                    if (window.EVIE && typeof window.EVIE.open === 'function') {
+                        window.EVIE.open();
+                    }
+                    return;
+                }
                 if (barListening) {
                     barRecognition.stop();
                     barListening = false;
                 } else {
                     barRecognition.start();
                     barListening = true;
-                    micBtn.style.background = 'rgba(239,68,68,0.2)';
-                    micBtn.style.color = '#f87171';
+                    micBtn.style.background = talkListenBg;
+                    micBtn.style.color = talkListenColor;
                 }
             });
         }
@@ -10080,15 +10099,6 @@ async function loadDashboardFarmValue() {
             });
         }
 
-        // EVIE button
-        var evieBtn = document.getElementById('evie-bar-evie');
-        if (evieBtn) {
-            evieBtn.addEventListener('click', function() {
-                if (window.EVIE && typeof window.EVIE.open === 'function') {
-                    window.EVIE.open();
-                }
-            });
-        }
     });
 })();
 
