@@ -37,6 +37,7 @@ const authFetch = (window.authFetch || fetch.bind(window));
 const state = {
   rooms: [],
   groups: [],
+  devices: [],
   templates: [],
   env: { zones: [], rooms: {} },
   envByZoneKey: new Map(),
@@ -56,6 +57,7 @@ const state = {
   showCeiling: true,
   collapsedZoneSystems: new Set(),
   history: { snapshots: [], cursor: -1 },
+  pendingPlacement: null,
 };
 
 let toastTimer = null;
@@ -683,6 +685,8 @@ function buildScene() {
       placeGroupsInZone(roomGroup, zr, groupsArr, room);
     });
 
+    buildDevicesInRoom(roomGroup, room);
+
     roomGroup.position.set(cursorX - dims.L/2, 0, -dims.W/2);
     farmRoot.add(roomGroup);
     state.roomMeshes.push(roomGroup);
@@ -792,6 +796,178 @@ function computeDataRange(metric) {
   const dlo = Math.min(...vals), dhi = Math.max(...vals);
   const spread = dhi - dlo || 0.5;
   return { lo: dlo - spread * 0.05, hi: dhi + spread * 0.05 };
+}
+
+// ── Device rendering ──────────────────────────────────────────────────────────
+
+const matSensor  = new THREE.MeshStandardMaterial({ color: 0x00e5ff, emissive: 0x00e5ff, emissiveIntensity: 0.55, roughness: 0.3, metalness: 0.25, transparent: true, opacity: 0.88 });
+const matFan     = new THREE.MeshStandardMaterial({ color: 0xaaaaaa, roughness: 0.6, metalness: 0.5 });
+const matHub     = new THREE.MeshStandardMaterial({ color: 0x777788, roughness: 0.5, metalness: 0.35 });
+const matEnvUnit = new THREE.MeshStandardMaterial({ color: 0x3377cc, roughness: 0.5, metalness: 0.2 });
+
+function makeDeviceMesh(device) {
+  const type = (device.type || '').toLowerCase();
+  let geo, mat;
+  if (type === 'woiosensor' || type.includes('sensor') || type.includes('thermo')) {
+    geo = new THREE.BoxGeometry(0.14, 0.14, 0.14);
+    mat = matSensor;
+  } else if (type.includes('fan')) {
+    geo = new THREE.CylinderGeometry(0.12, 0.12, 0.07, 16);
+    mat = matFan;
+  } else if (type.includes('hub')) {
+    geo = new THREE.BoxGeometry(0.18, 0.05, 0.12);
+    mat = matHub;
+  } else {
+    geo = new THREE.BoxGeometry(0.25, 0.35, 0.18);
+    mat = matEnvUnit;
+  }
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.castShadow = true; mesh.receiveShadow = true;
+  return mesh;
+}
+
+function buildDevicesInRoom(roomGroup, room) {
+  state.devices.forEach(device => {
+    if (!device || !device.id) return;
+    if (device.roomId !== room.id) return;
+    const x = Number(device.x_m), z = Number(device.z_m);
+    if (!Number.isFinite(x) || !Number.isFinite(z)) return;
+
+    const g = new THREE.Group();
+    const body = makeDeviceMesh(device);
+    g.add(body);
+
+    const lbl = makeLabelSprite(device.name || device.id);
+    lbl.scale.multiplyScalar(0.22);
+    lbl.position.set(0, 0.28, 0);
+    g.add(lbl);
+
+    g.position.set(x, 0.07, z);
+    g.userData = { kind: 'device', id: device.id, device, footprint: { length_m: 0.15, width_m: 0.15 }, roomId: room.id };
+    g.name = `device:${device.id}`;
+    roomGroup.add(g);
+    state.meshIndex.set(device.id, g);
+  });
+}
+
+async function saveDevices(opts = {}) {
+  try {
+    const r = await authFetch('/data/iot-devices.json', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(state.devices),
+    });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    if (!opts.silent) toast(opts.msg || 'Devices saved');
+  } catch (err) {
+    console.error('[v3d] device save failed', err);
+    toast('Device save failed: ' + (err.message || 'unknown'));
+  }
+}
+
+function updatePlacementBanner() {
+  const banner = $('v3dPlaceBanner');
+  if (!banner) return;
+  if (state.pendingPlacement) {
+    const dev = state.devices.find(d => d.id === state.pendingPlacement.deviceId);
+    $('v3dPlaceMsg').textContent = `Click room floor to place: ${dev?.name || state.pendingPlacement.deviceId}`;
+    banner.hidden = false;
+    canvas.classList.add('placing');
+  } else {
+    banner.hidden = true;
+    canvas.classList.remove('placing');
+  }
+}
+
+function activatePlacement(deviceId) {
+  state.pendingPlacement = { deviceId };
+  state.selection.clear();
+  applySelectionVisuals();
+  updatePlacementBanner();
+}
+
+function cancelPlacement() {
+  state.pendingPlacement = null;
+  updatePlacementBanner();
+  renderSidePanel();
+}
+
+async function completePlacement(worldPos) {
+  const { deviceId } = state.pendingPlacement;
+  state.pendingPlacement = null;
+  updatePlacementBanner();
+
+  const device = state.devices.find(d => d.id === deviceId);
+  if (!device) return;
+
+  let placed = false;
+  for (const rg of state.roomMeshes) {
+    const dims = rg.userData.dims;
+    if (!dims) continue;
+    const lp = rg.worldToLocal(worldPos.clone());
+    if (lp.x >= 0 && lp.x <= dims.L && lp.z >= 0 && lp.z <= dims.W) {
+      const roomId = rg.userData.id;
+      const room = state.rooms.find(r => r.id === roomId);
+      const zoneRects = room ? getZoneRects(room) : [];
+      const zr = zoneRects.find(z =>
+        lp.x >= z.x_m && lp.x <= z.x_m + z.length_m &&
+        lp.z >= z.y_m && lp.z <= z.y_m + z.width_m
+      );
+      device.roomId = roomId;
+      device.x_m = Math.round(lp.x * 1000) / 1000;
+      device.z_m = Math.round(lp.z * 1000) / 1000;
+      if (zr) device.zone = zr.name || zr.id;
+      placed = true;
+      break;
+    }
+  }
+
+  if (!placed) {
+    toast('Click within the room boundaries to place');
+    state.pendingPlacement = { deviceId };
+    updatePlacementBanner();
+    return;
+  }
+
+  buildScene();
+  renderSidePanel();
+  await saveDevices({ msg: `Placed ${device.name || device.id}` });
+}
+
+function renderDevicePanel(devices) {
+  const titleEl = $('v3dSideTitle'), countEl = $('v3dSideCount');
+  const bodyEl = $('v3dSideBody'), actsEl = $('v3dSideActions');
+  actsEl.hidden = true;
+  if (devices.length === 1) {
+    const dev = devices[0];
+    const room = state.rooms.find(r => r.id === dev.roomId);
+    const zr = dev.zone ? (room ? getZoneRects(room).find(z => z.name === dev.zone || z.id === dev.zone || String(z.id) === String(dev.zone)) : null) : null;
+    const envZ = envForZone(dev.roomId, dev.zone) || envForZone(dev.roomId, zr?.name);
+    const src = envZ?.sensors?.tempC?.sources?.[dev.id];
+    const rhSrc = envZ?.sensors?.rh?.sources?.[dev.id];
+    titleEl.textContent = dev.name || dev.id;
+    countEl.textContent = dev.type || 'Device';
+    bodyEl.innerHTML = `
+      <div class="v3d-side__row">
+        <div class="v3d-kv"><span>Type</span><span>${escapeHtml(dev.type || '-')}</span></div>
+        <div class="v3d-kv"><span>Room</span><span>${escapeHtml(room?.name || dev.roomId || 'unplaced')}</span></div>
+        <div class="v3d-kv"><span>Zone</span><span>${escapeHtml(String(dev.zone ?? 'unassigned'))}</span></div>
+        <div class="v3d-kv"><span>Position</span><span>${dev.x_m != null ? `${dev.x_m}, ${dev.z_m} m` : 'not placed'}</span></div>
+      </div>
+      ${src ? `<div class="v3d-side__row">
+        <div class="v3d-side__section-title">Live Readings</div>
+        ${envKvRow('Temperature', Number(src.current), 'C')}
+        ${rhSrc ? envKvRow('Humidity', Number(rhSrc.current), '%') : ''}
+        ${src.battery != null ? `<div class="v3d-kv"><span>Battery</span><span>${src.battery}%</span></div>` : ''}
+        ${src.updatedAt ? `<div class="v3d-kv"><span>Updated</span><span style="font-size:11px;">${new Date(src.updatedAt).toLocaleTimeString()}</span></div>` : ''}
+      </div>` : '<div class="v3d-empty" style="padding:8px;">No live data — assign to a zone to see readings.</div>'}
+      <div class="v3d-empty" style="padding:8px;font-size:12px;">${state.editMode ? 'Drag to reposition.' : 'Toggle Edit to drag and reposition.'}</div>
+    `;
+  } else {
+    titleEl.textContent = `${devices.length} devices selected`;
+    countEl.textContent = '';
+    bodyEl.innerHTML = devices.map(d => `<div class="v3d-kv"><span>${escapeHtml(d.name || d.id)}</span><span>${escapeHtml(String(d.zone ?? 'unassigned'))}</span></div>`).join('');
+  }
 }
 
 function applyHeatmap() {
@@ -1090,8 +1266,13 @@ async function endDrag() {
   drag.active = false;
   controls.enabled = true; canvas.classList.remove('dragging');
   if (!drag.movedAtLeastOnce) { drag.startMeshes = []; return; }
-  pushHistory();
-  drag.startMeshes.forEach(({ mesh }) => {
+
+  const groupMeshes  = drag.startMeshes.filter(({ mesh }) => mesh.userData.kind === 'group');
+  const deviceMeshes = drag.startMeshes.filter(({ mesh }) => mesh.userData.kind === 'device');
+
+  if (groupMeshes.length) pushHistory();
+
+  groupMeshes.forEach(({ mesh }) => {
     const id = mesh.userData.id;
     const g = state.groups.find(gg => gg.id === id);
     if (!g) return;
@@ -1100,9 +1281,25 @@ async function endDrag() {
     const zr = findZoneForPosition(mesh);
     if (zr) g.zone = zr.name;
   });
-  const n = drag.startMeshes.length;
+
+  deviceMeshes.forEach(({ mesh }) => {
+    const id = mesh.userData.id;
+    const dev = state.devices.find(d => d.id === id);
+    if (!dev) return;
+    dev.x_m = Math.round(mesh.position.x * 1000) / 1000;
+    dev.z_m = Math.round(mesh.position.z * 1000) / 1000;
+    dev.roomId = mesh.parent?.userData?.id || dev.roomId;
+    const zr = findZoneForPosition(mesh);
+    if (zr) dev.zone = zr.name || zr.id;
+  });
+
   drag.startMeshes = [];
-  await saveGroups({ msg: `Saved layout for ${n} system(s)` });
+
+  const saves = [];
+  if (groupMeshes.length) saves.push(saveGroups({ msg: deviceMeshes.length ? null : `Saved layout for ${groupMeshes.length} system(s)`, silent: !!deviceMeshes.length }));
+  if (deviceMeshes.length) saves.push(saveDevices({ msg: `Saved ${deviceMeshes.length} device position(s)` }));
+  await Promise.all(saves);
+  if (groupMeshes.length && deviceMeshes.length) toast(`Saved ${groupMeshes.length} system(s) and ${deviceMeshes.length} device(s)`);
 }
 
 const marquee = { active: false, startX: 0, startY: 0, curX: 0, curY: 0, el: null };
@@ -1146,14 +1343,25 @@ function marqueeEnd(additive) {
 let pointerDownAt = { x: 0, y: 0, t: 0 };
 canvas.addEventListener('pointerdown', (e) => {
   if (e.button !== 0) return;
-  const groupHit = pickFirstByKind(e.clientX, e.clientY, ['group']);
   pointerDownAt = { x: e.clientX, y: e.clientY, t: performance.now() };
-  if (state.editMode && groupHit) {
+
+  // Placement mode: next click places the pending device
+  if (state.pendingPlacement) {
+    setNdcFrom(e.clientX, e.clientY);
+    raycaster.setFromCamera(ndc, camera);
+    const floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+    const hitPt = new THREE.Vector3();
+    if (raycaster.ray.intersectPlane(floorPlane, hitPt)) completePlacement(hitPt);
+    return;
+  }
+
+  const hit = pickFirstByKind(e.clientX, e.clientY, ['group', 'device']);
+  if (state.editMode && hit) {
     canvas.setPointerCapture(e.pointerId); drag.pointerId = e.pointerId;
-    startDrag(groupHit.node, groupHit.point); return;
+    startDrag(hit.node, hit.point); return;
   }
   // Marquee selection only on shift+click (empty space)
-  if (!groupHit && e.shiftKey) {
+  if (!hit && e.shiftKey) {
     canvas.setPointerCapture(e.pointerId); drag.pointerId = e.pointerId;
     marqueeBegin(e.clientX, e.clientY);
   }
@@ -1184,7 +1392,7 @@ canvas.addEventListener('pointercancel', () => {
 let _hoverMesh = null;
 canvas.addEventListener('pointermove', (e) => {
   if (drag.active || marquee.active) return;
-  const hit = pickFirstByKind(e.clientX, e.clientY, ['group']);
+  const hit = pickFirstByKind(e.clientX, e.clientY, ['group', 'device']);
   const next = hit ? hit.node : null;
   if (next === _hoverMesh) return;
   _hoverMesh = next;
@@ -1196,9 +1404,9 @@ canvas.addEventListener('pointermove', (e) => {
 }, { passive: true });
 
 function handleClick(e) {
-  const groupHit = pickFirstByKind(e.clientX, e.clientY, ['group']);
-  if (groupHit) {
-    const id = groupHit.node.userData.id;
+  const equipHit = pickFirstByKind(e.clientX, e.clientY, ['group', 'device']);
+  if (equipHit) {
+    const id = equipHit.node.userData.id;
     if (e.shiftKey) {
       if (state.selection.has(id)) state.selection.delete(id); else state.selection.add(id);
     } else { state.selection.clear(); state.selection.add(id); }
@@ -1226,7 +1434,7 @@ function handleClick(e) {
 }
 
 canvas.addEventListener('dblclick', (e) => {
-  const groupHit = pickFirstByKind(e.clientX, e.clientY, ['group']);
+  const groupHit = pickFirstByKind(e.clientX, e.clientY, ['group', 'device']);
   if (!groupHit) return;
   const target = groupHit.node;
   const fp = target.userData.footprint || { length_m: 1, width_m: 1 };
@@ -1286,6 +1494,20 @@ function renderFarmSummary() {
         ${env && Number.isFinite(env.tempC) ? `<div class="v3d-kv"><span>Temp / RH</span><span>${fmt(env.tempC,1)} C / ${fmt(env.rh,0)} %</span></div>` : ''}
       </div>`;
   }).join('');
+  const unplaced = state.devices.filter(d => !d.roomId || d.x_m == null);
+  const unplacedHtml = unplaced.length ? `
+    <div class="v3d-side__section-title">Unplaced Devices (${unplaced.length})</div>
+    <div class="v3d-room-list">
+      ${unplaced.map(d => `
+        <div class="v3d-room-card" style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;">
+          <div>
+            <div style="font-weight:600;font-size:13px;">${escapeHtml(d.name || d.id)}</div>
+            <div style="font-size:11px;color:var(--v3d-muted);">${escapeHtml(d.type || 'device')}</div>
+          </div>
+          <button class="v3d-btn v3d-place-btn" data-device-id="${escapeHtml(d.id)}" style="font-size:11px;padding:4px 10px;">Place</button>
+        </div>`).join('')}
+    </div>` : '';
+
   bodyEl.innerHTML = `
     <div class="v3d-side__row">
       <div class="v3d-kv"><span>Total rooms</span><span>${state.rooms.length}</span></div>
@@ -1295,8 +1517,16 @@ function renderFarmSummary() {
     </div>
     <div class="v3d-side__section-title">Rooms</div>
     <div class="v3d-room-list">${cards}</div>
-    <div class="v3d-empty" style="padding:12px 4px;">Click a room floor, zone, or growing system to inspect. Shift-click adds to selection. Drag empty space for marquee. Toggle Edit to drag systems.</div>
+    ${unplacedHtml}
+    <div class="v3d-empty" style="padding:12px 4px;">Click a room floor, zone, or system to inspect. Toggle Edit to drag. Click Place to position a device.</div>
   `;
+
+  bodyEl.querySelectorAll('.v3d-place-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      activatePlacement(btn.dataset.deviceId);
+    });
+  });
 }
 
 function renderRoomPanel(roomId) {
@@ -1445,7 +1675,12 @@ function renderGroupPanel(ids) {
 
 function renderSidePanel() {
   const ids = Array.from(state.selection);
-  if (ids.length) { renderGroupPanel(ids); return; }
+  if (ids.length) {
+    const selectedDevices = ids.map(id => state.devices.find(d => d.id === id)).filter(Boolean);
+    const selectedGroups  = ids.map(id => state.groups.find(g => g.id === id)).filter(Boolean);
+    if (selectedDevices.length && !selectedGroups.length) { renderDevicePanel(selectedDevices); return; }
+    if (selectedGroups.length) { renderGroupPanel(ids.filter(id => state.groups.find(g => g.id === id))); return; }
+  }
   if (state.zoneSelection) { renderZonePanel(state.zoneSelection); return; }
   if (state.roomSelection) { renderRoomPanel(state.roomSelection); return; }
   renderFarmSummary();
@@ -1480,13 +1715,21 @@ $('v3dSideActions').addEventListener('click', async (e) => {
 
 async function loadData() {
   const bust = '?_=' + Date.now();
-  const urls = ['/data/rooms.json' + bust, '/data/groups.json' + bust, '/data/grow-systems.json' + bust, '/data/env.json' + bust];
+  const urls = [
+    '/data/rooms.json' + bust,
+    '/data/groups.json' + bust,
+    '/data/grow-systems.json' + bust,
+    '/data/env.json' + bust,
+    '/data/iot-devices.json' + bust,
+  ];
   const results = await Promise.all(urls.map(u => authFetch(u, { cache: 'no-store' }).then(r => r.ok ? r.json() : null).catch(() => null)));
   state.rooms = Array.isArray(results[0]) ? results[0] : (results[0]?.rooms || []);
   state.groups = Array.isArray(results[1]) ? results[1] : (results[1]?.groups || []);
   const gs = results[2];
   state.templates = gs && Array.isArray(gs.templates) ? gs.templates : (Array.isArray(gs) ? gs : []);
   state.env = results[3] && typeof results[3] === 'object' ? results[3] : { zones: [], rooms: {} };
+  const devRaw = results[4];
+  state.devices = Array.isArray(devRaw) ? devRaw : (devRaw?.devices || []);
   buildEnvIndex();
   $('v3dSubtitle').textContent = `${state.rooms.length} room(s), ${state.groups.length} system(s)`;
 }
@@ -1504,13 +1747,16 @@ function wireSSE() {
   };
   try {
     es = new EventSource('/events');
-    ['data-change','rooms-updated','groups-updated','zones-updated','env-updated','sensors-updated'].forEach(evt => {
+    ['data-change','rooms-updated','groups-updated','zones-updated','env-updated','sensors-updated','iot-devices'].forEach(evt => {
       es.addEventListener(evt, queueRefresh);
     });
     es.onerror = () => {};
     window.addEventListener('beforeunload', () => { try { es.close(); } catch (_) {} });
   } catch (_) {}
 }
+
+const _placeCancelBtn = $('v3dPlaceCancelBtn');
+if (_placeCancelBtn) _placeCancelBtn.addEventListener('click', cancelPlacement);
 
 $('v3dFitBtn').addEventListener('click', fitView);
 $('v3dGrowBtn').addEventListener('click', () => window.open('/views/grow-management.html', '_blank', 'noopener'));
@@ -1577,6 +1823,7 @@ window.addEventListener('keydown', (e) => {
   const tag = e.target.tagName;
   if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
   if (e.key === 'Escape') {
+    if (state.pendingPlacement) { cancelPlacement(); return; }
     state.selection.clear(); state.zoneSelection = null; state.roomSelection = null;
     applySelectionVisuals(); renderSidePanel();
   }
