@@ -22049,19 +22049,33 @@ app.get('/api/farm/profile', asyncHandler(async (req, res) => {
     }
     
     const farm = farmResult.rows[0];
-    const jwtSecret = farm.jwt_secret || JWT_SECRET_KEY;
-    
-    // Now verify the token with the farm's specific secret
+    const primaryJwtSecret = farm.jwt_secret || JWT_SECRET_KEY;
+    let verifiedWithFallback = false;
+
     try {
-      jwt.verify(token, jwtSecret);
-    } catch (verifyError) {
-      console.error('[/api/farm/profile] JWT verification failed:', verifyError.message);
-      return res.status(403).json({
-        status: 'error',
-        message: 'Invalid or expired token'
-      });
+      jwt.verify(token, primaryJwtSecret);
+    } catch (primaryVerifyError) {
+      if (farm.jwt_secret && farm.jwt_secret !== JWT_SECRET_KEY) {
+        try {
+          jwt.verify(token, JWT_SECRET_KEY);
+          verifiedWithFallback = true;
+          console.warn(`[/api/farm/profile] JWT verified with fallback secret for farm: ${farmId}`);
+        } catch (fallbackVerifyError) {
+          console.error('[/api/farm/profile] JWT verification failed:', primaryVerifyError.message);
+          return res.status(403).json({
+            status: 'error',
+            message: 'Invalid or expired token'
+          });
+        }
+      } else {
+        console.error('[/api/farm/profile] JWT verification failed:', primaryVerifyError.message);
+        return res.status(403).json({
+          status: 'error',
+          message: 'Invalid or expired token'
+        });
+      }
     }
-    
+
     console.log('[/api/farm/profile] JWT verified successfully for farm:', farmId);
     
     // Fetch rooms for this farm (may not exist yet for new farms)
