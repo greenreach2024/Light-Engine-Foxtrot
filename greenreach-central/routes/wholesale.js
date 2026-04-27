@@ -1785,6 +1785,20 @@ router.get('/catalog', async (req, res, next) => {
         );
       }
 
+      // Enrich network catalog items with _recipe-meta.json descriptions where missing.
+      // The network aggregate only carries descriptions when the upstream LE record has
+      // one, so apply the same enrichment used on the DB path.
+      if (items.length > 0) {
+        const recipeMetaWS = loadRecipeMetaSyncWS();
+        items = items.map(item => {
+          if (!item.description) {
+            const meta = recipeMetaWS[item.product_name] || recipeMetaWS[item.sku_name] || {};
+            if (meta.description) return { ...item, description: meta.description };
+          }
+          return item;
+        });
+      }
+
       // Database fallback: when the network aggregate is empty, build catalog
       // items directly from farm_inventory so the admin dashboard shows products
       if (items.length === 0 && isDatabaseAvailable()) {
