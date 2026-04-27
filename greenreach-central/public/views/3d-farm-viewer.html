@@ -53,15 +53,20 @@
     padding: 6px 10px; font-size: 12px;
   }
   .v3d-side {
-    position: fixed; top: 56px; right: 12px; width: 340px; max-height: calc(100vh - 80px);
+    /* Floating side card — sits comfortably away from the top bar
+       and never spans the full viewport height (which would make it
+       look anchored). max-height is capped so the card always reads
+       as a floating panel; the body scrolls internally when long. */
+    position: fixed; top: 84px; right: 16px; width: 340px;
+    max-height: min(72vh, 640px);
     background: var(--v3d-panel);
     backdrop-filter: blur(14px) saturate(140%);
     -webkit-backdrop-filter: blur(14px) saturate(140%);
     border: 1px solid var(--v3d-panel-border);
-    border-radius: 12px;
+    border-radius: 14px;
     z-index: 9;
     display: flex; flex-direction: column;
-    box-shadow: 0 16px 40px rgba(0,0,0,0.45);
+    box-shadow: 0 18px 48px rgba(0,0,0,0.55);
   }
   .v3d-side__head { display:flex; align-items:center; gap:8px; padding: 12px 14px; border-bottom: 1px solid var(--v3d-panel-border); }
   .v3d-side__title { font-size: 13px; font-weight: 600; }
@@ -254,5 +259,9 @@ _canvas.addEventListener('touchmove',  (e) => {
 } }
 </script>
 <script type="module" src="/js/3d-farm-viewer-v2.js"></script>
+<!-- E.V.I.E. presence (ambient orb + Talk-to-Evie). The 3D viewer was
+     missing this include, so Evie never mounted on this page. -->
+<link rel="stylesheet" href="/styles/evie-core.css">
+<script src="/js/evie-presence.js"></script>
 </body>
 </html>

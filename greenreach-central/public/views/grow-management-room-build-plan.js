@@ -748,9 +748,11 @@
       // we reach this branch we genuinely want totalCapacity.
       state.desiredUnits = totalCapacity;
     } else {
-      // Keep the manual value inside [0, totalCapacity] so the spatial plan
-      // and the "max N across all zones" hint stay consistent.
-      state.desiredUnits = Math.max(0, Math.min(state.desiredUnits || 0, totalCapacity));
+      // The solver's totalCapacity is a *recommendation* based on default
+      // walkway clearance — operators routinely fit more units by
+      // tightening aisles, double-stacking, or laying racks differently.
+      // Do NOT cap the manual value to totalCapacity; only floor at 0.
+      state.desiredUnits = Math.max(0, state.desiredUnits || 0);
     }
     const desired = Math.max(0, Math.round(state.desiredUnits || 0));
 
@@ -813,8 +815,8 @@
         </div>
         <div class="rbp-ctl">
           <label for="${UNIT_COUNT_ID}">Grow units</label>
-          <input id="${UNIT_COUNT_ID}" type="number" min="0" max="${totalCapacity}" step="1" value="${desired}"/>
-          <span class="rbp-ctl__hint">${state.autoFit ? 'auto-fit: ' + totalCapacity : 'manual'} · max ${totalCapacity} across all zones</span>
+          <input id="${UNIT_COUNT_ID}" type="number" min="0" step="1" value="${desired}"/>
+          <span class="rbp-ctl__hint">${state.autoFit ? 'auto-fit: ' + totalCapacity : 'manual'} · solver fits ${totalCapacity} with default clearance — you can override</span>
         </div>
         <div class="rbp-ctl rbp-ctl--toggle">
           <input id="${AUTOFIT_ID}" type="checkbox" ${state.autoFit ? 'checked' : ''}/>
