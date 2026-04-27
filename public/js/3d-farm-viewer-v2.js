@@ -55,6 +55,11 @@ const state = {
   showSensors: true,
   walkwayMode: false,
   collapsedZoneSystems: new Set(),
+  // Harvest readiness + crop pricing — populated by loadData() from
+  // /api/harvest/predictions/all and /api/crop-pricing. The Light Engine
+  // calculates readiness server-side; the viewer just displays it.
+  harvestPredictions: new Map(), // groupId -> prediction
+  cropPricing: new Map(),        // crop name (lowercased) -> pricing entry
 };
 
 let toastTimer = null;
@@ -643,6 +648,125 @@ function inSetpoint(v, sp) {
   return true;
 }
 
+// ---- harvest readiness + crop value helpers --------------------------------
+// All readiness/value numbers are sourced from the Light Engine
+// (/api/harvest/predictions/all + /api/crop-pricing). The viewer is
+// purely a presentation layer for these fields.
+function getGroupCrop(group) {
+  if (!group) return '';
+  const direct = group.crop || group.customization?.crop || '';
+  if (direct) return String(direct);
+  const pred = state.harvestPredictions.get(group.id);
+  return pred?.crop ? String(pred.crop) : '';
+}
+
+function getGroupReadiness(group) {
+  if (!group) return null;
+  const pred = state.harvestPredictions.get(group.id);
+  if (!pred || !pred.seedDate) return null;
+  const seed = new Date(pred.seedDate);
+  const harvest = pred.predictedDate ? new Date(pred.predictedDate) : null;
+  if (!Number.isFinite(seed.getTime())) return null;
+  const now = Date.now();
+  const totalMs = harvest ? (harvest.getTime() - seed.getTime()) : null;
+  const elapsedMs = now - seed.getTime();
+  const dps = Math.max(0, Math.floor(elapsedMs / 86400000));
+  const totalDays = totalMs ? Math.max(1, Math.round(totalMs / 86400000)) : null;
+  let progressPct = null;
+  if (totalDays) progressPct = Math.max(0, Math.min(1.05, elapsedMs / totalMs));
+  const daysRemaining = Number.isFinite(pred.daysRemaining)
+    ? pred.daysRemaining
+    : (harvest ? Math.ceil((harvest.getTime() - now) / 86400000) : null);
+  return {
+    crop: pred.crop || getGroupCrop(group) || '',
+    seedDate: pred.seedDate,
+    predictedDate: pred.predictedDate || null,
+    dps,
+    totalDays,
+    daysRemaining,
+    progressPct,                                // 0..1+ (>1 means past predicted)
+    overdue: daysRemaining != null && daysRemaining < 0,
+    ready: daysRemaining != null && daysRemaining <= 0 && daysRemaining >= -3,
+    confidence: pred.confidence || null,
+  };
+}
+
+function getGroupValue(group, readiness) {
+  if (!group) return null;
+  const crop = (readiness?.crop || getGroupCrop(group) || '').trim();
+  if (!crop) return null;
+  const price = state.cropPricing.get(crop.toLowerCase());
+  if (!price) return null;
+  const c = group.customization || {};
+  const units = Number(c.totalLocations) || Number(group.plants) || Number(group.trays) || 0;
+  if (!units) return null;
+  const retail = Number(price.retailPrice) || 0;
+  if (!retail) return null;
+  const fullValue = units * retail;
+  const pct = readiness?.progressPct != null ? Math.max(0, Math.min(1, readiness.progressPct)) : 1;
+  return {
+    today: fullValue * pct,
+    full: fullValue,
+    units,
+    unit: price.unit || 'unit',
+    retailPrice: retail,
+    currency: price.currency || 'CAD',
+  };
+}
+
+// Map a 0..1 progress value to a readiness color.
+// Stops: blue (just seeded) -> green (mid-veg) -> amber (approaching) ->
+// hot orange (ready) -> red (overdue). Reuses the existing palette so the
+// 3D viewer stays visually coherent with the env heatmap.
+function readinessColor(pct) {
+  if (!Number.isFinite(pct)) return null;
+  return heatColor(pct, 0, 1);
+}
+
+// Replace the shared canopy material on every mesh under `meshGroup`
+// with a per-group clone tinted to the readiness color. The original
+// shared materials (matCanopy etc.) are never mutated.
+function applyReadinessTint(meshGroup, readiness) {
+  if (!meshGroup || !readiness || readiness.progressPct == null) return;
+  const color = readinessColor(readiness.progressPct);
+  if (!color) return;
+  // Slight emissive boost when ready/overdue so the unit "glows" at harvest.
+  const emissiveBoost = readiness.ready || readiness.overdue ? 0.35 : 0.10;
+  const seen = new WeakMap();
+  meshGroup.traverse((n) => {
+    if (!n || !n.material) return;
+    const mat = n.material;
+    if (mat !== matCanopy) return;
+    let cloned = seen.get(mat);
+    if (!cloned) {
+      cloned = mat.clone();
+      cloned.color = color.clone();
+      cloned.emissive = color.clone().multiplyScalar(0.3);
+      cloned.emissiveIntensity = emissiveBoost;
+      seen.set(mat, cloned);
+    }
+    n.material = cloned;
+  });
+}
+
+// Floating label that identifies the crop and remaining days. Sized
+// smaller than the room/zone labels so it doesn't overwhelm the scene.
+function makeReadinessLabel(crop, readiness) {
+  let text;
+  if (readiness && readiness.daysRemaining != null) {
+    if (readiness.overdue) text = `${crop || 'Crop'} · OVERDUE`;
+    else if (readiness.ready) text = `${crop || 'Crop'} · READY`;
+    else text = `${crop || 'Crop'} · ${readiness.daysRemaining}d`;
+  } else if (crop) {
+    text = crop;
+  } else {
+    return null;
+  }
+  const sp = makeLabelSprite(text);
+  sp.scale.multiplyScalar(0.7);
+  return sp;
+}
+
 function buildScene() {
   clearGroupChildren(farmRoot);
   state.meshIndex.clear();
@@ -841,6 +965,18 @@ function placeGroupsInZone(roomGroup, zr, groupsArr, room, walkways = []) {
     if (rotate) mesh.rotation.y = Math.PI / 2;
     mesh.userData = { kind: 'group', id: group.id, group, footprint: built.footprint, rotate, height: built.height || 1.5, roomId: room.id, zoneRect: zr };
     mesh.name = `group:${group.id}`;
+    // Tint canopy by % of harvest progress + add a small floating crop /
+    // countdown label so units are identifiable from camera distance.
+    const readiness = getGroupReadiness(group);
+    applyReadinessTint(mesh, readiness);
+    const cropName = getGroupCrop(group);
+    const lbl = makeReadinessLabel(cropName, readiness);
+    if (lbl) {
+      const lblY = (built.height || 1.5) + 0.35;
+      lbl.position.set(posX, lblY, posY);
+      lbl.userData = { kind: 'groupLabel', groupId: group.id };
+      roomGroup.add(lbl);
+    }
     roomGroup.add(mesh);
     state.meshIndex.set(group.id, mesh);
 
@@ -1665,6 +1801,56 @@ function renderGroupPanel(ids) {
     titleEl.textContent = g.name || g.id;
     countEl.textContent = tpl?.category || '';
     const fp = groupFootprintM(g);
+    const readiness = getGroupReadiness(g);
+    const cropName = getGroupCrop(g);
+    const value = getGroupValue(g, readiness);
+    const fmtDate = (iso) => {
+      if (!iso) return '—';
+      try { return new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }); }
+      catch { return '—'; }
+    };
+    const fmtMoney = (n, cur = 'CAD') => {
+      if (!Number.isFinite(n)) return '—';
+      try { return new Intl.NumberFormat(undefined, { style: 'currency', currency: cur, maximumFractionDigits: 2 }).format(n); }
+      catch { return `$${n.toFixed(2)}`; }
+    };
+    let countdownText = '—';
+    let readinessTag = '';
+    if (readiness && readiness.daysRemaining != null) {
+      if (readiness.overdue) {
+        countdownText = `OVERDUE by ${Math.abs(readiness.daysRemaining)}d`;
+        readinessTag = `<span class="v3d-tag" style="background:#5a1414;color:#ffb4b4;">Overdue</span>`;
+      } else if (readiness.ready) {
+        countdownText = `Ready (${readiness.daysRemaining}d)`;
+        readinessTag = `<span class="v3d-tag" style="background:#3b2a08;color:#ffd089;">Ready</span>`;
+      } else {
+        countdownText = `${readiness.daysRemaining}d remaining`;
+      }
+    }
+    const pctNum = readiness && readiness.progressPct != null
+      ? Math.round(Math.max(0, Math.min(1, readiness.progressPct)) * 100)
+      : null;
+    const barColor = readiness && readiness.progressPct != null
+      ? '#' + readinessColor(readiness.progressPct).getHexString()
+      : '#3a4a60';
+    const progressBlock = pctNum != null
+      ? `<div class="v3d-kv"><span>Progress</span><span>${pctNum}%</span></div>
+         <div style="height:6px;background:#1a2533;border-radius:4px;overflow:hidden;margin-top:4px;">
+           <div style="width:${pctNum}%;height:100%;background:${barColor};"></div>
+         </div>`
+      : '';
+    const harvestBlock = (cropName || readiness)
+      ? `<div class="v3d-side__row">
+           <div class="v3d-side__section-title">Harvest readiness</div>
+           <div class="v3d-kv"><span>Crop</span><span>${escapeHtml(cropName || '—')} ${readinessTag}</span></div>
+           <div class="v3d-kv"><span>Seed date</span><span>${fmtDate(readiness?.seedDate)}</span></div>
+           <div class="v3d-kv"><span>Predicted harvest</span><span>${fmtDate(readiness?.predictedDate)}</span></div>
+           <div class="v3d-kv"><span>Countdown</span><span>${escapeHtml(countdownText)}</span></div>
+           ${progressBlock}
+           ${value ? `<div class="v3d-kv" style="margin-top:6px;"><span>Value today</span><span>${escapeHtml(fmtMoney(value.today, value.currency))}</span></div>
+             <div class="v3d-kv"><span>Value at harvest</span><span>${escapeHtml(fmtMoney(value.full, value.currency))} <span style="opacity:.6;">(${value.units} ${escapeHtml(value.unit)})</span></span></div>` : ''}
+         </div>`
+      : '';
     bodyEl.innerHTML = `
       <div class="v3d-side__row">
         <div class="v3d-kv"><span>Room</span><span>${escapeHtml(g.room || '-')}${dims?` (${fmt(dims.L,1)}x${fmt(dims.W,1)}m)`:''}</span></div>
@@ -1672,6 +1858,7 @@ function renderGroupPanel(ids) {
         <div class="v3d-kv"><span>Template</span><span>${escapeHtml(g.templateId || '-')}</span></div>
         <div class="v3d-kv"><span>Status</span><span><span class="v3d-tag ${g.status === 'active' ? 'v3d-tag--ok' : ''}">${escapeHtml(g.status || 'pending')}</span></span></div>
       </div>
+      ${harvestBlock}
       <div class="v3d-side__row">
         <div class="v3d-side__section-title">Geometry</div>
         <div class="v3d-kv"><span>Levels</span><span>${fmt(c.levels, 0)}</span></div>
@@ -1683,7 +1870,6 @@ function renderGroupPanel(ids) {
       <div class="v3d-side__row">
         <div class="v3d-side__section-title">Operations</div>
         <div class="v3d-kv"><span>Lights</span><span>${(g.lights || []).length}</span></div>
-        <div class="v3d-kv"><span>Crop</span><span>${escapeHtml(g.crop || '-')}</span></div>
         <div class="v3d-kv"><span>Plan</span><span>${escapeHtml(g.planId || g.plan || '-')}</span></div>
       </div>
       ${env ? `<div class="v3d-side__row">${envBlockHtml(env)}</div>` : ''}
@@ -1756,6 +1942,32 @@ async function loadData() {
   state.templates = gs && Array.isArray(gs.templates) ? gs.templates : (Array.isArray(gs) ? gs : []);
   state.env = results[3] && typeof results[3] === 'object' ? results[3] : { zones: [], rooms: {} };
   buildEnvIndex();
+
+  // Pull LE-side harvest predictions + crop pricing in parallel. These are
+  // optional — the viewer renders normally if either endpoint is missing
+  // (e.g. running offline against /data/*.json only).
+  await Promise.all([
+    authFetch('/api/harvest/predictions/all' + bust, { cache: 'no-store' })
+      .then(r => r && r.ok ? r.json() : null)
+      .then(d => {
+        state.harvestPredictions.clear();
+        const list = Array.isArray(d?.predictions) ? d.predictions : [];
+        list.forEach(p => { if (p && p.groupId) state.harvestPredictions.set(p.groupId, p); });
+      })
+      .catch(() => { /* keep prior map */ }),
+    authFetch('/api/crop-pricing' + bust, { cache: 'no-store' })
+      .then(r => r && r.ok ? r.json() : null)
+      .then(d => {
+        state.cropPricing.clear();
+        const crops = Array.isArray(d?.pricing?.crops) ? d.pricing.crops
+          : (Array.isArray(d?.crops) ? d.crops : []);
+        crops.forEach(c => {
+          if (c && c.crop) state.cropPricing.set(String(c.crop).toLowerCase(), c);
+        });
+      })
+      .catch(() => { /* keep prior map */ }),
+  ]);
+
   $('v3dSubtitle').textContent = `${state.rooms.length} room(s), ${state.groups.length} system(s)`;
 }
 
