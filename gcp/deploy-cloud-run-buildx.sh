@@ -7,7 +7,7 @@
 #      Apple Silicon builds ARM by default)
 #   3. Services deploy independently — a change scoped to one service
 #      does not require rebuilding the other
-#   4. Manual only — git pushes do NOT trigger deploys
+#   4. Invocation-controlled — can be run manually or by CI automation
 #
 # Usage:
 #   gcp/deploy-cloud-run-buildx.sh --service le          # just light-engine
