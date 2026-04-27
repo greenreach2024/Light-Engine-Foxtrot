@@ -3829,15 +3829,30 @@ router.post('/checkout/execute', checkoutLimiter, requireWholesaleDbForCriticalP
     if (!Array.isArray(cart) || cart.length === 0) throw new ValidationError('cart is required');
 
     // ── Duplicate checkout guard ──────────────────────────────────────────
-    // Hash the buyer + sorted cart + delivery date to detect resubmissions.
-    // If an order with the same fingerprint was placed in the last 5 minutes,
-    // return the existing order instead of charging the buyer again.
+    // Hash the buyer + sorted cart + delivery date + delivery details +
+    // payment source to detect resubmissions. If an order with the same
+    // fingerprint was placed in the last 5 minutes, return the existing
+    // order instead of charging the buyer again.
+    //
+    // The fingerprint also drives the Square idempotency key, so it must
+    // change whenever the request payload's payment-relevant fields change.
+    // Otherwise Square rejects retries with "Different request parameters
+    // used for the same idempotency_key" — e.g. a buyer fixing an empty
+    // delivery address after a failed attempt would otherwise be blocked.
     const cartFingerprint = crypto.createHash('sha256').update(
       JSON.stringify({
         buyer: req.wholesaleBuyer.id,
         cart: [...cart].sort((a, b) => (a.sku_id || '').localeCompare(b.sku_id || '')),
         delivery_date,
-        payment_provider: normalizedPaymentProvider
+        payment_provider: normalizedPaymentProvider,
+        fulfillment_method: isPickup ? 'pickup' : 'delivery',
+        delivery_address: isPickup ? null : {
+          street: normalizedDeliveryAddress?.street || '',
+          city: normalizedDeliveryAddress?.city || '',
+          zip: normalizedDeliveryAddress?.zip || '',
+          province: normalizedDeliveryAddress?.province || ''
+        },
+        payment_source_id: squareSourceId || null
       })
     ).digest('hex');
 
