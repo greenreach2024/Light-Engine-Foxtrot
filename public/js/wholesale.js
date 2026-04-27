@@ -1487,6 +1487,8 @@
           'spring-mix-organic': 'mixed-greens',
           'mixed-greens-organic': 'mixed-greens',
           'spicy-mixed-greens-organic': 'spicy-mixed-greens',
+          'spicy-mix': 'spicy-mixed-greens',
+          'spicy-mixed-greens': 'spicy-mixed-greens',
           'chard': 'swiss-chard',
           'swiss-chard': 'swiss-chard',
           'rainbow-swiss-chard': 'swiss-chard',

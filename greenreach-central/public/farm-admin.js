@@ -1282,7 +1282,7 @@ const LB_TO_100G = 0.22046; // 1 lb = 453.592g, so 100g/453.592g = 0.22046
 const DEFAULT_SKU_FACTOR = 0.75;
 
 // Pricing version - increment this when defaultPricing changes to force localStorage clear
-const PRICING_VERSION = '2026-04-10-v14';
+const PRICING_VERSION = '2026-04-26-v15';
 // Unit-of-measure map for Canadian packaged-goods pricing
 // 'weight' = sold by weight ($/oz or $/25g), 'pint' = sold per pint, 'unit' = sold per item
 const cropUnitMap = {
@@ -1381,6 +1381,8 @@ const defaultPricing = {
     'Organic Mixed Greens': { retail: 21.35, ws1: 15, ws2: 25, ws3: 35 },
     'Spring Mix': { retail: 21.35, ws1: 15, ws2: 25, ws3: 35 },
     'Salad Mix': { retail: 21.99, ws1: 15, ws2: 25, ws3: 35 },
+    'Spicy Mix': { retail: 21.35, ws1: 15, ws2: 25, ws3: 35 },
+    'Spicy Mixed Greens': { retail: 21.35, ws1: 15, ws2: 25, ws3: 35 },
     'Escarole Batavian': { retail: 21.35, ws1: 15, ws2: 25, ws3: 35 },
     'Sorrel': { retail: 21.35, ws1: 15, ws2: 25, ws3: 35 },
 
@@ -1526,8 +1528,30 @@ async function loadCropsFromDatabase() {
                 });
             }
         };
-        ensurePricingRow('Spring Mix', defaultPricing['Spring Mix'] || { retail: 21.35, ws1: 15, ws2: 25, ws3: 35 });
-        ensurePricingRow('Salad Mix', defaultPricing['Salad Mix'] || { retail: 21.99, ws1: 15, ws2: 25, ws3: 35 });
+        // Dynamically load all active salad mix templates from the API and inject into pricing.
+        // Any mix added in the admin will automatically appear here without code changes.
+        window._saladMixNames = new Set(['Spring Mix', 'Salad Mix', 'Spicy Mix']);
+        try {
+            const mixRes = await fetch(`${API_BASE}/api/farm/salad-mixes`, {
+                headers: currentSession?.token ? { 'Authorization': `Bearer ${currentSession.token}` } : undefined
+            });
+            if (mixRes.ok) {
+                const mixData = await mixRes.json();
+                if (mixData.success && Array.isArray(mixData.mixes)) {
+                    window._saladMixNames = new Set(mixData.mixes.map(m => m.name));
+                    for (const mix of mixData.mixes) {
+                        ensurePricingRow(mix.name, defaultPricing[mix.name] || { retail: 21.35, ws1: 15, ws2: 25, ws3: 35 });
+                    }
+                }
+            }
+        } catch (mixErr) {
+            console.warn('[Pricing] Could not load salad mix templates:', mixErr.message);
+        }
+        // Fallback: always ensure core mixes are visible even if the API is unavailable
+        ['Spring Mix', 'Salad Mix', 'Spicy Mix'].forEach(name => {
+            ensurePricingRow(name, defaultPricing[name] || { retail: 21.35, ws1: 15, ws2: 25, ws3: 35 });
+            window._saladMixNames.add(name);
+        });
 
         pricingData.sort((a, b) => String(a?.crop || '').localeCompare(String(b?.crop || '')));
 
@@ -1613,19 +1637,20 @@ function togglePricingUnit() {
 function renderPricingTable() {
     const tbody = document.querySelector('#pricing-table tbody');
     if (!tbody) return;
-    
+
     const weightUnitLabel = isPerGram ? '/100g' : '/lb';
-    
+
     // Update header labels to show weight unit (majority of crops)
     document.getElementById('unit-retail').textContent = `($${weightUnitLabel})`;
-    
-    tbody.innerHTML = pricingData.map((item, index) => {
+
+    const saladMixNames = window._saladMixNames || new Set();
+
+    const buildRow = (item, index) => {
         const cropUnit = getCropUnit(item.crop);
         const isWeightCrop = cropUnit === 'weight';
         const displayRetail = (isWeightCrop && isPerGram) ? convertPrice(item.retail, true) : item.retail;
         const formulaWS = calculateFormulaWholesalePrice(displayRetail, item.floor_price, item.sku_factor);
         const unitBadge = !isWeightCrop ? ` <span style="font-size: 11px; color: var(--text-muted); font-weight: 400;">(${getCropUnitLabel(item.crop)})</span>` : '';
-        
         const bm = (window._benchmarkConfigs || {})[item.crop] || 'direct';
         return `
             <tr>
@@ -1639,60 +1664,51 @@ function renderPricingTable() {
                     </select>
                 </td>
                 <td>
-                    <input 
-                        type="number" 
-                        class="pricing-input" 
-                        value="${displayRetail.toFixed(2)}" 
-                        step="0.01" 
-                        min="0"
-                        data-index="${index}"
-                        data-field="retail"
-                        onchange="updatePricing(${index}, 'retail', this.value)"
-                    >
+                    <input type="number" class="pricing-input" value="${displayRetail.toFixed(2)}" step="0.01" min="0"
+                        data-index="${index}" data-field="retail" onchange="updatePricing(${index}, 'retail', this.value)">
                 </td>
                 <td>
-                    <input 
-                        type="number" 
-                        class="pricing-input" 
-                        value="${(item.floor_price || 0).toFixed(2)}" 
-                        step="0.01" 
-                        min="0"
-                        data-index="${index}"
-                        data-field="floor_price"
-                        onchange="updatePricing(${index}, 'floor_price', this.value)"
-                        style="width: 70px;"
-                    >
+                    <input type="number" class="pricing-input" value="${(item.floor_price || 0).toFixed(2)}" step="0.01" min="0"
+                        data-index="${index}" data-field="floor_price" onchange="updatePricing(${index}, 'floor_price', this.value)"
+                        style="width: 70px;">
                 </td>
                 <td>
-                    <input 
-                        type="number" 
-                        class="pricing-input" 
-                        value="${DEFAULT_SKU_FACTOR.toFixed(2)}" 
-                        step="0.01" 
-                        min="0.75" 
-                        max="0.75"
-                        data-index="${index}"
-                        data-field="sku_factor"
-                        readonly
-                        disabled
-                        title="SKU factor is fixed at 0.75 for all crops"
-                        style="width: 60px; opacity: 0.8; cursor: not-allowed;"
-                    >
+                    <input type="number" class="pricing-input" value="${DEFAULT_SKU_FACTOR.toFixed(2)}" step="0.01" min="0.75" max="0.75"
+                        data-index="${index}" data-field="sku_factor" readonly disabled
+                        title="SKU factor is fixed at 0.75 for all crops" style="width: 60px; opacity: 0.8; cursor: not-allowed;">
                 </td>
                 <td class="calculated-price" style="font-weight: 600; color: var(--accent-green, #22c55e);">$${formulaWS.toFixed(2)}</td>
                 <td style="text-align: center;">
-                    <input 
-                        type="checkbox" 
-                        ${item.isTaxable ? 'checked' : ''}
-                        data-index="${index}"
-                        data-field="isTaxable"
+                    <input type="checkbox" ${item.isTaxable ? 'checked' : ''}
+                        data-index="${index}" data-field="isTaxable"
                         onchange="updatePricing(${index}, 'isTaxable', this.checked)"
-                        style="cursor: pointer; width: 18px; height: 18px;"
-                    >
+                        style="cursor: pointer; width: 18px; height: 18px;">
                 </td>
             </tr>
         `;
-    }).join('');
+    };
+
+    const sectionHeaderRow = (label, icon) => `
+        <tr class="pricing-section-header" style="background: var(--bg-secondary, #1e293b); pointer-events: none;">
+            <td colspan="7" style="padding: 10px 14px; font-size: 12px; font-weight: 700; letter-spacing: 0.08em;
+                text-transform: uppercase; color: var(--text-muted, #94a3b8); border-bottom: 1px solid var(--border-color, #334155);">
+                ${icon}&nbsp;&nbsp;${label}
+            </td>
+        </tr>
+    `;
+
+    const saladRows = pricingData.filter(item => saladMixNames.has(item.crop));
+    const regularRows = pricingData.filter(item => !saladMixNames.has(item.crop));
+
+    let html = '';
+    if (saladRows.length > 0) {
+        html += sectionHeaderRow('Salad Mixes', '🥗');
+        html += saladRows.map(item => buildRow(item, pricingData.indexOf(item))).join('');
+        html += sectionHeaderRow('Crops', '🌱');
+    }
+    html += regularRows.map(item => buildRow(item, pricingData.indexOf(item))).join('');
+
+    tbody.innerHTML = html;
 }
 
 /**
