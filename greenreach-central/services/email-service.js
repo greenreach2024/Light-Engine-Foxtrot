@@ -3,16 +3,16 @@
  * Transport: Google Workspace SMTP (smtp.gmail.com).
  * Fallback: console log stub in dev.
  *
- * Google SMTP requires an App Password for info@greenreachgreens.com.
+ * Google SMTP requires an App Password for peter@greenreachgreens.com.
  * Generate at: https://myaccount.google.com/apppasswords
- * Set SMTP_HOST=smtp.gmail.com, SMTP_PORT=587, SMTP_USER=info@greenreachgreens.com,
+ * Set SMTP_HOST=smtp.gmail.com, SMTP_PORT=587, SMTP_USER=peter@greenreachgreens.com,
  * SMTP_PASS=<app-password> in Cloud Run env / Secret Manager.
  */
 
 import nodemailer from 'nodemailer';
 import notificationStore from './notification-store.js';
 
-const FROM_EMAIL = process.env.FROM_EMAIL || process.env.EMAIL_FROM || 'info@greenreachgreens.com';
+const FROM_EMAIL = process.env.FROM_EMAIL || process.env.EMAIL_FROM || 'peter@greenreachgreens.com';
 const FROM_NAME = process.env.FROM_NAME || 'GreenReach Farms';
 
 // Business address for CAN-SPAM / CASL compliance (included in all email footers)
@@ -122,6 +122,35 @@ class EmailService {
     return this.sendEmail({
       to: buyer.email,
       subject: `Order Confirmation #${order.master_order_id}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9;">
+          <div style="background-color: #ffffff; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+            <h1 style="color: #2d3748; margin-bottom: 20px; font-size: 24px;">Order Confirmation</h1>
+            <p style="color: #4a5568; font-size: 16px; line-height: 1.6;">Hi ${buyer.contactName || buyer.businessName},</p>
+            <p style="color: #4a5568; font-size: 16px; line-height: 1.6;">Thank you for your order <strong>#${order.master_order_id}</strong>. We're excited to fulfill your wholesale needs!</p>
+            
+            <div style="background-color: #f7fafc; padding: 20px; border-radius: 6px; margin: 20px 0;">
+              <h3 style="color: #2d3748; margin-top: 0; font-size: 18px;">Order Details</h3>
+              <p style="margin: 5px 0; color: #4a5568;"><strong>Total:</strong> $${Number(order.grand_total || 0).toFixed(2)} CAD</p>
+              ${order.delivery_date ? `<p style="margin: 5px 0; color: #4a5568;"><strong>Delivery Date:</strong> ${order.delivery_date}</p>` : ''}
+            </div>
+            
+            <div style="background-color: #f7fafc; padding: 20px; border-radius: 6px; margin: 20px 0;">
+              <h3 style="color: #2d3748; margin-top: 0; font-size: 18px;">Items Ordered</h3>
+              <div style="color: #4a5568; line-height: 1.6;">
+                ${items ? items.split('\n').map(item => `<div style="margin: 5px 0;">${item}</div>`).join('') : '<p>See your account for detailed item list</p>'}
+              </div>
+            </div>
+            
+            <p style="color: #4a5568; font-size: 16px; line-height: 1.6;">You can check your order status anytime in the <a href="https://greenreachgreens.com/wholesale" style="color: #10b981; text-decoration: none;">wholesale portal</a>.</p>
+            
+            <div style="border-top: 1px solid #e2e8f0; margin: 30px 0; padding-top: 20px;">
+              <p style="color: #718096; font-size: 14px; margin: 0;">Questions? Reply to this email or contact peter@greenreachgreens.com</p>
+              <p style="color: #718096; font-size: 14px; margin: 10px 0 0 0;">-- GreenReach Farms<br>${BUSINESS_ADDRESS}</p>
+            </div>
+          </div>
+        </div>
+      `,
       text: [
         `Hi ${buyer.contactName || buyer.businessName},`,
         '',
@@ -137,7 +166,7 @@ class EmailService {
         '',
         '-- GreenReach Farms',
         `${BUSINESS_ADDRESS}`,
-        'info@greenreachgreens.com | greenreachgreens.com'
+        'peter@greenreachgreens.com | greenreachgreens.com'
       ].filter(Boolean).join('\n')
     });
   }
@@ -166,29 +195,50 @@ class EmailService {
     ).join('');
 
     const html = `
-      <h2 style="color:#2d3748;">Invoice ${invoice_number || order_id || ''}</h2>
-      <p>Hi ${buyer_name || 'there'},</p>
-      <p>Please find your invoice details below:</p>
-      <table style="width:100%;border-collapse:collapse;margin:16px 0;">
-        <thead>
-          <tr style="background:#f7fafc;">
-            <th style="padding:8px;text-align:left;border-bottom:2px solid #e2e8f0;">Item</th>
-            <th style="padding:8px;text-align:center;border-bottom:2px solid #e2e8f0;">Qty</th>
-            <th style="padding:8px;text-align:right;border-bottom:2px solid #e2e8f0;">Unit Price</th>
-            <th style="padding:8px;text-align:right;border-bottom:2px solid #e2e8f0;">Total</th>
-          </tr>
-        </thead>
-        <tbody>${lineItems}</tbody>
-        <tfoot>
-          <tr><td colspan="3" style="padding:8px;text-align:right;font-weight:bold;">Subtotal:</td><td style="padding:8px;text-align:right;">$${Number(subtotal).toFixed(2)}</td></tr>
-          <tr><td colspan="3" style="padding:8px;text-align:right;font-weight:bold;">Tax (HST):</td><td style="padding:8px;text-align:right;">$${Number(tax_amount).toFixed(2)}</td></tr>
-          <tr><td colspan="3" style="padding:8px;text-align:right;font-weight:bold;font-size:16px;">Total Due:</td><td style="padding:8px;text-align:right;font-weight:bold;font-size:16px;">$${Number(total).toFixed(2)} CAD</td></tr>
-        </tfoot>
-      </table>
-      <p><strong>Payment Terms:</strong> ${payment_terms}</p>
-      ${due_date ? `<p><strong>Due Date:</strong> ${due_date}</p>` : ''}
-      <p>If you have questions about this invoice, reply to this email or contact us at info@greenreachgreens.com.</p>
-      <p>-- GreenReach Farms</p>
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9;">
+        <div style="background-color: #ffffff; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+          <h1 style="color: #2d3748; margin-bottom: 20px; font-size: 24px;">Invoice ${invoice_number || order_id || ''}</h1>
+          <p style="color: #4a5568; font-size: 16px; line-height: 1.6;">Hi ${buyer_name || 'there'},</p>
+          <p style="color: #4a5568; font-size: 16px; line-height: 1.6;">Please find your invoice details below:</p>
+          
+          <table style="width:100%; border-collapse: collapse; margin: 20px 0; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 6px; overflow: hidden;">
+            <thead>
+              <tr style="background-color: #f7fafc;">
+                <th style="padding: 12px; text-align: left; border-bottom: 2px solid #e2e8f0; font-weight: 600; color: #2d3748;">Item</th>
+                <th style="padding: 12px; text-align: center; border-bottom: 2px solid #e2e8f0; font-weight: 600; color: #2d3748;">Qty</th>
+                <th style="padding: 12px; text-align: right; border-bottom: 2px solid #e2e8f0; font-weight: 600; color: #2d3748;">Unit Price</th>
+                <th style="padding: 12px; text-align: right; border-bottom: 2px solid #e2e8f0; font-weight: 600; color: #2d3748;">Total</th>
+              </tr>
+            </thead>
+            <tbody>${lineItems}</tbody>
+            <tfoot>
+              <tr style="background-color: #f7fafc;">
+                <td colspan="3" style="padding: 12px; text-align: right; font-weight: bold; color: #2d3748;">Subtotal:</td>
+                <td style="padding: 12px; text-align: right; font-weight: bold; color: #2d3748;">$${Number(subtotal).toFixed(2)}</td>
+              </tr>
+              <tr style="background-color: #f7fafc;">
+                <td colspan="3" style="padding: 12px; text-align: right; font-weight: bold; color: #2d3748;">Tax (HST):</td>
+                <td style="padding: 12px; text-align: right; font-weight: bold; color: #2d3748;">$${Number(tax_amount).toFixed(2)}</td>
+              </tr>
+              <tr style="background-color: #f7fafc; border-top: 2px solid #e2e8f0;">
+                <td colspan="3" style="padding: 12px; text-align: right; font-weight: bold; font-size: 18px; color: #2d3748;">Total Due:</td>
+                <td style="padding: 12px; text-align: right; font-weight: bold; font-size: 18px; color: #10b981;">$${Number(total).toFixed(2)} CAD</td>
+              </tr>
+            </tfoot>
+          </table>
+          
+          <div style="background-color: #f7fafc; padding: 20px; border-radius: 6px; margin: 20px 0;">
+            <p style="margin: 0; color: #4a5568;"><strong>Payment Terms:</strong> ${payment_terms}</p>
+            ${due_date ? `<p style="margin: 10px 0 0 0; color: #4a5568;"><strong>Due Date:</strong> ${due_date}</p>` : ''}
+          </div>
+          
+          <p style="color: #4a5568; font-size: 16px; line-height: 1.6;">If you have questions about this invoice, reply to this email or contact us at peter@greenreachgreens.com.</p>
+          
+          <div style="border-top: 1px solid #e2e8f0; margin: 30px 0; padding-top: 20px;">
+            <p style="color: #718096; font-size: 14px; margin: 0;">-- GreenReach Farms<br>${BUSINESS_ADDRESS}</p>
+          </div>
+        </div>
+      </div>
     `;
 
     const textItems = items.map(it => `  - ${it.name || it.product_name} x${it.quantity || it.qty} @ $${Number(it.unit_price || 0).toFixed(2)} = $${Number(it.line_total || 0).toFixed(2)}`).join('\n');
@@ -213,13 +263,25 @@ class EmailService {
     } = failureData;
 
     const html = `
-      <h2 style="color:#c53030;">Payment Failed</h2>
-      <p>Hi ${buyer_name || 'there'},</p>
-      <p>We were unable to process your payment of <strong>$${Number(amount || 0).toFixed(2)} CAD</strong> for order <strong>#${String(order_id || '').substring(0, 8)}</strong>.</p>
-      ${reason ? `<p><strong>Reason:</strong> ${reason}</p>` : ''}
-      <p>Please update your payment method and try again through the wholesale portal, or contact us for assistance.</p>
-      <p>If you believe this is an error, please reply to this email or contact info@greenreachgreens.com.</p>
-      <p>-- GreenReach Farms</p>
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9;">
+        <div style="background-color: #ffffff; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+          <h1 style="color: #c53030; margin-bottom: 20px; font-size: 24px;">Payment Failed</h1>
+          <p style="color: #4a5568; font-size: 16px; line-height: 1.6;">Hi ${buyer_name || 'there'},</p>
+          <p style="color: #4a5568; font-size: 16px; line-height: 1.6;">We were unable to process your payment of <strong>$${Number(amount || 0).toFixed(2)} CAD</strong> for order <strong>#${String(order_id || '').substring(0, 8)}</strong>.</p>
+          
+          ${reason ? `<div style="background-color: #fef2f2; padding: 15px; border-radius: 6px; margin: 20px 0; border-left: 4px solid #c53030;">
+            <p style="margin: 0; color: #742a2a; font-weight: 500;"><strong>Reason:</strong> ${reason}</p>
+          </div>` : ''}
+          
+          <p style="color: #4a5568; font-size: 16px; line-height: 1.6;">Please update your payment method and try again through the <a href="https://greenreachgreens.com/wholesale" style="color: #10b981; text-decoration: none;">wholesale portal</a>, or contact us for assistance.</p>
+          
+          <p style="color: #4a5568; font-size: 16px; line-height: 1.6;">If you believe this is an error, please reply to this email or contact peter@greenreachgreens.com.</p>
+          
+          <div style="border-top: 1px solid #e2e8f0; margin: 30px 0; padding-top: 20px;">
+            <p style="color: #718096; font-size: 14px; margin: 0;">-- GreenReach Farms<br>${BUSINESS_ADDRESS}</p>
+          </div>
+        </div>
+      </div>
     `;
 
     return this.sendEmail({
@@ -242,13 +304,25 @@ class EmailService {
     } = refundData;
 
     const html = `
-      <h2 style="color:#2d3748;">Refund Processed</h2>
-      <p>Hi ${buyer_name || 'there'},</p>
-      <p>A refund of <strong>$${Number(amount || 0).toFixed(2)} CAD</strong> has been processed for order <strong>#${String(order_id || '').substring(0, 8)}</strong>.</p>
-      <p>The refund should appear in your account within 5-10 business days depending on your bank.</p>
-      ${refund_id ? `<p><strong>Refund Reference:</strong> ${refund_id}</p>` : ''}
-      <p>If you have questions, reply to this email or contact info@greenreachgreens.com.</p>
-      <p>-- GreenReach Farms</p>
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9;">
+        <div style="background-color: #ffffff; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+          <h1 style="color: #2d3748; margin-bottom: 20px; font-size: 24px;">Refund Processed</h1>
+          <p style="color: #4a5568; font-size: 16px; line-height: 1.6;">Hi ${buyer_name || 'there'},</p>
+          <p style="color: #4a5568; font-size: 16px; line-height: 1.6;">A refund of <strong>$${Number(amount || 0).toFixed(2)} CAD</strong> has been processed for order <strong>#${String(order_id || '').substring(0, 8)}</strong>.</p>
+          
+          <div style="background-color: #f0fdf4; padding: 20px; border-radius: 6px; margin: 20px 0; border-left: 4px solid #10b981;">
+            <p style="margin: 0; color: #166534;">The refund should appear in your account within 5-10 business days depending on your bank.</p>
+          </div>
+          
+          ${refund_id ? `<p style="color: #4a5568; font-size: 16px; line-height: 1.6;"><strong>Refund Reference:</strong> ${refund_id}</p>` : ''}
+          
+          <p style="color: #4a5568; font-size: 16px; line-height: 1.6;">If you have questions, reply to this email or contact peter@greenreachgreens.com.</p>
+          
+          <div style="border-top: 1px solid #e2e8f0; margin: 30px 0; padding-top: 20px;">
+            <p style="color: #718096; font-size: 14px; margin: 0;">-- GreenReach Farms<br>${BUSINESS_ADDRESS}</p>
+          </div>
+        </div>
+      </div>
     `;
 
     return this.sendEmail({
@@ -343,7 +417,7 @@ class EmailService {
             <tr><td style="padding:8px;font-weight:600;">Recall Reason</td><td style="padding:8px;">${reason}</td></tr>
           </table>
           <p><strong>Please do not consume or distribute this product.</strong> ${instructions || 'Dispose of the product safely or contact us for return instructions.'}</p>
-          <p>We sincerely apologize for the inconvenience. Contact us at <a href="mailto:info@greenreachgreens.com">info@greenreachgreens.com</a>.</p>
+          <p>We sincerely apologize for the inconvenience. Contact us at <a href="mailto:peter@greenreachgreens.com">peter@greenreachgreens.com</a>.</p>
           <p>-- GreenReach Farms</p>
         </div>`;
       const buyerText = [
@@ -353,7 +427,7 @@ class EmailService {
         `Lot: ${lot_number}  Product: ${crop || 'Produce'}  Reason: ${reason}`,
         `Please do not consume or distribute this product.`,
         instructions || 'Dispose safely or contact us for return instructions.',
-        `Contact: info@greenreachgreens.com`,
+        `Contact: peter@greenreachgreens.com`,
         `-- GreenReach Farms  ${BUSINESS_ADDRESS}`
       ].join('\n');
       const r = await this.sendEmail({
