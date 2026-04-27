@@ -394,9 +394,9 @@ function mean(values) {
 }
 
 function getDefaultSkuFactor() {
-  const envValue = Number(process.env.WHOLESALE_DEFAULT_SKU_FACTOR || 0.75);
-  if (!Number.isFinite(envValue)) return 0.75;
-  return Math.min(0.75, Math.max(0.5, envValue));
+  const envValue = Number(process.env.WHOLESALE_DEFAULT_SKU_FACTOR || 0.65);
+  if (!Number.isFinite(envValue)) return 0.65;
+  return Math.min(0.65, Math.max(0.5, envValue));
 }
 
 function getBuyerDiscountRateFromRollingAverage(rollingAverage) {

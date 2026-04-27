@@ -1680,7 +1680,7 @@
       }
 
       const meta = this.catalogMeta || {};
-      const skuFactor = Number(meta.sku_factor || 0.75);
+      const skuFactor = Number(meta.sku_factor || 0.65);
       const buyerDiscount = Number(meta.buyer_discount_rate || 0);
       const rollingAvg = Number(meta.buyer_rolling_average || 0);
       const windowDays = Number(meta.window_days || 90);
