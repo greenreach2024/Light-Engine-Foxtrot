@@ -2213,7 +2213,12 @@
       } catch (error) {
         this.hideLoading();
         console.error('Place order error:', error);
-        this.showToast('Network error placing order', 'error');
+        const msg = error?.message || '';
+        if (msg && !msg.toLowerCase().includes('network') && !msg.toLowerCase().includes('fetch')) {
+          this.showToast(msg, 'error');
+        } else {
+          this.showToast('Network error placing order. Please try again.', 'error');
+        }
       } finally {
         this._placingOrder = false;
         const placeBtn = document.getElementById('place-order-btn');
@@ -3746,8 +3751,8 @@
       }
 
       try {
-        if (!this.squarePayments || !this.squareCard) {
-          // Fetch Square credentials from server
+        // Initialize the payments instance once (lightweight credential fetch)
+        if (!this.squarePayments) {
           const cfgRes = await fetch('/api/wholesale/payment/config');
           const cfgJson = await cfgRes.json();
           const appId = cfgJson?.data?.appId;
@@ -3759,6 +3764,16 @@
           }
 
           this.squarePayments = window.Square.payments(appId, locationId);
+        }
+
+        // Only create and attach the card element when checkout is visible.
+        // Creating squareCard before the container is in the DOM can cause
+        // Square to report PaymentMethodAlreadyAttachedError on the real attach
+        // call, leaving the card in a non-interactive state.
+        const checkoutView = document.getElementById('checkout-view');
+        if (!checkoutView?.classList?.contains('active')) return false;
+
+        if (!this.squareCard) {
           this.squareCard = await this.squarePayments.card();
           this.squareCardAttached = false;
         }
