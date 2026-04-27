@@ -39,6 +39,11 @@ Production is Google Cloud Run in `us-east1` for project `project-5d00790f-13a9-
 
 Important: AWS deployment docs exist in repo but are not the current production path for this project.
 
+**GitHub Pages is NOT production.** `deploy-pages.yml` creates a static read-only demo at
+`https://greenreach2024.github.io/Light-Engine-Foxtrot/` and is `workflow_dispatch` only.
+Never treat a GitHub Pages deployment as evidence that code is live in production.
+Production evidence = a successful `deploy-cloud-run.yml` run for the commit in question.
+
 ## 2) Access Setup Claude Must Have
 
 Claude operator requirements:
