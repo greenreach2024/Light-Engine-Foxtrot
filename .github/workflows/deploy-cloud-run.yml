@@ -1,13 +1,28 @@
 name: Deploy Cloud Run (buildx + digest-pinned)
 
-# Manual-only deploy. Pushes to git do NOT trigger this — deploys are
-# always initiated explicitly (from the GitHub UI "Run workflow" button
-# or by Devin via `gh workflow run deploy-cloud-run.yml -f service=...`).
+# Production deploy flow:
+# - Automatic on pushes to main touching deploy-relevant paths
+# - Manual workflow_dispatch for explicit one-off deploys
 #
 # Authentication is via Workload Identity Federation — no long-lived
 # service-account keys. Setup is documented in gcp/DEPLOY.md §WIF.
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/deploy-cloud-run.yml"
+      - "gcp/deploy-cloud-run-buildx.sh"
+      - "gcp/DEPLOY.md"
+      - "Dockerfile"
+      - "package.json"
+      - "package-lock.json"
+      - "server-foxtrot.js"
+      - "routes/**"
+      - "lib/**"
+      - "public/**"
+      - "greenreach-central/**"
   workflow_dispatch:
     inputs:
       service:
@@ -74,19 +89,29 @@ jobs:
 
       - name: Deploy
         run: |
+          set -euo pipefail
           chmod +x ./gcp/deploy-cloud-run-buildx.sh
-          FLAGS="--service ${{ inputs.service }}"
-          if [[ "${{ inputs.skip_build }}" == "true" ]]; then
-            FLAGS="$FLAGS --skip-build"
+
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            FLAGS="--service ${{ inputs.service }}"
+            if [[ "${{ inputs.skip_build }}" == "true" ]]; then
+              FLAGS="$FLAGS --skip-build"
+            fi
+          else
+            # Push-triggered deploys are full build+deploy of both services
+            # to keep behavior deterministic and avoid stale live URLs.
+            FLAGS="--service both"
           fi
+
           ./gcp/deploy-cloud-run-buildx.sh $FLAGS
 
       - name: Summary
         if: always()
         run: |
-          echo "### Cloud Run deploy — service: ${{ inputs.service }}" >> $GITHUB_STEP_SUMMARY
+          DEPLOY_SERVICE="${{ github.event_name == 'workflow_dispatch' && inputs.service || 'both' }}"
+          echo "### Cloud Run deploy — service: ${DEPLOY_SERVICE}" >> $GITHUB_STEP_SUMMARY
           for SVC in greenreach-central light-engine; do
-            if [[ "${{ inputs.service }}" == "both" || "${{ inputs.service }}" == "le" && "$SVC" == "light-engine" || "${{ inputs.service }}" == "central" && "$SVC" == "greenreach-central" ]]; then
+            if [[ "${DEPLOY_SERVICE}" == "both" || "${DEPLOY_SERVICE}" == "le" && "$SVC" == "light-engine" || "${DEPLOY_SERVICE}" == "central" && "$SVC" == "greenreach-central" ]]; then
               URL=$(gcloud run services describe "$SVC" --region=${{ env.GCP_REGION }} --format='value(status.url)' 2>/dev/null || echo "<unresolved>")
               IMG=$(gcloud run services describe "$SVC" --region=${{ env.GCP_REGION }} --format='value(spec.template.spec.containers[0].image)' 2>/dev/null || echo "<unresolved>")
               REV=$(gcloud run services describe "$SVC" --region=${{ env.GCP_REGION }} --format='value(status.latestReadyRevisionName)' 2>/dev/null || echo "<unresolved>")

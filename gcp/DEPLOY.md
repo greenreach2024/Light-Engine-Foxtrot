@@ -17,8 +17,9 @@ and codified in `gcp/deploy-cloud-run-buildx.sh`.
    only requires rebuilding `greenreach-central`. A change scoped to root
    (LE) only requires rebuilding `light-engine`. Shared UI files that live
    in both `public/` folders require both.
-4. **Manual only.** Pushes to `main` do NOT trigger a deploy. The build + deploy
-   steps are always executed deliberately.
+4. **`main` push auto-deploy + manual override.** Pushes to `main` now trigger
+   the deploy workflow automatically for both services. Manual dispatch remains
+   available for one-off deploys (`le|central|both`) and incident handling.
 
 ## Prerequisites
 
@@ -120,10 +121,13 @@ references the exact image bytes it was serving — no chance of a cached
 
 ## Deploy from GitHub Actions (WIF — no keys)
 
-Production deploys should be triggered from the `Deploy Cloud Run`
-GitHub Actions workflow (`.github/workflows/deploy-cloud-run.yml`). It
-authenticates to GCP via **Workload Identity Federation** — no
-long-lived service-account keys are ever created.
+Production deploys run through the `Deploy Cloud Run`
+GitHub Actions workflow (`.github/workflows/deploy-cloud-run.yml`):
+- automatically on pushes to `main` (for deploy-relevant paths), and
+- manually via `workflow_dispatch` when targeted deployment control is needed.
+
+The workflow authenticates to GCP via **Workload Identity Federation** —
+no long-lived service-account keys are ever created.
 
 ### One-time WIF setup (Cloud Shell)
 
@@ -171,8 +175,8 @@ gh workflow run deploy-cloud-run.yml -f service=le -f skip_build=false
 ```
 
 The workflow runs the same `gcp/deploy-cloud-run-buildx.sh` script, so
-the principles above (digest pinning, `linux/amd64`, per-service,
-manual-only) apply identically.
+the principles above (digest pinning, `linux/amd64`, per-service control)
+apply identically.
 
 ## Relationship to `gcp/deploy-cloud-run.sh`
 
