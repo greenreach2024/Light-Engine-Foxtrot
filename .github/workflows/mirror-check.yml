@@ -1,0 +1,33 @@
+name: Mirror Check (public/ ↔ greenreach-central/public/)
+
+# Guards against the dual-public-tree shadowing trap that hid the wholesale
+# fixes in #131/#134 and the 3D-viewer + grow-management updates fixed by
+# #138. See scripts/check-public-mirror.sh for the full background.
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "public/**"
+      - "greenreach-central/public/**"
+      - "scripts/check-public-mirror.sh"
+      - ".github/workflows/mirror-check.yml"
+
+jobs:
+  mirror-check:
+    runs-on: ubuntu-latest
+    # Allow the 'skip-mirror-check' label as an explicit escape hatch for
+    # the rare case where a one-sided change is genuinely intentional.
+    if: ${{ !contains(github.event.pull_request.labels.*.name, 'skip-mirror-check') }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Need both base and head to diff
+          fetch-depth: 0
+
+      - name: Check public/ ↔ greenreach-central/public/ mirror discipline
+        run: |
+          chmod +x scripts/check-public-mirror.sh
+          ./scripts/check-public-mirror.sh \
+            "${{ github.event.pull_request.base.sha }}" \
+            "${{ github.event.pull_request.head.sha }}"
