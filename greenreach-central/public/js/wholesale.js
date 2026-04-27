@@ -1483,6 +1483,8 @@
           'organic-mixed-greens': 'mixed-greens',
           'mixed-greens-organic': 'mixed-greens',
           'spicy-mixed-greens-organic': 'spicy-mixed-greens',
+          'spicy-mix': 'spicy-mixed-greens',
+          'spring-mix': 'mixed-greens',
           'eazyleaf-blend-organic': 'eazyleaf-blend-organic',
           'brentwood-eazyleaf-organic': 'eazyleaf-blend-organic',
           'burgandy-eazyleaf-organic': 'eazyleaf-blend-organic',

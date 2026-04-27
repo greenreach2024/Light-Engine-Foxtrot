@@ -99,6 +99,18 @@
     "category": "Herbs",
     "description": "Sweet, aromatic, and full-flavoured with classic notes of clove and anise. Tender green leaves pair beautifully with tomato, mozzarella, pasta, citrus, and Mediterranean dishes."
   },
+  "Purple Basil": {
+    "category": "Herbs",
+    "description": "Aromatic and deeply flavoured with bold clove and anise notes. Striking dark-purple leaves pair beautifully with heirloom tomato, burrata, stone fruits, cocktails, and fresh herb salads."
+  },
+  "Spicy Mix": {
+    "category": "Salad Mix",
+    "description": "Bold and peppery with layered heat from arugula, mizuna, mustard, and radicchio. Pairs well with strong cheeses, charcuterie, roasted beets, grilled proteins, and assertive vinaigrettes."
+  },
+  "Spring Mix": {
+    "category": "Salad Mix",
+    "description": "Tender and mild with a fresh, delicate bite. A versatile base that pairs effortlessly with fresh fruit, nuts, soft cheeses, citrus vinaigrettes, and light proteins."
+  },
   "Greek Oregano": {
     "category": "Herbs",
     "description": "Bold, warm, and intensely aromatic with a peppery bite. Essential for Greek salads, grilled lamb, roasted vegetables, pizza, marinades, and Mediterranean cooking."
