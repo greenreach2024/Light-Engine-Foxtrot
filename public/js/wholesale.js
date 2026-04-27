@@ -1483,6 +1483,8 @@
           'organic-mixed-greens': 'mixed-greens',
           'mixed-greens-organic': 'mixed-greens',
           'spicy-mixed-greens-organic': 'spicy-mixed-greens',
+          'spicy-mix': 'spicy-mixed-greens',
+          'spring-mix': 'mixed-greens',
           'eazyleaf-blend-organic': 'eazyleaf-blend-organic',
           'brentwood-eazyleaf-organic': 'eazyleaf-blend-organic',
           'burgandy-eazyleaf-organic': 'eazyleaf-blend-organic',
@@ -1678,7 +1680,7 @@
       }
 
       const meta = this.catalogMeta || {};
-      const skuFactor = Number(meta.sku_factor || 0.75);
+      const skuFactor = Number(meta.sku_factor || 0.65);
       const buyerDiscount = Number(meta.buyer_discount_rate || 0);
       const rollingAvg = Number(meta.buyer_rolling_average || 0);
       const windowDays = Number(meta.window_days || 90);
