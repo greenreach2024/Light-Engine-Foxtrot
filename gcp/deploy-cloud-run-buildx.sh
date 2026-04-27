@@ -114,6 +114,7 @@ build_and_push() {
   docker buildx build \
     --platform "${PLATFORM}" \
     --tag "${image_ref}" \
+    --no-cache \
     --push \
     "${ctx}"
 
