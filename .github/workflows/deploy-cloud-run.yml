@@ -12,16 +12,25 @@ on:
     branches:
       - main
     paths:
+      # Infrastructure / build
       - ".github/workflows/deploy-cloud-run.yml"
       - "gcp/deploy-cloud-run-buildx.sh"
       - "gcp/DEPLOY.md"
       - "Dockerfile"
       - "package.json"
       - "package-lock.json"
+      # Light Engine app
       - "server-foxtrot.js"
       - "routes/**"
       - "lib/**"
+      - "services/**"
+      - "middleware/**"
+      - "migrations/**"
+      - "config/**"
+      - "db/**"
+      - "leam/**"
       - "public/**"
+      # GreenReach Central service
       - "greenreach-central/**"
   workflow_dispatch:
     inputs:
