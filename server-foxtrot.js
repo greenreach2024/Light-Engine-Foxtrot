@@ -21979,12 +21979,20 @@ app.get('/api/farm/profile', asyncHandler(async (req, res) => {
   try {
     // First decode JWT without verification to get farmId
     const decoded = jwt.decode(token);
-    
+
+    if (!decoded) {
+      console.error('[/api/farm/profile] JWT decode returned null (malformed token)');
+      return res.status(403).json({
+        status: 'error',
+        message: 'Invalid token format'
+      });
+    }
+
     // Support both camelCase (farmId) and snake_case (farm_id) for compatibility
     const farmId = decoded.farmId || decoded.farm_id;
-    
-    if (!decoded || !farmId) {
-      console.error('[/api/farm/profile] JWT decode failed or missing farmId');
+
+    if (!farmId) {
+      console.error('[/api/farm/profile] JWT missing farmId');
       return res.status(403).json({
         status: 'error',
         message: 'Invalid token format'
