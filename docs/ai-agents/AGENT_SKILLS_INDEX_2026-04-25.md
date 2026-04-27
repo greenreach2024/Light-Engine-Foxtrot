@@ -8,6 +8,18 @@ This index summarises each agent's **current** and **proposed** skills/tools alo
 
 ---
 
+## Skill Documents (Developer Continuity)
+
+The following skill documents are implementation guides for engineers extending the core agents:
+
+- F.A.Y.E.: `docs/ai-agents/skills/faye-agent/SKILL.md`
+- E.V.I.E.: `docs/ai-agents/skills/evie-agent/SKILL.md`
+- G.W.E.N.: `docs/ai-agents/skills/gwen-agent/SKILL.md`
+
+These are intentionally operational (code-map + guardrail + validation checklists) and complement the vision/playbook docs listed above.
+
+---
+
 ## F.A.Y.E. — Farm Autonomy & Yield Engine
 
 **Current skills & tools**
