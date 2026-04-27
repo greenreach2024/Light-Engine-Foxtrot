@@ -445,9 +445,18 @@
           this.selectedFulfillment = e.target.value;
           const deliveryFields = document.getElementById('delivery-fields');
           const pickupInfo = document.getElementById('pickup-info');
+          // Toggle required on the delivery address fields so checkValidity()
+          // only blocks when delivery is selected — pickup orders shouldn't
+          // need a shipping address.
+          const addressField = document.getElementById('delivery-address');
+          const cityField = document.getElementById('delivery-city');
+          const postalField = document.getElementById('delivery-postal');
           if (e.target.value === 'pickup') {
             if (deliveryFields) deliveryFields.classList.add('hidden');
             if (pickupInfo) pickupInfo.classList.remove('hidden');
+            if (addressField) addressField.required = false;
+            if (cityField) cityField.required = false;
+            if (postalField) postalField.required = false;
             this.deliveryQuote = null;
             const feeEl = document.getElementById('delivery-fee-display');
             if (feeEl) feeEl.textContent = '—';
@@ -455,6 +464,9 @@
           } else {
             if (deliveryFields) deliveryFields.classList.remove('hidden');
             if (pickupInfo) pickupInfo.classList.add('hidden');
+            if (addressField) addressField.required = true;
+            if (cityField) cityField.required = true;
+            if (postalField) postalField.required = true;
             this.refreshDeliveryQuote();
           }
         });
@@ -667,14 +679,40 @@
       const emailField = document.getElementById('buyer-email');
       if (!nameField || !emailField) return;
 
+      const addressField = document.getElementById('delivery-address');
+      const cityField = document.getElementById('delivery-city');
+      const provinceField = document.getElementById('delivery-province');
+      const postalField = document.getElementById('delivery-postal');
+
       if (!this.currentBuyer) {
         nameField.value = '';
         emailField.value = '';
+        if (addressField) addressField.value = '';
+        if (cityField) cityField.value = '';
+        if (postalField) postalField.value = '';
         return;
       }
 
       nameField.value = this.currentBuyer.businessName || '';
       emailField.value = this.currentBuyer.email || '';
+
+      // Pre-fill delivery address from saved buyer profile so customers
+      // don't have to retype it every order. Only fills empty fields so
+      // any in-progress edits are preserved.
+      const loc = this.currentBuyer.location || {};
+      if (addressField && !addressField.value) {
+        addressField.value = loc.address1 || loc.street || '';
+      }
+      if (cityField && !cityField.value) {
+        cityField.value = loc.city || '';
+      }
+      if (provinceField && !provinceField.value) {
+        const prov = loc.province || loc.state || '';
+        if (prov) provinceField.value = prov;
+      }
+      if (postalField && !postalField.value) {
+        postalField.value = loc.postalCode || loc.zip || '';
+      }
     },
 
     showAuthModal(tab = 'sign-in') {
