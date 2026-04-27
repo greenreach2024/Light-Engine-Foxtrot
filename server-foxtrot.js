@@ -20996,6 +20996,12 @@ app.post('/api/farm/auth/login', authRateLimiter, asyncHandler(async (req, res) 
     };
 
     global.farmAdminSessions.set(sessionToken, session);
+    // Also key by the JWT itself. The 29 endpoints that auth via
+    // `farmAdminSessions.get(bearerToken)` (farm/activity, billing/usage,
+    // controller-bindings, farm/auth/verify, etc.) receive the JWT as
+    // Bearer header from the client — the random `sessionToken` is never
+    // sent. Without this entry, those lookups always miss for cloud users.
+    global.farmAdminSessions.set(jwtToken, session);
 
     await pool.query('UPDATE farm_users SET last_login = NOW() WHERE id = $1', [user.id]);
 
@@ -21118,15 +21124,22 @@ app.post('/api/farm/auth/verify', asyncHandler(async (req, res) => {
  */
 app.post('/api/farm/auth/logout', asyncHandler(async (req, res) => {
   const authHeader = req.headers.authorization;
-  
+
   if (authHeader && authHeader.startsWith('Bearer ')) {
     const token = authHeader.substring(7);
-    
+
     if (global.farmAdminSessions) {
+      // The session is keyed by both the JWT (what the client sends) and
+      // the random sessionToken (legacy). Wipe both so the orphan doesn't
+      // linger in the in-memory map for 24h.
+      const session = global.farmAdminSessions.get(token);
       global.farmAdminSessions.delete(token);
+      if (session?.token && session.token !== token) {
+        global.farmAdminSessions.delete(session.token);
+      }
     }
   }
-  
+
   res.json({
     status: 'success',
     message: 'Logged out successfully'
@@ -22034,12 +22047,23 @@ app.get('/api/farm/profile', asyncHandler(async (req, res) => {
       });
     }
     
-    // Fetch farm data including jwt_secret for verification
+    // Fetch farm data. The columns plan_type, location, timezone,
+    // pos_instance_id, store_subdomain, and jwt_secret are part of LE's
+    // own migration set (migrations/002_add_provisioning_fields.sql) but
+    // are NOT in greenreach-central's farms schema, which is the DB this
+    // service connects to in cloud (DB_NAME=greenreach_central). Selecting
+    // them by name causes "column does not exist" → 403, blocking the
+    // farm summary, 3D viewer, and grow management hydration.
+    //
+    // Read only the columns guaranteed to exist (per
+    // greenreach-central/config/database.js farms schema), plus the
+    // metadata/settings JSONB blobs, and derive the optional fields
+    // from there.
     const farmResult = await db.query(
-      'SELECT farm_id, name, plan_type, email, contact_name, location, timezone, pos_instance_id, store_subdomain, jwt_secret FROM farms WHERE farm_id = $1',
+      'SELECT farm_id, name, email, contact_name, metadata, settings FROM farms WHERE farm_id = $1',
       [farmId]
     );
-    
+
     if (farmResult.rows.length === 0) {
       console.error('[/api/farm/profile] Farm not found:', farmId);
       return res.status(404).json({
@@ -22047,18 +22071,33 @@ app.get('/api/farm/profile', asyncHandler(async (req, res) => {
         message: 'Farm not found'
       });
     }
-    
+
     const farm = farmResult.rows[0];
-    const primaryJwtSecret = farm.jwt_secret || JWT_SECRET_KEY;
-    let verifiedWithFallback = false;
+    const farmMeta = (farm.metadata && typeof farm.metadata === 'object') ? farm.metadata : {};
+    const farmSettings = (farm.settings && typeof farm.settings === 'object') ? farm.settings : {};
+    const pickFromBlobs = (...keys) => {
+      for (const k of keys) {
+        if (farmMeta[k] != null) return farmMeta[k];
+        if (farmSettings[k] != null) return farmSettings[k];
+      }
+      return null;
+    };
+
+    const planType = pickFromBlobs('plan_type', 'planType') || 'cloud';
+    const location = pickFromBlobs('location');
+    const timezone = pickFromBlobs('timezone') || 'America/New_York';
+    const posInstanceId = pickFromBlobs('pos_instance_id', 'posInstanceId');
+    const storeSubdomain = pickFromBlobs('store_subdomain', 'storeSubdomain');
+    const farmJwtSecret = pickFromBlobs('jwt_secret', 'jwtSecret');
+
+    const primaryJwtSecret = farmJwtSecret || JWT_SECRET_KEY;
 
     try {
       jwt.verify(token, primaryJwtSecret);
     } catch (primaryVerifyError) {
-      if (farm.jwt_secret && farm.jwt_secret !== JWT_SECRET_KEY) {
+      if (farmJwtSecret && farmJwtSecret !== JWT_SECRET_KEY) {
         try {
           jwt.verify(token, JWT_SECRET_KEY);
-          verifiedWithFallback = true;
           console.warn(`[/api/farm/profile] JWT verified with fallback secret for farm: ${farmId}`);
         } catch (fallbackVerifyError) {
           console.error('[/api/farm/profile] JWT verification failed:', primaryVerifyError.message);
@@ -22077,7 +22116,28 @@ app.get('/api/farm/profile', asyncHandler(async (req, res) => {
     }
 
     console.log('[/api/farm/profile] JWT verified successfully for farm:', farmId);
-    
+
+    // Once JWT is verified, register this token in the in-memory session
+    // map keyed by the JWT itself. The 29 endpoints that auth via
+    // `farmAdminSessions.get(bearerToken)` will then hit on this token
+    // even after a Cloud Run container restart wipes the map. Without
+    // this, those endpoints (farm/activity, billing/usage,
+    // controller-bindings, farm/auth/verify, etc.) would 403 until the
+    // user re-logs in.
+    if (!global.farmAdminSessions) global.farmAdminSessions = new Map();
+    if (!global.farmAdminSessions.has(token)) {
+      global.farmAdminSessions.set(token, {
+        token,
+        farmId,
+        email: decoded.email || farm.email || null,
+        role: decoded.role || 'admin',
+        createdAt: new Date(),
+        expiresAt: decoded.exp
+          ? new Date(decoded.exp * 1000)
+          : new Date(Date.now() + 24 * 60 * 60 * 1000)
+      });
+    }
+
     // Fetch rooms for this farm (may not exist yet for new farms)
     let rooms = [];
     try {
@@ -22089,19 +22149,19 @@ app.get('/api/farm/profile', asyncHandler(async (req, res) => {
     } catch (roomsError) {
       console.log('[/api/farm/profile] Rooms table query failed (may not exist):', roomsError.message);
     }
-    
+
     res.json({
       status: 'success',
       farm: {
         farmId: farm.farm_id,
         name: farm.name,
-        planType: farm.plan_type,
+        planType,
         email: farm.email,
         contactName: farm.contact_name,
-        location: farm.location,
-        timezone: farm.timezone,
-        posInstanceId: farm.pos_instance_id,
-        storeSubdomain: farm.store_subdomain,
+        location,
+        timezone,
+        posInstanceId,
+        storeSubdomain,
         rooms: rooms.map(r => ({
           id: r.room_id,
           name: r.name,
@@ -22112,10 +22172,25 @@ app.get('/api/farm/profile', asyncHandler(async (req, res) => {
       }
     });
   } catch (error) {
+    // The catch must NOT mask SQL errors as 403 ("Invalid or expired
+    // token"). That's exactly what hid the missing-column bug for hours.
+    // Surface the real error so the next breakage is debuggable from the
+    // client response.
     console.error('[farm/profile] Error:', error);
-    return res.status(403).json({
+    const isAuthError =
+      error?.name === 'JsonWebTokenError' ||
+      error?.name === 'TokenExpiredError' ||
+      /token|jwt/i.test(String(error?.message || ''));
+    if (isAuthError) {
+      return res.status(403).json({
+        status: 'error',
+        message: 'Invalid or expired token'
+      });
+    }
+    return res.status(500).json({
       status: 'error',
-      message: 'Invalid or expired token'
+      message: 'Failed to load farm profile',
+      detail: error?.message || String(error)
     });
   }
 }));
