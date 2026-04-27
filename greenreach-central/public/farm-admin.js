@@ -1279,10 +1279,10 @@ function formatTime(timestamp) {
 let pricingData = [];
 let isPerGram = false; // false = per lb (default), true = per 100g
 const LB_TO_100G = 0.22046; // 1 lb = 453.592g, so 100g/453.592g = 0.22046
-const DEFAULT_SKU_FACTOR = 0.75;
+const DEFAULT_SKU_FACTOR = 0.70;
 
 // Pricing version - increment this when defaultPricing changes to force localStorage clear
-const PRICING_VERSION = '2026-04-26-v15';
+const PRICING_VERSION = '2026-04-26-v16';
 // Unit-of-measure map for Canadian packaged-goods pricing
 // 'weight' = sold by weight ($/oz or $/25g), 'pint' = sold per pint, 'unit' = sold per item
 const cropUnitMap = {
@@ -1577,7 +1577,7 @@ function exportPricingCSV() {
         rows.push([
             item.crop, r.toFixed(2),
             (item.floor_price || 0).toFixed(2),
-            (item.sku_factor || 0.75).toFixed(2),
+            (item.sku_factor || 0.70).toFixed(2),
             calculateFormulaWholesalePrice(r, item.floor_price, item.sku_factor).toFixed(2),
             item.isTaxable ? 'Yes' : 'No'
         ]);
@@ -1673,9 +1673,9 @@ function renderPricingTable() {
                         style="width: 70px;">
                 </td>
                 <td>
-                    <input type="number" class="pricing-input" value="${DEFAULT_SKU_FACTOR.toFixed(2)}" step="0.01" min="0.75" max="0.75"
+                    <input type="number" class="pricing-input" value="${DEFAULT_SKU_FACTOR.toFixed(2)}" step="0.01" min="0.70" max="0.70"
                         data-index="${index}" data-field="sku_factor" readonly disabled
-                        title="SKU factor is fixed at 0.75 for all crops" style="width: 60px; opacity: 0.8; cursor: not-allowed;">
+                        title="SKU factor is fixed at 0.70 for all crops" style="width: 60px; opacity: 0.8; cursor: not-allowed;">
                 </td>
                 <td class="calculated-price" style="font-weight: 600; color: var(--accent-green, #22c55e);">$${formulaWS.toFixed(2)}</td>
                 <td style="text-align: center;">
@@ -1881,7 +1881,7 @@ const AI_PRICING_KEY = 'ai_pricing_recommendations';
 const AI_LAST_CHECK_KEY = 'ai_pricing_last_check';
 const AI_HISTORY_KEY = 'ai_pricing_history';
 const USD_TO_CAD_RATE_KEY = 'usd_to_cad_rate';
-const AI_WHOLESALE_SKU_FACTOR = 0.75;  // wholesale = retail * 0.75
+const AI_WHOLESALE_SKU_FACTOR = 0.70;  // wholesale = retail * 0.70
 
 // Specialty crop delta learning storage key
 const AI_SPECIALTY_DELTA_KEY = 'ai_specialty_deltas';
