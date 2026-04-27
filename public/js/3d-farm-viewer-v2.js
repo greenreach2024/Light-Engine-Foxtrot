@@ -58,6 +58,9 @@ const state = {
   collapsedZoneSystems: new Set(),
   history: { snapshots: [], cursor: -1 },
   pendingPlacement: null,
+  roomEquipment: [],
+  equipmentKB: { equipment: [], categories: [] },
+  equipDrawer: { open: false, level: 'cat', category: null, model: null, search: '', qty: 1, specs: {} },
 };
 
 let toastTimer = null;
@@ -686,6 +689,7 @@ function buildScene() {
     });
 
     buildDevicesInRoom(roomGroup, room);
+    buildEquipmentInRoom(roomGroup, room);
 
     roomGroup.position.set(cursorX - dims.L/2, 0, -dims.W/2);
     farmRoot.add(roomGroup);
@@ -865,12 +869,273 @@ async function saveDevices(opts = {}) {
   }
 }
 
+// ── Category colors / footprints ──────────────────────────────────────
+const EQUIP_CAT_META = {
+  fans:           { color: 0x4dd0a3, bg: '#1a6645', icon: 'FAN',  fp: { l: 0.45, w: 0.45, h: 0.18 } },
+  dehumidifier:   { color: 0x6ab1ff, bg: '#1a3a6a', icon: 'DH',   fp: { l: 0.55, w: 0.45, h: 0.90 } },
+  hvac:           { color: 0x9b8cff, bg: '#2d2160', icon: 'AC',   fp: { l: 0.90, w: 0.40, h: 0.35 } },
+  humidifier:     { color: 0x63d3ff, bg: '#103a50', icon: 'HM',   fp: { l: 0.30, w: 0.30, h: 0.75 } },
+  'co2-generator':{ color: 0xf5b86b, bg: '#5a3510', icon: 'CO2', fp: { l: 0.35, w: 0.35, h: 1.00 } },
+};
+function catMeta(cat) { return EQUIP_CAT_META[(cat||'').toLowerCase()] || { color: 0xaaaaaa, bg: '#333', icon: cat?.slice(0,3).toUpperCase()||'EQ', fp: { l: 0.5, w: 0.5, h: 0.5 } }; }
+
+function makeEquipMesh(category) {
+  const m = catMeta(category);
+  const mat = new THREE.MeshStandardMaterial({ color: m.color, metalness: 0.25, roughness: 0.55, transparent: true, opacity: 0.9 });
+  const { l, w, h } = m.fp;
+  let geo;
+  if (category === 'fans' || category === 'humidifier' || category === 'co2-generator') {
+    geo = new THREE.CylinderGeometry(l / 2, l / 2, h, 16);
+  } else {
+    geo = new THREE.BoxGeometry(l, h, w);
+  }
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.castShadow = true; mesh.receiveShadow = true;
+  return mesh;
+}
+
+function buildEquipmentInRoom(roomGroup, room) {
+  state.roomEquipment.forEach(entry => {
+    if (!entry || !entry.id) return;
+    if (entry.roomId && entry.roomId !== room.id) return;
+    const m = catMeta(entry.category);
+    const h = m.fp.h;
+    (entry.instances || []).forEach(inst => {
+      if (inst.roomId && inst.roomId !== room.id) return;
+      const x = Number(inst.x_m), z = Number(inst.z_m);
+      if (!Number.isFinite(x) || !Number.isFinite(z)) return;
+      const g = new THREE.Group();
+      const body = makeEquipMesh(entry.category);
+      g.add(body);
+      const lbl = makeLabelSprite(`${entry.vendor !== '_generic' ? entry.vendor + ' ' : ''}${entry.model}`);
+      lbl.scale.multiplyScalar(0.22);
+      lbl.position.set(0, h / 2 + 0.22, 0);
+      g.add(lbl);
+      g.position.set(x, h / 2, z);
+      if (inst.rotation) g.rotation.y = inst.rotation;
+      g.userData = { kind: 'room-equipment', id: inst.instanceId, equipId: entry.id, instanceId: inst.instanceId, footprint: { length_m: m.fp.l, width_m: m.fp.w }, roomId: room.id };
+      g.name = `equip:${inst.instanceId}`;
+      roomGroup.add(g);
+      state.meshIndex.set(inst.instanceId, g);
+    });
+  });
+}
+
+async function saveRoomEquipment(opts = {}) {
+  try {
+    const r = await authFetch('/data/room-equipment.json', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(state.roomEquipment),
+    });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    if (!opts.silent) toast(opts.msg || 'Equipment saved');
+  } catch (err) {
+    console.error('[v3d] equipment save failed', err);
+    toast('Equipment save failed: ' + (err.message || 'unknown'));
+  }
+}
+
+// ── Equipment Drawer ──────────────────────────────────────────────────
+const DRAWER_CATS = [
+  { key: 'fans',            label: 'Fans' },
+  { key: 'dehumidifier',    label: 'Dehumidifier' },
+  { key: 'hvac',            label: 'HVAC' },
+  { key: 'humidifier',      label: 'Humidifier' },
+  { key: 'co2-generator',   label: 'CO2 Generator' },
+];
+const GENERIC_SPECS = {
+  fans:           ['wattage', 'cfm'],
+  dehumidifier:   ['wattage', 'ppd'],
+  hvac:           ['btu', 'wattage'],
+  humidifier:     ['outputGPH'],
+  'co2-generator':['outputCuFtHr'],
+};
+const SPEC_LABELS = { wattage: 'Wattage (W)', cfm: 'CFM', ppd: 'PPD (pints/day)', btu: 'BTU', outputGPH: 'Output (GPH)', outputCuFtHr: 'Output (cu.ft/hr)' };
+
+function openEquipDrawer() {
+  state.equipDrawer.open = true;
+  state.equipDrawer.level = 'cat';
+  state.equipDrawer.category = null;
+  state.equipDrawer.model = null;
+  state.equipDrawer.search = '';
+  state.equipDrawer.qty = 1;
+  state.equipDrawer.specs = {};
+  const el = $('v3dEquipDrawer');
+  el.classList.add('open');
+  renderEquipDrawer();
+}
+
+function closeEquipDrawer() {
+  state.equipDrawer.open = false;
+  $('v3dEquipDrawer').classList.remove('open');
+}
+
+function renderEquipDrawer() {
+  const d = state.equipDrawer;
+  const titleEl = $('v3dEquipDrawerTitle');
+  const backBtn = $('v3dEquipDrawerBack');
+  const catGrid = $('v3dEquipCatGrid');
+  const modelPanel = $('v3dEquipModelPanel');
+  const configPanel = $('v3dEquipConfigPanel');
+
+  titleEl.textContent = d.level === 'config'
+    ? `Configure: ${d.model?.model || ''}`
+    : d.level === 'model'
+      ? `Select ${d.category ? DRAWER_CATS.find(c => c.key === d.category)?.label || d.category : ''} Model`
+      : 'Add Equipment';
+  backBtn.hidden = d.level === 'cat';
+  catGrid.hidden = d.level !== 'cat';
+  modelPanel.hidden = d.level !== 'model';
+  configPanel.hidden = d.level !== 'config';
+
+  if (d.level === 'cat') renderEquipCatGrid();
+  if (d.level === 'model') renderEquipModelPanel();
+  if (d.level === 'config') renderEquipConfigPanel();
+}
+
+function renderEquipCatGrid() {
+  const grid = $('v3dEquipCatGrid');
+  grid.innerHTML = DRAWER_CATS.map(cat => {
+    const m = catMeta(cat.key);
+    return `<div class="v3d-equip-tile" data-cat="${escapeHtml(cat.key)}">
+      <div class="v3d-equip-tile__icon" style="background:${m.bg};">${m.icon}</div>
+      <div class="v3d-equip-tile__label">${escapeHtml(cat.label)}</div>
+    </div>`;
+  }).join('');
+  grid.querySelectorAll('.v3d-equip-tile').forEach(tile => {
+    tile.addEventListener('click', () => {
+      state.equipDrawer.category = tile.dataset.cat;
+      state.equipDrawer.level = 'model';
+      state.equipDrawer.search = '';
+      renderEquipDrawer();
+    });
+  });
+}
+
+function renderEquipModelPanel() {
+  const d = state.equipDrawer;
+  const cat = d.category;
+  const searchInput = $('v3dEquipModelSearch');
+  if (searchInput) {
+    searchInput.value = d.search || '';
+    searchInput.oninput = () => { d.search = searchInput.value; renderEquipModelList(); };
+  }
+  renderEquipModelList();
+}
+
+function renderEquipModelList() {
+  const d = state.equipDrawer;
+  const q = (d.search || '').toLowerCase();
+  const models = (state.equipmentKB.equipment || []).filter(e => {
+    if ((e.category || '').toLowerCase() !== d.category) return false;
+    if (!q) return true;
+    return (e.vendor + ' ' + e.model).toLowerCase().includes(q);
+  });
+  const listEl = $('v3dEquipModelList');
+  if (!listEl) return;
+  if (!models.length) { listEl.innerHTML = '<div class="v3d-empty" style="padding:10px;">No models found</div>'; return; }
+  listEl.innerHTML = models.map((m, i) => {
+    const specHints = Object.entries(m.specs || {}).filter(([, v]) => v).slice(0, 2).map(([k,v]) => `${k}: ${v}`).join(' / ');
+    return `<div class="v3d-equip-model-row" data-idx="${i}">
+      <div>
+        <div class="v3d-equip-model-row__name">${escapeHtml(m.vendor !== '_generic' ? m.vendor + ' ' : '')}${escapeHtml(m.model)}</div>
+        ${specHints ? `<div class="v3d-equip-model-row__meta">${escapeHtml(specHints)}</div>` : ''}
+      </div>
+      ${m.isGeneric ? '<span class="v3d-equip-model-row__badge">Generic</span>' : ''}
+    </div>`;
+  }).join('');
+  listEl.querySelectorAll('.v3d-equip-model-row').forEach((row, i) => {
+    row.addEventListener('click', () => {
+      d.model = models[i];
+      d.specs = Object.assign({}, models[i].specs || {});
+      d.level = 'config';
+      renderEquipDrawer();
+    });
+  });
+}
+
+function renderEquipConfigPanel() {
+  const d = state.equipDrawer;
+  const cat = d.category;
+  const model = d.model;
+  const requiredSpecs = model?.requiredSpecs || GENERIC_SPECS[cat] || [];
+  const specGrid = $('v3dEquipSpecGrid');
+  if (specGrid) {
+    specGrid.innerHTML = requiredSpecs.map(key => `
+      <div>
+        <div class="v3d-equip-spec-label">${escapeHtml(SPEC_LABELS[key] || key)}</div>
+        <input class="v3d-equip-spec-input" data-spec="${escapeHtml(key)}" type="number" min="0"
+          value="${escapeHtml(String(d.specs[key] ?? ''))}" placeholder="0" />
+      </div>`).join('');
+    specGrid.querySelectorAll('.v3d-equip-spec-input').forEach(inp => {
+      inp.addEventListener('input', () => { d.specs[inp.dataset.spec] = Number(inp.value); });
+    });
+  }
+  const qtyInput = $('v3dEquipQty');
+  if (qtyInput) { qtyInput.value = d.qty; qtyInput.oninput = () => { d.qty = Math.max(1, parseInt(qtyInput.value) || 1); }; }
+}
+
+async function confirmEquipConfig() {
+  const d = state.equipDrawer;
+  if (!d.model || !d.category) return;
+  const room = state.rooms[0]; // place in first room; assignment happens on drag
+  const roomId = room?.id || null;
+  const qty = Math.max(1, parseInt($('v3dEquipQty')?.value || '1'));
+  const ts = Date.now();
+  const entryId = `EQ-${ts}`;
+  const instances = Array.from({ length: qty }, (_, i) => ({
+    instanceId: `${entryId}-${i + 1}`,
+    x_m: null, z_m: null, rotation: 0, roomId: null,
+  }));
+  const entry = {
+    id: entryId,
+    roomId,
+    category: d.category,
+    vendor: d.model.vendor,
+    model: d.model.model,
+    specs: { ...d.specs },
+    quantity: qty,
+    instances,
+    createdAt: new Date().toISOString(),
+  };
+  state.roomEquipment.push(entry);
+  await saveRoomEquipment({ msg: `Added ${qty}x ${entry.model}` });
+  closeEquipDrawer();
+  buildScene();
+  renderSidePanel();
+  if (instances.length === 1) {
+    activateInstancePlacement(entryId, instances[0].instanceId);
+  } else {
+    toast(`${qty}x ${entry.model} added — place from side panel`);
+    renderFarmSummary();
+  }
+}
+
+function activateInstancePlacement(equipId, instanceId) {
+  const entry = state.roomEquipment.find(e => e.id === equipId);
+  const inst = entry?.instances?.find(i => i.instanceId === instanceId);
+  if (!entry || !inst) return;
+  state.pendingPlacement = { kind: 'room-equipment', equipId, instanceId };
+  state.selection.clear();
+  applySelectionVisuals();
+  updatePlacementBanner();
+}
+
 function updatePlacementBanner() {
   const banner = $('v3dPlaceBanner');
   if (!banner) return;
   if (state.pendingPlacement) {
-    const dev = state.devices.find(d => d.id === state.pendingPlacement.deviceId);
-    $('v3dPlaceMsg').textContent = `Click room floor to place: ${dev?.name || state.pendingPlacement.deviceId}`;
+    const pp = state.pendingPlacement;
+    let label;
+    if (pp.kind === 'room-equipment') {
+      const entry = state.roomEquipment.find(e => e.id === pp.equipId);
+      label = entry ? `${entry.model} (${pp.instanceId})` : pp.instanceId;
+    } else {
+      const dev = state.devices.find(d => d.id === pp.deviceId);
+      label = dev?.name || pp.deviceId;
+    }
+    $('v3dPlaceMsg').textContent = `Click room floor to place: ${label}`;
     banner.hidden = false;
     canvas.classList.add('placing');
   } else {
@@ -893,10 +1158,48 @@ function cancelPlacement() {
 }
 
 async function completePlacement(worldPos) {
-  const { deviceId } = state.pendingPlacement;
+  const pp = state.pendingPlacement;
   state.pendingPlacement = null;
   updatePlacementBanner();
 
+  if (pp.kind === 'room-equipment') {
+    const entry = state.roomEquipment.find(e => e.id === pp.equipId);
+    const inst = entry?.instances?.find(i => i.instanceId === pp.instanceId);
+    if (!entry || !inst) return;
+    let placed = false;
+    for (const rg of state.roomMeshes) {
+      const dims = rg.userData.dims;
+      if (!dims) continue;
+      const lp = rg.worldToLocal(worldPos.clone());
+      if (lp.x >= 0 && lp.x <= dims.L && lp.z >= 0 && lp.z <= dims.W) {
+        const roomId = rg.userData.id;
+        const room = state.rooms.find(r => r.id === roomId);
+        const zr = room ? (getZoneRects(room).find(z =>
+          lp.x >= z.x_m && lp.x <= z.x_m + z.length_m &&
+          lp.z >= z.y_m && lp.z <= z.y_m + z.width_m
+        ) || null) : null;
+        inst.x_m = Math.round(lp.x * 1000) / 1000;
+        inst.z_m = Math.round(lp.z * 1000) / 1000;
+        inst.roomId = roomId;
+        if (zr) inst.zone = zr.name || zr.id;
+        placed = true;
+        break;
+      }
+    }
+    if (!placed) {
+      toast('Click within the room boundaries to place');
+      state.pendingPlacement = pp;
+      updatePlacementBanner();
+      return;
+    }
+    buildScene();
+    renderSidePanel();
+    await saveRoomEquipment({ msg: `Placed ${entry.model}` });
+    return;
+  }
+
+  // Device placement (original logic)
+  const { deviceId } = pp;
   const device = state.devices.find(d => d.id === deviceId);
   if (!device) return;
 
@@ -924,7 +1227,7 @@ async function completePlacement(worldPos) {
 
   if (!placed) {
     toast('Click within the room boundaries to place');
-    state.pendingPlacement = { deviceId };
+    state.pendingPlacement = pp;
     updatePlacementBanner();
     return;
   }
@@ -1161,7 +1464,7 @@ function updateDrag(clientX, clientY) {
     const tx = startLocal.x + dx;
     const tz = startLocal.z + dz;
     const c = clampPosToRoom(mesh, tx, tz);
-    mesh.position.set(c.x, 0, c.z);
+    mesh.position.set(c.x, startLocal.y, c.z);
     const room = mesh.parent;
     if (room) room.children.forEach(ch => {
       if (ch.userData?.kind === 'fixtureFor' && ch.userData.groupId === mesh.userData.id) {
@@ -1269,6 +1572,7 @@ async function endDrag() {
 
   const groupMeshes  = drag.startMeshes.filter(({ mesh }) => mesh.userData.kind === 'group');
   const deviceMeshes = drag.startMeshes.filter(({ mesh }) => mesh.userData.kind === 'device');
+  const equipMeshes  = drag.startMeshes.filter(({ mesh }) => mesh.userData.kind === 'room-equipment');
 
   if (groupMeshes.length) pushHistory();
 
@@ -1293,13 +1597,25 @@ async function endDrag() {
     if (zr) dev.zone = zr.name || zr.id;
   });
 
+  equipMeshes.forEach(({ mesh }) => {
+    const { equipId, instanceId } = mesh.userData;
+    const entry = state.roomEquipment.find(e => e.id === equipId);
+    const inst = entry?.instances?.find(i => i.instanceId === instanceId);
+    if (!inst) return;
+    inst.x_m = Math.round(mesh.position.x * 1000) / 1000;
+    inst.z_m = Math.round(mesh.position.z * 1000) / 1000;
+    inst.roomId = mesh.parent?.userData?.id || inst.roomId;
+    const zr = findZoneForPosition(mesh);
+    if (zr) inst.zone = zr.name || zr.id;
+  });
+
   drag.startMeshes = [];
 
   const saves = [];
-  if (groupMeshes.length) saves.push(saveGroups({ msg: deviceMeshes.length ? null : `Saved layout for ${groupMeshes.length} system(s)`, silent: !!deviceMeshes.length }));
-  if (deviceMeshes.length) saves.push(saveDevices({ msg: `Saved ${deviceMeshes.length} device position(s)` }));
+  if (groupMeshes.length) saves.push(saveGroups({ msg: (deviceMeshes.length || equipMeshes.length) ? null : `Saved layout for ${groupMeshes.length} system(s)`, silent: !!(deviceMeshes.length || equipMeshes.length) }));
+  if (deviceMeshes.length) saves.push(saveDevices({ silent: !!equipMeshes.length, msg: `Saved ${deviceMeshes.length} device position(s)` }));
+  if (equipMeshes.length) saves.push(saveRoomEquipment({ msg: `Saved ${equipMeshes.length} equipment position(s)` }));
   await Promise.all(saves);
-  if (groupMeshes.length && deviceMeshes.length) toast(`Saved ${groupMeshes.length} system(s) and ${deviceMeshes.length} device(s)`);
 }
 
 const marquee = { active: false, startX: 0, startY: 0, curX: 0, curY: 0, el: null };
@@ -1355,7 +1671,7 @@ canvas.addEventListener('pointerdown', (e) => {
     return;
   }
 
-  const hit = pickFirstByKind(e.clientX, e.clientY, ['group', 'device']);
+  const hit = pickFirstByKind(e.clientX, e.clientY, ['group', 'device', 'room-equipment']);
   if (state.editMode && hit) {
     canvas.setPointerCapture(e.pointerId); drag.pointerId = e.pointerId;
     startDrag(hit.node, hit.point); return;
@@ -1392,7 +1708,7 @@ canvas.addEventListener('pointercancel', () => {
 let _hoverMesh = null;
 canvas.addEventListener('pointermove', (e) => {
   if (drag.active || marquee.active) return;
-  const hit = pickFirstByKind(e.clientX, e.clientY, ['group', 'device']);
+  const hit = pickFirstByKind(e.clientX, e.clientY, ['group', 'device', 'room-equipment']);
   const next = hit ? hit.node : null;
   if (next === _hoverMesh) return;
   _hoverMesh = next;
@@ -1404,7 +1720,7 @@ canvas.addEventListener('pointermove', (e) => {
 }, { passive: true });
 
 function handleClick(e) {
-  const equipHit = pickFirstByKind(e.clientX, e.clientY, ['group', 'device']);
+  const equipHit = pickFirstByKind(e.clientX, e.clientY, ['group', 'device', 'room-equipment']);
   if (equipHit) {
     const id = equipHit.node.userData.id;
     if (e.shiftKey) {
@@ -1495,7 +1811,14 @@ function renderFarmSummary() {
       </div>`;
   }).join('');
   const unplaced = state.devices.filter(d => !d.roomId || d.x_m == null);
-  const unplacedHtml = unplaced.length ? `
+  const unplacedEquip = [];
+  state.roomEquipment.forEach(entry => {
+    (entry.instances || []).forEach(inst => {
+      if (inst.x_m == null) unplacedEquip.push({ entry, inst });
+    });
+  });
+  const unplacedHtml = (unplaced.length || unplacedEquip.length) ? `
+    ${unplaced.length ? `
     <div class="v3d-side__section-title">Unplaced Devices (${unplaced.length})</div>
     <div class="v3d-room-list">
       ${unplaced.map(d => `
@@ -1506,7 +1829,19 @@ function renderFarmSummary() {
           </div>
           <button class="v3d-btn v3d-place-btn" data-device-id="${escapeHtml(d.id)}" style="font-size:11px;padding:4px 10px;">Place</button>
         </div>`).join('')}
-    </div>` : '';
+    </div>` : ''}
+    ${unplacedEquip.length ? `
+    <div class="v3d-side__section-title">Unplaced Equipment (${unplacedEquip.length})</div>
+    <div class="v3d-room-list">
+      ${unplacedEquip.map(({ entry, inst }) => `
+        <div class="v3d-room-card" style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;">
+          <div>
+            <div style="font-weight:600;font-size:13px;">${escapeHtml(entry.model)}</div>
+            <div style="font-size:11px;color:var(--v3d-muted);">${escapeHtml(inst.instanceId)}</div>
+          </div>
+          <button class="v3d-btn v3d-equip-place-btn" data-equip-id="${escapeHtml(entry.id)}" data-inst-id="${escapeHtml(inst.instanceId)}" style="font-size:11px;padding:4px 10px;">Place</button>
+        </div>`).join('')}
+    </div>` : ''}` : '';
 
   bodyEl.innerHTML = `
     <div class="v3d-side__row">
@@ -1525,6 +1860,12 @@ function renderFarmSummary() {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
       activatePlacement(btn.dataset.deviceId);
+    });
+  });
+  bodyEl.querySelectorAll('.v3d-equip-place-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      activateInstancePlacement(btn.dataset.equipId, btn.dataset.instId);
     });
   });
 }
@@ -1673,11 +2014,67 @@ function renderGroupPanel(ids) {
   actsEl.hidden = false;
 }
 
+function renderEquipPanel(instanceId) {
+  let entry = null, inst = null;
+  for (const e of state.roomEquipment) {
+    const i = (e.instances || []).find(x => x.instanceId === instanceId);
+    if (i) { entry = e; inst = i; break; }
+  }
+  if (!entry || !inst) { renderFarmSummary(); return; }
+  const m = catMeta(entry.category);
+  const room = state.rooms.find(r => r.id === inst.roomId);
+  const specEntries = Object.entries(entry.specs || {}).filter(([, v]) => v != null && v !== 0);
+  $('v3dSideTitle').textContent = entry.model;
+  $('v3dSideCount').textContent = entry.category;
+  $('v3dSideActions').hidden = true;
+  $('v3dSideBody').innerHTML = `
+    <div class="v3d-equip-card">
+      <span class="v3d-equip-card__cat-badge" style="background:${m.bg};">${m.icon} ${escapeHtml(entry.category)}</span>
+      <div class="v3d-side__row">
+        <div class="v3d-kv"><span>Vendor</span><span>${escapeHtml(entry.vendor !== '_generic' ? entry.vendor : 'Generic')}</span></div>
+        <div class="v3d-kv"><span>Model</span><span>${escapeHtml(entry.model)}</span></div>
+        <div class="v3d-kv"><span>Instance</span><span style="font-size:10px;color:var(--v3d-muted);">${escapeHtml(inst.instanceId)}</span></div>
+        <div class="v3d-kv"><span>Room</span><span>${escapeHtml(room?.name || inst.roomId || 'unplaced')}</span></div>
+        <div class="v3d-kv"><span>Zone</span><span>${escapeHtml(String(inst.zone ?? 'unassigned'))}</span></div>
+        <div class="v3d-kv"><span>Position</span><span>${inst.x_m != null ? `${inst.x_m}, ${inst.z_m} m` : 'not placed'}</span></div>
+      </div>
+      ${specEntries.length ? `<div class="v3d-side__row">
+        <div class="v3d-side__section-title">Specs</div>
+        ${specEntries.map(([k, v]) => `<div class="v3d-kv"><span>${escapeHtml(SPEC_LABELS[k] || k)}</span><span>${escapeHtml(String(v))}</span></div>`).join('')}
+      </div>` : ''}
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
+        <button class="v3d-btn" style="font-size:12px;padding:5px 10px;" data-equip-action="place" data-equip-id="${escapeHtml(entry.id)}" data-inst-id="${escapeHtml(inst.instanceId)}">Re-place</button>
+        <button class="v3d-btn" style="font-size:12px;padding:5px 10px;" data-equip-action="print" data-inst-id="${escapeHtml(inst.instanceId)}">Print QR</button>
+        <button class="v3d-btn v3d-btn--danger" style="font-size:12px;padding:5px 10px;" data-equip-action="delete" data-equip-id="${escapeHtml(entry.id)}" data-inst-id="${escapeHtml(inst.instanceId)}">Delete</button>
+      </div>
+    </div>`;
+  $('v3dSideBody').querySelectorAll('[data-equip-action]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const action = btn.dataset.equipAction;
+      if (action === 'place') { activateInstancePlacement(btn.dataset.equipId, btn.dataset.instId); return; }
+      if (action === 'print') { window.open(`/api/qr-generator/generate-equipment?instanceId=${encodeURIComponent(btn.dataset.instId)}`, '_blank', 'noopener'); return; }
+      if (action === 'delete') {
+        if (!confirm(`Delete this instance (${btn.dataset.instId})?`)) return;
+        const eid = btn.dataset.equipId, iid = btn.dataset.instId;
+        const entryIdx = state.roomEquipment.findIndex(e => e.id === eid);
+        if (entryIdx === -1) return;
+        state.roomEquipment[entryIdx].instances = state.roomEquipment[entryIdx].instances.filter(i => i.instanceId !== iid);
+        if (!state.roomEquipment[entryIdx].instances.length) state.roomEquipment.splice(entryIdx, 1);
+        state.selection.clear();
+        await saveRoomEquipment({ msg: 'Instance deleted' });
+        buildScene(); renderFarmSummary();
+      }
+    });
+  });
+}
+
 function renderSidePanel() {
   const ids = Array.from(state.selection);
   if (ids.length) {
+    const selectedEquip   = ids.filter(id => state.meshIndex.get(id)?.userData?.kind === 'room-equipment');
     const selectedDevices = ids.map(id => state.devices.find(d => d.id === id)).filter(Boolean);
     const selectedGroups  = ids.map(id => state.groups.find(g => g.id === id)).filter(Boolean);
+    if (selectedEquip.length && !selectedDevices.length && !selectedGroups.length) { renderEquipPanel(selectedEquip[0]); return; }
     if (selectedDevices.length && !selectedGroups.length) { renderDevicePanel(selectedDevices); return; }
     if (selectedGroups.length) { renderGroupPanel(ids.filter(id => state.groups.find(g => g.id === id))); return; }
   }
@@ -1721,6 +2118,8 @@ async function loadData() {
     '/data/grow-systems.json' + bust,
     '/data/env.json' + bust,
     '/data/iot-devices.json' + bust,
+    '/data/room-equipment.json' + bust,
+    '/data/equipment-kb.json' + bust,
   ];
   const results = await Promise.all(urls.map(u => authFetch(u, { cache: 'no-store' }).then(r => r.ok ? r.json() : null).catch(() => null)));
   state.rooms = Array.isArray(results[0]) ? results[0] : (results[0]?.rooms || []);
@@ -1730,6 +2129,9 @@ async function loadData() {
   state.env = results[3] && typeof results[3] === 'object' ? results[3] : { zones: [], rooms: {} };
   const devRaw = results[4];
   state.devices = Array.isArray(devRaw) ? devRaw : (devRaw?.devices || []);
+  state.roomEquipment = Array.isArray(results[5]) ? results[5] : [];
+  const kbRaw = results[6];
+  if (kbRaw && Array.isArray(kbRaw.equipment)) state.equipmentKB = kbRaw;
   buildEnvIndex();
   $('v3dSubtitle').textContent = `${state.rooms.length} room(s), ${state.groups.length} system(s)`;
 }
@@ -1757,6 +2159,20 @@ function wireSSE() {
 
 const _placeCancelBtn = $('v3dPlaceCancelBtn');
 if (_placeCancelBtn) _placeCancelBtn.addEventListener('click', cancelPlacement);
+
+const _addEquipBtn = $('v3dAddEquipBtn');
+if (_addEquipBtn) _addEquipBtn.addEventListener('click', openEquipDrawer);
+const _equipDrawerClose = $('v3dEquipDrawerClose');
+if (_equipDrawerClose) _equipDrawerClose.addEventListener('click', closeEquipDrawer);
+const _equipDrawerBack = $('v3dEquipDrawerBack');
+if (_equipDrawerBack) _equipDrawerBack.addEventListener('click', () => {
+  const d = state.equipDrawer;
+  if (d.level === 'config') { d.level = 'model'; renderEquipDrawer(); }
+  else if (d.level === 'model') { d.level = 'cat'; renderEquipDrawer(); }
+  else closeEquipDrawer();
+});
+const _equipSaveBtn = $('v3dEquipSaveBtn');
+if (_equipSaveBtn) _equipSaveBtn.addEventListener('click', confirmEquipConfig);
 
 $('v3dFitBtn').addEventListener('click', fitView);
 $('v3dGrowBtn').addEventListener('click', () => window.open('/views/grow-management.html', '_blank', 'noopener'));
