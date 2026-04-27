@@ -6933,6 +6933,11 @@ async function checkFirstTimeSetup() {
                 'Authorization': `Bearer ${token}`
             }
         });
+
+        if (!response.ok) {
+            console.warn('[setup-wizard] Status endpoint returned non-OK response, skipping redirect:', response.status);
+            return;
+        }
         
         const data = await response.json();
         console.log('[setup-wizard] API status:', data);
@@ -6943,7 +6948,7 @@ async function checkFirstTimeSetup() {
             window.location.href = '/setup-wizard.html';
             return;
         }
-        if (!data.setupCompleted) {
+        if (data.setupCompleted === false) {
             // Double-check: if localStorage has setup_completed=true, don't redirect
             // This prevents redirect loops for farms that completed setup but DB flag is stale
             const localSetupDone = localStorage.getItem('setup_completed') === 'true' || sessionStorage.getItem('setup_completed') === 'true';
@@ -6958,6 +6963,11 @@ async function checkFirstTimeSetup() {
             console.log('[setup-wizard] Setup not complete, redirecting to wizard');
             window.location.href = getSetupWizardRedirectPath();
             return;
+        }
+
+        if (data.setupCompleted === true) {
+            localStorage.setItem('setup_completed', 'true');
+            sessionStorage.setItem('setup_completed', 'true');
         }
         
         console.log('[setup-wizard] Setup already completed');
