@@ -389,4 +389,126 @@ router.post('/generate-groups', async (req, res) => {
   }
 });
 
+/**
+ * Generate room equipment label PDF
+ * POST /api/qr-generator/generate-equipment
+ * Body: { equipmentIds?: string[] }  — optional filter; omit for all placed equipment
+ *
+ * Each label: QR = "EQUIP:{id}" + category + vendor/model + spec line + room
+ * Layout: 3x4 grid (12 per page), 2"x3" label size.
+ */
+router.post('/generate-equipment', async (req, res) => {
+  try {
+    const { equipmentIds } = req.body || {};
+
+    const equipPath = join(__dirname, '..', 'public', 'data', 'room-equipment.json');
+    const roomsPath = join(__dirname, '..', 'public', 'data', 'rooms.json');
+
+    let equipData, roomsData;
+    try {
+      equipData = JSON.parse(readFileSync(equipPath, 'utf8'));
+    } catch {
+      return res.status(500).json({ error: 'Could not read room-equipment.json' });
+    }
+    try {
+      const raw = JSON.parse(readFileSync(roomsPath, 'utf8'));
+      roomsData = Array.isArray(raw) ? raw : (raw.rooms || []);
+    } catch {
+      roomsData = [];
+    }
+
+    const roomMap = {};
+    roomsData.forEach(r => { roomMap[r.id] = r.name || r.id; });
+
+    const allEquip = Array.isArray(equipData) ? equipData : [];
+    let items = allEquip.filter(e => e && e.id);
+    if (Array.isArray(equipmentIds) && equipmentIds.length > 0) {
+      items = items.filter(e => equipmentIds.includes(e.id));
+    }
+    if (items.length === 0) {
+      return res.status(400).json({ error: 'No equipment found. Add equipment in the 3D viewer first.' });
+    }
+
+    // Explode instances — one label per placed instance
+    const labels = [];
+    for (const equip of items) {
+      const instances = Array.isArray(equip.instances) ? equip.instances : [{ instanceId: equip.id }];
+      const roomName = roomMap[equip.roomId] || equip.roomId || 'Unassigned';
+      const specs = equip.specs || {};
+      const specParts = [];
+      if (specs.cfm)         specParts.push(`${specs.cfm} CFM`);
+      if (specs.ppd)         specParts.push(`${specs.ppd} PPD`);
+      if (specs.btu)         specParts.push(`${specs.btu} BTU`);
+      if (specs.outputGPH)   specParts.push(`${specs.outputGPH} GPH`);
+      if (specs.outputCuFtHr) specParts.push(`${specs.outputCuFtHr} cu ft/hr`);
+      if (specs.wattage)     specParts.push(`${specs.wattage} W`);
+      const specLine = specParts.join(' / ') || equip.capacity || '';
+
+      for (const inst of instances) {
+        const qrValue = `EQUIP:${inst.instanceId || equip.id}`;
+        const qrDataUrl = await QRCode.toDataURL(qrValue, { width: 250, margin: 1, errorCorrectionLevel: 'H' });
+        labels.push({
+          id: inst.instanceId || equip.id,
+          category: equip.category || '',
+          vendor: equip.vendor || '',
+          model: equip.model || '',
+          specLine,
+          roomName,
+          qrDataUrl,
+        });
+      }
+    }
+
+    // Build PDF — 3x4 grid
+    const pdfDoc = await PDFDocument.create();
+    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+
+    const pageWidth = 612, pageHeight = 792;
+    const cols = 3, rows = 4, perPage = cols * rows;
+    const cellWidth = pageWidth / cols, cellHeight = pageHeight / rows;
+    const qrSize = 100;
+
+    let currentPage = null, pageIdx = 0;
+
+    for (let i = 0; i < labels.length; i++) {
+      if (i % perPage === 0) { currentPage = pdfDoc.addPage([pageWidth, pageHeight]); pageIdx = 0; }
+      const { id, category, vendor, model, specLine, roomName, qrDataUrl } = labels[i];
+      const col = pageIdx % cols, row = Math.floor(pageIdx / cols);
+      const cellX = col * cellWidth, cellY = pageHeight - (row + 1) * cellHeight;
+      const qrX = cellX + 10, qrY = cellY + cellHeight - qrSize - 10;
+      const textX = cellX + qrSize + 18;
+
+      const qrImageBytes = Buffer.from(qrDataUrl.split(',')[1], 'base64');
+      const qrImage = await pdfDoc.embedPng(qrImageBytes);
+      currentPage.drawImage(qrImage, { x: qrX, y: qrY, width: qrSize, height: qrSize });
+
+      const catStr = category.toUpperCase();
+      currentPage.drawText(catStr,               { x: textX, y: qrY + 85, size: 11, font: boldFont,  color: rgb(0,0,0) });
+      const vmStr = `${vendor} ${model}`.slice(0, 28);
+      currentPage.drawText(vmStr,                { x: textX, y: qrY + 68, size: 9,  font: boldFont,  color: rgb(0,0,0) });
+      currentPage.drawText(specLine.slice(0,30), { x: textX, y: qrY + 52, size: 8,  font,            color: rgb(0.2,0.2,0.2) });
+      currentPage.drawText(`Room: ${roomName}`,  { x: textX, y: qrY + 38, size: 8,  font,            color: rgb(0.3,0.3,0.3) });
+      currentPage.drawText(id.slice(0,30),       { x: textX, y: qrY + 24, size: 7,  font,            color: rgb(0.5,0.5,0.5) });
+
+      pageIdx++;
+    }
+
+    const pages = pdfDoc.getPages();
+    pages.forEach((page, idx) => {
+      const ft = `Equipment Labels | ${new Date().toLocaleDateString()} | Page ${idx+1}/${pages.length}`;
+      page.drawText(ft, { x: (pageWidth - font.widthOfTextAtSize(ft, 8)) / 2, y: 15, size: 8, font, color: rgb(0.5,0.5,0.5) });
+    });
+
+    const pdfBytes = await pdfDoc.save();
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="equipment-labels-${Date.now()}.pdf"`);
+    res.send(Buffer.from(pdfBytes));
+
+  } catch (error) {
+    console.error('[qr-generator] Equipment label error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 export { router };

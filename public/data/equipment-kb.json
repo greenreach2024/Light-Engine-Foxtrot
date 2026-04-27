@@ -784,18 +784,272 @@
         "CT-clamp",
         "multi-circuit"
       ]
+    },
+    {
+      "category": "hvac",
+      "vendor": "Mitsubishi",
+      "model": "Mr. Slim PKA-A24KA7",
+      "capacity": "24000 BTU",
+      "control": "Wired Remote / WiFi",
+      "tags": [
+        "mini-split",
+        "ceiling-cassette",
+        "commercial"
+      ]
+    },
+    {
+      "category": "hvac",
+      "vendor": "Daikin",
+      "model": "FTQ24TAVJU",
+      "capacity": "24000 BTU",
+      "control": "Infrared / App",
+      "tags": [
+        "mini-split",
+        "ceiling-cassette",
+        "inverter"
+      ]
+    },
+    {
+      "category": "hvac",
+      "vendor": "LG",
+      "model": "LMU360HHV",
+      "capacity": "36000 BTU",
+      "control": "ThinQ App",
+      "tags": [
+        "multi-split",
+        "heat-pump",
+        "inverter"
+      ]
+    },
+    {
+      "category": "hvac",
+      "vendor": "Fujitsu",
+      "model": "ARLG30LMCA",
+      "capacity": "30000 BTU",
+      "control": "Wired / App",
+      "tags": [
+        "ceiling-cassette",
+        "commercial",
+        "inverter"
+      ]
+    },
+    {
+      "category": "hvac",
+      "vendor": "_generic",
+      "model": "Generic HVAC / Mini-Split",
+      "capacity": "",
+      "control": "Manual",
+      "isGeneric": true,
+      "requiredSpecs": [
+        "wattage",
+        "btu"
+      ],
+      "specs": {
+        "wattage": 0,
+        "btu": 0
+      },
+      "tags": [
+        "generic"
+      ]
+    },
+    {
+      "category": "humidifier",
+      "vendor": "Anden",
+      "model": "A105US",
+      "capacity": "105 pints/day",
+      "control": "On/Off / Humidistat",
+      "tags": [
+        "commercial",
+        "ultrasonic",
+        "grow-room"
+      ]
+    },
+    {
+      "category": "humidifier",
+      "vendor": "Anden",
+      "model": "A210H",
+      "capacity": "210 pints/day",
+      "control": "Humidistat / 0-10V",
+      "tags": [
+        "commercial",
+        "grow-room",
+        "high-capacity"
+      ]
+    },
+    {
+      "category": "humidifier",
+      "vendor": "AutoFogger",
+      "model": "AF-10",
+      "capacity": "10 GPH",
+      "control": "Timer / Float Valve",
+      "tags": [
+        "ultrasonic",
+        "grow-room",
+        "mid-range"
+      ]
+    },
+    {
+      "category": "humidifier",
+      "vendor": "Vapor-Logic",
+      "model": "GTS-10",
+      "capacity": "10 lbs/hr steam",
+      "control": "0-10V / BACnet",
+      "tags": [
+        "steam",
+        "industrial",
+        "hvac-integrated"
+      ]
+    },
+    {
+      "category": "humidifier",
+      "vendor": "General Aire",
+      "model": "990 Steam",
+      "capacity": "34.6 GPD",
+      "control": "On/Off / Humidistat",
+      "tags": [
+        "steam",
+        "bypass",
+        "commercial"
+      ]
+    },
+    {
+      "category": "humidifier",
+      "vendor": "_generic",
+      "model": "Generic Humidifier",
+      "capacity": "",
+      "control": "Manual",
+      "isGeneric": true,
+      "requiredSpecs": [
+        "wattage",
+        "outputGPH"
+      ],
+      "specs": {
+        "wattage": 0,
+        "outputGPH": 0
+      },
+      "tags": [
+        "generic"
+      ]
+    },
+    {
+      "category": "co2-generator",
+      "vendor": "CAP",
+      "model": "CAPinator 8-Burner",
+      "capacity": "1.5 cu ft/hr CO2 per burner",
+      "control": "PPM Controller / Timer",
+      "tags": [
+        "natural-gas",
+        "propane",
+        "commercial"
+      ]
+    },
+    {
+      "category": "co2-generator",
+      "vendor": "Titan Controls",
+      "model": "Ares 8-Burner",
+      "capacity": "8-burner",
+      "control": "Integrated PPM",
+      "tags": [
+        "natural-gas",
+        "propane",
+        "automation"
+      ]
+    },
+    {
+      "category": "co2-generator",
+      "vendor": "Autopilot",
+      "model": "APCO2G8L",
+      "capacity": "8-burner LP/NG",
+      "control": "Timer / Controller",
+      "tags": [
+        "natural-gas",
+        "propane",
+        "commercial"
+      ]
+    },
+    {
+      "category": "co2-generator",
+      "vendor": "CAP",
+      "model": "4-Burner",
+      "capacity": "0.75 cu ft/hr CO2 per burner",
+      "control": "PPM Controller",
+      "tags": [
+        "small",
+        "natural-gas",
+        "propane"
+      ]
+    },
+    {
+      "category": "co2-generator",
+      "vendor": "_generic",
+      "model": "Generic CO2 Generator",
+      "capacity": "",
+      "control": "Manual",
+      "isGeneric": true,
+      "requiredSpecs": [
+        "btu",
+        "outputCuFtHr"
+      ],
+      "specs": {
+        "btu": 0,
+        "outputCuFtHr": 0
+      },
+      "tags": [
+        "generic"
+      ]
+    },
+    {
+      "category": "fans",
+      "vendor": "_generic",
+      "model": "Generic Fan",
+      "capacity": "",
+      "control": "Manual",
+      "isGeneric": true,
+      "requiredSpecs": [
+        "wattage",
+        "cfm"
+      ],
+      "specs": {
+        "wattage": 0,
+        "cfm": 0
+      },
+      "tags": [
+        "generic"
+      ]
+    },
+    {
+      "category": "dehumidifier",
+      "vendor": "_generic",
+      "model": "Generic Dehumidifier",
+      "capacity": "",
+      "control": "Manual",
+      "isGeneric": true,
+      "requiredSpecs": [
+        "wattage",
+        "ppd"
+      ],
+      "specs": {
+        "wattage": 0,
+        "ppd": 0
+      },
+      "tags": [
+        "generic"
+      ]
     }
   ],
   "categories": [
-    "Lighting",
+    "Fans",
     "HVAC",
     "Dehumidifier",
+    "Humidifier",
+    "CO2 Generator",
     "Mini-Split",
+    "Lighting",
     "Irrigation",
     "Sensors",
     "Controllers"
   ],
-  "lastUpdated": "2026-02-20",
-  "version": "1.1.0",
+  "lastUpdated": "2026-04-27",
+  "version": "1.2.0",
   "schemaVersion": "1.0.0"
 }

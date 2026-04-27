@@ -5564,7 +5564,19 @@
     // Confirm Scan
     function confirmScan() {
       if (!scannedData) return;
-      
+
+      // Prefix-based routing: handle special QR types regardless of scan mode
+      if (scannedData.startsWith('EQUIP:')) {
+        closeScanModal();
+        openEquipmentCard(scannedData.slice(6));
+        return;
+      }
+      if (scannedData.startsWith('GRP:')) {
+        closeScanModal();
+        openGroupCard(scannedData.slice(4));
+        return;
+      }
+
       // Route to appropriate flow based on mode
       switch (currentScanMode) {
         case 'seed':
@@ -5577,6 +5589,56 @@
           window.location.href = `/views/tray-inventory.html?move=${scannedData}`;
           break;
       }
+    }
+
+    async function openEquipmentCard(instanceId) {
+      try {
+        const res = await fetch('/data/room-equipment.json');
+        const entries = res.ok ? await res.json() : [];
+        let entry = null, inst = null;
+        for (const e of entries) {
+          const i = (e.instances || []).find(x => x.instanceId === instanceId);
+          if (i) { entry = e; inst = i; break; }
+        }
+        if (!entry || !inst) {
+          alert(`Equipment not found: ${instanceId}`);
+          return;
+        }
+        const specLines = Object.entries(entry.specs || {})
+          .filter(([, v]) => v)
+          .map(([k, v]) => `<div style="display:flex;justify-content:space-between;"><span style="color:#94a3b8;">${k}</span><span>${v}</span></div>`)
+          .join('');
+        const modalHtml = `
+          <div id="equipCardModal" style="position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.75);display:flex;align-items:center;justify-content:center;padding:1rem;">
+            <div style="background:#1e293b;border-radius:16px;padding:1.5rem;max-width:400px;width:100%;color:#f8fafc;">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+                <div style="font-size:1.2rem;font-weight:700;">${entry.model}</div>
+                <button onclick="document.getElementById('equipCardModal').remove()" style="background:none;border:none;color:#94a3b8;font-size:1.4rem;cursor:pointer;">&#x2715;</button>
+              </div>
+              <div style="font-size:0.85rem;color:#94a3b8;margin-bottom:1rem;">${entry.category} &mdash; ${entry.vendor !== '_generic' ? entry.vendor : 'Generic'}</div>
+              <div style="margin-bottom:1rem;font-size:0.9rem;">${specLines || '<span style="color:#64748b;">No specs recorded</span>'}</div>
+              <div style="font-size:0.8rem;color:#64748b;border-top:1px solid #334155;padding-top:0.75rem;">
+                <div>Instance: ${instanceId}</div>
+                <div>Room: ${inst.roomId || 'unassigned'}</div>
+                <div>Zone: ${inst.zone || 'unassigned'}</div>
+              </div>
+              <div style="display:flex;gap:0.75rem;margin-top:1rem;">
+                <a href="/api/qr-generator/generate-equipment?instanceId=${encodeURIComponent(instanceId)}" target="_blank"
+                  style="flex:1;padding:0.6rem;border-radius:10px;background:#3b82f6;color:#fff;text-align:center;font-size:0.9rem;text-decoration:none;">Print QR</a>
+                <a href="/views/3d-farm-viewer.html" target="_blank"
+                  style="flex:1;padding:0.6rem;border-radius:10px;background:#1a2a3a;border:1px solid #334155;color:#f8fafc;text-align:center;font-size:0.9rem;text-decoration:none;">View in 3D</a>
+              </div>
+            </div>
+          </div>`;
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+      } catch (err) {
+        console.error('[scan] openEquipmentCard failed', err);
+        alert('Failed to load equipment data');
+      }
+    }
+
+    function openGroupCard(groupId) {
+      window.open(`/views/grow-management.html?groupId=${encodeURIComponent(groupId)}`, '_blank', 'noopener');
     }
 
     // Show inline seed form with seed_source for traceability

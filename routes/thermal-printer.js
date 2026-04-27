@@ -65,6 +65,18 @@ const ZPL_TEMPLATES = {
 ^XZ
 `,
 
+  // 2" x 3" Equipment label — room equipment with QR + specs
+  equipmentLabel: (equipId, category, vendor, model, specLine, roomName) => `
+^XA
+^FO40,25^BQN,2,7^FDQA,EQUIP:${equipId}^FS
+^FO240,25^A0N,28,28^FD${category}^FS
+^FO240,58^A0N,22,22^FD${vendor} ${model}^FS
+^FO240,85^A0N,20,20^FD${specLine}^FS
+^FO240,110^A0N,18,18^FDRoom: ${roomName}^FS
+^FO240,135^A0N,14,14^FD${equipId}^FS
+^XZ
+`,
+
   // 4" x 6" Packing Label — SFCR: includes producer identity
   packingLabel: (orderId, buyer, items, qrData, producerName = '', producerAddr = '') => `
 ^XA
@@ -494,6 +506,114 @@ router.get('/label-group', async (req, res) => {
     res.send(html);
   } catch (error) {
     console.error('Group label HTML error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * Print equipment label
+ * POST /api/printer/print-equipment
+ * Body: { equipmentId, category, vendor, model, specLine, roomName, connection, printerName?, host?, port?, format? }
+ */
+router.post('/print-equipment', async (req, res) => {
+  try {
+    const {
+      equipmentId,
+      category = '',
+      vendor = '',
+      model = '',
+      specLine = '',
+      roomName = '',
+      connection = 'usb',
+      printerName,
+      host,
+      port = 9100,
+      format = 'zpl'
+    } = req.body;
+
+    if (!equipmentId) {
+      return res.status(400).json({ error: 'equipmentId is required' });
+    }
+
+    const labelData = ZPL_TEMPLATES.equipmentLabel(equipmentId, category, vendor, model, specLine, roomName);
+
+    const job = {
+      id: `job-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      type: connection,
+      data: labelData,
+      printerName,
+      host,
+      port,
+      status: 'pending',
+      createdAt: new Date(),
+      metadata: { equipmentId, category, vendor, model, labelType: 'equipment' }
+    };
+
+    printQueue.push(job);
+    startQueueProcessor();
+
+    res.json({
+      success: true,
+      jobId: job.id,
+      message: 'Equipment label print job queued',
+      queuePosition: printQueue.length
+    });
+  } catch (error) {
+    console.error('Print equipment error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * Browser-based equipment label (HTML with QR code, no thermal printer needed)
+ * GET /api/printer/label-equipment?equipment_id=...&category=...&vendor=...&model=...&spec_line=...&room_name=...
+ */
+router.get('/label-equipment', async (req, res) => {
+  try {
+    const { equipment_id, category = '', vendor = '', model = '', spec_line = '', room_name = '' } = req.query;
+    if (!equipment_id) {
+      return res.status(400).json({ error: 'equipment_id is required' });
+    }
+
+    const QRCode = (await import('qrcode')).default;
+    const qrDataUrl = await QRCode.toDataURL(`EQUIP:${equipment_id}`, {
+      width: 200, margin: 1, errorCorrectionLevel: 'H'
+    });
+
+    const html = `<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>Equipment Label - ${category} ${model}</title>
+<style>
+  @media print { body { margin: 0; } .no-print { display: none; } }
+  body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+  .label { width: 3in; background: white; border: 2px solid #000; padding: 12px;
+    margin: 0 auto; display: flex; gap: 12px; align-items: flex-start; }
+  .qr-code { width: 110px; height: 110px; flex-shrink: 0; }
+  .info { flex: 1; }
+  .cat  { font-size: 13px; font-weight: 800; text-transform: uppercase; margin-bottom: 2px; }
+  .name { font-size: 12px; font-weight: 600; margin-bottom: 2px; }
+  .spec { font-size: 11px; color: #444; margin-bottom: 2px; }
+  .room { font-size: 10px; color: #666; }
+  .eid  { font-size: 9px; color: #999; margin-top: 4px; font-family: monospace; }
+  .print-btn { background: #1a6b3c; color: white; border: none; padding: 10px 20px;
+    font-size: 15px; border-radius: 4px; cursor: pointer; display: block; margin: 16px auto; }
+</style></head><body>
+  <button class="print-btn no-print" onclick="window.print()">🖨️ Print Label</button>
+  <div class="label">
+    <img src="${qrDataUrl}" alt="QR" class="qr-code">
+    <div class="info">
+      <div class="cat">${category}</div>
+      <div class="name">${vendor} ${model}</div>
+      <div class="spec">${spec_line}</div>
+      <div class="room">Room: ${room_name}</div>
+      <div class="eid">${equipment_id}</div>
+    </div>
+  </div>
+</body></html>`;
+
+    res.setHeader('Content-Type', 'text/html');
+    res.send(html);
+  } catch (error) {
+    console.error('Equipment label HTML error:', error);
     res.status(500).json({ error: error.message });
   }
 });
