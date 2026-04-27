@@ -29,6 +29,7 @@ RectAreaLightUniformsLib.init();
 
 const IN_TO_M = 0.0254;
 const M_TO_FT = 3.28084;
+const MAIN_WALKWAY_M = 1.8288; // 6 ft service aisle
 const fmt = (v, d=1) => Number.isFinite(v) ? Number(v).toFixed(d) : '--';
 const $ = (id) => document.getElementById(id);
 const authFetch = (window.authFetch || fetch.bind(window));
@@ -50,9 +51,11 @@ const state = {
   editMode: false,
   heatmapOn: false,
   heatMetric: 'tempC',
+  heatAutoScale: false,
   showWalls: true,
   showCeiling: true,
   collapsedZoneSystems: new Set(),
+  history: { snapshots: [], cursor: -1 },
 };
 
 let toastTimer = null;
@@ -617,19 +620,55 @@ function buildScene() {
     const zoneFloors = new Map();
     zoneRects.forEach((zr, idx) => {
       const baseColor = zoneBaseColors[idx % zoneBaseColors.length];
-      const mat = new THREE.MeshStandardMaterial({ color: baseColor, roughness: 0.85, metalness: 0, transparent: true, opacity: 0.55 });
-      const zf = new THREE.Mesh(new THREE.BoxGeometry(zr.length_m, 0.02, zr.width_m), mat);
-      zf.position.set(zr.x_m + zr.length_m/2, 0.01, zr.y_m + zr.width_m/2);
-      zf.receiveShadow = true;
-      zf.userData = { kind: 'zone', roomId: room.id, zoneId: zr.id, zoneName: zr.name, rect: zr, baseColor };
-      roomGroup.add(zf);
       zoneFloors.set(zr.name, zr); zoneFloors.set(zr.id, zr);
-      state.zoneFloorIndex.set(`${room.id}|${zr.name}`, zf);
-      state.zoneFloorIndex.set(`${room.id}|${zr.id}`, zf);
+
+      // Split zone into per-sensor-source tiles for spatial heatmap resolution
+      const envData = envForZone(room.id, zr.name) || envForZone(room.id, zr.id);
+      const tempSources = envData?.sensors?.tempC?.sources;
+      const srcIds = tempSources ? Object.keys(tempSources) : [];
+
+      if (srcIds.length > 1) {
+        const tileW = zr.width_m / srcIds.length;
+        srcIds.forEach((srcId, si) => {
+          const mat = new THREE.MeshStandardMaterial({ color: baseColor, roughness: 0.85, metalness: 0, transparent: true, opacity: 0.55 });
+          const zf = new THREE.Mesh(new THREE.BoxGeometry(zr.length_m, 0.02, tileW), mat);
+          zf.position.set(zr.x_m + zr.length_m/2, 0.01, zr.y_m + si * tileW + tileW/2);
+          zf.receiveShadow = true;
+          zf.userData = { kind: 'zone', roomId: room.id, zoneId: zr.id, zoneName: zr.name, rect: zr, baseColor, sourceId: srcId };
+          roomGroup.add(zf);
+          state.zoneFloorIndex.set(`${room.id}|${zr.name}|${srcId}`, zf);
+          state.zoneFloorIndex.set(`${room.id}|${zr.id}|${srcId}`, zf);
+        });
+      } else {
+        const mat = new THREE.MeshStandardMaterial({ color: baseColor, roughness: 0.85, metalness: 0, transparent: true, opacity: 0.55 });
+        const zf = new THREE.Mesh(new THREE.BoxGeometry(zr.length_m, 0.02, zr.width_m), mat);
+        zf.position.set(zr.x_m + zr.length_m/2, 0.01, zr.y_m + zr.width_m/2);
+        zf.receiveShadow = true;
+        zf.userData = { kind: 'zone', roomId: room.id, zoneId: zr.id, zoneName: zr.name, rect: zr, baseColor };
+        roomGroup.add(zf);
+        state.zoneFloorIndex.set(`${room.id}|${zr.name}`, zf);
+        state.zoneFloorIndex.set(`${room.id}|${zr.id}`, zf);
+      }
+
       const zl = makeLabelSprite(zr.name);
       zl.position.set(zr.x_m + zr.length_m/2, 0.6, zr.y_m + zr.width_m/2);
       zl.scale.multiplyScalar(0.6); roomGroup.add(zl);
     });
+
+    // 6 ft central service aisle — amber overlay spanning the full room length
+    if (dims.W > MAIN_WALKWAY_M * 2 + 0.3) {
+      const walkMat = new THREE.MeshStandardMaterial({
+        color: 0x4a3d10, roughness: 0.96, metalness: 0, transparent: true, opacity: 0.28,
+      });
+      const wm = new THREE.Mesh(new THREE.BoxGeometry(dims.L - 0.3, 0.028, MAIN_WALKWAY_M), walkMat);
+      wm.position.set(dims.L / 2, 0.014, dims.W / 2);
+      wm.receiveShadow = true;
+      roomGroup.add(wm);
+      const wl = makeLabelSprite('← Aisle (6 ft) →');
+      wl.scale.multiplyScalar(0.42);
+      wl.position.set(dims.L / 2, 0.55, dims.W / 2);
+      roomGroup.add(wl);
+    }
 
     const roomGroups = state.groups.filter(g => groupInRoom(g, room));
     const buckets = new Map();
@@ -672,6 +711,17 @@ function placeGroupsInZone(roomGroup, zr, groupsArr, room) {
   let rowMaxW = 0;
   const maxX = zr.x_m + zr.length_m - padding;
   const maxY = zr.y_m + zr.width_m - padding;
+
+  // Skip the central 6 ft walkway when packing rows
+  const roomDims = readRoomDims(room);
+  const walkwayCenterY = roomDims ? roomDims.W / 2 : null;
+  const walkwayStartY = walkwayCenterY !== null ? walkwayCenterY - MAIN_WALKWAY_M / 2 : null;
+  const walkwayEndY   = walkwayCenterY !== null ? walkwayCenterY + MAIN_WALKWAY_M / 2 : null;
+  const zoneHasWalkway = walkwayStartY !== null &&
+    zr.y_m < walkwayEndY && zr.y_m + zr.width_m > walkwayStartY;
+  if (zoneHasWalkway && cursorY >= walkwayStartY && cursorY < walkwayEndY) {
+    cursorY = walkwayEndY + padding;
+  }
   // RectAreaLight budget per zone — top-down view drops fixture lighting
   // entirely (no benefit when looking straight down).
   let ralBudget = state.viewMode === 'top' ? 0 : MAX_RAL_PER_ZONE;
@@ -694,6 +744,9 @@ function placeGroupsInZone(roomGroup, zr, groupsArr, room) {
         cursorX = zr.x_m + padding;
         cursorY += rowMaxW + padding;
         rowMaxW = 0;
+        if (zoneHasWalkway && cursorY < walkwayEndY && cursorY + W > walkwayStartY) {
+          cursorY = walkwayEndY + padding;
+        }
       }
       posX = cursorX + L/2;
       posY = cursorY + W/2;
@@ -723,10 +776,35 @@ function placeGroupsInZone(roomGroup, zr, groupsArr, room) {
   });
 }
 
+function computeDataRange(metric) {
+  const vals = [];
+  state.envByZoneKey.forEach((envData) => {
+    const s = envData?.sensors?.[metric];
+    if (!s) return;
+    const cv = Number(s.current);
+    if (Number.isFinite(cv)) vals.push(cv);
+    if (s.sources) Object.values(s.sources).forEach(src => {
+      const sv = Number(src?.current);
+      if (Number.isFinite(sv)) vals.push(sv);
+    });
+  });
+  if (!vals.length) return null;
+  const dlo = Math.min(...vals), dhi = Math.max(...vals);
+  const spread = dhi - dlo || 0.5;
+  return { lo: dlo - spread * 0.05, hi: dhi + spread * 0.05 };
+}
+
 function applyHeatmap() {
   const on = state.heatmapOn;
   const metric = state.heatMetric;
   const mi = metricInfo(metric);
+
+  let lo = mi.lo, hi = mi.hi;
+  if (on && state.heatAutoScale) {
+    const r = computeDataRange(metric);
+    if (r) { lo = r.lo; hi = r.hi; }
+  }
+
   const seen = new Set();
   state.zoneFloorIndex.forEach((mesh) => {
     if (seen.has(mesh.uuid)) return;
@@ -740,17 +818,27 @@ function applyHeatmap() {
       return;
     }
     const env = envForZone(ud.roomId, ud.zoneName) || envForZone(ud.roomId, ud.zoneId);
-    const v = Number(env?.sensors?.[metric]?.current);
-    const c = heatColor(v, mi.lo, mi.hi);
+    let v;
+    if (ud.sourceId && env?.sensors?.[metric]?.sources?.[ud.sourceId]) {
+      v = Number(env.sensors[metric].sources[ud.sourceId].current);
+    } else {
+      v = Number(env?.sensors?.[metric]?.current);
+    }
+    const c = heatColor(v, lo, hi);
     mesh.material.color.copy(c);
     mesh.material.opacity = Number.isFinite(v) ? 0.78 : 0.35;
     if (mesh.material.emissive) mesh.material.emissive.copy(c).multiplyScalar(0.18);
   });
-  $('v3dHeatLo').textContent = `${mi.lo} ${mi.unit}`;
-  $('v3dHeatHi').textContent = `${mi.hi} ${mi.unit}`;
+
+  const loLabel = state.heatAutoScale ? lo.toFixed(1) : String(mi.lo);
+  const hiLabel = state.heatAutoScale ? hi.toFixed(1) : String(mi.hi);
+  $('v3dHeatLo').textContent = `${loLabel} ${mi.unit}`;
+  $('v3dHeatHi').textContent = `${hiLabel} ${mi.unit}`;
   $('v3dHeatKey').classList.toggle('show', on);
   $('v3dHeatMode').classList.toggle('show', on);
   $('v3dHeatBtn').classList.toggle('active', on);
+  const autoBtn = $('v3dHeatAutoBtn');
+  if (autoBtn) autoBtn.classList.toggle('active', state.heatAutoScale);
 }
 
 function applySelectionVisuals() {
@@ -841,15 +929,42 @@ const drag = {
   initialHit: new THREE.Vector3(),
   movedAtLeastOnce: false,
 };
-function clampPosToZone(mesh, x, z) {
-  const ud = mesh.userData; const zr = ud.zoneRect; if (!zr) return { x, z };
+// Clamp to room bounds — equipment can move freely anywhere in the room.
+// Zone assignment is auto-updated on drop (endDrag → findZoneForPosition).
+function clampPosToRoom(mesh, x, z) {
+  const ud = mesh.userData;
   const fp = ud.footprint;
+  if (!fp) return { x, z };
   const L = ud.rotate ? fp.width_m : fp.length_m;
   const W = ud.rotate ? fp.length_m : fp.width_m;
+  const pad = 0.15;
+  const dims = mesh.parent?.userData?.dims;
+  if (dims) {
+    return {
+      x: Math.max(L / 2 + pad, Math.min(dims.L - L / 2 - pad, x)),
+      z: Math.max(W / 2 + pad, Math.min(dims.W - W / 2 - pad, z)),
+    };
+  }
+  // Fallback: clamp to zone if room dims unavailable
+  const zr = ud.zoneRect;
+  if (!zr) return { x, z };
   return {
     x: Math.max(zr.x_m + L/2, Math.min(zr.x_m + zr.length_m - L/2, x)),
     z: Math.max(zr.y_m + W/2, Math.min(zr.y_m + zr.width_m - W/2, z)),
   };
+}
+
+function findZoneForPosition(mesh) {
+  const x = mesh.position.x, z = mesh.position.z;
+  const roomGroupId = mesh.parent?.userData?.id;
+  if (!roomGroupId) return null;
+  const room = state.rooms.find(r => r.id === roomGroupId);
+  if (!room) return null;
+  const zoneRects = getZoneRects(room);
+  return zoneRects.find(zr =>
+    x >= zr.x_m && x <= zr.x_m + zr.length_m &&
+    z >= zr.y_m && z <= zr.y_m + zr.width_m
+  ) || null;
 }
 function startDrag(targetMesh, startPoint) {
   let ids = state.selection.has(targetMesh.userData.id) ? Array.from(state.selection) : [targetMesh.userData.id];
@@ -869,7 +984,7 @@ function updateDrag(clientX, clientY) {
   drag.startMeshes.forEach(({ mesh, startLocal }) => {
     const tx = startLocal.x + dx;
     const tz = startLocal.z + dz;
-    const c = clampPosToZone(mesh, tx, tz);
+    const c = clampPosToRoom(mesh, tx, tz);
     mesh.position.set(c.x, 0, c.z);
     const room = mesh.parent;
     if (room) room.children.forEach(ch => {
@@ -879,18 +994,7 @@ function updateDrag(clientX, clientY) {
     });
   });
 }
-async function endDrag() {
-  if (!drag.active) return;
-  drag.active = false;
-  controls.enabled = true; canvas.classList.remove('dragging');
-  if (!drag.movedAtLeastOnce) { drag.startMeshes = []; return; }
-  drag.startMeshes.forEach(({ mesh }) => {
-    const id = mesh.userData.id;
-    const g = state.groups.find(gg => gg.id === id);
-    if (!g) return;
-    g.customization = g.customization || {};
-    g.customization.placement = { x_m: mesh.position.x, z_m: mesh.position.z, rotated: !!mesh.userData.rotate };
-  });
+async function saveGroups(opts = {}) {
   try {
     const r = await authFetch('/data/groups.json', {
       method: 'POST',
@@ -898,13 +1002,107 @@ async function endDrag() {
       body: JSON.stringify(state.groups),
     });
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    toast(`Saved layout for ${drag.startMeshes.length} system(s)`);
+    if (!opts.silent) toast(opts.msg || 'Saved');
   } catch (err) {
-    console.error('[v3d] save layout failed', err);
+    console.error('[v3d] save failed', err);
     toast('Save failed: ' + (err.message || 'unknown'));
-  } finally {
-    drag.startMeshes = [];
   }
+}
+
+function pushHistory() {
+  const h = state.history;
+  h.snapshots = h.snapshots.slice(0, h.cursor + 1);
+  h.snapshots.push(JSON.parse(JSON.stringify(state.groups)));
+  if (h.snapshots.length > 20) h.snapshots.shift();
+  h.cursor = h.snapshots.length - 1;
+  updateHistoryButtons();
+}
+
+function updateHistoryButtons() {
+  const h = state.history;
+  const undoBtn = $('v3dUndoBtn'), redoBtn = $('v3dRedoBtn');
+  if (undoBtn) undoBtn.disabled = h.cursor < 1;
+  if (redoBtn) redoBtn.disabled = h.cursor >= h.snapshots.length - 1;
+}
+
+async function applyHistorySnapshot(snap) {
+  state.groups = JSON.parse(JSON.stringify(snap));
+  state.selection.clear();
+  buildScene();
+  renderSidePanel();
+  await saveGroups({ silent: true });
+  updateHistoryButtons();
+}
+
+async function undo() {
+  const h = state.history;
+  if (h.cursor < 1) { toast('Nothing to undo'); return; }
+  h.cursor--;
+  toast('Undo');
+  await applyHistorySnapshot(h.snapshots[h.cursor]);
+}
+
+async function redo() {
+  const h = state.history;
+  if (h.cursor >= h.snapshots.length - 1) { toast('Nothing to redo'); return; }
+  h.cursor++;
+  toast('Redo');
+  await applyHistorySnapshot(h.snapshots[h.cursor]);
+}
+
+function rotateSelected() {
+  const ids = Array.from(state.selection);
+  if (!ids.length) { toast('Select a system to rotate'); return; }
+  pushHistory();
+  ids.forEach(id => {
+    const g = state.groups.find(gg => gg.id === id);
+    const mesh = state.meshIndex.get(id);
+    if (!g) return;
+    g.customization = g.customization || {};
+    const cur = g.customization.placement || {};
+    const x = cur.x_m ?? mesh?.position.x ?? 0;
+    const z = cur.z_m ?? mesh?.position.z ?? 0;
+    g.customization.placement = { x_m: x, z_m: z, rotated: !cur.rotated };
+  });
+  buildScene();
+  renderSidePanel();
+  saveGroups({ msg: `Rotated ${ids.length} system(s)` });
+}
+
+async function deleteSelected() {
+  const ids = Array.from(state.selection);
+  if (!ids.length) { toast('Select a system to delete'); return; }
+  const names = ids.map(id => {
+    const g = state.groups.find(gg => gg.id === id);
+    return g?.name || g?.id || id;
+  }).join(', ');
+  if (!confirm(`Delete ${ids.length} system(s)?\n\n${names}\n\nThis can be undone with Undo.`)) return;
+  pushHistory();
+  state.groups = state.groups.filter(g => !ids.includes(g.id));
+  state.selection.clear();
+  buildScene();
+  renderSidePanel();
+  await saveGroups({ msg: `Deleted ${ids.length} system(s)` });
+}
+
+async function endDrag() {
+  if (!drag.active) return;
+  drag.active = false;
+  controls.enabled = true; canvas.classList.remove('dragging');
+  if (!drag.movedAtLeastOnce) { drag.startMeshes = []; return; }
+  pushHistory();
+  drag.startMeshes.forEach(({ mesh }) => {
+    const id = mesh.userData.id;
+    const g = state.groups.find(gg => gg.id === id);
+    if (!g) return;
+    g.customization = g.customization || {};
+    g.customization.placement = { x_m: mesh.position.x, z_m: mesh.position.z, rotated: !!mesh.userData.rotate };
+    const zr = findZoneForPosition(mesh);
+    if (zr) g.zone = zr.name;
+  });
+  const n = drag.startMeshes.length;
+  drag.startMeshes = [];
+  await saveGroups({ msg: `Saved layout for ${n} system(s)` });
 }
 
 const marquee = { active: false, startX: 0, startY: 0, curX: 0, curY: 0, el: null };
@@ -1333,7 +1531,16 @@ $('v3dEditBtn').addEventListener('click', () => {
   state.editMode = !state.editMode;
   $('v3dEditBtn').classList.toggle('active', state.editMode);
   canvas.classList.toggle('editing', state.editMode);
-  toast(state.editMode ? 'Edit mode: drag systems to reposition' : 'Edit mode off');
+  toast(state.editMode ? 'Edit mode: drag anywhere in room — Rotate (R) or Delete (Del) selected' : 'Edit mode off');
+});
+$('v3dUndoBtn').addEventListener('click', () => undo());
+$('v3dRedoBtn').addEventListener('click', () => redo());
+$('v3dRotateBtn').addEventListener('click', () => rotateSelected());
+$('v3dDeleteBtn').addEventListener('click', () => deleteSelected());
+$('v3dHeatAutoBtn').addEventListener('click', () => {
+  state.heatAutoScale = !state.heatAutoScale;
+  applyHeatmap();
+  toast(state.heatAutoScale ? 'Heatmap: auto-scale ON (relative range)' : 'Heatmap: fixed scale');
 });
 $('v3dWallsBtn').addEventListener('click', () => {
   state.showWalls = !state.showWalls;
@@ -1377,6 +1584,10 @@ window.addEventListener('keydown', (e) => {
   if (e.key === 'w' || e.key === 'W') $('v3dWallsBtn').click();
   if (e.key === 'c' || e.key === 'C') $('v3dCeilingBtn').click();
   if (e.key === 'h' || e.key === 'H') $('v3dHeatBtn').click();
+  if (e.key === 'r' || e.key === 'R') rotateSelected();
+  if ((e.key === 'Delete' || e.key === 'Backspace') && state.editMode) { e.preventDefault(); deleteSelected(); }
+  if (e.key === 'z' && (e.ctrlKey || e.metaKey) && !e.shiftKey) { e.preventDefault(); undo(); }
+  if ((e.key === 'y' && (e.ctrlKey || e.metaKey)) || (e.key === 'z' && (e.ctrlKey || e.metaKey) && e.shiftKey)) { e.preventDefault(); redo(); }
 });
 
 function tick(now) {
@@ -1392,6 +1603,8 @@ function tick(now) {
     buildScene();
     fitView();
     renderSidePanel();
+    pushHistory();
+    updateHistoryButtons();
   } catch (err) {
     console.error('[v3d] init failed', err);
     toast('Failed to load farm data: ' + (err.message || 'unknown'));

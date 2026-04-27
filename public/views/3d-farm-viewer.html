@@ -47,6 +47,9 @@
   .v3d-btn.active { background: rgba(106, 177, 255, 0.22); border-color: rgba(106, 177, 255, 0.7); color: #ffffff; }
   .v3d-btn--primary { background: linear-gradient(180deg, #2bb27a, #1d8c5d); border-color: #1d8c5d; color: #ffffff; }
   .v3d-btn--primary:hover { background: linear-gradient(180deg, #34c98a, #239f6a); }
+  .v3d-btn--danger { background: rgba(200,45,45,0.15); border-color: rgba(255,90,90,0.45); color: var(--v3d-bad); }
+  .v3d-btn--danger:hover { background: rgba(200,45,45,0.35); border-color: rgba(255,90,90,0.8); }
+  .v3d-btn:disabled { opacity: 0.35; cursor: not-allowed; pointer-events: none; }
   .v3d-select {
     background: rgba(15,23,35,0.85); color: var(--v3d-text);
     border: 1px solid var(--v3d-panel-border); border-radius: 8px;
@@ -146,10 +149,15 @@
   </div>
   <button class="v3d-btn" id="v3dFitBtn" title="Fit view">Fit</button>
   <button class="v3d-btn" id="v3dShotBtn" title="Capture screenshot" aria-label="Capture screenshot">Snap</button>
-  <button class="v3d-btn" id="v3dEditBtn" title="Edit mode (E) - drag systems to reposition">Edit</button>
+  <button class="v3d-btn" id="v3dEditBtn" title="Edit mode (E) — drag systems anywhere in room">Edit</button>
+  <button class="v3d-btn" id="v3dUndoBtn" title="Undo last change (Ctrl+Z)" disabled>Undo</button>
+  <button class="v3d-btn" id="v3dRedoBtn" title="Redo (Ctrl+Y)" disabled>Redo</button>
+  <button class="v3d-btn" id="v3dRotateBtn" title="Rotate selected 90° (R)">Rotate</button>
+  <button class="v3d-btn v3d-btn--danger" id="v3dDeleteBtn" title="Delete selected (Del)">Delete</button>
   <button class="v3d-btn" id="v3dWallsBtn" title="Toggle walls (W)">Walls</button>
   <button class="v3d-btn" id="v3dCeilingBtn" title="Toggle ceiling (C)">Ceiling</button>
   <button class="v3d-btn" id="v3dHeatBtn" title="Heatmap overlay (H)">Heatmap</button>
+  <button class="v3d-btn" id="v3dHeatAutoBtn" title="Auto-scale heatmap to actual sensor range">Auto ⚖</button>
   <button class="v3d-btn" data-overlay="ppfd" title="PPFD light intensity overlay">PPFD</button>
   <button class="v3d-btn" data-overlay="dli" title="DLI daily light integral overlay">DLI</button>
   <select class="v3d-select" id="v3dHeatMetric" title="Heatmap metric">
