@@ -52,6 +52,8 @@ const state = {
   heatMetric: 'tempC',
   showWalls: true,
   showCeiling: true,
+  showSensors: true,
+  walkwayMode: false,
   collapsedZoneSystems: new Set(),
 };
 
@@ -188,11 +190,16 @@ function clearGroupChildren(g) {
 
 function readRoomDims(room) {
   if (!room) return null;
-  const L = Number(room.length_m ?? room.lengthM ?? room.dimensions?.length_m ?? room.dimensions?.lengthM);
-  const W = Number(room.width_m ?? room.widthM ?? room.dimensions?.width_m ?? room.dimensions?.widthM);
+  // User-facing convention: data field `length_m` is the room's depth
+  // (longer axis, rendered along Z) and `width_m` is the side-to-side
+  // axis (rendered along X). The renderer's L is the X extent and W is
+  // the Z extent, so we swap here so the visual matches the user's
+  // intent.
+  const lenIn = Number(room.length_m ?? room.lengthM ?? room.dimensions?.length_m ?? room.dimensions?.lengthM);
+  const widIn = Number(room.width_m ?? room.widthM ?? room.dimensions?.width_m ?? room.dimensions?.widthM);
   const H = Number(room.ceiling_height_m ?? room.ceilingHeightM ?? room.height_m ?? room.heightM ?? room.dimensions?.height_m ?? room.dimensions?.heightM ?? 3.2);
-  if (!Number.isFinite(L) || !Number.isFinite(W) || L <= 0 || W <= 0) return null;
-  return { L, W, H };
+  if (!Number.isFinite(lenIn) || !Number.isFinite(widIn) || lenIn <= 0 || widIn <= 0) return null;
+  return { L: widIn, W: lenIn, H };
 }
 
 function getZoneRects(room) {
@@ -253,13 +260,99 @@ function groupFootprintM(group) {
     return { length_m: lenIn * IN_TO_M, width_m: widIn * IN_TO_M };
   }
   const tpl = templateById(group.templateId);
+  // Templates use either spatialContract.unitFootprintM.{length,width} or
+  // top-level footprintM.{length,width}; tolerate older spatialContract
+  // variants too.
   const sc = tpl?.spatialContract;
-  if (sc) {
-    const L = Number(sc.footprint_m?.length || sc.lengthM || 1.5);
-    const W = Number(sc.footprint_m?.width || sc.widthM || 0.6);
-    return { length_m: L, width_m: W };
+  const fp = tpl?.footprintM || sc?.unitFootprintM || sc?.footprint_m || null;
+  if (fp) {
+    const L = Number(fp.length ?? fp.length_m ?? fp.lengthM);
+    const W = Number(fp.width ?? fp.width_m ?? fp.widthM);
+    if (Number.isFinite(L) && Number.isFinite(W) && L > 0 && W > 0) {
+      return { length_m: L, width_m: W };
+    }
   }
   return { length_m: 1.5, width_m: 0.6 };
+}
+
+// Resolve the template's working-area / clearance (meters) so auto-layout
+// respects the operator aisles documented on the grow management template
+// card. Falls back to a conservative 0.25 m gap when no clearance is set.
+function clearanceForGroup(group) {
+  const tpl = templateById(group.templateId);
+  const wc = tpl?.spatialContract?.workspaceClearanceM || tpl?.spatialContract?.workspace_clearance_m || {};
+  const front = Number(wc.front) || 0;
+  const back = Number(wc.back) || 0;
+  const ends = Number(wc.ends) || 0;
+  const minGap = 0.25;
+  return {
+    front, back, ends,
+    pad: Math.max(minGap, front, back, ends),
+    aisle: Math.max(minGap, front),
+  };
+}
+
+// Walkway helpers ---------------------------------------------------------
+function getRoomWalkways(room) {
+  const list = Array.isArray(room?.walkways) ? room.walkways : [];
+  return list.map(w => ({
+    id: w.id || `walkway-${room.id}-${list.indexOf(w)}`,
+    label: w.label || 'Walkway',
+    x_m: Number(w.x_m ?? w.x ?? 0),
+    y_m: Number(w.y_m ?? w.z_m ?? w.z ?? 0),
+    length_m: Number(w.length_m ?? w.lengthM ?? 0),
+    width_m: Number(w.width_m ?? w.widthM ?? 0),
+  })).filter(w => w.length_m > 0 && w.width_m > 0);
+}
+
+function rectsOverlap(a, b, tol = 0.01) {
+  return !(
+    a.x_m + a.length_m <= b.x_m + tol ||
+    b.x_m + b.length_m <= a.x_m + tol ||
+    a.y_m + a.width_m  <= b.y_m + tol ||
+    b.y_m + b.width_m  <= a.y_m + tol
+  );
+}
+
+// Sensor icon factory: distinct cyan stem-and-bulb that reads as a sensor.
+function makeSensorIcon(label) {
+  const g = new THREE.Group();
+  const matStem = new THREE.MeshStandardMaterial({ color: 0x67e8f9, roughness: 0.4, metalness: 0.3 });
+  const matBulb = new THREE.MeshStandardMaterial({ color: 0xa5f3fc, emissive: 0x22d3ee, emissiveIntensity: 0.9, roughness: 0.25, metalness: 0.1 });
+  const matBase = new THREE.MeshStandardMaterial({ color: 0x0f4f5e, roughness: 0.7, metalness: 0.3 });
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.16, 0.06, 16), matBase);
+  base.position.y = 0.03; base.castShadow = true; g.add(base);
+  const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.55, 12), matStem);
+  stem.position.y = 0.30; g.add(stem);
+  const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.10, 18, 14), matBulb);
+  bulb.position.y = 0.62; bulb.castShadow = true; g.add(bulb);
+  const halo = new THREE.Mesh(new THREE.RingGeometry(0.18, 0.24, 32),
+    new THREE.MeshBasicMaterial({ color: 0x22d3ee, transparent: true, opacity: 0.65, side: THREE.DoubleSide }));
+  halo.rotation.x = -Math.PI / 2; halo.position.y = 0.005; g.add(halo);
+  if (label) {
+    const sp = makeLabelSprite('📡 ' + label);
+    sp.position.set(0, 0.95, 0); sp.scale.multiplyScalar(0.55); g.add(sp);
+  }
+  return g;
+}
+
+// Walkway tile: subtle blue strip with directional hatching.
+function makeWalkwayTile(walkway) {
+  const cv = document.createElement('canvas'); cv.width = 128; cv.height = 64;
+  const ctx = cv.getContext('2d');
+  ctx.fillStyle = '#3b82f6'; ctx.globalAlpha = 0.18; ctx.fillRect(0, 0, 128, 64);
+  ctx.globalAlpha = 0.6; ctx.strokeStyle = '#93c5fd'; ctx.lineWidth = 3;
+  for (let x = -64; x < 192; x += 14) {
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x + 32, 64); ctx.stroke();
+  }
+  const tex = new THREE.CanvasTexture(cv);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(Math.max(1, walkway.length_m), Math.max(1, walkway.width_m));
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const mat = new THREE.MeshStandardMaterial({ map: tex, color: 0xffffff, roughness: 0.85, metalness: 0.0, transparent: true, opacity: 0.9 });
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(walkway.length_m, 0.03, walkway.width_m), mat);
+  mesh.receiveShadow = true;
+  return mesh;
 }
 
 function makeNftRack(group) {
@@ -566,7 +659,7 @@ function buildScene() {
     roomGroup.name = `room:${room.id}`;
     roomGroup.userData = { kind: 'roomGroup', id: room.id, name: room.name, dims };
 
-    const floor = new THREE.Mesh(new THREE.BoxGeometry(dims.L, 0.05, dims.W), matFloor);
+    const floor = new THREE.Mesh(new THREE.BoxGeometry(dims.L, 0.05, dims.W), matFloor.clone());
     floor.position.set(dims.L/2, -0.025, dims.W/2); floor.receiveShadow = true;
     floor.userData = { kind: 'room', id: room.id, name: room.name };
     roomGroup.add(floor);
@@ -629,11 +722,30 @@ function buildScene() {
       if (!buckets.has(key)) buckets.set(key, []);
       buckets.get(key).push(gr);
     });
+    const walkways = getRoomWalkways(room);
     buckets.forEach((groupsArr, zoneKey) => {
       const zr = zoneFloors.get(zoneKey) || zoneRects[0];
       if (!zr) return;
-      placeGroupsInZone(roomGroup, zr, groupsArr, room);
+      placeGroupsInZone(roomGroup, zr, groupsArr, room, walkways);
     });
+
+    // Render walkways on top of zone floors.
+    walkways.forEach((w) => {
+      const tile = makeWalkwayTile(w);
+      tile.position.set(w.x_m + w.length_m / 2, 0.018, w.y_m + w.width_m / 2);
+      tile.userData = { kind: 'walkway', roomId: room.id, walkway: w };
+      tile.name = `walkway:${w.id}`;
+      roomGroup.add(tile);
+      const lbl = makeLabelSprite(w.label || 'Walkway');
+      lbl.position.set(tile.position.x, 0.55, tile.position.z);
+      lbl.scale.multiplyScalar(0.55);
+      roomGroup.add(lbl);
+    });
+
+    // Render sensors as distinct icons; pickable in edit mode.
+    if (state.showSensors) {
+      buildSensorsForRoom(roomGroup, room, zoneRects);
+    }
 
     roomGroup.position.set(cursorX - dims.L/2, 0, -dims.W/2);
     farmRoot.add(roomGroup);
@@ -654,18 +766,49 @@ function buildScene() {
   updateStats();
 }
 
-function placeGroupsInZone(roomGroup, zr, groupsArr, room) {
+function placeGroupsInZone(roomGroup, zr, groupsArr, room, walkways = []) {
   if (!groupsArr.length) return;
-  const items = groupsArr.map(g => ({ group: g, fp: groupFootprintM(g) }));
-  const padding = 0.25;
-  let cursorX = zr.x_m + padding;
-  let cursorY = zr.y_m + padding;
+  const items = groupsArr.map(g => ({
+    group: g,
+    fp: groupFootprintM(g),
+    clearance: clearanceForGroup(g),
+  }));
+  // Per-group padding comes from each template's workspaceClearanceM
+  // (front aisle is the dominant constraint for picking access).
+  const minPad = items.reduce((m, it) => Math.max(m, it.clearance.pad), 0.25);
+  let cursorX = zr.x_m + minPad;
+  let cursorY = zr.y_m + minPad;
   let rowMaxW = 0;
-  const maxX = zr.x_m + zr.length_m - padding;
-  const maxY = zr.y_m + zr.width_m - padding;
-  // RectAreaLight budget per zone — top-down view drops fixture lighting
-  // entirely (no benefit when looking straight down).
+  const maxX = zr.x_m + zr.length_m - minPad;
+  const maxY = zr.y_m + zr.width_m - minPad;
   let ralBudget = state.viewMode === 'top' ? 0 : MAX_RAL_PER_ZONE;
+
+  // Treat walkways as occupied space for auto-layout: a candidate footprint
+  // overlapping any walkway gets pushed to the next slot.
+  const walkwayRects = walkways.map(w => ({
+    x_m: w.x_m, y_m: w.y_m, length_m: w.length_m, width_m: w.width_m,
+  }));
+  const placed = []; // rects of items already placed (avoid overlap among groups too)
+  const tryPlace = (L, W, startX, startY) => {
+    let cx = startX, cy = startY, rmx = 0;
+    let attempts = 0;
+    while (attempts++ < 400) {
+      if (cx + L > maxX) {
+        cx = zr.x_m + minPad;
+        cy += rmx + minPad;
+        rmx = 0;
+      }
+      if (cy + W > maxY) return null;
+      const cand = { x_m: cx, y_m: cy, length_m: L, width_m: W };
+      const blocked = walkwayRects.some(w => rectsOverlap(cand, w))
+        || placed.some(p => rectsOverlap(cand, p));
+      if (!blocked) {
+        return { x: cx + L / 2, y: cy + W / 2, rect: cand, nextX: cx + L + minPad, nextY: cy, rowMax: Math.max(rmx, W) };
+      }
+      cx += 0.10; // slide right and try again
+    }
+    return null;
+  };
 
   items.forEach(({ group, fp }) => {
     let L = fp.length_m, W = fp.width_m, rotate = false;
@@ -675,21 +818,22 @@ function placeGroupsInZone(roomGroup, zr, groupsArr, room) {
     if (hasPlacement) {
       rotate = !!placement.rotated;
       if (rotate) { L = fp.width_m; W = fp.length_m; }
-      posX = Math.max(zr.x_m + L/2, Math.min(zr.x_m + zr.length_m - L/2, Number(placement.x_m)));
-      posY = Math.max(zr.y_m + W/2, Math.min(zr.y_m + zr.width_m - W/2, Number(placement.z_m)));
+      posX = Math.max(zr.x_m + L / 2, Math.min(zr.x_m + zr.length_m - L / 2, Number(placement.x_m)));
+      posY = Math.max(zr.y_m + W / 2, Math.min(zr.y_m + zr.width_m - W / 2, Number(placement.z_m)));
+      placed.push({ x_m: posX - L / 2, y_m: posY - W / 2, length_m: L, width_m: W });
     } else {
-      if (cursorX + L > maxX && cursorX + W <= maxX && cursorY + L <= maxY) {
+      // Try the natural orientation first; if blocked everywhere, rotate.
+      let result = tryPlace(L, W, cursorX, cursorY);
+      if (!result && fp.length_m !== fp.width_m) {
         L = fp.width_m; W = fp.length_m; rotate = true;
+        result = tryPlace(L, W, cursorX, cursorY);
       }
-      if (cursorX + L > maxX) {
-        cursorX = zr.x_m + padding;
-        cursorY += rowMaxW + padding;
-        rowMaxW = 0;
-      }
-      posX = cursorX + L/2;
-      posY = cursorY + W/2;
-      cursorX += L + padding;
-      rowMaxW = Math.max(rowMaxW, W);
+      if (!result) return; // skip placement when nothing fits (e.g. walkways consume zone)
+      posX = result.x; posY = result.y;
+      placed.push(result.rect);
+      cursorX = result.nextX;
+      cursorY = result.rect.y_m;
+      rowMaxW = result.rowMax;
     }
     const built = buildEquipmentForGroup(group);
     const mesh = built.mesh;
@@ -714,28 +858,182 @@ function placeGroupsInZone(roomGroup, zr, groupsArr, room) {
   });
 }
 
+// Render sensors per room from env data + rooms.json placements.
+function buildSensorsForRoom(roomGroup, room, zoneRects) {
+  const placements = room?.sensors?.placements || {};
+  const placedById = new Map();
+  Object.entries(placements).forEach(([id, p]) => {
+    if (!p) return;
+    const x = Number(p.x_m ?? p.x); const z = Number(p.z_m ?? p.y_m ?? p.z);
+    if (Number.isFinite(x) && Number.isFinite(z)) placedById.set(String(id), { x_m: x, z_m: z, name: p.name });
+  });
+  const zones = Array.isArray(state.env?.zones) ? state.env.zones : [];
+  const seen = new Set();
+  const collect = (deviceId, name, zr, fallback) => {
+    const key = String(deviceId || name || '').trim();
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    let placed = placedById.get(key);
+    let x, z;
+    if (placed) { x = placed.x_m; z = placed.z_m; }
+    else if (fallback) { x = fallback.x; z = fallback.z; }
+    else if (zr) { x = zr.x_m + zr.length_m / 2; z = zr.y_m + zr.width_m / 2; }
+    else return;
+    const icon = makeSensorIcon(name || key);
+    icon.position.set(x, 0, z);
+    icon.userData = {
+      kind: 'sensor',
+      id: key,
+      sensorId: key,
+      name: name || key,
+      roomId: room.id,
+      zoneId: zr?.id,
+      zoneName: zr?.name,
+      footprint: { length_m: 0.4, width_m: 0.4 },
+      zoneRect: zr || { x_m: 0, y_m: 0, length_m: 99, width_m: 99 },
+      height: 0.7,
+    };
+    icon.name = `sensor:${key}`;
+    roomGroup.add(icon);
+  };
+
+  zones.forEach(z => {
+    const zr = zoneRects.find(r => r.id === z.id || r.name === z.name)
+      || (z.location && zoneRects.find(r => r.id === z.location || r.name === z.location));
+    if (!zr) return;
+    const sourceMaps = [
+      z.sensors?.tempC?.sources,
+      z.sensors?.rh?.sources,
+      z.sensorDevices,
+    ].filter(Boolean);
+    const all = {};
+    sourceMaps.forEach(m => Object.entries(m).forEach(([k, v]) => { all[k] = v; }));
+    const ids = Object.keys(all);
+    ids.forEach((id, idx) => {
+      const src = all[id] || {};
+      const cols = Math.max(1, Math.ceil(Math.sqrt(ids.length)));
+      const rows = Math.max(1, Math.ceil(ids.length / cols));
+      const ix = idx % cols; const iy = Math.floor(idx / cols);
+      const fallback = {
+        x: zr.x_m + (ix + 0.5) * (zr.length_m / cols),
+        z: zr.y_m + (iy + 0.5) * (zr.width_m / rows),
+      };
+      collect(src.deviceId || id, src.name || src.deviceId || id, zr, fallback);
+    });
+  });
+}
+
+// Build a per-room canvas texture using inverse-distance weighting from
+// every available sensor reading in the room so the heatmap shows a true
+// gradient between sensor points instead of flat per-zone colors.
+function makeRoomHeatmapTexture(room, zoneRects, metric) {
+  const dims = readRoomDims(room);
+  if (!dims) return null;
+  const mi = metricInfo(metric);
+  const probes = [];
+  zoneRects.forEach(zr => {
+    const env = envForZone(room.id, zr.name) || envForZone(room.id, zr.id);
+    if (!env) return;
+    const sources = env.sensors?.[metric]?.sources || env.sensorDevices || {};
+    const valid = Object.values(sources).filter(s => Number.isFinite(Number(s.current)));
+    if (valid.length > 1) {
+      const cols = Math.max(1, Math.ceil(Math.sqrt(valid.length)));
+      const rows = Math.max(1, Math.ceil(valid.length / cols));
+      valid.forEach((s, i) => {
+        const ix = i % cols; const iy = Math.floor(i / cols);
+        // Sensor X maps to room X (renderer length, dims.L). Map to canvas U.
+        probes.push({
+          u: (zr.x_m + (ix + 0.5) * (zr.length_m / cols)) / dims.L,
+          v: (zr.y_m + (iy + 0.5) * (zr.width_m / rows)) / dims.W,
+          val: Number(s.current),
+        });
+      });
+    } else {
+      const v = Number(env.sensors?.[metric]?.current);
+      if (Number.isFinite(v)) {
+        probes.push({
+          u: (zr.x_m + zr.length_m / 2) / dims.L,
+          v: (zr.y_m + zr.width_m / 2) / dims.W,
+          val: v,
+        });
+      }
+    }
+  });
+  if (!probes.length) return null;
+  const W = 96, H = 96;
+  const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const ctx = cv.getContext('2d');
+  const img = ctx.createImageData(W, H);
+  const power = 3;
+  for (let py = 0; py < H; py++) {
+    for (let px = 0; px < W; px++) {
+      const u = px / (W - 1);
+      const vv = py / (H - 1);
+      let num = 0, den = 0;
+      for (const p of probes) {
+        const dx = u - p.u, dy = vv - p.v;
+        const d2 = dx * dx + dy * dy;
+        if (d2 < 1e-6) { num = p.val; den = 1; break; }
+        const w = 1 / Math.pow(d2, power / 2);
+        num += w * p.val; den += w;
+      }
+      const interp = num / den;
+      const c = heatColor(interp, mi.lo, mi.hi);
+      const idx = (py * W + px) * 4;
+      img.data[idx]     = Math.round(c.r * 255);
+      img.data[idx + 1] = Math.round(c.g * 255);
+      img.data[idx + 2] = Math.round(c.b * 255);
+      img.data[idx + 3] = 215;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.minFilter = THREE.LinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+  tex.needsUpdate = true;
+  return tex;
+}
+
 function applyHeatmap() {
   const on = state.heatmapOn;
   const metric = state.heatMetric;
   const mi = metricInfo(metric);
+  // Reset zone floors: when heatmap is on, fade them out so the room-floor
+  // gradient texture is visible underneath; when off, restore base color.
   const seen = new Set();
   state.zoneFloorIndex.forEach((mesh) => {
     if (seen.has(mesh.uuid)) return;
     seen.add(mesh.uuid);
-    const ud = mesh.userData;
-    if (!ud) return;
+    const ud = mesh.userData; if (!ud) return;
+    if (mesh.material.map) { mesh.material.map = null; mesh.material.needsUpdate = true; }
     if (!on) {
       mesh.material.color.setHex(ud.baseColor || 0x153e2e);
       mesh.material.opacity = 0.55;
       if (mesh.material.emissive) mesh.material.emissive.setHex(0x000000);
+    } else {
+      mesh.material.opacity = 0.0;
+      if (mesh.material.emissive) mesh.material.emissive.setHex(0x000000);
+    }
+  });
+  state.roomFloorIndex.forEach((mesh, roomId) => {
+    if (mesh.material.map) { mesh.material.map.dispose?.(); mesh.material.map = null; }
+    if (!on) {
+      mesh.material.color.setHex(0xc9d4dc);
+      mesh.material.needsUpdate = true;
       return;
     }
-    const env = envForZone(ud.roomId, ud.zoneName) || envForZone(ud.roomId, ud.zoneId);
-    const v = Number(env?.sensors?.[metric]?.current);
-    const c = heatColor(v, mi.lo, mi.hi);
-    mesh.material.color.copy(c);
-    mesh.material.opacity = Number.isFinite(v) ? 0.78 : 0.35;
-    if (mesh.material.emissive) mesh.material.emissive.copy(c).multiplyScalar(0.18);
+    const room = state.rooms.find(r => r.id === roomId);
+    if (!room) return;
+    const zoneRects = getZoneRects(room);
+    const tex = makeRoomHeatmapTexture(room, zoneRects, metric);
+    if (tex) {
+      mesh.material.map = tex;
+      mesh.material.color.setHex(0xffffff);
+    } else {
+      mesh.material.color.setHex(0x223044);
+    }
+    mesh.material.needsUpdate = true;
   });
   $('v3dHeatLo').textContent = `${mi.lo} ${mi.unit}`;
   $('v3dHeatHi').textContent = `${mi.hi} ${mi.unit}`;
@@ -843,8 +1141,13 @@ function clampPosToZone(mesh, x, z) {
   };
 }
 function startDrag(targetMesh, startPoint) {
-  let ids = state.selection.has(targetMesh.userData.id) ? Array.from(state.selection) : [targetMesh.userData.id];
-  drag.startMeshes = ids.map(id => state.meshIndex.get(id)).filter(Boolean).map(m => ({ mesh: m, startLocal: m.position.clone() }));
+  const ud = targetMesh.userData || {};
+  if (ud.kind === 'sensor') {
+    drag.startMeshes = [{ mesh: targetMesh, startLocal: targetMesh.position.clone() }];
+  } else {
+    let ids = state.selection.has(ud.id) ? Array.from(state.selection) : [ud.id];
+    drag.startMeshes = ids.map(id => state.meshIndex.get(id)).filter(Boolean).map(m => ({ mesh: m, startLocal: m.position.clone() }));
+  }
   drag.initialHit.copy(startPoint);
   drag.active = true; drag.movedAtLeastOnce = false;
   controls.enabled = false; canvas.classList.add('dragging');
@@ -875,21 +1178,47 @@ async function endDrag() {
   drag.active = false;
   controls.enabled = true; canvas.classList.remove('dragging');
   if (!drag.movedAtLeastOnce) { drag.startMeshes = []; return; }
+  const groupChanges = [];
+  const sensorChanges = []; // { roomId, sensorId, x_m, z_m }
   drag.startMeshes.forEach(({ mesh }) => {
-    const id = mesh.userData.id;
+    const ud = mesh.userData || {};
+    if (ud.kind === 'sensor') {
+      sensorChanges.push({ roomId: ud.roomId, sensorId: ud.sensorId || ud.id, name: ud.name, x_m: mesh.position.x, z_m: mesh.position.z });
+      return;
+    }
+    const id = ud.id;
     const g = state.groups.find(gg => gg.id === id);
     if (!g) return;
     g.customization = g.customization || {};
-    g.customization.placement = { x_m: mesh.position.x, z_m: mesh.position.z, rotated: !!mesh.userData.rotate };
+    g.customization.placement = { x_m: mesh.position.x, z_m: mesh.position.z, rotated: !!ud.rotate };
+    groupChanges.push(g);
   });
   try {
-    const r = await authFetch('/data/groups.json', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(state.groups),
-    });
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    toast(`Saved layout for ${drag.startMeshes.length} system(s)`);
+    if (groupChanges.length) {
+      const r = await authFetch('/data/groups.json', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(state.groups),
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    }
+    if (sensorChanges.length) {
+      sensorChanges.forEach(c => {
+        const room = state.rooms.find(r => r.id === c.roomId);
+        if (!room) return;
+        room.sensors = room.sensors || { categories: [], placements: {} };
+        room.sensors.placements = room.sensors.placements || {};
+        room.sensors.placements[c.sensorId] = { x_m: Number(c.x_m.toFixed(3)), z_m: Number(c.z_m.toFixed(3)), name: c.name };
+      });
+      const r2 = await authFetch('/data/rooms.json', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rooms: state.rooms }),
+      });
+      if (!r2.ok) throw new Error(`HTTP ${r2.status}`);
+    }
+    const total = groupChanges.length + sensorChanges.length;
+    toast(`Saved ${total} item(s)`);
   } catch (err) {
     console.error('[v3d] save layout failed', err);
     toast('Save failed: ' + (err.message || 'unknown'));
@@ -937,9 +1266,141 @@ function marqueeEnd(additive) {
 }
 
 let pointerDownAt = { x: 0, y: 0, t: 0 };
+
+// Walkway placement state. When state.walkwayMode is on, a click+drag on
+// any room floor draws a preview rectangle and saves a walkway record on
+// the host room when the pointer is released.
+const walkwayDraw = {
+  active: false,
+  pointerId: null,
+  roomGroup: null,
+  roomId: null,
+  startLocal: null,
+  curLocal: null,
+  preview: null,
+};
+
+function pickFloorPoint(clientX, clientY) {
+  const hit = pickFirstByKind(clientX, clientY, ['room']);
+  if (!hit) return null;
+  const node = hit.node;
+  // Walk up to the room group whose userData kind is 'roomGroup'.
+  let rg = node.parent;
+  while (rg && rg.userData?.kind !== 'roomGroup') rg = rg.parent;
+  if (!rg) return null;
+  const local = rg.worldToLocal(hit.point.clone());
+  return { roomGroup: rg, roomId: rg.userData.id, point: hit.point.clone(), local };
+}
+
+function clampToRoom(rg, x, z) {
+  const dims = rg.userData?.dims; if (!dims) return { x, z };
+  return {
+    x: Math.max(0, Math.min(dims.L, x)),
+    z: Math.max(0, Math.min(dims.W, z)),
+  };
+}
+
+function startWalkwayDraw(e) {
+  const hit = pickFloorPoint(e.clientX, e.clientY);
+  if (!hit) return false;
+  walkwayDraw.active = true;
+  walkwayDraw.pointerId = e.pointerId;
+  walkwayDraw.roomGroup = hit.roomGroup;
+  walkwayDraw.roomId = hit.roomId;
+  const c = clampToRoom(hit.roomGroup, hit.local.x, hit.local.z);
+  walkwayDraw.startLocal = { x: c.x, z: c.z };
+  walkwayDraw.curLocal = { x: c.x, z: c.z };
+  // Preview mesh updated on move.
+  const geom = new THREE.BoxGeometry(0.1, 0.04, 0.1);
+  const mat = new THREE.MeshBasicMaterial({ color: 0x60a5fa, transparent: true, opacity: 0.55 });
+  walkwayDraw.preview = new THREE.Mesh(geom, mat);
+  walkwayDraw.preview.position.set(c.x, 0.025, c.z);
+  hit.roomGroup.add(walkwayDraw.preview);
+  controls.enabled = false;
+  canvas.setPointerCapture(e.pointerId);
+  return true;
+}
+
+function updateWalkwayDraw(e) {
+  if (!walkwayDraw.active || !walkwayDraw.preview) return;
+  setNdcFrom(e.clientX, e.clientY);
+  raycaster.setFromCamera(ndc, camera);
+  const planeHit = new THREE.Vector3();
+  if (!raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), planeHit)) return;
+  const local = walkwayDraw.roomGroup.worldToLocal(planeHit.clone());
+  const c = clampToRoom(walkwayDraw.roomGroup, local.x, local.z);
+  walkwayDraw.curLocal = { x: c.x, z: c.z };
+  const sx = walkwayDraw.startLocal.x, sz = walkwayDraw.startLocal.z;
+  const minX = Math.min(sx, c.x), maxX = Math.max(sx, c.x);
+  const minZ = Math.min(sz, c.z), maxZ = Math.max(sz, c.z);
+  const w = Math.max(0.05, maxX - minX);
+  const h = Math.max(0.05, maxZ - minZ);
+  walkwayDraw.preview.geometry.dispose();
+  walkwayDraw.preview.geometry = new THREE.BoxGeometry(w, 0.04, h);
+  walkwayDraw.preview.position.set((minX + maxX) / 2, 0.022, (minZ + maxZ) / 2);
+}
+
+async function endWalkwayDraw(e) {
+  if (!walkwayDraw.active) return;
+  const rg = walkwayDraw.roomGroup;
+  const roomId = walkwayDraw.roomId;
+  const sx = walkwayDraw.startLocal?.x, sz = walkwayDraw.startLocal?.z;
+  const ex = walkwayDraw.curLocal?.x, ez = walkwayDraw.curLocal?.z;
+  // Cleanup
+  if (walkwayDraw.preview) {
+    rg.remove(walkwayDraw.preview);
+    walkwayDraw.preview.geometry?.dispose();
+    walkwayDraw.preview.material?.dispose();
+  }
+  try { canvas.releasePointerCapture(walkwayDraw.pointerId); } catch (_) {}
+  walkwayDraw.active = false;
+  walkwayDraw.pointerId = null;
+  walkwayDraw.roomGroup = null;
+  walkwayDraw.preview = null;
+  controls.enabled = true;
+  if (!Number.isFinite(sx) || !Number.isFinite(ex)) return;
+  const minX = Math.min(sx, ex), maxX = Math.max(sx, ex);
+  const minZ = Math.min(sz, ez), maxZ = Math.max(sz, ez);
+  const length_m = maxX - minX;
+  const width_m = maxZ - minZ;
+  if (length_m < 0.30 || width_m < 0.30) {
+    toast('Walkway too small (drag a larger rectangle)');
+    return;
+  }
+  const room = state.rooms.find(r => r.id === roomId);
+  if (!room) return;
+  room.walkways = Array.isArray(room.walkways) ? room.walkways : [];
+  const walkway = {
+    id: `walkway-${Date.now().toString(36)}`,
+    label: `Walkway ${room.walkways.length + 1}`,
+    x_m: Number(minX.toFixed(3)),
+    y_m: Number(minZ.toFixed(3)),
+    length_m: Number(length_m.toFixed(3)),
+    width_m: Number(width_m.toFixed(3)),
+  };
+  room.walkways.push(walkway);
+  buildScene();
+  renderSidePanel();
+  try {
+    const r = await authFetch('/data/rooms.json', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rooms: state.rooms }),
+    });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    toast(`Walkway saved (${fmt(length_m, 1)}x${fmt(width_m, 1)} m); equipment re-laid out`);
+  } catch (err) {
+    console.error('[v3d] walkway save failed', err);
+    toast('Walkway placed locally; save failed: ' + (err.message || 'unknown'));
+  }
+}
+
 canvas.addEventListener('pointerdown', (e) => {
   if (e.button !== 0) return;
-  const groupHit = pickFirstByKind(e.clientX, e.clientY, ['group']);
+  if (state.walkwayMode) {
+    if (startWalkwayDraw(e)) return;
+  }
+  const groupHit = pickFirstByKind(e.clientX, e.clientY, ['group', 'sensor']);
   pointerDownAt = { x: e.clientX, y: e.clientY, t: performance.now() };
   if (state.editMode && groupHit) {
     canvas.setPointerCapture(e.pointerId); drag.pointerId = e.pointerId;
@@ -952,10 +1413,14 @@ canvas.addEventListener('pointerdown', (e) => {
   }
 });
 canvas.addEventListener('pointermove', (e) => {
+  if (walkwayDraw.active) { updateWalkwayDraw(e); return; }
   if (drag.active) { updateDrag(e.clientX, e.clientY); return; }
   if (marquee.active) { marquee.curX = e.clientX; marquee.curY = e.clientY; marqueeUpdateBox(); }
 });
 canvas.addEventListener('pointerup', (e) => {
+  if (walkwayDraw.active && walkwayDraw.pointerId === e.pointerId) {
+    endWalkwayDraw(e); return;
+  }
   if (drag.pointerId === e.pointerId) {
     try { canvas.releasePointerCapture(e.pointerId); } catch (_) {}
     drag.pointerId = null;
@@ -970,6 +1435,16 @@ canvas.addEventListener('pointerup', (e) => {
   handleClick(e);
 });
 canvas.addEventListener('pointercancel', () => {
+  if (walkwayDraw.active) {
+    if (walkwayDraw.preview && walkwayDraw.roomGroup) {
+      walkwayDraw.roomGroup.remove(walkwayDraw.preview);
+      walkwayDraw.preview.geometry?.dispose();
+      walkwayDraw.preview.material?.dispose();
+    }
+    walkwayDraw.active = false;
+    walkwayDraw.preview = null;
+    controls.enabled = true;
+  }
   if (drag.active) { drag.active = false; controls.enabled = true; canvas.classList.remove('dragging'); }
   if (marquee.active) { marquee.active = false; if (marquee.el) marquee.el.style.display='none'; controls.enabled = true; }
 });
@@ -1338,6 +1813,28 @@ $('v3dCeilingBtn').addEventListener('click', () => {
   buildScene();
   toast(state.showCeiling ? 'Ceiling: visible' : 'Ceiling: hidden');
 });
+const _sensorsBtn = $('v3dSensorsBtn');
+if (_sensorsBtn) _sensorsBtn.addEventListener('click', () => {
+  state.showSensors = !state.showSensors;
+  _sensorsBtn.classList.toggle('active', state.showSensors);
+  buildScene();
+  toast(state.showSensors ? 'Sensors: visible' : 'Sensors: hidden');
+});
+const _walkwayBtn = $('v3dWalkwayBtn');
+if (_walkwayBtn) _walkwayBtn.addEventListener('click', () => {
+  state.walkwayMode = !state.walkwayMode;
+  _walkwayBtn.classList.toggle('active', state.walkwayMode);
+  canvas.classList.toggle('walkway-mode', state.walkwayMode);
+  if (state.walkwayMode) {
+    state.editMode = false;
+    $('v3dEditBtn').classList.remove('active');
+    canvas.classList.remove('editing');
+    toast('Walkway mode: click and drag on a room floor to place a walkway');
+  } else {
+    toast('Walkway mode off');
+  }
+});
+if (_sensorsBtn) _sensorsBtn.classList.toggle('active', state.showSensors);
 $('v3dHeatBtn').addEventListener('click', () => {
   state.heatmapOn = !state.heatmapOn;
   applyHeatmap();
