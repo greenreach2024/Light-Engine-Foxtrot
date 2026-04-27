@@ -21,6 +21,15 @@
   #v3d-canvas { display: block; width: 100%; height: 100%; outline: none; cursor: grab; }
   #v3d-canvas.dragging { cursor: grabbing; }
   #v3d-canvas.editing { cursor: crosshair; }
+  #v3d-canvas.placing { cursor: cell; }
+  .v3d-place-banner {
+    position: fixed; bottom: 68px; left: 50%; transform: translateX(-50%);
+    background: rgba(0, 30, 40, 0.95); border: 1px solid rgba(0, 229, 255, 0.6);
+    color: #00e5ff; padding: 9px 18px; border-radius: 8px;
+    display: flex; gap: 14px; align-items: center; z-index: 20;
+    font-size: 13px; backdrop-filter: blur(6px);
+    box-shadow: 0 0 18px rgba(0, 229, 255, 0.18);
+  }
   .v3d-topbar {
     position: fixed; top: 0; left: 0; right: 0; z-index: 10;
     display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
@@ -47,6 +56,9 @@
   .v3d-btn.active { background: rgba(106, 177, 255, 0.22); border-color: rgba(106, 177, 255, 0.7); color: #ffffff; }
   .v3d-btn--primary { background: linear-gradient(180deg, #2bb27a, #1d8c5d); border-color: #1d8c5d; color: #ffffff; }
   .v3d-btn--primary:hover { background: linear-gradient(180deg, #34c98a, #239f6a); }
+  .v3d-btn--danger { background: rgba(200,45,45,0.15); border-color: rgba(255,90,90,0.45); color: var(--v3d-bad); }
+  .v3d-btn--danger:hover { background: rgba(200,45,45,0.35); border-color: rgba(255,90,90,0.8); }
+  .v3d-btn:disabled { opacity: 0.35; cursor: not-allowed; pointer-events: none; }
   .v3d-select {
     background: rgba(15,23,35,0.85); color: var(--v3d-text);
     border: 1px solid var(--v3d-panel-border); border-radius: 8px;
@@ -130,6 +142,96 @@
     background: rgba(106,177,255,0.12);
     border-radius: 4px;
   }
+
+  /* ── Equipment Drawer ───────────────────────────── */
+  .v3d-equip-drawer {
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 18;
+    background: rgba(8, 14, 22, 0.97);
+    border-top: 1px solid rgba(99,179,237,0.22);
+    backdrop-filter: blur(16px) saturate(150%);
+    -webkit-backdrop-filter: blur(16px) saturate(150%);
+    transform: translateY(100%);
+    transition: transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
+    max-height: 60vh; overflow-y: auto;
+  }
+  .v3d-equip-drawer.open { transform: translateY(0); }
+  .v3d-equip-drawer__header {
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px 18px; border-bottom: 1px solid rgba(99,179,237,0.14);
+  }
+  .v3d-equip-drawer__back {
+    background: none; border: none; color: var(--v3d-muted); cursor: pointer;
+    font-size: 18px; padding: 0 6px; line-height: 1;
+  }
+  .v3d-equip-drawer__back:hover { color: var(--v3d-text); }
+  .v3d-equip-drawer__title { font-size: 14px; font-weight: 600; flex: 1; }
+  .v3d-equip-cat-grid {
+    display: flex; gap: 14px; padding: 18px 20px; flex-wrap: wrap;
+    justify-content: center;
+  }
+  .v3d-equip-tile {
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+    width: 88px; cursor: pointer;
+    border: 1px solid rgba(99,179,237,0.18);
+    border-radius: 14px; padding: 14px 8px 10px;
+    background: rgba(15,23,35,0.6);
+    transition: background 120ms, border-color 120ms, transform 80ms;
+    user-select: none;
+  }
+  .v3d-equip-tile:hover { background: rgba(30,50,75,0.85); border-color: rgba(106,177,255,0.5); }
+  .v3d-equip-tile:active { transform: scale(0.96); }
+  .v3d-equip-tile__icon {
+    width: 42px; height: 42px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; font-weight: 700; letter-spacing: -0.02em;
+    color: #fff; flex-shrink: 0;
+  }
+  .v3d-equip-tile__label { font-size: 11px; color: var(--v3d-muted); text-align: center; line-height: 1.3; }
+  .v3d-equip-model-panel, .v3d-equip-config-panel { padding: 14px 20px; }
+  .v3d-equip-search {
+    width: 100%; box-sizing: border-box;
+    background: rgba(15,23,35,0.85); color: var(--v3d-text);
+    border: 1px solid var(--v3d-panel-border); border-radius: 8px;
+    padding: 8px 12px; font-size: 13px; margin-bottom: 12px;
+  }
+  .v3d-equip-search:focus { outline: none; border-color: rgba(106,177,255,0.6); }
+  .v3d-equip-model-list { display: flex; flex-direction: column; gap: 6px; max-height: 30vh; overflow-y: auto; }
+  .v3d-equip-model-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 9px 12px; border-radius: 8px; cursor: pointer;
+    border: 1px solid var(--v3d-panel-border);
+    background: rgba(15,23,35,0.55);
+    transition: background 100ms;
+  }
+  .v3d-equip-model-row:hover { background: rgba(30,50,75,0.8); }
+  .v3d-equip-model-row__name { font-size: 13px; font-weight: 500; }
+  .v3d-equip-model-row__meta { font-size: 11px; color: var(--v3d-muted); }
+  .v3d-equip-model-row__badge {
+    font-size: 10px; padding: 2px 7px; border-radius: 10px;
+    background: rgba(106,177,255,0.12); color: var(--v3d-accent-2);
+  }
+  .v3d-equip-spec-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+  .v3d-equip-spec-label { font-size: 11px; color: var(--v3d-muted); margin-bottom: 3px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .v3d-equip-spec-input {
+    width: 100%; box-sizing: border-box;
+    background: rgba(15,23,35,0.85); color: var(--v3d-text);
+    border: 1px solid var(--v3d-panel-border); border-radius: 8px;
+    padding: 7px 10px; font-size: 13px;
+  }
+  .v3d-equip-spec-input:focus { outline: none; border-color: rgba(106,177,255,0.6); }
+  .v3d-equip-qty-row { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+  .v3d-equip-qty-row label { font-size: 12px; color: var(--v3d-muted); }
+  .v3d-equip-qty-input {
+    width: 64px; background: rgba(15,23,35,0.85); color: var(--v3d-text);
+    border: 1px solid var(--v3d-panel-border); border-radius: 8px;
+    padding: 6px 10px; font-size: 13px; text-align: center;
+  }
+  /* equipment panel in side-bar */
+  .v3d-equip-card { display: flex; flex-direction: column; gap: 8px; }
+  .v3d-equip-card__cat-badge {
+    display: inline-block; padding: 3px 9px; border-radius: 10px;
+    font-size: 11px; font-weight: 600; color: #fff; margin-bottom: 4px;
+  }
 </style>
 </head>
 <body>
@@ -146,10 +248,15 @@
   </div>
   <button class="v3d-btn" id="v3dFitBtn" title="Fit view">Fit</button>
   <button class="v3d-btn" id="v3dShotBtn" title="Capture screenshot" aria-label="Capture screenshot">Snap</button>
-  <button class="v3d-btn" id="v3dEditBtn" title="Edit mode (E) - drag systems to reposition">Edit</button>
+  <button class="v3d-btn" id="v3dEditBtn" title="Edit mode (E) — drag systems anywhere in room">Edit</button>
+  <button class="v3d-btn" id="v3dUndoBtn" title="Undo last change (Ctrl+Z)" disabled>Undo</button>
+  <button class="v3d-btn" id="v3dRedoBtn" title="Redo (Ctrl+Y)" disabled>Redo</button>
+  <button class="v3d-btn" id="v3dRotateBtn" title="Rotate selected 90° (R)">Rotate</button>
+  <button class="v3d-btn v3d-btn--danger" id="v3dDeleteBtn" title="Delete selected (Del)">Delete</button>
   <button class="v3d-btn" id="v3dWallsBtn" title="Toggle walls (W)">Walls</button>
   <button class="v3d-btn" id="v3dCeilingBtn" title="Toggle ceiling (C)">Ceiling</button>
   <button class="v3d-btn" id="v3dHeatBtn" title="Heatmap overlay (H)">Heatmap</button>
+  <button class="v3d-btn" id="v3dHeatAutoBtn" title="Auto-scale heatmap to actual sensor range">Auto ⚖</button>
   <button class="v3d-btn" data-overlay="ppfd" title="PPFD light intensity overlay">PPFD</button>
   <button class="v3d-btn" data-overlay="dli" title="DLI daily light integral overlay">DLI</button>
   <select class="v3d-select" id="v3dHeatMetric" title="Heatmap metric">
@@ -159,6 +266,7 @@
     <option value="ppfd">PPFD</option>
     <option value="dli">DLI</option>
   </select>
+  <button class="v3d-btn" id="v3dAddEquipBtn" title="Add equipment to room">+ Add Equipment</button>
   <button class="v3d-btn v3d-btn--primary" id="v3dGrowBtn">Grow Management</button>
 </div>
 <aside class="v3d-side">
@@ -191,7 +299,36 @@
   <span class="v3d-heatkey" id="v3dHeatMode" style="margin-left:auto;"></span>
 </div>
 <div class="v3d-toast" id="v3dToast"></div>
+<div class="v3d-place-banner" id="v3dPlaceBanner" hidden>
+  <span id="v3dPlaceMsg">Click room floor to place device</span>
+  <button class="v3d-btn" id="v3dPlaceCancelBtn" style="font-size:12px;padding:5px 10px;">Cancel</button>
+</div>
 <div class="v3d-loading" id="v3dLoading"><span class="spin"></span><span>Building scene...</span></div>
+
+<!-- Equipment Drawer -->
+<div class="v3d-equip-drawer" id="v3dEquipDrawer">
+  <div class="v3d-equip-drawer__header">
+    <button class="v3d-equip-drawer__back" id="v3dEquipDrawerBack" hidden>&#8592;</button>
+    <span class="v3d-equip-drawer__title" id="v3dEquipDrawerTitle">Add Equipment</span>
+    <button class="v3d-btn" id="v3dEquipDrawerClose" style="font-size:12px;padding:5px 10px;">Close</button>
+  </div>
+  <!-- Level 0: category tiles -->
+  <div class="v3d-equip-cat-grid" id="v3dEquipCatGrid"></div>
+  <!-- Level 1: model search -->
+  <div class="v3d-equip-model-panel" id="v3dEquipModelPanel" hidden>
+    <input class="v3d-equip-search" id="v3dEquipModelSearch" type="text" placeholder="Search models..." autocomplete="off" />
+    <div class="v3d-equip-model-list" id="v3dEquipModelList"></div>
+  </div>
+  <!-- Level 2: quantity + specs config -->
+  <div class="v3d-equip-config-panel" id="v3dEquipConfigPanel" hidden>
+    <div class="v3d-equip-qty-row">
+      <label for="v3dEquipQty">Quantity</label>
+      <input class="v3d-equip-qty-input" id="v3dEquipQty" type="number" min="1" max="50" value="1" />
+    </div>
+    <div class="v3d-equip-spec-grid" id="v3dEquipSpecGrid"></div>
+    <button class="v3d-btn v3d-btn--primary" id="v3dEquipSaveBtn" style="width:100%;padding:10px;">Save to Grow Room</button>
+  </div>
+</div>
 <div class="v3d-detail" id="v3dDetail" hidden style="position:fixed;top:56px;left:12px;z-index:10;background:var(--v3d-panel);border:1px solid var(--v3d-panel-border);border-radius:12px;padding:12px 14px;min-width:260px;">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
     <span class="v3d-side__title" id="v3dDetailTitle">Zone Detail</span>

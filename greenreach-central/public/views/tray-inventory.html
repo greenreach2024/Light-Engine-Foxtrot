@@ -2602,19 +2602,7 @@
                 body: JSON.stringify(action.data)
               });
               break;
-            case 'seed':
-              response = await fetch(`${currentAPI}/api/trays/${action.data.trayId}/seed`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  recipe: action.data.recipe,
-                  variety: action.data.variety,
-                  seed_source: action.data.seed_source,
-                  seedDate: action.data.seedDate,
-                  plantCount: action.data.plantCount
-                })
-              });
-              break;
+            // Add other action types as needed
           }
           
           if (response && response.ok) {
@@ -5576,7 +5564,19 @@
     // Confirm Scan
     function confirmScan() {
       if (!scannedData) return;
-      
+
+      // Prefix-based routing: handle special QR types regardless of scan mode
+      if (scannedData.startsWith('EQUIP:')) {
+        closeScanModal();
+        openEquipmentCard(scannedData.slice(6));
+        return;
+      }
+      if (scannedData.startsWith('GRP:')) {
+        closeScanModal();
+        openGroupCard(scannedData.slice(4));
+        return;
+      }
+
       // Route to appropriate flow based on mode
       switch (currentScanMode) {
         case 'seed':
@@ -5589,6 +5589,56 @@
           window.location.href = `/views/tray-inventory.html?move=${scannedData}`;
           break;
       }
+    }
+
+    async function openEquipmentCard(instanceId) {
+      try {
+        const res = await fetch('/data/room-equipment.json');
+        const entries = res.ok ? await res.json() : [];
+        let entry = null, inst = null;
+        for (const e of entries) {
+          const i = (e.instances || []).find(x => x.instanceId === instanceId);
+          if (i) { entry = e; inst = i; break; }
+        }
+        if (!entry || !inst) {
+          alert(`Equipment not found: ${instanceId}`);
+          return;
+        }
+        const specLines = Object.entries(entry.specs || {})
+          .filter(([, v]) => v)
+          .map(([k, v]) => `<div style="display:flex;justify-content:space-between;"><span style="color:#94a3b8;">${k}</span><span>${v}</span></div>`)
+          .join('');
+        const modalHtml = `
+          <div id="equipCardModal" style="position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.75);display:flex;align-items:center;justify-content:center;padding:1rem;">
+            <div style="background:#1e293b;border-radius:16px;padding:1.5rem;max-width:400px;width:100%;color:#f8fafc;">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+                <div style="font-size:1.2rem;font-weight:700;">${entry.model}</div>
+                <button onclick="document.getElementById('equipCardModal').remove()" style="background:none;border:none;color:#94a3b8;font-size:1.4rem;cursor:pointer;">&#x2715;</button>
+              </div>
+              <div style="font-size:0.85rem;color:#94a3b8;margin-bottom:1rem;">${entry.category} &mdash; ${entry.vendor !== '_generic' ? entry.vendor : 'Generic'}</div>
+              <div style="margin-bottom:1rem;font-size:0.9rem;">${specLines || '<span style="color:#64748b;">No specs recorded</span>'}</div>
+              <div style="font-size:0.8rem;color:#64748b;border-top:1px solid #334155;padding-top:0.75rem;">
+                <div>Instance: ${instanceId}</div>
+                <div>Room: ${inst.roomId || 'unassigned'}</div>
+                <div>Zone: ${inst.zone || 'unassigned'}</div>
+              </div>
+              <div style="display:flex;gap:0.75rem;margin-top:1rem;">
+                <a href="/api/qr-generator/generate-equipment?instanceId=${encodeURIComponent(instanceId)}" target="_blank"
+                  style="flex:1;padding:0.6rem;border-radius:10px;background:#3b82f6;color:#fff;text-align:center;font-size:0.9rem;text-decoration:none;">Print QR</a>
+                <a href="/views/3d-farm-viewer.html" target="_blank"
+                  style="flex:1;padding:0.6rem;border-radius:10px;background:#1a2a3a;border:1px solid #334155;color:#f8fafc;text-align:center;font-size:0.9rem;text-decoration:none;">View in 3D</a>
+              </div>
+            </div>
+          </div>`;
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+      } catch (err) {
+        console.error('[scan] openEquipmentCard failed', err);
+        alert('Failed to load equipment data');
+      }
+    }
+
+    function openGroupCard(groupId) {
+      window.open(`/views/grow-management.html?groupId=${encodeURIComponent(groupId)}`, '_blank', 'noopener');
     }
 
     // Show inline seed form with seed_source for traceability
@@ -5686,50 +5736,16 @@
       const crop = document.getElementById('seedCrop').value.trim();
       if (!crop) { alert('Crop is required'); return; }
 
-      const seedData = {
-        trayId:      trayId,
-        recipe:      crop,
-        variety:     document.getElementById('seedVariety').value.trim() || null,
-        seed_source: document.getElementById('seedSource').value.trim() || null,
-        seedDate:    document.getElementById('seedDate').value,
-        plantCount:  document.getElementById('seedPlantCount').value || null
-      };
-
-      const scanResult = document.getElementById('scanResult');
-
-      // If offline, queue the seed action
-      if (!isOnline) {
-        await queueOfflineAction('seed', seedData);
-        scanResult.innerHTML = `
-          <div style="text-align: center; padding: 2rem;">
-            <div style="font-size: 3rem; color: #f97316; margin-bottom: 1rem;">+</div>
-            <div style="font-size: 1.5rem; font-weight: 700; color: #f97316; margin-bottom: 0.5rem;">
-              Saved Offline
-            </div>
-            <div style="font-size: 1.1rem; color: #cbd5e1; margin-bottom: 1rem;">
-              Seeding will sync when connection is restored
-            </div>
-            <div style="color: #94a3b8; font-size: 0.9rem;">${crop}</div>
-            <button onclick="closeScanModal()" style="
-              margin-top: 1.5rem; padding: 12px 24px; border: none; border-radius: 12px;
-              background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
-              color: white; font-size: 1.1rem; font-weight: 700; cursor: pointer;"
-            >Done</button>
-          </div>
-        `;
-        return;
-      }
-
       try {
         const res = await fetch(`${currentAPI}/api/trays/${trayId}/seed`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            recipe:      seedData.recipe,
-            variety:     seedData.variety,
-            seed_source: seedData.seed_source,
-            seedDate:    seedData.seedDate,
-            plantCount:  seedData.plantCount
+            recipe:      crop,
+            variety:     document.getElementById('seedVariety').value.trim() || null,
+            seed_source: document.getElementById('seedSource').value.trim() || null,
+            seedDate:    document.getElementById('seedDate').value,
+            plantCount:  document.getElementById('seedPlantCount').value || null
           })
         });
         const data = await res.json();
@@ -5743,6 +5759,7 @@
              </div>`
           : '';
 
+        const scanResult = document.getElementById('scanResult');
         scanResult.innerHTML = `
           <div style="text-align: center; padding: 2rem;">
             <div style="font-size: 3rem; color: #10b981;">+</div>
@@ -5759,25 +5776,7 @@
           </div>
         `;
       } catch (err) {
-        // Network error — queue offline as fallback
-        await queueOfflineAction('seed', seedData);
-        scanResult.innerHTML = `
-          <div style="text-align: center; padding: 2rem;">
-            <div style="font-size: 3rem; color: #f97316; margin-bottom: 1rem;">+</div>
-            <div style="font-size: 1.5rem; font-weight: 700; color: #f97316; margin-bottom: 0.5rem;">
-              Saved Offline
-            </div>
-            <div style="font-size: 1.1rem; color: #cbd5e1; margin-bottom: 1rem;">
-              Network error -- seeding saved offline
-            </div>
-            <div style="color: #94a3b8; font-size: 0.9rem;">${crop}</div>
-            <button onclick="closeScanModal()" style="
-              margin-top: 1.5rem; padding: 12px 24px; border: none; border-radius: 12px;
-              background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
-              color: white; font-size: 1.1rem; font-weight: 700; cursor: pointer;"
-            >Done</button>
-          </div>
-        `;
+        alert('Seeding error: ' + err.message);
       }
     }
 

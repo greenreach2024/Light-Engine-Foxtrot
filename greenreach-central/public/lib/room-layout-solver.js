@@ -11,9 +11,9 @@
 (function (root) {
   'use strict';
 
-  // 6 ft central service walkway (6 × 0.3048 = 1.8288 m). Applied to all
-  // orientations. Runs along the long axis; its width reduces the available
-  // short axis before row-count is calculated.
+  // 6 ft central service walkway (6 × 0.3048 = 1.8288 m). Applied to ALL
+  // orientations. The walkway runs along the long axis; its width reduces the
+  // available short axis before row-count is calculated.
   var DEFAULT_MAIN_WALKWAY_M = 1.8288;
   var MIN_SPLIT_UNITS = 12;
 
