@@ -1,8 +1,10 @@
 name: Deploy to GitHub Pages
 
 on:
-  push:
-    branches: [ main, feature/inventory-and-forecasting-system ]
+  # GitHub Pages is a STATIC DEMO only — not production.
+  # Production runs on Google Cloud Run (deploy-cloud-run.yml).
+  # Remove the push trigger so Pages does not deploy alongside every main push
+  # and pollute the GitHub deployment environment list with "github-pages" entries.
   workflow_dispatch:
 
 permissions:
