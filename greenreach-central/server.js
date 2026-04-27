@@ -911,7 +911,7 @@ const LEGACY_DATA_DIR = path.join(__dirname, '..', 'data');
 const DATA_SEARCH_DIRS = [FARM_DATA_DIR, LEGACY_DATA_DIR];
 const FARM_SYNC_INTERVAL = parseInt(process.env.FARM_SYNC_INTERVAL_MS) || 5 * 60 * 1000;
 const DAILY_SYNC_HOUR = parseInt(process.env.FARM_DAILY_SYNC_HOUR) || 2; // 2 AM default
-const SYNC_DATA_FILES = ['groups.json', 'rooms.json', 'farm.json', 'iot-devices.json', 'room-map.json', 'env.json', 'tray-formats.json'];
+const SYNC_DATA_FILES = ['groups.json', 'rooms.json', 'farm.json', 'iot-devices.json', 'room-map.json', 'env.json', 'tray-formats.json', 'farm-settings.json'];
 
 // Sync status tracking
 const syncStatus = {
@@ -1804,13 +1804,38 @@ async function syncFarmData(options = {}) {
     // so the aggregator can fetch its inventory
     if (updated > 0 && farmId && edgeUrl) {
       try {
+        // Pull fulfillment_standards out of the synced farm-settings.json
+        // so wholesale buyers see the farm's pickup/delivery schedule and
+        // requirements at checkout. Without this the network_farms entry
+        // keeps fulfillment_standards = {} no matter how often the farm
+        // saves them in LE-farm-admin.
+        const farmSettings = fetched['farm-settings.json'] || {};
+        const standardsRaw = farmSettings.fulfillmentStandards || farmSettings.fulfillment_standards || {};
+        const normalizeList = (value) => {
+          if (Array.isArray(value)) return value.map((item) => String(item || '').trim()).filter(Boolean);
+          if (typeof value === 'string') return value.split(/\r?\n|;/).map((item) => String(item || '').trim()).filter(Boolean);
+          return [];
+        };
+        const fulfillmentStandards = {
+          pickup_schedule: String(standardsRaw.pickup_schedule || farmSettings.pickupSchedule || '').trim(),
+          delivery_schedule: String(standardsRaw.delivery_schedule || farmSettings.deliverySchedule || '').trim(),
+          pickup_requirements: normalizeList(standardsRaw.pickup_requirements || farmSettings.pickupRequirements),
+          delivery_requirements: normalizeList(standardsRaw.delivery_requirements || farmSettings.deliveryRequirements),
+        };
+        const hasAnyStandards =
+          fulfillmentStandards.pickup_schedule ||
+          fulfillmentStandards.delivery_schedule ||
+          fulfillmentStandards.pickup_requirements.length > 0 ||
+          fulfillmentStandards.delivery_requirements.length > 0;
+
         await upsertNetworkFarm(farmId, {
           name: farmData.name || undefined,
           api_url: edgeUrl,
           url: edgeUrl,
           status: 'active',
           contact: farmData.contact || {},
-          location: { region: farmData.region, city: farmData.location }
+          location: { region: farmData.region, city: farmData.location },
+          ...(hasAnyStandards ? { fulfillment_standards: fulfillmentStandards } : {})
         });
         // Also persist api_url to DB so heartbeats can rediscover it after restart
         try {
